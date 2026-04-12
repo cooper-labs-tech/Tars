@@ -120,6 +120,7 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
     { name: 'Qwen Code', binary: 'qwen-code', version: null, loading: true },
     { name: 'OpenCode', binary: 'opencode', version: null, loading: true },
     { name: 'Pi', binary: 'pi', version: null, loading: true },
+    { name: 'MiniMax', binary: 'minimax', version: null, loading: true },
   ]);
 
   useEffect(() => {
@@ -276,6 +277,21 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
         onApiKeyBlur={() => onSaveAppSettings({ zhipuApiKey: appSettings.zhipuApiKey })}
         models={['zhipuai/glm-4.6', 'zhipuai/glm-4.5', 'zhipuai/glm-4-plus', 'zhipuai/glm-4-air', 'zhipuai/glm-4-flash']}
         routingNote="Provider: zai — direct via https://open.bigmodel.cn/api/paas/v4/. Falls back to OpenRouter key if no Zai key set."
+      />
+
+      {/* MiniMax */}
+      <ProviderCard
+        title="MiniMax"
+        description="ABAB series — MiniMax's flagship models for code and reasoning."
+        docsUrl="https://www.minimax.chat/platform"
+        enabled={!!appSettings.minimaxEnabled}
+        onToggle={() => onSaveAppSettings({ minimaxEnabled: !appSettings.minimaxEnabled })}
+        apiKey={appSettings.minimaxApiKey || ''}
+        apiKeyPlaceholder="..."
+        onApiKeyChange={(v) => onUpdateLocalSettings({ minimaxApiKey: v })}
+        onApiKeyBlur={() => onSaveAppSettings({ minimaxApiKey: appSettings.minimaxApiKey })}
+        models={['minimax/abab7', 'minimax/abab6.5s', 'minimax/abab5.5']}
+        routingNote="Provider: minimax — direct via https://api.minimax.chat/v1. Falls back to OpenRouter key if no MiniMax key set."
       />
 
       {/* Routing note */}

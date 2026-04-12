@@ -161,6 +161,7 @@ function loadAppSettings(): AppSettings {
       gcloud: '',
       gh: '',
       node: '',
+      minimax: '',
       additionalPaths: [],
     },
   };

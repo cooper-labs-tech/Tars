@@ -224,6 +224,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     localModel?: string;
     obsidianVaultPaths?: string[];
     orchestratorMode?: boolean;
+    cliPath?: string;
   }) => {
     const id = uuidv4();
     const shell = '/bin/bash';
@@ -383,6 +384,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       model: config.model,
       localModel: config.localModel,
       obsidianVaultPaths: config.obsidianVaultPaths || [],
+      cliPath: config.cliPath,
     };
     agents.set(id, status);
 
@@ -604,7 +606,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // ── Build CLI command via provider ─────────────────────────────
     const appSettingsForCommand = getAppSettings();
     const cliProvider = getProvider(provider);
-    const binaryPath = cliProvider.resolveBinaryPath(appSettingsForCommand);
+    const binaryPath = agent.cliPath || cliProvider.resolveBinaryPath(appSettingsForCommand);
 
     // Check if this is the Super Agent (orchestrator)
     const isSuperAgentCheck = agent.name?.toLowerCase().includes('super agent') ||
@@ -729,6 +731,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     obsidianVaultPaths?: string[];
     worktree?: WorktreeConfig;
     orchestratorMode?: boolean;
+    cliPath?: string | null;
   }) => {
     const agent = agents.get(params.id);
     if (!agent) {
@@ -777,6 +780,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     }
     if (params.orchestratorMode !== undefined) {
       agent.orchestratorMode = params.orchestratorMode;
+    }
+    if (params.cliPath !== undefined) {
+      agent.cliPath = params.cliPath === null ? undefined : params.cliPath;
     }
     if (params.worktree !== undefined && !agent.worktreePath) {
       // Only allow worktree setup if agent doesn't already have one

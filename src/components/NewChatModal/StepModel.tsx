@@ -49,6 +49,7 @@ const PROVIDER_API_ENDPOINTS: Record<string, { url: string; keySettingField?: st
   moonshot: { url: 'https://api.moonshot.cn/v1/models', keySettingField: 'moonshotApiKey' },
   mimo: { url: 'https://api.mimo.com/v1/models', keySettingField: 'mimoApiKey' },
   zhipu: { url: 'https://open.bigmodel.cn/api/paas/v4/models', keySettingField: 'zhipuApiKey' },
+  minimax: { url: 'https://api.minimax.chat/v1/models', keySettingField: 'minimaxApiKey' },
 };
 
 /** Module-level cache: provider → { models, timestamp } */
@@ -153,6 +154,27 @@ function ProviderIcon({ icon, selected, accent }: { icon: ProviderIconDef; selec
       </svg>
     );
   }
+  if (icon.type === 'svg-minimax') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M3 12l4-8h2l-3 6h4l-3 6h-2l4-8H5l4-8H7L3 12zm10 0l4-8h2l-3 6h4l-3 6h-2l4-8h-4l4-8h-2l-4 8z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-nvidia') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M9 4v9.3a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4V4h-2v9.3a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2V4H9zM3 4v16h2V4H3z" />
+      </svg>
+    );
+  }
+  if (icon.type === 'svg-nous') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={`w-4 h-4 ${colorClass}`}>
+        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z" />
+      </svg>
+    );
+  }
   if (icon.type === 'cpu') {
     return <Cpu className={`w-4 h-4 ${colorClass}`} />;
   }
@@ -163,6 +185,13 @@ function ProviderIcon({ icon, selected, accent }: { icon: ProviderIconDef; selec
   return <img src={icon.src} alt="" className="w-4 h-4 object-contain" />;
 }
 
+/** CLI binary entry detected from settings */
+interface DetectedCli {
+  key: string;
+  label: string;
+  path: string;
+}
+
 interface StepModelProps {
   provider: AgentProvider;
   onProviderChange: (provider: AgentProvider) => void;
@@ -170,6 +199,8 @@ interface StepModelProps {
   onModelChange: (model: string) => void;
   localModel: string;
   onLocalModelChange: (model: string) => void;
+  cliPath: string;
+  onCliPathChange: (path: string) => void;
   tasmaniaEnabled: boolean;
   installedProviders?: Record<string, boolean>;
   agentPersonaRef: React.MutableRefObject<AgentPersonaValues>;
@@ -183,6 +214,8 @@ const StepModel = React.memo(function StepModel({
   onModelChange,
   localModel,
   onLocalModelChange,
+  cliPath,
+  onCliPathChange,
   tasmaniaEnabled,
   installedProviders,
   agentPersonaRef,
@@ -192,12 +225,37 @@ const StepModel = React.memo(function StepModel({
   const [dynamicModels, setDynamicModels] = useState<ProviderModel[] | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
 
+  // Detected CLIs for the path selector
+  const [detectedClis, setDetectedClis] = useState<DetectedCli[]>([]);
+
   // Tasmania state for local provider
   const [tasmaniaStatus, setTasmaniaStatus] = useState<{
     status: string; modelName: string | null; endpoint: string | null;
   } | null>(null);
   const [tasmaniaModels, setTasmaniaModels] = useState<TasmaniaModel[]>([]);
   const [loadingTasmania, setLoadingTasmania] = useState(false);
+
+  // Detect installed CLIs for the path selector
+  useEffect(() => {
+    window.electronAPI?.cliPaths?.detect().then((paths) => {
+      if (!paths) return;
+      const cliMap: { key: string; label: string }[] = [
+        { key: 'claude', label: 'Claude' },
+        { key: 'codex', label: 'Codex' },
+        { key: 'gemini', label: 'Gemini' },
+        { key: 'opencode', label: 'OpenCode' },
+        { key: 'pi', label: 'Pi' },
+        { key: 'qwencode', label: 'Qwen Code' },
+        { key: 'minimax', label: 'MiniMax' },
+      ];
+      const detected: DetectedCli[] = [];
+      for (const { key, label } of cliMap) {
+        const p = (paths as Record<string, string>)[key];
+        if (p) detected.push({ key, label, path: p });
+      }
+      setDetectedClis(detected);
+    });
+  }, []);
 
   // Fetch dynamic models when provider changes
   const loadDynamicModels = useCallback(async () => {
@@ -333,7 +391,7 @@ const StepModel = React.memo(function StepModel({
           <select
             value={model}
             onChange={(e) => onModelChange(e.target.value)}
-            className="w-full px-3 py-2.5 rounded-lg text-sm bg-bg-primary border border-border-primary focus:border-accent-blue focus:outline-none"
+            className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
           >
             {resolvedModels.map((m) => (
               <option key={m.id} value={m.id}>
@@ -388,7 +446,7 @@ const StepModel = React.memo(function StepModel({
                   <select
                     value={localModel}
                     onChange={(e) => onLocalModelChange(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg text-sm bg-bg-primary border border-border-primary focus:border-accent-green focus:outline-none"
+                    className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                   >
                     {tasmaniaModels.map((m) => (
                       <option key={m.path} value={m.name}>
@@ -403,6 +461,28 @@ const StepModel = React.memo(function StepModel({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* CLI Path Override */}
+      {detectedClis.length > 0 && (
+        <div>
+          <label className="block text-sm font-medium mb-2">CLI Binary</label>
+          <select
+            value={cliPath}
+            onChange={(e) => onCliPathChange(e.target.value)}
+            className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
+          >
+            <option value="">Default (provider default)</option>
+            {detectedClis.map((cli) => (
+              <option key={cli.key} value={cli.path}>
+                {cli.label} — {cli.path}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-text-muted mt-1.5">
+            Override which CLI binary runs this agent. Defaults to the selected provider&apos;s CLI.
+          </p>
         </div>
       )}
 

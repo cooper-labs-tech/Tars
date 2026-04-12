@@ -17,7 +17,10 @@ export type AgentProvider =
   | 'mimo'
   | 'moonshot'
   | 'qwen'
-  | 'zhipu';
+  | 'zhipu'
+  | 'minimax'
+  | 'nvidia'
+  | 'nous-portal';
 
 /** Permission mode for agent tool use:
  * - normal: Claude asks for confirmation on each tool use
@@ -69,6 +72,7 @@ export interface AgentStatus {
   localModel?: string;        // Tasmania model name when provider is 'local'
   savedPrompt?: string;       // Saved task/prompt for re-launching the agent
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
+  cliPath?: string;              // Custom CLI binary path override
 }
 
 export interface CLIPaths {
@@ -81,6 +85,7 @@ export interface CLIPaths {
   gcloud: string;
   gh: string;
   node: string;
+  minimax: string;
   additionalPaths: string[];
 }
 
@@ -136,6 +141,12 @@ export interface AppSettings {
   qwenApiKey?: string;
   zhipuEnabled?: boolean;
   zhipuApiKey?: string;
+  minimaxEnabled?: boolean;
+  minimaxApiKey?: string;
+  nvidiaEnabled?: boolean;
+  nvidiaApiKey?: string;
+  nousPortalEnabled?: boolean;
+  nousPortalApiKey?: string;
   defaultProvider?: AgentProvider;
   obsidianVaultPaths?: string[];
   notificationSounds?: {

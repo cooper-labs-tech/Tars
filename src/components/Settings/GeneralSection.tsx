@@ -62,6 +62,7 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
           mimo: !!(settings?.mimoEnabled && settings?.mimoApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
           qwen: !!(settings?.qwenEnabled && settings?.qwenApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
           zhipu: !!(settings?.zhipuEnabled && settings?.zhipuApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          minimax: !!(settings?.minimaxEnabled && (settings?.minimaxApiKey || (settings?.openRouterEnabled && settings?.openRouterApiKey))),
         });
       }
     });

@@ -85,6 +85,7 @@ export default function AgentsPage() {
       obsidianVaultPaths: agent.obsidianVaultPaths,
       savedPrompt: agent.savedPrompt,
       orchestratorMode: agent.orchestratorMode,
+      cliPath: agent.cliPath,
     };
   }, [editAgentId, agents]);
 
@@ -104,10 +105,11 @@ export default function AgentsPage() {
     obsidianVaultPaths?: string[],
     effort?: 'low' | 'medium' | 'high',
     orchestratorMode?: boolean,
+    cliPath?: string,
   ) => {
     try {
       const resolvedModel = (provider !== 'local' && model && model !== 'default') ? model : undefined;
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort, provider, model: resolvedModel, localModel, obsidianVaultPaths, orchestratorMode });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort, provider, model: resolvedModel, localModel, obsidianVaultPaths, orchestratorMode, cliPath });
       if (prompt) {
         const options = { model: resolvedModel, provider, localModel };
         await startAgent(agent.id, prompt, options);

@@ -20,6 +20,7 @@ interface DetectedPaths {
   gcloud: string;
   gh: string;
   node: string;
+  minimax: string;
 }
 
 export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings }: CLIPathsSectionProps) => {
@@ -31,11 +32,11 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
   const [opencodeResult, setOpencodeResult] = useState<{ success: boolean; message: string } | null>(null);
   const [piResult, setPiResult] = useState<{ success: boolean; message: string } | null>(null);
   const [localPaths, setLocalPaths] = useState<CLIPaths>(
-    appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
+    appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '', additionalPaths: [] }
   );
 
   useEffect(() => {
-    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '', additionalPaths: [] });
   }, [appSettings.cliPaths]);
 
   const handleDetectPaths = async () => {
@@ -57,6 +58,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
         if (!updatedPaths.gcloud && paths.gcloud) updatedPaths.gcloud = paths.gcloud;
         if (!updatedPaths.gh && paths.gh) updatedPaths.gh = paths.gh;
         if (!updatedPaths.node && paths.node) updatedPaths.node = paths.node;
+        if (!updatedPaths.minimax && paths.minimax) updatedPaths.minimax = paths.minimax;
         setLocalPaths(updatedPaths);
       }
     } catch (error) {
@@ -90,7 +92,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
     onSaveAppSettings({ cliPaths: localPaths });
   };
 
-  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '', additionalPaths: [] });
 
   const renderPathInput = (
     label: string,
@@ -175,7 +177,8 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
               {detectedPaths.gcloud && <li>gcloud: {detectedPaths.gcloud}</li>}
               {detectedPaths.gh && <li>GitHub CLI: {detectedPaths.gh}</li>}
               {detectedPaths.node && <li>Node.js: {detectedPaths.node}</li>}
-              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.qwencode && !detectedPaths.opencode && !detectedPaths.pi && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
+              {detectedPaths.minimax && <li>MiniMax: {detectedPaths.minimax}</li>}
+              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.qwencode && !detectedPaths.opencode && !detectedPaths.pi && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && !detectedPaths.minimax && (
                 <li className="text-yellow-400">No CLI tools found in common locations</li>
               )}
             </ul>
@@ -350,6 +353,13 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
           'Path to the Node.js executable',
           'node',
           '/usr/local/bin/node or ~/.nvm/versions/node/v20/bin/node'
+        )}
+
+        {renderPathInput(
+          'MiniMax CLI',
+          'Path to the MiniMax CLI executable',
+          'minimax',
+          '/usr/local/bin/minimax or ~/.local/bin/minimax'
         )}
       </div>
 

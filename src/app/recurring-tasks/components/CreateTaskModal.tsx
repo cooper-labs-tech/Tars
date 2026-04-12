@@ -106,7 +106,7 @@ export function CreateTaskModal({
                       projectPath: selectedAgent?.projectPath || formData.projectPath,
                     });
                   }}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                  className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                 >
                   <option value="">No agent (use project path below)</option>
                   {agents.map(agent => (
@@ -169,7 +169,7 @@ export function CreateTaskModal({
                 <select
                   value={effectiveProvider}
                   onChange={(e) => onFormChange({ ...formData, provider: e.target.value })}
-                  className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                  className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                 >
                   {PROVIDER_REGISTRY.map(p => (
                     <option key={p.id} value={p.id}>{p.label}</option>

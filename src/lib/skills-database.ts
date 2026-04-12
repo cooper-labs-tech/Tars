@@ -140,6 +140,83 @@ export async function fetchSkillsFromMarketplace(): Promise<Skill[] | null> {
   }
 }
 
+export interface SkillsPageResult {
+  skills: Skill[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+}
+
+/**
+ * Fetch skills with pagination and optional search.
+ * In Electron: fetches all via IPC then paginates/filters client-side.
+ * In web/dev: delegates to the Next.js API route which supports pagination natively.
+ */
+export async function fetchSkillsPaginated(params: {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+}): Promise<SkillsPageResult | null> {
+  const { page = 1, pageSize = 50, search } = params;
+
+  // Electron path: fetch all via IPC, then paginate/filter client-side
+  if (typeof window !== 'undefined' && window.electronAPI?.skill?.fetchMarketplace) {
+    try {
+      const result = await window.electronAPI.skill.fetchMarketplace();
+      if (!result.skills) return null;
+
+      let filtered: Skill[] = result.skills as Skill[];
+      if (search) {
+        const q = search.toLowerCase();
+        filtered = filtered.filter(s =>
+          s.name.toLowerCase().includes(q) ||
+          s.repo.toLowerCase().includes(q)
+        );
+      }
+
+      const total = filtered.length;
+      const start = (page - 1) * pageSize;
+      const paged = filtered.slice(start, start + pageSize);
+
+      return {
+        skills: paged.map((s, i) => ({ ...s, rank: start + i + 1 })),
+        total,
+        page,
+        pageSize,
+        hasMore: start + pageSize < total,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  // Web/dev path: use the Next.js API route with pagination params
+  try {
+    const qp = new URLSearchParams();
+    qp.set('page', String(page));
+    qp.set('limit', String(pageSize));
+    if (search) qp.set('q', search);
+
+    const res = await fetch(`/api/skills/marketplace?${qp}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    if (data?.skills && Array.isArray(data.skills)) {
+      return {
+        skills: data.skills as Skill[],
+        total: data.total ?? data.skills.length,
+        page: data.page ?? page,
+        pageSize: data.pageSize ?? pageSize,
+        hasMore: data.hasMore ?? (data.skills.length >= pageSize),
+      };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // Get unique categories
 export const SKILL_CATEGORIES = [...new Set(SKILLS_DATABASE.map(s => s.category).filter((c): c is string => !!c))].sort();
 

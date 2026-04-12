@@ -111,6 +111,7 @@ export default function NewChatModal({
   const [localModel, setLocalModel] = useState('');
   const [tasmaniaEnabled, setTasmaniaEnabled] = useState(false);
   const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true, opencode: true, pi: true });
+  const [cliPath, setCliPath] = useState('');
   const agentPersonaRef = useRef<AgentPersonaValues>({ character: 'robot', name: '' });
 
   // Step 3: Tools
@@ -175,6 +176,7 @@ export default function NewChatModal({
         setLocalModel(editAgent.localModel || '');
         setSelectedObsidianVaults(editAgent.obsidianVaultPaths || []);
         setIsOrchestrator(editAgent.orchestratorMode || false);
+        setCliPath(editAgent.cliPath || '');
         setDetectedVault(null);
       } else {
         // Create mode: reset everything
@@ -193,6 +195,7 @@ export default function NewChatModal({
         setProvider('claude');
         setModel('default');
         setLocalModel('');
+        setCliPath('');
         setSelectedObsidianVaults([]);
         setDetectedVault(null);
 
@@ -249,6 +252,7 @@ export default function NewChatModal({
           mimo: !!(settings?.mimoEnabled && settings?.mimoApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
           qwen: !!(settings?.qwenEnabled && settings?.qwenApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
           zhipu: !!(settings?.zhipuEnabled && settings?.zhipuApiKey) || !!(settings?.openRouterEnabled && settings?.openRouterApiKey),
+          minimax: !!(settings?.minimaxEnabled && (settings?.minimaxApiKey || (settings?.openRouterEnabled && settings?.openRouterApiKey))),
         };
         setInstalledProviders(providers);
       });
@@ -364,6 +368,7 @@ export default function NewChatModal({
         obsidianVaultPaths: selectedObsidianVaults.length > 0 ? selectedObsidianVaults : [],
         worktree: worktreeConfig,
         orchestratorMode: isOrchestrator,
+        cliPath: cliPath || null,
       });
       onClose();
       return;
@@ -374,7 +379,7 @@ export default function NewChatModal({
       || (selectedSkills.length > 0 ? `Use the following skills: ${selectedSkills.join(', ')}` : '');
     const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
 
-    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, permissionMode, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined, effort, isOrchestrator);
+    onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, secondaryPath, permissionMode, provider, localModel, selectedObsidianVaults.length > 0 ? selectedObsidianVaults : undefined, effort, isOrchestrator, cliPath || undefined);
 
     // Reset form
     setStep(1);
@@ -393,8 +398,9 @@ export default function NewChatModal({
     setProvider('claude');
     setModel('default');
     setLocalModel('');
+    setCliPath('');
     setSelectedObsidianVaults([]);
-  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, permissionMode, effort, provider, localModel, selectedObsidianVaults, onSubmit, isEditMode, editAgent, onUpdate, onClose]);
+  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, showSecondaryProject, selectedSecondaryProject, customSecondaryPath, model, permissionMode, effort, provider, localModel, cliPath, selectedObsidianVaults, onSubmit, isEditMode, editAgent, onUpdate, onClose]);
 
   // Can proceed from current step?
   const canContinue = step === 1 ? !!projectPath : true;
@@ -463,6 +469,8 @@ export default function NewChatModal({
                 onModelChange={setModel}
                 localModel={localModel}
                 onLocalModelChange={setLocalModel}
+                cliPath={cliPath}
+                onCliPathChange={setCliPath}
                 tasmaniaEnabled={tasmaniaEnabled}
                 installedProviders={installedProviders}
                 agentPersonaRef={agentPersonaRef}

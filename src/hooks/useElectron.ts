@@ -60,6 +60,7 @@ export function useElectronAgents() {
     localModel?: string;
     obsidianVaultPaths?: string[];
     orchestratorMode?: boolean;
+    cliPath?: string;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');
@@ -85,6 +86,7 @@ export function useElectronAgents() {
     obsidianVaultPaths?: string[];
     worktree?: { enabled: boolean; branchName: string };
     orchestratorMode?: boolean;
+    cliPath?: string | null;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');

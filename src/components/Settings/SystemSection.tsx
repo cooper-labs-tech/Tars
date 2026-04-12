@@ -21,6 +21,9 @@ export const SystemSection = ({ info, appSettings, onSaveAppSettings }: SystemSe
     { name: 'Codex', binary: 'codex', version: null, loading: true },
     { name: 'Gemini', binary: 'gemini', version: null, loading: true },
     { name: 'Qwen Code', binary: 'qwen-code', version: null, loading: true },
+    { name: 'OpenCode', binary: 'opencode', version: null, loading: true },
+    { name: 'Pi', binary: 'pi', version: null, loading: true },
+    { name: 'MiniMax', binary: 'minimax', version: null, loading: true },
   ]);
 
   useEffect(() => {

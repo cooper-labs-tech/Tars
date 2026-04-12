@@ -20,7 +20,8 @@ import {
 import type { AgentProvider } from '@/types/electron';
 import { PROVIDER_REGISTRY, getProviderDef } from '@/lib/providers';
 
-type Provider = AgentProvider;
+/** MCP provider ID — extends AgentProvider with qwencode (CLI-only, not an agent provider) */
+type McpProvider = AgentProvider | 'qwencode';
 
 interface McpServer {
   name: string;
@@ -35,11 +36,22 @@ interface EditState {
   env: Record<string, string>;
 }
 
-const PROVIDER_TABS: { id: Provider; label: string }[] = PROVIDER_REGISTRY
-  .filter((p) => p.requiresCli)
-  .map(({ id, label }) => ({ id, label }));
+const PROVIDER_TABS: { id: McpProvider; label: string }[] = [
+  ...PROVIDER_REGISTRY
+    .filter((p) => p.requiresCli)
+    .map(({ id, label }) => ({ id, label })),
+  { id: 'qwencode', label: 'Qwen Code' },
+];
 
-function ProviderIcon({ provider, className }: { provider: Provider; className?: string }) {
+function ProviderIcon({ provider, className }: { provider: McpProvider; className?: string }) {
+  // Qwen Code CLI is not in the agent provider registry
+  if (provider === 'qwencode') {
+    return (
+      <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
   const def = getProviderDef(provider);
   if (!def) return null;
   const { icon, label } = def;
@@ -64,7 +76,7 @@ function ProviderIcon({ provider, className }: { provider: Provider; className?:
 }
 
 export function McpSection() {
-  const [provider, setProvider] = useState<Provider>('claude');
+  const [provider, setProvider] = useState<McpProvider>('claude');
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(false);
   const [expandedServer, setExpandedServer] = useState<string | null>(null);
@@ -75,7 +87,7 @@ export function McpSection() {
   const [error, setError] = useState<string | null>(null);
   const [maskedEnvKeys, setMaskedEnvKeys] = useState<Set<string>>(new Set());
 
-  const loadServers = useCallback(async (p: Provider) => {
+  const loadServers = useCallback(async (p: McpProvider) => {
     setLoading(true);
     setError(null);
     try {
@@ -113,7 +125,7 @@ export function McpSection() {
     setExpandedServer(null);
   }, [provider, loadServers]);
 
-  const handleTabChange = (p: Provider) => {
+  const handleTabChange = (p: McpProvider) => {
     setProvider(p);
   };
 

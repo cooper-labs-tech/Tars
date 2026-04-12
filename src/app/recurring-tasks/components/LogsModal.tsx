@@ -67,7 +67,7 @@ export function LogsModal({ selectedLogs, onClose, onRunIndexChange, logsContain
                 <select
                   value={selectedLogs.selectedRunIndex}
                   onChange={(e) => onRunIndexChange(parseInt(e.target.value))}
-                  className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-secondary border border-border rounded-lg truncate"
+                  className="flex-1 min-w-0 px-3 py-1.5 text-sm bg-secondary border border-border text-foreground focus:outline-none focus:border-foreground truncate"
                 >
                   {selectedLogs.runs.map((run, i) => (
                     <option key={i} value={i}>

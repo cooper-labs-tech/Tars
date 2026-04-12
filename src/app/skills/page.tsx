@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Sparkles,
   Search,
   Loader2,
   Package,
@@ -16,10 +15,11 @@ import {
   Check,
   Download,
   MonitorDown,
+  ChevronDown,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { useElectronSkills } from '@/hooks/useElectron';
-import { SKILLS_DATABASE, fetchSkillsFromMarketplace, type Skill } from '@/lib/skills-database';
+import { SKILLS_DATABASE, fetchSkillsPaginated, type Skill } from '@/lib/skills-database';
 import { PROVIDER_REGISTRY } from '@/lib/providers';
 import TerminalDialog from '@/components/TerminalDialog';
 import ProviderBadge from '@/components/ProviderBadge';
@@ -53,15 +53,61 @@ export default function SkillsPage() {
   const [currentInstallRepo, setCurrentInstallRepo] = useState('');
   const [currentInstallTitle, setCurrentInstallTitle] = useState('');
 
-  // Live skills data from skills.sh
+  // Paginated skills data from skills.sh
+  const PAGE_SIZE = 50;
   const [liveSkills, setLiveSkills] = useState<Skill[] | null>(null);
   const [loadingSkills, setLoadingSkills] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalSkills, setTotalSkills] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [activeSearch, setActiveSearch] = useState('');
 
-  useEffect(() => {
-    fetchSkillsFromMarketplace()
-      .then(skills => { if (skills) setLiveSkills(skills); })
-      .finally(() => setLoadingSkills(false));
+  const loadSkills = useCallback(async (page: number, searchQuery: string, append = false) => {
+    if (page === 1) setLoadingSkills(true);
+    else setLoadingMore(true);
+
+    try {
+      const result = await fetchSkillsPaginated({
+        page,
+        pageSize: PAGE_SIZE,
+        search: searchQuery || undefined,
+      });
+      if (result) {
+        if (append && page > 1) {
+          setLiveSkills(prev => [...(prev || []), ...result.skills]);
+        } else {
+          setLiveSkills(result.skills);
+        }
+        setTotalSkills(result.total);
+        setHasMore(result.hasMore);
+        setCurrentPage(page);
+      }
+    } finally {
+      setLoadingSkills(false);
+      setLoadingMore(false);
+    }
   }, []);
+
+  // Initial load
+  const initialLoadDone = useRef(false);
+  useEffect(() => { loadSkills(1, ''); initialLoadDone.current = true; }, [loadSkills]);
+
+  // Search with debounce — triggers server-side search
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    // Skip on initial mount (the initial load effect handles that)
+    if (!initialLoadDone.current) return;
+
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setActiveSearch(search);
+      loadSkills(1, search);
+    }, 300);
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [search, loadSkills]);
 
   const skillsDatabase = liveSkills || SKILLS_DATABASE;
 
@@ -83,11 +129,14 @@ export default function SkillsPage() {
     return installedSkillNames.includes(skillName.toLowerCase());
   };
 
-  // Filter skills
+  // Filter skills — client-side filter for instant feedback on currently loaded data.
+  // The debounced search also triggers a server-side fetch for broader results.
   const filteredSkills = useMemo(() => {
     let skills = skillsDatabase;
 
-    if (search) {
+    // If the local search differs from the active (server) search, apply client-side filter
+    // on the loaded data for instant feedback while server results load
+    if (search && search !== activeSearch) {
       const q = search.toLowerCase();
       skills = skills.filter(
         (s) =>
@@ -97,7 +146,7 @@ export default function SkillsPage() {
     }
 
     return skills;
-  }, [search, skillsDatabase]);
+  }, [search, activeSearch, skillsDatabase]);
 
   // Install skill directly (Electron only)
   const handleDirectInstall = async (repo: string, skillName: string) => {
@@ -227,7 +276,17 @@ export default function SkillsPage() {
             </div>
           )}
           <div className="text-xs lg:text-sm text-muted-foreground">
-            <span className="font-medium">{skillsDatabase.length}</span> skills
+            {totalSkills > 0 ? (
+              <>
+                Showing <span className="font-medium">{filteredSkills.length}</span>
+                {totalSkills > filteredSkills.length && (
+                  <> of <span className="font-medium">{totalSkills.toLocaleString()}</span></>
+                )}
+                {' '}skills
+              </>
+            ) : (
+              <><span className="font-medium">{skillsDatabase.length}</span> skills</>
+            )}
             {liveSkills && <span className="text-muted-foreground/60"> (live from skills.sh)</span>}
           </div>
         </div>
@@ -361,7 +420,7 @@ export default function SkillsPage() {
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search skills..."
+            placeholder="Search all skills on skills.sh..."
             className="w-full pl-10 pr-4 py-2.5 rounded-none text-sm"
           />
         </div>
@@ -477,6 +536,27 @@ export default function SkillsPage() {
                 })}
               </tbody>
             </table>
+          )}
+
+          {/* Load More button */}
+          {hasMore && !loadingSkills && (
+            <div className="flex justify-center py-6 border-t border-border/50">
+              <button
+                onClick={() => loadSkills(currentPage + 1, activeSearch, true)}
+                disabled={loadingMore}
+                className="px-6 py-2.5 bg-secondary border border-border text-sm text-foreground hover:bg-secondary/80 transition-colors flex items-center gap-2 disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+                {loadingMore
+                  ? 'Loading...'
+                  : `Load More (${Math.max(0, totalSkills - (liveSkills?.length || 0)).toLocaleString()} remaining)`
+                }
+              </button>
+            </div>
           )}
         </div>
       </div>

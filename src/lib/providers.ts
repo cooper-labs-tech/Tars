@@ -16,6 +16,9 @@ export type ProviderIconDef =
   | { type: 'svg-mimo' }
   | { type: 'svg-qwen' }
   | { type: 'svg-zai' }
+  | { type: 'svg-minimax' }
+  | { type: 'svg-nvidia' }
+  | { type: 'svg-nous' }
   | { type: 'text'; content: string }
   | { type: 'cpu' };
 
@@ -204,6 +207,46 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
       { id: 'zhipuai/glm-4-flash', name: 'GLM-4 Flash', description: 'Economy' },
     ],
     defaultModel: 'zhipuai/glm-4.6',
+  },
+  {
+    id: 'minimax',
+    label: 'MiniMax',
+    icon: { type: 'svg-minimax' },
+    accent: 'rose-500',
+    badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    models: [
+      { id: 'minimax/abab7', name: 'ABAB 7', description: 'Flagship' },
+      { id: 'minimax/abab6.5s', name: 'ABAB 6.5s', description: 'Fast' },
+      { id: 'minimax/abab5.5', name: 'ABAB 5.5', description: 'Balanced' },
+    ],
+    defaultModel: 'minimax/abab7',
+  },
+  {
+    id: 'nvidia',
+    label: 'NVIDIA NIM',
+    icon: { type: 'svg-nvidia' },
+    accent: 'green-500',
+    badgeClass: 'bg-green-500/15 text-green-600 dark:text-green-400',
+    models: [
+      { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', name: 'Nemotron Ultra 253B', description: 'Flagship reasoning' },
+      { id: 'nvidia/llama-3.1-nemotron-70b-instruct', name: 'Nemotron 70B', description: 'Balanced' },
+      { id: 'nvidia/llama-3.1-nemotron-51b-instruct', name: 'Nemotron 51B', description: 'Fast' },
+      { id: 'meta/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', description: 'Meta via NIM' },
+    ],
+    defaultModel: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+  },
+  {
+    id: 'nous-portal',
+    label: 'Nous Portal',
+    icon: { type: 'svg-nous' },
+    accent: 'teal-500',
+    badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-400',
+    models: [
+      { id: 'nous/hermes-3-llama-3.1-405b', name: 'Hermes 3 405B', description: 'Flagship agentic' },
+      { id: 'nous/hermes-3-llama-3.1-70b', name: 'Hermes 3 70B', description: 'Balanced' },
+      { id: 'nous/hermes-2-pro-llama-3-8b', name: 'Hermes 2 Pro 8B', description: 'Fast & efficient' },
+    ],
+    defaultModel: 'nous/hermes-3-llama-3.1-405b',
   },
 ];
 

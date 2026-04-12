@@ -846,7 +846,7 @@ export default function AutomationsPage() {
                   <select
                     value={formData.sourceType}
                     onChange={(e) => setFormData({ ...formData, sourceType: e.target.value as Automation['source']['type'] })}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                    className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                   >
                     <option value="github">GitHub</option>
                     <option value="jira">JIRA</option>
@@ -958,7 +958,7 @@ export default function AutomationsPage() {
                   <select
                     value={formData.scheduleMinutes}
                     onChange={(e) => setFormData({ ...formData, scheduleMinutes: e.target.value })}
-                    className="w-full px-3 py-2 bg-secondary border border-border rounded-lg"
+                    className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                   >
                     {SCHEDULE_PRESETS.map(preset => (
                       <option key={preset.value} value={preset.value}>{preset.label}</option>
@@ -1020,7 +1020,7 @@ Post the tweet as a comment.`}
                         <select
                           value={formData.agentProvider || defaultProvider}
                           onChange={(e) => setFormData({ ...formData, agentProvider: e.target.value })}
-                          className="w-full px-3 py-2 bg-secondary border border-border rounded-lg text-sm"
+                          className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                         >
                           {PROVIDER_REGISTRY.map(p => (
                             <option key={p.id} value={p.id}>{p.label}</option>
@@ -1208,7 +1208,7 @@ Post the tweet as a comment.`}
                       ...selectedLogs,
                       selectedRunIndex: parseInt(e.target.value, 10)
                     })}
-                    className="flex-1 max-w-xs px-3 py-1.5 bg-secondary border border-border rounded-lg text-sm"
+                    className="flex-1 max-w-xs px-3 py-1.5 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
                   >
                     {selectedLogs.runs.map((run, index) => (
                       <option key={run.id} value={index}>

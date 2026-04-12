@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap,
@@ -20,6 +20,8 @@ import {
   FolderOpen,
   Cpu,
   Pencil as PencilIcon,
+  Plus,
+  X as XIcon,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
 import { getProviderDef } from '@/lib/providers';
@@ -41,6 +43,7 @@ const ALL_PROVIDER_MODEL_PRICING: Record<string, {
   },
   gemini: {
     models: [
+      { id: 'gemini-3.1-pro', name: 'Gemini 3.1 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
       { id: 'gemini-3-pro', name: 'Gemini 3 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
       { id: 'gemini-3-flash', name: 'Gemini 3 Flash', inputPerMTok: 0.15, outputPerMTok: 0.60 },
       { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
@@ -53,8 +56,11 @@ const ALL_PROVIDER_MODEL_PRICING: Record<string, {
       { id: 'moonshotai/kimi-k2', name: 'Kimi K2', inputPerMTok: null, outputPerMTok: null },
       { id: 'openai/gpt-4.1', name: 'GPT-4.1', inputPerMTok: 2, outputPerMTok: 8 },
       { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
+      { id: 'anthropic/claude-sonnet-4', name: 'Claude Sonnet 4', inputPerMTok: 3, outputPerMTok: 15 },
+      { id: 'meta-llama/llama-4-maverick', name: 'Llama 4 Maverick', inputPerMTok: 0.20, outputPerMTok: 0.60 },
+      { id: 'qwen/qwen3-235b', name: 'Qwen3 235B', inputPerMTok: 0.80, outputPerMTok: 3.20 },
     ],
-    note: 'Pricing varies per model — see openrouter.ai/models for current rates.',
+    note: 'Pricing varies per model — see openrouter.ai/models for full catalogue of 300+ models.',
   },
   deepseek: {
     models: [
@@ -65,6 +71,7 @@ const ALL_PROVIDER_MODEL_PRICING: Record<string, {
   },
   moonshot: {
     models: [
+      { id: 'kimi-k2.5', name: 'Kimi K2.5', inputPerMTok: null, outputPerMTok: null },
       { id: 'kimi-k2', name: 'Kimi K2', inputPerMTok: null, outputPerMTok: null },
       { id: 'moonlight-16k', name: 'Moonlight 16K', inputPerMTok: null, outputPerMTok: null },
     ],
@@ -79,6 +86,7 @@ const ALL_PROVIDER_MODEL_PRICING: Record<string, {
   },
   qwen: {
     models: [
+      { id: 'qwen3.6-72b', name: 'Qwen 3.6 72B', inputPerMTok: 0.40, outputPerMTok: 1.60 },
       { id: 'qwq-32b', name: 'QwQ 32B', inputPerMTok: 0.30, outputPerMTok: 1.20 },
       { id: 'qwen3-235b', name: 'Qwen3 235B', inputPerMTok: 0.80, outputPerMTok: 3.20 },
       { id: 'qwen-2.5-72b', name: 'Qwen 2.5 72B', inputPerMTok: 0.30, outputPerMTok: 1.20 },
@@ -87,11 +95,20 @@ const ALL_PROVIDER_MODEL_PRICING: Record<string, {
   },
   zhipu: {
     models: [
+      { id: 'glm-5.1', name: 'GLM-5.1', inputPerMTok: 0.80, outputPerMTok: 3.20 },
+      { id: 'glm-5', name: 'GLM-5', inputPerMTok: 0.70, outputPerMTok: 2.80 },
       { id: 'glm-4.6', name: 'GLM-4.6', inputPerMTok: 0.70, outputPerMTok: 2.80 },
       { id: 'glm-4.5', name: 'GLM-4.5', inputPerMTok: 0.70, outputPerMTok: 2.80 },
       { id: 'glm-4-plus', name: 'GLM-4 Plus', inputPerMTok: 0.50, outputPerMTok: 2 },
       { id: 'glm-4-air', name: 'GLM-4 Air', inputPerMTok: 0.07, outputPerMTok: 0.07 },
       { id: 'glm-4-flash', name: 'GLM-4 Flash', inputPerMTok: 0.01, outputPerMTok: 0.01 },
+    ],
+  },
+  minimax: {
+    models: [
+      { id: 'abab7', name: 'ABAB 7', inputPerMTok: 0.70, outputPerMTok: 2.80 },
+      { id: 'abab6.5s', name: 'ABAB 6.5s', inputPerMTok: 0.30, outputPerMTok: 1.20 },
+      { id: 'abab5.5', name: 'ABAB 5.5', inputPerMTok: 0.15, outputPerMTok: 0.60 },
     ],
   },
 };
@@ -235,6 +252,21 @@ export default function UsagePage() {
   const [showPricingTable, setShowPricingTable] = useState(false);
   const [editingPricing, setEditingPricing] = useState(false);
   const [pricingOverrides, setPricingOverrides] = useState<Record<string, Record<string, { input: string; output: string }>>>({});
+  const [customModels, setCustomModels] = useState<Record<string, { id: string; name: string; inputPerMTok: number | null; outputPerMTok: number | null }[]>>({});
+  const [addingModelProvider, setAddingModelProvider] = useState<string | null>(null);
+  const [newModelForm, setNewModelForm] = useState({ id: '', name: '', inputPerMTok: '', outputPerMTok: '' });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dorothy_custom_pricing_models');
+      if (saved) setCustomModels(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const saveCustomModels = (models: typeof customModels) => {
+    setCustomModels(models);
+    localStorage.setItem('dorothy_custom_pricing_models', JSON.stringify(models));
+  };
 
   // Get today's stats - use the most recent available
   const todayActivity = useMemo(() => {
@@ -1457,10 +1489,109 @@ export default function UsagePage() {
                           </tr>
                         );
                       })}
+                      {/* Custom user-added models */}
+                      {(customModels[providerId] || []).map((model, idx) => (
+                        <tr key={`custom-${model.id}`} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
+                          <td className="py-2 px-2 font-medium flex items-center gap-1">
+                            {model.name}
+                            <button
+                              onClick={() => {
+                                const updated = { ...customModels };
+                                updated[providerId] = updated[providerId].filter((_, i) => i !== idx);
+                                if (updated[providerId].length === 0) delete updated[providerId];
+                                saveCustomModels(updated);
+                              }}
+                              className="text-text-muted hover:text-red-400 transition-colors ml-1"
+                              title="Remove model"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </td>
+                          <td className="text-right py-2 px-2">
+                            {model.inputPerMTok !== null ? `$${model.inputPerMTok}` : <span className="text-text-muted">—</span>}
+                          </td>
+                          <td className="text-right py-2 px-2">
+                            {model.outputPerMTok !== null ? `$${model.outputPerMTok}` : <span className="text-text-muted">—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                      {/* Inline add-model form */}
+                      {addingModelProvider === providerId && (
+                        <tr className="border-t border-border-primary">
+                          <td className="py-2 pr-2">
+                            <input
+                              type="text"
+                              value={newModelForm.name}
+                              onChange={(e) => setNewModelForm(prev => ({ ...prev, name: e.target.value, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
+                              placeholder="Model name"
+                              className="w-full px-2 py-1 bg-bg-tertiary border border-border-primary text-xs focus:outline-none focus:border-accent-blue"
+                            />
+                          </td>
+                          <td className="py-2 pr-2">
+                            <input
+                              type="number"
+                              value={newModelForm.inputPerMTok}
+                              onChange={(e) => setNewModelForm(prev => ({ ...prev, inputPerMTok: e.target.value }))}
+                              placeholder="$/MTok"
+                              className="w-full px-2 py-1 bg-bg-tertiary border border-border-primary text-xs focus:outline-none focus:border-accent-blue"
+                              step="0.01"
+                            />
+                          </td>
+                          <td className="py-2" colSpan={2}>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                value={newModelForm.outputPerMTok}
+                                onChange={(e) => setNewModelForm(prev => ({ ...prev, outputPerMTok: e.target.value }))}
+                                placeholder="$/MTok"
+                                className="w-full px-2 py-1 bg-bg-tertiary border border-border-primary text-xs focus:outline-none focus:border-accent-blue"
+                                step="0.01"
+                              />
+                              <button
+                                onClick={() => {
+                                  if (!newModelForm.name) return;
+                                  const entry = {
+                                    id: newModelForm.id,
+                                    name: newModelForm.name,
+                                    inputPerMTok: newModelForm.inputPerMTok ? parseFloat(newModelForm.inputPerMTok) : null,
+                                    outputPerMTok: newModelForm.outputPerMTok ? parseFloat(newModelForm.outputPerMTok) : null,
+                                  };
+                                  const updated = { ...customModels };
+                                  if (!updated[providerId]) updated[providerId] = [];
+                                  updated[providerId] = [...updated[providerId], entry];
+                                  saveCustomModels(updated);
+                                  setAddingModelProvider(null);
+                                }}
+                                className="px-2 py-1 bg-text-primary text-bg-primary text-xs hover:opacity-90 transition-colors whitespace-nowrap"
+                              >
+                                Add
+                              </button>
+                              <button
+                                onClick={() => setAddingModelProvider(null)}
+                                className="px-2 py-1 text-xs text-text-muted hover:text-text-primary transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                   {providerData.note && (
                     <p className="text-[10px] text-text-muted mt-1">{providerData.note}</p>
+                  )}
+                  {addingModelProvider !== providerId && (
+                    <button
+                      onClick={() => {
+                        setAddingModelProvider(providerId);
+                        setNewModelForm({ id: '', name: '', inputPerMTok: '', outputPerMTok: '' });
+                      }}
+                      className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors mt-2"
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add model
+                    </button>
                   )}
                 </div>
               );

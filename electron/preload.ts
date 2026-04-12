@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       localModel?: string;
       obsidianVaultPaths?: string[];
       orchestratorMode?: boolean;
+      cliPath?: string;
     }) => ipcRenderer.invoke('agent:create', config),
     update: (params: {
       id: string;
@@ -72,6 +73,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       obsidianVaultPaths?: string[];
       worktree?: { enabled: boolean; branchName: string };
       orchestratorMode?: boolean;
+      cliPath?: string | null;
     }) => ipcRenderer.invoke('agent:update', params),
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: string; localModel?: string } }) =>
       ipcRenderer.invoke('agent:start', params),
@@ -579,7 +581,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('cliPaths:detect'),
     get: () =>
       ipcRenderer.invoke('cliPaths:get'),
-    save: (paths: { claude: string; gh: string; node: string; additionalPaths: string[] }) =>
+    save: (paths: { claude: string; codex: string; gemini: string; qwencode: string; opencode: string; pi: string; gws: string; gcloud: string; gh: string; node: string; minimax: string; additionalPaths: string[] }) =>
       ipcRenderer.invoke('cliPaths:save', paths),
   },
 

@@ -137,7 +137,10 @@ export type AgentProvider =
   | 'mimo'
   | 'moonshot'
   | 'qwen'
-  | 'zhipu';
+  | 'zhipu'
+  | 'minimax'
+  | 'nvidia'
+  | 'nous-portal';
 
 export interface AgentStatus {
   id: string;
@@ -167,6 +170,7 @@ export interface AgentStatus {
   localModel?: string;        // Tasmania model name when provider is 'local'
   savedPrompt?: string;       // Saved task/prompt for re-launching the agent
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
+  cliPath?: string;              // Custom CLI binary path override
 }
 
 export interface PtyDataEvent {
@@ -363,6 +367,12 @@ export interface ElectronAPI {
       qwenApiKey?: string;
       zhipuEnabled?: boolean;
       zhipuApiKey?: string;
+      minimaxEnabled?: boolean;
+      minimaxApiKey?: string;
+      nvidiaEnabled?: boolean;
+      nvidiaApiKey?: string;
+      nousPortalEnabled?: boolean;
+      nousPortalApiKey?: string;
       notificationSounds?: {
         waiting?: string;
         complete?: string;
@@ -385,6 +395,7 @@ export interface ElectronAPI {
         gcloud: string;
         gh: string;
         node: string;
+        minimax: string;
         additionalPaths: string[];
       };
     }>;
@@ -436,6 +447,7 @@ export interface ElectronAPI {
         gcloud: string;
         gh: string;
         node: string;
+        minimax: string;
         additionalPaths: string[];
       };
     }) => Promise<{ success: boolean; error?: string }>;
@@ -703,35 +715,41 @@ export interface ElectronAPI {
       claude: string;
       codex: string;
       gemini: string;
+      qwencode: string;
       opencode: string;
       pi: string;
       gws: string;
       gcloud: string;
       gh: string;
       node: string;
+      minimax: string;
     }>;
     get: () => Promise<{
       claude: string;
       codex: string;
       gemini: string;
+      qwencode: string;
       opencode: string;
       pi: string;
       gws: string;
       gcloud: string;
       gh: string;
       node: string;
+      minimax: string;
       additionalPaths: string[];
     }>;
     save: (paths: {
       claude: string;
       codex: string;
       gemini: string;
+      qwencode: string;
       opencode: string;
       pi: string;
       gws: string;
       gcloud: string;
       gh: string;
       node: string;
+      minimax: string;
       additionalPaths: string[];
     }) => Promise<{ success: boolean; error?: string }>;
   };
