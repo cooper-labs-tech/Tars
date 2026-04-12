@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, ExternalLink, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, ExternalLink, CheckCircle, XCircle, Loader2, BarChart3 } from 'lucide-react';
 import { Toggle } from './Toggle';
 import type { AppSettings } from './types';
 
@@ -113,6 +113,7 @@ interface CLIProviderStatus {
 }
 
 export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings }: AIProvidersSectionProps) => {
+  const [showClaudeKey, setShowClaudeKey] = useState(false);
   const [cliProviders, setCliProviders] = useState<CLIProviderStatus[]>([
     { name: 'Claude', binary: 'claude', version: null, loading: true },
     { name: 'Codex', binary: 'codex', version: null, loading: true },
@@ -145,6 +146,105 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
 
   return (
     <div className="space-y-6">
+      {/* Claude Code */}
+      <div>
+        <h2 className="text-lg font-semibold mb-1">Claude Code</h2>
+        <p className="text-sm text-muted-foreground">Anthropic&apos;s official coding CLI — always available when installed.</p>
+      </div>
+
+      <div className="border border-border bg-card p-5 space-y-4">
+        {/* API Key */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">API Key</label>
+          <div className="relative">
+            <input
+              type={showClaudeKey ? 'text' : 'password'}
+              value={appSettings.anthropicApiKey || ''}
+              onChange={(e) => onUpdateLocalSettings({ anthropicApiKey: e.target.value })}
+              onBlur={() => onSaveAppSettings({ anthropicApiKey: appSettings.anthropicApiKey })}
+              placeholder="Uses system env ANTHROPIC_API_KEY"
+              className="w-full px-3 py-2 pr-10 bg-secondary border border-border text-sm font-mono focus:border-foreground focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => setShowClaudeKey(!showClaudeKey)}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showClaudeKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">Most users rely on the system environment variable. Only set this to override it.</p>
+        </div>
+
+        {/* Default Model */}
+        <div>
+          <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Default Model</label>
+          <select
+            value={appSettings.defaultClaudeModel || 'sonnet'}
+            onChange={(e) => onSaveAppSettings({ defaultClaudeModel: e.target.value })}
+            className="w-full sm:w-64 bg-secondary border border-border text-sm text-foreground px-3 py-2 focus:outline-none focus:border-foreground appearance-none"
+          >
+            <option value="sonnet">Sonnet — Daily coding</option>
+            <option value="opus">Opus — Complex reasoning</option>
+            <option value="haiku">Haiku — Fast &amp; efficient</option>
+          </select>
+        </div>
+
+        {/* Agent Settings */}
+        <div className="border-t border-border pt-4 space-y-0">
+          <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-wide">Agent Settings</p>
+          <div className="flex items-center justify-between py-3 border-b border-border">
+            <div>
+              <span className="text-sm">Verbose Mode</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Start agents with --verbose flag for detailed output</p>
+            </div>
+            <Toggle
+              enabled={!!appSettings.verboseModeEnabled}
+              onChange={() => onSaveAppSettings({ verboseModeEnabled: !appSettings.verboseModeEnabled })}
+            />
+          </div>
+          <div className="flex items-center justify-between py-3">
+            <div>
+              <span className="text-sm">Chrome Browser Sharing</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Share your logged-in Chrome browser with agents via --chrome flag</p>
+            </div>
+            <Toggle
+              enabled={!!appSettings.chromeEnabled}
+              onChange={() => onSaveAppSettings({ chromeEnabled: !appSettings.chromeEnabled })}
+            />
+          </div>
+          <div className="px-3 py-2 bg-muted/50 border border-border text-xs text-muted-foreground">
+            Requires Claude Code v2.0.73 or later and the{' '}
+            <a
+              href="https://chromewebstore.google.com/detail/claude-in-chrome/ofnckddkabkmfmjkfgiofpofhpgjdlda"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-foreground"
+            >
+              Claude in Chrome
+            </a>{' '}
+            extension installed.
+          </div>
+        </div>
+
+        {/* Status Line */}
+        <div className="flex items-center justify-between pt-4 border-t border-border">
+          <div className="flex items-start gap-3">
+            <BarChart3 className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">Status Line</p>
+              <p className="text-xs text-muted-foreground">
+                Show a real-time status bar in Claude Code with model, context usage, git branch, session time, and token stats
+              </p>
+            </div>
+          </div>
+          <Toggle
+            enabled={appSettings.statusLineEnabled === true}
+            onChange={() => onSaveAppSettings({ statusLineEnabled: !appSettings.statusLineEnabled })}
+          />
+        </div>
+      </div>
+
       <div>
         <h2 className="text-lg font-semibold mb-1">External AI Providers</h2>
         <p className="text-sm text-muted-foreground">
@@ -237,8 +337,6 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
         title="MiMo (Xiaomi)"
         description="MiMo V2 Pro — Xiaomi's flagship agentic model at $1/M input tokens."
         docsUrl="https://platform.xiaomimimo.com"
-        badge="New Mar 2026"
-        badgeColor="bg-blue-700/20 text-blue-400 border border-blue-700/30"
         enabled={!!appSettings.mimoEnabled}
         onToggle={() => onSaveAppSettings({ mimoEnabled: !appSettings.mimoEnabled })}
         apiKey={appSettings.mimoApiKey || ''}

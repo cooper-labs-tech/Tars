@@ -184,7 +184,7 @@ export default function Sidebar({ isMobile = false }: SidebarProps) {
           {!showLabels && (
             <Link
               href="/whats-new"
-              className={`flex items-center justify-center px-3 py-2.5 transition-colors ${
+              className={`flex items-center px-3 py-2.5 transition-colors ${
                 pathname === '/whats-new'
                   ? 'bg-primary/20 text-primary'
                   : 'text-muted-foreground hover:text-foreground hover:bg-secondary'

@@ -14,7 +14,7 @@ export function ScheduleFieldPicker({ value, onChange }: ScheduleFieldPickerProp
           <select
             value={value.schedulePreset}
             onChange={(e) => onChange({ schedulePreset: e.target.value })}
-            className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
+            className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground appearance-none"
           >
             {SCHEDULE_PRESETS.map(preset => (
               <option key={preset.value} value={preset.value}>{preset.label}</option>
@@ -28,7 +28,7 @@ export function ScheduleFieldPicker({ value, onChange }: ScheduleFieldPickerProp
               type="time"
               value={value.time}
               onChange={(e) => onChange({ time: e.target.value })}
-              className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
+              className="w-full px-3 py-2 bg-secondary border border-border text-sm text-foreground focus:outline-none focus:border-foreground appearance-none"
             />
           </div>
         )}
