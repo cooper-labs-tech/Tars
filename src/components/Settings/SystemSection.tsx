@@ -52,14 +52,6 @@ export const SystemSection = ({ info, appSettings, onSaveAppSettings }: SystemSe
     }
   };
 
-  const handleVerboseModeToggle = () => {
-    onSaveAppSettings({ verboseModeEnabled: !appSettings.verboseModeEnabled });
-  };
-
-  const handleChromeToggle = () => {
-    onSaveAppSettings({ chromeEnabled: !appSettings.chromeEnabled });
-  };
-
   return (
     <div className="space-y-6">
       <div>
@@ -91,63 +83,6 @@ export const SystemSection = ({ info, appSettings, onSaveAppSettings }: SystemSe
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Agent Settings */}
-      <div className="border border-border bg-card p-6">
-        <h3 className="text-md font-medium mb-4">Agent Settings</h3>
-        <div className="flex items-center justify-between py-3 border-b border-border">
-          <div>
-            <span className="text-sm">Verbose Mode</span>
-            <p className="text-xs text-muted-foreground mt-1">
-              Start agents with --verbose flag for detailed output
-            </p>
-          </div>
-          <button
-            onClick={handleVerboseModeToggle}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              appSettings.verboseModeEnabled ? 'bg-white' : 'bg-white/20'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-black transition-transform ${
-                appSettings.verboseModeEnabled ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-        <div className="flex items-center justify-between py-3 border-b border-border">
-          <div>
-            <span className="text-sm">Chrome Browser Sharing</span>
-            <p className="text-xs text-muted-foreground mt-1">
-              Share your logged-in Chrome browser with agents via --chrome flag
-            </p>
-          </div>
-          <button
-            onClick={handleChromeToggle}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              appSettings.chromeEnabled ? 'bg-white' : 'bg-white/20'
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-black transition-transform ${
-                appSettings.chromeEnabled ? 'translate-x-6' : 'translate-x-1'
-              }`}
-            />
-          </button>
-        </div>
-        <div className="mt-3 px-3 py-2 bg-muted/50 border border-border rounded text-xs text-muted-foreground">
-          Requires Claude Code v2.0.73 or later and the{' '}
-          <a
-            href="https://chromewebstore.google.com/detail/claude-in-chrome/ofnckddkabkmfmjkfgiofpofhpgjdlda"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground"
-          >
-            Claude in Chrome
-          </a>{' '}
-          extension installed.
         </div>
       </div>
 

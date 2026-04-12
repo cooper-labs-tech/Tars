@@ -108,6 +108,8 @@ export interface AppSettings {
   terminalFontSize?: number;
   terminalTheme?: 'dark' | 'light';
   statusLineEnabled?: boolean;
+  anthropicApiKey?: string;
+  defaultClaudeModel?: string;
   favoriteProjects?: string[];
   hiddenProjects?: string[];
   defaultProjectPath?: string;

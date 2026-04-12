@@ -3,7 +3,7 @@ import { Cpu } from 'lucide-react';
 import { PROVIDER_REGISTRY, type ProviderIconDef } from '@/lib/providers';
 
 /** Render the correct icon for any provider icon definition */
-function ProviderIconRenderer({ icon, className = 'w-3.5 h-3.5' }: { icon: ProviderIconDef; className?: string }) {
+export function ProviderIconRenderer({ icon, className = 'w-3.5 h-3.5' }: { icon: ProviderIconDef; className?: string }) {
   if (icon.type === 'image') {
     return <img src={icon.src} alt="" className={`${className} object-contain`} />;
   }
