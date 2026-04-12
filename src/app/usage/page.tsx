@@ -19,12 +19,13 @@ import {
   Timer,
   FolderOpen,
   Cpu,
-  Pencil as PencilIcon,
-  Plus,
-  X as XIcon,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
-import { getProviderDef } from '@/lib/providers';
+import { getProviderDef, PROVIDER_REGISTRY } from '@/lib/providers';
+import { ProviderIconRenderer } from '@/components/ProviderBadge';
+
+/** Session-level cache for OpenRouter live pricing */
+let openRouterPricingCache: { models: Array<{ id: string; name: string; inputPerMTok: number; outputPerMTok: number }> } | null = null;
 
 /** Per-model pricing defaults for ALL providers (input/output/cache per MTok).
  *  Used by the Pricing Reference table. Users can override via edit mode.
@@ -250,23 +251,35 @@ export default function UsagePage() {
   const { data, loading, error } = useClaude();
   const [costTimeRange, setCostTimeRange] = useState<TimeRange>('daily');
   const [showPricingTable, setShowPricingTable] = useState(false);
-  const [editingPricing, setEditingPricing] = useState(false);
-  const [pricingOverrides, setPricingOverrides] = useState<Record<string, Record<string, { input: string; output: string }>>>({});
-  const [customModels, setCustomModels] = useState<Record<string, { id: string; name: string; inputPerMTok: number | null; outputPerMTok: number | null }[]>>({});
-  const [addingModelProvider, setAddingModelProvider] = useState<string | null>(null);
-  const [newModelForm, setNewModelForm] = useState({ id: '', name: '', inputPerMTok: '', outputPerMTok: '' });
+  const [openRouterLiveModels, setOpenRouterLiveModels] = useState<Array<{ id: string; name: string; inputPerMTok: number; outputPerMTok: number }> | null>(openRouterPricingCache?.models ?? null);
+  const [loadingOpenRouterPricing, setLoadingOpenRouterPricing] = useState(false);
 
+  // Fetch OpenRouter live pricing when the section is first opened
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('dorothy_custom_pricing_models');
-      if (saved) setCustomModels(JSON.parse(saved));
-    } catch {}
-  }, []);
-
-  const saveCustomModels = (models: typeof customModels) => {
-    setCustomModels(models);
-    localStorage.setItem('dorothy_custom_pricing_models', JSON.stringify(models));
-  };
+    if (!showPricingTable || openRouterPricingCache || loadingOpenRouterPricing) return;
+    let cancelled = false;
+    setLoadingOpenRouterPricing(true);
+    fetch('https://openrouter.ai/api/v1/models')
+      .then(r => r.ok ? r.json() : null)
+      .then(json => {
+        if (cancelled || !json?.data) return;
+        const models = (json.data as Array<{ id: string; name?: string; pricing?: { prompt?: string; completion?: string } }>)
+          .filter(m => m.id && m.pricing?.prompt)
+          .map(m => ({
+            id: m.id,
+            name: m.name || m.id.split('/').pop() || m.id,
+            inputPerMTok: parseFloat(m.pricing!.prompt!) * 1_000_000,
+            outputPerMTok: parseFloat(m.pricing!.completion || '0') * 1_000_000,
+          }))
+          .filter(m => m.inputPerMTok > 0)
+          .slice(0, 100);
+        openRouterPricingCache = { models };
+        setOpenRouterLiveModels(models);
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingOpenRouterPricing(false); });
+    return () => { cancelled = true; };
+  }, [showPricingTable]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Get today's stats - use the most recent available
   const todayActivity = useMemo(() => {
@@ -1355,7 +1368,7 @@ export default function UsagePage() {
         })()}
       </motion.div>
 
-      {/* Pricing Reference Table — unified per-model for all providers */}
+      {/* Pricing Reference — per-provider cards */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1374,34 +1387,23 @@ export default function UsagePage() {
         </button>
 
         {showPricingTable && (
-          <div className="mt-4 overflow-x-auto space-y-6">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-[10px] text-text-muted">
-                All prices in $/MTok (per million tokens). {editingPricing ? 'Click values to edit.' : ''}
-              </p>
-              <button
-                onClick={() => setEditingPricing(!editingPricing)}
-                className="text-[10px] text-text-muted hover:text-text-primary flex items-center gap-1 transition-colors"
-              >
-                <PencilIcon className="w-3 h-3" />
-                {editingPricing ? 'Done' : 'Edit prices'}
-              </button>
-            </div>
+          <div className="mt-4 space-y-6">
+            <p className="text-[10px] text-text-muted">All prices in $/MTok (per million tokens).</p>
 
-            {/* Claude */}
-            <div>
-              <h4 className="text-xs font-medium mb-2 flex items-center gap-1.5">
+            {/* Claude (Anthropic) */}
+            <div className="border border-border-primary p-4">
+              <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5">
                 <img src="/claude-ai-icon.webp" alt="" className="w-3.5 h-3.5 object-contain" />
                 Claude (Anthropic)
               </h4>
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border-primary">
-                    <th className="text-left py-2 px-2 text-text-muted font-medium">Model</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">Input</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">Output</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">Cache Hits</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">5m Write</th>
+                    <th className="text-left py-1.5 px-2 text-text-muted font-medium">Model</th>
+                    <th className="text-right py-1.5 px-2 text-text-muted font-medium">Input</th>
+                    <th className="text-right py-1.5 px-2 text-text-muted font-medium">Output</th>
+                    <th className="text-right py-1.5 px-2 text-text-muted font-medium hidden sm:table-cell">Cache Hits</th>
+                    <th className="text-right py-1.5 px-2 text-text-muted font-medium hidden sm:table-cell">5m Write</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1419,11 +1421,11 @@ export default function UsagePage() {
                     const pricing = MODEL_PRICING[model.key];
                     return (
                       <tr key={model.key} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
-                        <td className="py-2 px-2 font-medium">{model.name}</td>
-                        <td className="text-right py-2 px-2">${pricing.inputPerMTok}</td>
-                        <td className="text-right py-2 px-2">${pricing.outputPerMTok}</td>
-                        <td className="text-right py-2 px-2">${pricing.cacheHitsPerMTok}</td>
-                        <td className="text-right py-2 px-2">${pricing.cache5mWritePerMTok}</td>
+                        <td className="py-1.5 px-2 font-medium">{model.name}</td>
+                        <td className="text-right py-1.5 px-2">${pricing.inputPerMTok}</td>
+                        <td className="text-right py-1.5 px-2">${pricing.outputPerMTok}</td>
+                        <td className="text-right py-1.5 px-2 hidden sm:table-cell">${pricing.cacheHitsPerMTok}</td>
+                        <td className="text-right py-1.5 px-2 hidden sm:table-cell">${pricing.cache5mWritePerMTok}</td>
                       </tr>
                     );
                   })}
@@ -1431,174 +1433,86 @@ export default function UsagePage() {
               </table>
             </div>
 
-            {/* Other Providers — per-model breakdown */}
-            {Object.entries(ALL_PROVIDER_MODEL_PRICING).map(([providerId, providerData]) => {
-              const providerDef = getProviderDef(providerId);
-              if (!providerDef) return null;
+            {/* OpenRouter — live from API */}
+            <div className="border border-border-primary p-4">
+              <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5">
+                {(() => { const def = getProviderDef('openrouter'); return def ? <ProviderIconRenderer icon={def.icon} className="w-3.5 h-3.5" /> : null; })()}
+                OpenRouter
+                {loadingOpenRouterPricing && <Loader2 className="w-3 h-3 animate-spin text-text-muted ml-1" />}
+                {openRouterLiveModels && (
+                  <span className="text-[10px] text-accent-green font-normal ml-1">live</span>
+                )}
+              </h4>
+              {openRouterLiveModels ? (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border-primary">
+                      <th className="text-left py-1.5 px-2 text-text-muted font-medium">Model</th>
+                      <th className="text-right py-1.5 px-2 text-text-muted font-medium">Input</th>
+                      <th className="text-right py-1.5 px-2 text-text-muted font-medium">Output</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {openRouterLiveModels.map((m) => (
+                      <tr key={m.id} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
+                        <td className="py-1.5 px-2 font-medium">{m.name}</td>
+                        <td className="text-right py-1.5 px-2">${m.inputPerMTok.toFixed(4)}</td>
+                        <td className="text-right py-1.5 px-2">${m.outputPerMTok.toFixed(4)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : loadingOpenRouterPricing ? (
+                <div className="flex items-center gap-2 py-4 text-xs text-text-muted">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Fetching live prices from openrouter.ai...
+                </div>
+              ) : (
+                <p className="text-xs text-text-muted py-2">Could not load pricing. See openrouter.ai/models for current rates.</p>
+              )}
+            </div>
+
+            {/* Other providers — hardcoded */}
+            {PROVIDER_REGISTRY.filter(p => !p.requiresCli && p.id !== 'openrouter' && ALL_PROVIDER_MODEL_PRICING[p.id]).map((providerDef) => {
+              const providerData = ALL_PROVIDER_MODEL_PRICING[providerDef.id];
               return (
-                <div key={providerId}>
-                  <h4 className="text-xs font-medium mb-2">{providerDef.label}</h4>
+                <div key={providerDef.id} className="border border-border-primary p-4">
+                  <h4 className="text-xs font-medium mb-3 flex items-center gap-1.5">
+                    <ProviderIconRenderer icon={providerDef.icon} className="w-3.5 h-3.5" />
+                    {providerDef.label}
+                  </h4>
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-border-primary">
-                        <th className="text-left py-2 px-2 text-text-muted font-medium">Model</th>
-                        <th className="text-right py-2 px-2 text-text-muted font-medium">Input</th>
-                        <th className="text-right py-2 px-2 text-text-muted font-medium">Output</th>
+                        <th className="text-left py-1.5 px-2 text-text-muted font-medium">Model</th>
+                        <th className="text-right py-1.5 px-2 text-text-muted font-medium">Input</th>
+                        <th className="text-right py-1.5 px-2 text-text-muted font-medium">Output</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {providerData.models.map((model) => {
-                        const overrides = pricingOverrides[providerId]?.[model.id];
-                        const inputVal = overrides?.input ?? (model.inputPerMTok !== null ? String(model.inputPerMTok) : '');
-                        const outputVal = overrides?.output ?? (model.outputPerMTok !== null ? String(model.outputPerMTok) : '');
-                        return (
-                          <tr key={model.id} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
-                            <td className="py-2 px-2 font-medium">{model.name}</td>
-                            <td className="text-right py-2 px-2">
-                              {editingPricing ? (
-                                <input
-                                  type="text"
-                                  value={inputVal}
-                                  onChange={(e) => setPricingOverrides(prev => ({
-                                    ...prev,
-                                    [providerId]: { ...prev[providerId], [model.id]: { input: e.target.value, output: outputVal } },
-                                  }))}
-                                  className="w-16 px-1 py-0.5 text-right bg-bg-tertiary border border-border-primary text-xs font-mono focus:outline-none focus:border-accent-blue"
-                                  placeholder="—"
-                                />
-                              ) : (
-                                model.inputPerMTok !== null ? `$${model.inputPerMTok}` : <span className="text-text-muted">—</span>
-                              )}
-                            </td>
-                            <td className="text-right py-2 px-2">
-                              {editingPricing ? (
-                                <input
-                                  type="text"
-                                  value={outputVal}
-                                  onChange={(e) => setPricingOverrides(prev => ({
-                                    ...prev,
-                                    [providerId]: { ...prev[providerId], [model.id]: { input: inputVal, output: e.target.value } },
-                                  }))}
-                                  className="w-16 px-1 py-0.5 text-right bg-bg-tertiary border border-border-primary text-xs font-mono focus:outline-none focus:border-accent-blue"
-                                  placeholder="—"
-                                />
-                              ) : (
-                                model.outputPerMTok !== null ? `$${model.outputPerMTok}` : <span className="text-text-muted">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      {/* Custom user-added models */}
-                      {(customModels[providerId] || []).map((model, idx) => (
-                        <tr key={`custom-${model.id}`} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
-                          <td className="py-2 px-2 font-medium flex items-center gap-1">
-                            {model.name}
-                            <button
-                              onClick={() => {
-                                const updated = { ...customModels };
-                                updated[providerId] = updated[providerId].filter((_, i) => i !== idx);
-                                if (updated[providerId].length === 0) delete updated[providerId];
-                                saveCustomModels(updated);
-                              }}
-                              className="text-text-muted hover:text-red-400 transition-colors ml-1"
-                              title="Remove model"
-                            >
-                              <XIcon className="w-3 h-3" />
-                            </button>
-                          </td>
-                          <td className="text-right py-2 px-2">
+                      {providerData.models.map((model) => (
+                        <tr key={model.id} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
+                          <td className="py-1.5 px-2 font-medium">{model.name}</td>
+                          <td className="text-right py-1.5 px-2">
                             {model.inputPerMTok !== null ? `$${model.inputPerMTok}` : <span className="text-text-muted">—</span>}
                           </td>
-                          <td className="text-right py-2 px-2">
+                          <td className="text-right py-1.5 px-2">
                             {model.outputPerMTok !== null ? `$${model.outputPerMTok}` : <span className="text-text-muted">—</span>}
                           </td>
                         </tr>
                       ))}
-                      {/* Inline add-model form */}
-                      {addingModelProvider === providerId && (
-                        <tr className="border-t border-border-primary">
-                          <td className="py-2 pr-2">
-                            <input
-                              type="text"
-                              value={newModelForm.name}
-                              onChange={(e) => setNewModelForm(prev => ({ ...prev, name: e.target.value, id: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
-                              placeholder="Model name"
-                              className="w-full px-2 py-1 bg-bg-tertiary border border-border-primary text-xs focus:outline-none focus:border-accent-blue"
-                            />
-                          </td>
-                          <td className="py-2 pr-2">
-                            <input
-                              type="number"
-                              value={newModelForm.inputPerMTok}
-                              onChange={(e) => setNewModelForm(prev => ({ ...prev, inputPerMTok: e.target.value }))}
-                              placeholder="$/MTok"
-                              className="w-full px-2 py-1 bg-bg-tertiary border border-border-primary text-xs focus:outline-none focus:border-accent-blue"
-                              step="0.01"
-                            />
-                          </td>
-                          <td className="py-2" colSpan={2}>
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number"
-                                value={newModelForm.outputPerMTok}
-                                onChange={(e) => setNewModelForm(prev => ({ ...prev, outputPerMTok: e.target.value }))}
-                                placeholder="$/MTok"
-                                className="w-full px-2 py-1 bg-bg-tertiary border border-border-primary text-xs focus:outline-none focus:border-accent-blue"
-                                step="0.01"
-                              />
-                              <button
-                                onClick={() => {
-                                  if (!newModelForm.name) return;
-                                  const entry = {
-                                    id: newModelForm.id,
-                                    name: newModelForm.name,
-                                    inputPerMTok: newModelForm.inputPerMTok ? parseFloat(newModelForm.inputPerMTok) : null,
-                                    outputPerMTok: newModelForm.outputPerMTok ? parseFloat(newModelForm.outputPerMTok) : null,
-                                  };
-                                  const updated = { ...customModels };
-                                  if (!updated[providerId]) updated[providerId] = [];
-                                  updated[providerId] = [...updated[providerId], entry];
-                                  saveCustomModels(updated);
-                                  setAddingModelProvider(null);
-                                }}
-                                className="px-2 py-1 bg-text-primary text-bg-primary text-xs hover:opacity-90 transition-colors whitespace-nowrap"
-                              >
-                                Add
-                              </button>
-                              <button
-                                onClick={() => setAddingModelProvider(null)}
-                                className="px-2 py-1 text-xs text-text-muted hover:text-text-primary transition-colors"
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
+                  <p className="text-[10px] text-text-muted mt-2">Prices may not reflect current rates</p>
                   {providerData.note && (
-                    <p className="text-[10px] text-text-muted mt-1">{providerData.note}</p>
-                  )}
-                  {addingModelProvider !== providerId && (
-                    <button
-                      onClick={() => {
-                        setAddingModelProvider(providerId);
-                        setNewModelForm({ id: '', name: '', inputPerMTok: '', outputPerMTok: '' });
-                      }}
-                      className="flex items-center gap-1 text-xs text-text-muted hover:text-text-primary transition-colors mt-2"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add model
-                    </button>
+                    <p className="text-[10px] text-text-muted mt-0.5">{providerData.note}</p>
                   )}
                 </div>
               );
             })}
 
             <p className="text-[10px] text-text-muted border-t border-border-primary pt-3">
-              Pricing shown uses default market rates. Actual costs vary by plan, routing, and caching.
+              Actual costs vary by plan, routing, and prompt caching. Check each provider&apos;s pricing page for the latest rates.
             </p>
           </div>
         )}

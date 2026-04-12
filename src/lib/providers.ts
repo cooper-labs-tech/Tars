@@ -214,6 +214,7 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     icon: { type: 'svg-minimax' },
     accent: 'rose-500',
     badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400',
+    requiresCli: true,
     models: [
       { id: 'minimax/abab7', name: 'ABAB 7', description: 'Flagship' },
       { id: 'minimax/abab6.5s', name: 'ABAB 6.5s', description: 'Fast' },

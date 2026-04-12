@@ -186,13 +186,53 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
         )}
       </div>
 
-      {/* Provider Toggles — OpenCode & Pi */}
-      <div className="border border-border bg-card p-6 space-y-4">
+      {/* Provider Toggles — OpenCode & Pi + status rows for others */}
+      <div className="border border-border bg-card p-6 space-y-0">
         <h3 className="text-md font-medium mb-2">CLI Agent Providers</h3>
         <p className="text-xs text-muted-foreground mb-4">
-          Enable additional CLI-based agent providers. Paths are configured below.
+          Status of all CLI-based agent providers. Enable/disable toggles for OpenCode and Pi; others are always available when installed.
         </p>
 
+        {/* Always-available CLIs: status rows only */}
+        {[
+          { key: 'claude', label: 'Claude', desc: 'Anthropic Claude Code CLI' },
+          { key: 'codex', label: 'Codex', desc: 'OpenAI Codex CLI' },
+          { key: 'gemini', label: 'Gemini', desc: 'Google Gemini CLI' },
+          { key: 'qwencode', label: 'Qwen Code', desc: 'Alibaba Qwen Code CLI' },
+          { key: 'minimax', label: 'MiniMax', desc: 'MiniMax CLI' },
+        ].map(({ key, label, desc }) => {
+          const detected = detectedPaths?.[key as keyof DetectedPaths];
+          return (
+            <div key={key} className="flex items-center justify-between py-3 border-b border-border">
+              <div className="flex items-center gap-3">
+                <Cpu className="w-4 h-4 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-medium">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {detecting ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                ) : detected ? (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                    <span className="text-xs font-mono text-muted-foreground">{detected}</span>
+                  </>
+                ) : detectedPaths ? (
+                  <>
+                    <XCircle className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Not detected</span>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Run detect above</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* OpenCode — toggle + test */}
         <div className="flex items-center justify-between py-3 border-b border-border">
           <div className="flex items-center gap-3">
             <Cpu className="w-4 h-4 text-cyan-500" />
@@ -232,6 +272,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
           </div>
         )}
 
+        {/* Pi — toggle + test */}
         <div className="flex items-center justify-between py-3">
           <div className="flex items-center gap-3">
             <Cpu className="w-4 h-4 text-cyan-500" />
