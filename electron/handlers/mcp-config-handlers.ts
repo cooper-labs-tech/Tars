@@ -323,6 +323,9 @@ function listServers(provider: string): McpServer[] {
     case 'opencode':
     case 'pi':
     case 'qwencode': return readJsonMcp(provider);
+    case 'minimax':
+    case 'nvidia':
+    case 'nous-portal': return readClaudeMcp();
     default: return [];
   }
 }
@@ -335,6 +338,9 @@ function updateServer(provider: string, server: McpServer): void {
     case 'opencode':
     case 'pi':
     case 'qwencode': writeJsonMcp(provider, 'update', server); break;
+    case 'minimax':
+    case 'nvidia':
+    case 'nous-portal': writeClaudeMcp('update', server); break;
   }
 }
 
@@ -346,6 +352,9 @@ function deleteServer(provider: string, name: string): void {
     case 'opencode':
     case 'pi':
     case 'qwencode': writeJsonMcp(provider, 'delete', undefined, name); break;
+    case 'minimax':
+    case 'nvidia':
+    case 'nous-portal': writeClaudeMcp('delete', undefined, name); break;
   }
 }
 
