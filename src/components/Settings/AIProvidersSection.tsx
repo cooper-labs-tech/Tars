@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Eye, EyeOff, ExternalLink, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 import { Toggle } from './Toggle';
 import type { AppSettings } from './types';
 
@@ -105,7 +105,43 @@ function ProviderCard({
   );
 }
 
+interface CLIProviderStatus {
+  name: string;
+  binary: string;
+  version: string | null;
+  loading: boolean;
+}
+
 export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings }: AIProvidersSectionProps) => {
+  const [cliProviders, setCliProviders] = useState<CLIProviderStatus[]>([
+    { name: 'Claude', binary: 'claude', version: null, loading: true },
+    { name: 'Codex', binary: 'codex', version: null, loading: true },
+    { name: 'Gemini', binary: 'gemini', version: null, loading: true },
+    { name: 'Qwen Code', binary: 'qwen-code', version: null, loading: true },
+    { name: 'OpenCode', binary: 'opencode', version: null, loading: true },
+    { name: 'Pi', binary: 'pi', version: null, loading: true },
+  ]);
+
+  useEffect(() => {
+    const detect = async () => {
+      const results = await Promise.all(
+        cliProviders.map(async (cli) => {
+          try {
+            const result = await window.electronAPI?.shell?.exec({ command: `${cli.binary} --version 2>&1` });
+            const version = result?.success && result.output && !result.output.includes('not found') && !result.output.includes('command not found')
+              ? result.output.trim().split('\n')[0]
+              : null;
+            return { ...cli, version, loading: false };
+          } catch {
+            return { ...cli, version: null, loading: false };
+          }
+        })
+      );
+      setCliProviders(results);
+    };
+    detect();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="space-y-6">
       <div>
@@ -114,6 +150,38 @@ export const AIProvidersSection = ({ appSettings, onSaveAppSettings, onUpdateLoc
           Configure API keys to use models from other providers. All providers route through
           the Claude CLI using the <code className="bg-secondary px-1 text-xs">ANTHROPIC_BASE_URL</code> override.
         </p>
+      </div>
+
+      {/* CLI-based Providers */}
+      <div className="border border-border bg-card p-5 space-y-3">
+        <div>
+          <h3 className="font-medium mb-0.5">CLI-based Providers</h3>
+          <p className="text-xs text-muted-foreground">
+            Providers that run as local CLI tools. Configure paths in Settings &gt; CLI Paths.
+          </p>
+        </div>
+        <div className="space-y-0">
+          {cliProviders.map((cli) => (
+            <div key={cli.binary} className="flex items-center justify-between py-2.5 border-b border-border last:border-0">
+              <span className="text-sm font-medium">{cli.name}</span>
+              <div className="flex items-center gap-2">
+                {cli.loading ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+                ) : cli.version ? (
+                  <>
+                    <CheckCircle className="w-3.5 h-3.5 text-green-500" />
+                    <span className="text-xs font-mono text-muted-foreground">{cli.version}</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5 text-red-400" />
+                    <span className="text-xs text-muted-foreground">Not installed</span>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* OpenRouter */}

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Cpu,
   AlertCircle,
   Loader2,
   Sparkles,
+  RefreshCw,
 } from 'lucide-react';
 import type { AgentPersonaValues } from './types';
 import type { AgentProvider } from '@/types/electron';
@@ -37,6 +38,67 @@ const PROVIDER_MODELS: Record<string, ProviderModel[]> = Object.fromEntries(
 const PROVIDER_DEFAULT_MODEL: Record<string, string> = Object.fromEntries(
   PROVIDER_REGISTRY.map((p) => [p.id, p.defaultModel]),
 );
+
+/* ── Dynamic model fetching ────────────────────────────────── */
+
+/** API endpoint config per provider */
+const PROVIDER_API_ENDPOINTS: Record<string, { url: string; keySettingField?: string }> = {
+  openrouter: { url: 'https://openrouter.ai/api/v1/models' }, // public, no key needed
+  deepseek: { url: 'https://api.deepseek.com/models', keySettingField: 'deepSeekApiKey' },
+  qwen: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/models', keySettingField: 'qwenApiKey' },
+  moonshot: { url: 'https://api.moonshot.cn/v1/models', keySettingField: 'moonshotApiKey' },
+  mimo: { url: 'https://api.mimo.com/v1/models', keySettingField: 'mimoApiKey' },
+  zhipu: { url: 'https://open.bigmodel.cn/api/paas/v4/models', keySettingField: 'zhipuApiKey' },
+};
+
+/** Module-level cache: provider → { models, timestamp } */
+const modelCache = new Map<string, { models: ProviderModel[]; ts: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+/** Fetch models from a provider's API. Returns null on failure. */
+async function fetchProviderModels(providerId: string): Promise<ProviderModel[] | null> {
+  const endpoint = PROVIDER_API_ENDPOINTS[providerId];
+  if (!endpoint) return null;
+
+  // Check cache
+  const cached = modelCache.get(providerId);
+  if (cached && Date.now() - cached.ts < CACHE_TTL) return cached.models;
+
+  try {
+    // Get API key from app settings if needed
+    let apiKey: string | undefined;
+    if (endpoint.keySettingField) {
+      const settings = await window.electronAPI?.appSettings?.get();
+      apiKey = (settings as Record<string, unknown> | undefined)?.[endpoint.keySettingField] as string | undefined;
+      if (!apiKey) return null; // No key, can't fetch
+    }
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+
+    const res = await fetch(endpoint.url, { headers, signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+
+    const json = await res.json();
+    const rawModels: { id: string; name?: string; description?: string; created?: number }[] = json.data || json.models || [];
+
+    if (!Array.isArray(rawModels) || rawModels.length === 0) return null;
+
+    const models: ProviderModel[] = rawModels
+      .filter((m) => m.id)
+      .slice(0, 50) // Limit to avoid huge lists
+      .map((m) => ({
+        id: m.id,
+        name: m.name || m.id.split('/').pop() || m.id,
+        description: m.description || '',
+      }));
+
+    modelCache.set(providerId, { models, ts: Date.now() });
+    return models;
+  } catch {
+    return null;
+  }
+}
 
 /** Render a typed provider icon */
 function ProviderIcon({ icon, selected, accent }: { icon: ProviderIconDef; selected: boolean; accent: string }) {
@@ -126,12 +188,35 @@ const StepModel = React.memo(function StepModel({
   agentPersonaRef,
   projectPath,
 }: StepModelProps) {
+  // Dynamic models state
+  const [dynamicModels, setDynamicModels] = useState<ProviderModel[] | null>(null);
+  const [loadingModels, setLoadingModels] = useState(false);
+
   // Tasmania state for local provider
   const [tasmaniaStatus, setTasmaniaStatus] = useState<{
     status: string; modelName: string | null; endpoint: string | null;
   } | null>(null);
   const [tasmaniaModels, setTasmaniaModels] = useState<TasmaniaModel[]>([]);
   const [loadingTasmania, setLoadingTasmania] = useState(false);
+
+  // Fetch dynamic models when provider changes
+  const loadDynamicModels = useCallback(async () => {
+    if (!PROVIDER_API_ENDPOINTS[provider]) {
+      setDynamicModels(null);
+      return;
+    }
+    setLoadingModels(true);
+    const models = await fetchProviderModels(provider);
+    setDynamicModels(models);
+    setLoadingModels(false);
+  }, [provider]);
+
+  useEffect(() => {
+    loadDynamicModels();
+  }, [loadDynamicModels]);
+
+  // Resolved model list: dynamic if available, else hardcoded fallback
+  const resolvedModels = dynamicModels || PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude;
 
   // Fetch Tasmania status when switching to local provider
   useEffect(() => {
@@ -175,8 +260,8 @@ const StepModel = React.memo(function StepModel({
       <div>
         <label className="block text-sm font-medium mb-2">Provider</label>
         <div className="grid gap-2 grid-cols-4">
-          {PROVIDER_REGISTRY.map(({ id, label, icon, accent, requiresCli }) => {
-            const installed = installedProviders?.[id] !== false;
+          {PROVIDER_REGISTRY.filter(p => p.id !== 'opencode' && p.id !== 'pi').map(({ id, label, icon, accent, requiresCli }) => {
+            const installed = installedProviders?.[id] === true;
             const disabledReason = !installed
               ? requiresCli ? 'Not installed' : 'Add API key in Settings'
               : null;
@@ -231,21 +316,39 @@ const StepModel = React.memo(function StepModel({
       {/* Model Selection — dynamic dropdown based on provider */}
       {provider !== 'local' ? (
         <div>
-          <label className="block text-sm font-medium mb-2">Model</label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium">Model</label>
+            {PROVIDER_API_ENDPOINTS[provider] && (
+              <button
+                onClick={loadDynamicModels}
+                disabled={loadingModels}
+                className="text-xs text-text-muted hover:text-text-primary flex items-center gap-1 transition-colors"
+                title="Refresh model list from API"
+              >
+                <RefreshCw className={`w-3 h-3 ${loadingModels ? 'animate-spin' : ''}`} />
+                {loadingModels ? 'Loading...' : dynamicModels ? 'Refresh' : 'Fetch models'}
+              </button>
+            )}
+          </div>
           <select
             value={model}
             onChange={(e) => onModelChange(e.target.value)}
             className="w-full px-3 py-2.5 rounded-lg text-sm bg-bg-primary border border-border-primary focus:border-accent-blue focus:outline-none"
           >
-            {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).map((m) => (
+            {resolvedModels.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name} — {m.description}
+                {m.name}{m.description ? ` — ${m.description}` : ''}
               </option>
             ))}
           </select>
-          {model && (
+          {dynamicModels && (
+            <p className="text-[10px] text-text-muted mt-1">
+              {dynamicModels.length} models from API
+            </p>
+          )}
+          {!dynamicModels && model && (
             <p className="text-xs text-text-muted mt-1.5">
-              {(PROVIDER_MODELS[provider] || PROVIDER_MODELS.claude).find(m => m.id === model)?.description}
+              {resolvedModels.find(m => m.id === model)?.description}
             </p>
           )}
         </div>

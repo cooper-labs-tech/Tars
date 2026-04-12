@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  BarChart2,
   Zap,
   MessageSquare,
   Clock,
@@ -18,26 +17,83 @@ import {
   ChevronDown,
   Gauge,
   Timer,
-  Minus,
   FolderOpen,
   Cpu,
+  Pencil as PencilIcon,
 } from 'lucide-react';
 import { useClaude } from '@/hooks/useClaude';
-import { getProviderDef, PROVIDER_REGISTRY } from '@/lib/providers';
-import { Pencil as PencilIcon } from 'lucide-react';
+import { getProviderDef } from '@/lib/providers';
 
-// Per-provider pricing defaults (input/output per MTok) for the pricing reference table.
-// Users can override these via the edit button.
-const DEFAULT_PROVIDER_PRICING: Record<string, { inputPerMTok: number; outputPerMTok: number } | null> = {
-  claude: null, // Claude uses the detailed MODEL_PRICING below
-  codex: { inputPerMTok: 2, outputPerMTok: 8 },
-  gemini: { inputPerMTok: 1.25, outputPerMTok: 10 },
-  openrouter: null, // varies per model
-  deepseek: { inputPerMTok: 0.55, outputPerMTok: 2.19 },
-  moonshot: { inputPerMTok: 1, outputPerMTok: 4 },
-  mimo: { inputPerMTok: 1, outputPerMTok: 4 },
-  qwen: { inputPerMTok: 0.30, outputPerMTok: 1.20 },
-  zhipu: { inputPerMTok: 0.70, outputPerMTok: 2.80 },
+/** Per-model pricing defaults for ALL providers (input/output/cache per MTok).
+ *  Used by the Pricing Reference table. Users can override via edit mode.
+ *  Cache columns only apply to Claude; other providers show "—". */
+const ALL_PROVIDER_MODEL_PRICING: Record<string, {
+  models: { id: string; name: string; inputPerMTok: number | null; outputPerMTok: number | null; cacheHitsPerMTok?: number; cache5mWritePerMTok?: number }[];
+  note?: string;
+}> = {
+  codex: {
+    models: [
+      { id: 'gpt-5.3-codex', name: 'GPT-5.3 Codex', inputPerMTok: 2.50, outputPerMTok: 10 },
+      { id: 'gpt-5.2-codex', name: 'GPT-5.2 Codex', inputPerMTok: 2, outputPerMTok: 8 },
+      { id: 'gpt-5.1-codex', name: 'GPT-5.1 Codex', inputPerMTok: 2, outputPerMTok: 8 },
+      { id: 'gpt-5-codex-mini', name: 'GPT-5 Codex Mini', inputPerMTok: 0.30, outputPerMTok: 1.20 },
+    ],
+  },
+  gemini: {
+    models: [
+      { id: 'gemini-3-pro', name: 'Gemini 3 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
+      { id: 'gemini-3-flash', name: 'Gemini 3 Flash', inputPerMTok: 0.15, outputPerMTok: 0.60 },
+      { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
+      { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', inputPerMTok: 0.15, outputPerMTok: 0.60 },
+    ],
+  },
+  openrouter: {
+    models: [
+      { id: 'deepseek/deepseek-r1', name: 'DeepSeek R1', inputPerMTok: 0.55, outputPerMTok: 2.19 },
+      { id: 'moonshotai/kimi-k2', name: 'Kimi K2', inputPerMTok: null, outputPerMTok: null },
+      { id: 'openai/gpt-4.1', name: 'GPT-4.1', inputPerMTok: 2, outputPerMTok: 8 },
+      { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', inputPerMTok: 1.25, outputPerMTok: 10 },
+    ],
+    note: 'Pricing varies per model — see openrouter.ai/models for current rates.',
+  },
+  deepseek: {
+    models: [
+      { id: 'deepseek-r1', name: 'DeepSeek R1', inputPerMTok: 0.55, outputPerMTok: 2.19 },
+      { id: 'deepseek-chat', name: 'DeepSeek V3', inputPerMTok: 0.27, outputPerMTok: 1.10 },
+      { id: 'deepseek-r1-distill-70b', name: 'R1 Distill 70B', inputPerMTok: 0.55, outputPerMTok: 2.19 },
+    ],
+  },
+  moonshot: {
+    models: [
+      { id: 'kimi-k2', name: 'Kimi K2', inputPerMTok: null, outputPerMTok: null },
+      { id: 'moonlight-16k', name: 'Moonlight 16K', inputPerMTok: null, outputPerMTok: null },
+    ],
+    note: 'Pricing not yet published. Check platform.moonshot.cn for current rates.',
+  },
+  mimo: {
+    models: [
+      { id: 'mimo-v2-pro', name: 'MiMo V2 Pro', inputPerMTok: 1, outputPerMTok: 4 },
+      { id: 'mimo-v2-flash', name: 'MiMo V2 Flash', inputPerMTok: 0.25, outputPerMTok: 1 },
+      { id: 'mimo-v2-omni', name: 'MiMo V2 Omni', inputPerMTok: 1, outputPerMTok: 4 },
+    ],
+  },
+  qwen: {
+    models: [
+      { id: 'qwq-32b', name: 'QwQ 32B', inputPerMTok: 0.30, outputPerMTok: 1.20 },
+      { id: 'qwen3-235b', name: 'Qwen3 235B', inputPerMTok: 0.80, outputPerMTok: 3.20 },
+      { id: 'qwen-2.5-72b', name: 'Qwen 2.5 72B', inputPerMTok: 0.30, outputPerMTok: 1.20 },
+      { id: 'qwen-coder-32b', name: 'Qwen Coder', inputPerMTok: 0.30, outputPerMTok: 1.20 },
+    ],
+  },
+  zhipu: {
+    models: [
+      { id: 'glm-4.6', name: 'GLM-4.6', inputPerMTok: 0.70, outputPerMTok: 2.80 },
+      { id: 'glm-4.5', name: 'GLM-4.5', inputPerMTok: 0.70, outputPerMTok: 2.80 },
+      { id: 'glm-4-plus', name: 'GLM-4 Plus', inputPerMTok: 0.50, outputPerMTok: 2 },
+      { id: 'glm-4-air', name: 'GLM-4 Air', inputPerMTok: 0.07, outputPerMTok: 0.07 },
+      { id: 'glm-4-flash', name: 'GLM-4 Flash', inputPerMTok: 0.01, outputPerMTok: 0.01 },
+    ],
+  },
 };
 
 // Token pricing per million tokens (MTok)
@@ -177,6 +233,8 @@ export default function UsagePage() {
   const { data, loading, error } = useClaude();
   const [costTimeRange, setCostTimeRange] = useState<TimeRange>('daily');
   const [showPricingTable, setShowPricingTable] = useState(false);
+  const [editingPricing, setEditingPricing] = useState(false);
+  const [pricingOverrides, setPricingOverrides] = useState<Record<string, Record<string, { input: string; output: string }>>>({});
 
   // Get today's stats - use the most recent available
   const todayActivity = useMemo(() => {
@@ -1265,7 +1323,7 @@ export default function UsagePage() {
         })()}
       </motion.div>
 
-      {/* Pricing Reference Table — all providers */}
+      {/* Pricing Reference Table — unified per-model for all providers */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1285,9 +1343,25 @@ export default function UsagePage() {
 
         {showPricingTable && (
           <div className="mt-4 overflow-x-auto space-y-6">
-            {/* Claude Models — detailed */}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] text-text-muted">
+                All prices in $/MTok (per million tokens). {editingPricing ? 'Click values to edit.' : ''}
+              </p>
+              <button
+                onClick={() => setEditingPricing(!editingPricing)}
+                className="text-[10px] text-text-muted hover:text-text-primary flex items-center gap-1 transition-colors"
+              >
+                <PencilIcon className="w-3 h-3" />
+                {editingPricing ? 'Done' : 'Edit prices'}
+              </button>
+            </div>
+
+            {/* Claude */}
             <div>
-              <h4 className="text-xs font-medium text-text-muted mb-2">Claude (Anthropic)</h4>
+              <h4 className="text-xs font-medium mb-2 flex items-center gap-1.5">
+                <img src="/claude-ai-icon.webp" alt="" className="w-3.5 h-3.5 object-contain" />
+                Claude (Anthropic)
+              </h4>
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-border-primary">
@@ -1295,8 +1369,7 @@ export default function UsagePage() {
                     <th className="text-right py-2 px-2 text-text-muted font-medium">Input</th>
                     <th className="text-right py-2 px-2 text-text-muted font-medium">Output</th>
                     <th className="text-right py-2 px-2 text-text-muted font-medium">Cache Hits</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">5m Cache Write</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">1h Cache Write</th>
+                    <th className="text-right py-2 px-2 text-text-muted font-medium">5m Write</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1315,11 +1388,10 @@ export default function UsagePage() {
                     return (
                       <tr key={model.key} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
                         <td className="py-2 px-2 font-medium">{model.name}</td>
-                        <td className="text-right py-2 px-2">${pricing.inputPerMTok}/MTok</td>
-                        <td className="text-right py-2 px-2">${pricing.outputPerMTok}/MTok</td>
-                        <td className="text-right py-2 px-2">${pricing.cacheHitsPerMTok}/MTok</td>
-                        <td className="text-right py-2 px-2">${pricing.cache5mWritePerMTok}/MTok</td>
-                        <td className="text-right py-2 px-2">${pricing.cache1hWritePerMTok}/MTok</td>
+                        <td className="text-right py-2 px-2">${pricing.inputPerMTok}</td>
+                        <td className="text-right py-2 px-2">${pricing.outputPerMTok}</td>
+                        <td className="text-right py-2 px-2">${pricing.cacheHitsPerMTok}</td>
+                        <td className="text-right py-2 px-2">${pricing.cache5mWritePerMTok}</td>
                       </tr>
                     );
                   })}
@@ -1327,82 +1399,80 @@ export default function UsagePage() {
               </table>
             </div>
 
-            {/* Other Providers — simplified input/output pricing */}
-            <div>
-              <h4 className="text-xs font-medium text-text-muted mb-2">Other Providers</h4>
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-border-primary">
-                    <th className="text-left py-2 px-2 text-text-muted font-medium">Provider</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">Input /MTok</th>
-                    <th className="text-right py-2 px-2 text-text-muted font-medium">Output /MTok</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {PROVIDER_REGISTRY.filter(p => p.id !== 'claude').map((p) => {
-                    const pricing = DEFAULT_PROVIDER_PRICING[p.id];
-                    return (
-                      <tr key={p.id} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
-                        <td className="py-2 px-2 font-medium">{p.label}</td>
-                        <td className="text-right py-2 px-2">
-                          {pricing ? `$${pricing.inputPerMTok}` : <span className="text-text-muted">&mdash;</span>}
-                        </td>
-                        <td className="text-right py-2 px-2">
-                          {pricing ? `$${pricing.outputPerMTok}` : <span className="text-text-muted">&mdash;</span>}
-                        </td>
+            {/* Other Providers — per-model breakdown */}
+            {Object.entries(ALL_PROVIDER_MODEL_PRICING).map(([providerId, providerData]) => {
+              const providerDef = getProviderDef(providerId);
+              if (!providerDef) return null;
+              return (
+                <div key={providerId}>
+                  <h4 className="text-xs font-medium mb-2">{providerDef.label}</h4>
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border-primary">
+                        <th className="text-left py-2 px-2 text-text-muted font-medium">Model</th>
+                        <th className="text-right py-2 px-2 text-text-muted font-medium">Input</th>
+                        <th className="text-right py-2 px-2 text-text-muted font-medium">Output</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              <p className="text-[10px] text-text-muted mt-2">
-                Pricing shown is approximate default rates. Actual costs may vary by model and routing.
-                OpenRouter pricing varies per model — check openrouter.ai/models for details.
-              </p>
-            </div>
+                    </thead>
+                    <tbody>
+                      {providerData.models.map((model) => {
+                        const overrides = pricingOverrides[providerId]?.[model.id];
+                        const inputVal = overrides?.input ?? (model.inputPerMTok !== null ? String(model.inputPerMTok) : '');
+                        const outputVal = overrides?.output ?? (model.outputPerMTok !== null ? String(model.outputPerMTok) : '');
+                        return (
+                          <tr key={model.id} className="border-b border-border-primary/50 hover:bg-bg-tertiary/50">
+                            <td className="py-2 px-2 font-medium">{model.name}</td>
+                            <td className="text-right py-2 px-2">
+                              {editingPricing ? (
+                                <input
+                                  type="text"
+                                  value={inputVal}
+                                  onChange={(e) => setPricingOverrides(prev => ({
+                                    ...prev,
+                                    [providerId]: { ...prev[providerId], [model.id]: { input: e.target.value, output: outputVal } },
+                                  }))}
+                                  className="w-16 px-1 py-0.5 text-right bg-bg-tertiary border border-border-primary text-xs font-mono focus:outline-none focus:border-accent-blue"
+                                  placeholder="—"
+                                />
+                              ) : (
+                                model.inputPerMTok !== null ? `$${model.inputPerMTok}` : <span className="text-text-muted">—</span>
+                              )}
+                            </td>
+                            <td className="text-right py-2 px-2">
+                              {editingPricing ? (
+                                <input
+                                  type="text"
+                                  value={outputVal}
+                                  onChange={(e) => setPricingOverrides(prev => ({
+                                    ...prev,
+                                    [providerId]: { ...prev[providerId], [model.id]: { input: inputVal, output: e.target.value } },
+                                  }))}
+                                  className="w-16 px-1 py-0.5 text-right bg-bg-tertiary border border-border-primary text-xs font-mono focus:outline-none focus:border-accent-blue"
+                                  placeholder="—"
+                                />
+                              ) : (
+                                model.outputPerMTok !== null ? `$${model.outputPerMTok}` : <span className="text-text-muted">—</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                  {providerData.note && (
+                    <p className="text-[10px] text-text-muted mt-1">{providerData.note}</p>
+                  )}
+                </div>
+              );
+            })}
+
+            <p className="text-[10px] text-text-muted border-t border-border-primary pt-3">
+              Pricing shown uses default market rates. Actual costs vary by plan, routing, and caching.
+            </p>
           </div>
         )}
       </motion.div>
 
-      {/* Provider Usage Breakdown */}
-      {data?.tokenStats?.providerTotals && Object.keys(data.tokenStats.providerTotals).length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="rounded-none border border-border-primary bg-bg-secondary p-5"
-        >
-          <div className="text-sm font-medium mb-4 flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-text-muted" />
-            Usage by Provider
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {Object.entries(data.tokenStats.providerTotals)
-              .sort(([, a], [, b]) => b.cost - a.cost)
-              .map(([providerId, totals]) => {
-                const providerDef = getProviderDef(providerId);
-                return (
-                  <div key={providerId} className="p-3 border border-border-primary bg-bg-tertiary/30">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium">{providerDef?.label || providerId}</span>
-                      <span className="text-xs text-accent-green font-mono">${totals.cost.toFixed(2)}</span>
-                    </div>
-                    <div className="text-xs text-text-muted space-y-0.5">
-                      <div className="flex justify-between">
-                        <span>Tokens</span>
-                        <span className="font-mono">{((totals.in + totals.out) / 1000000).toFixed(2)}M</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Sessions</span>
-                        <span className="font-mono">{totals.sessions}</span>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }

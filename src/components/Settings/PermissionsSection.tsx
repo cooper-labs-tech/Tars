@@ -55,8 +55,8 @@ export const PermissionsSection = ({ settings }: PermissionsSectionProps) => {
           </div>
 
           <p className="text-xs text-muted-foreground pt-2">
-            Permissions are managed through the CLI. Use <code className="text-foreground bg-secondary px-1 py-0.5">claude config</code> to modify.
-            These settings apply to all providers that use the Claude binary for execution.
+            Permissions are configured per CLI. For Claude: use <code className="text-foreground bg-secondary px-1 py-0.5">claude config</code>.
+            For other providers, refer to their CLI documentation.
           </p>
         </div>
       </div>

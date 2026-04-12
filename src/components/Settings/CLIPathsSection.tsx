@@ -13,6 +13,7 @@ interface DetectedPaths {
   claude: string;
   codex: string;
   gemini: string;
+  qwencode: string;
   opencode: string;
   pi: string;
   gws: string;
@@ -30,17 +31,18 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
   const [opencodeResult, setOpencodeResult] = useState<{ success: boolean; message: string } | null>(null);
   const [piResult, setPiResult] = useState<{ success: boolean; message: string } | null>(null);
   const [localPaths, setLocalPaths] = useState<CLIPaths>(
-    appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
+    appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] }
   );
 
   useEffect(() => {
-    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+    setLocalPaths(appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
   }, [appSettings.cliPaths]);
 
   const handleDetectPaths = async () => {
     setDetecting(true);
     try {
-      const paths = await window.electronAPI?.cliPaths?.detect();
+      const rawPaths = await window.electronAPI?.cliPaths?.detect();
+      const paths = rawPaths as DetectedPaths | undefined;
       if (paths) {
         setDetectedPaths(paths);
         // Auto-fill empty fields with detected values
@@ -48,8 +50,9 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
         if (!updatedPaths.claude && paths.claude) updatedPaths.claude = paths.claude;
         if (!updatedPaths.codex && paths.codex) updatedPaths.codex = paths.codex;
         if (!updatedPaths.gemini && paths.gemini) updatedPaths.gemini = paths.gemini;
+        if (!updatedPaths.qwencode && paths.qwencode) updatedPaths.qwencode = paths.qwencode;
         if (!updatedPaths.opencode && paths.opencode) updatedPaths.opencode = paths.opencode;
-        if (!updatedPaths.pi && (paths as DetectedPaths).pi) updatedPaths.pi = (paths as DetectedPaths).pi;
+        if (!updatedPaths.pi && paths.pi) updatedPaths.pi = paths.pi;
         if (!updatedPaths.gws && paths.gws) updatedPaths.gws = paths.gws;
         if (!updatedPaths.gcloud && paths.gcloud) updatedPaths.gcloud = paths.gcloud;
         if (!updatedPaths.gh && paths.gh) updatedPaths.gh = paths.gh;
@@ -87,7 +90,7 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
     onSaveAppSettings({ cliPaths: localPaths });
   };
 
-  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
+  const hasChanges = JSON.stringify(localPaths) !== JSON.stringify(appSettings.cliPaths || { claude: '', codex: '', gemini: '', qwencode: '', opencode: '', pi: '', gws: '', gcloud: '', gh: '', node: '', additionalPaths: [] });
 
   const renderPathInput = (
     label: string,
@@ -165,13 +168,14 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
               {detectedPaths.claude && <li>Claude: {detectedPaths.claude}</li>}
               {detectedPaths.codex && <li>Codex: {detectedPaths.codex}</li>}
               {detectedPaths.gemini && <li>Gemini: {detectedPaths.gemini}</li>}
+              {detectedPaths.qwencode && <li>Qwen Code: {detectedPaths.qwencode}</li>}
               {detectedPaths.opencode && <li>OpenCode: {detectedPaths.opencode}</li>}
               {detectedPaths.pi && <li>Pi Terminal: {detectedPaths.pi}</li>}
               {detectedPaths.gws && <li>GWS: {detectedPaths.gws}</li>}
               {detectedPaths.gcloud && <li>gcloud: {detectedPaths.gcloud}</li>}
               {detectedPaths.gh && <li>GitHub CLI: {detectedPaths.gh}</li>}
               {detectedPaths.node && <li>Node.js: {detectedPaths.node}</li>}
-              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.opencode && !detectedPaths.pi && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
+              {!detectedPaths.claude && !detectedPaths.codex && !detectedPaths.gemini && !detectedPaths.qwencode && !detectedPaths.opencode && !detectedPaths.pi && !detectedPaths.gws && !detectedPaths.gcloud && !detectedPaths.gh && !detectedPaths.node && (
                 <li className="text-yellow-400">No CLI tools found in common locations</li>
               )}
             </ul>
@@ -297,6 +301,13 @@ export const CLIPathsSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
           'Path to the Google Gemini CLI executable',
           'gemini',
           '/usr/local/bin/gemini or ~/.nvm/versions/node/v20/bin/gemini'
+        )}
+
+        {renderPathInput(
+          'Qwen Code CLI',
+          'Path to the Qwen Code CLI executable (Alibaba)',
+          'qwencode',
+          '/usr/local/bin/qwen-code or ~/.local/bin/qwen-code'
         )}
 
         {renderPathInput(

@@ -99,6 +99,7 @@ export const DEFAULT_APP_SETTINGS = {
     claude: '',
     codex: '',
     gemini: '',
+    qwencode: '',
     opencode: '',
     pi: '',
     gws: '',

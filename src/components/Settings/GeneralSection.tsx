@@ -341,8 +341,8 @@ export const GeneralSection = ({ info, appSettings, onSaveAppSettings }: General
           onChange={(e) => onSaveAppSettings({ defaultProvider: e.target.value })}
           className="w-full sm:w-64 px-3 py-2 bg-background border border-border text-sm text-foreground focus:outline-none focus:border-foreground"
         >
-          {PROVIDER_REGISTRY.map(({ id, label, requiresCli }) => {
-            const notAvailable = installedProviders[id] === false;
+          {PROVIDER_REGISTRY.filter(p => p.id !== 'opencode' && p.id !== 'pi').map(({ id, label, requiresCli }) => {
+            const notAvailable = installedProviders[id] !== true;
             const reason = notAvailable
               ? requiresCli ? ' (not installed)' : ' (add API key in Settings)'
               : '';

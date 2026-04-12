@@ -28,6 +28,7 @@ export interface CLIPaths {
   claude: string;
   codex: string;
   gemini: string;
+  qwencode: string;
   opencode: string;
   pi: string;
   gws: string;
