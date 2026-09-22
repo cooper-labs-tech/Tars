@@ -103,17 +103,23 @@ describe('dailyCost', () => {
     // 2026-08-24 for any timezone at UTC+2 or later (e.g. UTC+4).
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-23T22:30:00.000Z'));
-    ledger.recordUsage({ agentId: 'a', provider: 'claude', inputTokens: 1, outputTokens: 1, costUSD: 3, transport: 'acp' });
-    vi.useRealTimers();
+    try {
+      ledger.recordUsage({ agentId: 'a', provider: 'claude', inputTokens: 1, outputTokens: 1, costUSD: 3, transport: 'acp' });
 
-    const recordedAt = new Date(ledger.readLedger()[0].ts);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    const localDay = `${recordedAt.getFullYear()}-${pad(recordedAt.getMonth() + 1)}-${pad(recordedAt.getDate())}`;
-    const utcDay = recordedAt.toISOString().slice(0, 10);
+      // Read on the same pinned clock: dailyCost keeps the last 30 days, and
+      // read on the real one this turn left the window at 2026-09-22T22:30Z,
+      // thirty days after the instant above, and the test went red for good.
+      const recordedAt = new Date(ledger.readLedger()[0].ts);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const localDay = `${recordedAt.getFullYear()}-${pad(recordedAt.getMonth() + 1)}-${pad(recordedAt.getDate())}`;
+      const utcDay = recordedAt.toISOString().slice(0, 10);
 
-    expect(ledger.dailyCost()[localDay]).toBeCloseTo(3, 6);
-    if (localDay !== utcDay) {
-      expect(ledger.dailyCost()[utcDay]).toBeUndefined();
+      expect(ledger.dailyCost()[localDay]).toBeCloseTo(3, 6);
+      if (localDay !== utcDay) {
+        expect(ledger.dailyCost()[utcDay]).toBeUndefined();
+      }
+    } finally {
+      vi.useRealTimers();
     }
   });
 });
