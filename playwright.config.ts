@@ -43,10 +43,18 @@ export default defineConfig({
   ],
   webServer: {
     // E2E_PORT_OFFSET moves this with every suite's API port: see e2e/ports.mjs.
-    command: `npx next dev -p ${DEV_PORT}`,
+    // On the loopback only: the server runs with the runner's own HOME, and
+    // src/app/api/claude/sessions reads ~/.claude/projects from it. Unless told
+    // otherwise, next dev listens on every interface.
+    command: `npx next dev -H 127.0.0.1 -p ${DEV_PORT}`,
     url: `http://localhost:${DEV_PORT}`,
     reuseExistingServer: true,
-    timeout: 120_000,
+    // The first request compiles the dashboard, in whatever the machine has to
+    // spare. On 2026-09-23: 43 s cold at a load average of 195, and two runs
+    // started together above 400 both gave up at 120 s, before any surface.
+    // The wait ends at the first answer, so a longer one costs a quick server
+    // nothing.
+    timeout: 300_000,
     // Next dev phones home twice per run (telemetry.nextjs.org, seen leaving
     // the machine by lsof on 2026-09-17). This is merged over process.env by
     // the runner, so nothing else about the environment changes.

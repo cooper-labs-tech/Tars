@@ -46,3 +46,18 @@ describe('e2e launches of the app', () => {
     expect(fixture).toContain('CFFIXED_USER_HOME: sandboxHome');
   });
 });
+
+describe('the renderer server the e2e suite starts', () => {
+  const config = fs.readFileSync(path.join(__dirname, '..', 'playwright.config.ts'), 'utf-8');
+  const command = config.match(/command: `(npx next dev [^`]*)`/)?.[1];
+
+  it('is found in the config, so a moved command cannot pass for a bound one', () => {
+    expect(command).toBeDefined();
+  });
+
+  it('listens on the loopback only', () => {
+    // The runner's HOME reaches it, and so does the session reader under
+    // src/app/api, which reads ~/.claude/projects from that HOME.
+    expect(command).toMatch(/(?:-H|--hostname)[ =]127\.0\.0\.1(?![\d.])/);
+  });
+});
