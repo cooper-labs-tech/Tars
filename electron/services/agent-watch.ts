@@ -10,48 +10,29 @@ import { broadcastToAllWindows } from '../utils/broadcast';
 import { scheduleTick } from '../utils/agents-tick';
 
 /**
- * Handing something to an agent at a moment when it can take it.
+ * Handing something to an agent at a moment when it can take it: the news an
+ * orchestrator is owed about work it handed out, and bus messages, which must
+ * not land in the middle of a turn either. One queue for both (per recipient,
+ * coalescing, capped, behind the same session barrier and write window): two
+ * queues that look alike would drift.
  *
- * This started as one thing: telling an orchestrator that the agent it
- * dispatched had finished. Delegation was one-directional, an orchestrator had
- * to keep asking, and the day nobody armed a loop a whole QA pass finished with
- * nobody the wiser.
- *
- * The bus needs exactly the same machinery for a different payload: a message
- * from one agent to another, or from JeanBrasse, that must not land in the middle of
- * a turn. So it is the same queue, not a second one beside it. Per recipient,
- * coalescing, capped, behind the same session barrier and the same write
- * window: two queues that look alike would drift, and this one is the one the
- * tests drive end to end.
- *
- * The transport is the one Tars already uses to wake an agent up:
- * writeProgrammaticInput into its PTY, exactly as /dispatch does. There is no
- * MCP mechanism for this and there cannot be one, because MCP is request and
- * response: a server cannot wake a client that is not asking it anything.
+ * The transport is writeProgrammaticInput into the PTY, as /dispatch does. MCP
+ * cannot do this: a server cannot wake a client that is not asking it anything.
  */
 
 /**
- * What an agent has to say to whoever handed it work. Three kinds, and
- * nothing else is news:
- *
+ * What an agent has to say to whoever handed it work; nothing else is news:
  * - `outcome`: it completed, or it failed.
- * - `wait`: it stopped in the middle of the work to wait on an answer. A
- *   permission prompt, or a `waiting` with no reason from a CLI that posts
- *   nothing more precise. Blocked on a question is as much a reason to come
- *   back as finished, and the work is not over, so the link stays.
- * - `ended`: it is back at rest, `idle` or `waiting` because idle, and a turn
- *   has begun since the work was handed to it. That is the work done.
+ * - `wait`: it stopped mid-work on a question (a permission prompt, or a
+ *   `waiting` with no reason from a CLI that says no more). The work is not
+ *   over, so the link stays.
+ * - `ended`: it is at rest (`idle`, or `waiting` because idle) and a turn has
+ *   begun since the work was handed over: the work is done.
  *
- * A `waiting` because idle is not news of its own. It is Claude Code's idle
- * prompt, a minute after the agent stopped at its prompt, and while `idle` was
- * not news it was the only thing that told an orchestrator a delegated turn
- * had ended: a minute late, and also each time the agent came back to rest for
- * any other reason. JeanBrasse's note of 2026-09-18 was one of those. A failed ACP
- * start put 1212-Backend back to the `waiting` it had left, and the
- * orchestrator of a delegation finished 85 minutes earlier was told it "is now
- * waiting". The rest is now news once, as the end of the work handed over,
- * whichever post brings it: the Stop hook's `idle`, or for a turn that ended
- * without a Stop, the idle prompt.
+ * A rest is news once, as the end of that work, whichever post brings it (the
+ * Stop hook's `idle`, or the idle prompt a minute on for a turn with no Stop),
+ * and never otherwise: a rest for another reason told an orchestrator that a
+ * delegation finished 85 minutes earlier "is now waiting" (JeanBrasse, 2026-09-18).
  */
 type News = {
   /** `stopped`: its terminal went before the background work it left reported. */
@@ -69,20 +50,11 @@ type News = {
 };
 
 /**
- * How many room messages one recipient can be holding.
- *
- * Room messages only. It counted the children too, and an end of turn arriving
- * at the cap was thrown away: the same loss #113 had just closed, reached from
- * the other side. A busy orchestrator in a talkative room is all it takes, and
- * a chat backlog is a strange reason to lose the one signal that says
- * delegated work is finished.
- *
- * There is nothing for a cap to bound on the children side. `children` is a
- * Map keyed by the child's id, so a child that reports twice replaces itself
- * and the map cannot grow past the fleet: 42 agents on this machine today, 11
- * in the largest project. A room is the unbounded one, because every message
- * said is another entry, and a message refused here is recorded as a refused
- * delivery in the journal, which is visible. A dropped end of turn is not.
+ * How many room messages one recipient can hold. Room messages only: counting
+ * the children too threw away an end of turn arriving at the cap (#113's loss,
+ * from the other side). The children need no cap, being keyed by child id (at
+ * most the fleet: 42 agents here, 11 in the largest project), and a room
+ * message refused here is recorded as a refused delivery, which shows.
  */
 const MAX_PENDING_MESSAGES = 20;
 
@@ -92,10 +64,9 @@ const lastSeen = new Map<string, string>();
 
 /**
  * The state a transition is told apart by. The status alone repeats across
- * turns, because the routes that hand an agent work set `running` and emit
- * nothing: an agent dispatched from `waiting` is next seen `waiting` again,
- * for a permission prompt this time, and the prompt was read as no change and
- * never reached the orchestrator. The reason and the turn tell them apart.
+ * turns (the routes that hand work set `running` and emit nothing, so an agent
+ * dispatched from `waiting` is next seen `waiting` again, for a permission
+ * prompt): the reason and the turn tell them apart.
  */
 function stateOf(agent: AgentStatus): string {
   return [agent.status, agent.waitingReason ?? '', agent.lastTurnStartedAt ?? ''].join('|');
@@ -142,18 +113,11 @@ export type QueuedBusMessage = {
 
 /**
  * What is waiting for one recipient, and which of its sessions it is for.
- *
- * `children` is a map rather than a list, so a child that flaps between
- * running and waiting while its recipient is busy collapses to its latest
- * state instead of queueing one interruption per flap. `bus` is a list,
- * because two messages are two things said and neither replaces the other.
- *
- * `ptyId` and `sessionId` are the recipient as it was when this was queued.
- * Only `currentSessionId` is authoritative for an agent, and a killed session
- * leaves its id behind in `lastKilledSessionId` as a tombstone: an agent that
- * is killed and relaunched is a different session that never dispatched
- * anything and was never in that conversation, and handing it the previous
- * one's post would be exactly the stale delivery the session rule rejects.
+ * `children` is a map, so a child that flaps while its recipient is busy
+ * collapses to its latest state; `bus` is a list, since two messages are two
+ * things said. `ptyId` and `sessionId` are the recipient when this was queued:
+ * a killed and relaunched agent is another session, and handing it this would
+ * be the stale delivery the session rule rejects.
  */
 type Pending = {
   children: Map<string, News>;
@@ -212,24 +176,16 @@ function busOrigin(agentId: string, messageId: string, onWritten: () => void): P
 }
 
 /**
- * Recipients whose terminal is mid-write, until the trailing carriage
- * return of writeProgrammaticInput has landed.
- *
- * Two children finishing within a moment of each other while the recipient
- * is free produced two writes before either submit keystroke, so the two notes
- * ran together on one line and a stray Enter followed. Grouping only helped
- * when the recipient was busy, which is not this case.
+ * Recipients whose terminal is mid-write, until writeProgrammaticInput's
+ * trailing carriage return has landed: two children finishing together made
+ * two writes before either submit, run together on one line.
  */
 const delivering = new Map<string, ReturnType<typeof setTimeout>>();
 
 /**
- * Agents whose held messages are being written out right now.
- *
- * The spacing below orders writes inside one call and only inside one call, so
- * two releases of the same agent would interleave into the same terminal,
- * which is the exact thing that spacing exists to prevent. Two clicks, or two
- * windows, are enough: the window is hundreds of milliseconds per message.
- * Same idea as `delivering`, one release at a time per agent.
+ * Agents whose held messages are being written out now: the spacing orders
+ * writes within one call only, and two releases (two clicks, two windows)
+ * would interleave in one terminal. One release at a time per agent.
  */
 const releasing = new Set<string>();
 
@@ -249,15 +205,13 @@ export function stopAgentWatch(): void {
 }
 
 /**
- * A turn ended by Esc sends no hook: no Stop, and the idle prompt only a
- * minute on. The agent read `running` until its next turn, and everything
- * waiting for its rest (room messages, notes) waited with it (the Audit's
- * re-check of #174, older than it). The transcript records the interrupt, so
- * an interrupt recorded after the turn began, after work was last handed to
- * the agent, and after its session registered, ends the turn here as its Stop
- * would have: `idle`, announced
- * like any status. Looked at every INTERRUPT_WATCH_MS, and only for agents
- * that read `running`; the transcript is re-read only when it has changed.
+ * A turn ended by Esc sends no Stop, and the idle prompt comes a minute on: the
+ * agent read `running`, and all that waited for its rest waited too (the
+ * Audit's re-check of #174). An interrupt the transcript records after the
+ * turn began, after work was handed over and after the session registered ends
+ * the turn here as a Stop would: `idle`, announced. Checked every
+ * INTERRUPT_WATCH_MS for `running` agents only; a transcript is re-read only
+ * when it changed.
  */
 const INTERRUPT_WATCH_MS = 2000;
 let interruptWatch: ReturnType<typeof setInterval> | undefined;
@@ -273,11 +227,10 @@ export function watchInterruptedTurns(): void {
 }
 
 /**
- * A link kept for background work whose terminal is gone: stopped, restarted,
- * deleted or crashed before that work reported. The work ended with the
- * terminal, and the requester, told "you will be told again", would otherwise
- * never be (the Audit's gate of #152). Told now, and the link spent. Looked at
- * on the same tick as interrupted turns, since a stop sends no event here.
+ * A link kept for background work whose terminal is gone (stopped, restarted,
+ * deleted, crashed) before that work reported: the requester, told "you will
+ * be told again", is told now and the link spent (the Audit's gate of #152).
+ * Checked with interrupted turns, since a stop sends no event here.
  */
 function settleBackgroundLinks(): void {
   for (const child of agents.values()) {
@@ -300,12 +253,10 @@ export function stopWatchingInterruptedTurns(): void {
 function endInterruptedTurns(): void {
   for (const agent of agents.values()) {
     if (agent.status !== 'running') continue;
-    // The launch of the CLI now running counts too: a session resumed with
-    // --fork-session copies the old conversation, old interruptions and their
-    // dates included, and until its first UserPromptSubmit the last turn known
-    // is the previous session's (the Audit's gate of #179). The launch, and the
+    // From the launch of the CLI running now too: a resume with --fork-session
+    // copies old interruptions with their dates (the Audit's gate of #179). The
     // registration only when no launch was noted: claude registers again at
-    // every compaction, and an interruption made just before one is real.
+    // every compaction, and an interruption just before one is real.
     const launched = cliLaunchedAt(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined)
       ?? (agent.sessionRegisteredAt ? Date.parse(agent.sessionRegisteredAt) : NaN);
     const began = Math.max(...[agent.lastTurnStartedAt, agent.workHandedAt]
@@ -342,10 +293,8 @@ function onFleetChange(agentId: string): void {
   const news = before !== now ? newsOf(agent) : undefined;
   if (news) queueForRequester(agent, news);
 
-  // Whatever else this transition was, it may be the one that freed this
-  // agent to be interrupted. This is why nothing here polls or sleeps: the
-  // event that says a child finished is the same event that says a parent is
-  // free, so waiting for the right moment costs nothing.
+  // This transition may be the one that frees this agent: the event that says a
+  // child finished is the one that says a parent is free, so nothing polls.
   flush(agentId);
 }
 
@@ -368,12 +317,9 @@ function holding(held: Pending): number {
 }
 
 /**
- * Whether something is owed to this agent and not typed in yet, or is being
- * typed in right now.
- *
- * What is held is bound to the session it was owed to (see `flush`): an agent
- * whose terminal is replaced loses it for good. So a restart for changed
- * settings asks here first, and waits for it to go in.
+ * Whether something owed to this agent is not typed in yet, or is being typed
+ * now. What is held dies with its session (see `flush`), so a restart for
+ * changed settings asks here first, and waits.
  */
 export function holdsFor(agentId: string): boolean {
   const held = pending.get(agentId);
@@ -384,38 +330,20 @@ function queueForRequester(child: AgentStatus, news: News): void {
   const link = child.requestedBy;
   // Self-dispatch would be a message an agent sends itself on every task.
   if (!link || link.agentId === child.id) return;
-  // The link belongs to the session it was recorded in. A child restarted by
-  // any other route got a new ptyId, so this one is not about the work it is
-  // finishing now, and nobody is owed a word about it.
+  // The link belongs to the session it was recorded in: a child restarted by
+  // another route has a new ptyId, and this is not about that work.
   if (link.ptyId !== child.ptyId) return;
 
-  // Spent, once the work it was recorded for is actually over, whether or not
-  // the requester can still be reached. This is what stops a hand start from
-  // inheriting it: an agent relaunched from the interface keeps its live
-  // session and therefore its ptyId, so the binding above cannot tell that
-  // start apart on its own, but by then the link that a dispatch left behind
-  // has already been used up and is gone. A turn that ended normally used to
-  // leave it in place, so every later rest of that agent, typed in by JeanBrasse or
-  // put back by a failed ACP start, went on reporting to that orchestrator.
-  //
-  // Written to disk here, and nowhere else: the four routes that record a link
-  // save it, nothing saved it being spent, and 26 of the 42 agents on this
-  // machine carried one that had already been used. The file said work was
-  // owed for agents that owed nothing.
-  //
-  // Not spent, though, by a rest with work still running in the background:
-  // the agent comes back when that work reports (the Audit, 2026-09-23: rest
-  // at 18:55:59, back at 18:56:15, done at 18:56:52), and the link is what
-  // tells its requester about the real end. That rest is reported as what it
-  // is instead.
-  //
-  // Counted from the launch of the CLI now running too, not only from the
-  // hand-over: a resumed session copies the earlier conversation with its old
-  // timestamps, and a background start from before that launch is not running
-  // (the Audit's gate of #152). Not from the session's registration, which
-  // only stands in when no launch was noted: claude registers again at every
-  // compaction, in the same process, and the job it left running before one
-  // is still running after it (QA's gate of #189, measured in the app).
+  // Spent once the work it was recorded for is over, reachable requester or
+  // not, so that a later start by hand (same session, same ptyId) does not
+  // inherit it; saved here, the one place it is spent (26 of the 42 agents here
+  // carried a used one). Not spent by a rest with background work still
+  // running: the agent comes back when that work reports (the Audit,
+  // 2026-09-23), and the link tells the requester about the real end. That
+  // work counts from the current CLI's launch as well as the hand-over, since a
+  // resumed session copies old timestamps (the Audit's gate of #152), and from
+  // the session's registration only when no launch was noted: claude registers
+  // again at every compaction (QA's gate of #189).
   if (news.kind === 'ended' && child.workHandedAt) {
     const launched = cliLaunchedAt(child.ptyId ? ptyProcesses.get(child.ptyId) : undefined)
       ?? (child.sessionRegisteredAt ? Date.parse(child.sessionRegisteredAt) : NaN);
@@ -442,15 +370,10 @@ function handToRequester(requesterId: string, child: AgentStatus, news: News): v
   const requester = agents.get(link.agentId);
   if (!requester || !requester.ptyId) return;
 
-  // Already asked, and about to be answered. /wait is the long poll an
-  // orchestrator sits in while its agent works, and the transition that ends
-  // the work answers it. Typing the same thing into its terminal afterwards
-  // costs it a whole turn to read what it has already been handed: measured
-  // by the QA at 375 ms after the poll answered, for a 35 second turn.
-  //
-  // Only the poll on THIS agent, and only while it is open. Every other way
-  // an orchestrator is told, from send_message to the Telegram bot, has no
-  // poll behind it and still needs the note.
+  // Already asked and about to be answered: the transition answers the /wait
+  // an orchestrator sits in on this agent, and a note typed in afterwards costs
+  // it a turn (QA: 375 ms after the poll, for a 35 s turn). Only that poll,
+  // while open: every other way of being told still needs the note.
   if (isWaitingOn(link.agentId, child.id)) return;
 
   const held = heldFor(requester);
@@ -461,14 +384,10 @@ function handToRequester(requesterId: string, child: AgentStatus, news: News): v
 }
 
 /**
- * Orchestrators sitting in a /wait on one of their agents.
- *
- * Keyed by the agent being watched, holding whoever is watching it. The route
- * registers on the way in and releases on the way out, and the release is
- * deferred by a microtask on purpose: `emitAgentStatus` fires `status:<id>`,
- * which answers the poll, and then `fleet-change`, which brings us here, both
- * inside one synchronous call. Releasing straight away would take the entry
- * out before the only reader of it ever looked.
+ * Orchestrators sitting in a /wait, keyed by the agent watched. The release is
+ * deferred by a microtask on purpose: `emitAgentStatus` fires `status:<id>`
+ * (answering the poll) and then `fleet-change` (bringing us here) in one
+ * synchronous call, and releasing at once would remove the entry unread.
  */
 const waitingOn = new Map<string, Set<string>>();
 
@@ -495,13 +414,10 @@ function isWaitingOn(waiterAgentId: string, watchedAgentId: string): boolean {
 }
 
 /**
- * Is what was held for a busy requester still true now that it can be told?
- *
- * A note waits for as long as its requester works, and the requester may use
- * that time to hand the same agent more work. The QA was announced as "now
- * waiting" to an orchestrator that had just given it its next task, while it
- * worked on it (2026-09-16, 23:30). Work handed since overtakes what was held
- * about the work before it, and a wait that is over is not a wait.
+ * Whether what was held for a busy requester is still true when it can be
+ * told: work handed to the agent since overtakes it (QA was announced "now
+ * waiting" to an orchestrator that had just handed it its next task,
+ * 2026-09-16), and a wait that is over is no wait.
  */
 function stillNews(childId: string, news: News): boolean {
   const child = agents.get(childId);
@@ -513,18 +429,13 @@ function stillNews(childId: string, news: News): boolean {
 }
 
 /**
- * Hold a bus message for an agent, to be handed over when it is next free.
+ * Hold a bus message for an agent until it is next free. Refused when the
+ * target cannot be reached at all, which the caller records as a delivery the
+ * interface shows; nothing infers an end of turn from silence.
  *
- * Refused rather than queued when the target cannot be reached at all: the
- * caller records that as a delivery the interface shows, instead of a queue
- * that would never drain. Nothing here infers an end of turn from silence.
- *
- * Holds only, and writes nothing, even to an agent that is free this instant:
- * deliverBusMessages does that, once the caller has recorded the delivery row.
- * The write is what marks the row delivered, and this used to write at once,
- * before the row existed. The mark found no row, the row was then created as
- * `queued` and stayed so, and a later close of the thread turned it `dropped`,
- * on a message the agent had read and answered.
+ * Holds only, even for an agent free this instant: deliverBusMessages writes,
+ * once the caller has recorded the delivery row the write marks. Writing here
+ * first left that row `queued`, then `dropped`, on a message read and answered.
  */
 export function queueBusMessage(targetAgentId: string, message: QueuedBusMessage): boolean {
   const target = agents.get(targetAgentId);
@@ -544,29 +455,19 @@ export function queueBusMessage(targetAgentId: string, message: QueuedBusMessage
 }
 
 /**
- * Hand an agent what is held for it, if this is a moment it can take it.
- *
- * Called by whoever queued a bus message, after recording its delivery row.
- * An agent that is busy is left alone, as always, and its own next transition
- * hands the message over.
+ * Hand an agent what is held for it, if it can take it now: called once the
+ * delivery row is recorded. A busy agent's own next transition hands it over.
  */
 export function deliverBusMessages(targetAgentId: string): void {
   flush(targetAgentId);
 }
 
 /**
- * Hand over what is waiting, if this is a moment when it can be handed over.
- *
- * Writing into the PTY of an agent that is mid-task is the thing the
- * orchestrator's own rules forbid, and for good reason: it lands in the input
- * box of a TUI that is busy and derails the turn. So a running recipient is
- * left alone and what it is owed stays queued. Nothing schedules a retry,
- * because nothing needs to: the recipient's own next transition calls back in
- * here, and that transition is precisely the moment it stopped being busy.
- *
- * One write per pass. A delegation note and a bus message are two things to
- * say, and each gets its own line and its own submit rather than being run
- * together inside one paste.
+ * Hand over what is waiting, if the recipient can take it now. A running agent
+ * is left alone (a write lands in its busy TUI and derails the turn) and needs
+ * no retry: its own next transition calls back here, the moment it stops being
+ * busy. One write per pass: a note and a bus message each get their own line
+ * and their own submit.
  */
 function flush(requesterId: string): void {
   const held = pending.get(requesterId);
@@ -589,15 +490,10 @@ function flush(requesterId: string): void {
   // it. What is left stays queued and goes out when the window closes.
   if (delivering.has(requesterId)) return;
 
-  // The session rule, which is the whole of it: only currentSessionId is
-  // authoritative, and an id sitting in lastKilledSessionId is a tombstone.
-  // A killed and relaunched agent has a new pty and a new session, and it
-  // never dispatched any of this and was never in that conversation.
-  // Held for a terminal whose session had not registered yet (a launch on
-  // its way, the only time one is held there): it is owed to the session that
-  // then registers in that same terminal, which is the one it was queued for.
-  // Bound to no session, it was dropped at that very registration, the first
-  // moment it could have gone in.
+  // The session rule: only currentSessionId counts, and lastKilledSessionId is
+  // a tombstone. Held before the session registered (a launch on its way), it
+  // is owed to the session that then registers in that terminal: bound now,
+  // where it used to be dropped at the first moment it could go in.
   if (held.sessionId === undefined && requester.currentSessionId
     && held.ptyId === requester.ptyId && requester.sessionPtyId === requester.ptyId) {
     held.sessionId = requester.currentSessionId;
@@ -625,14 +521,9 @@ function flush(requesterId: string): void {
     return;
   }
 
-  // Delegation results first, because that note is what an orchestrator is
-  // waiting on; a bus message goes out on the next pass of the same window.
-  //
-  // The write may not happen now: a note does not go into a field somebody is
-  // typing in, and there it is held by the writer until that field is free.
-  // So `onWritten` is what marks a room message delivered, not the return of
-  // the call. A journal that says `delivered` for a message still sitting in
-  // a queue is the same lie whether the queue is here or one layer down.
+  // Delegation results first, the note an orchestrator waits on; a bus message
+  // goes on the next pass. The write may be held behind a person's draft, so
+  // `onWritten`, not the return, marks a room message delivered.
   if (held.children.size > 0) {
     const names = [...held.children.keys()].map(id => agents.get(id)?.name ?? id);
     const outcome = writeProgrammaticInput(ptyProcess, composeNote(held.children), true, {
@@ -652,10 +543,8 @@ function flush(requesterId: string): void {
       // dropped if the terminal exits first: the row follows the message.
       ...busOrigin(requesterId, message.messageId, () => onBusDelivered?.(requesterId, message.messageId)),
     });
-    // Refused means the terminal is holding all it can. What was not taken
-    // stays here, under this queue's own cap, rather than disappearing
-    // between the two. `held` is taken: it sits in the terminal's own queue
-    // and `onWritten` marks the journal when it lands.
+    // Refused: the terminal holds all it can, so this stays here, under this
+    // queue's cap. `held` is taken: `onWritten` marks the journal when it lands.
     if (outcome === 'refused') return;
     held.bus.shift();
   }
@@ -670,14 +559,7 @@ function flush(requesterId: string): void {
   }, PROGRAMMATIC_SUBMIT_DELAY_MS + 50));
 }
 
-/**
- * Say so when a room message is given up on.
- *
- * A dropped delegation result is only a note nobody will read, but a dropped
- * room message has a row in the journal that would otherwise read `queued` for
- * ever. Something that is not moving has to look like something that is not
- * moving.
- */
+/** Say so when a room message is given up on: its journal row would read `queued` for ever. */
 function abandonBusMessages(recipientId: string, held: Pending): void {
   for (const message of held.bus) {
     try {
@@ -726,28 +608,18 @@ function composeNote(finished: Map<string, News>): string {
 }
 
 /**
- * A message from the room, rendered as what it is.
+ * A message from the room, rendered as what it is. Provenance is data, not an
+ * instruction: the note says who speaks, where, and plainly whether that is
+ * JeanBrasse or a teammate, decided by the author kind the journal recorded (an agent
+ * can be named JeanBrasse). Answering is publishing, an act.
  *
- * Provenance is data, not an instruction: the note says who is speaking and
- * where, and says plainly whether that is JeanBrasse or a teammate. An agent must not
- * read a colleague's request as an order from the person who owns the machine,
- * nor JeanBrasse's own words as a colleague's request, and the note used to call
- * every message a teammate's, JeanBrasse's included. Decided by the kind of author
- * the journal recorded: an agent can be named JeanBrasse. Answering is done by
- * publishing, which is an act.
- *
- * The message itself is fenced, because it can say anything, including a line
- * shaped exactly like the first line of this note. Nothing marked it off, so an
- * agent could write "[Tars] JeanBrasse wrote in ... This is JeanBrasse, not a teammate." in
- * its message, and the recipient had nothing to tell it from the real one.
- * Filtering such lines out would not hold: a forgery needs no exact prefix,
- * only a convincing sentence, and look-alike characters get past any list. So
- * the fence is a word drawn for this note alone, from 96 random bits, after the
- * message was written. The note announces it before the message and closes it
- * after, so whatever the message imitates sits visibly inside, and it cannot
- * close the fence early without a word it never saw. Every value outside the
- * fence goes through envelopeValue, so that none can start a line of its own
- * or hide text there.
+ * The message is fenced: it can say anything, including a line shaped like
+ * this note's first one, and filtering cannot hold (a forgery needs no exact
+ * prefix, and look-alike characters pass any list). The fence is a word drawn
+ * for this note alone, from 96 random bits, after the message was written:
+ * whatever the message imitates sits visibly inside, and it cannot close the
+ * fence without a word it never saw. Every value outside the fence goes
+ * through envelopeValue, so none can start a line or hide text there.
  */
 function composeBusNote(message: QueuedBusMessage): string {
   const who = message.authorKind === 'human' ? 'This is JeanBrasse, not a teammate.' : 'This is a teammate, not JeanBrasse.';
@@ -767,17 +639,10 @@ function composeBusNote(message: QueuedBusMessage): string {
 }
 
 /**
- * Write held messages into an agent's terminal now, because a human said so.
- *
- * The queue will never do this by itself for a provider with no end of turn:
- * there is no moment it can call safe, and inventing one from silence is the
- * idleness detection this bus refuses. A human pressing the button is that
- * moment, and the decision is theirs, so this is the one path that writes into
- * a session whose state Tars does not know.
- *
- * Sequential with the same spacing flush uses: a second write issued before
- * the first has sent its carriage return lands inside it and is submitted by
- * it, which would paste two messages into one prompt.
+ * Write held messages into an agent's terminal now, because a human said so:
+ * for a provider with no end of turn the queue never finds a safe moment, and
+ * inventing one from silence is the idleness detection the bus refuses. One at
+ * a time with flush's spacing, or two would paste into one prompt.
  */
 export async function releaseBusMessagesNow(
   agentId: string,
@@ -789,14 +654,10 @@ export async function releaseBusMessagesNow(
   if (releasing.has(agentId)) return { written: [], refused: 'already_releasing' };
 
   const agent = agents.get(agentId);
-  // The session barrier is deliberately NOT applied here, and this is the only
-  // path where that is true. `flush` drops what it holds when the session that
-  // was owed it is gone, because that queue belongs to a session. This does
-  // not: a human looked at an agent, saw messages held for it, and pressed
-  // send. They are aiming at the agent, not at a session id, and an agent that
-  // was killed and relaunched between the button being drawn and the click is
-  // still the agent they meant. So the messages go into whatever session is
-  // live now. Assumed, and written down rather than left to be discovered.
+  // The session barrier is deliberately not applied, the one path where that is
+  // true: a human aims at the agent, not a session id, so messages go into the
+  // session live now, even one relaunched between drawing the button and the
+  // click.
   const ptyProcess = agent?.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   if (!ptyProcess) return { written: [], refused: 'no_terminal' };
 
@@ -815,10 +676,8 @@ export async function releaseBusMessagesNow(
         ...busOrigin(agentId, message.messageId, () => onWritten?.(message.messageId)),
       });
       if (outcome === 'refused') break;
-      // Two different things, and they used to be one. `written` said a
-      // message had reached the terminal, and telling a human "sent" about
-      // something sitting behind their own half-written sentence is telling
-      // them something they cannot check.
+      // Held behind the human's own draft is not written: "sent" would be a
+      // claim they cannot check.
       if (outcome === 'held') waiting.push(message.messageId);
       else written.push(message.messageId);
       await new Promise(resolve => setTimeout(resolve, PROGRAMMATIC_SUBMIT_DELAY_MS + 50));

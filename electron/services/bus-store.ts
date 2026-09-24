@@ -23,28 +23,18 @@ import type {
 } from '../types';
 
 /**
- * The bus journal: rooms, threads, messages and deliveries.
+ * The bus journal: rooms, threads, messages and deliveries, in one JSON file
+ * under ~/.dorothy written as agents.json is (temp file, then rename).
  *
- * One JSON file under ~/.dorothy, written the way agents.json is (temp file
- * then rename, through the shared writeAtomicSync). No new service, no
- * database, no network: a room is a view over the fleet Tars already has, and
- * only the journal and the membership overrides are persisted.
+ * Rooms are derived, not stored: `global` for the orchestrators, and one per
+ * project that has agents, its id `project:<path>` verbatim (Claude Code's
+ * directory encoding is lossy, and two projects can collide in it). Only the
+ * journal and the membership overrides are persisted. The global room is the
+ * super chat, read from the overseer's own conversation through an injected
+ * reader and never copied here: two stores for one conversation would drift.
  *
- * Rooms are derived rather than stored. There is one `global` room, whose
- * members are the orchestrators, and one room per project that has agents,
- * whose members are that project's agents. A room keeps its `projectPath`, so
- * its id is `project:<path>` verbatim: Claude Code's directory encoding
- * (slashes and dots to dashes) is lossy and two projects can collide in it,
- * and an id that cannot be read back is not worth the shortening.
- *
- * The global room is today's super chat and stays it: its messages are read
- * from the overseer's own conversation through an injected reader, never
- * copied into this journal. Two stores for one conversation would drift, and
- * the overseer's behaviour does not change in v1.
- *
- * What this file does NOT do is deliver. Recording that a message is `queued`
- * is not writing it into a session: the queue is agent-watch.ts, generalised
- * separately, and a delivery row says exactly what has happened and no more.
+ * Nothing here delivers: a delivery row says what happened and no more, and
+ * the queue is agent-watch.ts.
  */
 
 const BUS_SCHEMA_VERSION = 1;
@@ -54,13 +44,9 @@ export const MAX_ROUNDS = 3;
 export const MAX_AGENT_MESSAGES = 10;
 
 /**
- * Silence is first class.
- *
- * An agent with nothing to add says so in one of these, and that is not a
- * message: it is never stored, never shown, never delivered and never counted
- * against the bounds. Recognised at publication so an agent cannot spend a
- * thread's budget saying nothing. The list is Hermes's, which is where the
- * mechanism is from.
+ * Silence is first class: an agent with nothing to add says one of these (the
+ * list is Hermes's), which is never stored, shown, delivered or counted against
+ * the bounds, so saying nothing spends none of a thread's budget.
  */
 export const SILENCE_MARKERS = ['(pass)', '[SILENT]', 'SILENT', 'NO_REPLY', 'NO REPLY'];
 
@@ -89,11 +75,8 @@ let state: BusFile = emptyFile();
 let loaded = false;
 
 /**
- * Where the global room's messages come from.
- *
- * Injected rather than imported, so this module stays a leaf: the overseer
- * service imports the fleet and the journal would then import it back, which
- * is a require cycle that types cannot see and that fails at runtime.
+ * Where the global room's messages come from. Injected so this module stays a
+ * leaf: importing the overseer makes a require cycle that fails at runtime.
  */
 type GlobalHistoryReader = () => BusMessage[];
 let readGlobalHistory: GlobalHistoryReader | undefined;
@@ -136,12 +119,9 @@ export function loadBus(): void {
 }
 
 /**
- * The journal of the account this process runs as, whatever HOME says.
- *
- * `os.userInfo()` reads the password database and ignores the environment,
- * while `os.homedir()` honours HOME. That difference is the whole point: a
- * test that redirects HOME to a temp directory is redirected, and a test that
- * redirects nothing is not, and only the second one is dangerous.
+ * The journal of the account this process runs as, whatever HOME says:
+ * `os.userInfo()` ignores the environment where `os.homedir()` honours HOME,
+ * which tells a test that redirected HOME from one that redirected nothing.
  */
 function realAccountJournal(): string | undefined {
   try {
@@ -156,28 +136,16 @@ function inTestProcess(): boolean {
 }
 
 /**
- * The journal is written once per turn of the event loop, not once per row.
+ * The journal is written once per turn of the event loop, not once per row: a
+ * message's fan-out rewrote the whole file 7 to 13 times (measured 2026-09-18
+ * in a room of six on a month-sized journal, 628 KB: 11.4 ms a message; at
+ * 6.3 MB, 83 to 160 ms on the main thread). One write a message: 1.7 and
+ * 11.5 ms.
  *
- * Every mutator in this file wrote the whole journal, and the delivery fan-out
- * calls two of them once per target: one append, one delivery row per member,
- * one more when each row is marked delivered. Measured on 2026-09-18 through
- * bus:postMessage itself, in a room of six, on a journal the size of a month
- * of the super chat (343 messages, 2058 delivery rows, 628 KB): 13 rewrites of
- * the whole file for the first message and 7 to 8 for each one after it, 11.4
- * ms a message. At ten times that journal (6.3 MB), 83 ms a message and 160 at
- * worst, all of it on the main thread, and 615 MB rewritten over 12 messages.
- * One write a message instead: 1.7 ms and 11.5 ms.
- *
- * So the write, and only the write, is deferred to the end of the current
- * synchronous run. `state` still changes before the mutator returns, so
- * nothing that reads the journal can see a stale one - every reader here reads
- * memory - and no timer, socket or IPC callback runs between a mutation and
- * its write, because a microtask runs before any of them. What can happen in
- * between is the app being told to quit, which is why flushBus exists and why
- * before-quit calls it.
- *
- * Nothing about the journal's shape, its atomicity or its mode changes, and
- * nothing is purged: the same bytes, written a seventh to a thirteenth as often.
+ * Only the write is deferred, to the end of the current synchronous run:
+ * `state` changes before each mutator returns, every reader reads memory, and
+ * no timer, socket or IPC callback runs before a microtask. Quitting can, so
+ * before-quit calls flushBus. The bytes, their atomicity and mode are the same.
  */
 let writeQueued = false;
 
@@ -203,11 +171,8 @@ function writeBusNow(): void {
   // Never write a journal that was never read.
   if (!loaded) return;
 
-  // And that guard alone does not hold, which was worth finding out before the
-  // QA wrote against it: loadBus sets `loaded` even when there is no file, so
-  // any test that actually exercises a path flips it and the next write lands
-  // on the real journal. This is the one that holds. A test may write a journal
-  // it redirected; it may not write the one belonging to the account.
+  // Nor from a test onto the account's own journal: loadBus sets `loaded` even
+  // with no file, so the guard above alone let a test write the real one.
   if (inTestProcess() && BUS_FILE === realAccountJournal()) {
     console.warn('[bus] refusing to write the account journal from a test process: redirect BUS_FILE');
     return;
@@ -250,12 +215,9 @@ export function listRooms(): BusRoom[] {
 
   for (const projectPath of projectPaths) {
     const id = projectRoomId(projectPath);
-    // Enough for the conversation list to sort itself and show a line, read
-    // from the journal already in memory. Unread counts are not here: they
-    // need a per-viewer read marker, which is state this file does not keep.
-    // The global room has neither, because its history lives in the overseer's
-    // own conversation and reading it on every room listing would put a file
-    // read on a path that runs on every publication.
+    // From the journal in memory, enough to sort the list and show a line. No
+    // unread counts (they need a per-viewer marker this file does not keep); the
+    // global room has neither, its history being the overseer's file.
     const last = [...state.messages].reverse().find(m => m.roomId === id);
     rooms.push({
       id,
@@ -299,13 +261,9 @@ export function getRoom(roomId: string): BusRoom | undefined {
 }
 
 /**
- * A machine line in a room: something Tars did, written where the conversation
- * is so the page can draw it in place.
- *
- * Its own entry point rather than appendMessage, whose job is anchors: a human
- * message opens one, and an agent message that finds none open would open one
- * too. A system line must do neither. It attaches to the thread it is about,
- * including a closed one, and counts against no bound.
+ * A machine line in a room: something Tars did, where the conversation is. Not
+ * appendMessage, which opens anchors: a system line opens none, attaches to
+ * the thread it is about (closed or not), and counts against no bound.
  */
 export function appendSystemMessage(input: {
   roomId: string;
@@ -334,12 +292,9 @@ export function appendSystemMessage(input: {
 }
 
 /**
- * The room's members as the page needs them, reachability included.
- *
- * hasEndOfTurn is read from the provider's hook configuration here, the same
- * read the delivery path makes, so the renderer stops keeping its own copy of
- * which five CLIs cannot be reached. A copy of a derived value goes stale the
- * day a provider gains hooks, and it would go stale silently.
+ * The room's members as the page needs them, reachability read from each
+ * provider's hook configuration as delivery reads it: a copy in the renderer
+ * would go stale, silently, the day a provider gains hooks.
  */
 function membersOf(room: BusRoom): BusMember[] {
   return room.memberIds.map(id => {
@@ -429,13 +384,9 @@ export function closeThread(threadId: string, next: BusThread['state']): BusThre
 }
 
 /**
- * Who has already spoken in the round now in progress.
- *
- * Derived from the journal rather than stored on the thread: the contract
- * fixes what a thread carries, and a round is a reading of the messages, not
- * another field to keep in step with them. A round ends when an agent that has
- * already spoken in it speaks again, which is the rotation: everyone gets one
- * turn before anyone gets a second.
+ * Who has spoken in the round in progress, read from the journal rather than
+ * kept on the thread: a round ends when an agent already heard in it speaks
+ * again, so everyone gets one turn before anyone gets a second.
  */
 function currentRound(threadId: string): { round: number; heard: Set<string> } {
   let round = 1;
@@ -452,12 +403,9 @@ function currentRound(threadId: string): { round: number; heard: Set<string> } {
 }
 
 /**
- * Add a human message to a room.
- *
- * A human message closes the anchor in flight and opens a new one, which is
- * the contract's rule: the turn already running finishes, and the discussion
- * starts again at round one from what JeanBrasse just said. Nothing here cancels a
- * turn.
+ * Add a message to a room. A human one closes the anchor in flight and opens a
+ * new one at round one; the turn already running finishes, since nothing here
+ * cancels a turn.
  */
 export function appendMessage(input: {
   roomId: string;
@@ -522,13 +470,10 @@ export type PublishRefusal =
   | 'not_your_turn';
 
 /**
- * An agent publishes into a room, with every bound applied here.
- *
- * Server side on purpose: an agent that writes faster must not be able to get
- * around the bounds, so the tool is a caller of this and never a second
- * implementation of it. Refusals are returned with a reason rather than
- * swallowed, because a message that quietly never appears is the silent
- * failure this app has already had once.
+ * An agent publishes into a room, every bound applied here, server side, so an
+ * agent that writes faster cannot get around them; the tool only calls this.
+ * Refusals come back with a reason: a message that quietly never appears is a
+ * failure this app has had once.
  */
 export function publishAgentMessage(input: {
   roomId: string;
@@ -548,11 +493,8 @@ export function publishAgentMessage(input: {
     return { published: false, reason: 'not_a_member', detail: 'Only the agents of this room can post in it.' };
   }
 
-  // The latest anchor, open or not. Asking for the open one made the three
-  // refusals below unreachable: a thread that had just been stopped by hand
-  // answered `no_open_thread`, so an agent JeanBrasse had deliberately silenced was
-  // told no conversation had ever existed. Every other refusal here is true;
-  // that one lied, and the page renders these reasons to a human.
+  // The latest anchor, open or not: asking for the open one made the refusals
+  // below unreachable, and told an agent JeanBrasse had stopped that no thread existed.
   const thread = latestThreadOf(input.roomId);
   if (!thread) {
     return {
@@ -577,16 +519,10 @@ export function publishAgentMessage(input: {
 
   const { round, heard } = currentRound(thread.id);
   if (round > 1 || heard.size > 0) {
-    // A turn after the first is earned by being named, and named *since you
-    // last spoke*: a mention from before your own message is one you have
-    // already answered.
-    //
-    // This is also the only thing that ends a round. currentRound advances
-    // when an agent that has already been heard speaks again, so refusing
-    // that message, which is what this guard used to do, left the round
-    // stuck at one forever: MAX_ROUNDS was unreachable, and in a room of
-    // fewer than ten agents a thread never reached `bounded` at all. It
-    // simply refused everyone, with no state the interface could show.
+    // A turn after the first is earned by being named since you last spoke. This
+    // is also what ends a round (currentRound advances when a heard agent speaks
+    // again): refusing that message kept the round at one for ever, and a thread
+    // never reached `bounded`.
     const mineAt = priors.map(m => m.authorId).lastIndexOf(input.agentId);
     const since = priors.slice(mineAt + 1);
     const namedSince = since.some(m => m.authorId !== input.agentId && m.mentions.includes(input.agentId));
@@ -616,13 +552,10 @@ export function publishAgentMessage(input: {
 /* ── Deliveries ────────────────────────────────────────────────────────── */
 
 /**
- * Providers whose interactive session never leaves `running`.
- *
- * amp, codex, grok, opencode and pi have no native hooks, so their status only
- * changes when the process exits: a queue that waits for them to be at rest
- * would never drain. Read from the provider's own hook configuration rather
- * than a list written out here, so a provider that gains hooks stops being an
- * exception on the day it gains them, not on the day someone remembers.
+ * Whether the provider reports an end of turn. amp, codex, grok, opencode and
+ * pi have no native hooks: their status changes only on exit, and a queue
+ * waiting for them to rest would never drain. Read from the provider's hook
+ * configuration, so a provider that gains hooks stops being an exception then.
  */
 export function hasEndOfTurn(agent: AgentStatus): boolean {
   try {
@@ -633,11 +566,9 @@ export function hasEndOfTurn(agent: AgentStatus): boolean {
 }
 
 /**
- * Whether Tars can interrupt this agent's turn: a CLI on the claude binary,
- * where Esc stops a running turn and the transcript records it
- * (`[Request interrupted by user]`), which is how bus:sendNow knows it took.
- * The other CLIs record no such thing Tars reads, so an Esc sent to one would
- * be a guess.
+ * Whether Tars can interrupt this agent's turn: a claude-binary CLI, where Esc
+ * stops a turn and the transcript records it (`[Request interrupted by user]`),
+ * which is how bus:sendNow knows it took. Elsewhere an Esc would be a guess.
  */
 export function canInterrupt(agent: AgentStatus): boolean {
   try {
@@ -670,12 +601,8 @@ export function notSentFor(targetAgentId: string): BusDelivery[] {
     .sort((a, b) => a.queuedAt.localeCompare(b.queuedAt));
 }
 
-/** A message actually reached a terminal. The only place a delivery becomes
- *  `delivered`, so the interface can never show that on a guess.
- *
- *  `not_sent` is accepted as well as `queued`: a held message released by hand
- *  reaches the terminal the same way, and it would be a poor answer to write
- *  it in and go on calling it not sent. */
+/** A message reached a terminal: the only place a delivery becomes `delivered`,
+ *  from `queued`, `held`, or `not_sent` (a held message released by hand). */
 export function markDelivered(targetAgentId: string, messageId: string): BusDelivery | undefined {
   const delivery = state.deliveries.find(
     d => d.messageId === messageId && d.targetAgentId === targetAgentId
@@ -684,9 +611,8 @@ export function markDelivered(targetAgentId: string, messageId: string): BusDeli
   if (!delivery) return undefined;
   delivery.state = 'delivered';
   delivery.deliveredAt = new Date().toISOString();
-  // A released message keeps no trace of why it was once held: a row that says
-  // delivered and, beside it, that this provider can never be delivered to, is
-  // a row that contradicts itself on screen.
+  // A released message keeps no trace of why it was held: a row cannot say
+  // delivered and undeliverable at once.
   delivery.reasonCode = undefined;
   delivery.reason = undefined;
   delivery.refusedAt = undefined;
@@ -696,12 +622,10 @@ export function markDelivered(targetAgentId: string, messageId: string): BusDeli
 }
 
 /**
- * A message its target's terminal took, but that waits behind what somebody
- * has typed in that field: Tars never types across a draft. From `queued`, or
- * from `not_sent` when a person released it by hand into such a field, which
- * also takes it off the not-sent list so a second press sends nothing twice.
- * It turns `delivered` when it goes in, or `dropped` if the terminal exits
- * first; only the person at that keyboard ends the wait.
+ * A message its terminal took that waits behind somebody's draft (Tars never
+ * types across one): from `queued`, or `not_sent` released by hand, which takes
+ * it off the not-sent list so a second press sends nothing twice. It turns
+ * `delivered` when it goes in, or `dropped` if the terminal exits first.
  */
 export function markHeld(targetAgentId: string, messageId: string): BusDelivery | undefined {
   const delivery = state.deliveries.find(
@@ -718,11 +642,9 @@ export function markHeld(targetAgentId: string, messageId: string): BusDelivery 
   return delivery;
 }
 
-/** Mark every delivery still queued for a thread as dropped, with its reason:
- *  what Stop means for messages that had not gone out yet. A `held` one is
- *  left alone: its terminal has already taken it and will type it once the
- *  field is free, so calling it dropped would be the lie in the other
- *  direction. */
+/** Drop every delivery still queued for a thread, with its reason (what Stop
+ *  means for messages not yet out). A `held` one is left: its terminal has it,
+ *  and types it once the field is free. */
 export function cancelQueuedDeliveries(
   threadId: string,
   reasonCode: BusDeliveryReason,
@@ -743,14 +665,8 @@ export function cancelQueuedDeliveries(
   return cancelled;
 }
 
-/**
- * One queued delivery will never leave, and says so.
- *
- * The queue drops what it is holding when the session it was held for is gone.
- * Without this the row would read `queued` for ever, which is the state the
- * contract exists to make impossible: a message that is not moving has to look
- * like a message that is not moving.
- */
+/** One queued delivery will never leave (its session is gone), and says so: a
+ *  row reading `queued` for ever is what the contract rules out. */
 export function markDropped(
   targetAgentId: string,
   messageId: string,
@@ -778,11 +694,8 @@ export function setMembers(
   const room = getRoom(roomId);
   if (!room) return undefined;
   state.memberOverrides[roomId] = Array.from(new Set(memberIds));
-  // Changing who is in the room closes the anchor in flight rather than
-  // editing a live thread: that is what keeps the journal replayable. The
-  // closed thread is handed back so the caller can push it, because a member
-  // change that silently ended a thread would be exactly the invisible state
-  // the contract asks the interface to show.
+  // A membership change closes the anchor in flight rather than editing a live
+  // thread (the journal stays replayable), and hands it back to be pushed.
   const open = openThreadOf(roomId);
   if (open) open.state = 'superseded';
   scheduleSaveBus();
