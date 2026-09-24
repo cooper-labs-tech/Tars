@@ -4,13 +4,9 @@ import { DATA_DIR } from '../constants';
 import { priceFor } from './model-catalog';
 
 /**
- * Per-turn usage, for every provider.
- *
- * Claude Code writes its own transcripts, so its usage can be reconstructed
- * after the fact. No other CLI does, which is why "Usage by Provider" showed
- * nothing: it read a file only the statusline wrote, and the statusline is off
- * by default. Every ACP turn reports its tokens, so this records them as they
- * happen - that is the only source that covers Codex, Gemini, Grok and the rest.
+ * Per-turn usage for every provider, recorded as each ACP turn reports its
+ * tokens: the only source that covers Codex, Gemini, Grok and the rest, since
+ * only Claude Code writes transcripts its usage can be rebuilt from.
  */
 
 const LEDGER_FILE = path.join(DATA_DIR, 'usage-ledger.jsonl');
@@ -71,12 +67,9 @@ export function recordUsage(entry: Omit<UsageEntry, 'ts'>): void {
 }
 
 /**
- * `YYYY-MM-DD` of an entry's `ts` in the machine's own timezone, or null.
- *
- * `ts` is `Date.toISOString()`, i.e. UTC. Slicing its first ten characters
- * keys a turn by its UTC calendar day, which disagrees with the local day
- * transcript-usage.ts and the Usage page key by: a turn at 02:30 local in
- * Tbilisi (22:30 UTC the day before) landed under yesterday's date.
+ * `YYYY-MM-DD` of an entry's `ts` (UTC, from toISOString) in the machine's own
+ * timezone, or null: the day transcript-usage.ts and the Usage page key by,
+ * where slicing `ts` gave the UTC day (02:30 in Tbilisi landed on yesterday).
  */
 function localDay(ts: string): string | null {
   const d = new Date(ts);
@@ -214,21 +207,14 @@ function daysOf(entries: UsageEntry[]): { daily: LedgerDay[]; oldest: string | n
 }
 
 /**
- * The whole answer of the `usage:by-provider` channel, from one read.
- *
- * `providers` and `dailyCost` are windowed as they always were. `daily` and
- * `oldest` are not: they cover every turn in the file, whatever `sinceDays`
- * says. The Usage page applies one window to every figure it prints, and a
- * window of days cannot be cut from `providers`, a rolling count of 24-hour
- * periods back from now, or from `dailyCost`, which stops at thirty days.
- *
- * `oldest` is the first local day still in the file. It is trimmed to its last
- * 12 000 lines past 20 000, so after a trim that is later than the first turn
- * ever recorded, and a window starting before it is only partly covered.
- *
- * One read rather than one per field, on the main thread: at its cap the file
- * is about 4 MB, and three reads of it took 247 ms where this takes 136, what
- * the two reads before `daily` existed took (medians of 25 interleaved runs).
+ * The whole answer of `usage:by-provider`, from one read. `providers` and
+ * `dailyCost` are windowed as before; `daily` and `oldest` cover every turn in
+ * the file, since the page applies one window of days to every figure, and
+ * none can be cut from a rolling count of 24-hour periods or a thirty-day
+ * series. `oldest` is the first local day still in the file: past a trim (to
+ * its last 12 000 lines beyond 20 000), later than the first turn recorded.
+ * One read: at the cap the file is about 4 MB, and three reads took 247 ms
+ * where this takes 136 (medians of 25 interleaved runs).
  */
 export function usageByProvider(sinceDays?: number): {
   providers: ProviderTotals[];

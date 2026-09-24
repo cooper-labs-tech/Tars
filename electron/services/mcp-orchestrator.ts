@@ -9,70 +9,40 @@ import { getAllProviders } from '../providers';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
-/**
- * MCP Orchestrator Service
- *
- * Manages the setup, configuration, and lifecycle of the MCP orchestrator
- * which integrates with Claude's global configuration.
- */
+/** The bundled MCP servers, registered with every provider's CLI, and the memory backends with claude. */
 
 // ============== Helper Functions ==============
 
 /**
- * Get the path to the bundled MCP orchestrator
- * Always uses the packaged app path - MCP servers are bundled in extraResources
+ * Where each bundled server is: under process.resourcesPath, where
+ * extraResources puts it. Packaged only: an unpackaged app has no server there.
  */
 export function getMcpOrchestratorPath(): string {
-  // Always use the packaged app path - works for all users
   return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'bundle.js');
 }
 
-/**
- * Get the path to the bundled MCP telegram server
- * Always uses the packaged app path - MCP servers are bundled in extraResources
- */
 export function getMcpTelegramPath(): string {
-  // Always use the packaged app path - works for all users
   return path.join(process.resourcesPath, 'mcp-telegram', 'dist', 'bundle.js');
 }
 
-/**
- * Get the path to the bundled MCP kanban server
- * Always uses the packaged app path - MCP servers are bundled in extraResources
- */
 export function getMcpKanbanPath(): string {
-  // Always use the packaged app path - works for all users
   return path.join(process.resourcesPath, 'mcp-kanban', 'dist', 'bundle.js');
 }
 
-/**
- * Get the path to the bundled MCP vault server
- * Always uses the packaged app path - MCP servers are bundled in extraResources
- */
 export function getMcpVaultPath(): string {
   return path.join(process.resourcesPath, 'mcp-vault', 'dist', 'bundle.js');
 }
 
-/**
- * Get the path to the bundled MCP socialdata server
- * Always uses the packaged app path - MCP servers are bundled in extraResources
- */
 export function getMcpSocialDataPath(): string {
   return path.join(process.resourcesPath, 'mcp-socialdata', 'dist', 'bundle.js');
 }
 
-/**
- * Get the path to the bundled MCP X server (tweet posting)
- * Always uses the packaged app path - MCP servers are bundled in extraResources
- */
+/** The X server posts tweets. */
 export function getMcpXPath(): string {
   return path.join(process.resourcesPath, 'mcp-x', 'dist', 'bundle.js');
 }
 
-/**
- * Get the path to the bundled memory MCP server.
- * This is the one that makes memory provider-agnostic: every CLI gets it.
- */
+/** The memory server makes memory provider-agnostic: every CLI gets it. */
 export function getMcpMemoryPath(): string {
   return path.join(process.resourcesPath, 'mcp-memory', 'dist', 'bundle.js');
 }
@@ -214,27 +184,19 @@ async function installBundledSkills(): Promise<void> {
 // ============== Shared memory backends (remote MCP) ==============
 
 /**
- * Register/unregister the user's shared memory backends (gbrain, Honcho) as
- * remote HTTP MCP servers in the claude CLI's user scope, driven by settings.
- * Every claude-binary agent then gets the same memory tools that the user's
- * Hermes instance and claude.ai connectors use: one brain everywhere.
- *
- * Writes ~/.claude.json (the file `claude mcp add -s user` maintains)
- * directly: no dependency on the claude binary being on the packaged app's
- * PATH, and no CLI boot blocking the main process. Removal only touches
- * entries whose URL matches Tars's own settings. A gbrain/honcho the
- * user registered independently is never deleted.
- *
- * Claude-binary providers only: native CLIs (codex, gemini, grok, opencode,
- * pi) manage their own MCP configs and are out of scope here.
+ * Register or unregister the user's shared memory backends (gbrain, Honcho) as
+ * remote HTTP MCP servers in the claude CLI's user scope, so every
+ * claude-binary agent gets the memory tools Hermes and claude.ai use. Writes
+ * ~/.claude.json directly (no claude needed on the packaged app's PATH, no CLI
+ * boot on the main process), and removes only entries whose URL matches Tars's
+ * own settings. The native CLIs (codex, gemini, grok, opencode, pi) keep their
+ * own MCP configs.
  */
 export function setupMemoryBackends(appSettings?: AppSettings): void {
-  // Honcho refuses a call whose workspace it cannot infer, and advertises no
-  // tool that would let an agent find one: list_workspaces answers 502, and
-  // workspace_id is absent from all 31 tool schemas, so an agent treats it as
-  // optional and omits it. The header is the only clean way to bind it, and
-  // the server's own error message names it. An empty setting sends nothing,
-  // which leaves the config byte for byte what it is today.
+  // Honcho refuses a call whose workspace it cannot infer, and gives an agent no
+  // way to find one (list_workspaces answers 502; workspace_id is in none of its
+  // 31 tool schemas): the header binds it, as Honcho's own error says. An empty
+  // setting sends nothing.
   const honchoWorkspaceId = appSettings?.memoryHonchoWorkspaceId?.trim();
   const backends = [
     {

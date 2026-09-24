@@ -3,16 +3,11 @@ import * as path from 'path';
 import { DATA_DIR } from '../constants';
 
 /**
- * Live model + price catalogue.
- *
- * Model lists and per-token prices used to be hardcoded, so a new model or a
- * price change needed a release. models.dev publishes both for 193 providers,
- * in USD per million tokens, and re-syncs hourly; it is MIT licensed and
- * supports conditional GET, so the usual refresh costs one 304 and no body.
- *
- * Three tiers, in order: fresh fetch, last-good copy on disk (served whatever
- * its age), then the compiled-in floor. A network failure must never zero out
- * cost accounting.
+ * Live model and price catalogue, from models.dev (193 providers, USD per
+ * million tokens, re-synced hourly, MIT; a conditional GET makes the usual
+ * refresh one 304). Three tiers, in order: a fresh fetch, the last good copy on
+ * disk whatever its age, then the compiled-in floor. A network failure must
+ * never zero out cost accounting.
  */
 
 const CATALOG_URL = 'https://models.dev/api.json';
@@ -70,21 +65,11 @@ const PROVIDER_KEYS: Record<string, string> = {
   qwencode: 'alibaba',
   venice: 'venice',
   'ollama-cloud': 'ollama-cloud',
-  // No 'ollama' entry: models.dev catalogues hosted vendors, and local
-  // Ollama's catalogue is whatever the user has pulled onto their own
-  // machine - the built-in list in ollama-provider.ts is the floor,
-  // permanently, not just until this syncs. Ollama Cloud above is the
-  // separate hosted product (ollama-cloud-provider.ts) and does have a
-  // catalogue entry here.
-  //
-  // No 'custom-openai' entry either, and there never will be one: a private
-  // or self-hosted endpoint is by definition not in a public catalogue. Its
-  // one model comes from what the user typed in Settings - see
-  // custom-openai-provider.ts's getModels() and the models:list IPC handler.
-  //
-  // No 'amp' entry, and it is not an oversight: Amp publishes no model
-  // selection and picks its own mix per request, so there is nothing to price
-  // per model. `amp usage` is where its spend lives, on Amp's side.
+  // No 'ollama': local Ollama's catalogue is whatever the user pulled, so
+  // ollama-provider.ts's list is the floor for good (Ollama Cloud, above, is
+  // the hosted product). No 'custom-openai', ever: a private endpoint's one
+  // model is what the user typed in Settings. No 'amp': it picks its own mix
+  // per request, so nothing is priced per model (`amp usage` holds its spend).
 };
 
 /** Prices of last resort, used only when the catalogue is unreachable and no
@@ -216,13 +201,10 @@ export interface ResolvedModel {
 }
 
 /**
- * models.dev suffixes an undated id with "(latest)": `claude-sonnet-4-5` is
- * named "Claude Sonnet 4.5 (latest)" because it is the alias that tracks the
- * newest build of that family. It does NOT mean the newest model there is.
- *
- * Tars printed it verbatim in the model picker, so the list read as if Sonnet
- * 4.5 were current while Opus 5 sat two rows above it. The suffix comes off,
- * and the row says what it actually is instead.
+ * models.dev suffixes an undated id with "(latest)" (`claude-sonnet-4-5` is
+ * "Claude Sonnet 4.5 (latest)", the alias tracking that family's newest build),
+ * which does not mean the newest model: shown verbatim, the picker read as if
+ * Sonnet 4.5 were current, two rows under Opus 5. The suffix comes off.
  */
 function isAliasName(name: string): boolean {
   return /\(latest\)\s*$/i.test(name);

@@ -1,12 +1,7 @@
 /**
- * Kanban Automation Service
- *
- * Handles agent matching and spawning when tasks move to the "planned" column.
- *
- * Agent Matching Priority:
- * 1. Idle agent with same project + required skills
- * 2. Idle agent with same project (any skills)
- * 3. Create new agent with required skills
+ * When a task moves to "planned": the agent for it (an idle one on its project
+ * with the required skills, else any idle one on its project, else a new one
+ * with those skills), started on it.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -37,13 +32,7 @@ export function initKanbanAutomation(dependencies: KanbanAutomationDependencies)
   deps = dependencies;
 }
 
-/**
- * Find an existing agent that matches the task requirements
- *
- * @param projectPath - The project path the agent should work on
- * @param requiredSkills - Skills required for the task
- * @returns Agent ID if found, null otherwise
- */
+/** An idle agent on the project holding every required skill, else any idle one on it: its id, or null. */
 export async function findMatchingAgent(
   projectPath: string,
   requiredSkills: string[]
@@ -55,10 +44,8 @@ export async function findMatchingAgent(
 
   const agents = Array.from(deps.agents.values());
 
-  // Normalize paths for comparison
   const normalizedProjectPath = normalizePath(projectPath);
 
-  // Filter to idle agents only
   const idleAgents = agents.filter(a => a.status === 'idle');
 
   if (idleAgents.length === 0) {
@@ -94,35 +81,26 @@ export async function findMatchingAgent(
     return matchingProject.id;
   }
 
-  // No matching agent found
   console.log(`No matching agent found for project: ${projectPath}`);
   return null;
 }
 
-/**
- * Create a new agent specifically for a kanban task
- *
- * @param task - The kanban task that needs an agent
- * @returns The ID of the newly created agent
- */
+/** A new agent for a kanban task, named after it, with its required skills, in 'auto' mode: its id. */
 export async function createAgentForTask(task: KanbanTask): Promise<string> {
   if (!deps) {
     throw new Error('Kanban automation not initialized');
   }
 
-  // Generate a task-specific name
   const shortTitle = task.title.length > 20
     ? task.title.substring(0, 20) + '...'
     : task.title;
 
   const agentName = `Task: ${shortTitle}`;
 
-  // Pick a character based on task type/labels
   const character = selectCharacterForTask(task);
 
   console.log(`Creating new agent for task: ${task.title}`);
 
-  // Create the agent
   const agent = await deps.createAgent({
     projectPath: task.projectPath,
     skills: task.requiredSkills,
@@ -137,14 +115,10 @@ export async function createAgentForTask(task: KanbanTask): Promise<string> {
 }
 
 /**
- * Start an agent with a task prompt.
- *
- * Through the one launch every window uses (core/agent-launch.ts), so a task
- * from the board runs on the agent's own model and effort, with its MCP
- * servers and its provider. This used to type a bare
- * `claude --dangerously-skip-permissions`, built in main.ts, which ran on
- * whatever the CLI defaulted to. The permission it imposed is kept: board
- * tasks run unattended.
+ * Start an agent with a task prompt, through the one launch every window uses
+ * (core/agent-launch.ts): its own model, effort, MCP servers and provider, where
+ * a bare `claude --dangerously-skip-permissions` used to run on the CLI's
+ * defaults. The permission it imposed is kept: board tasks run unattended.
  */
 export async function startAgentForTask(agentId: string, prompt: string): Promise<void> {
   const result = await launchAgent(agentId, prompt, { permissionMode: 'bypass' });
