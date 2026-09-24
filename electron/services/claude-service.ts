@@ -71,12 +71,8 @@ export async function getClaudeSettings(): Promise<ClaudeSettings | null> {
  * Read Claude Code stats from stats-cache.json, statsig_user_metadata.json,
  * or compute from local files (history.jsonl + sessions/)
  */
-/**
- * Reading the stats means parsing history.jsonl, every session file and every
- * transcript. The Usage page and the tray both ask for it, so without a memo
- * that whole sweep ran again on each request, synchronously, on the main
- * thread. A minute of staleness is invisible in a usage chart.
- */
+/** A minute's memo: the stats parse history.jsonl, every session file and every
+ *  transcript on the main thread, for the Usage page and the tray alike. */
 let statsMemo: { at: number; value: ClaudeStats | null } | null = null;
 const STATS_TTL_MS = 60_000;
 
@@ -101,15 +97,10 @@ export async function getClaudeStats(): Promise<ClaudeStats | null> {
         : computeStatsFromLocalFiles();
     }
 
-    // The transcripts are read whatever the cache files hold. Neither exists on
-    // most accounts, and the local-file fallback has no token counts at all.
-    // Where stats-cache.json does exist, it carries each day's input+output
-    // tokens and nothing else: no cost, no cache reads or writes, no replies,
-    // and only as of the last /stats run. It used to be enough to skip the
-    // scan, which left a page that windows its figures by day able to window
-    // one of them. When the transcripts hold usage, their tokens, days and
-    // costs replace the cache's; the cache still supplies what the transcripts
-    // do not count, such as sessions, messages and hours.
+    // The transcripts are read whatever the cache files hold: neither exists on
+    // most accounts, and stats-cache.json, where it does, has only each day's
+    // input+output tokens as of the last /stats. Their tokens, days and costs
+    // replace the cache's, which still gives sessions, messages and hours.
     const usage = await computeTranscriptUsage();
     const unreadable = usage.unreadable ?? 0;
     if (Object.keys(usage.modelUsage).length > 0) {
@@ -127,12 +118,8 @@ export async function getClaudeStats(): Promise<ClaudeStats | null> {
       return merged;
     }
 
-    // And it survives the branch not being taken, which is the case that
-    // matters most: if every transcript fails to open there is no usage at
-    // all, so the merge above never happens, and the count of what could not
-    // be read used to be dropped exactly when all of it was unreadable. A
-    // figure built from nothing has to say so rather than come back as a
-    // smaller bill or as nothing at all.
+    // Kept even when no transcript opened, the merge above then skipped: a
+    // figure built from nothing says so rather than coming back as nothing.
     const value = unreadable > 0
       ? ({ ...(base || {}), unreadable } as ClaudeStats)
       : base;

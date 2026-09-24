@@ -1,11 +1,8 @@
 /**
- * Minimal MCP client over streamable HTTP.
- *
- * gbrain and Honcho are remote MCP servers. Until now Tars only wrote their
- * URL into ~/.claude.json and hoped: it never spoke to them, so "Connected"
- * in the UI meant "a URL is filled in", and no non-Claude CLI ever saw them.
- * This talks to them directly, so their tools can be probed, listed and called
- * on behalf of any agent whatever CLI it runs.
+ * Minimal MCP client over streamable HTTP, for the remote servers gbrain and
+ * Honcho: Tars probes, lists and calls their tools itself, for an agent on any
+ * CLI, where a URL written into ~/.claude.json made "Connected" mean only "a
+ * URL is filled in".
  */
 
 export interface McpEndpoint {
@@ -13,12 +10,9 @@ export interface McpEndpoint {
   token?: string;
   label: string;
   /**
-   * Extra headers this server needs on every call, beyond the bearer token.
-   *
-   * Honcho binds its workspace this way and has no other means: none of its
-   * tools declares workspace_id as required, so an agent omits it and the call
-   * is refused at execution time. Optional, and absent for gbrain, which needs
-   * nothing of the sort.
+   * Extra headers on every call, beyond the bearer token: Honcho binds its
+   * workspace this way and no other (no tool requires workspace_id, so an
+   * agent omits it and the call is refused). Absent for gbrain.
    */
   headers?: Record<string, string>;
 }

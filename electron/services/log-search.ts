@@ -2,11 +2,8 @@ import { agents } from '../core/agent-manager';
 import { stripAnsi } from '../utils/ansi';
 
 /**
- * Searching across the whole fleet.
- *
- * Every agent's output lived only in its own terminal, so answering "which
- * agent hit this error" meant opening 29 terminals and scrolling. This reads
- * the retained buffers in one pass.
+ * Searching across the whole fleet: every agent's retained buffer in one pass,
+ * rather than 29 terminals opened and scrolled.
  */
 
 export interface LogLine {

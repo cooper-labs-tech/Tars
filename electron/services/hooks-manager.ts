@@ -50,15 +50,11 @@ export async function configureStatusHooks(): Promise<void> {
 export const LEGACY_HOOK_LOGS = ['/tmp/dorothy-hooks.log', '/tmp/dorothy-hooks-debug.log'];
 
 /**
- * Remove the logs the hooks wrote in /tmp before 1.8.0, which moved them to
- * ~/.dorothy/logs at 0600. They stayed behind after the update: about 4 MB of
- * every agent's session ids and prompts' first words, readable by any user of
- * the machine (the Audit, gate of #135).
- *
- * Only a regular file this user owns: nothing is followed or removed on
- * somebody else's behalf. And only when HOME is this user's own home: a
- * sandbox or a test run of Tars, whose HOME is a scratch folder, would
- * otherwise delete the logs a Tars still on 1.7.9 is writing beside it.
+ * Remove the logs the hooks wrote in /tmp before 1.8.0 moved them to
+ * ~/.dorothy/logs at 0600: about 4 MB of session ids and prompts' first words,
+ * readable by any user of the machine (the Audit, gate of #135). Only regular
+ * files this user owns, nothing followed, and only when HOME is the user's own:
+ * a sandbox or a test would otherwise delete the logs a Tars on 1.7.9 writes.
  */
 export function removeLegacyHookLogs(files = LEGACY_HOOK_LOGS): string[] {
   const removed: string[] = [];

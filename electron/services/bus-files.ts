@@ -6,16 +6,12 @@ import { MAX_ATTACHMENT_BYTES, safeUploadName } from './hermes-client';
 import type { BusAttachment } from '../types';
 
 /**
- * Files for a room: what the composer's + (and a paste or a drop) hands the
- * agents in it.
- *
- * The renderer has the bytes and no path (Electron stopped exposing a real
- * path on its File objects), and an agent needs a path it can read. So the
- * bytes are written here, under ~/.dorothy, which is in every agent's
- * `--add-dir`, one folder per file so two files of the same name never meet,
- * and the message that sends them names each by its absolute path. Staged in
- * memory until a message takes them: a staged file nobody sends stays on disk
- * with the others, and is never named to anyone.
+ * Files for a room: what the composer's + (or a paste, or a drop) hands the
+ * agents in it. The renderer has bytes and no path, and an agent needs a path:
+ * the bytes are written under ~/.dorothy (in every agent's `--add-dir`), one
+ * folder per file so two of the same name never meet, and the message names
+ * each by its absolute path. Staged in memory until a message takes them; one
+ * nobody sends stays on disk, named to no one.
  */
 
 /** Where staged files live. A function so a test's DATA_DIR is read when used. */

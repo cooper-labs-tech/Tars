@@ -141,16 +141,10 @@ export function downloadUpdate() {
 }
 
 /**
- * Hand over to the downloaded update.
- *
- * This can fail and used to fail silently: it was called and never awaited or
- * caught, so a refusal left the window sitting on "Restarting" forever. On
- * macOS the common refusal is an unsigned build, where the updater cannot
- * validate what it downloaded and declines to swap it in.
- *
- * It also returns when it succeeds only in the sense that the process is about
- * to die, so the caller cannot treat "returned" as "worked". What it can do is
- * report a throw, which is the case that leaves the user staring at a spinner.
+ * Hand over to the downloaded update. It can fail (on macOS, an unsigned build
+ * whose download the updater cannot validate), and never awaited it failed in
+ * silence, the window left on "Restarting" for ever. Returning means only that
+ * the process is about to die, so what is reported is a throw.
  */
 export function quitAndInstall(): { started: boolean; error?: string } {
   try {

@@ -3,15 +3,12 @@ import { dataPath } from '../constants';
 import { writeAtomicSync } from '../utils/secret-file';
 
 /**
- * The skills.sh directory, for the Extensions page.
- *
- * It was fetched live on every visit: about a second of someone else's server
- * before the page could show its list (the Audit, 2026-09-23), and nothing at
- * all when skills.sh was slow or down. The listing changes by the day, not by
- * the visit, so the last one is served at once, from memory or from
- * ~/.dorothy/skills-marketplace.json after a restart, and fetched again behind
- * it once it is older than an hour. Only the very first visit, with nothing
- * kept yet, waits on the network. A failed fetch keeps what was there.
+ * The skills.sh directory, for the Extensions page. The last listing is served
+ * at once (from memory, or ~/.dorothy/skills-marketplace.json after a restart)
+ * and fetched again behind it once it is over an hour old: fetched on every
+ * visit, it cost about a second of someone else's server, and nothing showed
+ * when that server was down (the Audit, 2026-09-23). A failed fetch keeps what
+ * was there.
  */
 
 export interface MarketplaceSkill {
@@ -45,15 +42,12 @@ function repoSegment(segment: string): boolean {
 }
 
 /**
- * Whether an entry is one the Extensions page can show and install from.
- *
- * The listing comes from someone else's server, and is kept in
- * ~/.dorothy/skills-marketplace.json, a folder every agent can write. `repo`
- * is what `npx skills add https://github.com/<repo>` installs when the user
- * clicks Install, so a planted entry could show a well-known name beside
- * somebody else's repository (the Audit, gate of #144); the other fields are
- * read by the page, which calls toLowerCase on them. Checked on the way in
- * from the network and on the way back from the file.
+ * Whether an entry is one the Extensions page can show and install from. The
+ * listing comes from someone else's server into a folder every agent can
+ * write, and `repo` is what Install hands `npx skills add
+ * https://github.com/<repo>`, so a planted entry could put a well-known name
+ * on somebody else's repository (the Audit, gate of #144); the page calls
+ * toLowerCase on the other fields. Checked from the network and from the file.
  */
 function validSkill(entry: unknown): entry is MarketplaceSkill {
   if (!entry || typeof entry !== 'object') return false;

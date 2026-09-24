@@ -104,14 +104,11 @@ export function initVaultDb(): void {
   console.log('Vault database initialized at', VAULT_DB_FILE);
 }
 
-// documents_fts is a bare fts5 table, so MATCH parses the raw query as fts5
-// query syntax: unescaped `/ % - ' ( )` and bare AND/OR/NOT tokens are all
-// operators there, not literal characters. Real document titles and tags
-// contain them constantly ("Q1/Q2", "100%", "-negative", someone's name with
-// an apostrophe) and every one of those searches threw a SqliteError that
-// surfaced as a 500. Try the query as-is first, so intentional fts5 syntax
-// (AND/OR, prefix*) still works for anyone who wants it; only on a parse
-// failure fall back to treating the whole input as a literal quoted phrase.
+// documents_fts is a bare fts5 table: MATCH reads the raw query as fts5 syntax,
+// where `/ % - ' ( )` and AND/OR/NOT are operators, and real titles hold them
+// ("Q1/Q2", "100%", a name with an apostrophe), which threw a 500. The query is
+// tried as-is first, so intended fts5 syntax still works, and only on a parse
+// failure again as one quoted literal phrase.
 export function ftsSearch(db: Database.Database, query: string, limit: number): unknown[] {
   const sql = `
     SELECT d.*, snippet(documents_fts, 1, '<mark>', '</mark>', '...', 40) as snippet
@@ -124,12 +121,10 @@ export function ftsSearch(db: Database.Database, query: string, limit: number): 
   try {
     return db.prepare(sql).all(query, limit);
   } catch (err) {
-    // Only retry for fts5's own query-syntax rejection (SqliteError,
-    // e.g. "fts5: syntax error near ..." for AND/OR/-/quotes/parens, or
-    // "no such column: x" for a bare "-x" exclusion). A non-Sqlite error
-    // (locked file, corruption, disconnected handle) must still propagate -
-    // silently retrying those would swallow the real failure and mask it as
-    // an empty result set.
+    // Retried only for fts5's own syntax rejection (a SqliteError such as
+    // "fts5: syntax error near ..." or "no such column: x" for "-x"): anything
+    // else (a locked file, corruption) propagates, rather than reading as an
+    // empty result.
     if (!(err instanceof Database.SqliteError)) {
       throw err;
     }

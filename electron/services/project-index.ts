@@ -4,21 +4,13 @@ import { decodeProjectPath } from '../utils/decode-project-path';
 
 /**
  * The project folders a CLI keeps (`~/.claude/projects` and the like), with the
- * path each one stands for, read without blocking the main process.
- *
- * Decoding a folder name back to its path is what costs: Claude Code writes
- * both `/` and `.` as `-`, so decodeProjectPath tries the separators against
- * the disk, segment by segment. On JeanBrasse's 27 folders that was 101 ms of
- * existsSync, and fs:list-projects (Dashboard, Agents, Projects, Brain),
- * memory:list-projects, fs:read-project-files and the project scan of
- * claude:getData each paid it again on every call: 104 to 397 ms per call,
- * measured by the Audit on 2026-09-23.
- *
- * A folder's path is decoded once and kept. It is decoded again only when the
- * path it gave no longer exists, at most every REDECODE_MS: a folder whose
- * directory appears after it was first read (the decoder falls back to the
- * raw tokens for a path missing on disk) then gets its real path, and one
- * whose project was deleted costs a decode twice a minute, not every call.
+ * path each stands for, read without blocking the main process. Decoding a
+ * folder name is what costs (Claude Code writes `/` and `.` as `-`, so the
+ * decoder tries separators against the disk): 101 ms on JeanBrasse's 27 folders,
+ * paid again by four IPC callers on every call, 104 to 397 ms each (the Audit,
+ * 2026-09-23). A path is decoded once and kept, and again only when it no
+ * longer exists, at most every REDECODE_MS: a directory that appeared later
+ * then gets its real path, and a deleted project costs a decode twice a minute.
  */
 
 const decoded = new Map<string, { path: string; at: number }>();
