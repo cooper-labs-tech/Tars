@@ -5,27 +5,17 @@ import * as readline from 'readline';
 import { transcriptPath, transcriptRoots } from '../utils/resume-session';
 
 /**
- * An agent's real conversation, read from the journal Claude Code already
- * keeps.
+ * An agent's real conversation, read from the journal Claude Code keeps:
+ * ~/.claude/projects/<encoded project>/<sessionId>.jsonl, one JSON object per
+ * line, named after the agent's currentSessionId. The panels' `agent.output` is
+ * a full-screen TUI's raw stream, which repaints rather than scrolls: across 42
+ * agents here it held no newline at all, mixed frames drawn for different
+ * geometries, and 21% of its lines carried text written at different moments.
  *
- * The panels replay `agent.output`, which is the raw PTY stream of a full
- * screen TUI: measured on this machine, that buffer holds no newline at all
- * across 42 agents, mixes frames drawn for different terminal geometries, and
- * 21% of its history lines carry two islands of text written at different
- * moments. There is no conversation in it to recover, because a full screen
- * interface repaints rather than scrolls.
- *
- * The conversation is written down properly, one JSON object per line, in
- * ~/.claude/projects/<encoded project>/<sessionId>.jsonl, and the agent's
- * currentSessionId is literally that file's name. That is what this reads.
- *
- * Measured on the nine transcripts in this project, 0.4 MB to 10 MB:
- *  - 2454 to 3320 lines each. The weight is in a few enormous lines, not in
- *    their number: p50 743 bytes, p90 about 4 KB, p99 about 14 KB, max 1.1 MB
- *  - of the 3451 `user` records, only a few hundred are something a person
- *    typed; the rest are tool results wearing the user role
- *  - no record anywhere has isSidechain set, so subagent transcripts are not
- *    mixed into these files and nothing has to be filtered out
+ * On this project's nine transcripts (0.4 to 10 MB): 2454 to 3320 lines each,
+ * the weight in a few enormous ones (p50 743 bytes, p99 14 KB, max 1.1 MB);
+ * only a few hundred of 3451 `user` records typed by a person, the rest tool
+ * results; no isSidechain record, so no subagent transcript is mixed in.
  */
 
 /** Only two roles reach a reader. See collect() for what is dropped. */
@@ -59,13 +49,9 @@ export interface TranscriptMessage {
    */
   toolResult?: { toolUseId: string; isError: boolean };
   /**
-   * Assistant thinking, kept apart so a reader can fold it away.
-   *
-   * Expect it to be absent. Claude Code writes the thinking block with its
-   * signature and an empty body: all 1756 of them across these nine files
-   * carry no text at all. The field stays because the shape is right and
-   * costs nothing if that ever changes, but a reader should not build a view
-   * that depends on it.
+   * Assistant thinking, kept apart so a reader can fold it away. Expect it
+   * absent: all 1756 thinking blocks in these files carry a signature and no
+   * text, so no view should depend on it.
    */
   thinking?: string;
 }
@@ -99,12 +85,9 @@ export type AgentTranscript =
     };
 
 /**
- * How much of one message's text survives.
- *
- * p90 of a displayable block is 2.9 KB, so this keeps roughly nine in ten
- * whole, and the tail is where the bulk lives: p99 is 49 KB and the largest
- * seen is 568 KB. One un-capped tool result would be a bigger IPC payload than
- * a whole page of conversation.
+ * How much of one message's text survives: about nine blocks in ten whole
+ * (p90 2.9 KB), the tail cut where the bulk is (p99 49 KB, max 568 KB), since
+ * one uncapped tool result outweighs a page of conversation over IPC.
  */
 const TEXT_CAP = 4000;
 
@@ -159,13 +142,9 @@ interface RawRecord {
 
 /**
  * One transcript record turned into a message, or null when it is not
- * conversation.
- *
- * Dropped on purpose: `attachment` (6631 of them across these files, the most
- * common record of all, and none of it is anything anyone said), `system`
- * (stop_hook_summary and turn_duration, which are timings), and the eight
- * bookkeeping types Claude Code writes for its own use. A record marked isMeta
- * goes too: it is Tars's own injected context, not the agent's work.
+ * conversation. Dropped on purpose: `attachment` (the commonest record, 6631
+ * here, none of it said by anyone), `system` (timings), Claude Code's eight
+ * bookkeeping types, and anything isMeta (Tars's own injected context).
  */
 function toMessage(rec: RawRecord): TranscriptMessage | null {
   if (rec.type !== 'user' && rec.type !== 'assistant') return null;
@@ -237,23 +216,12 @@ function toMessage(rec: RawRecord): TranscriptMessage | null {
 }
 
 /**
- * Read one page, oldest first, ending just before `before`.
- *
- * Read forwards rather than backwards, and the numbers are why. These files
- * are only 2454 to 3320 lines, and streaming one whole 10 MB transcript costs
- * 49 ms with a single line resident at a time. Reading backwards would save
- * about 45 ms of that on the newest page and cost a chunked reverse scanner
- * that has to stitch partial lines back together around records of up to
- * 1.1 MB. That is a lot of machinery to buy one frame, on a path a reader
- * takes when a panel is opened rather than while it is being painted.
- *
- * What matters more is that it never blocks: readline over a read stream hands
- * the loop back between chunks, where the readFileSync plus split that
- * transcript-usage.ts uses for billing would sit on the thread that paints the
- * window and pumps every PTY, holding the whole file resident.
- *
- * Memory is a page and not a file: a ring of at most `limit` messages, so a
- * 10 MB transcript and a 0.4 MB one cost the same.
+ * Read one page, oldest first, ending just before `before`. Forwards: a whole
+ * 10 MB transcript streams in 49 ms with one line resident, and reading
+ * backwards would save about 45 ms on the newest page for a reverse scanner
+ * stitching lines of up to 1.1 MB, on a path taken when a panel opens.
+ * readline over a stream hands the loop back between chunks, and a ring of at
+ * most `limit` messages makes a 10 MB transcript cost what a 0.4 MB one does.
  */
 async function collect(file: string, before: string | undefined, limit: number): Promise<{
   messages: TranscriptMessage[];
@@ -293,14 +261,11 @@ async function collect(file: string, before: string | undefined, limit: number):
 }
 
 /**
- * Locate and read an agent's transcript.
- *
- * The session id is checked against the UUID shape before it reaches a path,
- * the same guard resume-session.ts puts in front of the command line: this
- * value arrives from an agent record and a UUID cannot climb out of a
- * directory. The resolved path is then asserted to sit under
- * ~/.claude/projects, so a project path that somehow contained traversal
- * cannot point the read anywhere else.
+ * Locate and read an agent's transcript. The session id must be UUID-shaped
+ * before it reaches a path (resume-session.ts guards the command line the same
+ * way: a UUID cannot climb out of a directory), and the resolved path must sit
+ * under ~/.claude/projects, so a project path holding traversal reads nothing
+ * else.
  */
 export async function readAgentTranscript(params: {
   sessionId?: string;

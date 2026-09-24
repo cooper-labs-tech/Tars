@@ -6,13 +6,9 @@ import * as path from 'path';
 const run = promisify(execFile);
 
 /**
- * What an agent actually changed.
- *
- * The Git panel ran `git diff --stat | tail -20` through a shell and showed
- * twenty lines of summary - no patch, no per-file view, and a shell command
- * built by string concatenation. Everything here goes through execFile with an
- * argv array: no shell, so a branch or path containing a quote or a semicolon
- * is data, not syntax.
+ * What an agent actually changed. Every git call goes through execFile with an
+ * argv array, never a shell, so a branch or path holding a quote or a
+ * semicolon is data, not syntax.
  */
 
 const MAX_PATCH_BYTES = 2_000_000;
@@ -39,13 +35,11 @@ export interface ReviewDiff {
 }
 
 /**
- * `--no-optional-locks`: the Review page reads repositories agents are working
- * in, and `git status` otherwise takes `index.lock` to rewrite the index as it
- * reads, which makes an agent's own `git commit` in that moment fail with
- * "index.lock exists". Measured on git 2.39: the flag keeps `status` off the
- * index, not a diff that compares content (`git diff HEAD`, as before this
- * cache), which still refreshes it. So the check a cached diff costs, a
- * `status`, never writes; only a diff that has to be computed again can.
+ * `--no-optional-locks`: `git status` otherwise takes `index.lock` to refresh
+ * the index as it reads, and an agent's own `git commit` at that moment fails
+ * with "index.lock exists". Measured on git 2.39: the flag keeps `status` off
+ * the index but not a content diff (`git diff HEAD`), so the check a cached
+ * diff costs never writes; only a diff computed again can.
  */
 async function git(cwd: string, args: string[], maxBuffer = 8 * 1024 * 1024): Promise<string> {
   const { stdout } = await run('git', ['--no-optional-locks', ...args], { cwd, maxBuffer, timeout: 30_000 });
@@ -61,17 +55,12 @@ async function tryGit(cwd: string, args: string[]): Promise<string> {
 }
 
 /**
- * A ref name that git cannot mistake for an option.
- *
- * Every rev range here is interpolated as `${baseBranch}...HEAD`, which lands
- * in an argv slot git still parses for options - `--` only protects the
- * pathspec that comes after it. A "branch" of `--output=/somewhere/else` made
- * `git diff --numstat --output=/somewhere/else...HEAD` write the patch to a
- * file outside the repo. `fileDiff` guarded its path against a leading dash
- * and left the base branch unguarded; both go through here now.
- *
- * The first character excludes `-` and `/` so no value can start an option,
- * and the rest is the branch/remote alphabet (`origin/feat/x-1.2`).
+ * A ref name git cannot mistake for an option. A rev range is interpolated as
+ * `${baseBranch}...HEAD` into an argv slot git still parses for options (`--`
+ * protects only the pathspec after it): a "branch" of `--output=/somewhere`
+ * made `git diff --numstat` write the patch outside the repo. Base branches and
+ * fileDiff's paths both come through here. The first character excludes `-`
+ * and `/`; the rest is the branch/remote alphabet (`origin/feat/x-1.2`).
  */
 const SAFE_REF = /^[A-Za-z0-9._][A-Za-z0-9._/-]*$/;
 
@@ -89,11 +78,8 @@ function statusFromCode(code: string): ChangedFile['status'] {
 }
 
 /**
- * The branch this work should be compared against.
- *
- * The upstream is the wrong answer when it is just origin/<this branch>:
- * comparing an agent's branch to its own remote copy shows nothing, when the
- * question is what the agent changed relative to the trunk it branched from.
+ * The branch this work is compared against: the trunk it branched from, not
+ * its upstream when that is only origin/<this branch>, which shows nothing.
  */
 const BASE_CANDIDATES = ['main', 'master', 'develop'];
 
@@ -151,12 +137,10 @@ async function worktreeState(repoPath: string, baseBranch: string | null): Promi
 }
 
 /**
- * The last diff of each repository and base, and the state it was taken on.
- *
- * `review:diff` took 366 to 731 ms per branch (the Audit, 2026-09-23): nine git
- * commands one after the other, run again on every visit to the same branch.
- * The state above costs three, run together; when it is unchanged the diff is
- * too. Kept for the last few repositories only.
+ * The last diff of each repository and base, and the state it was taken on:
+ * `review:diff` ran nine git commands on every visit (366 to 731 ms a branch,
+ * the Audit, 2026-09-23), where the state costs three, run together. Kept for
+ * the last few repositories.
  */
 const diffs = new Map<string, { state: string; diff: ReviewDiff }>();
 const MAX_CACHED_DIFFS = 16;
@@ -337,11 +321,8 @@ export interface RepoSummary {
 }
 
 /**
- * Everything the Git panel used to gather with four shell pipelines.
- *
- * It built `git status --porcelain`, `git diff --stat | tail -20` and a
- * `--pretty` log as strings and ran them through a login shell; here git runs
- * with an argv array and the parsing happens once, in one place.
+ * Everything the Git panel used to gather with four shell pipelines, from git
+ * run with an argv array and parsed in one place.
  */
 export async function repoSummary(repoPath: string): Promise<RepoSummary> {
   if (!repoPath || !fs.existsSync(repoPath)) throw new Error('no such directory');

@@ -24,12 +24,10 @@ import {
 import type { BusDelivery, BusDeliveryReason, BusMembersChanged, BusMessage, BusRoom, BusSystemKind, BusThread } from '../types';
 
 /**
- * What happens to a message once it has been published.
- *
- * One implementation, called by both doors: the Chat page over IPC and an
- * agent's room_post over the API. Fanning out deliveries in each of them
- * separately is how the two would end up disagreeing about who got what, and
- * a delivery row is the only thing the interface may show as proof.
+ * What happens to a message once it has been published: one implementation for
+ * both doors (the Chat page over IPC, an agent's room_post over the API), since
+ * two fan-outs would disagree about who got what, and a delivery row is the
+ * only proof the interface may show.
  */
 
 /** A message as a target's queue holds it: its text, then the files it sends
@@ -54,13 +52,11 @@ export function targetsOf(message: BusMessage, room: BusRoom): string[] {
 }
 
 /**
- * Queue a published message for each of its targets, and record what happened.
- *
- * A target that can be reached goes into the one queue Tars has, and is marked
- * delivered only when it actually reaches a terminal. A target that cannot is
- * recorded `not_sent` with its reason and waits for a human: amp, codex, grok,
- * opencode and pi never leave `running` in an interactive session, so a queue
- * for them would never drain. Nothing here reads silence as an end of turn.
+ * Queue a published message for each target, and record what happened. A
+ * reachable target goes into Tars's one queue, `delivered` only once the
+ * message reaches its terminal; one that cannot be reached (amp, codex, grok,
+ * opencode and pi never leave `running`) is recorded `not_sent` with its reason
+ * and waits for a human. Silence is never read as an end of turn.
  */
 export function fanOutDeliveries(message: BusMessage, room: BusRoom): BusDelivery[] {
   const deliveries: BusDelivery[] = [];
@@ -91,11 +87,8 @@ export function fanOutDeliveries(message: BusMessage, room: BusRoom): BusDeliver
 }
 
 /**
- * A machine line, written into the room and pushed like any other message.
- *
- * Here rather than in the handlers because both doors need it and because a
- * system line is a message: the page renders it in the transcript, in place,
- * and would otherwise have to reconstruct it from a thread push.
+ * A machine line, written into the room and pushed like any other message:
+ * both doors need it, and the page renders it in place.
  */
 export function announceSystem(
   roomId: string,
@@ -117,15 +110,10 @@ export function broadcastPublication(message: BusMessage, thread: BusThread, del
 }
 
 /**
- * Send what was never sent, because a human said to.
- *
- * `not_sent` is the state with no way out on its own: the target has no end of
- * turn, so nothing will ever be a safe moment and the queue refuses to guess
- * one. That refusal does not move. What moves is that a person can now decide,
- * and this is what their decision does: the held messages go in, oldest first,
- * into a session whose state Tars does not know. Specifying a state the
- * interface can show but never resolve is the silent failure this bus exists
- * to remove, so it gets a door.
+ * Send what was never sent, because a human said to. `not_sent` has no way out
+ * on its own (no end of turn, so no safe moment, and the queue will not guess
+ * one), so a person's decision is its door: the held messages go in, oldest
+ * first, into a session whose state Tars does not know.
  */
 export async function releaseNotSent(agentId: string): Promise<{ released: BusDelivery[]; reason?: string }> {
   const held = notSentFor(agentId);
@@ -188,10 +176,9 @@ export async function releaseNotSent(agentId: string): Promise<{ released: BusDe
 }
 
 /**
- * An anchor closed: drop what had not gone out, and say so.
- *
- * Stop, a newer human message and a change of members all end a thread, and a
- * reply nobody is waiting for any more is not worth waking an agent for.
+ * An anchor closed (Stop, a newer human message, a member change): drop what
+ * had not gone out, and say so. A reply nobody waits for is not worth waking an
+ * agent for.
  */
 export function closeAndAnnounce(threadId: string, reasonCode: BusDeliveryReason, reason: string): number {
   const dropped = cancelQueuedDeliveries(threadId, reasonCode, reason);
@@ -202,11 +189,9 @@ export function closeAndAnnounce(threadId: string, reasonCode: BusDeliveryReason
 }
 
 /**
- * A queued message reached a terminal.
- *
- * Wired into agent-watch, which calls it the moment it writes the message. The
- * only thing that turns a delivery `delivered`, and the Chat page hears it at
- * once rather than inferring it from silence.
+ * A queued message reached a terminal, as agent-watch reports the moment it
+ * writes it: the only thing that makes a delivery `delivered`, and the Chat
+ * page hears it at once.
  */
 export function announceDelivered(targetAgentId: string, messageId: string): void {
   const delivered = markDelivered(targetAgentId, messageId);
@@ -214,11 +199,9 @@ export function announceDelivered(targetAgentId: string, messageId: string): voi
 }
 
 /**
- * The queue could not keep what it was holding.
- *
- * Wired into agent-watch, which drops a recipient's queue when the session it
- * was queued for is gone. The row stops saying `queued` and says why, and the
- * Chat page hears it like any other delivery change.
+ * The queue could not keep what it held (agent-watch drops a recipient's queue
+ * when its session is gone): the row stops saying `queued` and says why, and
+ * the Chat page hears it.
  */
 export function announceDropped(targetAgentId: string, messageId: string, reasonCode: BusDeliveryReason, reason: string): void {
   const dropped = markDropped(targetAgentId, messageId, reasonCode, reason);
@@ -226,12 +209,9 @@ export function announceDropped(targetAgentId: string, messageId: string, reason
 }
 
 /**
- * A message its target's terminal took waits for a person's draft.
- *
- * Wired into agent-watch, which hears it from the terminal. The row says
- * `held` with the draft as its reason, rather than `queued` like a message
- * waiting for a turn to end: this wait ends only when that person sends or
- * clears their field, and the page has to be able to say so.
+ * A message its terminal took waits for a person's draft (agent-watch hears it
+ * from the terminal): the row says `held`, the draft its reason, since this
+ * wait ends only when that person sends or clears their field.
  */
 export function announceHeld(targetAgentId: string, messageId: string): void {
   const held = markHeld(targetAgentId, messageId);
@@ -254,21 +234,17 @@ export interface SendNowResult {
 }
 
 /**
- * Send to one agent now, interrupting its turn if it is in one (#124's send
- * now, JeanBrasse's choice B: a message queues by default, and this is the button
- * that interrupts).
- *
- * Recorded as a human message to that agent, like postMessage. An agent at
- * rest, or one Tars cannot interrupt, then gets it as any message would. A
- * busy one that can be interrupted gets an Esc, and the message is typed only
- * once its transcript records the interrupt: Claude Code sends no Stop hook
- * for one, so the status cannot say the turn is over, and a message typed
- * into a running turn is a queued steer, not "now". Typed through the same
- * writer as everything else, so a draft in the field still holds it (`held`).
- * An interrupt not on record within INTERRUPT_CONFIRM_MS leaves the message
- * queued for the turn's end, and the answer says so. An Esc that took later
- * than that ends the turn with no Stop, and the message then waits for the
- * next rest Tars hears of (the idle prompt a minute on, at the latest).
+ * Send to one agent now, interrupting its turn if it is in one (#124, JeanBrasse's
+ * choice B: messages queue by default, and this is the button that
+ * interrupts). Recorded as a human message to that agent, like postMessage.
+ * An agent at rest, or one Tars cannot interrupt, gets it as any message. A
+ * busy interruptible one gets an Esc, and the message is typed once its
+ * transcript records the interrupt (Claude Code sends no Stop for one, and a
+ * message typed into a running turn is a queued steer, not "now"), through the
+ * same writer, so a draft still holds it (`held`). No interrupt on record
+ * within INTERRUPT_CONFIRM_MS leaves it queued for the turn's end, and the
+ * answer says so; an Esc that took later ends the turn with no Stop, and the
+ * message waits for the next rest Tars hears of (a minute on at the latest).
  */
 export async function sendNow(params: {
   roomId?: unknown; agentId?: unknown; text?: unknown; attachments?: unknown;

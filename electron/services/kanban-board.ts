@@ -1,40 +1,25 @@
 /**
- * The agents' kanban, on the Hermes board.
+ * The agents' kanban, on the Hermes board the Kanban page shows (their tools
+ * used to write ~/.dorothy/kanban-tasks.json, which no page shows). This
+ * decides where an agent's task sits on that board and who may move it.
  *
- * The board lives in Hermes; the Kanban page shows it and nothing else. The
- * agents' kanban tools used to write ~/.dorothy/kanban-tasks.json, a board no
- * page shows, so a task an agent said it had filed was nowhere to be seen. They
- * now go through Tars to Hermes, and this decides where an agent's task sits on
- * that board and who may move it.
+ * Hermes 0.21.1, measured against its own code: the dispatcher spawns a `ready`
+ * task assigned to a Hermes profile; it promotes `todo`, and `blocked` with no
+ * block event, to `ready`; the gateway decomposes `triage`; `scheduled` leaves
+ * only by an explicit unblock (JeanBrasse dragging it); a `ready` task on a lane that
+ * cannot be a profile (ids are `[a-z0-9][a-z0-9_-]*`, never a colon) is skipped
+ * as `skipped_nonspawnable`; the API refuses `running`, and `done` from
+ * `scheduled`; a PATCH applies the assignee before the status. So:
+ * - parked: `scheduled` on the Tars lane (`tars:unclaimed`), which Hermes never
+ *   takes until JeanBrasse gives it a profile;
+ * - claimed: `ready` on the claimer's lane (`tars:<agent id>`), in one PATCH
+ *   whose assignee lands first, so it is never `ready` on no lane;
+ * - done: `done`, from the claim;
+ * - deleted: by its claimer, or by its filer while nobody claimed it.
  *
- * Measured against Hermes 0.21.1's own code (its kanban_db and its HTTP
- * handlers, in a throwaway HERMES_HOME):
- * - the dispatcher spawns a `ready` task assigned to a Hermes profile;
- * - it promotes `todo`, and `blocked` with no block event, to `ready` by itself;
- * - the gateway decomposes `triage` with its aux model (`kanban.auto_decompose`);
- * - `scheduled` is never dispatched nor promoted: an explicit unblock is the
- *   only way out, which is JeanBrasse dragging it on the board;
- * - a `ready` task assigned to what cannot be a Hermes profile (profile ids are
- *   `[a-z0-9][a-z0-9_-]*`: never a colon) is skipped as `skipped_nonspawnable`,
- *   Hermes's own provision for lanes that are not its workers;
- * - the API refuses `running`, and `done` from `scheduled`; a PATCH applies the
- *   assignee before the status.
- *
- * So:
- * - parked: `scheduled` on the Tars lane (`tars:unclaimed`). Hermes never takes
- *   it; JeanBrasse hands it to Hermes by moving it and giving it a Hermes profile.
- * - claimed: `ready` on the claiming agent's lane (`tars:<agent id>`), set in one
- *   PATCH whose assignee lands first, so the task is never `ready` on no lane.
- * - done: `done`, from the claim.
- * - deleted: by the agent that claimed it, or by the one that filed it while
- *   nobody has; the rest is another agent's, Hermes's or JeanBrasse's.
- *
- * Claims are atomic among Tars's agents, which all come through this process: a
- * claim reads and writes a task under that task's own lock. Hermes has no
- * compare-and-set, so this is no guard against a person moving the task on the
- * board at the same moment; that person is JeanBrasse, and the move is his to make.
- *
- * Each project is a Hermes tenant (its path), which the board filters on.
+ * Claims are atomic among Tars's agents (a task's own lock in this process).
+ * Hermes has no compare-and-set: JeanBrasse moving a task at the same moment wins,
+ * and the move is his. Each project is a Hermes tenant (its path).
  */
 
 import * as fs from 'fs';
@@ -266,12 +251,10 @@ function heldElsewhere(t: HermesTask, caller: KanbanCaller): string | null {
 }
 
 /**
- * The agent that filed a task, from the line Tars writes last in its body:
- * "Filed by <name> (Tars agent <id>)." The gateway records every creation as
- * "dashboard", so this line is the only record of who filed a task, and written
- * after the agent's own description it cannot be put there by the agent. Null
- * for a task nobody filed through Tars: made on the board, or moved from the
- * local one.
+ * The agent that filed a task, from the line Tars writes last in its body,
+ * "Filed by <name> (Tars agent <id>).": the gateway records every creation as
+ * "dashboard", and written after the agent's description it cannot be forged
+ * by the agent. Null for a task not filed through Tars.
  */
 function filerOf(t: HermesTask): string | null {
   const signed = /\(Tars agent ([^()\s]+)\)\.$/.exec((t.body ?? '').trimEnd());
@@ -280,10 +263,9 @@ function filerOf(t: HermesTask): string | null {
 
 /**
  * Why the caller may not delete a task, or null. An agent deletes a task it
- * claimed, done or not, or one it filed that nobody took. heldElsewhere let any
- * parked or done task through, whoever it was: a scheduled task JeanBrasse gave to a
- * Hermes profile, one Hermes finished, another agent's (the Backend's gate of
- * #171, W2). JeanBrasse deletes those on the Kanban page.
+ * claimed, done or not, or one it filed that nobody took; anyone else's (JeanBrasse's,
+ * Hermes's, another agent's) JeanBrasse deletes on the Kanban page (the Backend's gate
+ * of #171, W2).
  */
 function whyNotDeletable(t: HermesTask, caller: KanbanCaller): string | null {
   if (t.assignee === laneOf(caller.agentId)) return null;
@@ -570,14 +552,11 @@ export async function migrateLocalTasks(h: KanbanHermes, file: string, record: s
 // ── What is typed into an agent, and when ─────────────────────────────────
 
 /**
- * A task handed to an agent, typed as the agent that handed it.
- *
- * Its title and description are an agent's words, not Tars's: typed under
- * "Message from Tars:" they read as Tars's, which is the forged line #128's gate
- * found (the Backend's gate of #171). So the sender is the agent whose token made
- * the call, and the title, which shares a line with the words Tars adds, goes
- * through envelopeValue and cannot start a line of its own. The writer strips
- * every control character from the rest.
+ * A task handed to an agent, typed as the agent that handed it: its title and
+ * description are an agent's words, and under "Message from Tars:" they would
+ * read as Tars's (#128's forged line; the Backend's gate of #171). The title,
+ * sharing a line with Tars's words, goes through envelopeValue; the writer
+ * strips every control character from the rest.
  */
 export function handOffNote(task: AgentTask, by: KanbanCaller): { message: string; sender: MessageSender } {
   return {
@@ -599,11 +578,9 @@ export function landingNote(filer: KanbanCaller, task: AgentTask): { message: st
 }
 
 /**
- * When a hand-off (work) or a note may be typed into an agent.
- *
- * Never mid-turn and never into a permission dialog: both wait for the agent to
- * rest. A stopped agent is started for work, as handing work to it means, and
- * never for a note.
+ * When a hand-off (work) or a note may be typed into an agent: never mid-turn
+ * nor into a permission dialog. A stopped agent is started for work, never for
+ * a note.
  */
 export function whenToType(
   agent: { cliRunning: boolean; status?: string; waitingReason?: string },

@@ -6,22 +6,16 @@ import { transcriptPath, transcriptRoots } from '../utils/resume-session';
 /**
  * What an agent is actually on, as opposed to what Tars last wrote down.
  *
- * `agent.branchName` was only ever set by Tars itself, from the edit screen or
- * the create call, and nothing read it back, so an agent that ran
- * `git checkout -b` kept the old branch on its card. The working tree wins for
- * the branch: it is what actually happened.
+ * The branch: the working tree wins, since `agent.branchName` was only ever set
+ * by Tars, and an agent's own `git checkout -b` never showed on its card.
  *
- * The model is the other way round, and it used to be the same way. The
- * session's model replaced the record's everywhere, launches included, so the
- * model a session last answered on outlived every choice made after it: moved
- * to Opus 5.5 in the Agents page, thirteen agents relaunched on the model their
- * previous session had used, Opus 5 for most and Opus 4.8 for one. And the edit
- * screen, filled from that list, wrote the old model back into the record on
- * the next save of anything. So the record is the model an agent launches on,
- * and the session's reading travels beside it as `sessionModel`, for a screen
- * that wants to say the session runs something else, after a `/model` typed
- * into it. Both readings are cheap and cached, because the agent list is
- * rebuilt about twice a second.
+ * The model: the record wins, and is what a launch uses. The session's model
+ * used to replace it everywhere, so a choice made later lost to the model a
+ * session last answered on (thirteen agents moved to Opus 5.5 relaunched on
+ * their old model), and the edit screen wrote the old one back. The session's
+ * reading travels beside the record as `sessionModel`, for a screen showing a
+ * `/model` typed in. Both readings are cached: the list is rebuilt about twice
+ * a second.
  */
 
 /** Short enough that a checkout shows up promptly, long enough that a list
@@ -34,12 +28,9 @@ const modelCache = new Map<string, { value: string | null; at: number }>();
 /* ── The branch ──────────────────────────────────────────────────────── */
 
 /**
- * Kicked off in the background and read from the cache.
- *
- * The agent list is built synchronously in an IPC handler and on a route, and
- * neither can wait on git. So a miss returns null and starts the read: the
- * next refresh, a few hundred milliseconds later, has the answer. That is the
- * right trade for a field that changes once an hour at most.
+ * Read in the background and served from the cache: the list is built
+ * synchronously and cannot wait on git, so a miss returns null and starts the
+ * read, and the next refresh, a few hundred milliseconds later, has it.
  */
 export function currentBranch(cwd: string | undefined): string | null {
   if (!cwd) return null;
@@ -90,11 +81,9 @@ function lastAssistantModel(file: string): string | null {
 }
 
 /**
- * The model the session last actually answered on, or null.
- *
- * Read from the transcript rather than from anything Tars stores, which is the
- * whole point: it reflects a `/model` typed into the terminal. A reading for a
- * screen, never for a launch: see the top of this file.
+ * The model the session last answered on, or null, read from the transcript
+ * so it reflects a `/model` typed into the terminal. For a screen, never a
+ * launch.
  */
 export function sessionModel(
   agent: { resumableSessionId?: string; projectPath?: string; worktreePath?: string },
@@ -131,25 +120,18 @@ const STOP_TOOLS = new Set(['TaskStop', 'KillShell', 'KillBash']);
 const LOCAL_COMMAND_TAIL = 256 * 1024;
 
 /**
- * When the agent's session last recorded a local command finishing, in ms since
- * the epoch, or undefined.
+ * When the session last recorded a local command finishing (ms since the
+ * epoch), or undefined. A command typed at the prompt (/model, /effort,
+ * /config ...) never reaches the model, so no UserPromptSubmit fires; it leaves
+ * three records (`<local-command-caveat>`, `<command-name>`,
+ * `<local-command-stdout>`) written when it finishes: 44 to 74 ms after the key
+ * that closes a /model or /effort picker, and for /config only when it finally
+ * closes (Claude Code 2.1.280). By then the field is empty.
  *
- * A command typed by hand at the prompt (/model, /effort, /config ...) runs in
- * the CLI and never reaches the model: no UserPromptSubmit hook fires, and
- * nothing else says the field emptied. What it leaves is three records in the
- * session transcript, `<local-command-caveat>`, `<command-name>` and
- * `<local-command-stdout>`, written when it finishes, not when it opens.
- * Measured on Claude Code 2.1.280: 44 to 74 ms after the Enter or the Esc that
- * closes a /model or /effort picker; the /config panel wrote them only when it
- * finally closed, after a first Esc that merely cleared its filter. By then the
- * command's text has left the field and its panel is gone: the field is empty.
- *
- * Some finish without a record this takes: /help and /config closed without
- * a change write none, and /model cancelled with Esc writes two `system`
- * records (subtype local_command) that are skipped on purpose, since the same
- * pair is written when the "Switch model?" confirmation is backed out of with
- * Esc while the picker stays open (the gate of #128). For those this says
- * nothing.
+ * Silent for commands that write no such record: /help, /config closed with no
+ * change, and /model cancelled with Esc, whose two `system` records are skipped
+ * on purpose, since backing out of "Switch model?" writes the same pair while
+ * the picker stays open (the gate of #128).
  */
 export function lastLocalCommandAt(
   agent: { currentSessionId?: string; projectPath?: string; worktreePath?: string },
@@ -211,29 +193,23 @@ function latestLocalCommand(lines: string): number | undefined {
 }
 
 /**
- * The background work this session started and has not heard back from.
+ * The background work this session started and has not heard back from. A turn
+ * can end with work running (a background Bash, a Monitor, an async Agent):
+ * Claude Code stops the turn (Tars reads `idle`), and when the work finishes a
+ * `<task-notification>` starts the next turn by itself, so killing the CLI in
+ * between kills both (on 2.1.280, a `sleep 25` went to the background and the
+ * turn stopped ten seconds in).
  *
- * A turn can end with work still running: a Bash command run in the
- * background, a Monitor, an Agent launched asynchronously. Claude Code ends the
- * turn (Stop, so Tars reads `idle`), and when the work finishes it injects a
- * `<task-notification>` that starts the next turn by itself. Killing the CLI in
- * between kills that work and the turn it was waiting for. Measured on 2.1.280:
- * asked to `sleep 25`, the CLI refused a foreground sleep, ran it in the
- * background and stopped its turn ten seconds in.
+ * Both ends are structured in the transcript. Over a week of JeanBrasse's (329
+ * starts): a Bash start carries `toolUseResult.backgroundTaskId`, a Monitor
+ * `toolUseResult.taskId`, an async Agent `agentId` with `isAsync`; 322 ended in
+ * a note naming the id with a `<status>`, 7 in TaskStop (which sends no note),
+ * and 3 still ran. A Monitor's event notes carry no status: only a status ends
+ * it.
  *
- * Read from the transcript, because that is where Claude Code records both
- * ends, and both are structured. Across a week of JeanBrasse's transcripts (329
- * background starts): a Bash start carries `toolUseResult.backgroundTaskId`,
- * a Monitor `toolUseResult.taskId`, an asynchronous Agent `agentId` with
- * `isAsync`; 322 were followed by a note naming the id with a `<status>`
- * (completed, failed, killed, stopped), 7 were stopped with TaskStop, which
- * sends no note, and the other 3 were still running. A Monitor's event notes
- * carry no status: only a status ends it.
- *
- * `sinceMs` is when the CLI now running was launched. A resumed or forked
- * session copies the earlier conversation into its transcript, stamped with the
- * new session id but with the old timestamps, and a task started by a process
- * that is gone is not running.
+ * `sinceMs` is the launch of the CLI running now: a resumed or forked session
+ * copies the earlier conversation with its old timestamps, and a task started
+ * by a process that is gone is not running.
  */
 export function pendingBackgroundWork(
   agent: { currentSessionId?: string; projectPath?: string; worktreePath?: string },
@@ -305,15 +281,10 @@ export function pendingBackgroundWork(
 }
 
 /**
- * The agent as it really is: its own record, with the branch replaced by what
- * the working tree says, and the model its session last answered on beside the
- * one it is set to, as `sessionModel`.
- *
- * `model` stays the record's: it is what the next launch uses, and what the
- * edit screen shows and saves back.
- *
- * Only ever fills in; a null reading leaves the stored value alone, and an
- * agent with no session yet has no `sessionModel`.
+ * The agent as it really is: its record, with the branch the working tree
+ * reports and, beside `model` (what the next launch and the edit screen use),
+ * the model its session last answered on, as `sessionModel`. Only fills in: a
+ * null reading leaves the stored value alone.
  */
 export function withSessionTruth<T extends {
   model?: string;
@@ -339,16 +310,12 @@ export function clearAgentTruthCache(): void {
 
 
 /**
- * When the session's turn was last interrupted, or undefined.
- *
- * Claude Code records an interrupt in its transcript as a user entry whose text
- * begins `[Request interrupted by user` (`... for tool use]` when a tool was
- * waiting on the user), and sends no hook for it: no Stop, and no idle prompt
- * in the 90 s the Audit waited. Refusing a permission, with "No" or with Esc,
- * writes that entry (the Audit's gate of #174), and it is the only sign that
- * the dialog is gone. Read under both spellings of the project path, and
- * again only when the file has changed: the writer asks every second while a
- * message waits on a dialog.
+ * When the session's turn was last interrupted, or undefined. Claude Code
+ * records an interrupt as a user entry beginning `[Request interrupted by user`
+ * and sends no hook for it (no Stop, no idle prompt in the Audit's 90 s);
+ * refusing a permission writes it too, the only sign the dialog is gone (the
+ * Audit's gate of #174). Read under both spellings of the project path, and
+ * again only when the file changed: the writer asks every second.
  */
 export function lastInterruptAt(
   agent: { currentSessionId?: string; projectPath?: string; worktreePath?: string },
