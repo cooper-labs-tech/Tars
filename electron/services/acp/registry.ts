@@ -5,18 +5,9 @@ import type { AgentProvider } from '../../types';
 
 /**
  * Which CLIs can be driven over the Agent Client Protocol, and how to launch
- * them.
- *
- * ACP is what makes orchestration provider-agnostic: the same JSON-RPC
- * conversation drives Claude Code, Codex, Gemini, Grok, opencode and the rest,
- * and a turn *returns* with a stop reason and its token usage instead of
- * leaving us to guess from terminal output.
- *
- * The public registry publishes one agent.json per agent with the exact
- * distribution to run, so the launch commands are not hardcoded knowledge that
- * rots - they are refreshed like the model catalogue. It refreshes *versions*
- * only: the package name we execute comes from ALLOWED_PACKAGES below, never
- * from the network. See the comment there for what that prevents.
+ * them. The public registry's agent.json per agent refreshes the launch
+ * commands like the model catalogue, but *versions* only: the package executed
+ * comes from ALLOWED_PACKAGES below, never from the network (see why there).
  */
 
 const REGISTRY_BASE = 'https://raw.githubusercontent.com/agentclientprotocol/registry/main';
@@ -38,19 +29,12 @@ const PROVIDER_TO_ACP: Partial<Record<AgentProvider, string>> = {
   gemini: 'gemini',
   grok: 'grok',
   opencode: 'opencode',
-  // `pi` was mapped to an agent id that exists in neither FALLBACK nor
-  // ALLOWED_PACKAGES, so providerSupportsAcp('pi') answered true and then every
-  // launch attempt failed - opaquely if the registry was unreachable, and
-  // rejected by the allowlist if it was not. Saying no here is the truth: pi
-  // delegates over the PTY path, like the other CLIs with no ACP mode. Map it
-  // back the day upstream ships one, and add its package to ALLOWED_PACKAGES
-  // in the same commit.
+  // No `pi`: mapped to an id in neither FALLBACK nor ALLOWED_PACKAGES, it said
+  // yes to ACP and then failed every launch. It delegates over the PTY. Map it
+  // the day upstream ships an ACP mode, with its package in ALLOWED_PACKAGES.
 };
 
-/**
- * Known-good launch commands, used when the registry is unreachable. Kept
- * deliberately small: the registry is the source of truth.
- */
+/** Known-good launch commands, for when the registry is unreachable. */
 const FALLBACK: Record<string, AcpAgentEntry> = {
   'claude-acp': { id: 'claude-acp', name: 'Claude Agent', version: '0.70.0', command: 'npx', args: ['-y', '@agentclientprotocol/claude-agent-acp@0.70.0'] },
   'codex-acp': { id: 'codex-acp', name: 'Codex', version: '1.6.2', command: 'npx', args: ['-y', '@agentclientprotocol/codex-acp@1.6.2'] },
@@ -77,19 +61,14 @@ interface CacheShape {
 }
 
 /**
- * The npm package each agent id is allowed to run, without its version.
- *
- * This table is the security boundary of this module. The registry manifest -
- * and the on-disk cache built from it - is a *version* hint, never the name of
- * the binary we execute: `manifestToEntry` used to splice
- * `distribution.npx.package` straight into `npx -y <package>`, so a single
- * commit in the third-party agentclientprotocol/registry repo (or a write to
- * ~/.dorothy/acp-registry.json) could point that spawn at any package on npm,
- * which then ran as the user inside the user's project with the user's
- * environment, and stuck in the cache for the whole TTL.
- *
- * An agent id that is absent here can never be launched from the registry. Add
- * the package name here - deliberately - when upstream ships one.
+ * The npm package each agent id is allowed to run, without its version: this
+ * module's security boundary. The registry manifest, and the cache built from
+ * it, are a *version* hint, never the name of what runs: `manifestToEntry` once
+ * spliced `distribution.npx.package` into `npx -y <package>`, so one commit to
+ * the third-party agentclientprotocol/registry (or a write to
+ * ~/.dorothy/acp-registry.json) could run any npm package as the user, in their
+ * project, with their environment, for the cache's whole TTL. An agent id absent
+ * here is never launched from the registry: add its package deliberately.
  */
 const ALLOWED_PACKAGES: Record<string, readonly string[]> = {
   'claude-acp': ['@agentclientprotocol/claude-agent-acp'],
@@ -193,10 +172,9 @@ function writeCache(cache: CacheShape): void {
 }
 
 /**
- * Builds a launch entry for `agentId` from its manifest, or null if the
- * manifest asks for anything we are not willing to execute. The agent id is
- * ours, not `manifest.id`: the file we asked for decides which allowlist row
- * applies, so a manifest cannot rename itself into another agent's row.
+ * A launch entry for `agentId` from its manifest, or null if it asks for anything
+ * we will not execute. The agent id is ours, not `manifest.id`: a manifest cannot
+ * rename itself into another agent's allowlist row.
  */
 function manifestToEntry(agentId: string, manifest: RegistryManifest, fallbackArgs?: string[]): AcpAgentEntry | null {
   const npx = manifest.distribution?.npx;

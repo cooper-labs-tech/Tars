@@ -3,14 +3,10 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 
 /**
- * An Agent Client Protocol session against one agent process.
- *
- * The value over typing into a PTY is that a turn *returns*: `session/prompt`
- * resolves with a stop reason and the turn's token usage, so a delegated task
- * has a receipt instead of a keystroke and a hope. Tool calls, plans and
- * permission requests arrive as structured events rather than as ANSI text to
- * be scraped, and the same conversation works against every agent that speaks
- * the protocol.
+ * An Agent Client Protocol session against one agent process. Unlike a
+ * keystroke into a PTY, a turn returns (`session/prompt` resolves with a stop
+ * reason and its token usage), and tool calls, plans and permission requests
+ * arrive as events, the same on every agent that speaks the protocol.
  */
 
 export type StopReason =
@@ -36,21 +32,14 @@ export interface TurnResult {
   /** Tool calls it made, in order. */
   toolCalls: { title: string; kind?: string; status?: string }[];
   costUSD?: number;
-  /**
-   * What the turn started and left running when it ended: background
-   * commands, monitors, wakeups. A delegated run ends with its turn, and all
-   * of it is stopped with the agent (see backgroundOf).
-   */
+  /** What the turn left running (backgroundOf), stopped with the agent: a run ends with its turn. */
   background: string[];
 }
 
 /**
- * The name to report for a tool call that leaves work running after the turn,
- * or null. Claude Code has three: a Bash command started with
- * `run_in_background`, a Monitor, and a ScheduleWakeup (claude-agent-acp
- * titles those two by their tool name). In a terminal session each brings the
- * agent back when it fires; in a delegated run nothing does, since the run
- * ends with the turn and the agent is stopped.
+ * The name to report for a tool call that leaves work running past the turn, or
+ * null: a Bash `run_in_background`, a Monitor, a ScheduleWakeup (claude-agent-acp
+ * titles the last two by tool name). Nothing brings a delegated run back for them.
  */
 function backgroundOf(title: string, rawInput: unknown): string | null {
   const input = (rawInput ?? {}) as { run_in_background?: unknown; command?: unknown; description?: unknown };
@@ -90,10 +79,9 @@ const DEFAULT_TURN_TIMEOUT = 30 * 60_000;
 const STDERR_TAIL = 4_000;
 
 /**
- * What a launch that failed means, in words the agent that delegated can act
- * on. ENOENT alone is ambiguous: spawn reports a working directory that is
- * gone with the same code as a command that is nowhere on PATH, and names the
- * command either way.
+ * A failed launch in words the delegating agent can act on. ENOENT alone is
+ * ambiguous: spawn gives it, naming the command, for a missing working
+ * directory as for a command nowhere on PATH.
  */
 function launchFailure(err: NodeJS.ErrnoException, command: string, cwd: string, searched: string | undefined): Error {
   if (err.code === 'ENOENT' && !fs.existsSync(cwd)) {
@@ -106,11 +94,8 @@ function launchFailure(err: NodeJS.ErrnoException, command: string, cwd: string,
   return new Error(`could not start the agent: ${command}: ${err.message}`);
 }
 
-/**
- * The last lines an agent wrote to stderr, without stack frames or the update
- * notice npx prints after the agent it ran has died: why it stopped, in its
- * own words.
- */
+/** Why an agent stopped, in its own words: its last stderr lines, without stack
+ *  frames or the update notice npx prints after the agent it ran has died. */
 function lastWords(stderr: string): string {
   const lines = stderr.split('\n').map(line => line.trim())
     .filter(line => line && !line.startsWith('at ') && !line.startsWith('npm notice'));
@@ -147,18 +132,13 @@ function processTableNow(): ProcessRow[] | undefined {
 }
 
 /**
- * The processes some roots lead, and every process group found among their
- * descendants.
- *
- * The roots' own groups are not enough. Claude Code's Bash tool runs each
- * command in a group of its own, and a run whose claude could not pass the stop
- * on (wedged, SIGSTOPped by the Audit on #191) left its `zsh -c` and `sleep`
- * alive, reparented to launchd, once npm, the adapter and claude had died with
- * their group. So the tree is read from ps before the first signal, while the
- * parents that tie those groups to the run are still alive, and read again
- * before the last, from every process already known, for what was started in
- * between. Tars's own group, and init's, are never signalled. With no ps, the
- * roots' own groups still are.
+ * The processes some roots lead, and every process group among their
+ * descendants: Claude Code's Bash tool runs each command in a group of its own,
+ * and a wedged run (SIGSTOPped by the Audit on #191) left its `zsh -c` and
+ * `sleep` alive, reparented to launchd, once its own group had died. So ps is
+ * read before the first signal, while the parents still tie those groups to the
+ * run, and again before the last, for what started in between. Tars's group and
+ * init's are never signalled; with no ps, the roots' own groups still are.
  */
 class ProcessTree {
   private readonly known: Set<number>;
@@ -218,9 +198,8 @@ const QUIT_POLL_MS = 50;
 
 /**
  * Ends the processes these roots lead, and everything under them, before it
- * returns: SIGTERM, a wait of at most QUIT_GRACE_MS that ends as soon as
- * nothing is left, then SIGKILL. For the quit, where the stop's timer would
- * never fire (measured on #197: a wedged run was whole 14 s after the quit).
+ * returns: SIGTERM, up to QUIT_GRACE_MS while anything is left, SIGKILL. For the
+ * quit, where the stop's timer never fires (#197: a wedged run whole 14 s after).
  */
 export function endProcessTreesNow(roots: number[]): void {
   if (roots.length === 0) return;
@@ -272,10 +251,9 @@ export class AcpSession extends EventEmitter {
       cwd: this.options.cwd,
       env,
       stdio: ['pipe', 'pipe', 'pipe'],
-      // Its own process group, so that stop() ends what it started too: the
-      // command Tars spawns is npx or an adapter, the CLI runs under it, and
-      // the commands the CLI runs under that (the Audit's table, #6). Windows
-      // has no groups to signal; the kill there is the process alone.
+      // Its own process group, so that stop() ends the CLI under npx or the
+      // adapter, and the commands under the CLI (the Audit's table, #6).
+      // Windows has no groups: the kill there is the process alone.
       detached: process.platform !== 'win32',
     });
     this.child = child;
@@ -290,16 +268,13 @@ export class AcpSession extends EventEmitter {
       this.fail(new Error(`agent exited (code ${code})${lastWords(this.stderrTail)}`));
       this.emit('exit', code);
     });
-    // A launch that fails, the command nowhere on PATH or the folder gone, is
-    // reported here and only here: no 'exit' follows it. It used to be emitted
-    // again on this session, where nothing listened, and an 'error' nobody
-    // hears is thrown: in the main process, the "Uncaught Exception" window
-    // JeanBrasse saw on 2026-09-18, while the initialize below waited out its 90
-    // seconds. It fails what is waiting instead, that initialize first.
+    // A failed launch (command nowhere on PATH, folder gone) is reported here
+    // only, with no 'exit' after it. Re-emitted on this session, where nothing
+    // listened, it was thrown: the "Uncaught Exception" window of 2026-09-18,
+    // while initialize waited its 90 s. It fails what is waiting instead.
     child.on('error', err => this.fail(launchFailure(err, this.launch.command, this.options.cwd, env.PATH)));
-    // The same class on the way in: writing to an agent that has stopped
-    // reading raises EPIPE on its stdin. Nothing can reach it any more, so the
-    // session is over, and the agent is stopped rather than left behind.
+    // The same on the way in: EPIPE on stdin, an agent that stopped reading.
+    // Nothing can reach it, so the session is over and the agent is stopped.
     child.stdin.on('error', (err: NodeJS.ErrnoException) => {
       this.fail(new Error(`the agent stopped reading its input (${err.code ?? err.message})`));
       child.kill();
@@ -338,13 +313,10 @@ export class AcpSession extends EventEmitter {
   }
 
   /**
-   * Picks the session's permission mode.
-   *
-   * The default on some agents is "deny anything not pre-approved", which
-   * silently blocks the very MCP tools we inject. Choosing `default` puts the
-   * decision back on the client: every risky call arrives as a
-   * session/request_permission we answer ourselves, which is how the deny list
-   * ends up enforced identically on every agent.
+   * Picks the session's permission mode. Some agents default to "deny anything
+   * not pre-approved", which silently blocks the MCP tools we inject; `default`
+   * sends every risky call back as a session/request_permission we answer, so
+   * the deny list is enforced the same on every agent.
    */
   private async selectMode(session: Record<string, unknown>): Promise<void> {
     const modes = session.modes as
@@ -374,12 +346,10 @@ export class AcpSession extends EventEmitter {
   }
 
   /**
-   * Sets one of the options the agent offered for this session, such as its
-   * model or its effort (`session/set_config_option`). ACP has no command line
-   * to put them on: a session is configured once it is open. Answers whether
-   * the agent took the value, and says why not when it did not, because the
-   * turn runs either way and a setting that silently did not apply is how a
-   * delegation came to run on the CLI's defaults.
+   * Sets an option the agent offered for this session, its model or effort
+   * (`session/set_config_option`; ACP has no command line). Answers whether it
+   * took, and says why not: the turn runs either way, and a setting that silently
+   * did not apply is how delegations ran on the CLI's defaults.
    */
   async setConfigOption(configId: string, value: string): Promise<boolean> {
     if (!this.sessionId) throw new Error('session not started');
@@ -422,10 +392,7 @@ export class AcpSession extends EventEmitter {
     };
   }
 
-  /**
-   * What the turn in flight has said and done so far: for a turn stopped at
-   * its limit, which otherwise answered nothing however far it had got.
-   */
+  /** What the turn in flight has said and done so far: a turn stopped at its limit answers nothing else. */
   partialTurn(): { text: string; toolCalls: { title: string; kind?: string; status?: string }[]; background: string[] } {
     return { text: this.turnText.join(''), toolCalls: this.turnTools, background: [...this.turnBackground.values()] };
   }
@@ -596,10 +563,8 @@ export class AcpSession extends EventEmitter {
   }
 
   /**
-   * Answers a permission request without a human in the loop. This is the
-   * guardrail that finally works on every agent rather than only on Claude:
-   * a denied tool is denied by the protocol, not by a flag one CLI happens to
-   * support.
+   * Answers a permission request without a human in the loop: a denied tool is
+   * denied by the protocol, on every agent, not by a flag one CLI supports.
    */
   private answerPermission(id: number | undefined, params: Record<string, unknown>): void {
     if (id === undefined) return;

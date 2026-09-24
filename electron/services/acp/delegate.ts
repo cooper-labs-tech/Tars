@@ -14,31 +14,24 @@ import { API_PORT } from '../../constants';
 import { isSuperAgent } from '../../utils';
 
 /**
- * Running a delegated task over ACP instead of typing it into a terminal.
- *
- * The difference that matters: this returns. The caller gets the agent's
- * answer, why the turn ended, which tools it used and what the turn cost,
- * for any CLI that speaks the protocol, not just for Claude.
+ * A delegated task run over ACP rather than typed into a terminal: it returns
+ * the agent's answer, why the turn ended, the tools it used and what it cost,
+ * for any CLI that speaks the protocol.
  */
 
 export interface DelegationResult {
   ok: boolean;
   transport: 'acp';
   /**
-   * Whether the task reached the agent. False only when the run could not
-   * start at all, which is the one case where typing the task into the
-   * agent's terminal instead does not run it twice.
+   * Whether the task reached the agent. False only when the run never started,
+   * the one case where typing it into the terminal instead cannot run it twice.
    */
   started: boolean;
   /** `turn_limit` when the run was stopped at its time limit, mid-work. */
   stopReason?: string;
   text: string;
   toolCalls: string[];
-  /**
-   * What the turn left running when it ended, stopped with the agent: a run
-   * is one turn, and nothing brings the agent back for it (backgroundOf, in
-   * client.ts).
-   */
+  /** What the turn left running, stopped with the agent: a run is one turn (backgroundOf, client.ts). */
   backgroundStopped?: string[];
   usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number };
   costUSD?: number;
@@ -55,15 +48,13 @@ function apiUrl(): string {
 const ORCHESTRATOR_DENY = ['write', 'edit', 'create file', 'multiedit', 'notebook'];
 
 function mcpServersFor(agent: AgentStatus, apiToken: string): { name: string; command: string; args: string[]; env: { name: string; value: string }[] }[] {
-  // Handed over by name, since a CLI may start these servers with this list
-  // and nothing else. The token is what the API takes the caller from; the id
-  // alone would make every call from this run nobody's.
+  // By name, since a CLI may start these servers with this list and nothing
+  // else. The API takes the caller from the token; the id alone names nobody.
   const env = [
     { name: 'CLAUDE_AGENT_ID', value: agent.id },
     { name: 'CLAUDE_PROJECT_PATH', value: agent.projectPath },
     { name: 'CLAUDE_MGR_API_TOKEN', value: apiToken },
-    // Which Tars to call back. These servers get the list below and nothing
-    // else, and mcp-orchestrator falls back to 31415 without it.
+    // Which Tars to call back: mcp-orchestrator falls back to 31415 without it.
     { name: 'CLAUDE_MGR_API_URL', value: apiUrl() },
   ];
 
@@ -81,9 +72,8 @@ function mcpServersFor(agent: AgentStatus, apiToken: string): { name: string; co
 
 /**
  * The runs under way, by agent, so that stopping or deleting an agent stops its
- * delegated run too (the Audit's table on a3d7c125, #6): cancel() had no
- * caller, and a stopped agent's run went on working for up to its hour with
- * the agent's run token.
+ * delegated runs too (the Audit's table on a3d7c125, #6: one went on for up to
+ * its hour with the agent's run token).
  */
 interface Run { session: AcpSession; done: Promise<void>; stoppedWhy?: string }
 const runs = new Map<string, Set<Run>>();
@@ -91,9 +81,8 @@ const runs = new Map<string, Set<Run>>();
 const CANCEL_GRACE_MS = 1_500;
 
 /**
- * Stop every delegated run of this agent: asked to cancel over the protocol
- * first, then ended with every process it started (AcpSession.stop). Its caller
- * is answered that the run was stopped, and why. Returns how many were stopped.
+ * Stops every delegated run of this agent: a cancel over the protocol, then
+ * AcpSession.stop. Its caller is told the run was stopped, and why. Returns the count.
  */
 export async function stopAcpRuns(agentId: string, why: string): Promise<number> {
   const live = [...(runs.get(agentId) ?? [])];
@@ -108,13 +97,10 @@ export async function stopAcpRuns(agentId: string, why: string): Promise<number>
 }
 
 /**
- * End every delegated run before Tars exits, whatever it is doing. Called from
- * before-quit. The runs are asked to cancel, which is best effort, since the
- * message may not leave before the process does. Then their processes, and
- * every command their CLIs started, are ended while the quit waits: SIGTERM,
- * at most a second, SIGKILL. Measured on #197 before this: a run that still
- * answered ended by itself 2.4 s after the quit, and a wedged one was whole
- * 14 s later, reparented to launchd. Returns how many runs were ended.
+ * Ends every delegated run before Tars exits (before-quit): a best-effort cancel,
+ * then their process trees while the quit waits, SIGTERM, at most a second,
+ * SIGKILL. Before it (#197), a run still answering ended 2.4 s after the quit,
+ * and a wedged one was whole 14 s later, reparented to launchd. Returns the count.
  */
 export function endAcpRunsOnQuit(): number {
   const live = [...runs.values()].flatMap(set => [...set]).filter(run => run.session.isRunning);
@@ -159,39 +145,31 @@ export async function delegateOverAcp(opts: {
   }
 
   const provider = getProvider(agent.provider ?? 'claude');
-  // This run's own token. spawnAgentPty, which gives a terminal its token, is
-  // not on this path, and without one the run's MCP servers would fall back to
-  // the shared token, on which a call has no agent behind it: no room on the
-  // bus, no delegation onward. Its own rather than the terminal's, so that
-  // neither can cut the other off, and revoked when the run is over.
+  // This run's own token: spawnAgentPty is not on this path, and on the shared
+  // token its MCP calls would have no agent behind them (no bus room, no
+  // delegation onward). Not the terminal's, so neither cuts the other off.
   const { token: apiToken, revoke } = mintRunToken(agent.id);
   const session = new AcpSession(launch, {
     cwd,
     env: {
-      // The PATH every other launch of the main process gets, the folders set
-      // in Settings > CLI Paths first. Without it the launch had the app's own,
-      // and an app opened from the Dock has launchd's, where npx is not: the
-      // "spawn npx ENOENT" of 2026-09-18. The agent inherits it too, which is
-      // how npx finds node and the agent finds its MCP servers' node.
+      // The PATH of every other launch, Settings > CLI Paths first: an app opened
+      // from the Dock has launchd's, without npx ("spawn npx ENOENT", 2026-09-18).
+      // The agent inherits it, so npx and the MCP servers find node.
       PATH: buildFullPath(cliPathDirs(appSettings.cliPaths)),
       ...provider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills ?? [], appSettings),
       CLAUDE_AGENT_ID: agent.id,
       CLAUDE_PROJECT_PATH: agent.projectPath,
       CLAUDE_MGR_API_TOKEN: apiToken,
-      // Which Tars this run answers to, as spawnAgentPty gives every terminal
-      // (agent-pty.ts). It was missing here, so the hooks of an ACP run posted
-      // to 31415 whatever port this Tars was on: three posts from a sandbox on
-      // 31493 reached the live app and were refused as `Agent not found`.
-      // Nothing was written, but the port stopped being the boundary it is
-      // everywhere else.
+      // Which Tars this run answers to, as every terminal gets (agent-pty.ts).
+      // Without it an ACP run's hooks posted to 31415: a sandbox on 31493 reached
+      // the live app, refused as `Agent not found`, the port no longer a boundary.
       CLAUDE_MGR_API_URL: apiUrl(),
     },
     mcpServers: mcpServersFor(agent, apiToken),
     permissionMode: agent.permissionMode === 'bypass' ? 'bypass'
       : agent.permissionMode === 'auto' ? 'auto' : 'normal',
-    // An orchestrator delegates; it does not edit. Enforced here by the
-    // protocol rather than by a flag only one CLI understands. The role, as
-    // every launch reads it (core/agent-role.ts).
+    // An orchestrator delegates, it does not edit: enforced by the protocol, on
+    // the role every launch reads (core/agent-role.ts).
     denyTools: isSuperAgent(agent) ? ORCHESTRATOR_DENY : undefined,
   });
 
@@ -211,11 +189,9 @@ export async function delegateOverAcp(opts: {
   let started = false;
   try {
     await session.start();
-    // The agent's own model and effort. A launch in a terminal puts them on the
-    // command line; this one has none, so the session is configured once open,
-    // through the options the agent offers, model first because the effort
-    // levels on offer depend on the model. Without this every delegation ran
-    // on the adapter's default model and effort, whatever the agent was set to.
+    // The agent's own model and effort, set once the session is open (no command
+    // line here), model first since the efforts on offer depend on it. Without
+    // this every delegation ran on the adapter's defaults.
     const model = agent.model && agent.model !== 'default' ? agent.model : undefined;
     if (model && !(await session.setConfigOption('model', model))) {
       console.warn(`[acp] ${agent.name || agent.id}: this run is not on ${model}, the agent did not take it`);
