@@ -8,80 +8,38 @@ import { getAllProviders, getProvider } from '../providers';
 import { buildFullPath } from '../utils/path-builder';
 
 /**
- * Keeps the agent CLIs Tars runs up to date, so a model that a CLI release adds
- * can be used the day it ships, without anyone typing `claude update`.
+ * Keeps the agent CLIs Tars runs up to date, so a model a CLI release adds can
+ * be used the day it ships: Tars starts every claude with DISABLE_AUTOUPDATER=1
+ * and every Amp with updates disabled, so neither ever updated itself (on
+ * 2026-09-22 the fleet could not use Opus 5.5 until claude was updated by hand).
  *
- * Tars starts every claude with DISABLE_AUTOUPDATER=1 (managedCliEnv) and every
- * Amp with `amp.updates.mode: "disabled"`, and JeanBrasse runs all his sessions
- * through Tars, so neither CLI ever updated itself. On 2026-09-22 claude 2.1.280
- * had shipped Opus 5.5 and the fleet could not use it until claude was updated
- * by hand.
+ * Tars runs one update rather than each session's own, measured on claude
+ * 2.1.273 and 2.1.280:
+ * - each session's updater downloads for itself: three sessions, three 217 MB
+ *   downloads, and every footer asking for a restart;
+ * - `claude update` beside a live session leaves it alone: the new version is
+ *   written beside the old one and ~/.local/bin/claude swapped in one step, and
+ *   the session runs on from its own file, which a lock keeps from cleanup. A
+ *   version deleted under a second session still answers, but its Grep and
+ *   Glob fail (native claude runs its embedded ripgrep by starting its own file
+ *   again): USE_BUILTIN_RIPGREP=0 with `rg` on PATH, in managedCliEnv, keeps
+ *   them working. A new launch starts on the new version;
+ * - concurrent `claude update`s all succeed; Tars still runs one pass at a time.
  *
- * Tars runs the update itself, once, rather than letting each session's own
- * updater do it. Measured with claude 2.1.273 and 2.1.280 in a throwaway HOME:
+ * Amp is a global npm package, replaced in place: `bin/amp` is missing for 3 to
+ * over 31 s during an update (measured on @sourcegraph/amp), so an update
+ * starts only when no process runs that binary (`lsof`), after a download into
+ * a scratch prefix, and a launch in that window still fails. It updates the
+ * package that owns the binary, by its own name: `amp update` installs
+ * @ampcode/cli, which fails with EEXIST on the link the old package owns.
  *
- * - Claude Code's updater runs inside each session, from its footer, at start
- *   and then every thirty minutes. Three sessions started together made three
- *   separate 217 MB downloads (three staging directories, about 35 s each where
- *   one alone takes 10 s), and each then read "Update installed · Restart to
- *   update" until it was restarted. With twenty agents that is twenty downloads
- *   of every release, and twenty footers asking for a restart.
- * - `claude update` run once beside a live session leaves the session alone. The
- *   native installer writes the new version beside the old one in
- *   ~/.local/share/claude/versions and swaps ~/.local/bin/claude in one step:
- *   polled every millisecond, the link was never missing. The session keeps
- *   running the file it started from, same inode, drew nothing (0 bytes), and
- *   its next turn answered. The first session on a version also holds a lock
- *   on it (~/.local/state/claude/locks/<version>.lock), and the installer's
- *   cleanup, which keeps the two newest versions, skips a locked one: with fake
- *   newer versions pushing it out of those two, the running version survived,
- *   and was deleted by the first cleanup after that session exited, with a
- *   second session still on it. That session's next turn answered all the
- *   same, from the deleted file, but its Grep and Glob tools did not (QA, on
- *   three sessions of 2.1.280): native claude runs its embedded ripgrep by
- *   starting its own file again, as `rg`. With no `rg` on PATH every later
- *   search fails, `posix_spawn 'rg'` ENOENT; with Homebrew's on PATH, as in a
- *   Tars terminal on JeanBrasse's machine, the first one fails with a misleading
- *   "ripgrep not found on PATH" and the next ones go through the system `rg`.
- *   USE_BUILTIN_RIPGREP=0, with `rg` on PATH, kept both working: a later
- *   change to managedCliEnv. A new launch, and so a restart, starts on the new
- *   version, and ends it.
- * - Two or three `claude update` at once all succeed and leave one install.
- *   Tars still runs one pass at a time.
- *
- * Amp is a global npm package, and npm replaces a package in place, so an Amp
- * update is only started when no process is running that binary (`lsof`).
- * Measured with @sourcegraph/amp 0.0.1788811227 to 0.0.1790107230: a process
- * that was already running survived and kept answering, but `bin/amp` was
- * missing from the moment npm removed the old package until the new one was
- * in place, 8 to more than 31 s when the download happened inside that window,
- * and 3.3 to 9.3 s when the tarballs were already cached, followed by 0.2 to
- * 0.9 s on a 141-byte placeholder that prints "Amp native binary not
- * installed". Hence the download into a scratch prefix first. A launch that
- * falls in the window still fails: nothing here holds a launch back. npm's
- * cache for all of it lives in that scratch folder and goes with it, since
- * ~/.npm is never pruned and kept 38 MB of every Amp release.
- *
- * `amp update` itself cannot do it for JeanBrasse: his Amp is installed as
- * @sourcegraph/amp, renamed since to @ampcode/cli, and `amp update` runs
- * `npm install -g @ampcode/cli`, which fails with EEXIST on the `amp` link the
- * old package owns. Tars updates whichever package owns the binary, by its own
- * name, which is what `amp update` does for an install made under the new one.
- *
- * Covered: claude through its native installer, and Amp as a global npm
- * package. Every other CLI, and those two installed any other way, is left
- * alone and says so in the log: none of codex, gemini, grok, opencode or pi is
- * installed on the machine this was measured on, so no update path for them
- * could be checked, and a guessed one would look covered and do nothing.
- *
- * Only the CLIs at least one agent runs are checked: a fleet with no Amp agent
- * never has Amp updated, and the log says so once. And only while "Check for
- * updates" is on in Settings, the one switch for Tars's own updates and these
- * (JeanBrasse, 2026-09-23), read at every pass so turning it off stops the next one.
- *
- * Only an install under the home Tars runs in is touched. That is where
- * `claude update` writes, and it keeps a sandbox or a test run, whose HOME is a
- * scratch folder, away from the real CLIs.
+ * Covered: claude's native installer and Amp as a global npm package; every
+ * other CLI or install is left alone and says so in the log (no other path
+ * could be checked here, and a guessed one would look covered and do nothing).
+ * Only CLIs some agent runs, only while "Check for updates" is on (the one
+ * switch for Tars and these, JeanBrasse 2026-09-23, read at every pass), and only
+ * installs under the home Tars runs in, which keeps a sandbox or a test away
+ * from the real CLIs.
  */
 
 /** Claude Code's own cadence (1 800 000 ms in 2.1.280's footer), so an agent gets
@@ -198,13 +156,11 @@ type Install =
   | { kind: 'other'; launcher: string; binary: string };
 
 /**
- * How a CLI is installed, read from where its launcher really points.
- *
- * The native installer names each binary after its version, in
- * ~/.local/share/claude/versions. A global npm package lives in
- * <prefix>/lib/node_modules, and the package that owns the binary is the
- * top-level one there: Amp's binary is inside @ampcode/cli, which is itself
- * inside the @sourcegraph/amp that was installed.
+ * How a CLI is installed, read from where its launcher really points: the
+ * native installer names each binary after its version under
+ * ~/.local/share/claude/versions; a global npm package lives in
+ * <prefix>/lib/node_modules, owned by the top-level package there (Amp's
+ * binary sits in @ampcode/cli, inside the installed @sourcegraph/amp).
  */
 export function classifyInstall(launcher: string): Install {
   const binary = fs.realpathSync(launcher);
@@ -325,13 +281,9 @@ async function updateNpmGlobal(cli: string, install: Extract<Install, { kind: 'n
   const npm = locate('npm', env.PATH);
   if (!npm) return { cli, outcome: 'failed', from, detail: `no npm found to update ${install.pkg} in ${install.prefix}` };
 
-  // Everything npm fetches here goes into a cache of its own, in a scratch
-  // folder deleted at the end, and never into ~/.npm, which npm never prunes.
-  // Measured by QA: each Amp release left 38 MB there for good, a 27.8 MB
-  // tarball and its metadata, even an update that was then deferred, and Amp
-  // publishes about ten a day. The price is the package's metadata fetched whole
-  // on every check instead of revalidated: 1.2 MB on the wire for
-  // @sourcegraph/amp.
+  // npm's cache goes to a scratch folder deleted at the end, never ~/.npm, which
+  // npm never prunes (QA: 38 MB kept per Amp release, about ten releases a day).
+  // The price: the package's metadata fetched whole on every check, 1.2 MB.
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-cli-update-'));
   const cache = path.join(scratch, 'npm-cache');
   try {

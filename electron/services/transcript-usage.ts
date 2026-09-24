@@ -5,12 +5,9 @@ import { StringDecoder } from 'string_decoder';
 import { priceFor } from './model-catalog';
 
 /**
- * Token usage read from the Claude Code transcripts themselves.
- *
- * Claude Code only writes ~/.claude/stats-cache.json for some account types;
- * without it the Usage page had no tokens and therefore no cost at all. Every
- * assistant message in ~/.claude/projects/**\/*.jsonl carries its own usage
- * block, so the numbers are right there: that is what this reads.
+ * Token usage read from the Claude Code transcripts themselves: every assistant
+ * message in ~/.claude/projects/**\/*.jsonl carries its usage block, where
+ * ~/.claude/stats-cache.json exists only for some account types.
  */
 
 export interface ModelUsage {
@@ -28,25 +25,17 @@ export interface ModelUsage {
 export interface TranscriptUsage {
   modelUsage: Record<string, ModelUsage>;
   /**
-   * How many transcripts could not be read on this pass, and therefore
-   * contributed nothing.
-   *
-   * This feeds billing. A file that fails to open or parse used to be skipped
-   * in silence, which shows up as a smaller bill rather than as a gap: the one
-   * error that looks like good news and so never gets reported. Whoever renders
-   * these numbers is expected to say the figure is incomplete when this is not
-   * zero, rather than present it as the total.
+   * Transcripts that could not be read on this pass, and so contributed
+   * nothing. This feeds billing: skipped in silence, a failure reads as a
+   * smaller bill. Whoever renders the numbers says they are incomplete when
+   * this is not zero.
    */
   unreadable?: number;
   /**
-   * `costUSD` is the day priced from that day's own tokens, cache included.
-   * `tokensByModel` stays input+output only, which is why the number has to
-   * travel with it: the Usage page used to rebuild the day's cost by
-   * multiplying those tokens by an all-time blended $/token rate, and a day
-   * whose cache-read-to-output ratio differed from the all-time average came
-   * out anywhere from 80% under to 157% over. Cache reads are the bill here -
-   * 1.08bn read tokens against 1.5m output tokens on this author's history -
-   * and they were not in the daily map at all.
+   * Per day. `costUSD` is the day priced from its own tokens, cache included,
+   * since `tokensByModel` stays input+output: rebuilding a day from those at an
+   * all-time blended rate came out 80% under to 157% over, cache reads being
+   * most of the bill (1.08bn read against 1.5m output tokens here).
    */
   dailyModelTokens: Array<{
     date: string;
@@ -60,12 +49,10 @@ export interface TranscriptUsage {
      *  distinct ids rather than lines: counting lines roughly doubles it. */
     messagesByModel: Record<string, number>;
     costUSD: number;
-    /** The same cost split by the model that answered: each turn's own price,
-     *  1h and 5m cache writes apart, added to its model. Summed over models it
-     *  is `costUSD`; summed over days it is `modelUsage[model].costUSD`, less
-     *  the turns that carry no timestamp and so belong to no day. It has to be
-     *  split here: `breakdownByModel` keeps cache writes as one number, so
-     *  pricing it again downstream cannot tell a 2x write from a 1.25x one. */
+    /** The same cost per answering model, each turn priced with its 1h and 5m
+     *  cache writes apart: split here, since `breakdownByModel` keeps writes as
+     *  one number. Summed over models, `costUSD`; over days, the model's
+     *  `costUSD` less the turns with no timestamp. */
     costByModel: Record<string, number>;
   }>;
   /** Most recent day with real activity */
@@ -191,16 +178,9 @@ function listTranscripts(root: string): string[] {
 }
 
 /**
- * The memo, and which home it was computed for.
- *
- * `homeDir` is a parameter of the scan, but the memo was module scope and
- * unkeyed, so two different homes inside the sixty second window handed each
- * other their numbers. Production never noticed, since every caller passes
- * os.homedir(), and the tests avoided it by clearing in a beforeEach: a guard
- * on the calling side for a trap set on the called side. The key is here now,
- * so the protection does not depend on remembering it.
- *
- * `fileCache` needs no key: it is keyed by absolute path already.
+ * The memo, keyed by the home it was computed for: unkeyed, two homes within
+ * the sixty seconds were handed each other's numbers. `fileCache` needs no key,
+ * being keyed by absolute path.
  */
 let cache: { at: number; homeDir: string; value: TranscriptUsage } | null = null;
 
@@ -210,25 +190,7 @@ let cache: { at: number; homeDir: string; value: TranscriptUsage } | null = null
 let generation = 0;
 const CACHE_TTL = 60_000;
 
-/**
- * What one transcript file contributes, remembered so it is parsed once.
- *
- * The whole walk used to re-read and re-parse every .jsonl under
- * ~/.claude/projects on each cache miss: measured at 450 to 700ms against 451MB
- * across 1698 files on the author's machine, synchronously on the main process,
- * once a minute for as long as a Usage, Agents or Projects tab is open. Every
- * PTY's output handler, every other IPC call and the local HTTP server stall
- * for that whole time, and the cost only grows because Tars never prunes old
- * transcripts.
- *
- * Almost all of that work is re-reading files that cannot have changed: a
- * closed session's transcript is finished forever. Keyed on (mtimeMs, size), a
- * file is parsed once and its contribution reused, so the recurring cost falls
- * to a stat per file plus a real parse of only the session still being written.
- *
- * The first run after a launch still pays full price on the main thread. Moving
- * the walk to a worker is the remaining half of this and is not done here.
- */
+/** One API response, as a transcript line records it. */
 interface TurnEntry {
   /** `${message.id}:${requestId}`, the identity of one API response. */
   key: string;
@@ -239,25 +201,23 @@ interface TurnEntry {
 }
 
 /**
- * The turns one file holds, not their totals.
- *
- * Totals cannot be cached per file: resuming a session replays earlier messages
- * into a NEW transcript, so the same message id appears in two files and
- * counting both would double it. Deduplication has to stay global, which means
- * what a file contributes is its list of turns, and the merge decides what is
- * new. Measured on the author's machine: 66 files, 116MB, 9359 usage lines,
- * 4895 distinct messages, about 0.8MB held here against a 467ms parse.
+ * The turns one file holds, not their totals: resuming a session replays its
+ * messages into a new transcript under the same ids, so deduplication stays
+ * global (66 files, 116 MB here: about 0.8 MB held against a 467 ms parse).
  */
 type FileContribution = TurnEntry[];
 
+/**
+ * What each transcript contributes, keyed on (mtimeMs, size) so a file is
+ * parsed once: re-parsing every .jsonl on each miss held the main thread 450
+ * to 700 ms (451 MB, 1698 files here), once a minute while a Usage, Agents or
+ * Projects tab was open, and a closed session's transcript never changes.
+ */
 const fileCache = new Map<string, { mtimeMs: number; size: number; value: FileContribution }>();
 
 /**
- * `YYYY-MM-DD` in the machine's own timezone.
- *
- * Costs are read by a person who means their own calendar day. A turn at 01:00
- * local in Tbilisi is 21:00 UTC the day before; counting it as yesterday makes
- * "what did I spend today" wrong for everyone east of Greenwich.
+ * `YYYY-MM-DD` in the machine's own timezone: costs are read by a person who
+ * means their own day, and the UTC day is wrong for everyone east of Greenwich.
  */
 function localDateKey(isoTimestamp: string): string | null {
   const d = new Date(isoTimestamp);
@@ -267,20 +227,10 @@ function localDateKey(isoTimestamp: string): string | null {
 }
 
 /**
- * The turns one transcript file holds.
- *
- * No aggregation here: the caller deduplicates across files, because a resumed
- * session replays its earlier messages into a new transcript and both copies
- * carry the same message id.
- */
-/**
- * The file, in chunks, with a breath between them.
- *
- * readFileSync on the largest transcript here, 65 MB, is 165 ms the main
- * thread cannot be interrupted in, and it was the whole of the worst pause
- * once everything around it had been sliced. Four megabytes at a time is about
- * ten. The decoder is what makes chunking safe: a UTF-8 character can straddle
- * a boundary, and cutting one in half would corrupt the line it sits in.
+ * The file, 4 MB at a time with a breath between chunks: readFileSync on the
+ * 65 MB transcript here held the main thread 165 ms, the worst pause once all
+ * else was sliced. The decoder keeps whole a UTF-8 character that straddles a
+ * chunk boundary.
  */
 async function readFileInSlices(file: string): Promise<string | null> {
   const CHUNK = 4 * 1024 * 1024;
@@ -308,18 +258,17 @@ async function readFileInSlices(file: string): Promise<string | null> {
   }
 }
 
+/** The turns one transcript file holds; the caller deduplicates across files. */
 async function readTranscript(file: string): Promise<FileContribution | null> {
   const turns: FileContribution = [];
 
-  // Null, not an empty list. An empty list is a transcript that holds no
-  // usage, which is a fact; a file that would not open is not, and returning
-  // one as the other is how a failure turns into a smaller bill.
+  // Null, not an empty list: a file that would not open is not a transcript
+  // without usage, and reading it as one turns a failure into a smaller bill.
   const content = await readFileInSlices(file);
   if (content === null) return null;
 
-  // Walked rather than split: `split('\n')` on the 65 MB transcript is one
-  // more atomic 59 ms, building thirty thousand strings before the loop can
-  // begin. Walking spends the same time, a breath at a time.
+  // Walked rather than split: `split('\n')` on the 65 MB transcript is one more
+  // atomic 59 ms; walking spends it a breath at a time.
   let lines = 0;
   let start = 0;
   while (start < content.length) {
@@ -365,9 +314,8 @@ async function readTranscript(file: string): Promise<FileContribution | null> {
     turns.push({
       key: `${message.id ?? ''}:${entry.requestId ?? ''}`,
       model,
-      // The user's day, not UTC's. Transcript timestamps are ISO/Z, so slicing
-      // the first ten characters gave the UTC date while the chart labelled its
-      // bars with the local one, putting every bar a day out east of Greenwich.
+      // The user's day: slicing the ISO/Z timestamp gave the UTC one, every bar
+      // a day out east of Greenwich against the chart's local labels.
       date: timestamp ? localDateKey(timestamp) : null,
       counts,
     });
@@ -395,28 +343,18 @@ async function contributionFor(file: string): Promise<FileContribution | null> {
 }
 
 /**
- * The scan, in slices, off the thread that draws.
- *
- * Measured on this machine before any of this: 1826 transcripts, 883 MB, and
- * 2775 ms of unbroken synchronous work on the main thread the first time, then
- * 2656 to 3270 ms every time the memo expired, because the per-file cache
- * spares the parsing and not the walking or the adding up. For those seconds
- * the window painted nothing and answered nothing: a freeze, not a delay, and
- * one that three callers can trigger, the Usage page and /stats from either
- * bot.
- *
- * So it yields. Every SLICE files it hands the loop back, which is what keeps
- * the window alive while this runs. The totals are identical either way: the
- * awaits are inserted between files, never inside the arithmetic of one.
+ * The scan yields to the loop so the window keeps painting: 1826 transcripts
+ * (883 MB) held the main thread 2775 ms the first time and 2.6 to 3.3 s at
+ * every memo expiry, a freeze three callers could trigger (the Usage page and
+ * either bot's /stats). The awaits sit between files, never inside one's
+ * arithmetic, so the totals are the same.
  */
 const BREATH_MS = 8;
 let lastBreath = 0;
 
-/** Hand the loop back if this pass has held it longer than a frame.
- *
- *  Measured by time rather than by file count, because the corpus is skewed:
- *  1826 transcripts, 16 of them over 10 MB and the largest 65 MB, so a slice of
- *  twenty-five files was 604 ms whenever a big one fell inside it. */
+/** Hand the loop back if this pass has held it longer than a frame: timed, not
+ *  counted in files, as sizes are skewed (a 65 MB transcript made a 25-file
+ *  slice 604 ms). */
 async function breatheIfDue(): Promise<void> {
   const now = Date.now();
   if (now - lastBreath < BREATH_MS) return;
@@ -460,16 +398,11 @@ async function scanTranscripts(homeDir: string): Promise<TranscriptUsage> {
   const dailyMessages = new Map<string, Record<string, number>>();
   let lastComputedDate: string | null = null;
 
-  // One API response is written as several lines, one per content block, all
-  // carrying the same message id and requestId, and counting them all would
-  // roughly double every cost on the page. But the earlier lines carry a
-  // *partial* usage block: the final line is the one with the whole
-  // output_tokens count. Keeping the first and skipping the rest threw away
-  // 279,904 output tokens ($7.00) of the author's history. So: remember what
-  // each key has already contributed and top it up.
-  //
-  // This stays global rather than per file, because a resumed session replays
-  // its earlier messages into a new transcript under the same ids.
+  // One API response is several lines (one per content block) under one message
+  // id and requestId, the earlier ones with a partial usage block: each key's
+  // contribution is topped up, rather than counted per line (doubling costs) or
+  // taken from the first line (279,904 output tokens, $7.00, lost here). Global,
+  // not per file: a resumed session replays under the same ids.
   const applied = new Map<string, Counts>();
 
   const files = listTranscripts(root);
@@ -523,9 +456,7 @@ async function scanTranscripts(homeDir: string): Promise<TranscriptUsage> {
         cell.cacheRead += delta.cacheRead;
         cell.cacheWrite += delta.cacheWrite;
         dailyBreakdown.set(turn.date, split);
-        // The day priced from its own tokens, cache reads and cache writes
-        // included, rather than left to be reconstructed downstream from
-        // input+output alone.
+        // The day priced from its own tokens, cache reads and writes included.
         dailyCost.set(turn.date, (dailyCost.get(turn.date) ?? 0) + cost);
         const costs = dailyCostByModel.get(turn.date) ?? Object.create(null);
         costs[turn.model] = (costs[turn.model] || 0) + cost;
@@ -573,19 +504,15 @@ async function scanTranscripts(homeDir: string): Promise<TranscriptUsage> {
 }
 
 /**
- * Drops both memos so a test or a refresh sees fresh numbers.
- *
- * The per-file map has to go too: a test that rewrites a fixture within the
- * same millisecond and to the same length would otherwise be handed the old
- * parse, since (mtimeMs, size) is all that identifies it.
+ * Drops both memos so a test or a refresh sees fresh numbers, the per-file map
+ * too: a fixture rewritten in the same millisecond to the same length would
+ * otherwise give back the old parse.
  */
 export function clearTranscriptUsageCache(): void {
   generation += 1;
   cache = null;
   fileCache.clear();
-  // The scan in progress went with them. This function says it clears the
-  // cache and used to leave this behind: harmless while every caller awaited,
-  // and a wrong billing figure the day one did not, handed over from another
-  // home with nothing to say where it came from.
+  // And the scan in progress: left behind, a caller that did not await could be
+  // handed another home's figures.
   inFlight.clear();
 }
