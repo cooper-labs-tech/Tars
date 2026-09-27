@@ -101,7 +101,10 @@ if [ -n "$SESSION_ID" ]; then
        | .[$sid] = {"in": $tin, "out": $tout, "cost": $cost, "model": $model, "extra": $extra, "date": $date, "provider": $provider}' \
       > "$TMP_FILE" 2>/dev/null && mv "$TMP_FILE" "$TOKEN_STATS_FILE" 2>/dev/null || rm -f "$TMP_FILE"
 
-    # Release lock
+    # Release lock, once. The trap goes first: the script runs on (git, for
+    # the branch) before it exits, another render can take the lock by then,
+    # and the trap would remove that render's lock.
+    trap - EXIT
     rmdir "$LOCK_DIR" 2>/dev/null || true
   fi
 fi

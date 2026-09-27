@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 50,
+    version: '1.9.1',
+    date: '2026-09-26',
+    updates: [
+      'With several Claude agents at work at once, the Usage page no longer misses one of their sessions: an agent\'s status line could remove the lock another had just taken on the token count, and two of them then wrote the count over each other. Fixed by Nexarion434',
+    ],
+  },
+  {
     id: 49,
     version: '1.9.0',
     date: '2026-09-24',
