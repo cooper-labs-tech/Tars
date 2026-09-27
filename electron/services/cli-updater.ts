@@ -365,7 +365,14 @@ async function updateNpmGlobal(cli: string, install: Extract<Install, { kind: 'n
     }
     return { cli, outcome: 'failed', from, detail: `npm install -g ${install.pkg}@${latest}: ${failure(run)}, ${took}` };
   } finally {
-    fs.rmSync(scratch, { recursive: true, force: true });
+    // A folder left behind is said, never reported in place of the update's
+    // outcome: a throw from here replaced it, and an update that went through
+    // read "failed".
+    try {
+      fs.rmSync(scratch, { recursive: true, force: true });
+    } catch (err) {
+      console.error(`[cli-updates] could not remove ${scratch}: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 }
 
