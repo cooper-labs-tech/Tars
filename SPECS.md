@@ -593,7 +593,7 @@ Everything the app owns lives under `~/.dorothy` (`DATA_DIR`), except what its a
 | `api-token` | 64 hex chars | `initApiToken()` | mode `0600`, regenerated if shorter than 32 chars |
 | `hermes-connection.json` | `HermesConnection` | `writeHermesConnection()` | non-atomic |
 | `projects.json` | `string[]` | `writeCustomProjects()` | also the allowlist for `local-file://` |
-| `templates.json` / `templates.backup.json` | `{ user: AgentTemplate[], overrides }` | template handlers | backup pair |
+| `templates.json` / `templates.backup.json` | `{ user: AgentTemplate[], overrides }` | template handlers | backup pair. `template:import`, `template:create` and `template:update` refuse what the import review refuses: permissions Tars does not know, a folder that is not an absolute path, a skill that is not a skill name, an unknown provider or model, a prompt that is not text; an import is refused whole. Skill names are checked for every agent too (`utils/skill-name.ts`: `agent:create`, `agent:update`, `POST /api/agents`, and dropped from agents.json as it is read), since every task opens with them |
 | `team-templates.json` | `{ user: TeamTemplate[] }` | team-template handlers | builtins are code, not data |
 | `kanban-tasks.json` | `KanbanTask[]` | kanban handlers | the old local board, which no page shows: its open tasks move to the Hermes board once at launch, parked, and it stays as the backup |
 | `kanban-moved-to-hermes.json` | `{ [localId]: hermesId }` | `services/kanban-board.ts` | which local tasks moved; atomic |
