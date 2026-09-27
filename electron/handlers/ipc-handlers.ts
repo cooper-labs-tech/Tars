@@ -24,6 +24,7 @@ import { buildFullPath } from '../utils/path-builder';
 import { cliPathDirs } from '../utils/cli-path-dirs';
 import { projectFolders } from '../services/project-index';
 import { marketplaceListing } from '../services/skills-marketplace';
+import { skillsProblem } from '../utils/skill-name';
 import { resolveWorktreePath } from '../utils/worktree-path';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
@@ -285,6 +286,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     }
     // Before anything is created: a refused role leaves no worktree or terminal behind.
     const role = requestedRole(config) ?? 'worker';
+    // Every task the agent is given opens with its skills (gate of #204).
+    const skillsWrong = skillsProblem(config.skills ?? []);
+    if (skillsWrong) throw new Error(`Not created: ${skillsWrong}.`);
 
     // Validate model name: only allow safe characters (alphanumeric, dash, dot, slash, colon, underscore)
     if (config.model && !/^[a-zA-Z0-9._\-\/:@]+$/.test(config.model)) {
@@ -976,6 +980,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       role = requestedRole(params);
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : String(err) };
+    }
+    // Checked before any field changes: a refused edit changes nothing.
+    if (params.skills !== undefined) {
+      const skillsWrong = skillsProblem(params.skills);
+      if (skillsWrong) return { success: false, error: `Not saved: ${skillsWrong}.` };
     }
     // What the running CLI was started with, as far as this edit can change it.
     const launchBefore = launchSettings(agent);

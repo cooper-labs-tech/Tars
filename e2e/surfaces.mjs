@@ -232,6 +232,17 @@ export const VOLATILE = {
     selector: 'text=/· \\d+ chunks$/',
     why: 'how much a live CLI has printed by the time the page is photographed',
   },
+  'tailnet-webhook': {
+    surfaces: ['settings-hermes'],
+    // The sandbox asks the Mac's own Tailscale: hermes-handlers.ts runs
+    // `tailscale status` from PATH and from two absolute paths no fixture can
+    // hide. So the Incoming webhook row shows the machine recording: its
+    // MagicDNS name in the URL (`https://macbook-air-de-n...` in the 1.8.0 and
+    // 1.9.0 references) and, once `tailscale serve` is on, in the line under it.
+    // The row's input and its line only, by the row's own data hooks.
+    selector: '[data-settings-row]:has([data-settings-label]:text-is("Incoming webhook")) :is(input, [data-settings-hint])',
+    why: "the Mac's own Tailscale state and MagicDNS name, which name the machine recording",
+  },
   'changelog-body': {
     surfaces: ['whats-new'],
     selector: 'div.space-y-2:has(ul li)',
