@@ -53,7 +53,8 @@ export class CodexProvider implements CLIProvider {
       command += ` --add-dir '${escaped}'`;
     }
 
-    // Obsidian vaults (read-only access)
+    // The template's folders: added to what the CLI may reach, with whatever
+    // the agent's permission mode allows there, reading and writing alike.
     if (params.obsidianVaultPaths) {
       for (const vp of params.obsidianVaultPaths) {
         if (fs.existsSync(vp)) {

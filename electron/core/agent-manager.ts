@@ -7,6 +7,8 @@ import { AgentStatus, AppSettings } from '../types';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENTS_FILE, DATA_DIR, dataPath } from '../constants';
 import { ensureDataDir, isSuperAgent } from '../utils';
+import { isSkillName } from '../utils/skill-name';
+import { quoted } from '../utils/reveal';
 import { rolesOnLoad } from './agent-role';
 import { ptyProcesses, setDialogProbe, writeProgrammaticInput } from './pty-manager';
 import { dialogOpen, dialogShown } from './agent-launch';
@@ -596,7 +598,16 @@ export function loadAgents() {
       // `skills.join(',')`, so `agent:start` threw "Cannot read properties of
       // undefined (reading 'join')" and the agent simply never started, with
       // the reason buried in an IPC rejection.
-      agent.skills = Array.isArray(agent.skills) ? agent.skills : [];
+      // And only names: every task opens with the skills, and one saved before
+      // names were checked, or written in by hand, would open each of them
+      // with whatever it says (the Audit's gate of #204).
+      // Said, naming the agent and what goes, since the next save makes it final.
+      const saved: unknown[] = Array.isArray(agent.skills) ? agent.skills : [];
+      agent.skills = saved.filter(isSkillName);
+      if (agent.skills.length !== saved.length) {
+        const dropped = saved.filter(skill => !isSkillName(skill)).map(quoted).join(', ');
+        console.warn(`[agents] ${quoted(agent.name || agent.id)}: skills dropped, not skill names: ${dropped}`);
+      }
       // Session ownership is runtime state: any persisted session died with
       // the previous app run, and keeping it would make the stale-session
       // guard reject the next real session's hooks (and /health lie).

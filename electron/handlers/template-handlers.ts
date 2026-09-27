@@ -4,6 +4,9 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { DATA_DIR } from '../constants';
 import { BUILTIN_TEMPLATES } from '../constants/builtin-templates';
+import { isValidProvider } from '../providers';
+import { skillsProblem } from '../utils/skill-name';
+import { quoted } from '../utils/reveal';
 import type {
   AgentTemplate,
   AgentTemplateInput,
@@ -126,6 +129,50 @@ function overrideFromPatch(patch: AgentTemplatePatch, prev?: BuiltinOverride): B
   return merged;
 }
 
+const PERMISSION_MODES: readonly string[] = ['normal', 'auto', 'bypass'];
+/** The launch's own check on `--model`, as the import review holds it. */
+const MODEL_NAME = /^[a-zA-Z0-9._:/[\]-]+$/;
+
+/**
+ * What the import review (src/lib/template-review.ts) refuses in a template,
+ * refused here too: whatever reaches template:import, template:create or
+ * template:update, and by whatever way, is held to it (the Audit's gate of
+ * #204). A template's skills open every task of the agents made from it, its
+ * folders are handed to them as `--add-dir`, and its permissions are theirs.
+ * `patch` checks only the fields given, for an update.
+ */
+function templateProblem(t: unknown, patch = false): string | undefined {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return 'a template must be an object';
+  const f = t as Record<string, unknown>;
+  const name = typeof f.displayName === 'string' ? quoted(f.displayName) : 'a template';
+  if (!patch || f.displayName !== undefined) {
+    if (typeof f.displayName !== 'string' || !f.displayName.trim()) return 'a template has no name';
+  }
+  if (f.provider != null && (typeof f.provider !== 'string' || !isValidProvider(f.provider))) {
+    return `${name} asks for a provider Tars does not know`;
+  }
+  for (const field of ['model', 'localModel'] as const) {
+    if (f[field] != null && (typeof f[field] !== 'string' || !MODEL_NAME.test(f[field] as string))) {
+      return `${name} asks for a model that is not a model name`;
+    }
+  }
+  if (f.permissionMode != null && (typeof f.permissionMode !== 'string' || !PERMISSION_MODES.includes(f.permissionMode))) {
+    return `${name} asks for permissions Tars does not know`;
+  }
+  if (f.obsidianVaultPaths != null) {
+    if (!Array.isArray(f.obsidianVaultPaths)) return `${name} has folders that are not a list of paths`;
+    if (f.obsidianVaultPaths.some(folder => typeof folder !== 'string' || !path.isAbsolute(folder))) {
+      return `${name} asks for a folder that is not an absolute path`;
+    }
+  }
+  if (f.skills != null) {
+    const problem = skillsProblem(f.skills);
+    if (problem) return `${name} names a skill that is not one: ${problem}`;
+  }
+  if (f.savedPrompt != null && typeof f.savedPrompt !== 'string') return `${name} has a prompt that is not text`;
+  return undefined;
+}
+
 export function registerTemplateHandlers(): void {
   ipcMain.handle('template:list', async () => {
     try {
@@ -156,6 +203,8 @@ export function registerTemplateHandlers(): void {
       if (!input?.displayName?.trim()) {
         return { success: false, error: 'displayName is required' };
       }
+      const problem = templateProblem(input);
+      if (problem) return { success: false, error: `Not saved: ${problem}.` };
       const template = buildFromInput(input);
       const store = loadStore();
       store.user.push(template);
@@ -169,6 +218,8 @@ export function registerTemplateHandlers(): void {
 
   ipcMain.handle('template:update', async (_event, patch: AgentTemplatePatch) => {
     try {
+      const problem = templateProblem(patch, true);
+      if (problem) return { success: false, error: `Not saved: ${problem}.` };
       const store = loadStore();
       const builtin = BUILTIN_TEMPLATES.find(t => t.id === patch.id);
 
@@ -280,6 +331,13 @@ export function registerTemplateHandlers(): void {
       }
       if (!Array.isArray(p.templates) || p.templates.length === 0) {
         return { success: false, error: 'No templates found in file' };
+      }
+
+      // Refused whole, as the review refuses the file: nothing of it is kept
+      // when one of its templates cannot be used as it reads.
+      for (const raw of p.templates) {
+        const problem = templateProblem(raw);
+        if (problem) return { success: false, error: `Not imported: ${problem}.` };
       }
 
       const store = loadStore();
