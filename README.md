@@ -88,7 +88,10 @@ and window say who stopped it, when and why; it stays stopped across a restart,
 so it is not resumed at launch or handed kanban work until it is started again.
 An agent that reads running but has written nothing for 30 minutes and runs no
 command is marked stalled, and the orchestrator that gave it the work, or its
-project's orchestrator, is told.
+project's orchestrator, is told. An agent with no turn for 30 minutes is put to
+sleep, which gives its memory back: its pane keeps its last screen, and a
+message, a chat, a key typed there or wake brings it back on its own
+conversation. Orchestrators never sleep.
 
 **Any CLI, any model.** Nineteen providers, plus local models and any OpenAI-compatible
 endpoint of your own. Model lists and prices come from a

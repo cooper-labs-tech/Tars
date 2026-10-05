@@ -1651,6 +1651,20 @@ with `ps -A -o pid,ppid,stat,etime,command | grep -A12 claude` (a frozen claude 
 often an unreaped zombie, and 0 % CPU) and `sample <pid> 1`. If nothing moves: stop it, and start it again with a
 brief of what is already done. A long tool that runs no process (a web fetch, a subagent) is not caught by this rule.
 
+### An agent asleep
+
+`asleep` (and a `[sleep] <name>: asleep, no turn for 30 minutes; its CLI ends, its conversation is kept` line in the
+main process log) means: no turn for 30 minutes, so its CLI and everything under it were ended, and its conversation is
+kept. It is not stopped: a message, a dispatch, a room message, a chat, a kanban task, `wake` or a key typed in its
+pane starts it again on that conversation (`--resume`), in about a second, and it reads `waking` until its session is
+up. An orchestrator is never put to sleep. SPECS.md, "An agent asleep", has the rules.
+
+| Symptom | Cause |
+|---|---|
+| An agent at rest for hours never sleeps | something keeps it: a process under its CLI (a dev server, a background task: `ps -A -o pid,ppid,command \| grep -A8 claude`), a draft in its field, a message, note or question waiting for it, an agent still holding work it handed out, or a conversation Tars cannot resume (a provider other than claude, or no transcript) |
+| Woken, it started a new conversation | its transcript was not on disk any more at the wake (`~/.claude/projects/<encoded path>/<session>.jsonl`), so there was nothing to resume |
+| Its pane is blank while it sleeps | Tars restarted since it fell asleep: the last screen is kept in memory only |
+
 ### Agent stuck in the wrong directory
 
 `killStalePty()` compares the PTY's recorded `ptyCwd` against `worktreePath || projectPath` and
