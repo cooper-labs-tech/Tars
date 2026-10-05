@@ -102,7 +102,9 @@ const text = async (page: Page, selector: string) => ((await page.locator(select
 test('an asleep agent reads asleep since when on its card, its panel, its window and in a rail, and wakes from each, saying who woke it', async () => {
   test.setTimeout(420_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-asleep-ui-'));
-  const project = path.join(home, 'projects', 'demo');
+  // The real path: the CLI runs there, and Claude Code files its transcripts
+  // under it, which the Projects page lists beside the one Tars was given.
+  const project = path.join(fs.realpathSync(home), 'projects', 'demo');
   const dir = path.join(home, '.dorothy');
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
@@ -172,6 +174,8 @@ test('an asleep agent reads asleep since when on its card, its panel, its window
     seen.card = await text(page, '[data-agent-card="worker"]');
     await stepShot(page, '01-agents-card-asleep');
     await page.goto(`${DEV_URL}/projects`, { waitUntil: 'domcontentloaded' });
+    await page.getByRole('heading', { name: 'demo', exact: true }).first()
+      .locator('xpath=ancestor::div[.//button][1]').getByRole('button', { name: 'open', exact: true }).click({ timeout: 30_000 });
     const projectRow = page.locator('[data-project-agent="worker"]');
     await expect(projectRow).toContainText('asleep', { timeout: 30_000 });
     await expect(projectRow.getByRole('button', { name: 'wake', exact: true })).toBeVisible();
@@ -215,8 +219,15 @@ test('an asleep agent reads asleep since when on its card, its panel, its window
     await expect(dialog.getByRole('button', { name: 'wake', exact: true })).toBeEnabled();
     seen.window = (await dialog.innerText()).replace(/\s+/g, ' ').slice(0, 400);
     await stepShot(page, '06-window-asleep');
+    // Escape closes the window, and wakes nothing: the window does not hand
+    // an asleep agent's terminal the focus, where a key wakes it.
+    const before = lines(launchesFile).filter((l) => l.id === 'worker').length;
+    await page.waitForTimeout(600);
     await page.keyboard.press('Escape');
     await expect(dialog).toHaveCount(0);
+    await page.waitForTimeout(1500);
+    expect(lines(launchesFile).filter((l) => l.id === 'worker'), 'Escape woke it').toHaveLength(before);
+    expect((await get('worker')).status).toBe('asleep');
     await page.locator('[data-agent-card="lead"]').getByRole('button', { name: 'open', exact: true }).click();
     const rail = page.getByRole('dialog');
     await expect(rail).toContainText(/Asleep \(1\)/i);
@@ -235,6 +246,16 @@ test('an asleep agent reads asleep since when on its card, its panel, its window
     recordValues({ seen, launches: lines(launchesFile).filter((l) => l.id === 'worker') });
   } finally {
     await app.close().catch(() => { /* gone */ });
-    fs.rmSync(home, { recursive: true, force: true });
+    // A hook the last CLI started can still be writing its log there: the
+    // removal is done again until nothing comes back under it.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        fs.rmSync(home, { recursive: true, force: true });
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOTEMPTY' || attempt === 10) throw error;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+    }
   }
 });

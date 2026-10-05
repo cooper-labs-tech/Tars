@@ -16,7 +16,9 @@ import type { AgentStatus } from '../../src/types/electron';
  * 2. the time: one that does not parse prints "Invalid Date" or "NaN:NaN", and
  *    one of another day or year reads as today's;
  * 3. waking said of an agent already up: the copy kept `waking` after its
- *    session came up, or kept it on an agent stopped or asleep again;
+ *    session came up, or kept it on an agent stopped or asleep again; or not
+ *    said of one a message woke, which reads running from the start, its task
+ *    the message (corrected after the e2e: this list first allowed idle only);
  * 4. who woke it: an agent's or a chat's name, free text, turns the line
  *    around with a U+202E, splits it with a line break, or pushes the rest out
  *    by its length;
@@ -69,9 +71,13 @@ describe('waking', () => {
   it('nothing for an agent with no wake on its way, or one already up, stopped or asleep again (3)', () => {
     expect(wakingLine(agent({ status: 'idle', asleepSince: undefined }))).toBeNull();
     const up = waking('you', 'wake');
-    for (const status of ['running', 'waiting', 'completed', 'error', 'stopped', 'asleep'] as const) {
+    for (const status of ['waiting', 'completed', 'error', 'stopped', 'asleep'] as const) {
       expect(wakingLine({ ...up, status }), status).toBeNull();
     }
+  });
+
+  it('a message wakes it running, its task the message, and it reads waking all the same (3)', () => {
+    expect(wakingLine({ ...waking('Orchestrator', 'message'), status: 'running' })).toBe('Waking: a message from Orchestrator');
   });
 
   it('a name that hides, turns or breaks the line is flattened, and a long one cut (4)', () => {
