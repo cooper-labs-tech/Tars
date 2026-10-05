@@ -20,6 +20,9 @@ const STATUS_TONES: Record<DisplayStatus, StatusTone> = {
   done: 'idle',
   ready: 'idle',
   stopped: 'idle',
+  // Frame: `Agent asleep · and how it wakes`, asleep in the idle ink, waking in the waiting one.
+  asleep: 'idle',
+  waking: 'waiting',
 };
 
 export default function TrayAgentItem({

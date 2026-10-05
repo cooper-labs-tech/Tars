@@ -118,6 +118,16 @@ export function consumeResumeSessionId(
   return resolveResumeSessionId(agent, homeDir);
 }
 
+/**
+ * The next start of this agent resumes its conversation again, as the first of
+ * a run does: it was put to sleep (core/agent-asleep.ts), and woken, it must
+ * pick up where it was, whichever sender wakes it and however often this run
+ * has started it before.
+ */
+export function resumeOnNextStart(agentId: string): void {
+  startedThisRun.delete(agentId);
+}
+
 /** Test seam: forget which agents have started. */
 export function resetResumeTracking(): void {
   startedThisRun.clear();

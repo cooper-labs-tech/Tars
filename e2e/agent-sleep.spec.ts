@@ -18,7 +18,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Then the worker is woken three times, each time on its own conversation (`--resume` and the session it slept in):
  * - a mouse report from its pane wakes nothing, and a key typed there does;
  * - a room message wakes it, reading `waking` with who woke it, and the message reaches the session that woke;
- * - the wake call does.
+ * - the wake call does;
+ * - a message the lead sends it wakes it, the message its first prompt, reading woken by the lead.
  * The run record never counts it as working, and /wait answers at once for an agent asleep.
  *
  * The CLIs are stand-ins named `claude` (node scripts, as an npm install of Claude Code is) that run Tars's own hook
@@ -63,11 +64,19 @@ const hook = (name, payload) => spawnSync('/bin/bash', [path.join(HOOKS, name)],
 });
 const line = (o) => fs.appendFileSync(transcript, JSON.stringify(o) + '\n');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const api = (route, body) => fetch(process.env.CLAUDE_MGR_API_URL + route, {
+  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN, 'X-Tars-Caller-Id': id }, body: JSON.stringify(body),
+});
 // The busy worker left a job running under its CLI.
 if (id === 'busy') spawn('/bin/sh', ['-c', 'exec sleep 600'], { stdio: 'ignore' });
 
 async function turn(prompt) {
   record('prompts.jsonl', { sid, prompt });
+  // The lead, told to, sends the worker a message, as send_message does.
+  if (id === 'lead' && prompt.includes('TELL>>')) {
+    const answer = await api('/api/agents/worker/message', { message: 'MSG>> the docs are yours' });
+    record('calls.jsonl', { status: answer.status, body: await answer.json() });
+  }
   hook('user-prompt-submit.sh', { hook_event_name: 'UserPromptSubmit', prompt });
   line({ type: 'user', timestamp: new Date().toISOString(), message: { role: 'user', content: prompt } });
   line({ type: 'assistant', timestamp: new Date().toISOString(), message: { role: 'assistant', content: [{ type: 'text', text: 'done' }] } });
@@ -75,19 +84,27 @@ async function turn(prompt) {
   hook('on-stop.sh', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'done' });
 }
 
+// Raw before the session registers, which is when Tars may start typing: a CR
+// typed earlier would reach it as a LF.
+process.stdin.setRawMode(true);
 hook('session-start.sh', { hook_event_name: 'SessionStart', source: resumed === -1 ? 'startup' : 'resume' });
 process.stdout.write('SCREEN-OF-' + id + ' session ' + sid + '\r\n> ');
-process.stdin.setRawMode(true);
 let buffer = '';
+let pasting = false;
 let queue = Promise.resolve();
 if (launchPrompt.trim()) queue = queue.then(() => turn(launchPrompt));
+// A CR ends a prompt, outside a bracketed paste: a message of several lines is one prompt, as in Claude Code.
 process.stdin.on('data', (data) => {
-  buffer += data.toString();
-  let end;
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const typed = buffer.slice(0, end).replace(/\x1b\[20[01]~/g, '');
-    buffer = buffer.slice(end + 1);
-    if (typed.trim()) queue = queue.then(() => turn(typed));
+  for (const piece of data.toString().split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if (ch === '\r' && !pasting) {
+        const typed = buffer;
+        buffer = '';
+        if (typed.trim()) queue = queue.then(() => turn(typed));
+      } else buffer += ch;
+    }
   }
 });
 process.stdin.resume();
@@ -130,11 +147,9 @@ test('an agent with no turn for 30 minutes is put to sleep, keeps its screen, an
     const page = await app.firstWindow();
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-    const api = () => (window as unknown as Api).electronAPI;
     const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
     const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
     const byId = async () => Object.fromEntries((await list()).map((a) => [a.id, a]));
-    void api;
 
     for (const id of ['lead', 'worker', 'busy', 'drafter']) {
       await page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
@@ -158,11 +173,25 @@ test('an agent with no turn for 30 minutes is put to sleep, keeps its screen, an
         a.lastTurnStartedAt = undefined;
         a.workHandedAt = undefined;
       }
-      return req(`${dist}/services/agent-sleep.js`).checkSleep();
+      return req(`${dist}/services/agent-sleep.js`).checkSleep() as Promise<Array<{ agentId: string; slept: boolean; why?: string }>>;
     }, { dist });
 
+    /**
+     * The pass, until it puts the worker to sleep: what a turn just ended
+     * leaves under its CLI (its Stop hook still posting) is busy for a moment,
+     * as it would be for the pass of that minute, and the next one finds it gone.
+     */
+    const sleepWorker = async () => {
+      let last: Awaited<ReturnType<typeof restAndCheck>> = [];
+      await expect.poll(async () => {
+        last = await restAndCheck();
+        return last.find((o) => o.agentId === 'worker')?.slept ?? (await get('worker')).status;
+      }, { timeout: 30_000, intervals: [500] }).toBe(true);
+      return last;
+    };
+
     // ── Put to sleep ──
-    const checked = await restAndCheck();
+    const checked = await sleepWorker();
     const asleep = await byId();
     const screen = (await get('worker')).output?.join('') ?? '';
     const runState = JSON.parse(fs.readFileSync(path.join(home, '.tars-private', 'run-state.json'), 'utf8'));
@@ -203,7 +232,7 @@ test('an agent with no turn for 30 minutes is put to sleep, keeps its screen, an
     await sessionUp(1);
 
     // ── A room message ──
-    await restAndCheck();
+    await sleepWorker();
     expect((await get('worker')).status).toBe('asleep');
     const rooms = await page.evaluate(() => (window as unknown as Api).electronAPI.bus.listRooms());
     const room = (Array.isArray(rooms) ? rooms : rooms.rooms).find((r) => r.kind === 'project' && r.memberIds.includes('worker'))!;
@@ -214,21 +243,30 @@ test('an agent with no turn for 30 minutes is put to sleep, keeps its screen, an
     const roomPrompt = lines(promptsFile).find((p) => p.id === 'worker' && p.prompt.includes('ROOM>>'));
 
     // ── The wake call ──
-    await restAndCheck();
+    await sleepWorker();
     expect((await get('worker')).status).toBe('asleep');
     const woke = await page.evaluate(() => (window as unknown as Api).electronAPI.agent.wake('worker'));
     const byCall = await get('worker');
     await sessionUp(3);
     const notAsleep = await page.evaluate(() => (window as unknown as Api).electronAPI.agent.wake('lead'));
 
-    recordValues({ wakes: wakes(), byKey: byKey.waking ?? byKey.status, byRoom: byRoom.waking ?? byRoom.status, byCall: byCall.waking ?? byCall.status, woke, notAsleep, roomPrompt });
-    for (const w of wakes()) {
-      expect(w.resume, 'woken on its own conversation').toBe(firstLaunch.worker.sid);
-      expect(w.prompt, 'nothing typed for it').toBe('');
-    }
+    // ── A message from the orchestrator ──
+    await sleepWorker();
+    expect((await get('worker')).status).toBe('asleep');
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.sendInput({ id: 'lead', input: 'TELL>> wake the worker\r' }));
+    await expect.poll(() => wakes().length, { timeout: 30_000 }).toBe(4);
+    const byMessage = await get('worker');
+    await sessionUp(4);
+    const call = lines(path.join(home, 'calls.jsonl'))[0];
+
+    recordValues({ wakes: wakes(), byKey: byKey.waking ?? byKey.status, byRoom: byRoom.waking ?? byRoom.status, byCall: byCall.waking ?? byCall.status, byMessage: byMessage.waking ?? byMessage.status, woke, notAsleep, roomPrompt, call });
+    for (const w of wakes()) expect(w.resume, 'woken on its own conversation').toBe(firstLaunch.worker.sid);
+    expect(wakes().slice(0, 3).map((w) => w.prompt), 'nothing typed for a key, a room message or the wake call').toEqual(['', '', '']);
+    expect(wakes()[3].prompt, 'woken by a message, it starts on it').toContain('MSG>> the docs are yours');
+    expect(call.status).toBe(200);
     // Who woke it and how, while it woke (or already up, if its session beat the read).
-    for (const [seen, via] of [[byKey, 'key'], [byRoom, 'chat'], [byCall, 'wake']] as const) {
-      if (seen.waking) expect(seen.waking).toMatchObject({ via });
+    for (const [seen, via, by] of [[byKey, 'key', 'you'], [byRoom, 'chat', undefined], [byCall, 'wake', 'you'], [byMessage, 'message', 'Project Lead']] as const) {
+      if (seen.waking) expect(seen.waking).toMatchObject(by ? { via, by } : { via });
       else expect(seen.status).not.toBe('asleep');
     }
     expect(roomPrompt.sid).toBe(firstLaunch.worker.sid);

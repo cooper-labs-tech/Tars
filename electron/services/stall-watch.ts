@@ -59,7 +59,7 @@ export function parseProcesses(out: string): Proc[] {
   return procs;
 }
 
-function readProcesses(): Promise<Proc[] | undefined> {
+export function readProcesses(): Promise<Proc[] | undefined> {
   return new Promise(done => {
     execFile('ps', ['-A', '-o', 'pid=,ppid=,stat=,etime=,command='], { maxBuffer: 16 * 1024 * 1024, timeout: 5_000 }, (err, stdout) => {
       done(err ? undefined : parseProcesses(String(stdout)));

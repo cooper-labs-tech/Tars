@@ -12,6 +12,8 @@ export const STATUS_COLORS: Record<AgentStatus['status'], { text: string }> = {
   // At rest, like idle, and in its ink: the word and its line say the rest.
   // Frame: `Agent stopped · who and why`.
   stopped: { text: 'text-status-idle' },
+  // Asleep, in the idle ink. Frame: `Agent asleep · and how it wakes`.
+  asleep: { text: 'text-status-idle' },
 };
 
 /**
@@ -20,10 +22,10 @@ export const STATUS_COLORS: Record<AgentStatus['status'], { text: string }> = {
  * stopped agent is at rest too, and takes the idle ink with its own word.
  */
 export const statusTone = (status: AgentStatus['status']): StatusTone =>
-  status === 'completed' || status === 'stopped' ? 'idle' : status;
+  status === 'completed' || status === 'stopped' || status === 'asleep' ? 'idle' : status;
 
 /** The word an agent's row prints, and the Agents page filters on. */
-export type StatusWord = StatusTone | 'stopped';
+export type StatusWord = StatusTone | 'stopped' | 'asleep';
 
 /**
  * The status as a word: the four tones, and `stopped`, which says an agent

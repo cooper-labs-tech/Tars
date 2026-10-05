@@ -235,7 +235,7 @@ export function formatAgentStatus(agent: AgentStatus): string {
   const isSuper = isSuperAgent(agent);
   const emoji = isSuper ? '👑' : (TG_CHARACTER_FACES[agent.character || ''] || '🤖');
   const statusEmoji = {
-    idle: '⚪', running: '🟢', completed: '✅', error: '🔴', waiting: '🟡', stopped: '⏹'
+    idle: '⚪', running: '🟢', completed: '✅', error: '🔴', waiting: '🟡', stopped: '⏹', asleep: '💤'
   }[agent.status] || '⚪';
 
   let text = `${emoji} *${agent.name || 'Unnamed'}* ${statusEmoji}\n`;

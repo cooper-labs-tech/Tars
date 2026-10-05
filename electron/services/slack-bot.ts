@@ -223,7 +223,7 @@ export function initSlackBot(
 type Say = (msg: string) => Promise<unknown>;
 
 const DOTS: Record<StatusGroup, string> = {
-  running: ':large_green_circle:', waiting: ':large_yellow_circle:', error: ':red_circle:', stopped: ':black_square_for_stop:', idle: ':white_circle:',
+  running: ':large_green_circle:', waiting: ':large_yellow_circle:', error: ':red_circle:', stopped: ':black_square_for_stop:', idle: ':white_circle:', asleep: ':zzz:',
 };
 const face = (a: AgentStatus) => SLACK_CHARACTER_FACES[a.character || ''] || ':robot_face:';
 

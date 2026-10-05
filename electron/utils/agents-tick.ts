@@ -7,9 +7,10 @@ import { cliRunningIn } from '../core/agent-pty';
 import { leftFullscreenIn } from '../core/terminal-mirror';
 import { launchesPending, sessionStarting, setLaunchListener } from '../core/agent-launch';
 import { publishedWaitingOn } from './waiting-on';
-import type { AgentStatus, AgentWaitingOn } from '../types';
+import { publishedWaking } from '../core/agent-asleep';
+import type { AgentStatus, AgentWaitingOn, AgentWaking } from '../types';
 
-export type DisplayStatus = 'working' | 'waiting' | 'done' | 'ready' | 'stopped' | 'error';
+export type DisplayStatus = 'working' | 'waiting' | 'done' | 'ready' | 'stopped' | 'error' | 'asleep' | 'waking';
 
 export interface AgentTickItem {
   id: string;
@@ -33,6 +34,10 @@ export interface AgentTickItem {
   leftFullscreen: boolean;
   /** A launch is on its way and its session is not up yet (sessionStarting). */
   launching: boolean;
+  /** Since when it is asleep. See AgentStatus.asleepSince. */
+  asleepSince?: string;
+  /** Who woke it and how, while its CLI comes back. See AgentStatus.waking. */
+  waking?: AgentWaking;
 }
 
 let tickTimer: ReturnType<typeof setTimeout> | null = null;
@@ -61,7 +66,9 @@ export function scheduleTick(): void {
   }, 500);
 }
 
-function deriveDisplayStatus(a: AgentStatus): DisplayStatus {
+function deriveDisplayStatus(a: AgentStatus, waking: AgentWaking | undefined): DisplayStatus {
+  if (waking) return 'waking';
+  if (a.status === 'asleep') return 'asleep';
   if (a.status === 'running') return 'working';
   if (a.status === 'waiting') return 'waiting';
   if (a.status === 'completed') return 'done';
@@ -78,23 +85,29 @@ function agentCliRunning(a: AgentStatus): boolean {
 
 function buildTickPayload(): AgentTickItem[] {
   return Array.from(agents.values())
-    .map(a => ({
-      id: a.id,
-      name: a.name || `Agent ${a.id.slice(0, 6)}`,
-      character: a.character || 'robot',
-      status: a.status,
-      displayStatus: deriveDisplayStatus(a),
-      statusLine: (a as AgentStatus & { statusLine?: string }).statusLine || '',
-      currentTask: a.currentTask || '',
-      projectName: a.projectPath ? path.basename(a.projectPath) : '',
-      lastActivity: a.lastActivity,
-      statusSince: a.statusSince,
-      waitingOn: publishedWaitingOn(a),
-      provider: a.provider || 'claude',
-      cliRunning: agentCliRunning(a),
-      launching: sessionStarting(a),
-      leftFullscreen: leftFullscreenIn(a.ptyId ? ptyProcesses.get(a.ptyId) : undefined),
-    }))
+    .map(a => {
+      const launching = sessionStarting(a);
+      const waking = publishedWaking(a, launching);
+      return {
+        id: a.id,
+        name: a.name || `Agent ${a.id.slice(0, 6)}`,
+        character: a.character || 'robot',
+        status: a.status,
+        displayStatus: deriveDisplayStatus(a, waking),
+        statusLine: (a as AgentStatus & { statusLine?: string }).statusLine || '',
+        currentTask: a.currentTask || '',
+        projectName: a.projectPath ? path.basename(a.projectPath) : '',
+        lastActivity: a.lastActivity,
+        statusSince: a.statusSince,
+        waitingOn: publishedWaitingOn(a),
+        provider: a.provider || 'claude',
+        cliRunning: agentCliRunning(a),
+        launching,
+        asleepSince: a.asleepSince,
+        waking,
+        leftFullscreen: leftFullscreenIn(a.ptyId ? ptyProcesses.get(a.ptyId) : undefined),
+      };
+    })
     .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime());
 }
 

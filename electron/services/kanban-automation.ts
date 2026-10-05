@@ -12,6 +12,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { AgentStatus, AgentCharacter } from '../types';
 import { launchAgent } from '../core/agent-launch';
+import { noteWaker } from '../core/agent-asleep';
 import type { KanbanTask } from '../handlers/kanban-handlers';
 import * as os from 'os';
 
@@ -58,8 +59,9 @@ export async function findMatchingAgent(
   // Normalize paths for comparison
   const normalizedProjectPath = normalizePath(projectPath);
 
-  // Filter to idle agents only
-  const idleAgents = agents.filter(a => a.status === 'idle');
+  // Filter to idle agents only. An asleep one is at rest too: handed the task,
+  // it wakes on its conversation (core/agent-asleep.ts).
+  const idleAgents = agents.filter(a => a.status === 'idle' || a.status === 'asleep');
 
   if (idleAgents.length === 0) {
     console.log('No idle agents available');
@@ -147,6 +149,7 @@ export async function createAgentForTask(task: KanbanTask): Promise<string> {
  * tasks run unattended.
  */
 export async function startAgentForTask(agentId: string, prompt: string): Promise<void> {
+  if (deps?.agents.get(agentId)?.status === 'asleep') noteWaker(agentId, 'the board', 'message');
   const result = await launchAgent(agentId, prompt, { permissionMode: 'bypass' });
   if (!result.success) throw new Error(result.error);
 }

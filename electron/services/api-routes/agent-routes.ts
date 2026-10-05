@@ -9,6 +9,8 @@ import { ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { agentStatusOnExit, isQuitting } from '../../core/quit-state';
 import { clearStop, stopAgent, stopReasonOf } from '../../core/agent-stop';
+import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
+import type { AgentWakeVia } from '../../types';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogOpen, dialogShown } from '../../core/agent-launch';
 import { getProvider, isValidProvider } from '../../providers';
 import { skillsProblem } from '../../utils/skill-name';
@@ -47,6 +49,8 @@ type SpawnOpts = {
   model?: string;
   permissionMode?: 'normal' | 'auto' | 'bypass';
   printMode?: boolean;
+  /** Who this session wakes the agent for, and how, should it be asleep (core/agent-asleep.ts). */
+  wokenBy?: { by: string; via: AgentWakeVia };
 };
 
 /**
@@ -346,8 +350,11 @@ async function spawnAgentSession(
   // dropped as belonging to a session that no longer exists.
   if (agent.requestedBy) agent.requestedBy = { ...agent.requestedBy, ptyId };
   agent.ptyCwd = rawWorkingDir;
-  // A terminal again: a stop is over (core/agent-stop.ts).
+  // A terminal again: a stop is over (core/agent-stop.ts), and a sleep too,
+  // the agent waking on its conversation, its task the message that woke it.
   clearStop(agent);
+  if (opts.wokenBy) noteWaker(agent.id, opts.wokenBy.by, opts.wokenBy.via);
+  wakeFromSleep(agent);
   agent.status = 'running';
   agent.workHandedAt = new Date().toISOString();
   agent.currentTask = prompt;
@@ -755,7 +762,8 @@ async function performDispatchLocked(
   }
 
   // No session: spawn a fresh one with the message as the prompt.
-  if (!(await spawnAgentSession(agent, opts.message, { model: opts.model, permissionMode: opts.permissionMode }, ctx, sendJson))) {
+  const wokenBy = { by: opts.from ?? 'Tars', via: 'message' as const };
+  if (!(await spawnAgentSession(agent, opts.message, { model: opts.model, permissionMode: opts.permissionMode, wokenBy }, ctx, sendJson))) {
     return;
   }
   sendJson({ success: true, mode: 'start', previousStatus, agent: { id: agent.id, name: agent.name, status: agent.status } });
@@ -774,9 +782,11 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const currentStatus = agent.status;
 
     // Return immediately if already in terminal state
-    if (currentStatus === 'completed' || currentStatus === 'error' || currentStatus === 'idle' || currentStatus === 'waiting' || currentStatus === 'stopped') {
+    if (currentStatus === 'completed' || currentStatus === 'error' || currentStatus === 'idle' || currentStatus === 'waiting' || currentStatus === 'stopped' || currentStatus === 'asleep') {
       sendJson({
         status: agent.status,
+        // Asleep: a message wakes it on its conversation (core/agent-asleep.ts).
+        asleepSince: agent.asleepSince,
         lastCleanOutput: agent.lastCleanOutput,
         error: agent.error,
         waitingReason: agent.waitingReason,
@@ -1098,7 +1108,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         }, 409);
         return false;
       }
-      return spawnAgentSession(agent, prompt, { model, permissionMode: bodyPermissionMode, printMode }, ctx, sendJson);
+      return spawnAgentSession(agent, prompt, { model, permissionMode: bodyPermissionMode, printMode, wokenBy: { by: senderName(agent, req), via: 'start' } }, ctx, sendJson);
     });
     if (!spawned) return;
 
@@ -1270,7 +1280,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         // using the message as the prompt, identical to the /start path. This
         // ensures send_message and delegate_task reconnect transparently
         // instead of timing out.
-        if (!(await spawnAgentSession(agent, message, {}, ctx, sendJson))) {
+        if (!(await spawnAgentSession(agent, message, { wokenBy: { by: senderName(agent, req), via: 'message' } }, ctx, sendJson))) {
           return;
         }
         sendJson({ success: true });

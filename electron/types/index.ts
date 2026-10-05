@@ -54,9 +54,30 @@ export interface AgentWaitingOn {
   text: string;
 }
 
+/** How an asleep agent was woken (core/agent-asleep.ts). */
+export type AgentWakeVia = 'message' | 'chat' | 'wake' | 'key' | 'start';
+
+/** An asleep agent whose CLI is on its way back: who woke it, how, and when. */
+export interface AgentWaking {
+  /** "you", "Tars", an agent's name, or a chat ("Telegram"). */
+  by: string;
+  via: AgentWakeVia;
+  /** ISO. */
+  since: string;
+}
+
 export interface AgentStatus {
   id: string;
-  status: 'idle' | 'running' | 'completed' | 'error' | 'waiting' | 'stopped';
+  /** 'asleep': its CLI was ended after 30 minutes without a turn, its
+   *  conversation kept; a message, a dispatch, a chat, the wake call or a key
+   *  typed into its terminal wakes it on that conversation (core/agent-asleep.ts,
+   *  services/agent-sleep.ts). Not stopped: nothing has to start it again. */
+  status: 'idle' | 'running' | 'completed' | 'error' | 'waiting' | 'stopped' | 'asleep';
+  /** ISO: since when it is asleep. Set with `asleep`, gone when it wakes. */
+  asleepSince?: string;
+  /** Set from the moment a wake starts its CLI until that CLI's session is up
+   *  or its launch is given up (AgentStatus.launching). Not saved. */
+  waking?: AgentWaking;
   /** Set by a stop (core/agent-stop.ts) until the agent gets a terminal again:
    *  "you", "Tars", or the name of the agent that asked. */
   stoppedBy?: string;

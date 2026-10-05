@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 
 /**
@@ -29,8 +28,15 @@ import * as path from 'path';
  *    one, a stopped one), or a second CLI over a wake already on its way.
  */
 
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-asleep-'));
-const AGENTS_FILE = path.join(tmp, 'agents.json');
+const { tmp, AGENTS_FILE } = vi.hoisted(() => {
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const fs = require('fs') as typeof import('fs');
+  const os = require('os') as typeof import('os');
+  const path = require('path') as typeof import('path');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-asleep-'));
+  return { tmp, AGENTS_FILE: path.join(tmp, 'agents.json') };
+});
 
 vi.mock('../../../electron/constants', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();

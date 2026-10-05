@@ -24,7 +24,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
 export const CARRY_OVER_FILE = privatePath('carry-over.json');
 
 const NEWS_KINDS = ['outcome', 'wait', 'ended', 'stopped', 'stalled'];
-const STATUSES = ['idle', 'running', 'completed', 'error', 'waiting', 'stopped'];
+const STATUSES = ['idle', 'running', 'completed', 'error', 'waiting', 'stopped', 'asleep'];
 /** A wait's reason, as agent-watch records it, or a stall's minutes: a short word, never a sentence. */
 const REASON = /^[A-Za-z0-9_-]{1,40}$/;
 const BACKGROUND_ID = /^[A-Za-z0-9_.:-]{1,200}$/;

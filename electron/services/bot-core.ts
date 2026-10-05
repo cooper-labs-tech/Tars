@@ -21,6 +21,7 @@ import { cliRunningIn, shellReady } from '../core/agent-pty';
 import { stopAcpRuns } from './acp/delegate';
 import { killStalePty, armTaskStartWatch } from '../core/agent-manager';
 import { consumeResumeSessionId } from '../utils/resume-session';
+import { noteWaker } from '../core/agent-asleep';
 import { noteLaunch, launchSettings } from '../core/agent-restart';
 import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown } from '../core/agent-launch';
 
@@ -41,13 +42,14 @@ export function findAgent(agents: Map<string, AgentStatus>, name: string): Agent
   return Array.from(agents.values()).find(a => a.name?.toLowerCase().includes(name) || a.id === name);
 }
 
-export type StatusGroup = 'running' | 'waiting' | 'error' | 'stopped' | 'idle';
+export type StatusGroup = 'running' | 'waiting' | 'error' | 'stopped' | 'idle' | 'asleep';
 const GROUPS: Array<[StatusGroup, string, (a: AgentStatus) => boolean]> = [
   ['running', 'Running', a => a.status === 'running'],
   ['waiting', 'Waiting', a => a.status === 'waiting'],
   ['error', 'Error', a => a.status === 'error'],
   ['stopped', 'Stopped', a => a.status === 'stopped'],
   ['idle', 'Idle', a => a.status === 'idle' || a.status === 'completed'],
+  ['asleep', 'Asleep', a => a.status === 'asleep'],
 ];
 
 /**
@@ -271,6 +273,10 @@ export async function startWithTask(
   opts: { resume: boolean; reply: Reply<StartOutcome> },
 ): Promise<void> {
   let launch: object | null = null;
+  // Asleep, it wakes on its own conversation whatever this chat resumes, and
+  // reads woken by the chat (core/agent-asleep.ts).
+  const asleep = agent.status === 'asleep';
+  if (asleep) noteWaker(agent.id, from, 'chat');
   try {
     const workingPath = workingPathOf(agent);
     launch = await claimLaunch(agent);
@@ -304,7 +310,7 @@ export async function startWithTask(
     const binaryPath = provider.resolveBinaryPath(fleet.settings());
     const mcpConfigPath = mcpConfigPathFor(provider);
     const command = provider.buildInteractiveCommand({
-      resumeSessionId: opts.resume ? consumeResumeSessionId(agent) ?? undefined : undefined,
+      resumeSessionId: opts.resume || asleep ? consumeResumeSessionId(agent) ?? undefined : undefined,
       binaryPath,
       prompt: task,
       model: agent.model,

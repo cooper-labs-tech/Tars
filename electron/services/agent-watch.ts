@@ -110,7 +110,8 @@ function stateOf(agent: AgentStatus): string {
 
 function isAtRest(agent: AgentStatus): boolean {
   // A stopped agent is done with the work it was handed: whoever handed it is told.
-  return agent.status === 'idle' || agent.status === 'stopped' || (agent.status === 'waiting' && agent.waitingReason === 'idle');
+  // An asleep one rests (core/agent-asleep.ts).
+  return agent.status === 'idle' || agent.status === 'stopped' || agent.status === 'asleep' || (agent.status === 'waiting' && agent.waitingReason === 'idle');
 }
 
 /** A turn has begun since the latest work was handed to this agent. */

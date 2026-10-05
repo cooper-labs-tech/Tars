@@ -2,6 +2,7 @@ import { agents } from '../core/agent-manager';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { ptyProcesses } from '../core/pty-manager';
 import { dialogShown } from '../core/agent-launch';
+import { wakeAgent } from '../core/agent-asleep';
 import { lastInterruptAt } from './agent-truth';
 import { agentStatusEmitter } from './agent-events';
 import { deliverBusMessages, queueBusMessage, releaseBusMessagesNow, type QueuedBusMessage } from './agent-watch';
@@ -72,6 +73,31 @@ export function carryWaitingDeliveries(): void {
   }
 }
 
+/**
+ * A message for an agent asleep: held as a carried one is, for the first
+ * session that registers in its terminal, and the agent woken on its own
+ * conversation by the message's author (core/agent-asleep.ts). Its row reads
+ * `queued` until it is typed in, as any other.
+ */
+function holdForWake(agentId: string, message: BusMessage): true {
+  const list = carriedBus.get(agentId) ?? [];
+  if (!list.includes(message.id)) list.push(message.id);
+  carriedBus.set(agentId, list);
+  if (!carryingBus) {
+    carryingBus = true;
+    agentStatusEmitter.on('fleet-change', deliverCarried);
+  }
+  const target = agents.get(agentId);
+  if (target) {
+    void wakeAgent(target, message.authorName || 'you', 'chat').then((answer) => {
+      if (answer.success) return;
+      carriedBus.set(agentId, (carriedBus.get(agentId) ?? []).filter((id) => id !== message.id));
+      announceDropped(agentId, message.id, 'no_live_session', `it is asleep and could not be woken: ${answer.error}`);
+    });
+  }
+  return true;
+}
+
 /** Queues what was carried for this agent once a session of this run has registered in its terminal. */
 export function deliverCarried(agentId: string): void {
   const ids = carriedBus.get(agentId);
@@ -112,7 +138,8 @@ export function fanOutDeliveries(message: BusMessage, room: BusRoom): BusDeliver
     const target = agents.get(targetAgentId);
     if (!target) continue;
     const reachable = hasEndOfTurn(target);
-    const queued = reachable && queueBusMessage(targetAgentId, queuedOf(message));
+    const asleep = reachable && target.status === 'asleep';
+    const queued = asleep ? holdForWake(targetAgentId, message) : reachable && queueBusMessage(targetAgentId, queuedOf(message));
     deliveries.push(recordDelivery({
       messageId: message.id,
       targetAgentId,
@@ -129,7 +156,7 @@ export function fanOutDeliveries(message: BusMessage, room: BusRoom): BusDeliver
     // Only now, with the row in the journal. Handing the message over is what
     // marks the row delivered, so an agent at rest, which takes it at once,
     // has to have a row to mark.
-    if (queued) deliverBusMessages(targetAgentId);
+    if (queued && !asleep) deliverBusMessages(targetAgentId);
   }
   return deliveries;
 }
