@@ -36,6 +36,12 @@ export interface RouteRequest {
    */
   callerAgentId?: string;
   /**
+   * True when that token is the agent's terminal's, not a delegated run's:
+   * the one caller a later message can be typed back to. Never set from a
+   * header.
+   */
+  callerTerminal?: boolean;
+  /**
    * True when the caller is Tars itself: the main process reaching its own
    * API over the loopback with the pass minted in `core/agent-tokens.ts`,
    * which is never written to disk and never given to a child. No agent, so

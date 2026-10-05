@@ -290,6 +290,12 @@ export interface AppSettings {
   telegramAuthToken: string; // Secret token for authentication
   telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
   telegramRequireMention: boolean; // Only respond when bot is @mentioned in groups
+  /**
+   * The relay to the user's Telegram through their Hermes (services/hermes-relay.ts): off unless turned on in
+   * Settings, Hermes. On, it is the only voice there: the Tars bot's token is erased and the bot off
+   * (hermes-relay-switch.ts), questions, reports and the orchestrator's send_telegram go through it.
+   */
+  hermesRelayEnabled?: boolean;
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;

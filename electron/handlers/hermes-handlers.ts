@@ -9,6 +9,7 @@ import * as https from 'https';
 import { API_PORT, DATA_DIR, dataPath } from '../constants';
 import { configuredHermesConnection, readHermesConnection, writeHermesConnection } from '../services/hermes-config';
 import { resetLiveSession } from '../services/overseer';
+import { relayStatus } from '../services/hermes-relay';
 import { describeSecretFileError } from '../utils/secret-file';
 // The webhook's own secret, not the master token, which over the tailnet would
 // hand out every route. Kept in the private directory: see that module.
@@ -315,6 +316,11 @@ export function registerHermesHandlers(): void {
       serveCommand: `tailscale serve --bg --set-path /api/webhooks/hermes ${API_PORT}`,
     };
   });
+
+  // The relay to the user's Telegram through their Hermes, as Settings, Hermes
+  // shows it (services/hermes-relay.ts). Its changes are pushed on the same
+  // channel name; the switch is hermesRelayEnabled, saved with app:saveSettings.
+  ipcMain.handle('hermes:relay:status', async () => relayStatus());
 
   ipcMain.handle('hermes:connection:get', async () => {
     const connection = readConnection();

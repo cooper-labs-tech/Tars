@@ -1,0 +1,8 @@
+{
+  "name": "tars-relay",
+  "label": "Tars relay",
+  "description": "The routes Tars calls to write to its user through this Hermes, and to read his replies.",
+  "version": "1.0.0",
+  "tab": { "hidden": true },
+  "api": "plugin_api.py"
+}

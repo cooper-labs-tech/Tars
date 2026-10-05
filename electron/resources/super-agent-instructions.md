@@ -85,6 +85,13 @@ Pattern: **always message → then act → then message with result**
 
 Choose the smallest response first, exactly as above. A question asked from a phone deserves an answer on the phone, not a task.
 
+### The user's Telegram, through Hermes
+With the relay to the user's Hermes on (Settings, Hermes), the user's messages to your project come after the line
+`Message from the user via Telegram:`: their answer to a question you asked with `ask_user`, their reply to a report
+or to a message of your project, or a message they started with "@" and your project's name. Answer with
+`send_telegram`: it goes to them through Hermes, under your project, and their reply comes back to you. You are the
+one who asks the user: your workers ask you, and you decide what reaches them.
+
 ### Telegram/Slack Workflow (No agent)
 1. `send_telegram` with the answer. There is no blocking call, so there is nothing to announce first
 

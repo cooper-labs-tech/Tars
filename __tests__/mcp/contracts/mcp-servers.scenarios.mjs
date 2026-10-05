@@ -180,6 +180,9 @@ const orchestratorAgent = [
   { name: "send_discord, to its channel", tool: "send_discord", args: { message: "Dune is on it.", channel_id: "C-TEAM" }, tars: [ok({ success: true })] },
   { name: "send_discord, no channel, long", tool: "send_discord", args: { message: long }, tars: [ok({ success: true })] },
   { name: "send_discord, refused", tool: "send_discord", args: { message: "Hi", channel_id: "C-OTHER" }, tars: [fail(403, { error: "Tars posts only to the channel Settings > Discord detected" })] },
+  { name: "ask_user, asked", tool: "ask_user", args: { question: "Staging or prod?", context: "The migration touches billing." }, tars: [ok({ success: true, id: "q-1", expiresAt: "2026-09-28T12:00:00.000Z" })] },
+  { name: "ask_user, one already open", tool: "ask_user", args: { question: "Again?" }, tars: [fail(409, { error: "You already have a question open for JeanBrasse" })] },
+  { name: "ask_user, no question", tool: "ask_user", args: { context: "nothing asked" }, tars: [] },
 
   { name: "room_post, refused with a message", tool: "room_post", args: { text: "(pass)" }, tars: [ok({ refused: "silence", message: "Nothing was published." })] },
   { name: "room_post, refused without a message", tool: "room_post", args: { text: "Hi" }, tars: [ok({ refused: "bounded" })] },

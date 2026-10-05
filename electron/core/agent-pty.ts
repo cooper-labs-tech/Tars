@@ -211,6 +211,16 @@ export function spawnAgentPty(opts: {
  * can be read, starting and then running, and an interactive shell never does
  * at its prompt, where a typed line would run as a command.
  */
+/**
+ * Whether this is an agent terminal Tars started whose CLI has stopped, back
+ * at its shell: what the writer asks before it types a held message
+ * (pty-manager.ts, setCliProbe). A terminal it did not start as an agent's is
+ * not known to have stopped, and is left as it was.
+ */
+export function cliStoppedIn(ptyProcess: pty.IPty): boolean {
+  return spawnedAs.has(ptyProcess) && !cliRunningIn(ptyProcess);
+}
+
 export function cliRunningIn(ptyProcess: pty.IPty | undefined): boolean {
   if (!ptyProcess) return false;
   const spawned = spawnedAs.get(ptyProcess);

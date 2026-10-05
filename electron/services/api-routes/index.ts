@@ -10,6 +10,7 @@ import { registerVaultRoutes } from './vault-routes';
 import { registerMemoryRoutes } from './memory-routes';
 import { registerWebhookRoutes } from './webhook-routes';
 import { registerBusRoutes } from './bus-routes';
+import { registerAskUserRoutes } from './ask-user-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -23,6 +24,7 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerVaultRoutes(app, ctx);
   registerMemoryRoutes(app, ctx);
   registerWebhookRoutes(app, ctx);
+  registerAskUserRoutes(app, ctx);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';

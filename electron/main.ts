@@ -12,6 +12,11 @@
 // First: every module required after it is compiled from the cache it keeps.
 import './core/compile-cache';
 
+import { startGithubWatch } from './services/github-watch';
+import { onRelayStatus, startHermesRelay } from './services/hermes-relay';
+import { startRelayRouting } from './services/hermes-relay-routing';
+import { settingsForRelay } from './services/hermes-relay-switch';
+import { reportsOn } from './services/event-reports';
 import { app, BrowserWindow } from 'electron';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -181,6 +186,7 @@ function loadAppSettings(): AppSettings {
     telegramAuthToken: '',
     telegramAuthorizedChatIds: [],
     telegramRequireMention: false,
+    hermesRelayEnabled: false,
     slackEnabled: false,
     slackBotToken: '',
     slackAppToken: '',
@@ -713,6 +719,21 @@ app.whenReady().then(async () => {
     saveAgents,
   });
 
+  // The relay to the user's Telegram through their Hermes, following its switch
+  // live (services/hermes-relay.ts). On, it is the only voice there: the Tars
+  // bot's token is gone and the bot stays off (hermes-relay-switch.ts).
+  const forRelay = settingsForRelay(appSettings);
+  if (forRelay !== appSettings) {
+    appSettings = forRelay;
+    saveAppSettingsToFile(forRelay);
+  }
+  startHermesRelay({ enabled: () => appSettings.hermesRelayEnabled === true });
+  startRelayRouting({
+    agents, ptyProcesses, settings: () => appSettings, saveAgents,
+    initAgentPty: (agent: AgentStatus) => initAgentPty(agent, getMainWindow(), handleStatusChangeNotificationWrapper, saveAgents),
+  });
+  onRelayStatus(status => broadcastToAllWindows('hermes:relay:status', status));
+
   // Initialize services
   initTelegramBot();
   initSlackBot(() => appSettings, (settings) => {
@@ -812,6 +833,10 @@ app.whenReady().then(async () => {
   // every half hour, logged to ~/.dorothy/cli-updates.log. Under the same
   // switch. See services/cli-updater.ts.
   startCliUpdates(() => appSettings, () => [...agents.values()].map(agent => agent.provider));
+
+  // PRs merged and changes requested in the agents' repositories, read with
+  // `gh` while the reports go out (the relay is on), for the user's event reports.
+  startGithubWatch(() => [...agents.values()].map(agent => agent.projectPath).filter(Boolean), reportsOn);
 
   console.log('App initialization complete');
 });

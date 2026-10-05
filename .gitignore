@@ -74,3 +74,6 @@ design/exports/
 # session reads. Only the root CLAUDE.md is the project's; a deliberate nested
 # one can still be added with `git add -f`.
 /*/**/CLAUDE.md
+
+# Python bytecode (the Hermes plugin in hermes-plugins/)
+__pycache__/

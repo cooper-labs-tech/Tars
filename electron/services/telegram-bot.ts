@@ -8,6 +8,7 @@ import { AgentStatus, AppSettings } from '../types';
 import { TG_CHARACTER_FACES, TELEGRAM_DOWNLOADS_DIR, dataPath } from '../constants';
 import { redactSecrets } from '../utils/redact-secrets';
 import { isSuperAgent, formatAgentStatus, getSuperAgentInstructions, getSuperAgentInstructionsPath, getTelegramInstructions } from '../utils';
+import { orchestratorForMessage, whereToWrite } from './orchestrator-routing';
 import {
   findAgent, forwardToOrchestrator, priceUsage, projectsReport, startWithTask, statusReport, stopNow,
   type BotFleet, type ClaudeUsageStats, type StatusGroup,
@@ -65,7 +66,6 @@ type ClaudeStats = ClaudeUsageStats;
 
 let fleet: BotFleet;
 let mainWindow: BrowserWindow | null;
-let getSuperAgent: () => AgentStatus | undefined;
 let getClaudeStats: () => Promise<ClaudeStats | null>;
 let saveAppSettings: (settings: AppSettings) => void;
 
@@ -77,7 +77,9 @@ export function initTelegramBotService(
   ptyMap: Map<string, pty.IPty>,
   settings: () => AppSettings,
   window: BrowserWindow | null,
-  getSuperAgentFn: () => AgentStatus | undefined,
+  // No longer read: a message names its project (orchestrator-routing.ts).
+  // Kept so that the callers' arguments keep their places until the bot goes.
+  _getSuperAgentFn: () => AgentStatus | undefined,
   saveAgentsFn: () => void,
   getClaudeStatsFn: () => Promise<ClaudeStats | null>,
   initAgentPtyFn: (agent: AgentStatus) => Promise<string>,
@@ -86,7 +88,6 @@ export function initTelegramBotService(
   fleet = { agents: agentsMap, ptyProcesses: ptyMap, settings, saveAgents: saveAgentsFn, initAgentPty: initAgentPtyFn };
   getSettings = settings;
   mainWindow = window;
-  getSuperAgent = getSuperAgentFn;
   getClaudeStats = getClaudeStatsFn;
   saveAppSettings = saveAppSettingsFn;
 }
@@ -861,15 +862,15 @@ export function initTelegramBot() {
  * @param attachedFiles - Optional array of local file paths that were downloaded
  */
 export async function sendToSuperAgent(chatId: string, message: string, attachedFiles?: string[]) {
-  const superAgent = getSuperAgent();
-
-  if (!superAgent) {
-    telegramBot?.sendMessage(chatId,
-      '👑 No Super Agent found.\n\nCreate one in Tars first, or use /start\\_agent to start a specific agent.',
-      { parse_mode: 'Markdown' }
-    );
+  // The orchestrator the message names with "@project", or the fleet's only
+  // one: never the first found, which may be another project's (point E).
+  const target = orchestratorForMessage(fleet.agents, message);
+  if (target.kind !== 'found') {
+    telegramBot?.sendMessage(chatId, `👑 ${whereToWrite(target)}`);
     return;
   }
+  const superAgent = target.orchestrator;
+  message = target.text;
 
   // Track which chat to respond to - this is crucial for multi-chat support
   currentResponseChatId = chatId;

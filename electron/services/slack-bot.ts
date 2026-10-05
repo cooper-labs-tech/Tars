@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 import { AgentStatus, AppSettings } from '../types';
 import { SLACK_CHARACTER_FACES } from '../constants';
-import { formatSlackAgentStatus, isSuperAgent, getSuperAgent, getSuperAgentInstructionsPath } from '../utils';
+import { formatSlackAgentStatus, isSuperAgent, getSuperAgentInstructionsPath } from '../utils';
+import { orchestratorForMessage, whereToWrite } from './orchestrator-routing';
 import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
 import { ptyProcesses } from '../core/pty-manager';
 import { getMainWindow } from '../core/window-manager';
@@ -420,17 +421,17 @@ export async function sendToSuperAgentFromSlack(
   appSettings: AppSettings,
   mainWindow?: Electron.BrowserWindow | null
 ): Promise<void> {
-  const superAgent = getSuperAgent(agents);
-
-  if (!superAgent) {
-    await say(
-      ':crown: No Super Agent found.\n\nCreate one in Tars first, or use `start <agent> <task>` to start a specific agent.'
-    );
+  // The orchestrator the message names with "@project", or the fleet's only
+  // one: never the first found, which may be another project's (point E).
+  const target = orchestratorForMessage(agents, message);
+  if (target.kind !== 'found') {
+    await say(`:crown: ${whereToWrite(target)}`);
     return;
   }
+  const superAgent = target.orchestrator;
 
   // Sanitize message - replace newlines with spaces for terminal compatibility
-  const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
+  const sanitizedMessage = target.text.replace(/\r?\n/g, ' ').trim();
 
   try {
     await forwardToOrchestrator(fleetFor(appSettings), superAgent, 'Slack', {

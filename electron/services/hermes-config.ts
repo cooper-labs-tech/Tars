@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { DATA_DIR } from '../constants';
+import { DATA_DIR, privatePath } from '../constants';
 import { defaultHermesConnection, type HermesConnection } from '../types/hermes';
 import { describeSecretFileError, ensureSecretFileMode, writeSecretFileSync } from '../utils/secret-file';
 
@@ -11,6 +11,42 @@ import { describeSecretFileError, ensureSecretFileMode, writeSecretFileSync } fr
  */
 
 export const HERMES_CONNECTION_FILE = path.join(DATA_DIR, 'hermes-connection.json');
+
+/**
+ * The dashboard's session token, apart from the rest of the connection: in
+ * ~/.tars-private, which no agent is handed, where ~/.dorothy is in every
+ * agent's --add-dir (JeanBrasse's decision 6, 2026-10-01). Whoever holds it can drive
+ * the dashboard, and, with the tars-relay plugin on the server, write to the
+ * user as Tars and read or delete their replies.
+ */
+export const HERMES_TOKEN_FILE = privatePath('hermes-token');
+
+function readToken(): string | undefined {
+  try {
+    return fs.readFileSync(HERMES_TOKEN_FILE, 'utf-8').trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeToken(token: string | undefined): void {
+  if (token) writeSecretFileSync(HERMES_TOKEN_FILE, token);
+  else fs.rmSync(HERMES_TOKEN_FILE, { force: true });
+}
+
+/**
+ * What the file holds once its token is out of it. A connection saved before
+ * 1.9.2 kept its token in ~/.dorothy: it moves to ~/.tars-private at the first
+ * read, and the file is written again without it. A token found there wins: an
+ * older Tars that ran since wrote it last.
+ */
+function withoutToken(file: Partial<HermesConnection>): Partial<HermesConnection> {
+  if (!('token' in file)) return file;
+  const { token, ...rest } = file;
+  if (typeof token === 'string' && token) writeToken(token);
+  writeSecretFileSync(HERMES_CONNECTION_FILE, JSON.stringify(rest, null, 2));
+  return rest;
+}
 
 export function readHermesConnection(): HermesConnection {
   try {
@@ -24,7 +60,8 @@ export function readHermesConnection(): HermesConnection {
       // startup; do it here too so the guarantee belongs to the module that
       // owns the file rather than to a caller remembering.
       ensureSecretFileMode(HERMES_CONNECTION_FILE);
-      return { ...defaultHermesConnection(), ...JSON.parse(fs.readFileSync(HERMES_CONNECTION_FILE, 'utf-8')) };
+      const file = withoutToken(JSON.parse(fs.readFileSync(HERMES_CONNECTION_FILE, 'utf-8')));
+      return { ...defaultHermesConnection(), ...file, token: readToken() };
     }
   } catch (err) {
     // Same reason as the session jar: this file holds `token`, and a parse
@@ -36,8 +73,9 @@ export function readHermesConnection(): HermesConnection {
 
 export function writeHermesConnection(conn: HermesConnection): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  // Holds the gateway session token - same treatment as app-settings.json.
-  writeSecretFileSync(HERMES_CONNECTION_FILE, JSON.stringify(conn, null, 2));
+  const { token, ...rest } = conn;
+  writeToken(token);
+  writeSecretFileSync(HERMES_CONNECTION_FILE, JSON.stringify(rest, null, 2));
 }
 
 /**
@@ -60,8 +98,8 @@ export function configuredHermesConnection(): { conn: HermesConnection } | { unu
     return unusable(`cannot be read (${describeSecretFileError(err)})`);
   }
   if (!parsed || typeof parsed !== 'object') return unusable('holds no connection');
-  const file = parsed as Partial<HermesConnection>;
-  const conn: HermesConnection = { ...defaultHermesConnection(), ...file };
+  const file = withoutToken(parsed as Partial<HermesConnection>);
+  const conn: HermesConnection = { ...defaultHermesConnection(), ...file, token: readToken() };
   switch (file.mode) {
     case 'local': {
       const port = file.localPort;

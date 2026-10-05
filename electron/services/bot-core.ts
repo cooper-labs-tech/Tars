@@ -16,13 +16,13 @@ import type { AgentPermissionMode, AgentStatus, AppSettings } from '../types';
 import { isSuperAgent, getSuperAgentInstructionsPath } from '../utils';
 import { getProvider } from '../providers';
 import type { CLIProvider } from '../providers/cli-provider';
-import { writeProgrammaticInput } from '../core/pty-manager';
+import { writeProgrammaticInput, type MessageSender } from '../core/pty-manager';
 import { cliRunningIn, shellReady } from '../core/agent-pty';
 import { stopAcpRuns } from './acp/delegate';
 import { killStalePty, armTaskStartWatch } from '../core/agent-manager';
 import { consumeResumeSessionId } from '../utils/resume-session';
 import { noteLaunch, launchSettings } from '../core/agent-restart';
-import { sessionStarted, launchUnlessRunning, launchAbandoned } from '../core/agent-launch';
+import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown } from '../core/agent-launch';
 
 /** What a bot needs from the rest of Tars. */
 export interface BotFleet {
@@ -256,7 +256,7 @@ export type StartOutcome = 'no-terminal' | 'refused' | 'held' | 'written' | 'sta
  * the flow: a Slack reply that fails is a failure of the flow, as it was, while
  * Telegram's replies are sent and not waited for (its callbacks return nothing).
  */
-export type Reply<Outcome> = (outcome: Outcome) => unknown;
+export type Reply<Outcome, Detail = undefined> = (outcome: Outcome, detail?: Detail) => unknown;
 
 /**
  * Start an agent on a task from a chat. A CLI already up in its terminal is a
@@ -342,7 +342,10 @@ export function stopNow(fleet: BotFleet, agent: AgentStatus): void {
   fleet.saveAgents();
 }
 
-export type ForwardOutcome = 'no-terminal' | 'typed' | 'started';
+export type ForwardOutcome = 'no-terminal' | 'typed' | 'refused' | 'started';
+
+/** With `typed`: what the message waits behind, when it is held rather than in the field yet. */
+export type ForwardDetail = { heldBy: 'dialog' | 'draft' };
 
 /**
  * A chat message to the orchestrator: typed into its session when a CLI runs
@@ -358,15 +361,21 @@ export async function forwardToOrchestrator(
   from: BotChannel,
   opts: {
     message: string;
+    /** Before the message, when there is something to say about where it came from; '' for nothing. */
     context: string;
+    /**
+     * Who the line before it names: the chat by default. The relay passes the
+     * user, whose own words it carries (hermes-relay-routing.ts).
+     */
+    sender?: MessageSender;
     permissionMode: AgentPermissionMode;
     resume: boolean;
     /** Read only for a launch: Telegram writes a file of its own for it. */
     systemPromptFile: () => string | undefined;
-    reply: Reply<ForwardOutcome>;
+    reply: Reply<ForwardOutcome, ForwardDetail>;
   },
 ): Promise<void> {
-  const prompt = `${opts.context} ${opts.message}`;
+  const prompt = opts.context ? `${opts.context} ${opts.message}` : opts.message;
   let launch: object | null = null;
   try {
     launch = await claimLaunch(orchestrator);
@@ -380,10 +389,25 @@ export async function forwardToOrchestrator(
       orchestrator.currentTask = opts.message.slice(0, 100);
       orchestrator.lastActivity = new Date().toISOString();
       fleet.saveAgents();
-      writeProgrammaticInput(ptyProcess, prompt, true, {
-        agentId: orchestrator.id, from, sender: { kind: 'channel', channel: from },
+      // Held for a person: somebody is typing there, or left a draft. Called
+      // at once when that is why; never for Tars's own previous write, which
+      // ends by itself in a moment.
+      let heldForPerson = false;
+      const outcome = writeProgrammaticInput(ptyProcess, prompt, true, {
+        agentId: orchestrator.id, from, sender: opts.sender ?? { kind: 'channel', channel: from },
+        onHeld: () => { heldForPerson = true; },
       });
-      await opts.reply('typed');
+      // Refused: the terminal holds all it can, and nothing was typed.
+      if (outcome === 'refused') {
+        await opts.reply('refused');
+        return;
+      }
+      // Held: it goes in by itself once what holds it is gone, and whoever
+      // sent it can be told what that is (JeanBrasse's answer 24 of 2026-10-05).
+      const heldBy = outcome !== 'held' ? undefined
+        : dialogShown(orchestrator, ptyProcess) ? 'dialog' as const
+          : heldForPerson ? 'draft' as const : undefined;
+      await opts.reply('typed', heldBy ? { heldBy } : undefined);
       return;
     }
     const workingPath = workingPathOf(orchestrator);

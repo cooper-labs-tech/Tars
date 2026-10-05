@@ -626,6 +626,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('hermes:connection:save', connection),
     importDesktopConnection: () =>
       ipcRenderer.invoke('hermes:connection:import'),
+    // The relay to the user's Telegram through their Hermes: its state now, and each change of it.
+    relayStatus: () =>
+      ipcRenderer.invoke('hermes:relay:status'),
+    onRelayStatus: (callback: (status: unknown) => void) => {
+      const listener = (_: unknown, status: unknown) => callback(status);
+      ipcRenderer.on('hermes:relay:status', listener);
+      return () => ipcRenderer.removeListener('hermes:relay:status', listener);
+    },
     testConnection: (connection: Record<string, unknown>) =>
       ipcRenderer.invoke('hermes:connection:test', connection),
     signIn: (params: { connection: Record<string, unknown>; username: string; password: string; provider?: string }) =>

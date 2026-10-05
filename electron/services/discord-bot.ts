@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import { Client, Events, GatewayIntentBits, Partials, type Message, type MessageCreateOptions } from 'discord.js';
 import { AgentStatus, AppSettings } from '../types';
 import { TG_CHARACTER_FACES } from '../constants';
-import { isSuperAgent, getSuperAgent, getSuperAgentInstructionsPath } from '../utils';
+import { isSuperAgent, getSuperAgentInstructionsPath } from '../utils';
+import { orchestratorForMessage, whereToWrite } from './orchestrator-routing';
 import { agents, saveAgents, initAgentPty } from '../core/agent-manager';
 import { ptyProcesses } from '../core/pty-manager';
 import { getMainWindow } from '../core/window-manager';
@@ -314,14 +315,17 @@ export async function handleDiscordCommand(text: string, channelId: string, say:
 }
 
 export async function sendToSuperAgentFromDiscord(channelId: string, message: string, say: Say, appSettings: AppSettings): Promise<void> {
-  const superAgent = getSuperAgent(agents);
-  if (!superAgent) {
-    await say('👑 No Super Agent found.\n\nCreate one in Tars first, or use `start <agent> <task>` to start a specific agent.');
+  // The orchestrator the message names with "@project", or the fleet's only
+  // one: never the first found, which may be another project's (point E).
+  const target = orchestratorForMessage(agents, message);
+  if (target.kind !== 'found') {
+    await say(`👑 ${whereToWrite(target)}`);
     return;
   }
+  const superAgent = target.orchestrator;
 
   // One line: the terminal takes a newline as Enter.
-  const sanitizedMessage = message.replace(/\r?\n/g, ' ').trim();
+  const sanitizedMessage = target.text.replace(/\r?\n/g, ' ').trim();
 
   try {
     await forwardToOrchestrator(fleetFor(appSettings), superAgent, 'Discord', {

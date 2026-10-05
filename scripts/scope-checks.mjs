@@ -48,6 +48,8 @@ const CANNOT_REACH_THE_RENDERER = [
   { prefix: '.github/', why: 'CI configuration' },
   // The marketing site is its own Next app.
   { prefix: 'landing/', why: 'the landing site, a separate app' },
+  // Plugins for Hermes, installed by hand on the Hermes server; the app never loads them.
+  { prefix: 'hermes-plugins/', why: 'a Hermes plugin, run by Hermes on its server' },
   // Prompt text handed to agents. Read by CLIs, never rendered.
   { match: /^electron\/resources\/.*\.md$/, why: 'agent prompt text, never rendered' },
   // Documentation.

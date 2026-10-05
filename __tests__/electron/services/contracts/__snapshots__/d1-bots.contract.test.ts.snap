@@ -771,9 +771,7 @@ exports[`Slack, as recorded before D1 > a message with no orchestrator in the fl
   "slack": [
     {
       "in": "D1",
-      "text": ":crown: No Super Agent found.
-
-Create one in Tars first, or use \`start <agent> <task>\` to start a specific agent.",
+      "text": ":crown: No project has an orchestrator in Tars, so your message reached nobody. Projects: @atlas, @orion.",
     },
   ],
   "slackPosted": [],
@@ -2099,12 +2097,7 @@ exports[`Telegram, as recorded before D1 > a message with no orchestrator in the
   "slackPosted": [],
   "telegram": [
     {
-      "opts": {
-        "parse_mode": "Markdown",
-      },
-      "text": "👑 No Super Agent found.
-
-Create one in Tars first, or use /start\\_agent to start a specific agent.",
+      "text": "👑 No project has an orchestrator in Tars, so your message reached nobody. Projects: @atlas, @orion.",
       "to": "42",
     },
   ],

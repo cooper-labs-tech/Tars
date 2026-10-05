@@ -32,6 +32,7 @@ describe('changes that cannot reach a rendered surface', () => {
     ['agent prompt text', ['electron/resources/super-agent-instructions.md']],
     ['CI configuration', ['.github/workflows/ci.yml']],
     ['the landing site', ['landing/src/app/page.tsx']],
+    ['a Hermes plugin, installed on the Hermes server', ['hermes-plugins/tars-relay/relay_core.py', 'hermes-plugins/tars-relay/dashboard/plugin_api.py']],
   ])('skips the suite for %s', (_name, files) => {
     expect(runs(files as string[])).toBe(false);
   });

@@ -423,6 +423,7 @@ export function startApiServer(
           res,
           params,
           callerAgentId: caller.ok ? caller.agentId : undefined,
+          callerTerminal: caller.ok ? caller.terminal === true : false,
           internal: caller.ok ? caller.internal === true : false,
           hermes: caller.ok ? caller.hermes === true : false,
         };

@@ -812,3 +812,53 @@ describe('/run-task, the delegation that answers with what the agent did', () =>
     expect(neverStarted.status).toBe(502);
   });
 });
+
+/**
+ * POST /api/user/ask, what ask_user calls: an agent asks JeanBrasse on Telegram, and
+ * his answer is typed into its terminal (step 2 of the relay plan).
+ *
+ * How it fails, written before the code (2026-09-28):
+ * 1. The shared token asks, as nobody: a question JeanBrasse would read as an
+ *    agent's, and whose answer would go into no terminal, or into any.
+ * 2. A delegated run's token asks: the run is one turn and has no terminal
+ *    his answer could be typed into.
+ * 3. An empty question, or one longer than a Telegram message can quote,
+ *    is sent.
+ * 4. Over-correction: the agent's own terminal token is refused before the
+ *    question is looked at (here there is no Telegram, so it is a 503).
+ */
+describe('POST /api/user/ask', () => {
+  const ask = (token: string, body: Record<string, unknown>) => call('POST', '/api/user/ask', bearer(token), body);
+
+  it('1. is refused to the shared token', async () => {
+    const { status, body } = await ask(sharedToken, { question: 'Staging or prod?' });
+    expect(status, JSON.stringify(body)).toBe(403);
+  });
+
+  it('2. is refused to a delegated run\'s token', async () => {
+    const run = tokens.mintRunToken(ALPHA.id);
+    const { status, body } = await ask(run.token, { question: 'Staging or prod?' });
+    expect(status, JSON.stringify(body)).toBe(403);
+    expect(String(body.error)).toMatch(/terminal/i);
+    run.revoke();
+  });
+
+  it('3. refuses an empty question and one too long', async () => {
+    expect((await ask(alphaToken, { question: '   ' })).status).toBe(400);
+    expect((await ask(alphaToken, { question: 'x'.repeat(2_001) })).status).toBe(400);
+    expect((await ask(alphaToken, { question: 'ok?', context: 'x'.repeat(4_001) })).status).toBe(400);
+  });
+
+  it('4. takes an orchestrator\'s own terminal token, and says when the relay to Hermes cannot carry the question', async () => {
+    agents.get(ALPHA.id)!.role = 'orchestrator';
+    const { status, body } = await ask(alphaToken, { question: 'Staging or prod?' });
+    expect(status, JSON.stringify(body)).toBe(503);
+    expect(String(body.error)).toMatch(/Hermes/);
+  });
+
+  it('5. refuses a worker\'s own terminal token: only a project\'s orchestrator asks the user (JeanBrasse, 2026-10-01)', async () => {
+    const { status, body } = await ask(alphaToken, { question: 'Staging or prod?' });
+    expect(status, JSON.stringify(body)).toBe(403);
+    expect(String(body.error)).toMatch(/orchestrator/);
+  });
+});

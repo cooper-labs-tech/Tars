@@ -449,6 +449,23 @@ export interface HermesSshConfig {
   localPort?: number;
 }
 
+/**
+ * The relay to the user's Telegram through their Hermes (electron/services/hermes-relay.ts), as Settings, Hermes shows
+ * it. `state`: off (the switch, hermesRelayEnabled, is off); ready; unreachable (Hermes did not answer); not-configured
+ * (the tars-relay plugin has no user id on the server); plugin-missing (not installed on the server); unauthorized
+ * (the dashboard token was refused); no-connection (no Hermes connection saved). `waiting`: sends Hermes has not
+ * taken yet, which go when it does.
+ */
+export interface HermesRelayStatus {
+  enabled: boolean;
+  state: 'off' | 'ready' | 'unreachable' | 'not-configured' | 'plugin-missing' | 'unauthorized' | 'no-connection';
+  waiting: number;
+  lastError?: string;
+  lastSentAt?: string;
+  lastReplyAt?: string;
+  checkedAt?: string;
+}
+
 export interface HermesConnection {
   mode: HermesMode;
   localPort?: number;
@@ -1230,6 +1247,8 @@ export interface ElectronAPI {
       telegramAuthToken: string;
       telegramAuthorizedChatIds: string[];
       telegramRequireMention: boolean;
+      /** The relay to the user's Telegram through their Hermes. On, the Tars bot's token is erased and the bot off. */
+      hermesRelayEnabled?: boolean;
       slackEnabled: boolean;
       slackBotToken: string;
       slackAppToken: string;
@@ -1334,6 +1353,7 @@ export interface ElectronAPI {
       telegramAuthToken?: string;
       telegramAuthorizedChatIds?: string[];
       telegramRequireMention?: boolean;
+      hermesRelayEnabled?: boolean;
       slackEnabled?: boolean;
       slackBotToken?: string;
       slackAppToken?: string;
@@ -1804,6 +1824,9 @@ export interface ElectronAPI {
     saveConnection: (connection: HermesConnection) => Promise<{ success: boolean; error?: string }>;
     /** `tokenNotImported`: the connection came without the token Hermes Desktop keeps encrypted, which Tars cannot read. */
     importDesktopConnection: () => Promise<{ success: boolean; connection?: HermesConnection; baseUrl?: string; error?: string; tokenNotImported?: boolean }>;
+    /** The relay's state now; `onRelayStatus` hears each change of it. */
+    relayStatus: () => Promise<HermesRelayStatus>;
+    onRelayStatus: (callback: (status: HermesRelayStatus) => void) => () => void;
     testConnection: (connection: HermesConnection) => Promise<{
       success: boolean;
       baseUrl?: string;
