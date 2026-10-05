@@ -23,10 +23,10 @@ const MAX_NAME = 40;
  */
 const HIDDEN_OR_LINE_BREAKING = /[\p{Zl}\p{Zp}\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]+/gu;
 
-const flat = (text: string | undefined) => (text ?? '').replace(HIDDEN_OR_LINE_BREAKING, ' ').replace(/\s+/g, ' ').trim();
+export const flat = (text: string | undefined) => (text ?? '').replace(HIDDEN_OR_LINE_BREAKING, ' ').replace(/\s+/g, ' ').trim();
 
 /** Cut by code points, so a character beyond the BMP is never split in two. */
-function caller(name: string | undefined): string {
+export function caller(name: string | undefined): string {
   const points = [...flat(name)];
   return points.length > MAX_NAME ? `${points.slice(0, MAX_NAME - 1).join('')}…` : points.join('');
 }
@@ -34,7 +34,7 @@ function caller(name: string | undefined): string {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 /** "at 14:02" today, "on 30 Sep at 23:58" another day, with the year when it is not this one. */
-function when(iso: string | undefined, now: Date): string {
+export function when(iso: string | undefined, now: Date): string {
   const at = iso ? new Date(iso) : null;
   if (!at || Number.isNaN(at.getTime())) return '';
   const time = `${pad(at.getHours())}:${pad(at.getMinutes())}`;

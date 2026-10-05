@@ -4,8 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { GripVertical, ShieldOff, Bot, Shield, Gauge, Maximize2, Minimize2 } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { AgentMark } from '@/components/ui';
-import { STATUS_COLORS, errorReason, statusWord } from '@/app/agents/constants';
+import { errorReason } from '@/app/agents/constants';
 import { stopLine } from '@/lib/stop-line';
+import { asleepLine, wakingLine } from '@/lib/asleep-line';
+import AgentStatusWord from '@/components/AgentStatusWord';
 import { AgentAccountControl } from '@/components/ClaudeAccounts/AgentAccountControl';
 
 interface TerminalPanelHeaderProps {
@@ -15,6 +17,8 @@ interface TerminalPanelHeaderProps {
   tabType: 'custom' | 'project';
   onStart: () => void;
   onStop: () => void;
+  /** An asleep agent's CLI started again on its own conversation (PR 322). */
+  onWake: () => void;
   onFullscreen: () => void;
   onExitFullscreen: () => void;
   onClear: () => void;
@@ -29,6 +33,7 @@ export default function TerminalPanelHeader({
   tabType,
   onStart,
   onStop,
+  onWake,
   onFullscreen,
   onExitFullscreen,
   onClear,
@@ -48,6 +53,10 @@ export default function TerminalPanelHeader({
   const reason = errorReason(agent);
   // Who stopped it, when and why. Frame: `Agent stopped · who and why`.
   const stop = stopLine(agent);
+  // Asleep since when, or who is waking it: the same place, the same ink.
+  // Frame: `Agent asleep · and how it wakes`.
+  const waking = wakingLine(agent);
+  const sleep = waking ?? asleepLine(agent);
 
   const showDragHandle = tabType === 'custom';
   // Neither kind of tab deletes anything from here any more. A custom tab
@@ -113,6 +122,12 @@ export default function TerminalPanelHeader({
         <span className="flex-1 min-w-0 text-[11px] text-text-secondary truncate" title={stop}>
           {stop}
         </span>
+      ) : sleep ? (
+        // Asleep since when, or who is waking it, where the stop says who
+        // stopped it. Frame: `Agent asleep · and how it wakes`.
+        <span className="flex-1 min-w-0 text-[11px] text-text-secondary truncate" title={sleep}>
+          {sleep}
+        </span>
       ) : branch && (
         <span className="text-[10px] font-mono text-muted-foreground truncate max-w-[120px] shrink-[3]">
           {branch}
@@ -126,7 +141,7 @@ export default function TerminalPanelHeader({
         </span>
       )}
 
-      {!reason && !stop && (
+      {!reason && !stop && !sleep && (
         <>
           {/* Permission mode indicator */}
           {(agent.permissionMode === 'auto' || (!agent.permissionMode && agent.skipPermissions)) && (
@@ -161,9 +176,7 @@ export default function TerminalPanelHeader({
           plain words. The provider was only ever implied by the model string,
           so an agent left on its provider default showed nothing at all and
           you could not tell what would launch. */}
-      <span className={`text-[10px] font-mono shrink-0 ${STATUS_COLORS[agent.status].text}`} title={stop ?? undefined}>
-        {statusWord(agent.status)}
-      </span>
+      <AgentStatusWord agent={agent} className="text-[10px] font-mono shrink-0" title={stop ?? sleep ?? undefined} />
       {/* It gives way first, then the branch, so the name keeps its width
           in a narrow panel: the mark and the status word took the room. */}
       {(agent.provider || model) && (
@@ -189,23 +202,38 @@ export default function TerminalPanelHeader({
       {/* Start / stop. The panel's primary action, so it is a button you can
           see and hit - not a row inside the overflow menu. A grid of terminals
           with no visible way to launch the CLI is a grid of empty shells. */}
-      <button
-        type="button"
-        onMouseDown={e => e.stopPropagation()}
-        onClick={isLive ? onStop : onStart}
-        // A bordered 26px row action, like every other action in the app. The
-        // first version was accent-filled, which put a solid orange block in
-        // every pane header at once - the accent is for one primary action on
-        // a screen, not for six of them in a row.
-        className={`h-[26px] px-2 text-[11px] font-mono lowercase border transition-colors cursor-pointer ${
-          isLive
-            ? 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
-            : 'border-border-accent text-foreground hover:border-primary hover:text-primary'
-        }`}
-        title={isLive ? 'Stop this agent' : `Start ${agent.provider ?? 'the CLI'} in this terminal`}
-      >
-        {isLive ? 'stop' : 'start'}
-      </button>
+      {agent.status === 'asleep' || waking ? (
+        // Asleep, the panel's action wakes it on its conversation; off while
+        // it comes back. Frame: `Agent asleep · and how it wakes`.
+        <button
+          type="button"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={onWake}
+          disabled={!!waking}
+          className="h-[26px] px-2 text-[11px] font-mono lowercase border border-border-accent text-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:border-border-accent disabled:hover:text-foreground"
+          title={waking ? 'Coming back on its conversation' : 'Wake it on its own conversation'}
+        >
+          wake
+        </button>
+      ) : (
+        <button
+          type="button"
+          onMouseDown={e => e.stopPropagation()}
+          onClick={isLive ? onStop : onStart}
+          // A bordered 26px row action, like every other action in the app. The
+          // first version was accent-filled, which put a solid orange block in
+          // every pane header at once - the accent is for one primary action on
+          // a screen, not for six of them in a row.
+          className={`h-[26px] px-2 text-[11px] font-mono lowercase border transition-colors cursor-pointer ${
+            isLive
+              ? 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
+              : 'border-border-accent text-foreground hover:border-primary hover:text-primary'
+          }`}
+          title={isLive ? 'Stop this agent' : `Start ${agent.provider ?? 'the CLI'} in this terminal`}
+        >
+          {isLive ? 'stop' : 'start'}
+        </button>
+      )}
 
       {/* Fullscreen in one press, out of the menu: the arrows point out at
           rest and turn inward while the panel fills the window. */}

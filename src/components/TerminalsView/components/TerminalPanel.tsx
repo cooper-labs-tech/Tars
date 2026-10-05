@@ -8,6 +8,7 @@ import LeftFullscreenNotice from './LeftFullscreenNotice';
 import RestartPendingNotice from './RestartPendingNotice';
 import { useMessageWaiting } from '@/hooks/useMessagesWaiting';
 import { useRestartPending } from '@/hooks/useRestartPending';
+import { asleepHint } from '@/lib/asleep-line';
 import TerminalPanelHeader from './TerminalPanelHeader';
 
 interface TerminalPanelProps {
@@ -20,6 +21,7 @@ interface TerminalPanelProps {
   onStart: (agentId: string) => void;
   onStop: (agentId: string) => void;
   onRestart: (agentId: string) => void;
+  onWake: (agentId: string) => void;
   onRemove: (agentId: string) => void;
   onClear: (agentId: string) => void;
   onFullscreen: (agentId: string) => void;
@@ -47,6 +49,7 @@ function TerminalPanel({
   onStart,
   onStop,
   onRestart,
+  onWake,
   onRemove,
   onClear,
   onFullscreen,
@@ -101,6 +104,7 @@ function TerminalPanel({
   // one terminal re-renders that panel and leaves the other nineteen alone.
   const waiting = useMessageWaiting(agent.id);
   const restartPending = useRestartPending(agent.id);
+  const hint = asleepHint(agent);
 
   const handleClick = useCallback(() => {
     onFocus(agent.id);
@@ -109,6 +113,7 @@ function TerminalPanel({
   const handleStart = useCallback(() => onStart(agent.id), [agent.id, onStart]);
   const handleStop = useCallback(() => onStop(agent.id), [agent.id, onStop]);
   const handleRestart = useCallback(() => onRestart(agent.id), [agent.id, onRestart]);
+  const handleWake = useCallback(() => onWake(agent.id), [agent.id, onWake]);
   const handleRemove = useCallback(() => onRemove(agent.id), [agent.id, onRemove]);
   const handleClear = useCallback(() => onClear(agent.id), [agent.id, onClear]);
   const handleFullscreen = useCallback(() => onFullscreen(agent.id), [agent.id, onFullscreen]);
@@ -117,6 +122,7 @@ function TerminalPanel({
   return (
     <div
       ref={setDropRef}
+      data-agent-panel={agent.id}
       className={`
         flex flex-col overflow-hidden h-full bg-background border transition-colors
         ${isOver ? 'border-primary' : isFocused ? 'border-border-accent' : 'border-border'}
@@ -132,6 +138,7 @@ function TerminalPanel({
         tabType={tabType}
         onStart={handleStart}
         onStop={handleStop}
+        onWake={handleWake}
         onFullscreen={handleFullscreen}
         onExitFullscreen={onExitFullscreen}
         onClear={handleClear}
@@ -157,6 +164,17 @@ function TerminalPanel({
       {/* Terminal body */}
       <div className="flex-1 min-h-0 overflow-hidden relative bg-background">
         <div ref={containerRef} className="absolute inset-0" />
+        {/* Asleep, under the last screen of the CLI it slept in: since when,
+            and that a key wakes it; coming back, that its CLI starts again.
+            Over the terminal rather than written into it: the screen opens
+            with a reset and a full-screen program's ends on its own cursor,
+            so a line written before is wiped and one written after lands
+            inside the program's frame. Frame: `Agent asleep · and how it wakes`. */}
+        {hint && (
+          <p className="absolute inset-x-0 bottom-0 px-3 py-1.5 bg-background font-mono text-[11px] text-muted-foreground truncate pointer-events-none select-none">
+            {hint}
+          </p>
+        )}
       </div>
     </div>
   );

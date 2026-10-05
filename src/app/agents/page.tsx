@@ -22,9 +22,11 @@ import { Chip, Dropdown, LoadingState, type DropdownOption } from '@/components/
 import { statusWord } from './constants';
 
 // The words the cards print, in the frames' order: stopped sits between idle
-// and error (`Agent stopped · who and why`). `completed` is not one of them:
-// the card prints it as idle, so the Idle filter is where it is found.
-const STATUS_FILTERS = ['running', 'waiting', 'idle', 'stopped', 'error'] as const;
+// and error (`Agent stopped · who and why`), asleep between idle and stopped
+// (`Agent asleep · and how it wakes`). `completed` is not one of them: the
+// card prints it as idle, so the Idle filter is where it is found, as is an
+// agent coming back from sleep, whose status is idle while it reads waking.
+const STATUS_FILTERS = ['running', 'waiting', 'idle', 'asleep', 'stopped', 'error'] as const;
 
 // The picker's "every project" row. Never a project: an agent's projectPath
 // is absolute.
@@ -41,6 +43,7 @@ export default function AgentsPage() {
     updateAgent,
     startAgent,
     stopAgent,
+    wakeAgent,
     removeAgent,
   } = useElectronAgents();
   const { projects, openFolderDialog } = useElectronFS();
@@ -187,6 +190,17 @@ export default function AgentsPage() {
     }
   }, [updateAgent]);
 
+  // A card's `wake`: the agent's CLI started again on its own conversation
+  // (#322). A refusal, or a launch that fails, leaves it asleep, and is logged.
+  const handleWakeAgent = useCallback(async (id: string) => {
+    try {
+      const result = await wakeAgent(id);
+      if (!result.success) console.error('Failed to wake agent:', result.error);
+    } catch (error) {
+      console.error('Failed to wake agent:', error);
+    }
+  }, [wakeAgent]);
+
   const handleStartAgent = useCallback(async (agentId: string, prompt?: string) => {
     await startAgent(agentId, prompt || '');
   }, [startAgent]);
@@ -331,6 +345,7 @@ export default function AgentsPage() {
                       onEdit={() => setEditAgentId(agent.id)}
                       onStart={() => handleStartAgent(agent.id)}
                       onStop={() => stopAgent(agent.id)}
+                      onWake={() => handleWakeAgent(agent.id)}
                       onDelete={() => handleRemoveAgent(agent.id)}
                       onSaveAsTemplate={() => handleSaveAsTemplate(agent.id)}
                     />

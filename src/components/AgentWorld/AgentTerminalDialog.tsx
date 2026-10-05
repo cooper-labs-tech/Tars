@@ -7,6 +7,7 @@ import MessageWaitingNotice from '@/components/MessageWaitingNotice';
 import { useMessageWaiting } from '@/hooks/useMessagesWaiting';
 import { TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 import { stopLine } from '@/lib/stop-line';
+import { asleepHint, asleepLine, wakingLine } from '@/lib/asleep-line';
 import 'xterm/css/xterm.css';
 
 import type { AgentTerminalDialogProps, PanelType } from './AgentDialogTypes';
@@ -130,6 +131,18 @@ export default function AgentTerminalDialog({
     if (agent) onStop(agent.id);
   }, [agent, onStop]);
 
+  // The window's `wake`: an asleep agent's CLI started again on its own
+  // conversation (#322). The page's next tick or status says it is waking.
+  const handleWake = useCallback(async () => {
+    if (!agent || !window.electronAPI?.agent?.wake) return;
+    try {
+      const result = await window.electronAPI.agent.wake(agent.id);
+      if (!result.success) console.error('Failed to wake agent:', result.error);
+    } catch (err) {
+      console.error('Failed to wake agent:', err);
+    }
+  }, [agent]);
+
   const handleOpenInFinder = useCallback(async () => {
     if (!projectPath || !window.electronAPI?.shell?.reveal) return;
     try {
@@ -209,6 +222,10 @@ export default function AgentTerminalDialog({
   // Who stopped it, when and why, in the path's place on the second row.
   // Frame: `Agent stopped · who and why`.
   const stop = stopLine(agent);
+  // Asleep since when, or who is waking it, in the same place; and under its
+  // last screen, that a key wakes it. Frame: `Agent asleep · and how it wakes`.
+  const sleep = wakingLine(agent) ?? asleepLine(agent);
+  const hint = asleepHint(agent, agent.name || 'Agent');
 
   return (
     <DialogShell
@@ -225,6 +242,7 @@ export default function AgentTerminalDialog({
           hasSecondaryProject={hasSecondaryProject}
           isSuperAgentMode={isSuperAgentMode}
           onStop={handleStop}
+          onWake={handleWake}
           onOpenInFinder={handleOpenInFinder}
           onToggleFullscreen={() => setIsFullscreen(v => !v)}
           onClose={onClose}
@@ -236,6 +254,8 @@ export default function AgentTerminalDialog({
           <div className="flex-1 min-w-0 flex items-center justify-between gap-3 px-4">
             {stop ? (
               <span className="text-[11px] text-text-secondary truncate" title={stop}>{stop}</span>
+            ) : sleep ? (
+              <span className="text-[11px] text-text-secondary truncate" title={sleep}>{sleep}</span>
             ) : (
               <span className="font-mono text-[11px] text-muted-foreground truncate">{projectPath}</span>
             )}
@@ -275,6 +295,13 @@ export default function AgentTerminalDialog({
                 <div className={`absolute inset-0 flex items-center justify-center ${TERMINAL_SURFACE_CLASS}`}>
                   <BrandSpinner size={30} label="Loading terminal" />
                 </div>
+              )}
+              {/* Over the terminal, as on a board panel: the screen it slept
+                  on opens with a reset, which wipes a line written before it. */}
+              {terminalReady && hint && (
+                <p className={`absolute inset-x-0 bottom-0 px-2 py-1.5 font-mono text-[11px] text-muted-foreground truncate pointer-events-none select-none ${TERMINAL_SURFACE_CLASS}`}>
+                  {hint}
+                </p>
               )}
               {/* Scroll-to-bottom button - appears when user has scrolled up */}
               {terminalReady && !isAtBottom && (

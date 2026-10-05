@@ -25,6 +25,7 @@ interface TerminalGridProps {
   onStartAgent: (agentId: string) => void;
   onStopAgent: (agentId: string) => void;
   onRestartAgent: (agentId: string) => void;
+  onWakeAgent: (agentId: string) => void;
   onRemoveAgent: (agentId: string) => void;
   onClearTerminal: (agentId: string) => void;
   onFullscreenPanel: (agentId: string) => void;
@@ -56,6 +57,7 @@ function TerminalGrid({
   onStartAgent,
   onStopAgent,
   onRestartAgent,
+  onWakeAgent,
   onRemoveAgent,
   onClearTerminal,
   onFullscreenPanel,
@@ -185,6 +187,7 @@ function TerminalGrid({
             onStart={onStartAgent}
             onStop={onStopAgent}
             onRestart={onRestartAgent}
+            onWake={onWakeAgent}
             onRemove={onRemoveAgent}
             onClear={onClearTerminal}
             onFullscreen={onFullscreenPanel}
@@ -227,6 +230,7 @@ function TerminalGrid({
                 onStart={onStartAgent}
                 onStop={onStopAgent}
                 onRestart={onRestartAgent}
+                onWake={onWakeAgent}
                 onRemove={onRemoveAgent}
                 onClear={onClearTerminal}
                 onFullscreen={onFullscreenPanel}

@@ -12,14 +12,17 @@ export const STATUS_COLORS: Record<AgentStatus['status'], { text: string }> = {
   // At rest, like idle, and in its ink: the word and its line say the rest.
   // Frame: `Agent stopped · who and why`.
   stopped: { text: 'text-status-idle' },
-  // Asleep, in the idle ink. Frame: `Agent asleep · and how it wakes`.
+  // At rest too, its CLI ended to give its memory back: the idle ink, after
+  // a hollow square, the mark of an agent no CLI holds (AgentStatusWord).
+  // Frame: `Agent asleep · and how it wakes`.
   asleep: { text: 'text-status-idle' },
 };
 
 /**
  * Folds the runtime status set onto the design's four inks (R6). `completed`
  * is a real runtime state but not a design status: it reads as idle. A
- * stopped agent is at rest too, and takes the idle ink with its own word.
+ * stopped or an asleep agent is at rest too, and takes the idle ink with its
+ * own word.
  */
 export const statusTone = (status: AgentStatus['status']): StatusTone =>
   status === 'completed' || status === 'stopped' || status === 'asleep' ? 'idle' : status;
@@ -28,9 +31,11 @@ export const statusTone = (status: AgentStatus['status']): StatusTone =>
 export type StatusWord = StatusTone | 'stopped' | 'asleep';
 
 /**
- * The status as a word: the four tones, and `stopped`, which says an agent
- * was ended on purpose (by you, Tars, or another agent) and is not resumed
- * at launch, where `idle` is an agent at rest. `completed` reads idle.
+ * The status as a word: the four tones; `stopped`, which says an agent was
+ * ended on purpose (by you, Tars, or another agent) and is not resumed at
+ * launch, where `idle` is an agent at rest; and `asleep`, an agent whose CLI
+ * Tars ended after 30 minutes without a turn, woken on its own conversation
+ * by whatever needs it. `completed` reads idle.
  */
 export const statusWord = (status: AgentStatus['status']): StatusWord =>
   status === 'completed' ? 'idle' : status;

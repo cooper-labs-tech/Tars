@@ -4,6 +4,7 @@ import type { AgentStatus } from '@/types/electron';
 import { AgentMark } from '@/components/ui';
 import { isSuperAgent } from './AgentDialogTypes';
 import { stopLine } from '@/lib/stop-line';
+import { asleepLine } from '@/lib/asleep-line';
 
 interface AgentDialogSuperAgentSidebarProps {
   /** The orchestrator whose window this is. Every other agent is listed. */
@@ -44,6 +45,9 @@ export const AgentDialogSuperAgentSidebar = memo(function AgentDialogSuperAgentS
   // Counted in the head, so listed: after idle, each with who stopped it,
   // when and why. Frame: `Agent stopped · who and why`.
   const stoppedAgents = otherAgents.filter(a => a.status === 'stopped');
+  // Counted in the head, so listed: after idle and before stopped, each with
+  // since when. Frame: `Agent asleep · and how it wakes`.
+  const asleepAgents = otherAgents.filter(a => a.status === 'asleep');
 
   return (
     <div className="h-full overflow-y-auto">
@@ -139,6 +143,31 @@ export const AgentDialogSuperAgentSidebar = memo(function AgentDialogSuperAgentS
                     </span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {asleepAgents.length > 0 && (
+            <div>
+              <p className="text-[10px] text-text-muted mb-1.5 uppercase tracking-wide">
+                Asleep ({asleepAgents.length})
+              </p>
+              <div className="space-y-1">
+                {asleepAgents.map((agent) => {
+                  const line = asleepLine(agent);
+                  return (
+                    <div key={agent.id} className="flex items-center gap-2 px-2 py-1.5 rounded-none hover:bg-bg-tertiary/50">
+                      <AgentMark name={agent.name || agent.id} orchestrator={isSuperAgent(agent)} className="opacity-60" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-text-secondary truncate">{agent.name}</p>
+                        <p className="text-[10px] text-text-muted truncate" title={line ?? undefined}>{line}</p>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-text-muted/20 text-text-muted">
+                        asleep
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

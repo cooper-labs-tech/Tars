@@ -1,8 +1,9 @@
 import { memo } from 'react';
 import type { AgentStatus } from '@/types/electron';
 import { AgentMark, Button } from '@/components/ui';
-import { STATUS_COLORS, statusWord } from '@/app/agents/constants';
 import { stopLine } from '@/lib/stop-line';
+import { asleepLine, wakingLine } from '@/lib/asleep-line';
+import AgentStatusWord from '@/components/AgentStatusWord';
 import { AgentAccountControl } from '@/components/ClaudeAccounts/AgentAccountControl';
 
 interface AgentDialogHeaderProps {
@@ -12,6 +13,9 @@ interface AgentDialogHeaderProps {
   /** Row actions. Each renders disabled until the dialog wires a handler in. */
   onStop?: () => void;
   onRestart?: () => void;
+  /** An asleep agent's CLI started again on its own conversation (PR 322): the
+   *  window's `wake`, in restart's place while it is asleep or waking. */
+  onWake?: () => void;
   onEdit?: () => void;
   onOpenInReview?: () => void;
   /** @deprecated The design has no Finder button and no fullscreen toggle.
@@ -28,6 +32,7 @@ export const AgentDialogHeader = memo(function AgentDialogHeader({
   onClose,
   onStop,
   onRestart,
+  onWake,
   onEdit,
   onOpenInReview,
 }: AgentDialogHeaderProps) {
@@ -44,6 +49,10 @@ export const AgentDialogHeader = memo(function AgentDialogHeader({
   // filed under you and replace them, so there is none to offer. Frame:
   // `Agent stopped · who and why`.
   const stop = stopLine(agent);
+  // Asleep, or coming back: wake takes restart's place, off while it comes
+  // back. Frame: `Agent asleep · and how it wakes`.
+  const waking = wakingLine(agent);
+  const sleep = waking ?? asleepLine(agent);
 
   return (
     <div className="h-12 px-4 border-b border-border bg-card flex items-center justify-between gap-4">
@@ -58,9 +67,7 @@ export const AgentDialogHeader = memo(function AgentDialogHeader({
       <div className="flex items-center gap-1 shrink-0">
         {/* The status as a word, in its colour, where the frame puts it:
             first of the row's actions. */}
-        <span className={`font-mono text-[11px] mr-1.5 ${STATUS_COLORS[agent.status].text}`} title={stop ?? undefined}>
-          {statusWord(agent.status)}
-        </span>
+        <AgentStatusWord agent={agent} className="font-mono text-[11px] mr-1.5" title={stop ?? sleep ?? undefined} />
         <Button
           variant="ghost"
           size="sm"
@@ -71,16 +78,29 @@ export const AgentDialogHeader = memo(function AgentDialogHeader({
         >
           stop
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="font-mono font-normal"
-          onClick={onRestart}
-          disabled={!onRestart}
-          title={onRestart ? undefined : 'Not wired yet'}
-        >
-          restart
-        </Button>
+        {sleep ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="font-mono font-normal"
+            onClick={onWake}
+            disabled={!onWake || !!waking}
+            title={waking ? 'Coming back on its conversation' : 'Wake it on its own conversation'}
+          >
+            wake
+          </Button>
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="font-mono font-normal"
+            onClick={onRestart}
+            disabled={!onRestart}
+            title={onRestart ? undefined : 'Not wired yet'}
+          >
+            restart
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

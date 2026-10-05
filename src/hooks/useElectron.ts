@@ -8,6 +8,9 @@ export const isElectron = (): boolean => {
   return typeof window !== 'undefined' && window.electronAPI !== undefined;
 };
 
+/** A wake on its way as one comparable value: who, how and since when. */
+const wakingKey = (waking: AgentStatus['waking']) => (waking ? `${waking.by}\u0000${waking.via}\u0000${waking.since}` : '');
+
 // Hook for agent management via Electron IPC
 export function useElectronAgents() {
   const [agents, setAgents] = useState<AgentStatus[]>([]);
@@ -58,7 +61,11 @@ export function useElectronAgents() {
             prevAgent.claudeAccountId !== agent.claudeAccountId ||
             prevAgent.claudeAccountPin !== agent.claudeAccountPin ||
             // The last move by Tars, which its control's title tells.
-            prevAgent.claudeAccountMove?.at !== agent.claudeAccountMove?.at
+            prevAgent.claudeAccountMove?.at !== agent.claudeAccountMove?.at ||
+            // Asleep since when, and who is waking it: the line in place of
+            // its task, branch or path says both.
+            prevAgent.asleepSince !== agent.asleepSince ||
+            wakingKey(prevAgent.waking) !== wakingKey(agent.waking)
           );
         });
         return hasChanged ? list : prev;
@@ -149,6 +156,18 @@ export function useElectronAgents() {
     }
     await window.electronAPI!.agent.stop(id);
     await fetchAgents();
+  }, [fetchAgents]);
+
+  // Wake an asleep agent on its own conversation, nothing typed (#322). The
+  // answer says why when it is refused: not asleep, or a launch that failed,
+  // after which it stays asleep.
+  const wakeAgent = useCallback(async (id: string) => {
+    if (!isElectron()) {
+      throw new Error('Electron API not available');
+    }
+    const result = await window.electronAPI!.agent.wake(id);
+    await fetchAgents();
+    return result;
   }, [fetchAgents]);
 
   // Remove an agent
@@ -250,7 +269,9 @@ export function useElectronAgents() {
         // idle): the Chat counts it neither stopped nor idle.
         const changed = (a: AgentStatus, t: (typeof tickAgents)[number]) =>
           a.status !== t.status || a.currentTask !== t.currentTask || a.cliRunning !== t.cliRunning ||
-          a.leftFullscreen !== t.leftFullscreen || !!a.launching !== !!t.launching;
+          a.leftFullscreen !== t.leftFullscreen || !!a.launching !== !!t.launching ||
+          // Asleep since when, and who is waking it (#322): the tick carries both.
+          a.asleepSince !== t.asleepSince || wakingKey(a.waking) !== wakingKey(t.waking);
         const hasChange = tickAgents.some(t => {
           const existing = prev.find(a => a.id === t.id);
           return existing && changed(existing, t);
@@ -259,7 +280,7 @@ export function useElectronAgents() {
         return prev.map(a => {
           const tick = tickAgents.find(t => t.id === a.id);
           if (tick && changed(a, tick)) {
-            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity, cliRunning: tick.cliRunning, leftFullscreen: tick.leftFullscreen, launching: tick.launching };
+            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity, cliRunning: tick.cliRunning, leftFullscreen: tick.leftFullscreen, launching: tick.launching, asleepSince: tick.asleepSince, waking: tick.waking };
           }
           return a;
         });
@@ -290,6 +311,7 @@ export function useElectronAgents() {
     updateAgent,
     startAgent,
     stopAgent,
+    wakeAgent,
     removeAgent,
     sendInput,
     refresh: fetchAgents,

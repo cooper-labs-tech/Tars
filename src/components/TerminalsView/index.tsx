@@ -41,6 +41,7 @@ export default function TerminalsView() {
     isLoading,
     startAgent,
     stopAgent,
+    wakeAgent,
     removeAgent,
     sendInput,
     createAgent,
@@ -377,6 +378,20 @@ export default function TerminalsView() {
     }
   }, []);
 
+  // A panel's `wake`: an asleep agent's CLI started again on its own
+  // conversation (#322). Refused, or a launch that fails, it says why on the
+  // line a failed start uses, and the agent stays asleep.
+  const handleWakeAgent = useCallback(async (agentId: string) => {
+    setStartError(null);
+    try {
+      const result = await wakeAgent(agentId);
+      if (!result.success) setStartError(result.error || 'The agent could not be woken.');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStartError(message.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, ''));
+    }
+  }, [wakeAgent]);
+
   // Remove from tab (custom tabs): stop agent + remove from tab membership
   //
   // Deps here and below name the specific fields read, not `tabManager` or
@@ -675,6 +690,7 @@ export default function TerminalsView() {
             onStartAgent={handleStartAgent}
             onStopAgent={handleStopAgent}
             onRestartAgent={handleRestartAgent}
+            onWakeAgent={handleWakeAgent}
             onRemoveAgent={handleRemoveAgent}
             onClearTerminal={multiTerminal.clearTerminal}
             onFullscreenPanel={grid.fullscreenPanel}

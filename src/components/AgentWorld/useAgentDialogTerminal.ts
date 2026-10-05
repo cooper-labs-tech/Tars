@@ -123,7 +123,11 @@ export function useAgentDialogTerminal({
         fitAndResize();
         setTimeout(fitAndResize, 50);
         setTimeout(fitAndResize, 200);
-        setTimeout(() => { fitAndResize(); term.focus(); }, 350);
+        // Not an asleep agent's: a key typed into it wakes the agent, Escape
+        // included, and the Escape that closes this window would have woken it.
+        // A click in the terminal is how to type there. Frame: `Agent asleep ·
+        // and how it wakes`.
+        setTimeout(() => { fitAndResize(); if (agent.status !== 'asleep') term.focus(); }, 350);
 
         // Keys that reach no terminal (an idle agent has none since #164) are
         // said so in the panel rather than dropped. See keySender.
@@ -157,8 +161,15 @@ export function useAgentDialogTerminal({
           }
         }
         if (cancelled) return;
-        term.writeln(connectionLine(agent.name || 'Agent', !!latestAgent?.ptyId));
-        term.writeln('');
+        // Asleep, the window shows the screen its CLI slept on, as it was,
+        // and says over it that a key wakes it (AgentTerminalDialog): a line
+        // written here would say it is not running, and the screen's reset
+        // would wipe it. Frame: `Agent asleep · and how it wakes`.
+        const asleep = latestAgent?.status === 'asleep';
+        if (!asleep) {
+          term.writeln(connectionLine(agent.name || 'Agent', !!latestAgent?.ptyId));
+          term.writeln('');
+        }
 
         if (latestAgent?.output?.length) {
           // Since #127 an agent with a live terminal answers with one
@@ -169,7 +180,9 @@ export function useAgentDialogTerminal({
           const strip = agent.provider === 'gemini' && !isSnapshot;
           const writeLine = (line: string) => term.write(strip ? stripCursorSequences(line) : line);
 
-          if (skipHistoricalOutput) {
+          if (asleep) {
+            latestAgent.output.forEach(writeLine);
+          } else if (skipHistoricalOutput) {
             latestAgent.output.slice(-20).forEach(writeLine);
           } else {
             term.writeln('\x1b[33m--- Previous output ---\x1b[0m');
