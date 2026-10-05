@@ -160,11 +160,13 @@ describe('asleep', () => {
   });
 
   it('12. an agent that was not asleep starts without waking', () => {
-    noteWaker('w1', 'you', 'wake');
-    const a = agent({ status: 'stopped' });
-    wakeFromSleep(a);
-    expect(a.waking).toBeUndefined();
-    expect(a.status).toBe('stopped');
+    for (const status of ['stopped', 'idle', 'error', 'completed'] as const) {
+      noteWaker('w1', 'you', 'wake');
+      const a = agent({ status });
+      wakeFromSleep(a);
+      expect(a.waking, status).toBeUndefined();
+      expect(a.status, status).toBe(status);
+    }
   });
 });
 
@@ -211,11 +213,21 @@ describe('across a restart of Tars', () => {
     manager.agents.set('a1', a);
     manager.agents.set('b1', b);
     manager.saveAgents();
+    // Not written: agents.json carries no launch.
+    const written = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf-8')).agents as AgentStatus[];
+    expect(written.find((x) => x.id === 'b1')?.waking).toBeUndefined();
     manager.agents.clear();
     manager.loadAgents();
     expect(manager.agents.get('a1')?.status).toBe('asleep');
     expect(manager.agents.get('a1')?.asleepSince).toBe('2026-10-05T11:30:00.000Z');
     expect(manager.agents.get('b1')?.waking).toBeUndefined();
+    // Nor read back from a file that has one (an older build, a hand edit).
     manager.stopAgentAutosave();
+    fs.writeFileSync(AGENTS_FILE, JSON.stringify({ version: 3, agents: written.map((x) => (x.id === 'b1' ? { ...x, waking: { by: 'you', via: 'wake', since: '2026-10-05T11:31:00.000Z' } } : x)) }));
+    vi.resetModules();
+    const again = await import('../../../electron/core/agent-manager');
+    again.loadAgents();
+    expect(again.agents.get('b1')?.waking).toBeUndefined();
+    again.stopAgentAutosave();
   });
 });
