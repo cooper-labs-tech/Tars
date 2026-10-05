@@ -42,7 +42,7 @@ const FEATURES = [
   },
   {
     title: 'When an agent stops, or stalls',
-    body: 'Stop one with a reason, and its card, panel and window say who stopped it, when and why. One that reads running but has written nothing for 30 minutes and runs no command is marked stalled, and its orchestrator is told.',
+    body: 'Stop one, and its card, panel and window say who stopped it and when, and an orchestrator that stops one says why. One that reads running but has written nothing for 30 minutes and runs no command is marked stalled, and its orchestrator is told.',
   },
 ];
 

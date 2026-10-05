@@ -1604,7 +1604,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: The task for \"Dune\" is waiting for its terminal and has not been typed in yet. JeanBrasse is typing in it. Nothing needs resending: it goes in by itself once the field is free."
+                "text": "HELD: The task for \"Dune\" is waiting for its terminal and has not been typed in yet. JeanBrasse is typing in it. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again."
               }
             ]
           }
@@ -1645,7 +1645,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: The task for \"a1\" is waiting for its terminal and has not been typed in yet. Its field is in use. Nothing needs resending: it goes in by itself once the field is free."
+                "text": "HELD: The task for \"a1\" is waiting for its terminal and has not been typed in yet. Its field is in use. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again."
               }
             ]
           }
@@ -2139,7 +2139,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: Your message for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is being edited. Nothing needs resending: it goes in by itself once the field is free."
+                "text": "HELD: Your message for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is being edited. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again."
               }
             ]
           }
@@ -3160,7 +3160,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: The task for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is in use. Nothing needs resending: it goes in by itself once the field is free. delegate_task is not waiting on it: use wait_for_agent to follow it."
+                "text": "HELD: The task for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is in use. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again. delegate_task is not waiting on it: use wait_for_agent to follow it."
               }
             ]
           }
@@ -3721,7 +3721,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: The answer to its question for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is in use by JeanBrasse. Nothing needs resending: it goes in by itself once the field is free. delegate_task is not waiting on it: use wait_for_agent to follow it."
+                "text": "HELD: The answer to its question for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is in use by JeanBrasse. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again. delegate_task is not waiting on it: use wait_for_agent to follow it."
               }
             ]
           }

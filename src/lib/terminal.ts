@@ -34,13 +34,18 @@ export function stripCursorSequences(data: string): string {
 const TERMINAL_REPLIES = new RegExp([
   '\\x1b\\[\\?[0-9;]*c',        // DA1: \x1b[?1;2c
   '\\x1b\\[>[0-9;]*c',          // DA2: \x1b[>0;276;0c
-  '\\x1b\\[\\?[0-9;]*\\$y',     // DECRPM: \x1b[?1;2$y
+  '\\x1b\\[\\??[0-9;]*\\$y',    // DECRPM, private and ANSI modes: \x1b[?1;2$y, \x1b[4;2$y
   '\\x1b\\[[0-9;]*R',           // CPR: \x1b[24;80R
   '\\x1b\\[[0-9;]*n',           // DSR: \x1b[0n
+  '\\x1b\\[[0-9;]*t',           // window reports: \x1b[8;24;80t, \x1b[4;600;800t
   '\\x1b\\[[IO]',               // focus in / focus out
   '\\x1b\\[<[0-9;]*[Mm]',       // SGR mouse report: \x1b[<35;48;1M
   '\\x1b\\[M[\\s\\S]{3}',       // X10 mouse report: \x1b[M + 3 bytes
-  '\\x1bP[\\s\\S]*?\\x1b\\\\',  // DCS reply (XTVERSION, DECRQSS)
+  // OSC reply, ended by BEL or ST: the colours (4, 10, 11, 12), as
+  // \x1b]11;rgb:0f0f/0f0f/0f0f\x1b\\. Claude Code asks for the background
+  // (#314), and the answer typed in as keys held a message for ever.
+  '\\x1b\\][\\s\\S]*?(?:\\x07|\\x1b\\\\)',
+  '\\x1bP[\\s\\S]*?(?:\\x07|\\x1b\\\\)', // DCS reply (XTVERSION, DECRQSS), ended by BEL or ST
 ].join('|'), 'g');
 
 /**

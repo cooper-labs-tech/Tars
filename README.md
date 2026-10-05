@@ -82,9 +82,10 @@ conversation; past its threshold, 90% of the 5 h window or 95% of the week
 unless you change them, it moves when its turn ends. Its card,
 its panel and its window name the account it runs on.
 
-**A stop says why, and a stall is told.** Stopping an agent ends its CLI and
+**A stop says who, and a stall is told.** Stopping an agent ends its CLI and
 everything the CLI started. The agent then reads stopped, and its card, panel
-and window say who stopped it, when and why; it stays stopped across a restart,
+and window say who stopped it and when, and why when an orchestrator stopped
+it, which must give a reason; it stays stopped across a restart,
 so it is not resumed at launch or handed kanban work until it is started again.
 An agent that reads running but has written nothing for 30 minutes and runs no
 command is marked stalled, and the orchestrator that gave it the work, or its
@@ -216,7 +217,7 @@ completion hook, it simply has no screen of its own.
 |---|---|
 | **Dashboard** | The terminal grid. Every agent, live, grouped by project; each panel shows its session and opens fullscreen in one press |
 | **Chat** | Hermes and a room per project, in one list. Hermes watches every project and asks before it acts; in a room, that project's agents talk to each other and to you, the thread first, the team listed under the rooms, and what needs you above the thread |
-| **Agents** | Create, configure, start and stop, grouped by project or one project at a time. A stopped agent says who stopped it, when and why. Templates and whole teams |
+| **Agents** | Create, configure, start and stop, grouped by project or one project at a time. A stopped agent says who stopped it and when, and why when an orchestrator did. Templates and whole teams |
 | **Kanban** | The Hermes task board |
 | **Schedules** | Your Hermes cron jobs: run now, pause, resume, edit, delete |
 | **Review** | What each agent changed, as a diff against its base branch, in every project you added |

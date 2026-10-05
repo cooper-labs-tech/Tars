@@ -1231,7 +1231,15 @@ grep 'is going out now'
 message was queued behind a field rather than typed in, so an MCP client is not told it was sent.
 `send_message`, `start_agent` and `delegate_task` say it too, in a result that begins `HELD:`;
 `delegate_task` then returns at once rather than wait on a turn that has not begun
-(`wait_for_agent` follows it).
+(`wait_for_agent` follows it). The agent it was for does not read `running` until the message is
+in. If the message is still held three minutes on while that agent rests, the agent that sent it
+is told again by Tars: why it waits, and that only a person at that terminal ends the wait (stop
+and start the agent to drop it, then send it again).
+
+A terminal's replies (a colour report, a cursor or device report) reach the main process with what
+is typed and are passed to the CLI, but never read as keys. Before 1.9.3 xterm's answer to Claude
+Code's background-colour query left Tars unsure of the field, and messages to an idle agent waited
+for a person to clear an empty field.
 
 **Who a message is from.** A message Tars types into a CLI, short or pasted, comes after a line
 saying who sent it, as Tars verified it:

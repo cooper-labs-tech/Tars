@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Button, Input, PasswordInput } from '@/components/ui';
+import { Button, Input, PasswordInput, StatusBadge, StatusSquare } from '@/components/ui';
 import { SettingsRow } from './SettingsRow';
 import { Toggle } from './Toggle';
 import type { AppSettings } from './types';
@@ -10,12 +10,14 @@ interface TelegramSectionProps {
   appSettings: AppSettings;
   onSaveAppSettings: (updates: Partial<AppSettings>) => void;
   onUpdateLocalSettings: (updates: Partial<AppSettings>) => void;
+  /** Opens Settings, Hermes, where Telegram through Hermes is switched off. */
+  onOpenHermes?: () => void;
 }
 
 /** Row actions are words, never glyphs: 26px bordered lowercase mono. */
 const ACTION = 'font-mono lowercase';
 
-export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings }: TelegramSectionProps) => {
+export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings, onOpenHermes }: TelegramSectionProps) => {
   const [testingTelegram, setTestingTelegram] = useState(false);
   const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
@@ -103,6 +105,36 @@ export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalS
     : tokenGenerated
       ? <span className="text-warning">Restart the app to apply the new token.</span>
       : 'Share it with trusted users. They send /auth <token> to your bot.';
+
+  // Telegram through Hermes on (#285): main has erased the bot's token and
+  // keeps the bot off whatever this page sends (settingsForRelay), so nothing
+  // here can be typed or switched, or the page would show a token or a switch
+  // main has just refused. It says the bot is off and what replaced it, and how
+  // to bring it back. Frame: `Settings · Telegram · Telegram through Hermes`,
+  // and its light copy.
+  if (appSettings.hermesRelayEnabled === true) {
+    return (
+      <>
+        <SettingsRow
+          label="Telegram bot"
+          description="Replaced by Telegram through Hermes: Hermes is the only voice on your Telegram, and the bot's token was erased."
+          wrap
+          control={
+            <StatusBadge tone="idle" className="font-mono">
+              <StatusSquare tone="idle" />
+              off
+            </StatusBadge>
+          }
+        />
+        <SettingsRow
+          label="Telegram through Hermes"
+          description="To bring the bot back, turn it off in Settings, Hermes, Connection, then paste a new bot token here."
+          wrap
+          control={<Button size="sm" className={ACTION} onClick={onOpenHermes}>open hermes</Button>}
+        />
+      </>
+    );
+  }
 
   return (
     <>

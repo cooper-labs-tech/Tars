@@ -32,6 +32,7 @@ import { withSessionTruth } from '../agent-truth';
 import { noteLaunch, launchSettings, restartForSettings, forgetRestart } from '../../core/agent-restart';
 import { assignRole, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
+import { envelopeValue } from '../../utils/envelope-value';
 
 /**
  * The orchestrator instructions, or nothing for a regular agent. The UI start
@@ -492,6 +493,48 @@ function heldReasonFor(agent: AgentStatus): string {
   return dialogShown(agent, agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined) ? DIALOG_REASON : HELD_REASON;
 }
 
+/**
+ * How long a held message waits before the agent that sent it is told again
+ * (bug-held-forever-05-10.md: three messages answered HELD, "Nothing needs
+ * resending", waited 2 h 20 to 2 h 40, and nobody heard of them again).
+ */
+export const HELD_RETELL_MS = 3 * 60_000;
+
+const clockOf = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+
+/**
+ * Tells the agent that sent a message, once, when it is still held
+ * HELD_RETELL_MS on: why, and that only a person at the terminal ends the
+ * wait. A target in a turn may have somebody typing at it: it is looked at
+ * again later. Returns what cancels it, for when the message goes in or is
+ * dropped.
+ */
+function retellWhileHeld(target: AgentStatus, sender: MessageSender | undefined, sentAt: number): () => void {
+  if (sender?.kind !== 'agent' || sender.id === target.id) return () => undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const arm = () => {
+    timer = setTimeout(() => {
+      if (target.status === 'running') { arm(); return; }
+      const from = agents.get(sender.id);
+      const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
+      if (!pty) return;
+      // Quoted as data, as every value a note of Tars's carries outside a fence
+      // (utils/envelope-value.ts): a name with a line separator in it would
+      // otherwise put a line of its own in Tars's voice (the Audit's gate of #314).
+      const name = envelopeValue(target.name || target.id);
+      const minutes = Math.max(1, Math.round((Date.now() - sentAt) / 60_000));
+      writeProgrammaticInput(pty,
+        `[Tars] Your message to ${name} of ${clockOf(sentAt)} is still not in its terminal, ${minutes} minutes on. `
+        + `${heldReasonFor(target)} Only a person at that terminal can end this wait: if nobody is there, tell the user, `
+        + `or stop ${name} and start it again, which drops the message, and send it again then.`,
+        true, { agentId: sender.id, from: 'Tars', sender: { kind: 'tars' } });
+    }, HELD_RETELL_MS);
+    timer.unref?.();
+  };
+  arm();
+  return () => { if (timer) clearTimeout(timer); };
+}
+
 /** Who a message into an agent's terminal is from, as verified: the agent whose
  *  token made the call, or Tars when it is Tars's own pass or the agent itself. */
 function senderOf(agent: AgentStatus, req: RouteRequest): MessageSender {
@@ -734,20 +777,35 @@ async function performDispatchLocked(
   // Elsewhere a session is started with the message as its task.
   if (livePty && cliRunningIn(livePty)) {
     // A live session, mid-task or at its prompt: type the message into it.
+    // Working once the message is in its terminal, not before: an agent read
+    // `running` for hours from the instant a message was held behind its
+    // field, and nothing else reached it (bug-held-forever-05-10.md).
+    // `onWritten` runs at once for a message that goes straight in.
+    let cancelRetell: (() => void) | undefined;
+    let handed = false;
+    const handedOver = () => {
+      if (handed) return;
+      handed = true;
+      cancelRetell?.();
+      agent.status = 'running';
+      agent.waitingReason = undefined;
+      agent.workHandedAt = new Date().toISOString();
+      // This message starts a new piece of work in the same session; the
+      // previous task's captured output must not be mistaken for its result.
+      agent.lastCleanOutput = undefined;
+      agent.lastActivity = new Date().toISOString();
+      saveAgents();
+      announceAgent(agent);
+    };
     const outcome = writeProgrammaticInput(livePty, opts.message, true, {
       agentId: agent.id,
       from: opts.from ?? 'Tars',
       sender: opts.sender ?? { kind: 'tars' },
+      onWritten: handedOver,
+      onDropped: () => cancelRetell?.(),
     });
-    agent.status = 'running';
-    agent.waitingReason = undefined;
-    agent.workHandedAt = new Date().toISOString();
-    // This message starts a new piece of work in the same session; the
-    // previous task's captured output must not be mistaken for its result.
-    agent.lastCleanOutput = undefined;
-    agent.lastActivity = new Date().toISOString();
-    saveAgents();
-    announceAgent(agent);
+    if (outcome !== 'held' && outcome !== 'refused') handedOver();
+    if (outcome === 'held') cancelRetell = retellWhileHeld(agent, opts.sender, Date.now());
     // `held` is not `written`. The message is queued for that terminal and
     // goes in when the field frees, but answering a caller "sent" while
     // nothing has been typed tells it something it cannot check: the QA
@@ -1289,17 +1347,30 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
       const ptyProcess = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
       if (ptyProcess) {
+        // Working once it is in, as /dispatch (bug-held-forever-05-10.md).
+        let cancelRetell: (() => void) | undefined;
+        let handed = false;
+        const handedOver = () => {
+          if (handed) return;
+          handed = true;
+          cancelRetell?.();
+          agent.status = 'running';
+          agent.waitingReason = undefined;
+          agent.workHandedAt = new Date().toISOString();
+          agent.lastActivity = new Date().toISOString();
+          saveAgents();
+          announceAgent(agent);
+        };
+        const sender = senderOf(agent, req);
         const outcome = writeProgrammaticInput(ptyProcess, message, true, {
           agentId: agent.id,
           from: senderName(agent, req),
-          sender: senderOf(agent, req),
+          sender,
+          onWritten: handedOver,
+          onDropped: () => cancelRetell?.(),
         });
-        agent.status = 'running';
-        agent.waitingReason = undefined;
-        agent.workHandedAt = new Date().toISOString();
-        agent.lastActivity = new Date().toISOString();
-        saveAgents();
-        announceAgent(agent);
+        if (outcome !== 'held' && outcome !== 'refused') handedOver();
+        if (outcome === 'held') cancelRetell = retellWhileHeld(agent, sender, Date.now());
         sendJson({ success: true, ...(outcome === 'held' ? { held: true, heldReason: heldReasonFor(agent) } : {}) });
         return;
       }

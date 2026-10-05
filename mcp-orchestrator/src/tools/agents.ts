@@ -40,7 +40,9 @@ type DispatchResult = {
 function heldText(agentName: string, what: string, reason?: string): string {
   return `HELD: ${what} for "${agentName}" is waiting for its terminal and has not been typed in yet. `
     + (reason ?? "Its field is in use.")
-    + " Nothing needs resending: it goes in by itself once the field is free.";
+    // Never "nothing needs resending": a field only a person can free may not
+    // free (bug-held-forever-05-10.md). The route tells the sender again.
+    + " It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again.";
 }
 
 /**

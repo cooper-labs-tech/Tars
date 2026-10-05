@@ -96,6 +96,29 @@ const SEQUENCES: Record<string, Token['k']> = {
   '\x1b[I': 'ignore', '\x1b[O': 'ignore',
 };
 
+/**
+ * A terminal's replies, which a panel passes on with what is typed: never a
+ * key. A CLI asks the terminal something and xterm answers in the input stream
+ * (bug-held-forever-05-10.md: Claude Code's `ESC ] 11 ; ?`, answered with the
+ * background colour, read as keys, left the draft unknown, and messages waited
+ * hours for a person to clear an empty field). The panels strip most of these
+ * (src/lib/terminal.ts); this is the main process's own guard.
+ * - DA1 `ESC [ ? 1 ; 2 c`, DA2 `ESC [ > 0 ; 276 ; 0 c`
+ * - CPR `ESC [ 24 ; 80 R` (Shift+F3 has the same bytes, and moves nothing in a field)
+ * - DSR `ESC [ 0 n`, DECRPM `ESC [ ? 2004 ; 1 $ y`, window reports `ESC [ 8 ; 24 ; 80 t`
+ * OSC and DCS strings are replies whatever they say, once ended (see tokenize).
+ */
+const CSI_REPLY = /^\x1b\[(?:\?[\d;]*c|>[\d;]*c|\d+;\d+R|\d*n|\??[\d;]*\$y|\d+;\d+;\d+t)$/;
+
+/** Where an OSC or DCS string that starts at `i` ends (after its BEL or ST), or -1 when the chunk does not end it. */
+function stringEnd(data: string, i: number): number {
+  for (let j = i + 2; j < data.length; j++) {
+    if (data[j] === '\x07') return j + 1;
+    if (data[j] === '\x1b' && data[j + 1] === '\\') return j + 2;
+  }
+  return -1;
+}
+
 /** An escape sequence's length at `i`, or 0 when it is a lone ESC. */
 function sequenceLength(data: string, i: number): number {
   const next = data[i + 1];
@@ -127,11 +150,21 @@ function tokenize(data: string): Token[] {
       continue;
     }
     const ch = data[i];
+    if (ch === '\x1b' && (data[i + 1] === ']' || data[i + 1] === 'P')) {
+      // An OSC or DCS string: a reply of the terminal's, never a key. One the
+      // chunk does not end is not followed: what comes after it cannot be read.
+      flush();
+      const end = stringEnd(data, i);
+      if (end < 0) { tokens.push({ k: 'other' }); break; }
+      tokens.push({ k: 'ignore' });
+      i = end;
+      continue;
+    }
     if (ch === '\x1b') {
       flush();
       const len = sequenceLength(data, i);
       const seq = data.slice(i, i + len);
-      if (/^\x1b\[<[\d;]*[Mm]$/.test(seq) || /^\x1b\[M/.test(seq)) tokens.push({ k: 'ignore' });
+      if (/^\x1b\[<[\d;]*[Mm]$/.test(seq) || /^\x1b\[M/.test(seq) || CSI_REPLY.test(seq)) tokens.push({ k: 'ignore' });
       else tokens.push({ k: SEQUENCES[seq] ?? 'other' } as Token);
       i += len;
       continue;
@@ -150,7 +183,7 @@ function tokenize(data: string): Token[] {
   return tokens;
 }
 
-/** Does this chunk hold anything a person typed, as opposed to a mouse or focus report? */
+/** Does this chunk hold anything a person typed, as opposed to a mouse or focus report, or a terminal's reply? */
 export function isKeystroke(data: string): boolean {
   return tokenize(data).some(t => t.k !== 'ignore');
 }

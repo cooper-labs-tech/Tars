@@ -4,8 +4,8 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 113 root frames.
-`design/chat-design.pen` holds 72 of those, the other forty-one being newer than the
+rather than a companion to it. `design/tars-redesign.pen` holds 117 root frames.
+`design/chat-design.pen` holds 72 of those, the other forty-five being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
 room listed on the `/chat` line below: 85 in all. 71 share their ids
@@ -66,8 +66,8 @@ custom dashboard boards, the sidebar collapse) is deliberately absent.
 |---|---|
 | General | Preferences, Terminal, Notifications, System |
 | AI & Providers | Providers, Claude accounts, CLI Paths, Permissions |
-| Hermes | Connection (+ link out to Schedules) |
-| Integrations | Telegram, Slack, Discord, X (Twitter), Google Workspace |
+| Hermes | Connection (+ link out to Schedules), with its Telegram through Hermes switch: Settings · Connection, and its states in Settings · Connection · Telegram through Hermes (and its light copy) |
+| Integrations | Telegram, Slack, Discord, X (Twitter), Google Workspace; Telegram with Telegram through Hermes on, the bot off and nothing to type: Settings · Telegram · Telegram through Hermes (and its light copy) |
 | Extensions | Skills & Plugins, Custom MCP, Tasmania |
 | Workspace | Git, Memory Backends |
 

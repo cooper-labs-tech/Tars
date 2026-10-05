@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button, Input, PasswordInput, Select, SegmentedControl, StatusBadge, StatusSquare } from '@/components/ui';
 import type { AnyTone } from '@/components/ui';
 import { SettingsRow } from './SettingsRow';
+import { HermesRelayRow } from './HermesRelayRow';
 import type { AppSettings, } from './types';
 import type { HermesConnection, HermesMode } from '@/types/electron';
 
@@ -487,6 +488,12 @@ export const HermesSection = ({ appSettings, onSaveAppSettings }: HermesSectionP
             </Button>
           </div>
         }
+      />
+
+      {/* Telegram through Hermes, after the webhook as the frame draws it. */}
+      <HermesRelayRow
+        enabled={appSettings.hermesRelayEnabled === true}
+        onSave={on => onSaveAppSettings({ hermesRelayEnabled: on })}
       />
     </>
   );

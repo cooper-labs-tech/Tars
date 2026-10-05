@@ -744,7 +744,7 @@
                           "fill": "#9B9B9B",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Stop one with a reason, and its card, panel and window say who stopped it, when and why. One that reads running but has written nothing for 30 minutes and runs no command is marked stalled, and its orchestrator is told.",
+                          "content": "Stop one, and its card, panel and window say who stopped it and when, and an orchestrator that stops one says why. One that reads running but has written nothing for 30 minutes and runs no command is marked stalled, and its orchestrator is told.",
                           "lineHeight": 1.55,
                           "fontFamily": "$font-ui",
                           "fontSize": 14,

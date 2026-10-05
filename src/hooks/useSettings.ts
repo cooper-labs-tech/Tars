@@ -146,9 +146,18 @@ export const useSettings = () => {
       const result = await window.electronAPI.appSettings.save(newSettings);
       if (!result.success) {
         setError(result.error || 'Failed to save notification settings');
-      } else if (newSettings.errorReportsEnabled !== undefined) {
-        // The window's half of error reports follows the switch at once.
-        void followErrorReports(newSettings.errorReportsEnabled);
+      } else {
+        if (newSettings.errorReportsEnabled !== undefined) {
+          // The window's half of error reports follows the switch at once.
+          void followErrorReports(newSettings.errorReportsEnabled);
+        }
+        // The relay on, main has erased the bot's token and turned the bot
+        // off as it saved (settingsForRelay): this page sends only what
+        // changed, so it says the same of its own copy, or Settings, Telegram
+        // would go on showing a bot that no longer runs.
+        if (newSettings.hermesRelayEnabled === true) {
+          setAppSettings(prev => ({ ...prev, telegramEnabled: false, telegramBotToken: '' }));
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save notification settings');

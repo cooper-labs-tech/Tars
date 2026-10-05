@@ -71,6 +71,13 @@ const HEADER_ACTIONS: Record<SettingsSection, { label: string; kind: HeaderActio
   skills: { label: 'Refresh', kind: 'refresh' },
 };
 
+/**
+ * Telegram while Telegram through Hermes is on: the bot is off and its token
+ * erased, so there is nothing to test, as `Settings · Telegram · Telegram
+ * through Hermes` draws it.
+ */
+const NO_ACTION = { label: '', kind: 'none' } as const;
+
 export default function SettingsPage() {
   return (
     <Suspense>
@@ -131,6 +138,7 @@ function SettingsPageInner() {
             appSettings={appSettings}
             onSaveAppSettings={handleSaveAppSettings}
             onUpdateLocalSettings={updateLocalAppSettings}
+            onOpenHermes={() => setActiveSection('hermes')}
           />
         );
       case 'slack':
@@ -250,7 +258,9 @@ function SettingsPageInner() {
   // `Terminal`, `Providers`, `Connection`. Title and subtitle both come from
   // the leaf, so the nav and the header can never disagree.
   const activeLeaf = SECTIONS.find(s => s.id === activeSection);
-  const action = HEADER_ACTIONS[activeSection];
+  const action = activeSection === 'telegram' && appSettings.hermesRelayEnabled === true
+    ? NO_ACTION
+    : HEADER_ACTIONS[activeSection];
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] overflow-hidden">

@@ -30711,6 +30711,91 @@
                                   ]
                                 }
                               ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "iy2OZ",
+                              "name": "row Telegram through Hermes",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "DV430",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "fCHdT",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Telegram through Hermes",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "K8pafd",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "jAZza",
+                                  "name": "r",
+                                  "gap": 12,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "pTgmj",
+                                      "name": "Toggle off",
+                                      "width": 30,
+                                      "height": 16,
+                                      "fill": "$surface-raised",
+                                      "stroke": "$border",
+                                      "strokeWidth": 1,
+                                      "layout": "none",
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "VALtG",
+                                          "x": 2,
+                                          "y": 1,
+                                          "name": "knob",
+                                          "fill": "$text-secondary",
+                                          "width": 12,
+                                          "height": 12
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
                             }
                           ]
                         }
@@ -31911,7 +31996,7 @@
                                       "fill": "#727272",
                                       "textGrowth": "fixed-width",
                                       "width": 560,
-                                      "content": "44.4.4 · Node 24.21.0 · darwin arm64",
+                                      "content": "44.4.4 · Node v24.21.0 · darwin arm64",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-ui",
                                       "fontSize": 11,
@@ -192151,6 +192236,4832 @@
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
                               "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "scwYO",
+      "x": 3080,
+      "y": 24000,
+      "name": "Settings · Connection · Telegram through Hermes",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "Hcj88",
+          "name": "t",
+          "fill": "$text-primary",
+          "content": "Settings · Connection · Telegram through Hermes, its switch and its states",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "YyrMD",
+          "name": "intro",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "One switch, off until you turn it on. On, Tars writes to your Telegram through the tars-relay plugin on your Hermes, and every reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off, so the switch asks first. Once on, the row says how the relay stands, read from Tars as it changes: its word in its tone, and a sentence on what to do.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "F6uVb",
+          "name": "body",
+          "width": 946,
+          "fill": "$surface",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "padding": [
+            4,
+            16,
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "M5kzqt",
+              "name": "state off, as on the page: the warning is in the sentence",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RfPTa",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "off, as on the page: the warning is in the sentence",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "IJI4b",
+                  "name": "row Telegram through Hermes",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "O7qZwj",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zymXi",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "FO2x7",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "p5F7vA",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "oeha4",
+                          "name": "Toggle off",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Xjr78",
+                              "x": 2,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$text-secondary",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "hqCPq",
+              "name": "state switched on: nothing is saved before turn on",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "q6U8O",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "switched on: nothing is saved before turn on",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "alVQP",
+                  "name": "row Telegram through Hermes",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "m3OhY",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Z8xma",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "W418SF",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PSvWh",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "nk7Yy",
+                          "name": "Toggle off",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "uolFI",
+                              "x": 2,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$text-secondary",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "XQZoo",
+                  "name": "row Telegram through Hermes · confirm",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "g2EhtV",
+                      "name": "notice",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "HaXGi",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "kxh0J",
+                          "name": "text",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Turning it on erases the Tars bot's token and switches the bot off: your Telegram then hears from Hermes alone. Tars needs the tars-relay plugin on your Hermes.",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "CHeio",
+                          "name": "b cancel",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "aGLMX",
+                              "name": "l",
+                              "fill": "$text-secondary",
+                              "content": "cancel",
+                              "lineHeight": 1.35,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ZmZR9",
+                          "name": "b turn on",
+                          "height": 26,
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xaOvZ",
+                              "name": "l",
+                              "fill": "$text-primary",
+                              "content": "turn on",
+                              "lineHeight": 1.35,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "t9Pwp",
+              "name": "state ready",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "KHmDk",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "ready",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "eZjTF",
+                  "name": "row Telegram through Hermes · ready",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "SuEgo",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nIFog",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "bvfJR",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes writes to you for Tars, and each reply reaches the orchestrator it answers. Last sent at 14:02, last reply at 14:05.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "bdBcL",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "MRDPs",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "kxffO",
+                              "name": "d",
+                              "fill": "$status-running",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "g0f5pW",
+                              "name": "l",
+                              "fill": "$status-running",
+                              "content": "ready",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "g7CjCo",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "L5IIdZ",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "KzTZt",
+              "name": "state Hermes does not answer: what waits goes when it does",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Wxjxz",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "Hermes does not answer: what waits goes when it does",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "tbH5H",
+                  "name": "row Telegram through Hermes · unreachable",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "rikJo",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LDFbR",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "CvR1t",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes did not answer. 2 messages wait, and go when it answers.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VA8MU",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "x4b2r",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "nfI8k",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "ilq9l",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "content": "unreachable",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xvpiB",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "z0uth",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wEUIO",
+              "name": "state the plugin has no Telegram user",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "nQP9Q",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "the plugin has no Telegram user",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "grw7E",
+                  "name": "row Telegram through Hermes · not-configured",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ChOkU",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "J6ue2N",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uAU3N",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The tars-relay plugin on your Hermes has no Telegram user to write to. Set it in the plugin's settings on the server.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZehEF",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "j5hoyF",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "vxdZ6",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "cHwaM",
+                              "name": "l",
+                              "fill": "$status-waiting",
+                              "content": "not configured",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "m66gD",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Jj2lh",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zWJ2A",
+              "name": "state the plugin is not on the server",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "YCqJJ",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "the plugin is not on the server",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ZaNh8",
+                  "name": "row Telegram through Hermes · plugin-missing",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "N829IZ",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "u4XQwL",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "BnurP",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The tars-relay plugin is not installed on your Hermes. Install it there: Tars looks again every few seconds.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QWTf5",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "m3E1Fq",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "k3i9m",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "dDSk0",
+                              "name": "l",
+                              "fill": "$status-waiting",
+                              "content": "plugin missing",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rdjcO",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Zko98",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lRkyp",
+              "name": "state the token was refused",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "v82xsK",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "the token was refused",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "LhSbz",
+                  "name": "row Telegram through Hermes · unauthorized",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "rCRzK",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lOpsL",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "KBuZS",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes refused the dashboard token. Sign in again above.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T2Eoo",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "TbWCq",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "X7LKf",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "b0qSMT",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "content": "unauthorized",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "QVe1T",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "liJVD",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ThSdt",
+              "name": "state no connection saved",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "HEApF",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "no connection saved",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Jk1Ea",
+                  "name": "row Telegram through Hermes · no-connection",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "urmPS",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "tOWja",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "u22ApS",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "No Hermes connection is saved. Set one above, then save.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fOefw",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "pp9kf",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "z0Mhl",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "zIZOT",
+                              "name": "l",
+                              "fill": "$status-waiting",
+                              "content": "no connection",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AwvAX",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "pv3zl",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "SpQDI",
+      "x": 4620,
+      "y": 24000,
+      "name": "Settings · Connection · Telegram through Hermes · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "LC8GL",
+          "name": "t",
+          "fill": "$text-primary",
+          "content": "Settings · Connection · Telegram through Hermes, its switch and its states",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "MRq01",
+          "name": "intro",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "One switch, off until you turn it on. On, Tars writes to your Telegram through the tars-relay plugin on your Hermes, and every reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off, so the switch asks first. Once on, the row says how the relay stands, read from Tars as it changes: its word in its tone, and a sentence on what to do.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "BC0Nl",
+          "name": "body",
+          "width": 946,
+          "fill": "$surface",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "padding": [
+            4,
+            16,
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "qmHcD",
+              "name": "state off, as on the page: the warning is in the sentence",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "oG37O",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "off, as on the page: the warning is in the sentence",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "E5DBqt",
+                  "name": "row Telegram through Hermes",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "D8Xntb",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mDdl1",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "VQwaq",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wMwqN",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "mzefR",
+                          "name": "Toggle off",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "G8IwzT",
+                              "x": 2,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$text-secondary",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qC3aF",
+              "name": "state switched on: nothing is saved before turn on",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kjEX4",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "switched on: nothing is saved before turn on",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "X5OZhT",
+                  "name": "row Telegram through Hermes",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "lMnri",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "XrxWD",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "hhKEy",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nyHGO",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Zn4zZ",
+                          "name": "Toggle off",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "CN1Y3",
+                              "x": 2,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$text-secondary",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "k5bqz",
+                  "name": "row Telegram through Hermes · confirm",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "wW9Un",
+                      "name": "notice",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "OCDtD",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "SM9HD",
+                          "name": "text",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Turning it on erases the Tars bot's token and switches the bot off: your Telegram then hears from Hermes alone. Tars needs the tars-relay plugin on your Hermes.",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vTllV",
+                          "name": "b cancel",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "TBwxT",
+                              "name": "l",
+                              "fill": "$text-secondary",
+                              "content": "cancel",
+                              "lineHeight": 1.35,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "r4ZFHh",
+                          "name": "b turn on",
+                          "height": 26,
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "lpQqW",
+                              "name": "l",
+                              "fill": "$text-primary",
+                              "content": "turn on",
+                              "lineHeight": 1.35,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iDG6d",
+              "name": "state ready",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TNV0z",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "ready",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "WilJm",
+                  "name": "row Telegram through Hermes · ready",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ayDeS",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xATp9",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "BJBZB",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes writes to you for Tars, and each reply reaches the orchestrator it answers. Last sent at 14:02, last reply at 14:05.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "D4rTs4",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "v8DjyZ",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "sok7A",
+                              "name": "d",
+                              "fill": "$status-running",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "dLUYr",
+                              "name": "l",
+                              "fill": "$status-running",
+                              "content": "ready",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "B7GrDH",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "OFG26",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wxl3a",
+              "name": "state Hermes does not answer: what waits goes when it does",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "O8Vk49",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "Hermes does not answer: what waits goes when it does",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "fWATd",
+                  "name": "row Telegram through Hermes · unreachable",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "lIQN3",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "p1p3r",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "TyWVz",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes did not answer. 2 messages wait, and go when it answers.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ivhQ7",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "u7QCMI",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "nK3L9",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "yNEYS",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "content": "unreachable",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "XxvvR",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "w50hz",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "LAReY",
+              "name": "state the plugin has no Telegram user",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ywopc",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "the plugin has no Telegram user",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "L4sMvJ",
+                  "name": "row Telegram through Hermes · not-configured",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "MFtHA",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ydx1f",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ifwq1",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The tars-relay plugin on your Hermes has no Telegram user to write to. Set it in the plugin's settings on the server.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oybe8",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "wtWev",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "rsiDD",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "jsCZn",
+                              "name": "l",
+                              "fill": "$status-waiting",
+                              "content": "not configured",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "P9LVI",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "MhsvH",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "JDi7e",
+              "name": "state the plugin is not on the server",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "PZIQW",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "the plugin is not on the server",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "YxnTE",
+                  "name": "row Telegram through Hermes · plugin-missing",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "e3iQGx",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DmOWJ",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XdXaP",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The tars-relay plugin is not installed on your Hermes. Install it there: Tars looks again every few seconds.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eS8wI",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "p1RBS",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "v1DLyM",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "I8XIVN",
+                              "name": "l",
+                              "fill": "$status-waiting",
+                              "content": "plugin missing",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Q9sZtQ",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "YRliN",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eTuLU",
+              "name": "state the token was refused",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "BeF3T",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "the token was refused",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "cNjyK",
+                  "name": "row Telegram through Hermes · unauthorized",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "z9JKPn",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "z8Q9e",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "P8v3Ad",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Hermes refused the dashboard token. Sign in again above.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zmqZm",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "VMUPj",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "SYind",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "JmuiY",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "content": "unauthorized",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "hh1HW",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Woida",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iKWX9",
+              "name": "state no connection saved",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 2,
+              "padding": [
+                12,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "J0uYU",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 914,
+                  "content": "no connection saved",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "bLx1h",
+                  "name": "row Telegram through Hermes · no-connection",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "wdTPG",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Z1btVp",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Telegram through Hermes",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "qRaZ5",
+                          "name": "h",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "No Hermes connection is saved. Set one above, then save.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "H0Cle",
+                      "name": "r",
+                      "gap": 12,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "aO65A",
+                          "name": "st",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "xE5un",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "Mor5v",
+                              "name": "l",
+                              "fill": "$status-waiting",
+                              "content": "no connection",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JeuZL",
+                          "name": "Toggle on",
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "yiFvh",
+                              "x": 16,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$bg",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "clAod",
+      "x": 6160,
+      "y": 24000,
+      "name": "Settings · Telegram · Telegram through Hermes",
+      "theme": {
+        "mode": "dark"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$bg",
+      "children": [
+        {
+          "type": "frame",
+          "id": "Gbf5x",
+          "name": "Shell",
+          "width": 1440,
+          "height": 900,
+          "children": [
+            {
+              "type": "frame",
+              "id": "KqtI7",
+              "name": "Sidebar",
+              "width": 216,
+              "height": 900,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": {
+                "right": 1
+              },
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "B1TAx",
+                  "name": "Logo",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    16,
+                    18,
+                    12,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "JfLwQ",
+                      "name": "logo mark",
+                      "fill": "$accent",
+                      "width": 13,
+                      "height": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "FFrRW",
+                      "name": "Wordmark",
+                      "fill": "$text-primary",
+                      "content": "Tars",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "jYR3u",
+                  "name": "Nav",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 1,
+                  "padding": [
+                    4,
+                    8
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "fjZAd",
+                      "name": "nav Dashboard",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "s7TBQK",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "B9sVS",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Dashboard",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CUn3q",
+                      "name": "nav Agents",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "UMGpQ",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "b5zXlg",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Agents",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "J9tXd4",
+                      "name": "nav Kanban",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Y3jbAg",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "CoXlY",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Kanban",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XGjjL",
+                      "name": "nav Schedules",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "IqVVi",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "eeDnh",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Schedules",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N8UjRL",
+                      "name": "nav Review",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "eEozV",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "h04fR",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Review",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fZq9B",
+                      "name": "nav Logs",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "VLctu",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "eboUE",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Logs",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L4Zc9",
+                      "name": "nav Vault",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "JeAxC",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "jWww7",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Vault",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pvr92",
+                      "name": "nav Projects",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "O7ml7W",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "XvKt9",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Projects",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "b05S5",
+                      "name": "nav Extensions",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "QIqLR",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "dv0J5",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Extensions",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NED3D",
+                      "name": "nav Usage",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "VSTt8",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "W5MzJ",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Usage",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XKDfi",
+                      "name": "nav Brain",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "kDenX",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "AHZ2n",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Brain",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "K1jkq",
+                  "name": "spacer",
+                  "width": 8,
+                  "height": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "q1lRKP",
+                  "name": "Bottom",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 1,
+                  "padding": [
+                    8,
+                    8,
+                    4,
+                    8
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "C9Qrd",
+                      "name": "nav What's new",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "c7olI",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "f5H67",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "What's new",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LmKja",
+                      "name": "nav Settings",
+                      "width": "fill_container",
+                      "fill": "$accent-dim",
+                      "stroke": "$accent",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "lvWvd",
+                          "name": "icon",
+                          "fill": "$accent",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "GFi6V",
+                          "name": "label",
+                          "fill": "$text-primary",
+                          "content": "Settings",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "PPEuY",
+                  "name": "Status",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    18,
+                    14,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "AR1oc",
+                      "name": "dot",
+                      "fill": "$status-running",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "jro9P",
+                      "name": "conn",
+                      "fill": "$text-muted",
+                      "content": "connected · :31415",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "isQh1",
+              "name": "Main",
+              "width": 1224,
+              "height": 900,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "r2q5K",
+                  "name": "Header",
+                  "width": "fill_container",
+                  "padding": [
+                    22,
+                    26,
+                    14,
+                    26
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Zj7jX",
+                      "name": "Titles",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Yj1xJ",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "content": "Telegram",
+                          "lineHeight": 1.15,
+                          "fontFamily": "$font-display",
+                          "fontSize": 24,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "tj4AB",
+                          "name": "Subtitle",
+                          "fill": "$text-secondary",
+                          "content": "Drive your agents from your phone.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fFjfO",
+                  "name": "Content",
+                  "width": "fill_container",
+                  "height": 812,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    26,
+                    22,
+                    26
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "iAEXL",
+                      "name": "cols",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "x4iSy",
+                          "name": "Groups",
+                          "width": 214,
+                          "height": "fill_container",
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 1,
+                          "padding": 10,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "eTo4u",
+                              "name": "g General",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "Wdkmq",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "SW9fB",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "General",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "t57qJV",
+                              "name": "g AI & Providers",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "Zh9Qr",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "GHGgs",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "AI & Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "jX1v7",
+                              "name": "g Hermes",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "t2jwiI",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "DhELd",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "Hermes",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "OQGrr",
+                              "name": "g Integrations",
+                              "width": "fill_container",
+                              "fill": "$surface",
+                              "stroke": "$accent",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "UNEly",
+                                  "name": "i",
+                                  "fill": "$accent",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OIJ3j",
+                                  "name": "l",
+                                  "fill": "$text-primary",
+                                  "content": "Integrations",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "imX87",
+                              "name": "s Telegram",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$accent-dim",
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "gV7I8",
+                                  "name": "l",
+                                  "fill": "$text-primary",
+                                  "content": "Telegram",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rc2dY",
+                              "name": "s Slack",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "erC53",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Slack",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "zPxbK",
+                              "name": "s X (Twitter)",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "DaVYd",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "X (Twitter)",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "jGDQg",
+                              "name": "s Google Workspace",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "keyhV",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Google Workspace",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Zlnyl",
+                              "name": "g Extensions",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "GheoL",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "VaDij",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "Extensions",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Dho20",
+                              "name": "g Workspace",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "EMYgd",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "UWDOW",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "Workspace",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "hnpFg",
+                          "name": "body",
+                          "width": 946,
+                          "height": "fill_container",
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            4,
+                            16,
+                            14,
+                            16
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "heRaM",
+                              "name": "row Telegram bot",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "JeVh6",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Ue1gZ",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Telegram bot",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "tPSrL",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Replaced by Telegram through Hermes: Hermes is the only voice on your Telegram, and the bot's token was erased.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Wcigx",
+                                  "name": "st",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "rectangle",
+                                      "id": "HnRFh",
+                                      "name": "d",
+                                      "fill": "$status-idle",
+                                      "width": 6,
+                                      "height": 6
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "f1mQb",
+                                      "name": "l",
+                                      "fill": "$status-idle",
+                                      "content": "off",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "gHvJU",
+                              "name": "row Telegram through Hermes",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "D21UgD",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "xEN8Z",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Telegram through Hermes",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ouksT",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "To bring the bot back, turn it off in Settings, Hermes, Connection, then paste a new bot token here.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "ekKtq",
+                                  "name": "b open hermes",
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "padding": [
+                                    6,
+                                    12
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "IwYzS",
+                                      "name": "l",
+                                      "fill": "$text-secondary",
+                                      "content": "open hermes",
+                                      "lineHeight": 1.35,
+                                      "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "p8NHWn",
+      "x": 7700,
+      "y": 24000,
+      "name": "Settings · Telegram · Telegram through Hermes · light",
+      "theme": {
+        "mode": "light"
+      },
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$bg",
+      "children": [
+        {
+          "type": "frame",
+          "id": "qDpeD",
+          "name": "Shell",
+          "width": 1440,
+          "height": 900,
+          "children": [
+            {
+              "type": "frame",
+              "id": "MN6kt",
+              "name": "Sidebar",
+              "width": 216,
+              "height": 900,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": {
+                "right": 1
+              },
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "K2Ta6",
+                  "name": "Logo",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "padding": [
+                    16,
+                    18,
+                    12,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "iP5u0",
+                      "name": "logo mark",
+                      "fill": "$accent",
+                      "width": 13,
+                      "height": 13
+                    },
+                    {
+                      "type": "text",
+                      "id": "tVHDb",
+                      "name": "Wordmark",
+                      "fill": "$text-primary",
+                      "content": "Tars",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-display",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yqxoy",
+                  "name": "Nav",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 1,
+                  "padding": [
+                    4,
+                    8
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "yjblx",
+                      "name": "nav Dashboard",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "F9Vnbb",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "XzHqY",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Dashboard",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zokim",
+                      "name": "nav Agents",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "jK0Yb",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "CUZ0H",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Agents",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "p8Aoj",
+                      "name": "nav Kanban",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "OMFfJ",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "gAg1v",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Kanban",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BCAHz",
+                      "name": "nav Schedules",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ewmtF",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "heJjd",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Schedules",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KvMKv",
+                      "name": "nav Review",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "lEmW8",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "KNSvX",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Review",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "G45cHF",
+                      "name": "nav Logs",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "b5GGRG",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "dXjYL",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Logs",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "G8Hz23",
+                      "name": "nav Vault",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "vUvdP",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "jtYYu",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Vault",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "y5L7WJ",
+                      "name": "nav Projects",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Zu8bi",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "MdeV9",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Projects",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VXH93",
+                      "name": "nav Extensions",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "fkxrz",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "Rn6wH",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Extensions",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gyrfU",
+                      "name": "nav Usage",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "stAz0",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "QBUpe",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Usage",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "K4FRFt",
+                      "name": "nav Brain",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "e392L",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "K35dL",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Brain",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Vkmcl",
+                  "name": "spacer",
+                  "width": 8,
+                  "height": "fill_container"
+                },
+                {
+                  "type": "frame",
+                  "id": "eqZoO",
+                  "name": "Bottom",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 1,
+                  "padding": [
+                    8,
+                    8,
+                    4,
+                    8
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "uATLt",
+                      "name": "nav What's new",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ecy45",
+                          "name": "icon",
+                          "fill": "$text-muted",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "mNFFf",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "What's new",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kMZNG",
+                      "name": "nav Settings",
+                      "width": "fill_container",
+                      "fill": "$accent-dim",
+                      "stroke": "$accent",
+                      "gap": 10,
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "u2z3n",
+                          "name": "icon",
+                          "fill": "$accent",
+                          "width": 13,
+                          "height": 13
+                        },
+                        {
+                          "type": "text",
+                          "id": "Is7Om",
+                          "name": "label",
+                          "fill": "$text-primary",
+                          "content": "Settings",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kNXm4",
+                  "name": "Status",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    8,
+                    18,
+                    14,
+                    18
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "y74uoH",
+                      "name": "dot",
+                      "fill": "$status-running",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "RlLsn",
+                      "name": "conn",
+                      "fill": "$text-muted",
+                      "content": "connected · :31415",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Rd6fu",
+              "name": "Main",
+              "width": 1224,
+              "height": 900,
+              "layout": "vertical",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "I47ewU",
+                  "name": "Header",
+                  "width": "fill_container",
+                  "padding": [
+                    22,
+                    26,
+                    14,
+                    26
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LjwPz",
+                      "name": "Titles",
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pSqrw",
+                          "name": "Title",
+                          "fill": "$text-primary",
+                          "content": "Telegram",
+                          "lineHeight": 1.15,
+                          "fontFamily": "$font-display",
+                          "fontSize": 24,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q0zD8",
+                          "name": "Subtitle",
+                          "fill": "$text-secondary",
+                          "content": "Drive your agents from your phone.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sczoH",
+                  "name": "Content",
+                  "width": "fill_container",
+                  "height": 812,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    26,
+                    22,
+                    26
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "XCoTS",
+                      "name": "cols",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "gap": 12,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "MZtLr",
+                          "name": "Groups",
+                          "width": 214,
+                          "height": "fill_container",
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "gap": 1,
+                          "padding": 10,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "bHhN0",
+                              "name": "g General",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "V7a9z6",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "d1nBN",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "General",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vr3sK",
+                              "name": "g AI & Providers",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "ocdT7",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "SFRix",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "AI & Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "gUlJN",
+                              "name": "g Hermes",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "PoAjh",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "odU4G",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "Hermes",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "OwjCe",
+                              "name": "g Integrations",
+                              "width": "fill_container",
+                              "fill": "$surface",
+                              "stroke": "$accent",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "xU5eY",
+                                  "name": "i",
+                                  "fill": "$accent",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "arPuh",
+                                  "name": "l",
+                                  "fill": "$text-primary",
+                                  "content": "Integrations",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "HrDLj",
+                              "name": "s Telegram",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$accent-dim",
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "meGn9",
+                                  "name": "l",
+                                  "fill": "$text-primary",
+                                  "content": "Telegram",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "KVxGE",
+                              "name": "s Slack",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "w2u95u",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Slack",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "NmuSe",
+                              "name": "s X (Twitter)",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "aXjZZ",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "X (Twitter)",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "YHrTo",
+                              "name": "s Google Workspace",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "X8QZXz",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Google Workspace",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "iURiv",
+                              "name": "g Extensions",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "v5V5Ik",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "O0669",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "Extensions",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "hz2Bx",
+                              "name": "g Workspace",
+                              "width": "fill_container",
+                              "gap": 8,
+                              "padding": [
+                                8,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "ESM2g",
+                                  "name": "i",
+                                  "fill": "$text-muted",
+                                  "width": 12,
+                                  "height": 12
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "ua7Xp",
+                                  "name": "l",
+                                  "fill": "$text-secondary",
+                                  "content": "Workspace",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xUfVX",
+                          "name": "body",
+                          "width": 946,
+                          "height": "fill_container",
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            4,
+                            16,
+                            14,
+                            16
+                          ],
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "qCXrJ",
+                              "name": "row Telegram bot",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "o5Xdv",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "XrcX4",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Telegram bot",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "ojoVu",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Replaced by Telegram through Hermes: Hermes is the only voice on your Telegram, and the bot's token was erased.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "rNMCu",
+                                  "name": "st",
+                                  "gap": 8,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "rectangle",
+                                      "id": "D91BZ",
+                                      "name": "d",
+                                      "fill": "$status-idle",
+                                      "width": 6,
+                                      "height": 6
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "IQbKn",
+                                      "name": "l",
+                                      "fill": "$status-idle",
+                                      "content": "off",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11.5,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "uFUdu",
+                              "name": "row Telegram through Hermes",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "Ks1y6",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "G1AfK",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Telegram through Hermes",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "X42N8U",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "To bring the bot back, turn it off in Settings, Hermes, Connection, then paste a new bot token here.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "HCCAd",
+                                  "name": "b open hermes",
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "padding": [
+                                    6,
+                                    12
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "YmNQp",
+                                      "name": "l",
+                                      "fill": "$text-secondary",
+                                      "content": "open hermes",
+                                      "lineHeight": 1.35,
+                                      "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
                             }
                           ]
                         }
