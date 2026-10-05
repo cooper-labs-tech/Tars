@@ -2762,6 +2762,63 @@
           }
         },
         {
+          "scenario": "wait_for_agent, asleep",
+          "call": {
+            "tool": "wait_for_agent",
+            "arguments": {
+              "id": "a1"
+            }
+          },
+          "requests": [
+            {
+              "to": "tars",
+              "method": "GET",
+              "path": "/api/agents/a1/wait?timeout=120",
+              "headers": [
+                "host: 127.0.0.1:<port>",
+                "connection: keep-alive",
+                "Content-Type: application/json",
+                "X-Tars-Client: mcp",
+                "Authorization: Bearer agent-token-lead",
+                "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Caller-Project: /projects/alpha",
+                "accept: */*",
+                "accept-language: *",
+                "sec-fetch-mode: cors",
+                "user-agent: node",
+                "accept-encoding: gzip, deflate"
+              ]
+            },
+            {
+              "to": "tars",
+              "method": "GET",
+              "path": "/api/agents/a1",
+              "headers": [
+                "host: 127.0.0.1:<port>",
+                "connection: keep-alive",
+                "Content-Type: application/json",
+                "X-Tars-Client: mcp",
+                "Authorization: Bearer agent-token-lead",
+                "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Caller-Project: /projects/alpha",
+                "accept: */*",
+                "accept-language: *",
+                "sec-fetch-mode: cors",
+                "user-agent: node",
+                "accept-encoding: gzip, deflate"
+              ]
+            }
+          ],
+          "answer": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Agent \"Dune\" is asleep since 2026-10-05T12:00:00.000Z: it had no turn for 30 minutes, so Tars ended its CLI and kept its conversation. Its last work is done; get_agent_output reads what it last said, and send_message wakes it on that conversation."
+              }
+            ]
+          }
+        },
+        {
           "scenario": "wait_for_agent, times out",
           "call": {
             "tool": "wait_for_agent",
