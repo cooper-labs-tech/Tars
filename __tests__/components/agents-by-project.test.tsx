@@ -242,24 +242,31 @@ describe('the Agents page', () => {
     expect(sections()[0].cards).toEqual(['Orchestrator', 'QA Engineer', 'Backend Engineer', 'Frontend Engineer']);
   });
 
-  it('offers five statuses, stopped between idle and error, and counts a completed agent under Idle', () => {
+  it('offers six statuses, asleep between idle and stopped, stopped between them and error, and counts a completed agent under Idle', () => {
     open(seven());
-    expect(chips()).toEqual(['All (7)', 'running (3)', 'waiting (1)', 'idle (2)', 'stopped (0)', 'error (1)']);
+    expect(chips()).toEqual(['All (7)', 'running (3)', 'waiting (1)', 'idle (2)', 'asleep (0)', 'stopped (0)', 'error (1)']);
     (chip('idle').props.onClick as () => void)();
     expect(sections().flatMap(s => s.cards).sort()).toEqual(['Modeller', 'QA Engineer']);
   });
 
   it('counts a stopped agent under Stopped, not Idle, and shows it alone under its chip', () => {
     open([...seven(), agent('Halted', CAPITAL, { status: 'stopped', stoppedBy: 'Project Lead' })]);
-    expect(chips()).toEqual(['All (8)', 'running (3)', 'waiting (1)', 'idle (2)', 'stopped (1)', 'error (1)']);
+    expect(chips()).toEqual(['All (8)', 'running (3)', 'waiting (1)', 'idle (2)', 'asleep (0)', 'stopped (1)', 'error (1)']);
     (chip('stopped').props.onClick as () => void)();
     expect(sections().flatMap(s => s.cards)).toEqual(['Halted']);
+  });
+
+  it('counts an asleep agent under Asleep, not Idle, and shows it alone under its chip', () => {
+    open([...seven(), agent('Dozing', CAPITAL, { status: 'asleep', asleepSince: '2026-10-05T12:02:00.000Z' })]);
+    expect(chips()).toEqual(['All (8)', 'running (3)', 'waiting (1)', 'idle (2)', 'asleep (1)', 'stopped (0)', 'error (1)']);
+    (chip('asleep').props.onClick as () => void)();
+    expect(sections().flatMap(s => s.cards)).toEqual(['Dozing']);
   });
 
   it('counts the chips within the project on screen, so a count is what its chip would show', () => {
     open(seven());
     pick(TARS);
-    expect(chips()).toEqual(['All (4)', 'running (2)', 'waiting (1)', 'idle (1)', 'stopped (0)', 'error (0)']);
+    expect(chips()).toEqual(['All (4)', 'running (2)', 'waiting (1)', 'idle (1)', 'asleep (0)', 'stopped (0)', 'error (0)']);
     expect(sections().map(s => s.path)).toEqual([TARS]);
     (chip('running').props.onClick as () => void)();
     expect(sections()).toEqual([{ path: TARS, heading: ['tars', '~/tars', '2 agents'], cards: ['Orchestrator', 'Frontend Engineer'] }]);
