@@ -170,7 +170,9 @@ over, the agent, the model, its turns and tokens, its own cost, and its total wi
 the work it handed on to other agents. A task whose CLI writes no transcript reads
 not counted rather than $0.00. On Claude Code 2.1.289 or newer, a Claude agent's
 task stays counted once its transcript is cleaned up: Tars keeps what each of its
-turns used as it ends.
+turns used as it ends. A switch at the head of the list shows the same tasks by
+agent: one row each, with its project, provider and Claude account, its tasks,
+time and tokens, and the sum of its tasks' own costs.
 
 ![Usage: what each provider actually cost, against the budget you set, and under it what each task cost](screenshots/usage.png)
 
@@ -290,7 +292,7 @@ without leaving Tars. Without a gateway the rest of Tars works fine.
 | **Vault** | Documents your agents can read and write |
 | **Projects** | The folders Tars knows about, and their agents |
 | **Extensions** | Skills and plugins, per provider |
-| **Usage** | Spend per provider and per model, over the last 24 hours or 14 days, 12 weeks or 12 months, against your budgets, each Claude account's limits, and what each task cost |
+| **Usage** | Spend per provider and per model, over the last 24 hours or 14 days, 12 weeks or 12 months, against your budgets, each Claude account's limits, and what each task and each agent cost |
 | **Brain** | The five memory sources, and whether each one answers |
 
 ![The vault: documents your agents can read and write](screenshots/vault.png)

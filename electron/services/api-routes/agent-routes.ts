@@ -15,7 +15,11 @@ import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogOpen, dialogShown, takeSlot } from '../../core/agent-launch';
-import { getProvider, isValidProvider } from '../../providers';
+import { getAllProviders, getProvider, isValidProvider } from '../../providers';
+import { planModeRefusal } from '../../providers/plan-mode';
+// An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
+// refused is only what could not start, on the platform Tars runs on (2.0.2).
+import { cliPathProblem } from '../../platform/cli-path';
 import { skillsProblem } from '../../utils/skill-name';
 import { buildFullPath } from '../../utils/path-builder';
 import { toLaunch, withPath, LaunchError, type Launch } from '../../platform';
@@ -185,15 +189,9 @@ async function spawnAgentSessionInSlot(
   // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, Moonshot...).
   const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings);
 
-  // Alt providers re-point the claude binary at another vendor. Without a key
-  // there is no ANTHROPIC_BASE_URL and the session would silently run on the
-  // user's Anthropic account. Refuse instead.
-  const isAltProvider = cliProvider.binaryName === 'claude' &&
-                        !!agent.provider && agent.provider !== 'claude' && agent.provider !== 'local';
-  if (isAltProvider && !providerEnvVars.ANTHROPIC_BASE_URL) {
-    sendJson({
-      error: `No API key configured for provider "${agent.provider}". Add it (or an OpenRouter key) in Settings > AI Providers.`,
-    }, 400);
+  const keyRefusal = missingKeyRefusal(agent.provider, providerEnvVars);
+  if (keyRefusal) {
+    sendJson({ error: keyRefusal }, 400);
     return false;
   }
 
@@ -1079,6 +1077,19 @@ function messageTarget(req: RouteRequest, sendJson: SendJson): { agent: AgentSta
   return { agent, reply: (data, status) => sendJson(status && status >= 400 ? data : { ...(data as object), deliveredTo }, status) };
 }
 
+/**
+ * Alt providers re-point the claude binary at another vendor. Without a key
+ * there is no ANTHROPIC_BASE_URL and the session would silently run on the
+ * user's Anthropic account: refused, at a launch and, since 2.0.2, at a
+ * creation through the API, with the same sentence.
+ */
+function missingKeyRefusal(provider: AgentStatus['provider'], providerEnvVars: Record<string, string>): string | null {
+  const isAltProvider = getProvider(provider).binaryName === 'claude' && !!provider && provider !== 'claude' && provider !== 'local';
+  return isAltProvider && !providerEnvVars.ANTHROPIC_BASE_URL
+    ? `No API key configured for provider "${provider}". Add it (or an OpenRouter key) in Settings > AI Providers.`
+    : null;
+}
+
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
@@ -1314,7 +1325,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       name?: string;
       skills?: string[];
       character?: AgentCharacter;
-      permissionMode?: 'normal' | 'auto' | 'bypass';
+      permissionMode?: AgentStatus['permissionMode'];
       secondaryProjectPath?: string;
       /** The Orchestrator toggle, or its old name: see requestedRole. */
       role?: AgentRole;
@@ -1337,8 +1348,25 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // creating in the wrong project is the mistake this guard exists for.
     if (!mayActIn(req, driver, projectPath, `a new agent would belong to project ${projectPath}`, sendJson)) return;
     if (provider !== undefined && !isValidProvider(provider)) {
-      sendJson({ error: `Unknown provider "${provider}"` }, 400);
+      sendJson({ error: `Unknown provider "${provider}". Providers: ${getAllProviders().map((p) => p.id).join(', ')}.` }, 400);
       return;
+    }
+    if (permissionMode !== undefined && !['plan', 'normal', 'auto', 'bypass'].includes(permissionMode)) {
+      sendJson({ error: 'Invalid permission mode: plan, normal, auto or bypass' }, 400);
+      return;
+    }
+    // Plan on a provider that has none would run as normal (the Audit's Low 2 on #407).
+    const noPlan = planModeRefusal(provider, permissionMode);
+    if (noPlan) {
+      sendJson({ error: noPlan }, 400);
+      return;
+    }
+    if (cliPath !== undefined) {
+      const why = cliPathProblem(cliPath);
+      if (why) {
+        sendJson({ error: why }, 400);
+        return;
+      }
     }
     // Every task the agent is given opens with its skills (gate of #204).
     const skillsWrong = skillsProblem(skills);
@@ -1385,6 +1413,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
 
     const id = uuidv4();
+    // Refused as its first launch would be: an API-key provider without its key.
+    const keyRefusal = missingKeyRefusal(provider as AgentStatus['provider'], getProvider(provider as AgentStatus['provider']).getPtyEnvVars(id, projectPath, skills, ctx.getAppSettings()));
+    if (keyRefusal) {
+      sendJson({ error: keyRefusal }, 400);
+      return;
+    }
     const resolvedName = name || `Agent ${id.slice(0, 6)}`;
     const agent: AgentStatus = {
       id,

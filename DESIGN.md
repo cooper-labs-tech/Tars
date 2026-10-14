@@ -422,12 +422,11 @@ A 32px `surface` header (`TerminalsView/components/TerminalPanelHeader`): the
 agent's mark at 16, its name, its branch (or, in error, the reason in red, and
 stopped, who stopped it, when and why in `text-secondary`), then
 right of the gap the status as a word in its tone and `provider · model` in
-mono, `session` boxed as a selected segment (`secondary` fill, `border-accent`
-border), start or stop, a 26px fullscreen button (lucide `maximize-2`, and
+mono, start or stop, a 26px fullscreen button (lucide `maximize-2`, and
 `minimize-2` while the pane fills the window), and the `···` menu with clear,
-and remove outside fullscreen. Frames: `Dashboard · dark`, `Agent error ·
-reason`, `Panel header · session and fullscreen`, `Agent stopped · who and
-why`. xterm gets its palette
+and remove outside fullscreen. No word names the pane's view: it has one, its
+session (Noah, 13/10). Frames: `Dashboard · dark`, `Agent error · reason`,
+`Panel header · fullscreen`, `Agent stopped · who and why`. xterm gets its palette
 as a JS object rather than from CSS variables, and there are two of them:
 `src/components/Terminal.tsx` draws on `#0D0B08`, while `TERMINAL_THEME` in
 `src/components/AgentWorld/constants.ts` (re-exported by `TerminalsView`) draws

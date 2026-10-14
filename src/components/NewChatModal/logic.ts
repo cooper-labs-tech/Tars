@@ -31,6 +31,22 @@ export function agentOptionsSummary(opts: {
   ].filter(Boolean).join(' · ');
 }
 
+/**
+ * The worktree an agent's settings show: its own, from `worktreePath`. agent:list's
+ * `branchName` is the branch its folder is on (services/agent-truth.ts), its project's
+ * for an agent with no worktree, so it cannot say whether the agent has one.
+ */
+export function ownWorktreeOf(agent: { worktreePath?: string; branchName?: string }): { on: boolean; branchName: string; locked: boolean } {
+  const own = !!agent.worktreePath;
+  return { on: own, branchName: own ? agent.branchName ?? '' : '', locked: own };
+}
+
+/** What a save of an agent's settings sends for its worktree: one turned on for an agent with none, with a branch. */
+export function worktreeToSave(state: { useWorktree: boolean; branchName: string }, agent: { worktreePath?: string }): { enabled: true; branchName: string } | undefined {
+  const branchName = state.branchName.trim();
+  return state.useWorktree && !agent.worktreePath && branchName ? { enabled: true, branchName } : undefined;
+}
+
 /** Project is required; a worktree with no branch name has nowhere to be created. */
 export function canSubmitAgent(opts: { projectPath: string; useWorktree: boolean; branchName: string }): boolean {
   return !!opts.projectPath && (!opts.useWorktree || !!opts.branchName.trim());

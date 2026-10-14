@@ -525,6 +525,41 @@ describe('skill names, for every agent (gate of #204)', () => {
   });
 });
 
+/**
+ * Plan on a provider that has none (the Audit's Low 2 on #407): a Codex agent in plan runs as normal and edits
+ * once it has asked, since codex-provider maps only auto and bypass. The window disables plan for such a
+ * provider (src/lib/plan-mode.ts); what it sends never holds it, so a refusal here costs it nothing.
+ *
+ * How it fails, written before the code (2026-10-14):
+ * 1. agent:create makes a Codex agent in plan.
+ * 2. agent:update sets plan on a Codex agent, or moves an agent in plan to Codex: plan on a provider with none.
+ * 3. Over-correction: plan refused for Claude Code, or an update that ends on a mode the provider has refused.
+ */
+describe("plan on a provider that has none (the Audit's Low 2 on #407)", () => {
+  it("1. agent:create refuses a Codex agent in plan, with the window's reason, and makes none", async () => {
+    const before = agents.size;
+    await expect(create({ name: 'Planner', provider: 'codex', permissionMode: 'plan' })).rejects.toThrow(/has no plan mode here/);
+    expect(agents.size).toBe(before);
+  });
+
+  it('2. agent:update refuses plan on Codex, and Codex under plan, and changes nothing', async () => {
+    const codex = record('c1', { provider: 'codex', permissionMode: 'normal' });
+    expect(await update({ id: 'c1', permissionMode: 'plan' })).toMatchObject({ success: false, error: expect.stringMatching(/has no plan mode here/) });
+    expect(codex.permissionMode).toBe('normal');
+    const planner = record('p1', { provider: 'claude', permissionMode: 'plan' });
+    expect(await update({ id: 'p1', provider: 'codex' })).toMatchObject({ success: false, error: expect.stringMatching(/has no plan mode here/) });
+    expect(planner.provider).toBe('claude');
+  });
+
+  it('3. keeps plan for Claude Code, and a move to Codex that leaves plan', async () => {
+    const created = await create({ name: 'Claude planner', provider: 'claude', permissionMode: 'plan' });
+    expect(created.permissionMode).toBe('plan');
+    expect(await update({ id: created.id, name: 'Renamed' })).toMatchObject({ success: true });
+    record('p2', { provider: 'claude', permissionMode: 'plan' });
+    expect(await update({ id: 'p2', provider: 'codex', permissionMode: 'normal' })).toMatchObject({ success: true });
+  });
+});
+
 describe("a chat's runner, from the window (the Audit's M1 and M2 on #379)", () => {
   const runnerFields = (): Partial<AgentStatus> => ({
     role: 'worker', kind: 'chat', chatId: 'c-2', teamOrchestratorId: 'lead', savedPrompt: "the lead's brief",

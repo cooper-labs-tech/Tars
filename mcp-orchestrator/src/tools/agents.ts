@@ -405,7 +405,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "create_agent",
-    description: "Create a new agent. Defaults to YOUR project when projectPath is omitted; another project is refused unless allowCrossProject is true. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
+    description: "Create a new agent, on any provider Tars runs or on a CLI binary of your choosing. Defaults to YOUR project when projectPath is omitted; another project is refused unless allowCrossProject is true. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
     schema: {
       projectPath: z.string().optional().describe("Absolute path to the project directory (defaults to your own project)"),
       name: z.string().optional().describe("Name for the agent (e.g., 'Backend Worker', 'Test Runner')"),
@@ -421,9 +421,20 @@ const AGENT_TOOLS: Tool[] = [
         .describe("If true (default), agent runs with --dangerously-skip-permissions flag for autonomous operation"),
       secondaryProjectPath: z.string().optional().describe("Secondary project path to add as context (--add-dir)"),
       allowCrossProject: z.boolean().optional().describe("Explicitly allow creating the agent in ANOTHER project than yours (normally rejected)"),
+      provider: z
+        .string()
+        .optional()
+        .describe("The provider, by id (default claude). Its own CLI: claude, codex, gemini, grok, opencode, pi, amp. Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen, zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."),
+      model: z.string().optional().describe("The model, as the provider names it (e.g. 'opus' for claude, 'gpt-5-codex' for codex). Omit for the provider's default."),
+      effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("Reasoning effort. Omit for the CLI's own."),
+      permissionMode: z
+        .enum(["plan", "normal", "auto", "bypass"])
+        .optional()
+        .describe("plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing). Omit for auto."),
+      cliPath: z.string().optional().describe("Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."),
     },
     failure: "creating agent",
-    async run({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath, allowCrossProject }) {
+    async run({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath, allowCrossProject, provider, model, effort, permissionMode, cliPath }) {
       const resolvedProjectPath = projectPath || getCallerIdentity().projectPath;
       if (!resolvedProjectPath) {
         return problem("Error: projectPath is required (no caller project identity available).");
@@ -436,8 +447,13 @@ const AGENT_TOOLS: Tool[] = [
         skipPermissions,
         secondaryProjectPath,
         allowCrossProject,
-      })) as { agent: { id: string; name: string } };
-      return text(`Created agent "${data.agent.name}" with ID: ${data.agent.id}`);
+        provider,
+        model,
+        effort,
+        permissionMode,
+        cliPath,
+      })) as { agent: { id: string; name: string; provider?: string } };
+      return text(`Created agent "${data.agent.name}" with ID: ${data.agent.id}${data.agent.provider ? ` (${data.agent.provider})` : ""}`);
     },
   }),
 

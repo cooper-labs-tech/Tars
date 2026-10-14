@@ -4,8 +4,10 @@ import {
   canSubmitAgent,
   canSubmitTeam,
   deployButtonLabel,
+  ownWorktreeOf,
   teamSelectionSummary,
   worktreeCount,
+  worktreeToSave,
 } from '@/components/NewChatModal/logic';
 
 /**
@@ -98,5 +100,43 @@ describe('deployButtonLabel', () => {
   it('pluralises the count', () => {
     expect(deployButtonLabel(1)).toBe('Deploy 1 agent');
     expect(deployButtonLabel(5)).toBe('Deploy 5 agents');
+  });
+});
+
+/**
+ * The worktree an agent's settings show and send (Noah's report of 13/10: set,
+ * saved, and nothing kept). agent:list's branchName is the branch the agent's
+ * folder is on, read from git (services/agent-truth.ts), so an agent with no
+ * worktree of its own has its project's there. Written before the code. How it
+ * can fail:
+ * 1. an agent with no worktree of its own reads as having one, because its
+ *    folder is on a branch: its switch on and locked, nothing to save;
+ * 2. an agent with its own worktree reads as free, and a second one is offered;
+ * 3. its folder's branch (main) is put in the field of an agent with none;
+ * 4. a worktree turned on is not sent, or sent for an agent that already has one
+ *    (agent:update ignores it), or sent with a blank or untrimmed branch.
+ */
+describe('ownWorktreeOf', () => {
+  it('reads an agent with no worktree as free, whatever branch its folder is on (1, 3)', () => {
+    expect(ownWorktreeOf({ branchName: 'main' })).toEqual({ on: false, branchName: '', locked: false });
+    expect(ownWorktreeOf({})).toEqual({ on: false, branchName: '', locked: false });
+  });
+
+  it('reads an agent with its own worktree as on and locked, with its branch (2)', () => {
+    expect(ownWorktreeOf({ worktreePath: '/p/.worktrees/feat-x', branchName: 'feat/x' })).toEqual({ on: true, branchName: 'feat/x', locked: true });
+    expect(ownWorktreeOf({ worktreePath: '/p/.worktrees/feat-x' })).toEqual({ on: true, branchName: '', locked: true });
+  });
+});
+
+describe('worktreeToSave', () => {
+  it('sends a worktree turned on for an agent with none, its branch trimmed (4)', () => {
+    expect(worktreeToSave({ useWorktree: true, branchName: '  feat/notes ' }, {})).toEqual({ enabled: true, branchName: 'feat/notes' });
+    expect(worktreeToSave({ useWorktree: true, branchName: 'feat/notes' }, { branchName: 'main' })).toEqual({ enabled: true, branchName: 'feat/notes' });
+  });
+
+  it('sends nothing when it is off, blank, or the agent has its own already (4)', () => {
+    expect(worktreeToSave({ useWorktree: false, branchName: 'feat/notes' }, {})).toBeUndefined();
+    expect(worktreeToSave({ useWorktree: true, branchName: '   ' }, {})).toBeUndefined();
+    expect(worktreeToSave({ useWorktree: true, branchName: 'feat/y' }, { worktreePath: '/p/.worktrees/feat-x', branchName: 'feat/x' })).toBeUndefined();
   });
 });

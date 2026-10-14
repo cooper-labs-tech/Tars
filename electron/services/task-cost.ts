@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { readUsageLines, pricingFor, costOf, diff, add, type Counts, type Pricing } from './transcript-usage';
+import { readGainedUsageLines, pricingFor, costOf, diff, add, type Counts, type Pricing } from './transcript-usage';
 import { transcriptPath, transcriptRoots } from '../utils/resume-session';
 import type { TaskRecord, TurnTokens } from './task-ledger';
 
@@ -58,32 +58,47 @@ interface TimedLine {
 
 const ZERO: Counts = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, write1h: 0, write5m: 0, searches: 0 };
 
-/** Parsed files, kept while unchanged: a session still being written is read again, the others not. */
-const fileCache = new Map<string, { mtimeMs: number; size: number; lines: TimedLine[] }>();
-const FILE_CACHE_MAX = 32;
+/**
+ * Each transcript read, and where its reading stopped: a session still being
+ * written is read from there, as transcript-usage.ts reads since #377, and the
+ * others not at all. Kept while some call asked for the file in the last ten
+ * minutes, which sizes it to the sessions the page shows: a cap of 32 files,
+ * under the 72 of one busy day, read the others whole again at every call.
+ */
+interface ReadFile { ino: number; offset: number; mtimeMs: number; size: number; lines: TimedLine[]; usedAt: number }
+const fileCache = new Map<string, ReadFile>();
+const KEEP_UNUSED_MS = 10 * 60_000;
 
-async function timedLinesOf(file: string): Promise<{ mtimeMs: number; lines: TimedLine[] } | null> {
+/** Forgets every transcript read, for a test that starts over. */
+export function clearTaskCostCache(): void {
+  fileCache.clear();
+}
+
+async function timedLinesOf(file: string, now: number): Promise<{ mtimeMs: number; lines: TimedLine[] } | null> {
   let stat: fs.Stats;
   try {
     stat = fs.statSync(file);
   } catch {
     return null;
   }
-  const cached = fileCache.get(file);
-  if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
-    fileCache.delete(file);
-    fileCache.set(file, cached);
-    return cached;
+  const hit = fileCache.get(file);
+  if (hit && hit.mtimeMs === stat.mtimeMs && hit.size === stat.size) {
+    hit.usedAt = now;
+    return hit;
   }
-  const read = await readUsageLines(file);
-  if (read === null) return null;
-  const lines: TimedLine[] = [];
-  for (const { key, model, timestamp, counts } of read) {
+  // Grown, the same file: read from where it stopped. Anything else (shrunk,
+  // replaced, rewritten to the same size with a new date) is read whole.
+  const from = hit && hit.ino === stat.ino && stat.size > hit.size && hit.size >= hit.offset ? hit : { offset: 0, lines: [] as TimedLine[] };
+  const gained = await readGainedUsageLines(file, from.offset, stat.size);
+  // Only a real read is remembered: a failure kept would be a file missing for good.
+  if (!gained) return null;
+  const added: TimedLine[] = [];
+  for (const { key, model, timestamp, counts } of gained.usage) {
     const at = timestamp ? Date.parse(timestamp) : NaN;
-    if (Number.isFinite(at)) lines.push({ key, model, at, counts });
+    if (Number.isFinite(at)) added.push({ key, model, at, counts });
   }
-  fileCache.set(file, { mtimeMs: stat.mtimeMs, size: stat.size, lines });
-  while (fileCache.size > FILE_CACHE_MAX) fileCache.delete(fileCache.keys().next().value as string);
+  const lines = added.length ? [...from.lines, ...added] : from.lines;
+  fileCache.set(file, { ino: stat.ino, offset: from.offset + gained.consumed, mtimeMs: stat.mtimeMs, size: stat.size, lines, usedAt: now });
   return { mtimeMs: stat.mtimeMs, lines };
 }
 
@@ -137,12 +152,14 @@ export async function readTaskCosts(tasks: TaskRecord[], opts: { homeDir?: strin
   for (const list of sessions.values()) list.sort((a, b) => a.startedAt - b.startedAt);
 
   const read: Array<{ sessionId: string; mtimeMs: number; lines: TimedLine[] }> = [];
+  const now = Date.now();
   for (const { file, sessionId } of files) {
-    const parsed = await timedLinesOf(file);
+    const parsed = await timedLinesOf(file, now);
     if (!parsed) continue;
     read.push({ sessionId, ...parsed });
     foundSessions.add(sessionId);
   }
+  for (const [file, kept] of fileCache) if (now - kept.usedAt > KEEP_UNUSED_MS) fileCache.delete(file);
   // Oldest first, as on the Usage page: a reply is its first writer's.
   read.sort((a, b) => a.mtimeMs - b.mtimeMs);
 

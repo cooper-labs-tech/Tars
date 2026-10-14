@@ -125,6 +125,7 @@ export default function AgentsPage() {
       model: agent.model,
       localModel: agent.localModel,
       branchName: agent.branchName,
+      worktreePath: agent.worktreePath,
       obsidianVaultPaths: agent.obsidianVaultPaths,
       savedPrompt: agent.savedPrompt,
       role: agent.role,
@@ -187,11 +188,13 @@ export default function AgentsPage() {
     cliPath?: string | null;
   }) => {
     try {
-      await updateAgent({ id, ...updates });
+      // A refusal keeps the dialog open with the changes made, and says why.
+      const result = await updateAgent({ id, ...updates });
+      if (!result?.success) return { error: result?.error || 'Tars did not save it' };
       setEditAgentId(null);
     } catch (error) {
       console.error('Failed to update agent:', error);
-      return false;
+      return { error: error instanceof Error ? error.message : String(error) };
     }
   }, [updateAgent]);
 

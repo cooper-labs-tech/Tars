@@ -47,6 +47,10 @@ vi.mock('../../../../electron/utils/path-builder', () => ({
 }));
 
 import * as pty from 'node-pty';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { getAllProviders } from '../../../../electron/providers';
 import { registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
 import { resetLaunches } from '../../../../electron/core/agent-launch';
 import { agents, saveAgents, killStalePty } from '../../../../electron/core/agent-manager';
@@ -276,6 +280,83 @@ describe('agent-routes', () => {
       const sendJson = vi.fn();
       await handler(makeReq({ callerAgentId, body: {} }), sendJson, ctx);
       expect(sendJson).toHaveBeenCalledWith({ error: 'projectPath is required' }, 400);
+    });
+  });
+
+  /**
+   * An agent makes another on any provider and CLI (2.0.2, Noah: "ça doit supporter n'importe quel
+   * provider/cli"). How it fails, written before the code (2026-10-14):
+   * 1. An unknown provider is refused without the providers that exist: the caller cannot correct it.
+   * 2. A provider run through an API key, without its key, is created, and its first launch is refused
+   *    (or, worse, would run on the user's Anthropic account): refused at creation, as the launch would.
+   * 3. A CLI provider loses its model, effort or permission mode on the way.
+   * 4. A cliPath that is not absolute, does not exist, is a folder or is not executable is kept, and the
+   *    launch fails later with no reason; or an absolute executable file is refused.
+   * 5. A permission mode outside plan, normal, auto and bypass is kept.
+   */
+  describe('POST /api/agents: any provider and any CLI (2.0.2)', () => {
+    const create = async (body: Record<string, unknown>) => {
+      agents.set('creator', makeAgent({ id: 'creator' }));
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = app.routes.find(r => r.method === 'POST' && r.pattern === '/api/agents')!.handler;
+      const sendJson = vi.fn();
+      await handler(makeReq({ callerAgentId: 'creator', body: { projectPath: '/test/project', name: 'Made', ...body } }), sendJson, ctx);
+      return sendJson.mock.calls[0] as [Record<string, any>, number | undefined];
+    };
+
+    it('1. refuses an unknown provider, and names every provider of the registry', async () => {
+      const [answer, status] = await create({ provider: 'nope' });
+      expect(status).toBe(400);
+      for (const p of getAllProviders()) expect(answer.error).toContain(p.id);
+    });
+
+    it("2. refuses a provider run through an API key when its key is not set, as its launch would", async () => {
+      const [answer, status] = await create({ provider: 'openrouter' });
+      expect(status).toBe(400);
+      expect(answer.error).toBe('No API key configured for provider "openrouter". Add it (or an OpenRouter key) in Settings > AI Providers.');
+      expect(agents.size).toBe(1);
+    });
+
+    it('3. keeps a CLI provider with its model, effort and permission mode', async () => {
+      const [answer, status] = await create({ provider: 'codex', model: 'gpt-5-codex', effort: 'high', permissionMode: 'normal' });
+      expect(status).toBeUndefined();
+      expect(answer.agent).toMatchObject({ provider: 'codex', model: 'gpt-5-codex', effort: 'high', permissionMode: 'normal' });
+    });
+
+    it('4. takes a cliPath only when it is an absolute path to an executable file, and says why otherwise', async () => {
+      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-path-'));
+      const exe = path.join(dir, 'my-cli');
+      fs.writeFileSync(exe, '#!/bin/sh\n', { mode: 0o755 });
+      const plain = path.join(dir, 'plain');
+      fs.writeFileSync(plain, 'x', { mode: 0o644 });
+      for (const [cliPath, why] of [
+        ['my-cli', /absolute/], [path.join(dir, 'missing'), /no file/], [dir, /not a file/], [plain, /not executable/],
+      ] as const) {
+        const [answer, status] = await create({ cliPath });
+        expect(status, cliPath).toBe(400);
+        expect(answer.error, cliPath).toMatch(why);
+      }
+      const [made, status] = await create({ provider: 'codex', cliPath: exe });
+      expect(status).toBeUndefined();
+      expect(made.agent.cliPath).toBe(exe);
+    });
+
+    it('5. refuses a permission mode outside plan, normal, auto and bypass', async () => {
+      const [answer, status] = await create({ permissionMode: 'yolo' });
+      expect(status).toBe(400);
+      expect(answer.error).toMatch(/plan, normal, auto or bypass/);
+    });
+
+    // The Audit's Low 2 on #407: a Codex agent made in plan ran as normal and edited once it had asked.
+    it("6. refuses plan for a provider that has none, with the window's reason, and keeps it for Claude Code", async () => {
+      const [answer, status] = await create({ provider: 'codex', permissionMode: 'plan' });
+      expect(status).toBe(400);
+      expect(answer.error).toMatch(/has no plan mode here: plan would run as manual/);
+      expect(agents.size).toBe(1);
+      const [made, ok] = await create({ provider: 'claude', permissionMode: 'plan' });
+      expect(ok).toBeUndefined();
+      expect(made.agent.permissionMode).toBe('plan');
     });
   });
 

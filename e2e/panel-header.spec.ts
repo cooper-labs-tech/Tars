@@ -7,18 +7,21 @@ import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, seedS
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * An agent's panel header on the Dashboard (Noah, 01/10). Frames: `Panel
- * header · session and fullscreen` and its light copy, and every frame that
- * draws a panel header, in design/tars-redesign.pen. In the real app, in a
- * sandbox where nothing starts:
+ * An agent's panel header on the Dashboard (Noah, 01/10 and 13/10). Frames:
+ * `Panel header · fullscreen` and its light copy, and every frame that draws a
+ * panel header, in design/tars-redesign.pen. In the real app, in a sandbox
+ * where nothing starts:
  * - the panel has no history view: nothing in its header offers one, and no
  *   view switch is left;
- * - the word that named the live view says `session`;
+ * - no word names its one view: neither `live` nor `session`, which offered
+ *   nothing to choose and took room (Noah, 13/10);
  * - fullscreen is a 26 px button in the header, after start or stop and out
  *   of the menu: a press fills the window, the button turns to exit
  *   fullscreen, and a second press takes the panel back;
  * - the panel's menu offers clear and hide from this board, and fullscreen no
- *   longer; in fullscreen, clear alone.
+ *   longer; in fullscreen, clear alone;
+ * - on a narrow card, at 1024 px, the header keeps one line, its name shown and
+ *   its start or stop, fullscreen and menu inside it.
  */
 
 let app: ElectronApplication;
@@ -62,7 +65,8 @@ test("an agent's panel header: its session, no history, and fullscreen in one pr
   await expect(h.getByText('history', { exact: true })).toHaveCount(0);
   await expect(h.getByRole('radiogroup')).toHaveCount(0);
   await expect(h.getByText('live', { exact: true })).toHaveCount(0);
-  await expect(h.getByText('session', { exact: true })).toBeVisible();
+  await expect(h.getByText('session', { exact: true })).toHaveCount(0);
+  await expect(h.locator('[title*="session" i]')).toHaveCount(0);
 
   // Fullscreen is a button of its own, 26 px, after start or stop.
   const fs1 = h.getByRole('button', { name: 'Fullscreen', exact: true });
@@ -109,6 +113,23 @@ test("an agent's panel header: its session, no history, and fullscreen in one pr
   await expect.poll(async () => (await header('Orchestrator').boundingBox())?.width ?? 0).toBeLessThan(1200);
   await stepShot(page, '05-back-on-the-board');
 
+  // A narrow card: one line still, the name shown, the actions inside it.
+  await page.setViewportSize({ width: 1024, height: 768 });
+  const narrow = header('Orchestrator');
+  await expect.poll(async () => (await narrow.boundingBox())?.width ?? 0).toBeLessThan(560);
+  const nBox = (await narrow.boundingBox())!;
+  const inside = async (l: Locator) => {
+    const b = (await l.boundingBox())!;
+    return b.x >= nBox.x - 0.5 && b.x + b.width <= nBox.x + nBox.width + 0.5 && b.y >= nBox.y - 0.5 && b.y + b.height <= nBox.y + nBox.height + 0.5;
+  };
+  expect(Math.round(nBox.height)).toBeLessThanOrEqual(33);
+  expect(((await narrow.getByText('Orchestrator', { exact: true }).boundingBox())?.width ?? 0) > 20).toBe(true);
+  for (const l of [narrow.getByRole('button', { name: /^(start|stop)$/ }), narrow.getByRole('button', { name: 'Fullscreen', exact: true }), narrow.getByRole('button', { name: 'Panel actions' })]) {
+    await expect(l).toBeVisible();
+    expect(await inside(l)).toBe(true);
+  }
+  await stepShot(page, '06-narrow-card');
+
   expect(errors, errors.join('\n')).toEqual([]);
-  recordValues({ restWidth, fullscreenButton: box, pageErrors: errors });
+  recordValues({ restWidth, fullscreenButton: box, narrowHeader: nBox, pageErrors: errors });
 });

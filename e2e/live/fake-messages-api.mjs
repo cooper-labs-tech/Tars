@@ -9,7 +9,8 @@
 // own terminal, `<FAKE_NESTED_CLI> -p "LINES 1 inner<tag>"`, whose own requests
 // come here too (the nested CLI of #380's gate).
 // Every request is logged as one JSON line to FAKE_LOG, which is how a spec
-// knows a turn reached the model. Adapted from the Frontend's #132 proof.
+// knows a turn reached the model, with the effort Claude Code asked for
+// (`output_config.effort`). Adapted from the Frontend's #132 proof.
 import http from 'node:http';
 import fs from 'node:fs';
 
@@ -110,7 +111,7 @@ http.createServer((req, res) => {
     const side = String(model).includes('haiku');
     // The command the turn carries, which Claude Code follows with context of its
     // own: logging the end of the turn would lose it.
-    log({ url: req.url, model, stream: !!json.stream, side, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0] });
+    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0] });
     if (!json.stream) {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({

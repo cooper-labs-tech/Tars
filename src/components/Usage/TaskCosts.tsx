@@ -4,9 +4,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { TaskReport } from '@/types/electron';
 import { useClaude } from '@/hooks/useClaude';
-import { Button, Dropdown, Panel, PanelCaption } from '@/components/ui';
+import { Button, Dropdown, Panel, PanelCaption, SegmentedControl } from '@/components/ui';
 import type { DropdownOption } from '@/components/ui';
 import { fmtTokens, getModelDisplayName } from '@/lib/usage-format';
+import { USAGE_VIEW_KEY, agentViewFilter, projectName, totalsByAgent, usageViewOf, viewCounts } from '@/lib/agent-costs';
+import type { AgentTotal, UsageView } from '@/lib/agent-costs';
 import {
   TASKS_PAGE,
   agentName,
@@ -36,6 +38,10 @@ const ALL = '__all__';
 const NOT_COUNTED_NOTE =
   'Not counted: a CLI in a terminal that writes no transcript, such as Codex or Gemini. Over ACP, a task is counted at what the run reports.';
 
+/** What an agent's row holds: its tasks, and so nothing from before Tars recorded them. */
+const AGENT_ROWS_NOTE =
+  'A row adds up the agent\'s tasks, which Tars records since 1.9.3: what it spent before then is in the charts above, in no row.';
+
 /** The header cells: 10px uppercase, as a panel's caption. */
 const HEAD = 'pb-1.5 font-normal text-[10px] uppercase tracking-[0.08em] text-muted-foreground border-b border-border';
 /** Every column after the first: the frame's 10px between columns. */
@@ -51,6 +57,7 @@ const WIDE = 'hidden min-[1400px]:table-cell';
 const MID = 'hidden xl:table-cell';
 
 const countOf = (n: number) => (n === 1 ? '1 task' : `${n} tasks`);
+const agentsOf = (n: number) => (n === 1 ? '1 agent' : `${n} agents`);
 
 /** A picker's options, with the one picked kept even when the window holds none of its tasks. */
 function withPicked(all: string, total: number, options: FilterOption[], picked: string | null, labelOf: (v: string) => string): DropdownOption[] {
@@ -64,7 +71,8 @@ function withPicked(all: string, total: number, options: FilterOption[], picked:
  * four charts and over the page's one timeframe: the tasks, newest first,
  * twenty at a time, filtered by project and agent, and the averages per agent
  * and per model over the tasks listed. Frame: `Usage · cost per task`, and its
- * light copy.
+ * light copy. Or the same tasks by agent, one row each, from the switch at the
+ * head of the list, which the page remembers: `Usage · cost per agent`.
  */
 export function TaskCosts({ start, length, control }: {
   /** The window's first moment: the page's own, not the 24-hour periods usage.tasks counts in. */
@@ -86,6 +94,7 @@ export function TaskCosts({ start, length, control }: {
   const [report, setReport] = useState<TaskReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<TaskFilter>({ projectPath: null, agentId: null });
+  const [view, setView] = useState<UsageView>('task');
   const startMs = start.getTime();
   // The list a "show more" was for: another window or filter starts at twenty again.
   const listKey = `${startMs}|${filter.projectPath ?? ''}|${filter.agentId ?? ''}`;
@@ -104,9 +113,21 @@ export function TaskCosts({ start, length, control }: {
     );
   }, [startMs, data]);
 
+  // The view last picked, read once mounted: there is no storage when the page is built.
+  useEffect(() => {
+    try { setView(usageViewOf(window.localStorage.getItem(USAGE_VIEW_KEY))); } catch { /* storage refused: by task */ }
+  }, []);
+  const pickView = (next: UsageView) => {
+    setView(next);
+    try { window.localStorage.setItem(USAGE_VIEW_KEY, next); } catch { /* not remembered, still shown */ }
+  };
+
   const names = useMemo(() => report?.agentNames ?? {}, [report]);
   const inTimeframe = useMemo(() => (report ? inWindow(report.tasks, new Date(startMs)) : []), [report, startMs]);
-  const listed = useMemo(() => filterTasks(inTimeframe, filter), [inTimeframe, filter]);
+  // By agent, the agent picked steps aside: every agent of the project is a row.
+  const listed = useMemo(() => filterTasks(inTimeframe, view === 'agent' ? agentViewFilter(filter) : filter), [inTimeframe, filter, view]);
+  const counts = useMemo(() => viewCounts(inTimeframe, filter), [inTimeframe, filter]);
+  const agents = useMemo(() => (view === 'agent' ? totalsByAgent(listed, accountLabels) : []), [view, listed, accountLabels]);
   const byAgent = useMemo(() => averagesBy(listed, t => t.agentId), [listed]);
   const byModel = useMemo(() => averagesBy(listed, t => dominantModel(t) ?? t.provider ?? 'claude'), [listed]);
 
@@ -127,7 +148,19 @@ export function TaskCosts({ start, length, control }: {
       </p>
     );
   } else if (listed.length === 0) {
-    body = <p className="text-xs text-muted-foreground">{`No task in these ${control} for the project and the agent picked.`}</p>;
+    body = (
+      <p className="text-xs text-muted-foreground">
+        {view === 'agent' ? `No task in these ${control} for the project picked.` : `No task in these ${control} for the project and the agent picked.`}
+      </p>
+    );
+  } else if (view === 'agent') {
+    body = (
+      <>
+        <AgentTable rows={agents} names={names} />
+        <p className="text-[11px] text-muted-foreground">{AGENT_ROWS_NOTE}</p>
+        {notCounted > 0 && <p className="text-[11px] text-muted-foreground">{NOT_COUNTED_NOTE}</p>}
+      </>
+    );
   } else {
     body = (
       <>
@@ -216,11 +249,26 @@ export function TaskCosts({ start, length, control }: {
     <>
       <Panel data-tasks-panel className="flex flex-col gap-2.5">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <PanelCaption>{`TASKS · ${length}`}</PanelCaption>
+          <div className="flex items-center gap-3">
+            <PanelCaption>{`${view === 'agent' ? 'AGENTS' : 'TASKS'} · ${length}`}</PanelCaption>
+            {inTimeframe.length > 0 && (
+              <SegmentedControl
+                options={[
+                  { value: 'task', label: `By task (${counts.tasks})` },
+                  { value: 'agent', label: `By agent (${counts.agents})` },
+                ]}
+                value={view}
+                onChange={pickView}
+                ariaLabel="Show the tasks one by one, or by agent"
+              />
+            )}
+          </div>
           {inTimeframe.length > 0 && (
             <div className="flex items-center gap-2">
               <span className="font-mono text-[11px] text-muted-foreground">
-                {`${countOf(listed.length)}${notCounted > 0 ? ` · ${notCounted} not counted` : ''}`}
+                {view === 'agent'
+                  ? `${agentsOf(agents.length)}${notCounted > 0 ? ` · ${countOf(notCounted)} not counted` : ''}`
+                  : `${countOf(listed.length)}${notCounted > 0 ? ` · ${notCounted} not counted` : ''}`}
               </span>
               <Dropdown
                 value={filter.projectPath ?? ALL}
@@ -231,22 +279,24 @@ export function TaskCosts({ start, length, control }: {
                 className="w-48"
                 ariaLabel="Show the tasks of one project"
               />
-              <Dropdown
-                value={filter.agentId ?? ALL}
-                options={withPicked('All agents', inTimeframe.length, agentOptions(inTimeframe, names), filter.agentId, id => agentName(id, names))}
-                onChange={value => setFilter(f => ({ ...f, agentId: value === ALL ? null : value }))}
-                size="sm"
-                align="right"
-                className="w-48"
-                ariaLabel="Show the tasks of one agent"
-              />
+              {view === 'task' && (
+                <Dropdown
+                  value={filter.agentId ?? ALL}
+                  options={withPicked('All agents', inTimeframe.length, agentOptions(inTimeframe, names), filter.agentId, id => agentName(id, names))}
+                  onChange={value => setFilter(f => ({ ...f, agentId: value === ALL ? null : value }))}
+                  size="sm"
+                  align="right"
+                  className="w-48"
+                  ariaLabel="Show the tasks of one agent"
+                />
+              )}
             </div>
           )}
         </div>
         {body}
       </Panel>
 
-      {/* The averages of the tasks listed: the timeframe, then the project and agent picked. */}
+      {/* The averages of the tasks listed: the timeframe, then the project picked, and by task the agent picked. */}
       {listed.length > 0 && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
           <Averages which="agent" caption={`AVERAGE PER AGENT · ${length}`} rows={byAgent} nameOf={key => agentName(key, names)} known={key => key in names} />
@@ -296,5 +346,64 @@ function Averages({ which, caption, rows, nameOf, known, mono = false }: {
         </tbody>
       </table>
     </Panel>
+  );
+}
+
+/**
+ * One row per agent over the tasks listed, the dearest first: its project, the
+ * provider and account of its latest task with any other under it, its tasks
+ * (the running ones said), the time of those that ended, its tokens and the
+ * sum of its own costs, partial when a task of it is not counted.
+ */
+function AgentTable({ rows, names }: { rows: AgentTotal[]; names: Record<string, string> }) {
+  return (
+    <table className="w-full table-fixed border-collapse text-left">
+      <thead>
+        <tr>
+          <th className={HEAD}>Agent</th>
+          <th className={`${HEAD} ${CELL} w-[130px]`}>Project</th>
+          <th className={`${HEAD} ${CELL} ${MID} w-[150px]`}>Provider</th>
+          <th className={`${HEAD} ${CELL} w-[70px] text-right`}>Tasks</th>
+          <th className={`${HEAD} ${CELL} w-[74px] text-right`}>Time</th>
+          <th className={`${HEAD} ${CELL} w-[74px] text-right`}>Tokens</th>
+          <th className={`${HEAD} ${CELL} w-[100px] text-right`}>Cost</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(row => {
+          const others = row.providers.slice(1).join(', ');
+          return (
+            <tr key={row.agentId} data-agent-row className="align-top border-b border-border hover:bg-secondary">
+              <td data-cell="agent" className="py-[7px]">
+                <p data-value className={`text-xs truncate ${row.agentId in names ? 'text-foreground' : 'text-muted-foreground'}`}>
+                  {agentName(row.agentId, names)}
+                </p>
+              </td>
+              <td data-cell="project" className="py-[7px] pl-2.5">
+                <p data-value className="text-xs text-text-secondary truncate">{projectName(row.projectPath)}</p>
+              </td>
+              <td data-cell="provider" className={`py-[7px] pl-2.5 ${MID}`}>
+                <p data-value className="text-xs text-text-secondary truncate">{row.providers[0]}</p>
+                {others && <p data-sub className="mt-0.5 font-mono text-[10.5px] text-muted-foreground truncate" title={others}>{`also ${others}`}</p>}
+              </td>
+              <td data-cell="tasks" className="py-[7px] pl-2.5 text-right">
+                <p data-value className={MONO}>{row.tasks}</p>
+                {row.running > 0 && <p data-sub className="mt-0.5 font-mono text-[10.5px] text-status-running whitespace-nowrap">{`${row.running} running`}</p>}
+              </td>
+              <td data-cell="time" className="py-[7px] pl-2.5 text-right">
+                <p data-value className={`${MONO} whitespace-nowrap`}>{durationLabel(row.durationMs)}</p>
+              </td>
+              <td data-cell="tokens" className="py-[7px] pl-2.5 text-right">
+                <p data-value className={MONO}>{row.tokens === null ? '-' : fmtTokens(row.tokens)}</p>
+              </td>
+              <td data-cell="cost" className="py-[7px] pl-2.5 text-right whitespace-nowrap">
+                <p data-value className={`font-mono text-[11px] ${row.costUSD === null ? 'text-muted-foreground' : 'text-status-running'}`}>{moneyText(row.costUSD)}</p>
+                {row.partial && <p data-sub className="mt-0.5 font-mono text-[10.5px] text-muted-foreground">partial</p>}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

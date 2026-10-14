@@ -12,6 +12,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * The tool is the real one, registered on a fake server that validates the
  * arguments against the tool's own schema the way the SDK does, so a flag the
  * schema does not declare is dropped here as it would be there.
+ *
+ * Any provider and any CLI (2.0.2, Noah: "ça doit supporter n'importe quel
+ * provider/cli"). How it fails, written before the code (2026-10-14):
+ * 6. The schema does not declare provider, model, effort, permissionMode or
+ *    cliPath: they are dropped, and the agent is made on Claude.
+ * 7. The description does not name the providers by id: an orchestrator has
+ *    nothing to ask for but Claude, and says so ("my tool only makes Claude
+ *    agents", measured by Noah on 2026-10-14).
+ * 8. An effort or a permission mode outside its values reaches the API.
  */
 
 vi.mock('../../mcp-orchestrator/src/utils/api.js', () => ({
@@ -40,9 +49,12 @@ type FieldSchema = { parse(value: unknown): unknown };
 
 function makeFakeServer() {
   const tools = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
+  const shapes = new Map<string, Record<string, FieldSchema & { description?: string }>>();
   return {
     tools,
+    shapes,
     tool(name: string, _desc: string, shape: Record<string, FieldSchema>, handler: (args: Record<string, unknown>) => Promise<unknown>) {
+      shapes.set(name, shape);
       tools.set(name, args => {
         const parsed: Record<string, unknown> = {};
         for (const [key, field] of Object.entries(shape)) {
@@ -85,5 +97,30 @@ describe('create_agent', () => {
 
     const [, , body] = mockApiRequest.mock.calls[0];
     expect((body as Record<string, unknown>).allowCrossProject).toBeUndefined();
+  });
+});
+
+describe('create_agent: any provider and any CLI (2.0.2)', () => {
+  it('6. passes provider, model, effort, permissionMode and cliPath on to the API', async () => {
+    const create = await loadCreateAgent();
+    await create({ name: 'tester', provider: 'codex', model: 'gpt-5-codex', effort: 'high', permissionMode: 'normal', cliPath: '/opt/bin/codex' });
+    const [, , body] = mockApiRequest.mock.calls[0];
+    expect(body).toMatchObject({ provider: 'codex', model: 'gpt-5-codex', effort: 'high', permissionMode: 'normal', cliPath: '/opt/bin/codex' });
+  });
+
+  it('7. names every provider of the registry by its id, in the schema the model reads', async () => {
+    const { registerAgentTools } = await import('../../mcp-orchestrator/src/tools/agents.js');
+    const server = makeFakeServer();
+    registerAgentTools(server as never);
+    const description = server.shapes.get('create_agent')!.provider?.description ?? '';
+    const { getAllProviders } = await import('../../electron/providers');
+    for (const p of getAllProviders()) expect(description).toContain(p.id);
+  });
+
+  it('8. refuses an effort or a permission mode outside its values before the API', async () => {
+    const create = await loadCreateAgent();
+    await expect(async () => create({ effort: 'extreme' })).rejects.toThrow();
+    await expect(async () => create({ permissionMode: 'yolo' })).rejects.toThrow();
+    expect(mockApiRequest).not.toHaveBeenCalled();
   });
 });

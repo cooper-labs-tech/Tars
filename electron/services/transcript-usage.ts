@@ -550,12 +550,13 @@ async function contributionFor(file: string): Promise<FileContribution | null> {
 }
 
 /**
- * The turns of a transcript's bytes from `from` to `to`, by slices of four
- * megabytes with breaths, as readFileInSlices reads, and how many bytes of
- * whole lines that was. A line still being written waits for its end; a last
- * line with no newline after it is taken when it parses whole.
+ * The usage lines of a transcript's bytes from `from` to `to`, by slices of
+ * four megabytes with breaths, as readFileInSlices reads, and how many bytes
+ * of whole lines that was. A line still being written waits for its end; a
+ * last line with no newline after it is taken when it parses whole. Shared
+ * with task-cost.ts, which reads the same transcripts the same way.
  */
-async function readGainedTurns(file: string, from: number, to: number): Promise<{ turns: FileContribution; consumed: number; lines: number } | null> {
+export async function readGainedUsageLines(file: string, from: number, to: number): Promise<{ usage: UsageLine[]; consumed: number; lines: number } | null> {
   const CHUNK = 4 * 1024 * 1024;
   let fd: number;
   try {
@@ -563,14 +564,14 @@ async function readGainedTurns(file: string, from: number, to: number): Promise<
   } catch {
     return null;
   }
-  const turns: FileContribution = [];
+  const usage: UsageLine[] = [];
   let consumed = 0;
   let lines = 0;
   const take = (text: string) => {
     for (const line of text.split('\n')) {
       lines += 1;
-      const usage = usageLineOf(line);
-      if (usage) turns.push(contributionOf(usage));
+      const found = usageLineOf(line);
+      if (found) usage.push(found);
     }
   };
   try {
@@ -597,12 +598,18 @@ async function readGainedTurns(file: string, from: number, to: number): Promise<
       try { JSON.parse(last); whole = true; } catch { /* still being written */ }
       if (whole) { take(last); consumed += pending.length; }
     }
-    return { turns, consumed, lines };
+    return { usage, consumed, lines };
   } catch {
     return null;
   } finally {
     fs.closeSync(fd);
   }
+}
+
+/** The turns of a transcript's bytes from `from` to `to`, and how many bytes of whole lines that was. */
+async function readGainedTurns(file: string, from: number, to: number): Promise<{ turns: FileContribution; consumed: number; lines: number } | null> {
+  const gained = await readGainedUsageLines(file, from, to);
+  return gained && { turns: gained.usage.map(contributionOf), consumed: gained.consumed, lines: gained.lines };
 }
 
 /**

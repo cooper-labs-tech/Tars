@@ -12,13 +12,15 @@ vi.mock('react', async (importOriginal) => ({
 }));
 
 /**
- * An agent's panel header on the Dashboard, after Noah's request of 01/10.
- * Frames: `Panel header · session and fullscreen` (and its light copy), and
- * `Left fullscreen · notice`, in design/tars-redesign.pen. Written before the
- * code, as the ways it can fail:
+ * An agent's panel header on the Dashboard, after Noah's requests of 01/10 and
+ * 13/10. Frames: `Panel header · fullscreen` (and its light copy), and `Left
+ * fullscreen · notice`, in design/tars-redesign.pen. Written before the code,
+ * as the ways it can fail:
  * 1. the header still offers the history view: a view switch, or any control
  *    or word that says history;
- * 2. the panel's view is still named live, or nothing names it session;
+ * 2. the panel's view is still named: live, or session, the one view a panel
+ *    has, which named nothing to choose and took room in the header (Noah,
+ *    13/10: "il ne sert plus à rien puisqu'on ne choisit plus une autre vue");
  * 3. fullscreen is not a button of its own in the header, outside the menu,
  *    26 px square;
  * 4. the button does the wrong thing for the state: onFullscreen while the
@@ -92,11 +94,17 @@ describe("an agent's panel header", () => {
     expect(elements(h.result).some(e => e.type === SegmentedControl || e.props.role === 'radiogroup' || e.props.role === 'radio')).toBe(false);
   });
 
-  it('names the panel session, and never live (2)', () => {
-    const h = render(false);
-    expect(texts(h)).toContain('session');
-    expect(texts(h)).not.toContain('live');
-    expect(offered(h)).not.toContain('live');
+  it('names no view, neither session nor live, at rest or in fullscreen (2)', () => {
+    for (const isFullscreen of [false, true]) {
+      const h = render(isFullscreen);
+      expect(texts(h)).not.toContain('session');
+      expect(texts(h)).not.toContain('live');
+      expect(offered(h)).not.toContain('session');
+      expect(offered(h)).not.toContain('live');
+      expect(elements(h.result).some(e => /\bsession\b/i.test(String(e.props.title ?? '')))).toBe(false);
+      h.unmount();
+      header = undefined;
+    }
   });
 
   it('has a 26 px fullscreen button of its own, with the arrows out, that fills the window (3, 4)', () => {

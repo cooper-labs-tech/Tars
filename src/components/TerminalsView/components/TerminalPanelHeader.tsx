@@ -188,16 +188,9 @@ export default function TerminalPanelHeader({
           subscriptions are on. Frame: `Agent · Claude account`. */}
       <AgentAccountControl agent={agent} stopMouseDown />
 
-      {/* What the panel shows: its agent's session, as it runs. It named the
-          live view while a history view sat beside it, and is a word now,
-          boxed as that selected segment was. Frame: `Panel header · session
-          and fullscreen`. */}
-      <span
-        className="inline-flex items-center h-[26px] px-2.5 mr-0.5 text-xs border bg-secondary border-border-accent text-foreground shrink-0"
-        title="The agent's session, in its terminal"
-      >
-        session
-      </span>
+      {/* No word names what the panel shows: it shows one thing, its agent's
+          session, so the boxed `session` that followed here named nothing to
+          choose (Noah, 13/10). Frame: `Panel header · fullscreen`. */}
 
       {/* Start / stop. The panel's primary action, so it is a button you can
           see and hit - not a row inside the overflow menu. A grid of terminals

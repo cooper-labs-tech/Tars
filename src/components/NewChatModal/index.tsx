@@ -16,7 +16,7 @@ import { AgentPanel } from './AgentPanel';
 import { TeamPanel } from './TeamPanel';
 import SkillInstallTerminal from './SkillInstallTerminal';
 import { blankMember } from './team-defaults';
-import { canSubmitAgent, canSubmitTeam, deployButtonLabel, deployedMemberName } from './logic';
+import { canSubmitAgent, canSubmitTeam, deployButtonLabel, deployedMemberName, ownWorktreeOf, worktreeToSave } from './logic';
 import type { CreationMode } from './types';
 import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
@@ -101,6 +101,8 @@ export default function NewChatModal({
   const [prompt, setPrompt] = useState('');
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
+  // Why the main process refused the last save of an agent's settings; the dialog stays open with the changes.
+  const [saveRefusal, setSaveRefusal] = useState<string | null>(null);
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('normal');
   const [effort, setEffort] = useState<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('medium');
   const [isOrchestrator, setIsOrchestrator] = useState(false);
@@ -204,14 +206,17 @@ export default function NewChatModal({
     // land in this one.
     let cancelled = false;
     setMode(isEditMode ? 'agent' : (initialMode || 'agent'));
+    setSaveRefusal(null);
 
     if (editAgent) {
       setProjectPath(editAgent.projectPath);
       setSelectedSkills(editAgent.skills || []);
       setPrompt(editAgent.savedPrompt || '');
       setModel(editAgent.model || 'default');
-      setUseWorktree(!!editAgent.branchName);
-      setBranchName(editAgent.branchName || '');
+      // Its own worktree, from worktreePath: branchName is the branch its folder is on.
+      const own = ownWorktreeOf(editAgent);
+      setUseWorktree(own.on);
+      setBranchName(own.branchName);
       setCharacter(editAgent.character || 'robot');
       setAgentName(editAgent.name || '');
       setPermissionMode(editAgent.permissionMode ?? (editAgent.skipPermissions ? 'auto' : 'normal'));
@@ -318,9 +323,8 @@ export default function NewChatModal({
     setIsSubmitting(true);
     try {
       if (isEditMode && editAgent && onUpdate) {
-        const worktreeConfig = useWorktree && !editAgent.branchName
-          ? { enabled: true, branchName: branchName.trim() }
-          : undefined;
+        const worktreeConfig = worktreeToSave({ useWorktree, branchName }, editAgent);
+        setSaveRefusal(null);
         const result = await onUpdate(editAgent.id, {
           projectPath,
           skills: selectedSkills,
@@ -336,6 +340,10 @@ export default function NewChatModal({
           cliPath: cliPath || null,
         });
         if (result === false) return;
+        if (result && typeof result === 'object' && 'error' in result) {
+          setSaveRefusal(result.error);
+          return;
+        }
         onClose();
         return;
       }
@@ -507,7 +515,11 @@ export default function NewChatModal({
         className="[&_button:not(:disabled)]:cursor-pointer"
         footerLeft={
           isEditMode
-            ? undefined
+            ? saveRefusal && (
+              <p role="alert" className="text-xs text-status-error">
+                Not saved: {saveRefusal.trim().replace(/[.\s]+$/, '')}. Your changes are still here.
+              </p>
+            )
             : mode === 'team'
               ? <span className="text-xs text-muted-foreground">Five worktrees are created under the project. Nothing is pushed.</span>
               : <span className="text-xs text-muted-foreground">It starts as soon as you create it.</span>
@@ -569,7 +581,7 @@ export default function NewChatModal({
               onPermissionModeChange={setPermissionMode}
               useWorktree={useWorktree}
               onToggleWorktree={() => setUseWorktree(v => !v)}
-              worktreeLocked={isEditMode && !!editAgent?.branchName}
+              worktreeLocked={isEditMode && ownWorktreeOf(editAgent ?? {}).locked}
               branchName={branchName}
               onBranchNameChange={setBranchName}
               isOrchestrator={isOrchestrator}

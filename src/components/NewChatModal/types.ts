@@ -26,7 +26,10 @@ export interface EditAgentData {
   provider?: AgentProvider;
   model?: string;
   localModel?: string;
+  /** The branch its folder is on, read from git: its project's when it has no worktree of its own. */
   branchName?: string;
+  /** Its own worktree, when it has one. */
+  worktreePath?: string;
   obsidianVaultPaths?: string[];
   savedPrompt?: string;
   /** The Orchestrator toggle. */
@@ -73,7 +76,7 @@ export interface NewChatModalProps {
     worktree?: WorktreeConfig;
     role?: 'orchestrator' | 'worker';
     cliPath?: string | null;
-  }) => void | Promise<boolean | void>;
+  }) => void | Promise<boolean | void | { error: string }>;
   /** Called after a team is deployed, with the ids of the agents created. */
   onTeamDeployed?: (agentIds: string[]) => void;
   editAgent?: EditAgentData | null;
