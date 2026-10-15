@@ -71,6 +71,12 @@ jobs:
         if: ${{ !cancelled() }}
         run: npm test
 
+      # ubuntu-24.04 (ubuntu-latest) has AppArmor restrict unprivileged user
+      # namespaces, which Chromium's sandbox needs, so Electron can abort at
+      # launch; Playwright's own CI lifts it the same way for Electron.
+      - name: Allow the user namespaces Chromium's sandbox needs
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+
       # The real app on a virtual display; the main process was built above.
       - name: Platform specs
         if: ${{ !cancelled() }}
