@@ -1,13 +1,14 @@
 'use client';
 
 import Image from 'next/image';
-import { Download, Github } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import dashboard from '@/assets/dashboard.png';
 import newInterface from '@/assets/new-interface.png';
+import { GetTars, HeroDownload } from '@/components/Downloads';
 import { PreviewSection } from '@/components/PreviewSection';
 import { SiteFooter } from '@/components/SiteFooter';
 import { SiteNav } from '@/components/SiteNav';
+import { readVisitor, type Arch, type Builds, type Os } from '@/lib/platforms';
 
 const FEATURES = [
   {
@@ -69,11 +70,18 @@ const FEATURES = [
 ];
 
 export default function Home() {
-  const [count, setCount] = useState<number | null>(null);
+  // Undefined until /api/stats answers; its builds are null when GitHub did not.
+  const [stats, setStats] = useState<{ total: number | null; builds: Builds | null }>();
+  // The visitor's system, read in the browser and kept nowhere.
+  const [visitor, setVisitor] = useState<{ os: Os | null; arch: Arch | null }>();
 
   useEffect(() => {
-    fetch('/api/stats').then(r => r.json()).then(d => setCount(d.total)).catch(() => { });
+    setVisitor(readVisitor(navigator));
+    fetch('/api/stats').then(r => r.json()).then(d => setStats({ total: d.total ?? null, builds: d.builds ?? null })).catch(() => setStats({ total: null, builds: null }));
   }, []);
+
+  // Until both are known, Download goes to the list below rather than name a system.
+  const os = stats && visitor ? visitor.os : null;
 
   return (
     <main className="min-h-screen bg-bg text-ink">
@@ -90,21 +98,7 @@ export default function Home() {
           click, one memory they all share, and delegation that comes back with what each task did and
           what it cost.
         </p>
-        <div className="flex flex-wrap items-center gap-3">
-          <a href="/api/download" className="flex items-center gap-2 px-5 py-2.5 bg-accent text-bg text-sm font-medium hover:bg-accent-deep transition-colors">
-            <Download className="w-4 h-4" />
-            Download for Mac
-          </a>
-          <a href="https://github.com/cooper-labs-tech/Tars" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-5 py-2.5 border border-line-strong text-sm text-ink-soft hover:text-ink transition-colors">
-            <Github className="w-4 h-4" />
-            Source
-          </a>
-          {/* GitHub's own count of .dmg downloads (src/lib/downloads.ts).
-              Nothing while there is none, or when GitHub did not answer. */}
-          {count !== null && count > 0 && (
-            <span className="font-mono text-xs text-ink-muted">{count.toLocaleString()} downloads</span>
-          )}
-        </div>
+        <HeroDownload visitor={os} arch={visitor?.arch ?? null} builds={stats?.builds ?? null} count={stats?.total ?? null} />
       </section>
 
       {/* The product itself: the Dashboard of a real Tars, four Claude Code
@@ -165,17 +159,8 @@ export default function Home() {
         </ol>
       </section>
 
-      {/* Download */}
-      <section id="download" className="max-w-[1040px] mx-auto px-6 py-20 text-center">
-        <h2 className="font-display text-4xl mb-4">Get Tars</h2>
-        <p className="text-ink-soft text-[15px] mb-8 max-w-md mx-auto">
-          macOS desktop app. Free and open source. No account, no cloud in the middle.
-        </p>
-        <a href="/api/download" className="inline-flex items-center gap-2 px-6 py-3 bg-accent text-bg text-sm font-medium hover:bg-accent-deep transition-colors">
-          <Download className="w-4 h-4" />
-          Download for Mac
-        </a>
-      </section>
+      {/* Download: a card per system (Landing · desktop, Get Tars). */}
+      <GetTars builds={stats?.builds ?? null} visitor={os} arch={visitor?.arch ?? null} />
 
       <SiteFooter />
     </main>

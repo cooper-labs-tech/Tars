@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
-import { downloadCount } from '@/lib/downloads';
+import { releaseStats } from '../../../lib/downloads';
 
-// GitHub's count of .dmg downloads, read and cached by the server, so no
-// visitor's browser asks GitHub. `total` is null when GitHub did not answer;
-// the page shows nothing then, as it does at 0.
+// GitHub's count of .dmg downloads, and for each system the version of its
+// newest build, read and cached by the server, so no visitor's browser asks
+// GitHub. Both are null when GitHub did not answer; the page then shows no
+// count, and offers every system, the download route deciding.
 export async function GET() {
-  return NextResponse.json({ total: await downloadCount() });
+  return NextResponse.json(await releaseStats());
 }

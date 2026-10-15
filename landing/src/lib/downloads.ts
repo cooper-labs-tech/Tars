@@ -9,6 +9,8 @@
  * Tars: on 2026-09-24 they were 1,434 of 1,439.
  */
 
+import { builds, type Builds, type Release as PlatformRelease } from './platforms';
+
 export const REPO = 'cooper-labs-tech/Tars';
 
 interface Asset {
@@ -19,6 +21,8 @@ interface Asset {
 interface Release {
   assets?: Asset[];
 }
+
+type GitHubRelease = Release & PlatformRelease;
 
 export function countDmgDownloads(releases: Release[]): number {
   return releases.reduce(
@@ -34,12 +38,12 @@ const PER_PAGE = 100;
 const MAX_PAGES = 20;
 
 /**
- * Every release's .dmg downloads, from every page GitHub has. Null when any
- * page does not come back whole, or the pages never end: no count is better
- * than a false one.
+ * Every release GitHub has, newest first, from every page. Null when any page
+ * does not come back whole, or the pages never end: no answer is better than
+ * a partial one.
  */
-export async function downloadCount(fetchImpl: typeof fetch = fetch): Promise<number | null> {
-  const releases: Release[] = [];
+async function readReleases(fetchImpl: typeof fetch): Promise<GitHubRelease[] | null> {
+  const releases: GitHubRelease[] = [];
   try {
     for (let page = 1; ; page += 1) {
       if (page > MAX_PAGES) return null;
@@ -51,11 +55,32 @@ export async function downloadCount(fetchImpl: typeof fetch = fetch): Promise<nu
       if (!res.ok) return null;
       const batch: unknown = await res.json();
       if (!Array.isArray(batch)) return null;
-      releases.push(...(batch as Release[]));
+      releases.push(...(batch as GitHubRelease[]));
       if (batch.length < PER_PAGE) break;
     }
   } catch {
     return null;
   }
-  return countDmgDownloads(releases);
+  return releases;
+}
+
+/**
+ * Every release's .dmg downloads, from every page GitHub has. Null when any
+ * page does not come back whole, or the pages never end: no count is better
+ * than a false one.
+ */
+export async function downloadCount(fetchImpl: typeof fetch = fetch): Promise<number | null> {
+  const releases = await readReleases(fetchImpl);
+  return releases ? countDmgDownloads(releases) : null;
+}
+
+/**
+ * What the page reads: the count, and for each system the version of its
+ * newest build (src/lib/platforms.ts), so a system no release has a build for
+ * says when it comes. Both null when GitHub did not answer whole.
+ */
+export async function releaseStats(fetchImpl: typeof fetch = fetch): Promise<{ total: number | null; builds: Builds | null }> {
+  const releases = await readReleases(fetchImpl);
+  if (!releases) return { total: null, builds: null };
+  return { total: countDmgDownloads(releases), builds: builds(releases) };
 }
