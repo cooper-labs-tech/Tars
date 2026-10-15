@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -50,7 +50,11 @@ const args = process.argv.slice(2);
 const dashes = args.indexOf('--');
 const launchPrompt = dashes === -1 ? '' : args.slice(dashes + 1).join(' ');
 record('launches.jsonl', { pid: process.pid, argv: args, prompt: launchPrompt, TMPDIR: process.env.TMPDIR, resume: args.includes('--resume') });
-const hook = (name, payload) => spawnSync('/bin/bash', [path.join(HOOKS, name)], {
+// Tars's own hooks, as it installs them: the .sh under bash on macOS and Linux, their Node runner on Windows.
+const hookCommand = (name) => (process.platform === 'win32'
+  ? [process.execPath, [path.join(HOOKS, 'tars-hook.mjs'), name.replace(/\.sh$/, '')]]
+  : ['/bin/bash', [path.join(HOOKS, name)]]);
+const hook = (name, payload) => spawnSync(...hookCommand(name), {
   input: JSON.stringify({ session_id: sid, cwd: process.cwd(), transcript_path: transcript, ...payload }), env: process.env, timeout: 20000,
 });
 let n = 0;
@@ -109,8 +113,9 @@ test('after an abrupt stop, the working agents are resumed with a note, the rest
   const privateDir = path.join(home, '.tars-private');
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
+  // only to a .js script, hence the .cjs there.
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
   const agent = (id: string, name: string, role = 'worker') => ({
     id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
     projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',
@@ -162,7 +167,12 @@ test('after an abrupt stop, the working agents are resumed with a note, the rest
   const before = { launches: lines(launchesFile), runState: JSON.parse(fs.readFileSync(path.join(privateDir, 'run-state.json'), 'utf8')) };
 
   // ── The crash: Tars and every CLI, by PID ──
-  const killed = [app.process().pid!, ...before.launches.map((l) => l.pid as number)];
+  // Tars is its main process. On Windows Playwright starts electron.exe through
+  // cmd.exe /c, and app.process() is that cmd.exe: killed, it leaves Tars
+  // running, and the relaunch below is a second instance that hands over to it
+  // and exits (measured).
+  const tars = process.platform === 'win32' ? await app.evaluate(() => process.pid) : app.process().pid!;
+  const killed = [tars, ...before.launches.map((l) => l.pid as number)];
   for (const pid of killed) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone already */ } }
   await new Promise((r) => setTimeout(r, 2_000));
 
@@ -214,5 +224,6 @@ test('after an abrupt stop, the working agents are resumed with a note, the rest
   expect(ended.resumed.sort()).toEqual(['lead', 'worker']);
   // Out of every agent's reach (the Audit's gate of #310): nothing of either in ~/.dorothy, each 0600.
   expect(['run-state.json', 'carry-over.json'].filter((f) => fs.existsSync(path.join(dir, f)))).toEqual([]);
-  expect(['run-state.json', 'carry-over.json'].map((f) => fs.statSync(path.join(privateDir, f)).mode & 0o777)).toEqual([0o600, 0o600]);
+  // POSIX mode bits, which Windows has none of (Node reads 666 there).
+  if (process.platform !== 'win32') expect(['run-state.json', 'carry-over.json'].map((f) => fs.statSync(path.join(privateDir, f)).mode & 0o777)).toEqual([0o600, 0o600]);
 });

@@ -309,6 +309,29 @@ function writeTokenStats(f) {
   }
 }
 
+/**
+ * The git to run: on Windows the first git.exe on the PATH, by its full path,
+ * or null. This runs in the project's folder, and Node on Windows looks a bare
+ * `git` up there before the PATH: a repository carrying a git.exe of its own
+ * would have it run every 5 s (electron/platform/git-command.ts). Only plain
+ * absolute entries: a relative one is the current folder again. No git on the
+ * PATH: no branch. Elsewhere `git`, which no lookup finds in the current folder.
+ */
+function gitOnPath() {
+  if (process.platform !== 'win32') return 'git';
+  for (const raw of (process.env.PATH || '').split(';')) {
+    const dir = raw.trim().replace(/^"(.*)"$/, '$1');
+    if (!/^[a-z]:[\\/]/i.test(dir) || dir.slice(2).includes(':')) continue;
+    const file = path.win32.join(dir, 'git.exe');
+    try {
+      if (fs.statSync(file).isFile()) return file;
+    } catch {
+      // not there
+    }
+  }
+  return null;
+}
+
 function gitBranch() {
   const cacheDir = path.join(DATA_DIR, 'statusline-cache');
   try { fs.mkdirSync(cacheDir, { recursive: true, mode: 0o700 }); } catch { /* || true */ }
@@ -323,7 +346,9 @@ function gitBranch() {
   }
   if (branch === '?') {
     try {
-      branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
+      const git = gitOnPath();
+      if (!git) throw new Error('no git on the PATH');
+      branch = execFileSync(git, ['rev-parse', '--abbrev-ref', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true })
         .toString('utf8').replace(/\n+$/, '').replace(/\r$/, '');
       if (branch === '') branch = '?';
     } catch {

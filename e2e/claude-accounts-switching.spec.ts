@@ -101,6 +101,8 @@ function lines(file: string): Record<string, unknown>[] {
 
 const ev = (page: Page) => page.evaluate.bind(page);
 
+test.skip(process.platform === 'win32', 'several Claude accounts are off on a Windows build until they are ported; this runs on macOS and Linux');
+
 test('an agent cut by its account\'s limit goes on, on another account', async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-accounts-switch-'));

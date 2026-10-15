@@ -7,6 +7,19 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 60,
+    version: '2.0.3',
+    date: '2026-10-13',
+    updates: [
+      'Tars runs on Windows 11 (64-bit), from Tars-Setup-2.0.3.exe, an installer for your account alone, attached to the release. It is not signed yet: SmartScreen warns the first time you run it, More info, then Run anyway.',
+      'Tars\'s hooks and its own tools run on Node.js there, which a native claude.exe does not bring: install Node.js 22 or later. Without it, Tars says so at launch, and until then the agents\' status does not move and their Tars tools do not start.',
+      'Each agent\'s CLI runs in a real Windows terminal, started as itself, with no shell in between. Stopping an agent, or quitting Tars, ends everything its terminal started.',
+      'Tars draws its own title bar under the Windows buttons, in the theme\'s colours. Closing the window keeps your agents working, with Tars in the tray; Quit Tars in the tray\'s menu ends it.',
+      'Settings, Terminal picks the shell a terminal opens: PowerShell 7, Windows PowerShell, the Command Prompt or Git Bash.',
+      'Not on Windows yet: several Claude accounts, putting an idle agent to sleep, marking a frozen agent stalled, and removing the folders Settings, System lists.',
+    ],
+  },
+  {
     id: 59,
     version: '2.0.2',
     date: '2026-10-13',

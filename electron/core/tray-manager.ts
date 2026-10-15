@@ -136,6 +136,15 @@ export function updateTrayAttention(hasWaiting: boolean): void {
   }
 }
 
+/**
+ * The tray icon, or null before initTray. Read by the Windows E2E spec
+ * (e2e/desktop-shell.win32.spec.ts) for the icon's bounds, which place the
+ * tray panel it opens.
+ */
+export function getTray(): Tray | null {
+  return tray;
+}
+
 export function rebuildTrayMenu() {
   // No-op: the tray panel is live via IPC, no native menu to rebuild
 }

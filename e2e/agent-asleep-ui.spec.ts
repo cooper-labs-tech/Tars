@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type Page } from '@playwright/test
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, stepShot, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -54,7 +54,11 @@ const record = (file, o) => fs.appendFileSync(path.join(process.env.HOME, file),
 const dashes = args.indexOf('--');
 const launchPrompt = dashes === -1 ? '' : args.slice(dashes + 1).join(' ');
 record('launches.jsonl', { pid: process.pid, sid, resume: resumed === -1 ? null : args[resumed + 1], prompt: launchPrompt });
-const hook = (name, payload) => spawnSync('/bin/bash', [path.join(HOOKS, name)], {
+// Tars's own hooks, as it installs them: the .sh under bash on macOS and Linux, their Node runner on Windows.
+const hookCommand = (name) => (process.platform === 'win32'
+  ? [process.execPath, [path.join(HOOKS, 'tars-hook.mjs'), name.replace(/\.sh$/, '')]]
+  : ['/bin/bash', [path.join(HOOKS, name)]]);
+const hook = (name, payload) => spawnSync(...hookCommand(name), {
   input: JSON.stringify({ session_id: sid, cwd: process.cwd(), transcript_path: transcript, ...payload }), env: process.env, timeout: 20000,
 });
 const line = (o) => fs.appendFileSync(transcript, JSON.stringify(o) + '\n');
@@ -108,8 +112,9 @@ test('an asleep agent reads asleep since when on its card, its panel, its window
   const dir = path.join(home, '.dorothy');
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
+  // only to a .js script, hence the .cjs there.
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
   const agent = (id: string, name: string, role = 'worker') => ({
     id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
     projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',
@@ -140,13 +145,24 @@ test('an asleep agent reads asleep since when on its card, its panel, its window
     /** Every agent rested 40 minutes, and the pass that runs every minute, until it puts the worker to sleep. */
     const sleepWorker = async () => {
       await expect.poll(async () => {
-        const checked = await app.evaluate(async (_e, { dist }) => {
+        const checked = await app.evaluate(async (_e, { dist, windows }) => {
           const req = process.mainModule!.require;
           const { agents } = req(`${dist}/core/agent-manager.js`);
           const fortyMinutesAgo = new Date(Date.now() - 40 * 60_000).toISOString();
           for (const a of agents.values()) { a.statusSince = fortyMinutesAgo; a.lastTurnStartedAt = undefined; a.workHandedAt = undefined; }
-          return req(`${dist}/services/agent-sleep.js`).checkSleep() as Promise<Array<{ agentId: string; slept: boolean }>>;
-        }, { dist });
+          // Windows has no process table for the pass to read (agent-sleep.ts
+          // reads ps: there it refuses every agent). It is
+          // handed the one ps shows on macOS for these stand-ins, each CLI its
+          // terminal's own process with nothing under it, so that what this spec
+          // is about, an asleep agent's window and its wakes through the
+          // Windows launch, is proven there too.
+          const { ptyProcesses } = req(`${dist}/core/pty-manager.js`);
+          const read = windows ? {
+            procs: async () => [...agents.values()].filter((a) => a.ptyId && ptyProcesses.has(a.ptyId))
+              .map((a) => ({ pid: ptyProcesses.get(a.ptyId).pid, ppid: process.pid, stat: 'S', age: 2400, command: 'node claude' })),
+          } : undefined;
+          return req(`${dist}/services/agent-sleep.js`).checkSleep(undefined, read) as Promise<Array<{ agentId: string; slept: boolean }>>;
+        }, { dist, windows: process.platform === 'win32' });
         return checked.find((o) => o.agentId === 'worker')?.slept ?? (await get('worker')).status;
       }, { timeout: 30_000, intervals: [500] }).toBe(true);
       await expect.poll(async () => (await get('worker')).status).toBe('asleep');

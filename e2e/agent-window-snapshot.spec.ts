@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, stepShot, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -40,13 +40,11 @@ test('the agent window of a gemini agent shows the rows its CLI placed with curs
   const dir = path.join(home, '.dorothy');
   fs.mkdirSync(project, { recursive: true });
   fs.mkdirSync(dir, { recursive: true });
-  const cli = path.join(home, 'fake-gemini.cjs');
-  fs.writeFileSync(cli, [
-    `#!${process.execPath}`,
+  const cli = writeNodeCli(path.join(home, 'fake-gemini.cjs'), [
     "process.stdout.write('\\x1b[2J\\x1b[Hthe first row\\x1b[3;5Hthe third row');",
     'process.stdin.resume();',
     '',
-  ].join('\n'), { mode: 0o755 });
+  ].join('\n'));
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
     id: AGENT.id, name: AGENT.name, character: 'robot', provider: 'gemini', status: 'idle', role: 'worker',
     projectPath: project, skills: [], cliPath: cli,

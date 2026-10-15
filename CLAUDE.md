@@ -3,12 +3,12 @@
 - **App**: Tars, an Electron desktop app that runs many AI coding-agent CLIs in parallel, each in its own PTY terminal, and orchestrates them
 - **Goal**: one window where a fleet of agents (Claude Code, Codex, Gemini, Grok, OpenCode, Pi, and thirteen API-key providers) work on your projects at once, are delegated to, report back, and are billed
 - **Repo**: https://github.com/cooper-labs-tech/Tars (moved from `JeanBrasse/Tars` on 2026-10-07, Noah's decision; GitHub redirects the old URLs, so an installed 1.9.x still finds its updates), a fork of `Charlie85270/Dorothy`, renamed to Tars. Nothing is ever pushed upstream; `git remote get-url --push upstream` returns `DISABLED-no-push`
-- **Bundle**: `xyz.cooperlabs.tars`, product name `Tars`, macOS only (`electron-builder --mac`, dmg + zip). Updates are published to and fetched from the fork: `GITHUB_REPO` in `electron/constants/index.ts` and `build.publish` in `package.json` both say `cooper-labs-tech/Tars`. The code stays Linux compatible (Noah, 2026-09-24): the CI runs the tests on ubuntu, and no macOS-only code path ships without a Linux one or a clean failure.
+- **Bundle**: `xyz.cooperlabs.tars`, product name `Tars`, macOS (`electron-builder --mac`, dmg + zip, `npm run release`) and Windows x64 (`electron-builder --win`, a per-user NSIS installer + zip, `npm run release:win` on Windows, added to the same release). Updates are published to and fetched from the fork, on both platforms: `GITHUB_REPO` in `electron/constants/index.ts` and `build.publish` in `package.json` both say `cooper-labs-tech/Tars`, and `build.win` has no feed of its own. The code stays Linux compatible (Noah, 2026-09-24), and every change runs on macOS, Windows and Linux (Noah, 2026-10-13). GitHub Actions runs on demand only (Noah, 2026-10-15): `.github/workflows/ci.yml` on ubuntu and `ci-windows.yml` on windows, each both `tsc`, `npm test` and `npm run e2e:platform`, started with `gh workflow run` (OPERATIONS.md, "CI: on demand"); no macOS-only code path ships without a Linux one or a clean failure.
 - **Docs**: all four exist and are current. `DESIGN.md` (tokens + components) before touching a pixel, `SPECS.md` (what it is), `OPERATIONS.md` (runbook), `ETHOS.md` (how decisions get made). This line used to say only DESIGN.md had been written; the other three were added on 2026-08-23 and the README links to all of them. A fifth, `SECURITY.md`, was added on 2026-09-18: what is a boundary, what only looks like one, and the measurements behind each
 
 ## Stack
 
-- **Shell**: Electron 44 (Node 24.21, Chromium 152, macOS 13 or later), main process in `electron/` (~47k lines TypeScript, compiled to `electron/dist/` by `tsc -p electron/tsconfig.json`, CommonJS, ES2022)
+- **Shell**: Electron 44 (Node 24.21, Chromium 152, macOS 13 or later, Windows 10 or later), main process in `electron/` (~47k lines TypeScript, compiled to `electron/dist/` by `tsc -p electron/tsconfig.json`, CommonJS, ES2022)
 - **Renderer**: Next.js 16.3 App Router, React 19, TypeScript, Tailwind CSS 4, `~44k` lines in `src/`. Packaged as a static export (`output: 'export'` when `ELECTRON_BUILD=1`) and served over a custom `app://` protocol
 - **Terminals**: `node-pty` + `xterm` 5 / `xterm-addon-fit`
 - **State**: React hooks over IPC (`src/hooks/`), plus a small `zustand` store (`src/store/`) for sidebar/vault UI state
@@ -17,7 +17,7 @@
 - **Delegation**: two transports: keystrokes written into the PTY (`/dispatch`), and the Agent Client Protocol (`electron/services/acp/`), which actually returns a result
 - **Storage**: JSON + SQLite under `~/.dorothy/` (`better-sqlite3` for the vault). No server, no cloud, no database migrations. One exception: `~/.tars-private/` holds what the agents are not handed, which today is Noah's conversation with the super chat, the Hermes webhook secret and the Claude accounts' registry (`claude-accounts.json`: ids, names, thresholds, never a credential). `~/.dorothy` is in every agent's `--add-dir`; nothing under `~/.tars-private` is ever passed to a CLI. Each Claude account after the first is a Claude Code folder of its own, `~/.claude-accounts/<id>`, which the agents started on it run in
 - **Tests**: E2E first: `@playwright/test` drives the real Electron app (`e2e/`), and every run leaves an artefact. `vitest` (`__tests__/`) is the regression net and the home of units tested in isolation, written failures first. The rules are in Workflow Rule 3
-- **Node**: 22, pinned in `.nvmrc`. Run `nvm use` first. `package.json` `engines` declares `>=22.12.0`, Electron's own floor since 43, and CI runs 22
+- **Node**: 22, pinned in `.nvmrc`. Run `nvm use` first. `package.json` `engines` declares `>=22.12.0`, Electron's own floor since 43, and the CI workflows run 22
 
 ## Key Files
 

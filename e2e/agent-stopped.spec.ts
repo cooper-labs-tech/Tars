@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
-import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, stepShot, removeHome } from './fixture.mjs';
+import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, removeHome, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -53,13 +53,12 @@ function sandbox() {
   fs.mkdirSync(dir, { recursive: true });
   // In Node, not bash: a bash stand-in is named like the shell in the pty's
   // foreground, and the app would never see a CLI running.
-  const cli = path.join(home, 'stand-in-cli.cjs');
-  fs.writeFileSync(cli, [
-    `#!${process.execPath}`,
+  // writeNodeCli: the script itself on macOS and Linux, npm's shim beside it on Windows.
+  const cli = writeNodeCli(path.join(home, 'stand-in-cli.cjs'), [
     "process.stdout.write('stand-in ready\\n');",
     'process.stdin.resume();',
     '',
-  ].join('\n'), { mode: 0o755 });
+  ].join('\n'));
   const agent = (id: string, name: string, role: string, branchName?: string) => ({
     id, name, character: 'robot', provider: 'claude', model: 'opus-5', status: 'idle', role,
     projectPath: project, skills: [], cliPath: cli, ...(branchName ? { branchName } : {}),

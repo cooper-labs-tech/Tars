@@ -11,9 +11,11 @@ import { createHash } from 'node:crypto';
  * 16/09: a missing release is `release not found` with exit 1, an outage is
  * `error connecting to ...` with the same exit 1, and a missing tag through
  * `gh api` is `gh: Not Found (HTTP 404)`. Anything else is refused with exit 99
- * and written to the log like every call, and so is `release create` unless the
- * test has called `allowPublishing()`: a test publishes because it says so by
- * name, never because of a state it copied from another test.
+ * and written to the log like every call, and so are `release create` and
+ * `release upload` unless the test has called `allowPublishing()`: a test
+ * publishes because it says so by name, never because of a state it copied
+ * from another test. An upload over an asset already there is refused as gh
+ * refuses it without --clobber, before anything is sent.
  */
 
 /** `state` is `uploaded` unless given: GitHub lists an asset whose upload has not finished as `open`. */
@@ -37,9 +39,16 @@ export type FakeGhState = {
   /**
    * What GitHub serves instead of what it was sent: the commit every tag points
    * at, the digest of an asset by name, the bytes of a downloaded
-   * latest-mac.yml, the tag of /releases/latest.
+   * latest-mac.yml or latest.yml, the tag of /releases/latest.
    */
   serve?: { target?: string; digests?: Record<string, string>; manifest?: string; latest?: string };
+  /**
+   * What `serve` becomes once the first `release upload` has gone through: a
+   * GitHub that changes under a release between its upload and its read-back.
+   */
+  serveAfterUpload?: { target?: string; digests?: Record<string, string>; manifest?: string; latest?: string };
+  /** Every tag is an annotated tag object, which `git/tags/<sha>` resolves to its commit. */
+  annotatedTags?: boolean;
 };
 
 const SCRIPT = `
@@ -91,6 +100,31 @@ if (cmd === 'release' && sub === 'create') {
   process.stdout.write('https://github.com/' + option('--repo') + '/releases/tag/' + tag + '\\n');
   process.exit(0);
 }
+if (cmd === 'release' && sub === 'upload') {
+  if (!fs.existsSync(path.join(home, 'publishing-allowed'))) fail('fake gh: this test did not allow publishing: ' + args.join(' '), 99);
+  if (state.offline) outage();
+  const tag = args[2];
+  const release = state.releases && state.releases[tag];
+  if (!release) fail('release not found', 1);
+  const files = [];
+  for (let i = 3; i < args.length && !args[i].startsWith('--'); i++) files.push(args[i]);
+  const dupes = files.map(file => path.basename(file)).filter(name => release.assets.some(a => a.name === name));
+  if (dupes.length && !args.includes('--clobber')) fail('asset under the same name already exists: [' + dupes.join(' ') + ']', 1);
+  const uploads = path.join(home, 'uploads', tag);
+  fs.mkdirSync(uploads, { recursive: true });
+  for (const file of files) {
+    const bytes = fs.readFileSync(file);
+    fs.writeFileSync(path.join(uploads, path.basename(file)), bytes);
+    release.assets = release.assets.filter(a => a.name !== path.basename(file));
+    release.assets.push({ name: path.basename(file), size: bytes.length, digest: 'sha256:' + crypto.createHash('sha256').update(bytes).digest('hex'), state: 'uploaded' });
+  }
+  if (state.serveAfterUpload) {
+    state.serve = state.serveAfterUpload;
+    delete state.serveAfterUpload;
+  }
+  fs.writeFileSync(process.env.FAKE_GH_STATE, JSON.stringify(state));
+  process.exit(0);
+}
 if (cmd === 'release' && sub === 'download') {
   const tag = args[2];
   if (state.offline) outage();
@@ -98,7 +132,7 @@ if (cmd === 'release' && sub === 'download') {
   const name = option('--pattern');
   const uploaded = path.join(home, 'uploads', tag, name);
   if (!fs.existsSync(uploaded)) fail('no assets match the file pattern', 1);
-  const bytes = name === 'latest-mac.yml' && typeof serve.manifest === 'string' ? serve.manifest : fs.readFileSync(uploaded);
+  const bytes = (name === 'latest-mac.yml' || name === 'latest.yml') && typeof serve.manifest === 'string' ? serve.manifest : fs.readFileSync(uploaded);
   fs.writeFileSync(path.join(option('--dir'), name), bytes);
   process.exit(0);
 }
@@ -108,10 +142,17 @@ if (cmd === 'api') {
   if (ref) {
     const release = state.releases && state.releases[ref[1]];
     if ((state.tags || []).includes(ref[1]) || release) {
-      process.stdout.write(JSON.stringify({ object: { type: 'commit', sha: serve.target || (release && release.target) || '0'.repeat(40) } }));
+      const commit = serve.target || (release && release.target) || '0'.repeat(40);
+      const object = state.annotatedTags ? { type: 'tag', sha: 'tag-object-of-' + commit } : { type: 'commit', sha: commit };
+      process.stdout.write(JSON.stringify({ object }));
       process.exit(0);
     }
     fail('gh: Not Found (HTTP 404)', 1);
+  }
+  const tagObject = /^repos\\/[^/]+\\/[^/]+\\/git\\/tags\\/tag-object-of-(.+)$/.exec(args[1] || '');
+  if (tagObject && state.annotatedTags) {
+    process.stdout.write(JSON.stringify({ object: { type: 'commit', sha: tagObject[1] } }));
+    process.exit(0);
   }
   if (/^repos\\/[^/]+\\/[^/]+\\/releases\\/latest$/.test(args[1] || '')) {
     process.stdout.write(JSON.stringify({ tag_name: serve.latest || state.latest }));

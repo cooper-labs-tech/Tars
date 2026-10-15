@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, seedSandbox, removeHome } from './fixture.mjs';
+import { launchSandboxed, removeHome, seedSandbox, splashGone } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -54,6 +54,11 @@ test('saving the Git toggle carries that key and nothing else', async () => {
 
   // Open the Git section: the page takes its snapshot of the file here.
   await page.goto(`${DEV_URL}/settings`, { waitUntil: 'domcontentloaded' });
+  // Hydrated first: until React holds the page, what follows acts on the
+  // server's HTML, and on a slow runner its bounds ran out there (run
+  // 36461229599, attempt 2). splashGone waits for that as long as the spec
+  // allows, then holds the splash to its own cap.
+  await splashGone(page);
   await page.waitForTimeout(1500);
   const nav = page.getByTestId('settings-nav');
   await nav.getByText('Workspace', { exact: true }).click();

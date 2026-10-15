@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { KNOWN_PAGE_ERRORS, RECORDING_SUITES, VOLATILE, readPageErrorRecords } from './surfaces.mjs';
+import { KNOWN_PAGE_ERRORS, RECORDING_SUITES, VOLATILE, maskApplies, readPageErrorRecords } from './surfaces.mjs';
 
 /**
  * The surfaces of this run that recorded nothing, which is what stops either
@@ -79,7 +79,8 @@ test('every tolerated page error still happens, or its entry is stale', () => {
 test('every volatile mask still matches something, or its entry is dead', () => {
   const records = readPageErrorRecords();
   const used = new Set(records.flatMap(r => r.masks ?? []));
-  const dead = Object.entries(VOLATILE).filter(([key, entry]) => !used.has(key) && !entry.sometimes);
+  // A mask declared for other platforms is not judged on this one: it never ran here.
+  const dead = Object.entries(VOLATILE).filter(([key, entry]) => maskApplies(entry) && !used.has(key) && !entry.sometimes);
 
   if (dead.length > 0) {
     const missing = surfacesThatDidNotRecord(records);

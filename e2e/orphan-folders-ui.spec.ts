@@ -82,7 +82,10 @@ test('the folders no agent owns are listed, asked about first, kept on cancel, a
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project, unread]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
-  const busy = spawn('sleep', ['300'], { cwd: wt('busy'), stdio: 'ignore' });
+  // node on Windows, which has no sleep of its own.
+  const busy = process.platform === 'win32'
+    ? spawn(process.execPath, ['-e', 'setTimeout(() => {}, 300000)'], { cwd: wt('busy'), stdio: 'ignore' })
+    : spawn('sleep', ['300'], { cwd: wt('busy'), stdio: 'ignore' });
   const onDisk = () => ({ relay: fs.existsSync(wt('feat-relay-retry')), noGit: fs.existsSync(wt('agent-7f3c1a')), busy: fs.existsSync(wt('busy')), stale: fs.existsSync(stale), late: fs.existsSync(wt('late-orphan')) });
 
   const app = await launchSandboxed(electron, home, {
@@ -147,6 +150,25 @@ test('the folders no agent owns are listed, asked about first, kept on cancel, a
     await block.getByRole('button', { name: 'remove 3 folders', exact: true }).click();
     await expect(confirm).toContainText('Remove these 3 folders,');
     await confirm.getByRole('button', { name: 'remove 3 folders', exact: true }).click();
+    if (process.platform === 'win32') {
+      // Windows has neither lsof nor /proc to read which process works in a
+      // folder (processCwds, orphan-folders.ts): nothing is removed, each is
+      // kept as of unknown use, and the row says so.
+      // The late folder is listed, as everywhere.
+      await expect(block).toContainText('None was removed: Tars could not read which processes work in them, so all 3 were kept.', { timeout: 60_000 });
+      await expect(rows).toHaveCount(4);
+      for (const name of ['feat-relay-retry', 'agent-7f3c1a', 'busy']) await expect(byName(name).locator('[data-orphan-why]')).toHaveText('use unknown');
+      await expect(byName('late-orphan')).toContainText('no .git');
+      await expect(unreadLine).toHaveText(UNREAD);
+      seen.done = (await block.locator('[data-settings-hint]').first().innerText()).replace(/\s+/g, ' ');
+      seen.kept = (await rows.allInnerTexts()).map(t => t.replace(/\s+/g, ' '));
+      await stepShot(page, '03-windows-none-removed');
+      const after = { ...onDisk(), live: git(wt('feat', 'live'), 'rev-parse', '--abbrev-ref', 'HEAD'), agent: fs.existsSync(wt('agent-wt', 'a.txt')) };
+      recordValues({ ...seen, after, pageErrors });
+      expect(after).toEqual({ relay: true, noGit: true, busy: true, stale: true, late: true, live: 'feat/live', agent: true });
+      expect(pageErrors).toEqual([]);
+      return;
+    }
     await expect(block).toContainText('Removed 2 folders:', { timeout: 60_000 });
     await expect(block).toContainText('One was kept: a process works in it.');
     // Read again: the busy one kept, and the late one, never confirmed, listed.
@@ -197,6 +219,7 @@ test('the folders no agent owns are listed, asked about first, kept on cancel, a
 
 test('a folder that could not be removed says why in its title, never with its path, and one gone meanwhile is said in the end', async () => {
   test.skip(process.getuid?.() === 0, 'root removes a read-only folder, so nothing is kept to read');
+  test.skip(process.platform === 'win32', 'Windows removes no folder no agent owns: it cannot read which process works in one (no lsof nor /proc, orphan-folders.ts), so none can fail to go; the first test reads what it says instead');
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-orphans-stuck-'));
   const realHome = fs.realpathSync(home);

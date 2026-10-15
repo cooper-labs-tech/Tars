@@ -4,11 +4,13 @@ Tars runs on your own machine. There is no cluster, no cloud tenancy, no deploy.
 Everything below is run locally from the repo root or against
 the installed app.
 
-Target platform is macOS: `electron-builder` is invoked with `--mac` only, the code-signing
-config is `build/entitlements.mac.plist`, and the Tasmania integration reads a token out of
-`~/Library/Application Support/`. The code stays Linux compatible all the same (Noah,
-2026-09-24): the CI runs the tests on ubuntu, and a macOS-only code path has a Linux one or
-fails cleanly.
+Target platforms are macOS and Windows: `electron-builder` is invoked with `--mac` by
+`npm run release` and with `--win` by `npm run release:win` (*Cut a release*), the macOS
+code-signing config is `build/entitlements.mac.plist` (the Windows build is not signed), and
+on macOS the Tasmania integration reads a token out of `~/Library/Application Support/`. The
+code stays Linux compatible all the same (Noah,
+2026-09-24), and runs on Windows too: the tests run on ubuntu and on windows when asked (CI, on
+demand), and a macOS-only code path has a Linux one or fails cleanly.
 
 ---
 
@@ -23,8 +25,8 @@ nvm use          # reads .nvmrc → 22
 node -v          # v22.x
 ```
 
-`package.json` declares `"engines": { "node": ">=22.12.0" }`, the floor Electron itself declares since 43, and CI
-(`.github/workflows/ci.yml`) runs the test job on Node 22. **Node 18 fails**, in two different ways:
+`package.json` declares `"engines": { "node": ">=22.12.0" }`, the floor Electron itself declares since 43, and both CI
+workflows (`.github/workflows/ci.yml`, `ci-windows.yml`, run on demand) use Node 22. **Node 18 fails**, in two different ways:
 
 ```
 # npm test on Node 18.16
@@ -287,6 +289,24 @@ Per surface the spec does two things:
 - `toHaveScreenshot()` against `e2e/__screenshots__/<name>.png` with
   `maxDiffPixelRatio: 0.005`, `animations: 'disabled'`.
 
+**On Windows** the suite reads and records its own references, `e2e/__screenshots__/win32/`
+(`playwright.config.ts`): Windows draws its own fonts and title bar, so it can neither match
+the macOS pictures nor be allowed to write over them. `launchSandboxed` also points
+`USERPROFILE`, `HOMEDRIVE` and `HOMEPATH`, `APPDATA` and `LOCALAPPDATA` at the sandbox, since the
+app reads those and not `HOME`; hands the app a PATH of the system's folders, Git and the node
+running the suite, so that no CLI of the machine reaches a picture; and starts Electron with
+`--disable-lcd-text`. The specs that photograph make their sandbox under
+`<SystemDrive>\tars-e2e\` (`makeShotSandbox`), so the paths the pages print are as long on
+every machine. Every platform runs with `--lang=fr-FR`, the locale both sets of references
+were recorded in. `desktop-shell.win32.spec.ts` and `quit-time.win32.spec.ts` run on Windows
+only: they drive the title bar, the tray, the keys, a second launch and a quit with real OS
+input through `e2e/win32-desktop.ps1`, which needs the window wholly on the screen.
+
+**Refreshing the Windows references.** They are recorded on Windows, never on a Mac, and the
+on-demand Windows workflow does not run the surfaces (CI, below). On a Windows machine, run
+`npm run e2e:update` (with `npx tsc -p electron/tsconfig.json` first)
+and review `git diff --stat e2e/__screenshots__/win32/` as below.
+
 The manifest is `e2e/surfaces.mjs`: **18 pages + 18 settings sections + 3 overlays = 39
 surfaces**. `e2e/__screenshots__/` holds one PNG per surface, plus the six Chat rooms that
 their own spec photographs.
@@ -364,20 +384,44 @@ lot: the Kanban table was dead code, the provider colours and marks moved into
 `src/components/ui/`, the terminal theme reads the tokens, and the `theme-color` tag was
 removed after measuring that nothing in the app listens for it.
 
-### CI
+### CI: on demand, Linux and Windows only
 
-`.github/workflows/ci.yml` runs on PRs to `main` and pushes to `main`: `ubuntu-latest`,
-Node 22, `npm ci`, Electron's binary (`npx install-electron`, from a cache keyed on its version,
-three tries when it has to download: GitHub answered that download 500 or 503 twice on 2026-10-01),
-`npm test`. **That is all CI does**: no lint, no design lint, no E2E, no
-build. Playwright needs a display and a mac build; run it locally before you merge anything
-visual.
+Noah, 2026-10-15: GitHub Actions "que pour les tests spécifiques pour linux et windows, pas en
+permanence". Both workflows run on `workflow_dispatch` only: nothing runs on a PR or a push to
+`main`, and nothing runs unless somebody asks. macOS is checked locally, as below.
 
-**It runs, and it is the only check made on Linux.** Measured on 2026-09-17, it had never run:
-Actions stay off on a fork until somebody enables them. They are on now, and
-`gh api repos/cooper-labs-tech/Tars/actions/runs` answered `total_count: 87` on 2026-09-24. Its result is
-part of every gate, because the code stays Linux compatible (Noah, 2026-09-24): a test that
-passes on your Mac and fails there is a finding, not noise.
+| Workflow | Host | What it runs |
+|---|---|---|
+| `.github/workflows/ci.yml` | `ubuntu-latest` | both `tsc`, `npm test`, `npm run e2e:platform` under `xvfb-run` |
+| `.github/workflows/ci-windows.yml` | `windows-latest` | both `tsc`, `npm test`, `npm run e2e:platform` on a 1920x1080 display |
+
+`npm test` there runs the per-platform cases on a real host: on a Mac they run with
+`process.platform` stubbed (Noah's rule of 2026-10-13, each change on macOS, Windows and Linux).
+`npm run e2e:platform` is the eight specs that drive paths, processes, shells and file modes in
+the real app: `acp-delegation`, `agent-launch`, `claude-projects-paths`, `cli-paths-extra-path`,
+`project-names`, `pty-kill`, and on Windows only `desktop-shell.win32` and `quit-time.win32`. Not
+the full E2E suite, not the lints (the same on every OS, run locally). Each step runs even when
+one before it failed; a job stops at 45 minutes, and a second run of the same ref cancels the
+first. When the specs fail, the run directories are uploaded (`e2e-platform-linux`,
+`e2e-platform-windows`, kept 7 days).
+
+**When to run them.** Before a PR that touches `electron/platform/`, a path (joining, quoting,
+case, separators, `~`), a process (spawn, kill, a process tree, ConPTY or node-pty), a shell or
+its quoting, or file modes and links, is gated. Its verdict says it ran, or says what is proven
+on macOS only.
+
+**The one command**, per platform, from any checkout signed in with `gh`:
+
+```bash
+gh workflow run ci.yml --repo cooper-labs-tech/Tars --ref main -f ref=<branch>
+gh workflow run ci-windows.yml --repo cooper-labs-tech/Tars --ref main -f ref=<branch>
+# a PR from a fork: -f ref=refs/pull/<n>/head
+gh run list --repo cooper-labs-tech/Tars --workflow ci-windows.yml --limit 1   # then gh run watch <id>
+```
+
+`--ref main` picks the workflow's own file (a dispatch needs it on the default branch); `-f ref=`
+is what is checked out and tested. Read a fork's PR before you dispatch its ref: its code runs on
+the runner with a read-only token and the cache's token (npm checks each cached package's hash).
 
 ---
 
@@ -511,12 +555,23 @@ reads its own setting, so they agree only as long as both are kept in step:
 `autoInstallOnAppQuit = true`, calls `autoUpdater.checkForUpdates()`, and **only** on throw
 falls back to `GET https://api.github.com/repos/${GITHUB_REPO}/releases/latest`: comparing
 `tag_name` minus a leading `v` against `app.getVersion()` component by component, then picking
-the first `.dmg` or `.zip` asset.
+the first `.dmg` or `.zip` asset (on Windows, the setup `.exe`: below).
 
 A release published to a repository that one of the two does not name is invisible to that
 path, so a change to either setting changes the other with it. The comment on `GITHUB_REPO` explains why it is
 not the upstream: pointing it at `Charlie85270/Dorothy` offered upstream builds as updates to
 fork installs, which overwrote them. Nothing is ever pushed upstream.
+
+**Windows reads the same two.** `electron-updater` reads `latest.yml` from the repository of
+`build.publish`, which electron-builder bakes into `resources\app-update.yml` (`build.win` has
+no `publish` of its own), and the fallback asks `GITHUB_REPO`. One release carries both
+platforms' files, the Windows ones added after the macOS ones by `npm run release:win`, so on
+Windows the fallback offers the release's `*Setup*.exe`, this architecture's first, never a
+`.dmg` or a `.zip`, and no update at all while the release carries no setup: until the Windows
+half of a release is out, `electron-updater` throws on the missing `latest.yml` and the
+fallback says up to date. Those two decisions are `electron/platform/update-feed.ts`;
+`__tests__/electron/platform/update-feed.test.ts` fails when `build.publish` and
+`GITHUB_REPO` part, or when `build.win` gets a feed of its own.
 
 Auto-check fires 5 s after `whenReady()` and every 30 minutes, and each tick reads `appSettings.autoCheckUpdates`:
 with it `false` the tick does nothing, so turning the switch off or on needs no restart. The same switch
@@ -579,6 +634,74 @@ a build of the version being released.
 
 `latest-mac.yml` must be in the release assets or `electron-updater` throws and every client
 silently drops to the GitHub-API fallback.
+
+#### Windows: `npm run release:win`
+
+A version is released once, for both platforms: `npm run release` publishes it from a Mac,
+then, on a Windows machine and from the same commit, `npm run release:win` builds the Windows
+app and adds its files to that same release. Nothing about the version changes: the Windows
+build carries `package.json`'s.
+
+```powershell
+npm run release:win -- --dry-run   # the checks, the artifacts of this version if built; nothing else
+npm run release:win                # build, check, and add the Windows files to v<version>
+```
+
+`scripts/release-win.mjs` stops at the first thing that is not as it should be:
+
+1. **refuses** unless `HEAD` is `origin/main` after a fetch, the tracked tree is clean, the
+   Electron installed is the one locked (as in step 1 above), and on GitHub `v<version>` is
+   released, its tag on `HEAD`, it is `/releases/latest`, and it carries none of the Windows
+   files yet. A GitHub it cannot ask is a refusal, not a pass;
+2. builds, without `CI`, `GH_TOKEN` or `GITHUB_TOKEN`: the app icon (`scripts/make-app-ico.mjs`
+   writes `build/icon.ico` from `public/icon.svg`), `npm run build:renderer`, the main process,
+   the seven MCP bundles, then `electron-builder --win --x64 --config
+   build/electron-builder-win.json --publish never`. That file is `package.json` `build` plus
+   the exclusion of what the packaged app never loads (`next`, `@next/*`, `sharp`, `@img/*`,
+   better-sqlite3's `deps/` and non-win32 prebuilds, node-pty's darwin prebuilds), written at
+   every run, never committed, never read on macOS. Not `build.win.files`: electron-builder
+   makes a platform's own `files` a matcher of its own, and one holding only exclusions packs
+   the whole checkout (`.next/cache`, `design/`);
+3. checks the artifacts in `release/`: `latest.yml` names this version and
+   `Tars-Setup-<version>.exe` with its size and sha512, its `.blockmap` and
+   `Tars-Windows-<version>-x64.zip` exist, `app.asar` says this version,
+   `resources\app-update.yml` feeds from `build.publish`, node-pty (with `conpty.dll` and
+   `OpenConsole.exe`), better-sqlite3, the Node hooks and every MCP bundle are unpacked, and
+   nothing the app never loads is shipped;
+4. `gh release upload v<version>` with the installer, its blockmap and the zip, then
+   `latest.yml`, so that no installed Tars reads a `latest.yml` whose installer is not there
+   yet; never over a file already there (an attempt that stopped half way leaves files that
+   `gh release delete-asset` removes);
+5. reads back what GitHub serves: the tag still on the commit built, the `sha256` digest of
+   every Windows asset, `latest.yml` byte for byte, and `/releases/latest` still `v<version>`.
+
+The dry run does 1, and 3 when `release/` holds a Windows build of this version, and says what
+the rest would do. Until the Windows half is out, every Windows install stays where it is:
+the latest release has no `latest.yml`, and the fallback offers no release without a setup.
+Once a newer version is released for macOS, the older one's Windows half is refused at step 1:
+build the newer one. The Windows build stays in `release/` of the checkout that made it;
+nothing moves or prunes it.
+
+**The Windows builds are not signed**: SmartScreen warns on the first run, and
+`electron-updater` installs an update without checking a publisher, so whoever can write to the
+releases can ship code to every Windows install. Keep the accounts and tokens with write access
+to the repository few, with 2FA.
+
+The installer (`build.nsis`) is per user: no elevation, `%LOCALAPPDATA%\Programs\tars` (a
+one-click per-user install is named after the package, `tars`, not the product), Start
+menu and desktop shortcuts, user data kept on uninstall. To try one without touching your own
+install:
+
+```powershell
+Tars-Setup-<v>.exe /S /D=C:\throwaway\Tars         # silent per-user install; /D last, unquoted
+"C:\throwaway\Tars\Uninstall Tars.exe" /S /currentuser
+```
+
+The uninstall entry is written to `HKCU` and removed by the uninstall. To test an update
+without GitHub, replace the installed `resources\app-update.yml` with `provider: generic`,
+`url: http://127.0.0.1:<port>/` and `updaterCacheDirName: tars-updater`, serve the newer
+build's `latest.yml`, `.exe` and `.blockmap` from that port, check and download from the app,
+then quit it: the update installs on quit, silently, with its own `app-update.yml`.
 
 ### Which builds are kept
 

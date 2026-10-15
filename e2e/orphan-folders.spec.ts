@@ -59,8 +59,10 @@ test('the folders no agent owns are listed, and removed when asked, but the one 
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
-  // A process working in one of them.
-  const busy = spawn('sleep', ['120'], { cwd: wt('busy'), stdio: 'ignore' });
+  // A process working in one of them: node on Windows, which has no sleep of its own.
+  const busy = process.platform === 'win32'
+    ? spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { cwd: wt('busy'), stdio: 'ignore' })
+    : spawn('sleep', ['120'], { cwd: wt('busy'), stdio: 'ignore' });
 
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31459), DOROTHY_E2E: '1' },
@@ -101,10 +103,18 @@ test('the folders no agent owns are listed, and removed when asked, but the one 
     expect(typeof byName['agent-7f3c1a'].lastChangedAt).toBe('string');
     expect(listing.totalBytes).toBe(listing.folders.reduce((sum, f) => sum + (f.sizeBytes as number), 0));
 
-    expect(report.removed).toBe(2);
-    expect(report.kept).toEqual([expect.objectContaining({ path: wt('busy'), reason: 'in-use', detail: expect.stringContaining(`(${busy.pid})`) })]);
     expect(steps.map(st => [st.done, st.total])).toEqual([[1, 3], [2, 3], [3, 3]]);
-    expect(after).toEqual({ relay: false, noGit: false, busy: true, live: 'feat/live', agent: true });
+    if (process.platform === 'win32') {
+      // Windows has neither lsof nor /proc to read which process works in a
+      // folder (processCwds, orphan-folders.ts): nothing is removed, and each
+      // is kept as of unknown use.
+      expect(report).toEqual({ removed: 0, freedBytes: 0, kept: shown.map(p => expect.objectContaining({ path: p, reason: 'unknown-use' })) });
+      expect(after).toEqual({ relay: true, noGit: true, busy: true, live: 'feat/live', agent: true });
+    } else {
+      expect(report.removed).toBe(2);
+      expect(report.kept).toEqual([expect.objectContaining({ path: wt('busy'), reason: 'in-use', detail: expect.stringContaining(`(${busy.pid})`) })]);
+      expect(after).toEqual({ relay: false, noGit: false, busy: true, live: 'feat/live', agent: true });
+    }
     expect(pageErrors).toEqual([]);
   } finally {
     if (busy.pid) { try { process.kill(busy.pid, 'SIGKILL'); } catch { /* gone */ } }

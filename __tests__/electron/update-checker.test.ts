@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 
 // ── Hoisted mocks (available inside vi.mock factories) ─────────────
 const { mockAutoUpdater, mockFetch } = vi.hoisted(() => ({
@@ -30,6 +30,11 @@ vi.mock('../../electron/constants', () => ({
 }));
 
 vi.stubGlobal('fetch', mockFetch);
+
+// The macOS and Linux feed, whatever runs the tests: Windows is update-checker-win32.test.ts.
+const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+beforeAll(() => Object.defineProperty(process, 'platform', { ...platform, value: 'darwin' }));
+afterAll(() => Object.defineProperty(process, 'platform', platform));
 
 // ── Import after mocks ─────────────────────────────────────────────
 import {

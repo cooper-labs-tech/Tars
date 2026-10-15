@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import { gitCommand } from '../platform/git-command';
 
 const run = promisify(execFile);
 
@@ -50,7 +51,7 @@ export interface ReviewDiff {
 async function git(cwd: string, args: string[], maxBuffer = 8 * 1024 * 1024): Promise<string> {
   // core.quotePath=false: a name with accents comes back as it is, where git
   // quoted and escaped it ("caf\303\251.txt") and that text became the path.
-  const { stdout } = await run('git', ['--no-optional-locks', '-c', 'core.quotePath=false', ...args], { cwd, maxBuffer, timeout: 30_000 });
+  const { stdout } = await run(gitCommand(), ['--no-optional-locks', '-c', 'core.quotePath=false', ...args], { cwd, maxBuffer, timeout: 30_000 });
   return stdout;
 }
 

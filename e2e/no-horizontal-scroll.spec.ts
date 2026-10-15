@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { ALL } from './surfaces.mjs';
-import { launchSandboxed, seedSandbox, stubSkillsSh, removeHome } from './fixture.mjs';
+import { launchSandboxed, removeHome, seedSandbox, splashGone, stubSkillsSh } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -72,6 +72,11 @@ test.afterAll(async () => {
 for (const surface of ALL as Array<{ name: string; route: string; clickText?: string; clickText2?: string; clickRole?: 'radio'; settle?: number }>) {
   test(`no sideways scroll: ${surface.name}`, async () => {
     await page.goto(DEV_URL + surface.route, { waitUntil: 'domcontentloaded' });
+    // Hydrated first: until React holds the page, what follows acts on the
+    // server's HTML, and on a slow runner its bounds ran out there (run
+    // 36461229599, attempt 2). splashGone waits for that as long as the spec
+    // allows, then holds the splash to its own cap.
+    await splashGone(page);
     await page.waitForTimeout(600);
 
     // Same click-through as the screenshot sweep: most pickers live behind an
@@ -135,6 +140,11 @@ for (const surface of ALL as Array<{ name: string; route: string; clickText?: st
 
 test('no sideways scroll: usage hover cards on the first and last bar', async () => {
   await page.goto(DEV_URL + '/usage', { waitUntil: 'domcontentloaded' });
+  // Hydrated first: until React holds the page, what follows acts on the
+  // server's HTML, and on a slow runner its bounds ran out there (run
+  // 36461229599, attempt 2). splashGone waits for that as long as the spec
+  // allows, then holds the splash to its own cap.
+  await splashGone(page);
   await page.waitForTimeout(1200);
 
   // The bar columns are the hover targets inside the chart panels: each is the

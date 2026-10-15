@@ -1,11 +1,9 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
 import { execFileSync } from 'child_process';
-import * as fs from 'fs';
 import * as os from 'os';
-import * as path from 'path';
 import { ALL, recordPageErrors, SCREENSHOT_TOLERANCE, USAGE_DAY, volatileMasks } from './surfaces.mjs';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
-import { launchSandboxed, listenForErrors, markWhatsNewSeen, pinDayOn, seedSandbox, stubSkillsSh, settleFleet, removeHome } from './fixture.mjs';
+import { launchSandboxed, listenForErrors, makeShotSandbox, markWhatsNewSeen, pinDayOn, removeShotSandbox, seedSandbox, settleFleet, splashGone, stubSkillsSh } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -43,7 +41,8 @@ test.beforeAll(async () => {
   // red by 4,370 to 4,514 px each, and a folder of 48 characters under /tmp
   // kept them green. The references were recorded under this folder. The chat
   // suite left TMPDIR for /tmp for the same reason (d08e4559).
-  sandboxHome = fs.mkdtempSync(path.join(osTempFolder(), 'dorothy-e2e-'));
+  // On Windows, a folder of the same length on every machine (makeShotSandbox).
+  sandboxHome = makeShotSandbox('dorothy-e2e-', osTempFolder());
   // Photograph a populated app, not an empty one. Every surface used to render
   // its own empty state, which cannot show a status colour, a row rhythm, a
   // truncation or a full column - so the screenshots guarded almost nothing.
@@ -73,7 +72,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close();
-  await removeHome(sandboxHome);
+  await removeShotSandbox(sandboxHome);
 });
 
 for (const surface of ALL as Array<{ name: string; route: string; clickText?: string; clickText2?: string; clickRole?: 'radio'; settle?: number }>) {
@@ -81,6 +80,8 @@ for (const surface of ALL as Array<{ name: string; route: string; clickText?: st
     const errorsBefore = pageErrors.length;
 
     await page.goto(DEV_URL + surface.route, { waitUntil: 'domcontentloaded' });
+    // Photographed once the launch splash, shown again by every load, has gone.
+    await splashGone(page);
     await page.waitForTimeout(600);
 
     // Settings labels collide with the main navigation ('Extensions' is both a

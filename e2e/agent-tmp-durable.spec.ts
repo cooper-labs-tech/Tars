@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { execFileSync, spawn } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -36,16 +36,16 @@ test("an agent's CLI gets a temporary folder under ~/.dorothy/tmp that outlives 
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
   const seen = path.join(home, 'env-seen.jsonl');
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, [
-    `#!${process.execPath}`,
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim
+  // beside it, which Tars reads through only to a .js script, hence the .cjs there.
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), [
     "const fs = require('fs'), path = require('path');",
     `fs.appendFileSync(${JSON.stringify(seen)}, JSON.stringify({ id: process.env.CLAUDE_AGENT_ID, TMPDIR: process.env.TMPDIR, CLAUDE_CODE_TMPDIR: process.env.CLAUDE_CODE_TMPDIR }) + '\\n');`,
     "if (process.env.TMPDIR) fs.writeFileSync(path.join(process.env.TMPDIR, 'scratch-' + Date.now() + '.txt'), 'kept');",
     "process.stdout.write('stand-in ready\\n');",
     'process.stdin.resume();',
     '',
-  ].join('\n'), { mode: 0o755 });
+  ].join('\n'));
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
     id: 'worker', name: 'Worker', character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
     projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-01T08:00:00.000Z', lastActivity: '2026-10-01T08:00:00.000Z',
@@ -72,14 +72,18 @@ test("an agent's CLI gets a temporary folder under ~/.dorothy/tmp that outlives 
   const socks = path.join(workerRoot, 'c', 'cc-socks');
   fs.mkdirSync(socks, { recursive: true });
   const socket = path.join(socks, '4242.sock');
+  // No socket file on Windows: Node listens there on named pipes only, never on a path in a folder.
+  const withSocket = process.platform !== 'win32';
   // Listened on by its relative name, from its own folder: a socket's path holds at most 104 bytes, and this one
   // under the system's temporary folder is longer.
-  const listener = spawn(process.execPath, ['-e', "require('net').createServer().listen('4242.sock', () => console.log('listening')); setInterval(() => {}, 1e9);"], { cwd: socks, stdio: ['ignore', 'pipe', 'inherit'] });
-  await new Promise<void>((resolve, reject) => {
-    listener.stdout!.on('data', (d) => { if (String(d).includes('listening')) resolve(); });
-    listener.on('exit', (code) => reject(new Error(`the socket's listener exited with ${code}`)));
-  });
-  fs.lutimesSync(socket, old, old);
+  const listener = withSocket ? spawn(process.execPath, ['-e', "require('net').createServer().listen('4242.sock', () => console.log('listening')); setInterval(() => {}, 1e9);"], { cwd: socks, stdio: ['ignore', 'pipe', 'inherit'] }) : null;
+  if (listener) {
+    await new Promise<void>((resolve, reject) => {
+      listener.stdout!.on('data', (d) => { if (String(d).includes('listening')) resolve(); });
+      listener.on('exit', (code) => reject(new Error(`the socket's listener exited with ${code}`)));
+    });
+    fs.lutimesSync(socket, old, old);
+  }
   for (const p of [
     gone, path.dirname(gone), path.dirname(path.dirname(gone)), workerOld, path.dirname(workerOld),
     sessionFile, path.dirname(sessionFile), sessionFolder, path.dirname(sessionFolder), path.dirname(path.dirname(sessionFolder)), socks,
@@ -111,7 +115,7 @@ test("an agent's CLI gets a temporary folder under ~/.dorothy/tmp that outlives 
     }
     // Still listened on after the pass: a client connects, by the same relative name.
     let socketAnswers = false;
-    try {
+    if (withSocket) try {
       execFileSync(process.execPath, ['-e', "const c = require('net').connect('4242.sock'); c.on('connect', () => { c.end(); process.exit(0); }); c.on('error', () => process.exit(1));"], { cwd: socks, timeout: 10_000 });
       socketAnswers = true;
     } catch { /* refused, or no socket */ }
@@ -146,17 +150,18 @@ test("an agent's CLI gets a temporary folder under ~/.dorothy/tmp that outlives 
 
     expect(first).toEqual({ id: 'worker', TMPDIR: expectedT, CLAUDE_CODE_TMPDIR: expectedC });
     expect(second).toEqual(first);
-    expect(modes).toEqual(['700', '700', '700']);
+    // POSIX mode bits, which Windows has none of: Node reads 666 for any folder there (measured).
+    if (process.platform !== 'win32') expect(modes).toEqual(['700', '700', '700']);
     expect(firstScratch).toHaveLength(1);
     expect(values.scratchAfterRelaunch).toEqual(expect.arrayContaining(firstScratch));
     expect(values.deletedAgentFolder).toBe(false);
     expect(values.liveAgentsOldFile, 'the worker ran when the pass came: its t/ entry untouched for a day goes').toBe(false);
     expect(values.liveSessionFolder, 'the folder of the session it would resume stays, however old').toBe(true);
-    expect(values.socket, 'claude\'s messaging socket stays while a server listens on it').toBe(true);
-    expect(values.socketAnswers, 'and still answers').toBe(true);
+    if (withSocket) expect(values.socket, 'claude\'s messaging socket stays while a server listens on it').toBe(true);
+    if (withSocket) expect(values.socketAnswers, 'and still answers').toBe(true);
     expect(log).toMatch(new RegExp(`removed .*${shortIdOf('deleted-agent')}.*untouched for 7 days`));
     expect(log).toMatch(/removed .*old-but-live\.txt.*untouched for a day, its agent running/);
   } finally {
-    listener.kill();
+    listener?.kill();
   }
 });

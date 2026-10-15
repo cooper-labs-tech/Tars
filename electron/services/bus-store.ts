@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { BUS_FILE } from '../constants';
 import { writeAtomicSync } from '../utils/secret-file';
 import { isSuperAgent } from '../utils';
+import { projectName } from '../platform';
 import { chatNameOf, namedChatOf } from '../core/chat-inbox';
 import { agents } from '../core/agent-manager';
 import { getProvider } from '../providers';
@@ -264,7 +265,9 @@ export function listRooms(): BusRoom[] {
       id,
       kind: 'project',
       projectPath,
-      title: projectPath.split('/').filter(Boolean).pop() || projectPath,
+      // The folder's name: the last segment once trailing `/` are gone, as it
+      // always was on darwin and linux, and on Windows `\` separates too.
+      title: projectName(projectPath.replace(/\/+$/, '')) || projectPath,
       memberIds: memberIdsFor(id, 'project', projectPath),
       createdAt,
       lastMessageAt: last?.createdAt,

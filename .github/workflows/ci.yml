@@ -1,28 +1,45 @@
-name: CI - Tests
+name: CI - Linux (on demand)
 
+# Run only when asked (Noah, 2026-10-15: Actions "que pour les tests spécifiques
+# pour linux et windows, pas en permanence"). macOS stays local. What runs is
+# what a Mac cannot prove: both type checks and the unit tests on a real Linux
+# host, where the per-platform cases run unstubbed, and the specs that drive
+# paths, processes, shells and file modes (npm run e2e:platform). Not the full
+# E2E. When to run it, and the command: OPERATIONS.md, "Tests and guardrails".
+#
+#   gh workflow run ci.yml --ref main -f ref=<branch, or refs/pull/<n>/head>
 on:
-  pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'What to test: a branch, a tag, a commit, or refs/pull/<n>/head (empty: the ref the workflow runs from)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-linux-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
-    name: Run Tests
+  linux:
+    name: Linux (ubuntu-latest)
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [22]
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: ${{ matrix.node-version }}
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
           cache: 'npm'
 
       - name: Install dependencies
@@ -30,22 +47,10 @@ jobs:
 
       # Electron 44 has no postinstall: its binary was downloaded by the first
       # test that loaded electron, and GitHub answered that download 500 or 503
-      # twice on 01/10 (#235's merge head, then main after #266), which turned a
-      # green change red. The download is cached under its version, and fetched
-      # in a step of its own that tries three times when it does happen.
-      - name: Electron's version
-        id: electron
-        run: echo "version=$(node -p "require('./node_modules/electron/package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Electron's download
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron-download
-          key: electron-${{ runner.os }}-${{ steps.electron.outputs.version }}
-
-      - name: Install Electron's binary
+      # twice on 01/10, which turned a green change red. Fetched up front, three
+      # tries.
+      - name: Install the Electron binary
         run: |
-          export electron_config_cache="$HOME/.cache/electron-download"
           for try in 1 2 3; do
             npx install-electron && exit 0
             echo "Electron's download failed (try $try of 3), trying again in 30 s"
@@ -53,54 +58,36 @@ jobs:
           done
           exit 1
 
-      - name: Run tests
+      # Each check runs even when one before it failed, so one run says all it can.
+      - name: Type check (renderer)
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit
+
+      - name: Type check (main process)
+        if: ${{ !cancelled() }}
+        run: npx tsc -p electron/tsconfig.json
+
+      - name: Unit tests
+        if: ${{ !cancelled() }}
         run: npm test
 
-  # Tars ships for macOS only, and the code stays portable: this keeps work done
-  # on Windows from breaking there unseen. Not blocking yet: its first runs list
-  # what fails on Windows, so that each failure is sorted (a test POSIX by
-  # nature skips there, with its reason; a real defect goes to the Backend).
-  # It becomes blocking once every remaining failure is understood.
-  test-windows:
-    name: Run Tests (Windows, measuring)
-    runs-on: windows-latest
-    continue-on-error: true
-    # A test that hangs on Windows (run 2 sat silent for eight minutes) ends
-    # the job instead of holding a runner for the six-hour default.
-    timeout-minutes: 30
+      # ubuntu-24.04 (ubuntu-latest) has AppArmor restrict unprivileged user
+      # namespaces, which Chromium's sandbox needs, so Electron can abort at
+      # launch; Playwright's own CI lifts it the same way for Electron.
+      - name: Allow the user namespaces Chromium's sandbox needs
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
-    steps:
-      # Git for Windows checks text out with CRLF line endings; the tests read
-      # fixtures and sources byte for byte, as they are on macOS and Linux.
-      - name: Keep LF line endings
-        run: git config --global core.autocrlf false
+      # The real app on a virtual display; the main process was built above.
+      - name: Platform specs
+        if: ${{ !cancelled() }}
+        env:
+          E2E_TRACE: 'on'
+        run: xvfb-run -a npm run e2e:platform
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
+      - name: Upload the run artefacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          node-version: 22
-          cache: 'npm'
-
-      # npm test runs the tars-relay plugin's own tests through Python 3.9 or
-      # later; on Windows the runner's Python answers to python and py -3.
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test -- --reporter=default --reporter=json --outputFile=vitest-windows.json
-
-      - name: Keep the report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: vitest-windows
-          path: vitest-windows.json
-          if-no-files-found: warn
+          name: e2e-platform-linux
+          path: test-results/runs/**
+          retention-days: 7

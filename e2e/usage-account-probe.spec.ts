@@ -65,6 +65,8 @@ function writeStandIn(home: string, log: string): string {
   return bin;
 }
 
+test.skip(process.platform === 'win32', 'several Claude accounts are off on a Windows build until they are ported; this runs on macOS and Linux');
+
 test("the Usage page is handed each Claude account's windows as Claude Code reads them, per-model weekly included", async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-account-probe-'));

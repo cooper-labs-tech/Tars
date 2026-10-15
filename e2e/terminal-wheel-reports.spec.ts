@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type CDPSession, type Locator, typ
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, seedSandbox, removeHome } from './fixture.mjs';
+import { launchSandboxed, removeHome, seedSandbox, splashGone, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -26,8 +26,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /** Raw mode, no echo, every byte appended to `log`; the alternate screen, and the mouse request if asked. */
 function recorder(log: string, askForMouse: boolean): string {
-  return `#!${process.execPath}
-const fs = require('fs');
+  return `const fs = require('fs');
 process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdout.write('\\x1b[?1049h\\x1b[2J\\x1b[H');
@@ -63,15 +62,16 @@ test('a panel sends the wheel a full-screen CLI asked for as wheel reports, and 
     { id: 'wheel-asked', name: 'Reader that asked', log: logs.asked, askForMouse: true },
     { id: 'wheel-plain', name: 'Reader that did not', log: logs.plain, askForMouse: false },
   ];
+  const cliPaths = new Map<string, string>();
   for (const agent of agents) {
     fs.writeFileSync(agent.log, '');
-    fs.writeFileSync(path.join(home, `${agent.id}.cjs`), recorder(agent.log, agent.askForMouse), { mode: 0o755 });
+    cliPaths.set(agent.id, writeNodeCli(path.join(home, `${agent.id}.cjs`), recorder(agent.log, agent.askForMouse)));
   }
   // Only the two readers, idle and without a terminal, so the board's auto
   // start runs them, and them alone, through the agent's own CLI path.
   fs.writeFileSync(path.join(home, '.dorothy', 'agents.json'), JSON.stringify(agents.map(agent => ({
     id: agent.id, name: agent.name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
-    projectPath: project, skills: [], cliPath: path.join(home, `${agent.id}.cjs`),
+    projectPath: project, skills: [], cliPath: cliPaths.get(agent.id),
     createdAt: '2026-09-16T08:00:00.000Z', lastActivity: '2026-09-16T08:00:00.000Z',
   })), null, 2));
 
@@ -84,6 +84,11 @@ test('a panel sends the wheel a full-screen CLI asked for as wheel reports, and 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForLoadState('domcontentloaded');
     await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
+    // Hydrated first: until React holds the page, nothing the checks below wait
+    // for can render, and on a runner slow to hydrate their bounds ran out on an
+    // empty page on a slow runner. splashGone waits as long as the
+    // spec allows for that, then holds the splash to its own cap.
+    await splashGone(page);
 
     const asked = await screenOf(page, 'Reader that asked');
     const plain = await screenOf(page, 'Reader that did not');

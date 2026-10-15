@@ -555,3 +555,59 @@ answers a chat's agent of the same project only. Off, the tool is not
 registered at all. What a chat can do without it does not change: its CLI runs
 as the user, and the runners' transcripts are files under `~/.claude` it can
 read. The option decides what Tars hands it, not what it can reach.
+
+## 7. Windows
+
+What changes on Windows, measured on Windows 11 (26200) between the 25th of
+September and the 13th of October 2026. Everything above holds there too: the
+agents run as the user, and nothing here confines them.
+
+**Secrets are closed by their access list, not by a mode.** `0o600` and `0o700`
+do nothing on Windows: Node maps chmod to the read-only bit. A secret file and
+`~/.tars-private` get an access list instead: the current user and SYSTEM, full
+control, nothing inherited (`platform/owner-only.ts`, `utils/secret-file.ts`).
+A secret is born closed: its temp file is made in `~/.tars-private/.staging`,
+which holds that list before its first byte, then renamed into place. icacls and
+whoami are run by their full path under `%SystemRoot%\System32`, the user named
+by SID. What this keeps out is the other accounts on the machine, Codex's
+sandbox accounts included (Codex adds `CodexSandboxUsers` to the folders its
+sandbox reads); not the agents, which run as the user, and not an administrator,
+who can take the file back. **A close that fails leaves the file with the list
+it inherited, and says so in the log only** (`[secret-acl]`): the write goes on,
+and nothing in the window says it.
+
+**Paths that would reach the network or another namespace are refused.** A
+notification sound must be a local `X:\...` `.wav`: a UNC path (`\host\...`)
+would be opened, and opening it sends the account's NTLM hash to that host;
+`\?\`, relative and drive-relative paths are refused too, and so is a link to a
+share, a device or an NT path (`platform/sound.ts`). The file reaches a fixed
+PowerShell script as data, in a variable, never pasted into code. SystemRoot,
+and in the shell picker ComSpec, ProgramFiles and LOCALAPPDATA, count only as
+plain absolute paths.
+
+**Gemini's environment redaction lets the agent token through.** With
+`security.environmentVariableRedaction.enabled` on, Gemini CLI drops every
+variable whose name holds TOKEN from what its hooks get, and every hook post was
+refused. Tars adds `CLAUDE_MGR_API_TOKEN` to
+`security.environmentVariableRedaction.allowed` in Gemini's settings
+(`utils/gemini-node-hooks.ts`), on every platform. The token is per terminal and
+dies with it (§3); the user's own entries are kept.
+
+**Nothing is looked up in a project's folder.** Node on Windows looks a bare
+program name up in the folder it is started in before the PATH, and Tars starts
+git in a project's folder: a repository carrying a git.exe of its own had it
+run, by the status line every 5 s and as soon as the project was listed.
+Measured on the 13th of October with Node 22 and Electron 44: a planted git.exe
+ran; `NoDefaultCurrentDirectoryInExePath=1` in the child's environment did not
+stop it, in the starting process's own did. So Tars runs the git.exe on the PATH
+by its full path (`platform/git-command.ts`), the status line walks the PATH
+itself, and `NoDefaultCurrentDirectoryInExePath=1` is set in Tars's own
+environment at start and in every agent's (`core/agent-pty.ts`), whose CLIs look
+up git and rg the same way. taskkill, icacls, whoami and PowerShell are always
+run by their full path under `%SystemRoot%\System32`.
+
+**The installer and the updates are not signed.** SmartScreen warns on the
+installer's first run, and `electron-updater` installs an update without
+checking a publisher: whoever can write to the releases of
+`cooper-labs-tech/Tars` ships code to every Windows install. On macOS the
+update must carry the app's own signature; on Windows nothing stands in for it.

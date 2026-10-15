@@ -171,8 +171,11 @@ test('the usage page lists each task with its own cost and its total, the averag
     seen.fourteenDays = first;
     expect(first.slice(0, 3).map(r => r.text)).toEqual(['translate the strings', 'review the build', 'fix the build on main']);
     expect(first[0]).toMatchObject({ source: 'from Project Lead', agent: 'Codex Helper', provider: 'Codex', model: 'gpt-5.3-codex', time: '15 min', tokens: '-', own: 'not counted', total: 'not counted' });
-    expect(first[1]).toMatchObject({ source: 'from Project Lead', agent: 'Build Worker', provider: 'Claude · Second', model: 'Opus 5', time: '15 min', turns: '1', tokens: '3.0M', own: '$3.00', total: '$3.00' });
-    expect(first[2]).toMatchObject({ source: 'typed', agent: 'Project Lead', provider: 'Claude · Main', time: '30 min', tokens: '1.5M', own: '$2.00', total: '$5.00partial' });
+    // Several Claude accounts are off on a Windows build whatever the registry
+    // says: there a task names no account.
+    const claudeOn = (account: string) => (process.platform === 'win32' ? 'Claude' : `Claude · ${account}`);
+    expect(first[1]).toMatchObject({ source: 'from Project Lead', agent: 'Build Worker', provider: claudeOn('Second'), model: 'Opus 5', time: '15 min', turns: '1', tokens: '3.0M', own: '$3.00', total: '$3.00' });
+    expect(first[2]).toMatchObject({ source: 'typed', agent: 'Project Lead', provider: claudeOn('Main'), time: '30 min', tokens: '1.5M', own: '$2.00', total: '$5.00partial' });
     expect(first[3]).toMatchObject({ text: 'update the landing copy', source: 'from Telegram · stopped', agent: 'Site Writer', provider: 'Claude', own: '$0.25' });
     expect(first[4]).toMatchObject({ text: 'the nightly test run', source: 'from Hermes · error', own: '$1.00', time: '43 min' });
     expect(first[5]).toMatchObject({ text: 'an old task of a deleted agent', agent: 'deleted agent', own: '$0.10' });

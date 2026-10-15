@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type Locator, type Page } from '@p
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, seedSandbox, stepShot, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, seedSandbox, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -32,8 +32,7 @@ const QUERIES = [
 ];
 
 function recorder(log: string): string {
-  return `#!${process.execPath}
-const fs = require('fs');
+  return `const fs = require('fs');
 process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.on('data', chunk => fs.appendFileSync(${JSON.stringify(log)}, chunk));
@@ -57,6 +56,19 @@ async function screenOf(page: Page, agentName: string): Promise<Locator> {
 
 const escaped = (bytes: string) => JSON.stringify(bytes);
 
+/**
+ * Windows: the pty is ConPTY, whose console is a terminal of its own. It
+ * answers the insert mode, the bracketed paste mode and the text area's size
+ * itself, in that order, and passes on to the panel only the palette colour
+ * and xterm's version (measured with node-pty and nobody reading the pty:
+ * these three answers reached the recorder all the same). They are the
+ * console's, not the panel's, so they are taken off before the check; any
+ * other byte is still the panel's. macOS and Linux: a pty answers nothing,
+ * and nothing is taken off.
+ */
+const CONSOLE_ANSWERS = /^\x1b\[4;2\$y\x1b\[\?2004;2\$y\x1b\[8;\d+;\d+t/;
+const fromThePanel = (bytes: string) => (process.platform === 'win32' ? bytes.replace(CONSOLE_ANSWERS, '') : bytes);
+
 test('a mounted panel sends its terminal\'s replies to nobody, and the keys typed into it through', async () => {
   test.setTimeout(180_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-panel-replies-'));
@@ -64,8 +76,8 @@ test('a mounted panel sends its terminal\'s replies to nobody, and the keys type
   const project = path.join(home, 'projects', 'tars');
   const log = path.join(home, 'received.bin');
   fs.writeFileSync(log, '');
-  const cli = path.join(home, `${AGENT.id}.cjs`);
-  fs.writeFileSync(cli, recorder(log), { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux, npm's shim beside it on Windows.
+  const cli = writeNodeCli(path.join(home, `${AGENT.id}.cjs`), recorder(log));
   // The asker alone, idle and without a terminal, so the board's auto start
   // runs it through the agent's own CLI path.
   fs.writeFileSync(path.join(home, '.dorothy', 'agents.json'), JSON.stringify([{
@@ -97,7 +109,7 @@ test('a mounted panel sends its terminal\'s replies to nobody, and the keys type
     await expect.poll(() => fs.readFileSync(log, 'latin1'), { timeout: 15_000 }).toBe(replies + 'ok');
 
     recordValues({ queries: QUERIES, receivedBeforeTyping: escaped(replies), receivedAfterTyping: escaped(fs.readFileSync(log, 'latin1')) });
-    expect(escaped(replies), 'the replies the panel sent as keys').toBe(escaped(''));
+    expect(escaped(fromThePanel(replies)), 'the replies the panel sent as keys').toBe(escaped(''));
   } finally {
     await app.close();
     await removeHome(home);

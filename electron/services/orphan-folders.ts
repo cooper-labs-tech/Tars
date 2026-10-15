@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { diskUsage } from '../platform/disk-usage';
+import { gitCommand } from '../platform/git-command';
 
 /**
  * The folders no agent owns (Noah's choice 16 of 05/10; the frames merged in
@@ -80,7 +81,7 @@ function inside(child: string, parent: string): boolean {
 
 /** The worktrees git knows for a project, as real paths; null when git cannot say. */
 async function knownWorktrees(project: string): Promise<string[] | null> {
-  const r = await run('git', ['worktree', 'list', '--porcelain'], project);
+  const r = await run(gitCommand(), ['worktree', 'list', '--porcelain'], project);
   if (r.code !== 0) {
     console.warn(`[orphan-folders] git cannot list the worktrees of ${project} (${r.code}): ${r.stderr.trim().slice(0, 300)}; none of its folders is offered`);
     return null;

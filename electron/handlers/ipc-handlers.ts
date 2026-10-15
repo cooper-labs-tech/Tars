@@ -74,6 +74,7 @@ import { spawnSkillInstallerOnWindows, startPluginInstallOnWindows } from '../co
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { terminalSnapshot, leftFullscreenIn, rememberPanelSize, resizeTerminalMirror } from '../core/terminal-mirror';
 import { probeVersion } from '../core/version-probe';
+import { gitCommand } from '../platform/git-command';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -170,7 +171,7 @@ async function makeAgentWorktree(projectPath: string, branchName: string): Promi
       // a quote or a space in it used to break the command (or run its own).
       // See the same fix in agent:create. In the C locale: gitRefusal reads
       // git's "fatal:", which a translated git would not write.
-      const git = (args: string[]) => execFileSync('git', args, { cwd: projectPath, stdio: 'pipe', env: { ...process.env, LC_ALL: 'C' } });
+      const git = (args: string[]) => execFileSync(gitCommand(), args, { cwd: projectPath, stdio: 'pipe', env: { ...process.env, LC_ALL: 'C' } });
       // An existing branch is checked out there, a new one is made: only the
       // add that applies runs, so a refusal is git's reason for it. Any failure
       // of the first used to be retried as a new branch, and the user read the
@@ -400,12 +401,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
           // Check if branch already exists
           try {
-            execFileSync('git', ['rev-parse', '--verify', branchName], { cwd, stdio: 'pipe' });
+            execFileSync(gitCommand(), ['rev-parse', '--verify', branchName], { cwd, stdio: 'pipe' });
             // Branch exists, create worktree using existing branch
-            execFileSync('git', ['worktree', 'add', worktreePath, branchName], { cwd, stdio: 'pipe' });
+            execFileSync(gitCommand(), ['worktree', 'add', worktreePath, branchName], { cwd, stdio: 'pipe' });
           } catch {
             // Branch doesn't exist, create worktree with new branch
-            execFileSync('git', ['worktree', 'add', '-b', branchName, worktreePath], { cwd, stdio: 'pipe' });
+            execFileSync(gitCommand(), ['worktree', 'add', '-b', branchName, worktreePath], { cwd, stdio: 'pipe' });
           }
         }
         // Its dependencies, cloned from the project's where they were installed
@@ -3082,7 +3083,7 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     try {
       const { execFile } = await import('child_process');
       const { promisify } = await import('util');
-      const { stdout } = await promisify(execFile)('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      const { stdout } = await promisify(execFile)(gitCommand(), ['rev-parse', '--abbrev-ref', 'HEAD'], {
         cwd, timeout: 8000,
       });
       return { success: true, output: stdout.trim() };
