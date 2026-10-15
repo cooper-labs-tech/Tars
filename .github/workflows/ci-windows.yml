@@ -1,6 +1,6 @@
 name: CI - Windows (on demand)
 
-# Run only when asked (JeanBrasse, 2026-10-15: Actions "que pour les tests spécifiques
+# Run only when asked (the maintainer, 2026-10-15: Actions "que pour les tests spécifiques
 # pour linux et windows, pas en permanence"). macOS stays local. What runs is
 # what a Mac cannot prove: both type checks and the unit tests on a real Windows
 # host, where the per-platform cases run unstubbed, and the specs that drive

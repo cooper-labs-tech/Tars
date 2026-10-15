@@ -386,7 +386,7 @@ removed after measuring that nothing in the app listens for it.
 
 ### CI: on demand, Linux and Windows only
 
-JeanBrasse, 2026-10-15: GitHub Actions "que pour les tests spécifiques pour linux et windows, pas en
+The maintainer, 2026-10-15: GitHub Actions "que pour les tests spécifiques pour linux et windows, pas en
 permanence". Both workflows run on `workflow_dispatch` only: nothing runs on a PR or a push to
 `main`, and nothing runs unless somebody asks. macOS is checked locally, as below.
 
@@ -396,7 +396,7 @@ permanence". Both workflows run on `workflow_dispatch` only: nothing runs on a P
 | `.github/workflows/ci-windows.yml` | `windows-latest` | both `tsc`, `npm test`, `npm run e2e:platform` on a 1920x1080 display |
 
 `npm test` there runs the per-platform cases on a real host: on a Mac they run with
-`process.platform` stubbed (JeanBrasse's rule of 2026-10-13, each change on macOS, Windows and Linux).
+`process.platform` stubbed (the maintainer's rule of 2026-10-13, each change on macOS, Windows and Linux).
 `npm run e2e:platform` is the eight specs that drive paths, processes, shells and file modes in
 the real app: `acp-delegation`, `agent-launch`, `claude-projects-paths`, `cli-paths-extra-path`,
 `project-names`, `pty-kill`, and on Windows only `desktop-shell.win32` and `quit-time.win32`. Not
