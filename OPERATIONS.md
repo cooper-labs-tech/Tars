@@ -9,8 +9,8 @@ Target platforms are macOS and Windows: `electron-builder` is invoked with `--ma
 code-signing config is `build/entitlements.mac.plist` (the Windows build is not signed), and
 on macOS the Tasmania integration reads a token out of `~/Library/Application Support/`. The
 code stays Linux compatible all the same (JeanBrasse,
-2026-09-24): the CI runs the tests on ubuntu, and a macOS-only code path has a Linux one or
-fails cleanly.
+2026-09-24), and runs on Windows too: the tests run on ubuntu and on windows when asked (CI, on
+demand), and a macOS-only code path has a Linux one or fails cleanly.
 
 ---
 
@@ -25,8 +25,8 @@ nvm use          # reads .nvmrc → 22
 node -v          # v22.x
 ```
 
-`package.json` declares `"engines": { "node": ">=22.12.0" }`, the floor Electron itself declares since 43, and CI
-(`.github/workflows/ci.yml`) runs the test job on Node 22. **Node 18 fails**, in two different ways:
+`package.json` declares `"engines": { "node": ">=22.12.0" }`, the floor Electron itself declares since 43, and both CI
+workflows (`.github/workflows/ci.yml`, `ci-windows.yml`, run on demand) use Node 22. **Node 18 fails**, in two different ways:
 
 ```
 # npm test on Node 18.16
@@ -302,12 +302,9 @@ were recorded in. `desktop-shell.win32.spec.ts` and `quit-time.win32.spec.ts` ru
 only: they drive the title bar, the tray, the keys, a second launch and a quit with real OS
 input through `e2e/win32-desktop.ps1`, which needs the window wholly on the screen.
 
-**Refreshing the Windows references.** They are recorded on Windows, never on a Mac. A design
-change that moves a surface turns its Windows picture red in the `e2e` job of `ci-windows.yml`
-as it turns the macOS one red locally. Either take the new pictures from that run: download
-its `e2e-runs-windows` artifact, look at each `<name>-diff.png`, and copy `<name>-actual.png`
-over `e2e/__screenshots__/win32/<name>.png` for the surfaces the change was meant to move. Or,
-on a Windows machine, run `npm run e2e:update` (with `npx tsc -p electron/tsconfig.json` first)
+**Refreshing the Windows references.** They are recorded on Windows, never on a Mac, and the
+on-demand Windows workflow does not run the surfaces (CI, below). On a Windows machine, run
+`npm run e2e:update` (with `npx tsc -p electron/tsconfig.json` first)
 and review `git diff --stat e2e/__screenshots__/win32/` as below.
 
 The manifest is `e2e/surfaces.mjs`: **18 pages + 18 settings sections + 3 overlays = 39
@@ -387,31 +384,43 @@ lot: the Kanban table was dead code, the provider colours and marks moved into
 `src/components/ui/`, the terminal theme reads the tokens, and the `theme-color` tag was
 removed after measuring that nothing in the app listens for it.
 
-### CI
+### CI: on demand, Linux and Windows only
 
-`.github/workflows/ci.yml` runs on PRs to `main` and pushes to `main`: `ubuntu-latest`,
-Node 22, `npm ci`, Electron's binary (`npx install-electron`, from a cache keyed on its version,
-three tries when it has to download: GitHub answered that download 500 or 503 twice on 2026-10-01),
-`npm test`. **That is all the ubuntu job does**: no lint, no design lint, no E2E, no
-build. The macOS E2E suite needs a display and a Mac; run it locally before you merge anything
-visual.
+JeanBrasse, 2026-10-15: GitHub Actions "que pour les tests spécifiques pour linux et windows, pas en
+permanence". Both workflows run on `workflow_dispatch` only: nothing runs on a PR or a push to
+`main`, and nothing runs unless somebody asks. macOS is checked locally, as below.
 
-**Windows is measured, not gated**, the way the `test-windows` job of `ci.yml` runs `npm test`
-on `windows-latest` without blocking, until every Windows failure is understood.
-`.github/workflows/ci-windows.yml` adds two jobs on the same events, both `continue-on-error`,
-each run whatever the other did: `checks` (both `tsc`, `npm run lint`, `npm run lint:design`,
-`npm run check:dashes`, `npm run e2e:guard`, each run even when one before it failed) and `e2e`
-(`npx playwright test` against `e2e/__screenshots__/win32/`, on a display set to 1920x1080
-first by `.github/scripts/display-resolution.ps1`, with `E2E_TRACE=on`). `npm test` runs once on
-Windows, in `test-windows`. A red Windows job shows in the run and fails nothing; read it as a
-finding, as the Linux job is read. When the E2E job fails, the Playwright report and the run
-directories are uploaded with the run (`playwright-report-windows`, `e2e-runs-windows`).
+| Workflow | Host | What it runs |
+|---|---|---|
+| `.github/workflows/ci.yml` | `ubuntu-latest` | both `tsc`, `npm test`, `npm run e2e:platform` under `xvfb-run` |
+| `.github/workflows/ci-windows.yml` | `windows-latest` | both `tsc`, `npm test`, `npm run e2e:platform` on a 1920x1080 display |
 
-**It runs, and it is the only check made on Linux.** Measured on 2026-09-17, it had never run:
-Actions stay off on a fork until somebody enables them. They are on now, and
-`gh api repos/cooper-labs-tech/Tars/actions/runs` answered `total_count: 87` on 2026-09-24. Its result is
-part of every gate, because the code stays Linux compatible (JeanBrasse, 2026-09-24): a test that
-passes on your Mac and fails there is a finding, not noise.
+`npm test` there runs the per-platform cases on a real host: on a Mac they run with
+`process.platform` stubbed (JeanBrasse's rule of 2026-10-13, each change on macOS, Windows and Linux).
+`npm run e2e:platform` is the eight specs that drive paths, processes, shells and file modes in
+the real app: `acp-delegation`, `agent-launch`, `claude-projects-paths`, `cli-paths-extra-path`,
+`project-names`, `pty-kill`, and on Windows only `desktop-shell.win32` and `quit-time.win32`. Not
+the full E2E suite, not the lints (the same on every OS, run locally). Each step runs even when
+one before it failed; a job stops at 45 minutes, and a second run of the same ref cancels the
+first. When the specs fail, the run directories are uploaded (`e2e-platform-linux`,
+`e2e-platform-windows`, kept 7 days).
+
+**When to run them.** Before a PR that touches `electron/platform/`, a path (joining, quoting,
+case, separators, `~`), a process (spawn, kill, a process tree, ConPTY or node-pty), a shell or
+its quoting, or file modes and links, is gated. Its verdict says it ran, or says what is proven
+on macOS only.
+
+**The one command**, per platform, from any checkout signed in with `gh`:
+
+```bash
+gh workflow run ci.yml --repo cooper-labs-tech/Tars --ref main -f ref=<branch>
+gh workflow run ci-windows.yml --repo cooper-labs-tech/Tars --ref main -f ref=<branch>
+# a PR from a fork: -f ref=refs/pull/<n>/head
+gh run list --repo cooper-labs-tech/Tars --workflow ci-windows.yml --limit 1   # then gh run watch <id>
+```
+
+`--ref main` picks the workflow's own file (a dispatch needs it on the default branch); `-f ref=`
+is what is checked out and tested.
 
 ---
 
