@@ -404,7 +404,9 @@ describe('npm run release:win', { timeout: 60_000 }, () => {
     expect(built[0].config).toEqual(windowsBuilderConfig(JSON.parse(before.toString())));
     expect(fs.readFileSync(path.join(dir, 'package.json')).equals(before)).toBe(true);
     // Two uploads to the existing release, latest.yml last; never a release of its own.
-    const release = path.join(dir, 'release');
+    // The script's root is git's --show-toplevel, the checkout's real path: on macOS,
+    // git gives /private/var/folders/... for the /var/folders/... of os.tmpdir().
+    const release = path.join(fs.realpathSync(dir), 'release');
     expect(writes()).toEqual([
       ['release', 'upload', `v${VERSION}`, path.join(release, `Tars-Setup-${VERSION}.exe`), path.join(release, `Tars-Setup-${VERSION}.exe.blockmap`),
         path.join(release, `Tars-Windows-${VERSION}-x64.zip`), '--repo', REPO],
