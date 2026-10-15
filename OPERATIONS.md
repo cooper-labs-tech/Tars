@@ -420,7 +420,8 @@ gh run list --repo cooper-labs-tech/Tars --workflow ci-windows.yml --limit 1   #
 ```
 
 `--ref main` picks the workflow's own file (a dispatch needs it on the default branch); `-f ref=`
-is what is checked out and tested.
+is what is checked out and tested. Read a fork's PR before you dispatch its ref: its code runs on
+the runner with a read-only token and the cache's token (npm checks each cached package's hash).
 
 ---
 
