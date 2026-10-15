@@ -49,6 +49,22 @@ export type FakeGhState = {
   serveAfterUpload?: { target?: string; digests?: Record<string, string>; manifest?: string; latest?: string };
   /** Every tag is an annotated tag object, which `git/tags/<sha>` resolves to its commit. */
   annotatedTags?: boolean;
+  /**
+   * GitHub Actions, for release:linux: what a `workflow run` dispatch starts.
+   * The run's head commit is `headSha` when given (a run of another commit),
+   * else the `ref` input it was dispatched with; it ends with `conclusion`
+   * (success unless given) and offers each artifact named in `artifacts`, the
+   * folder whose files `run download --name` copies. `noRun` dispatches and
+   * starts nothing. Dispatches are refused like an upload unless
+   * allowPublishing() was called.
+   */
+  workflow?: {
+    headSha?: string; conclusion?: string; artifacts?: Record<string, string>; noRun?: boolean; dispatchFails?: string;
+    /** What GitHub becomes while the runners build: merged into the state at the dispatch. */
+    afterDispatch?: Partial<FakeGhState>;
+  };
+  /** The runs dispatched so far, newest last. */
+  runs?: { databaseId: number; headSha: string; status: string; conclusion: string; createdAt: string; url: string; workflow: string }[];
 };
 
 const SCRIPT = `
@@ -132,8 +148,48 @@ if (cmd === 'release' && sub === 'download') {
   const name = option('--pattern');
   const uploaded = path.join(home, 'uploads', tag, name);
   if (!fs.existsSync(uploaded)) fail('no assets match the file pattern', 1);
-  const bytes = (name === 'latest-mac.yml' || name === 'latest.yml') && typeof serve.manifest === 'string' ? serve.manifest : fs.readFileSync(uploaded);
+  const bytes = /^latest(-mac|-linux(-arm64)?)?\\.yml$/.test(name) && typeof serve.manifest === 'string' ? serve.manifest : fs.readFileSync(uploaded);
   fs.writeFileSync(path.join(option('--dir'), name), bytes);
+  process.exit(0);
+}
+if (cmd === 'workflow' && sub === 'run') {
+  if (!fs.existsSync(path.join(home, 'publishing-allowed'))) fail('fake gh: this test did not allow publishing: ' + args.join(' '), 99);
+  if (state.offline) outage();
+  const wf = state.workflow || {};
+  if (wf.dispatchFails) fail(wf.dispatchFails, 1);
+  const input = args[args.indexOf('-f') + 1] || '';
+  const ref = input.startsWith('ref=') ? input.slice(4) : '';
+  if (!wf.noRun) {
+    state.runs = state.runs || [];
+    const databaseId = 1000 + state.runs.length;
+    state.runs.push({ databaseId, headSha: wf.headSha || ref, status: 'completed', conclusion: wf.conclusion || 'success', createdAt: new Date().toISOString(), url: 'https://github.com/' + option('--repo') + '/actions/runs/' + databaseId, workflow: args[2] });
+  }
+  if (wf.afterDispatch) Object.assign(state, wf.afterDispatch);
+  fs.writeFileSync(process.env.FAKE_GH_STATE, JSON.stringify(state));
+  process.exit(0);
+}
+if (cmd === 'run' && sub === 'list') {
+  if (state.offline) outage();
+  const wf = option('--workflow');
+  process.stdout.write(JSON.stringify((state.runs || []).filter(r => r.workflow === wf).reverse()));
+  process.exit(0);
+}
+if (cmd === 'run' && sub === 'view') {
+  if (state.offline) outage();
+  const r = (state.runs || []).find(x => String(x.databaseId) === args[2]);
+  if (!r) fail('could not find any workflow run with ID ' + args[2], 1);
+  process.stdout.write(JSON.stringify({ status: r.status, conclusion: r.conclusion, url: r.url }));
+  process.exit(0);
+}
+if (cmd === 'run' && sub === 'download') {
+  if (state.offline) outage();
+  const r = (state.runs || []).find(x => String(x.databaseId) === args[2]);
+  if (!r) fail('could not find any workflow run with ID ' + args[2], 1);
+  const from = ((state.workflow || {}).artifacts || {})[option('--name')];
+  if (!from) fail('no artifact matches any of the names or patterns provided', 1);
+  const into = option('--dir');
+  fs.mkdirSync(into, { recursive: true });
+  for (const f of fs.readdirSync(from)) fs.copyFileSync(path.join(from, f), path.join(into, f));
   process.exit(0);
 }
 if (cmd === 'api') {

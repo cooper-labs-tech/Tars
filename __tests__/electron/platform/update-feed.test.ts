@@ -20,10 +20,15 @@ import { installerAssetFor, offersUpdate } from '../../../electron/platform/upda
  *    architecture's installer, or a macOS file when there is no setup .exe;
  *  - a release that carries no Windows installer yet offered on win32, which
  *    sends the user to a page with nothing to install;
- *  - darwin and linux no longer get the .dmg first, then the .zip, or no
- *    longer get every newer release offered;
- *  - darwin and linux, on a release with no .dmg, offered the Windows zip
- *    listed beside the macOS one.
+ *  - darwin no longer gets the .dmg first, then the .zip, or no longer gets
+ *    every newer release offered;
+ *  - darwin, on a release with no .dmg, offered the Windows zip listed beside
+ *    the macOS one;
+ * And from the Linux build (the maintainer's parity rule of 2026-10-16, P1):
+ *  - linux offered a macOS or a Windows file (a .dmg it cannot open), the other
+ *    architecture's AppImage, or anything when the release has no AppImage
+ *    for it yet; or a release with no AppImage offered at all, sending the
+ *    user to a page with nothing to install, as Windows was before its setup.
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -61,17 +66,31 @@ describe('which asset is offered', () => {
     expect(installerAssetFor([asset('tars-setup-2.0.0.EXE')], 'win32', 'x64')?.name).toBe('tars-setup-2.0.0.EXE');
   });
 
-  it('darwin and linux: unchanged, the .dmg, then the .zip', () => {
+  it('darwin: unchanged, the .dmg, then the .zip', () => {
     expect(installerAssetFor(release, 'darwin', 'arm64')?.name).toBe('Tars-1.9.6-arm64.dmg');
     expect(installerAssetFor([asset('Tars-1.9.6-arm64-mac.zip')], 'darwin', 'arm64')?.name).toBe('Tars-1.9.6-arm64-mac.zip');
-    expect(installerAssetFor(release, 'linux', 'x64')?.name).toBe('Tars-1.9.6-arm64.dmg');
   });
 
-  it('darwin and linux: with no .dmg, the macOS zip, never the Windows zip listed beside it', () => {
+  it('darwin: with no .dmg, the macOS zip, never the Windows zip listed beside it', () => {
     const windowsFirst = [asset('Tars-Windows-1.9.6-x64.zip'), asset('Tars-1.9.6-arm64-mac.zip'), asset('Tars-Setup-1.9.6.exe')];
     expect(installerAssetFor(windowsFirst, 'darwin', 'arm64')?.name).toBe('Tars-1.9.6-arm64-mac.zip');
-    expect(installerAssetFor(windowsFirst, 'linux', 'x64')?.name).toBe('Tars-1.9.6-arm64-mac.zip');
     expect(installerAssetFor([asset('Tars-Windows-1.9.6-x64.zip'), asset('Tars-Setup-1.9.6.exe')], 'darwin', 'arm64')).toBeUndefined();
+  });
+
+  it('linux: this architecture\'s AppImage, never a macOS or a Windows file, nor the other architecture\'s', () => {
+    const all = [...release, asset('Tars-2.0.4-arm64.AppImage'), asset('Tars-2.0.4-x64.AppImage'), asset('latest-linux.yml'), asset('latest-linux-arm64.yml')];
+    expect(installerAssetFor(all, 'linux', 'x64')?.name).toBe('Tars-2.0.4-x64.AppImage');
+    expect(installerAssetFor(all, 'linux', 'arm64')?.name).toBe('Tars-2.0.4-arm64.AppImage');
+    expect(installerAssetFor(release, 'linux', 'x64'), 'a release with no AppImage').toBeUndefined();
+    expect(installerAssetFor([asset('Tars-2.0.4-arm64.AppImage')], 'linux', 'x64'), 'only the other architecture').toBeUndefined();
+  });
+
+  it('linux: the AppImage named as package.json has electron-builder name it', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+    const named = (arch: string) => String(pkg.build.linux.artifactName).replace('${version}', '2.0.4').replace('${arch}', arch).replace('${ext}', 'AppImage');
+    for (const arch of ['x64', 'arm64']) {
+      expect(installerAssetFor([asset(named('x64')), asset(named('arm64'))], 'linux', arch)?.name).toBe(named(arch));
+    }
   });
 
   it('names the installer and the zip the way package.json has electron-builder name them, so each platform takes its own', () => {
@@ -89,10 +108,13 @@ describe('whether a newer release is offered', () => {
     expect(offersUpdate('win32', undefined)).toBe(false);
   });
 
-  it('darwin and linux: always, as before, whatever the release carries', () => {
-    for (const platform of ['darwin', 'linux'] as const) {
-      expect(offersUpdate(platform, asset('Tars-1.9.6-arm64.dmg'))).toBe(true);
-      expect(offersUpdate(platform, undefined)).toBe(true);
-    }
+  it('darwin: always, as before, whatever the release carries', () => {
+    expect(offersUpdate('darwin', asset('Tars-1.9.6-arm64.dmg'))).toBe(true);
+    expect(offersUpdate('darwin', undefined)).toBe(true);
+  });
+
+  it('linux: only when it carries an AppImage for it, as Windows with its setup', () => {
+    expect(offersUpdate('linux', asset('Tars-2.0.4-x64.AppImage'))).toBe(true);
+    expect(offersUpdate('linux', undefined)).toBe(false);
   });
 });
