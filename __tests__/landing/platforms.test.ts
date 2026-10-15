@@ -44,6 +44,11 @@ import {
  *    system is not known;
  * 7. the browser the page runs in: its client hints, its touch points or its
  *    user agent left unread, or a browser without userAgentData throwing.
+ *
+ * Added after the code, for a mutant of its bench that survived (M11):
+ * 8. the Windows zip, or the setup's .blockmap, taken for its installer when
+ *    GitHub lists it before the setup, or served from a release that has no
+ *    setup (3 had the setup listed first, so it never had to choose).
  */
 
 const MAC_SAFARI = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
@@ -131,6 +136,12 @@ describe('the file of a release (3)', () => {
   it('serves the visitor\'s architecture when the release has both', () => {
     expect(installerFor('linux', ALL_THREE, 'arm64')?.name).toBe('Tars-2.0.4-arm64.AppImage');
     expect(installerFor('linux', ALL_THREE, 'x64')?.name).toBe('Tars-2.0.4.AppImage');
+  });
+
+  it('serves Windows its setup whatever order GitHub lists the files in, and never the zip (8)', () => {
+    const zipFirst = ['Tars-Windows-2.0.4-x64.zip', 'Tars-Setup-2.0.4.exe.blockmap', 'latest.yml', 'Tars-Setup-2.0.4.exe'].map(asset);
+    expect(installerFor('windows', zipFirst)?.name).toBe('Tars-Setup-2.0.4.exe');
+    expect(installerFor('windows', ['Tars-Windows-2.0.4-x64.zip', 'latest.yml'].map(asset))).toBeUndefined();
   });
 
   it('serves nothing from a release that has no file for the system', () => {
