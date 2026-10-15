@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-16',
+    updates: [
+      'Tars for Linux: each release now carries an AppImage for x64 and one for arm64 machines, beside the macOS and Windows files, and a Linux install is offered its updates from the same releases, as the other two are.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-13',

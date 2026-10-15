@@ -191,6 +191,10 @@ installer is not signed, so SmartScreen warns on its first run: More info, then 
 anyway. Tars updates itself from the same releases as on macOS. Closing the window
 keeps your agents working, with Tars in the tray; Quit Tars in the tray's menu ends it.
 
+On Linux, from 2.0.4, take `Tars-<version>-x64.AppImage` (or `-arm64` on an ARM
+machine), make it executable (`chmod +x`) and run it. It updates itself from the same
+releases. It is not signed.
+
 Then point Tars at a folder. It finds the CLIs already installed on your machine:
 you do not configure paths unless something lives somewhere unusual.
 

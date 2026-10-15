@@ -4,8 +4,9 @@ Tars runs on your own machine. There is no cluster, no cloud tenancy, no deploy.
 Everything below is run locally from the repo root or against
 the installed app.
 
-Target platforms are macOS and Windows: `electron-builder` is invoked with `--mac` by
-`npm run release` and with `--win` by `npm run release:win` (*Cut a release*), the macOS
+Target platforms are macOS, Windows and Linux: `electron-builder` is invoked with `--mac` by
+`npm run release`, with `--win` by `npm run release:win`, and with `--linux` on GitHub's Linux
+runners for `npm run release:linux` (*Cut a release*), the macOS
 code-signing config is `build/entitlements.mac.plist` (the Windows build is not signed), and
 on macOS the Tasmania integration reads a token out of `~/Library/Application Support/`. The
 code stays Linux compatible all the same (JeanBrasse,
@@ -573,6 +574,12 @@ fallback says up to date. Those two decisions are `electron/platform/update-feed
 `__tests__/electron/platform/update-feed.test.ts` fails when `build.publish` and
 `GITHUB_REPO` part, or when `build.win` gets a feed of its own.
 
+**Linux reads them too.** An AppImage's `electron-updater` reads `latest-linux.yml` on x64 and
+`latest-linux-arm64.yml` on arm64, from the same `build.publish` (`build.linux` has no
+`publish` of its own), and the fallback offers this architecture's
+`Tars-<version>-<arch>.AppImage`, never another platform's file, and no update while the
+release carries none for it, as on Windows.
+
 Auto-check fires 5 s after `whenReady()` and every 30 minutes, and each tick reads `appSettings.autoCheckUpdates`:
 with it `false` the tick does nothing, so turning the switch off or on needs no restart. The same switch
 governs the CLI updates below.
@@ -702,6 +709,45 @@ without GitHub, replace the installed `resources\app-update.yml` with `provider:
 `url: http://127.0.0.1:<port>/` and `updaterCacheDirName: tars-updater`, serve the newer
 build's `latest.yml`, `.exe` and `.blockmap` from that port, check and download from the app,
 then quit it: the update installs on quit, silently, with its own `app-update.yml`.
+
+#### Linux: `npm run release:linux`
+
+The Linux half of the same release (the maintainer's parity rule of 2026-10-16): two AppImages,
+x64 and arm64, and their feeds. They are built where their native modules can be, on GitHub's
+Linux runners (`.github/workflows/release-linux.yml`: `ubuntu-latest` and `ubuntu-24.04-arm`,
+the repository being public; a read-only token, nothing published from there), and uploaded
+from your checkout with your own `gh`. Run it after `npm run release`, from the same commit:
+
+```bash
+npm run release:linux -- --dry-run   # the checks, and what it would dispatch and upload; nothing else
+npm run release:linux                # build on the runners, check, and add the Linux files to v<version>
+```
+
+`scripts/release-linux.mjs` stops at the first thing that is not as it should be:
+
+1. **refuses** unless `HEAD` is `origin/main` after a fetch and the tracked tree is clean, and
+   on GitHub `v<version>` is released, its tag on `HEAD`, it is `/releases/latest`, and it
+   carries none of the Linux files yet;
+2. `gh workflow run release-linux.yml --ref main -f ref=<HEAD>`, then finds the run it started
+   by its head commit and waits for it (an hour at most). On each runner,
+   `node scripts/release-linux.mjs --build` builds without `CI`, `GH_TOKEN` or `GITHUB_TOKEN`
+   (`npm run build:renderer`, the main process, the seven MCP bundles, then `electron-builder
+   --linux AppImage --<arch> --publish never`) and checks what it built: the feed against the
+   AppImage, `app.asar` saying this version, `resources/app-update.yml` feeding from
+   `build.publish`, node-pty's Linux `pty.node` and no Windows `conpty.node`, better-sqlite3's
+   binary, the hooks and every MCP bundle unpacked, and nothing the app never loads. A run that
+   does not succeed stops the release with its address;
+3. downloads the two artifacts (`tars-linux-x64-<HEAD>`, `tars-linux-arm64-<HEAD>`, kept 7
+   days) and checks each feed against its AppImage: this version, the size, the sha512;
+4. asks GitHub again what step 1 asked, then `gh release upload` the two AppImages, then the
+   two feeds, never over a file already there;
+5. reads back what GitHub serves: the tag still on `HEAD`, every digest, both feeds byte for
+   byte, `/releases/latest` still `v<version>`.
+
+Until it has run, Linux installs stay where they are: the fallback offers no release without
+an AppImage for them. The AppImages are not signed (AppImage has no signature a desktop checks
+by default): whoever can write to the releases can ship code to every Linux install, as on
+Windows.
 
 ### Which builds are kept
 
