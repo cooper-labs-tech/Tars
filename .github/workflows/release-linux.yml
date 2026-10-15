@@ -1,0 +1,80 @@
+name: Release - Linux build (on demand)
+
+# The Linux half of a release (scripts/release-linux.mjs; the maintainer's
+# parity rule of 2026-10-16: a published Linux build). Dispatched by `npm run
+# release:linux` on main's head, which it checks out: the AppImage's native
+# modules (node-pty, better-sqlite3) are built on Linux. Its token is read-only
+# and nothing here publishes: the artifact is downloaded, checked and uploaded
+# to the release by release:linux, with the maintainer's own gh.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'The commit to build (release:linux passes main''s head)'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-linux-${{ inputs.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: AppImage (${{ matrix.arch }})
+    # One runner per architecture: each AppImage's native modules are built on
+    # its own (the repository is public, so the arm64 runners cost nothing).
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Electron 44 has no postinstall: fetched up front, three tries (ci.yml).
+      - name: Install the Electron binary
+        run: |
+          for try in 1 2 3; do
+            npx install-electron && exit 0
+            echo "Electron's download failed (try $try of 3), trying again in 30 s"
+            sleep 30
+          done
+          exit 1
+
+      # The build and its checks, for the runner's own architecture: the AppImage
+      # against its feed (latest-linux.yml, latest-linux-arm64.yml), and the
+      # unpacked app (version, feed, Linux native modules, hooks, MCP bundles).
+      - name: Build and check the AppImage
+        run: node scripts/release-linux.mjs --build
+
+      - name: Upload the AppImage and its feed
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tars-linux-${{ matrix.arch }}-${{ inputs.ref }}
+          path: |
+            release/*.AppImage
+            release/latest-linux*.yml
+          if-no-files-found: error
+          retention-days: 7
