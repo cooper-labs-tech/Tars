@@ -190,7 +190,7 @@ export default function TerminalPanelHeader({
 
       {/* No word names what the panel shows: it shows one thing, its agent's
           session, so the boxed `session` that followed here named nothing to
-          choose (Noah, 13/10). Frame: `Panel header · fullscreen`. */}
+          choose (JeanBrasse, 13/10). Frame: `Panel header · fullscreen`. */}
 
       {/* Start / stop. The panel's primary action, so it is a button you can
           see and hit - not a row inside the overflow menu. A grid of terminals

@@ -17,7 +17,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/tars-hook.sh"
 #
 # One expired credential is shared by every agent on the machine, so they all
 # fail in the same second. That is the night of 2026-09-16: five sessions dead
-# in one minute, and Noah asking why nobody was working while the CLI had
+# in one minute, and JeanBrasse asking why nobody was working while the CLI had
 # written the reason in each terminal.
 #
 # So this posts the failure with the CLI's own words, and the server puts the

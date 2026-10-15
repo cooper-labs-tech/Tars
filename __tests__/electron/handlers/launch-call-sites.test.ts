@@ -215,7 +215,7 @@ type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>;
 const handlers = new Map<string, Handler>();
 
 const { WIN_PATH, POSIX_PATH, WIN_DISK, CLAUDE_EXE, NODE_EXE, NPX_CLI, WIN_POWERSHELL, X86_CLAUDE } = vi.hoisted(() => {
-  const CLI_DIR = 'C:\\Users\\Nico Las\\.local\\bin';
+  const CLI_DIR = 'C:\\Users\\Sam Lee\\.local\\bin';
   const NODE_DIR = 'C:\\Program Files\\nodejs';
   const X86 = 'C:\\Program Files (x86)\\Anthropic';
   const NPX_SHIM = [

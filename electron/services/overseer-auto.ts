@@ -7,7 +7,7 @@ import { agents } from '../core/agent-manager';
  * `confirmPendingAction`, and it still rejects malformed actions and replays.
  * A rule here decides that a particular proposal counts as already approved,
  * and every rule has to earn that by being specific about the state it applies
- * to. Anything a rule does not match still waits for Noah, which is every
+ * to. Anything a rule does not match still waits for JeanBrasse, which is every
  * proposal by default: the list starts empty.
  *
  * Two things every rule must respect, because they are correctness rather than

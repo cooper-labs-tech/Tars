@@ -17,7 +17,7 @@ import {
  * can be used the day it ships, without anyone typing `claude update`.
  *
  * Tars starts every claude with DISABLE_AUTOUPDATER=1 (managedCliEnv) and every
- * Amp with `amp.updates.mode: "disabled"`, and Noah runs all his sessions
+ * Amp with `amp.updates.mode: "disabled"`, and JeanBrasse runs all his sessions
  * through Tars, so neither CLI ever updated itself. On 2026-09-22 claude 2.1.280
  * had shipped Opus 5.5 and the fleet could not use it until claude was updated
  * by hand.
@@ -46,7 +46,7 @@ import {
  *   three sessions of 2.1.280): native claude runs its embedded ripgrep by
  *   starting its own file again, as `rg`. With no `rg` on PATH every later
  *   search fails, `posix_spawn 'rg'` ENOENT; with Homebrew's on PATH, as in a
- *   Tars terminal on Noah's machine, the first one fails with a misleading
+ *   Tars terminal on JeanBrasse's machine, the first one fails with a misleading
  *   "ripgrep not found on PATH" and the next ones go through the system `rg`.
  *   USE_BUILTIN_RIPGREP=0, with `rg` on PATH, kept both working: a later
  *   change to managedCliEnv. A new launch, and so a restart, starts on the new
@@ -67,7 +67,7 @@ import {
  * cache for all of it lives in that scratch folder and goes with it, since
  * ~/.npm is never pruned and kept 38 MB of every Amp release.
  *
- * `amp update` itself cannot do it for Noah: his Amp is installed as
+ * `amp update` itself cannot do it for JeanBrasse: his Amp is installed as
  * @sourcegraph/amp, renamed since to @ampcode/cli, and `amp update` runs
  * `npm install -g @ampcode/cli`, which fails with EEXIST on the `amp` link the
  * old package owns. Tars updates whichever package owns the binary, by its own
@@ -82,7 +82,7 @@ import {
  * Only the CLIs at least one agent runs are checked: a fleet with no Amp agent
  * never has Amp updated, and the log says so once. And only while "Check for
  * updates" is on in Settings, the one switch for Tars's own updates and these
- * (Noah, 2026-09-23), read at every pass so turning it off stops the next one.
+ * (JeanBrasse, 2026-09-23), read at every pass so turning it off stops the next one.
  *
  * Only an install under the home Tars runs in is touched. That is where
  * `claude update` writes, and it keeps a sandbox or a test run, whose HOME is a
@@ -261,7 +261,7 @@ function flagSet(value: unknown): boolean {
  * and CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC, in Tars's environment or in
  * ~/.claude/settings.json, and `autoUpdates: false` in ~/.claude.json unless the
  * native installer set it there itself (`autoUpdatesProtectedForNative`), which
- * it does on every native install, Noah's included.
+ * it does on every native install, JeanBrasse's included.
  */
 function claudeUpdatesOff(ctx: CliUpdateContext): string | null {
   const settingsEnv = (readJson(path.join(ctx.home, '.claude', 'settings.json'))?.env ?? {}) as Record<string, unknown>;

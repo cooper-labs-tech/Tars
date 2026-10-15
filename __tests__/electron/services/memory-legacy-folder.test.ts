@@ -14,7 +14,7 @@ import * as path from 'node:path';
  * holding both (the old one with the MEMORY.md, Claude's after one session):
  * the Memory page listed the project twice under the same path, the old
  * memory in one row Claude does not read, and an empty row where it does.
- * Noah's orchestrator chose: a one-time copy into Claude's folder, never
+ * JeanBrasse's orchestrator chose: a one-time copy into Claude's folder, never
  * overwriting, the old file kept; one row per project, Claude's, which names
  * the older copy.
  *

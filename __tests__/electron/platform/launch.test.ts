@@ -69,7 +69,7 @@ describe('darwin/linux: today\'s shape, to the byte', () => {
   });
 });
 
-const NPM = 'C:\\Users\\Nico Las\\AppData\\Roaming\\npm';
+const NPM = 'C:\\Users\\Sam Lee\\AppData\\Roaming\\npm';
 const NODEJS = 'C:\\Program Files (x86)\\nodejs';
 const CODEX_SHIM = [
   '@ECHO off', 'GOTO start', ':find_dp0', 'SET dp0=%~dp0', 'EXIT /b', ':start', 'SETLOCAL', 'CALL :find_dp0', '',
@@ -93,14 +93,14 @@ const disk = fakeWinFs({
   [`${NPM}\\codex`]: '#!/bin/sh\n',
   [`${NPM}\\node_modules\\@openai\\codex\\bin\\codex.js`]: '',
   [`${NODEJS}\\node.exe`]: 'MZ',
-  'C:\\Users\\Nico Las\\.local\\bin\\claude.exe': 'MZ',
+  'C:\\Users\\Sam Lee\\.local\\bin\\claude.exe': 'MZ',
 });
 
 const PROMPT = "line one, it's \"quoted\"\nline two: %PATH% & echo pwned\r\n'; Remove-Item x\\\n";
 const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 
 describe('win32: the CLI itself, no shell', () => {
-  const cwd = 'C:\\Users\\Nico Las\\proj (x86)\\it\'s';
+  const cwd = 'C:\\Users\\Sam Lee\\proj (x86)\\it\'s';
 
   it('3, 5, 6, 9. an npm node shim: node.exe, the script, then the CLI\'s arguments', () => {
     const env = { Path: `${NPM};${NODEJS}`, PATHEXT: '.COM;.EXE;.BAT;.CMD', OTHER: '1' };
@@ -121,8 +121,8 @@ describe('win32: the CLI itself, no shell', () => {
     const before = process.env.PATH;
     process.env.PATH = NODEJS;
     try {
-      const launch = toLaunch("'claude' --verbose", cwd, { PATH: 'C:\\Users\\Nico Las\\.local\\bin' }, 'win32', { fs: disk }) as DirectLaunch;
-      expect(launch.file).toBe('C:\\Users\\Nico Las\\.local\\bin\\claude.exe');
+      const launch = toLaunch("'claude' --verbose", cwd, { PATH: 'C:\\Users\\Sam Lee\\.local\\bin' }, 'win32', { fs: disk }) as DirectLaunch;
+      expect(launch.file).toBe('C:\\Users\\Sam Lee\\.local\\bin\\claude.exe');
       expect(launch.commandLine).toBe('--verbose');
     } finally {
       process.env.PATH = before;
@@ -130,10 +130,10 @@ describe('win32: the CLI itself, no shell', () => {
   });
 
   it('7. one PATH key in the env, holding the value set last', () => {
-    const env = { Path: 'C:\\stale', PATH: `C:\\Users\\Nico Las\\.local\\bin`, KEEP: 'x', UNSET: undefined };
+    const env = { Path: 'C:\\stale', PATH: `C:\\Users\\Sam Lee\\.local\\bin`, KEEP: 'x', UNSET: undefined };
     const launch = toLaunch("'claude'", cwd, env, 'win32', { fs: disk }) as DirectLaunch;
     expect(Object.keys(launch.env).filter((k) => k.toUpperCase() === 'PATH')).toEqual(['Path']);
-    expect(launch.env.Path).toBe('C:\\Users\\Nico Las\\.local\\bin');
+    expect(launch.env.Path).toBe('C:\\Users\\Sam Lee\\.local\\bin');
     expect(launch.env.KEEP).toBe('x');
     expect(launch.commandLine).toBe('');
     expect(env.Path).toBe('C:\\stale');
@@ -157,7 +157,7 @@ describe('win32: the CLI itself, no shell', () => {
 
   it('8. a line over the limit: LaunchError, not a truncated launch', () => {
     const huge = 'x'.repeat(40_000);
-    try { toLaunch(`'claude' -- ${q(huge)}`, cwd, { Path: 'C:\\Users\\Nico Las\\.local\\bin' }, 'win32', { fs: disk }); expect.unreachable(); } catch (e) {
+    try { toLaunch(`'claude' -- ${q(huge)}`, cwd, { Path: 'C:\\Users\\Sam Lee\\.local\\bin' }, 'win32', { fs: disk }); expect.unreachable(); } catch (e) {
       expect(e).toBeInstanceOf(LaunchError);
       expect((e as LaunchError).code).toBe('command-line');
     }

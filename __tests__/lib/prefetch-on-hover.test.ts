@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
- * Prefetch on sidebar hover (Noah's speed list, the claude.dev takeaways): what
+ * Prefetch on sidebar hover (JeanBrasse's speed list, the claude.dev takeaways): what
  * a page reads starts loading while the pointer rests on its sidebar entry, so a
  * click finds it on its way or already in. Only what a store keeps is started:
  * Claude Code's data (src/hooks/useClaude.ts, #233), read by Usage, Projects,

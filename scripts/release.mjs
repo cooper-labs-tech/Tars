@@ -3,7 +3,7 @@
  * `npm run release`: the only way a Tars release is published.
  *
  * On 16/09 the procedure existed and was got around three ways: 1.7.0 and 1.7.1
- * were built in a worktree, so the release/ Noah opens stayed on 1.6.19; the
+ * were built in a worktree, so the release/ JeanBrasse opens stayed on 1.6.19; the
  * purge assumed every old version was published and 1.6.19 was not; and the
  * publication itself was done by hand, with a copy instead of a move and one
  * version's latest-mac.yml written over another's. A note in memory did not

@@ -4,7 +4,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
 
 /**
  * Whether the last run of Tars ended abruptly, and who was working when it did
- * (RD-REDEMARRAGE.md, 2.2; approved by Noah on 2026-10-05).
+ * (RD-REDEMARRAGE.md, 2.2; approved by JeanBrasse on 2026-10-05).
  *
  * agents.json cannot say: it saves a working agent as idle, and a crash leaves
  * it as the last save had it. So a run marks its start here, keeps the state of

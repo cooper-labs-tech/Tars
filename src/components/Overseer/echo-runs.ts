@@ -12,14 +12,14 @@ export type ThreadItem =
  * Fold each run of consecutive template echoes into a single entry.
  *
  * Per run rather than one banner for the whole conversation, because where they
- * happened is the part that matters: a fold sitting under a question Noah asked
+ * happened is the part that matters: a fold sitting under a question JeanBrasse asked
  * says that question went unanswered, which a count at the top of the thread
  * cannot. Nothing is dropped - every message stays in the run it belongs to and
  * the fold opens onto all of them.
  *
  * The role is tested alongside the flag rather than trusted. Nothing marks a
  * user message today, and the flag is computed rather than stored, but folding
- * is the one thing that must never happen to a line Noah typed, so the rule
+ * is the one thing that must never happen to a line JeanBrasse typed, so the rule
  * that protects it is written where it is relied on instead of being inherited
  * from how the reader currently happens to behave.
  */

@@ -107,7 +107,7 @@ export function getClaudeStats(): Promise<ClaudeStats | null> {
 /**
  * The stats as last computed, at once: what the Usage page reads through
  * claude:getData. The first claude:getData after a launch waited for the whole
- * transcript scan, 2.4 to 3 s on Noah's 1826 transcripts, and each one after
+ * transcript scan, 2.4 to 3 s on JeanBrasse's 1826 transcripts, and each one after
  * the minute ran out waited again. A memo older than the minute is handed over
  * all the same while it is computed again behind it, and the page, which polls
  * every 10 s, picks the new numbers up at its next tick. With nothing computed

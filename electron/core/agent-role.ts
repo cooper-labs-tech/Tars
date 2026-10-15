@@ -12,7 +12,7 @@ import type { AgentRole, AgentStatus } from '../types';
  * orchestrator. So the toggle changed nothing for the orchestrators, gave a
  * worker a restriction without the instructions that go with it, and renaming
  * "Tars-Orchestrator" to "Tars-Lead" would have demoted it without a word.
- * Audited on 2026-09-22; Noah decided the same evening that the toggle is the
+ * Audited on 2026-09-22; JeanBrasse decided the same evening that the toggle is the
  * role, the name decides nothing, and a project has one orchestrator.
  *
  * `orchestratorMode` stays on the record, always equal to the role, because

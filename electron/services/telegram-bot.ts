@@ -46,7 +46,7 @@ let authMisses: Array<{ chatId: string; at: number }> = [];
  * When /auth compares this chat's token again, rounded up to the minute, or 0
  * when it may now. The refusal names that time and the one way to lift the
  * limit sooner, which a lock-out from the global count needs: twenty misses
- * from anywhere keep every new chat out, Noah's included (the Audit's gate of
+ * from anywhere keep every new chat out, JeanBrasse's included (the Audit's gate of
  * #200). Turning Telegram off and on in Settings restarts the bot, which starts
  * the count again; nothing outside Settings can.
  */
@@ -144,7 +144,7 @@ export function sendTelegramMessage(text: string, parseMode: 'Markdown' | 'HTML'
 }
 
 /**
- * The chats this bot may send to, as the settings are now: the ones Noah
+ * The chats this bot may send to, as the settings are now: the ones JeanBrasse
  * authorized and the default chat, the set the send route and mcp-telegram
  * accept. Read at every send.
  */

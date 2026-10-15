@@ -136,13 +136,13 @@ describe('the overseer, as recorded before the D2 refactor', () => {
       'Here you go:\n```json\n{"say":"Frontend is done.","action":{"agentId":"a1","text":"Ship it"}}\n```',
       'prose before {"say":"with prose","action":null} and after',
       '{"say":"broken json, "action":',
-      '{"say":"<what you tell Noah, plain text or light markdown>","action":null}',
+      '{"say":"<what you tell JeanBrasse, plain text or light markdown>","action":null}',
       '',
       'no json at all, just words',
       '{"say":"nested {braces} and \\"quotes\\"","action":{"agentId":"b1","text":"a {b} c"}}',
     ];
     expect(replies.map(r => overseer.parseEnvelope(r))).toMatchSnapshot('envelopes');
-    expect(['', 'ok', '<what you tell Noah, plain text or light markdown>', 'Frontend is building. <something>', 'All quiet.']
+    expect(['', 'ok', '<what you tell JeanBrasse, plain text or light markdown>', 'Frontend is building. <something>', 'All quiet.']
       .map(s => overseer.isTemplateEcho(s))).toMatchSnapshot('template echo');
     expect([
       ['Frontend has been running for 2 minutes.', 'Frontend has been running for 3 minutes.'],
@@ -191,7 +191,7 @@ describe('the overseer, as recorded before the D2 refactor', () => {
       messages: [
         { id: 'o1', role: 'overseer', text: 'Backend is idle.', action: action('act-1', 'b1', 'Pick up the review'), timestamp: '2026-09-23T11:59:00.000Z' },
         { id: 'o2', role: 'overseer', text: 'Frontend could ship.', action: action('act-2', 'a1', 'Ship it'), timestamp: '2026-09-23T11:59:30.000Z' },
-        { id: 'o3', role: 'overseer', text: '<what you tell Noah, plain text or light markdown>', action: action('act-3', 'b1', 'Echoed'), timestamp: '2026-09-23T11:59:40.000Z' },
+        { id: 'o3', role: 'overseer', text: '<what you tell JeanBrasse, plain text or light markdown>', action: action('act-3', 'b1', 'Echoed'), timestamp: '2026-09-23T11:59:40.000Z' },
       ],
       previousSnapshot: null, longRunningReported: [], paused: false,
     }, null, 2));

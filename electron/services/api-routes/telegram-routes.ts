@@ -12,7 +12,7 @@ import { sendForChat } from '../telegram-bot';
 
 /**
  * With the relay on (services/hermes-relay.ts), send_telegram is the one way left to write to the user, and goes
- * through their Hermes: from a project's orchestrator only (Noah's rule of 2026-10-01), or a chat's runner, which has
+ * through their Hermes: from a project's orchestrator only (JeanBrasse's rule of 2026-10-01), or a chat's runner, which has
  * its powers (core/agent-role.ts), under its project, so that the user's reply reaches it, with its secrets masked and
  * in plain text. The chat it names is not read: the relay writes to one person. A file goes nowhere: the relay
  * carries text.
@@ -38,7 +38,7 @@ const textOnly = (sendJson: SendJson) =>
   sendJson({ error: 'The relay to the user\'s Telegram through Hermes carries text only: no photo, video or document goes out.' }, 410);
 
 /**
- * The chats a send may go to: the ones Noah authorized, as the settings say
+ * The chats a send may go to: the ones JeanBrasse authorized, as the settings say
  * now. Read live, never from the snapshot the server was started with: a chat
  * removed in Settings kept receiving until the next launch (the audit's lead
  * #20). The same set mcp-telegram's own send accepts.
@@ -73,7 +73,7 @@ export function registerTelegramRoutes(app: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'Telegram not configured or no chat ID. Set a default chat in Settings > Telegram.' }, 400);
       return;
     }
-    // Only a chat Noah authorized. The chat_id comes from a model (send_telegram
+    // Only a chat JeanBrasse authorized. The chat_id comes from a model (send_telegram
     // in every agent), and a prompt-injected one could name any chat that had
     // started the bot.
     if (!authorizedChats(ctx).has(targetChatId)) {

@@ -12,7 +12,7 @@ import { childEnv, envValue, findOnPath, realFs, resolveShell, shellArgs, type E
  * holds it. See shell:open-terminal in handlers/ipc-handlers.ts for the
  * injection this replaced.
  *
- * Linux (Noah, 2026-09-24: "l'app doit rester compatible linux"): the first of
+ * Linux (JeanBrasse, 2026-09-24: "l'app doit rester compatible linux"): the first of
  * LINUX_TERMINALS that is installed, started in the directory (its cwd, and the
  * flag that names the directory where the terminal has one), detached, with an
  * argv array and no shell: the directory is never parsed as a command. Before

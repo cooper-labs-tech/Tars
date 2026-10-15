@@ -209,7 +209,7 @@ test("chats: Main made once from the project's orchestrator, and every change ke
     // 5. Lead asks the worker, busy with a turn of its own: a request out, and Main cannot go.
     const workerHook = (body: Record<string, unknown>) => api('/api/hooks/status', 'w1', { agent_id: 'w1', session_id: SESSION_W, ...body });
     await workerHook({ status: 'idle', source: 'startup' });
-    await workerHook({ status: 'running', event: 'UserPromptSubmit', current_task: 'something Noah asked earlier' });
+    await workerHook({ status: 'running', event: 'UserPromptSubmit', current_task: 'something JeanBrasse asked earlier' });
     const asked = await api('/api/agents/w1/message', 'o1', { message: 'TASK-A review #280' });
     expect(asked.status).toBe(200);
     const queue = () => app.evaluate((_e, { dist }) => {

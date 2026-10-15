@@ -7,14 +7,14 @@ import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, seedS
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * An agent's panel header on the Dashboard (Noah, 01/10 and 13/10). Frames:
+ * An agent's panel header on the Dashboard (JeanBrasse, 01/10 and 13/10). Frames:
  * `Panel header · fullscreen` and its light copy, and every frame that draws a
  * panel header, in design/tars-redesign.pen. In the real app, in a sandbox
  * where nothing starts:
  * - the panel has no history view: nothing in its header offers one, and no
  *   view switch is left;
  * - no word names its one view: neither `live` nor `session`, which offered
- *   nothing to choose and took room (Noah, 13/10);
+ *   nothing to choose and took room (JeanBrasse, 13/10);
  * - fullscreen is a 26 px button in the header, after start or stop and out
  *   of the menu: a press fills the window, the button turns to exit
  *   fullscreen, and a second press takes the panel back;

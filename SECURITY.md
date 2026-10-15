@@ -5,7 +5,7 @@ change is. Measured, dated, and written down when the measurement says a
 defence is not one: a lid that reads like a boundary is worse than an open door
 nobody mistook for closed.
 
-Everything here was measured on Noah's machine, macOS 26.6.1 (Darwin 25.6.0),
+Everything here was measured on JeanBrasse's machine, macOS 26.6.1 (Darwin 25.6.0),
 on `main` at `b17db0f`, between the 17th and the 18th of September 2026, except
 where a passage names `bad8c97`: the first version of the 1.7.6 work, which an
 audit read on the 18th and found holes in.
@@ -46,11 +46,11 @@ alone:
 | Credential | Who it is | What it opens |
 |---|---|---|
 | An agent's token (`CLAUDE_MGR_API_TOKEN`, minted in memory per terminal and per ACP run) | that agent | its own project's agents, and a new agent in its own project, never an orchestrator (`POST /api/agents` refuses the role to every caller: only the Agents page makes one); another project's only with `allowCrossProject`. Not the webhook |
-| Tars's own pass (minted in memory, written nowhere) | the main process | every agent of every project: it is Noah's super chat, which drives every project by design. Not the webhook |
+| Tars's own pass (minted in memory, written nowhere) | the main process | every agent of every project: it is JeanBrasse's super chat, which drives every project by design. Not the webhook |
 | `~/.tars-private/hermes-webhook-secret` | Hermes | `POST /api/webhooks/hermes` and nothing else, and through it any agent of any project, named by id or by name |
 | `~/.dorothy/api-token`, the shared token | nobody | reads, and the exempt routes. It drives no agent, and does not open the webhook |
 
-The new agent an agent makes runs on any provider of the registry and on any CLI binary it names (`cliPath`, refused unless it is an absolute path to an executable file). This is not a boundary Tars gives away: `POST /api/agents` took a `cliPath` and any permission mode from every agent before 2.0.2, and a permission mode does not confine the agent that asks (see the ceiling below). What the API refuses is what could not start, or would not run as asked: an unknown provider, an API-key provider without its key, a `cliPath` that is not an executable file, and plan on a provider that has none, which would run as normal (2.0.2, Noah: "ça doit supporter n'importe quel provider/cli"; the Audit's gate of #407).
+The new agent an agent makes runs on any provider of the registry and on any CLI binary it names (`cliPath`, refused unless it is an absolute path to an executable file). This is not a boundary Tars gives away: `POST /api/agents` took a `cliPath` and any permission mode from every agent before 2.0.2, and a permission mode does not confine the agent that asks (see the ceiling below). What the API refuses is what could not start, or would not run as asked: an unknown provider, an API-key provider without its key, a `cliPath` that is not an executable file, and plan on a provider that has none, which would run as normal (2.0.2, JeanBrasse: "ça doit supporter n'importe quel provider/cli"; the Audit's gate of #407).
 
 Measured before the change, on `b17db0f`: a call presenting the shared token
 with **no** `x-tars-client` header stopped, started, dispatched to and DELETEd
@@ -127,13 +127,13 @@ from `/tmp` (readable by every user, shared by every Tars on the machine) to
 (`removeLegacyHookLogs`): only regular files the user owns, and only when `HOME` is the
 user's own, so a sandbox never deletes the logs of a Tars still on 1.7.9 beside it.
 
-**What the webhook secret is.** The reach of Noah's own chat, handed to Hermes,
-so it lives where Noah's conversation lives, in `~/.tars-private`, and not in
+**What the webhook secret is.** The reach of JeanBrasse's own chat, handed to Hermes,
+so it lives where JeanBrasse's conversation lives, in `~/.tars-private`, and not in
 `~/.dorothy`, where it was minted until 1.7.6. It moves at the first start that
 finds it there, value unchanged, so a Hermes job that holds it keeps working.
 That takes it out of the directory every agent is pointed at. It does not take
 it out of an agent's reach: an agent that goes looking reads `~/.tars-private`
-like any other file of Noah's (§1, §5), and with the secret drives any agent of
+like any other file of JeanBrasse's (§1, §5), and with the secret drives any agent of
 any project through the webhook. And an agent that read it before the move
 still has it. Rotating it is deleting `~/.tars-private/hermes-webhook-secret`,
 opening Settings > Hermes, which mints a new one, and giving Hermes that.
@@ -156,7 +156,7 @@ bypass. What that binds, measured:
 - **A target with no ACP mode** is not a run: `delegate_task` types the task into its
   terminal, where it works in its own mode, whatever its asker's.
 
-And it is **not a boundary**. A persistent worker keeps the mode Noah gave it, which is its
+And it is **not a boundary**. A persistent worker keeps the mode JeanBrasse gave it, which is its
 configuration and not the asker's grant: `send_message` and `/dispatch` to a worker in
 bypass have it do anything a worker in bypass may do, whatever mode the sender runs in.
 The message only carries a mark after its sender line, "(sender in plan mode, you in
@@ -167,7 +167,7 @@ not confine the asker.
 **What steer and restart respect, and what they do not.** An agent may interrupt
 (`steer`) or restart a worker only when the work in hand is its own or there is none, and
 may restart it only when no other asker's request waits in its queue (a stop ends them
-all). A turn Noah typed into the worker's terminal has no asker Tars knows of: any agent
+all). A turn JeanBrasse typed into the worker's terminal has no asker Tars knows of: any agent
 of the project may interrupt or restart it, as it could already stop the agent.
 
 **What the receipts hold** (1.9.6, `services/request-receipts.ts`). A send with a
@@ -240,11 +240,11 @@ line of TypeScript, and nothing in this repo pretends otherwise.
 
 ## 4. A sandbox for a Tars agent: what it would really buy
 
-Noah decides this; nothing here is implemented, and no agent is confined by
+JeanBrasse decides this; nothing here is implemented, and no agent is confined by
 anything Tars ships today. This is the measurement, so the decision has numbers
 under it.
 
-`claude` runs unconfined: its Bash reads everything Noah reads. `--add-dir` sets
+`claude` runs unconfined: its Bash reads everything JeanBrasse reads. `--add-dir` sets
 **tool permissions**, not an access boundary, and on this machine 37 of the 42
 agents in the fleet run with `--dangerously-skip-permissions`, where the flag
 decides nothing at all.
@@ -262,7 +262,7 @@ full:
 4. ps -Eww -p 39401 - failed: (eval):1: operation not permitted: ps
 ```
 
-So: it did its work, and it could not read Noah's home. Separately measured
+So: it did its work, and it could not read JeanBrasse's home. Separately measured
 under the same profile: `~/.dorothy/api-token` denied, `/Users/you/tars`
 denied, the loopback API reachable, `api.anthropic.com` reachable, `git`,
 `node` and `npm` working.
@@ -347,7 +347,7 @@ What it took to get there, none of it obvious:
   error; `log show` does not report these refusals, so it is no use as a
   detector.
 
-### What Noah gains
+### What JeanBrasse gains
 
 - An agent cannot read `~/Documents`, `~/.ssh`, another project's source, or
   `~/.dorothy` (the fleet's settings, every provider API key, the shared token,
@@ -356,7 +356,7 @@ What it took to get there, none of it obvious:
   the failure mode with teeth: a confused agent `rm -rf`ing the wrong tree.
 - It is per agent and per profile, so a read-only reviewer agent is expressible.
 
-### What Noah loses
+### What JeanBrasse loses
 
 - **`ps` stops working entirely**, in every profile, confined or not, because it
   is setuid root. An agent debugging a stuck process loses its tool.
@@ -371,7 +371,7 @@ What it took to get there, none of it obvious:
   colleague's token out of the process table. The sandbox is a filesystem
   boundary, not a process boundary.
 
-### The shape it would take in Tars, if Noah wants it
+### The shape it would take in Tars, if JeanBrasse wants it
 
 `initAgentPty` is the one line every PTY starts on. A confined spawn would be
 `sandbox-exec -f <profile> <the command it already builds>`, with the profile
@@ -387,7 +387,7 @@ the first path nobody thought to list.
 | Path | Holds | Reachable by an agent |
 |---|---|---|
 | `~/.dorothy/` | the fleet, settings, the shared token, the vault, the bus journal, the Hermes gateway's connection (`hermes-connection.json`, without its token since 1.9.3), and the files staged for a room (`bus-files/`, a week, then removed), and each agent's temporary folder (`tmp/`: its commands' temporary files and Claude Code's scratchpad and background task output, kept 7 days, a day for a running agent's leftovers), and the task ledger (`task-ledger.jsonl`: who handed each task to whom, when it started and ended, its sessions and what it cost, without what it said) | Yes, deliberately: it is in every agent's `--add-dir`. A file sent to one room can be read by every agent of every project, as its journal can; `bus-files/` is refused when it is a link, and each file is written in a folder of its own that must not exist yet |
-| `~/.tars-private/` | Noah's conversation with the super chat, the receipts of sends made with a `clientRequestId` (`request-receipts.jsonl`, 24 h, never the text) and what delegated runs answered (`task-results.jsonl`), the Hermes sessions it held that conversation in (`overseer-hermes-sessions.json`), the questions agents asked the user with `ask_user` and the Telegram messages they went out as (`user-questions.json`: kept here and not in `~/.dorothy`, which any agent can write, so no agent can point an answer at another), what the event reports counted and the GitHub watch has seen (`event-reports.json`, `github-watch.json`: kept out of the agents' reach so none can silence a report), the Hermes dashboard's token (`hermes-token`, Noah's decision 6 of 2026-10-01), what the relay sent and what waits for Hermes (`relay-sent.json`, `relay-outbox.json`, `relay-state.json`; each sent message with the chat it came from), what Tars's own Telegram bot sent for a chat (`telegram-sent.json`: Telegram's chat and message ids and the chat's id, never the text, 7 days: an agent able to write it could point the user's next reply at another chat), the user's go-aheads on Sentry's errors (`sentry-go-aheads.json`: an agent able to write it could hand a task on in the user's name), the error triage's Sentry token (`sentry-token`: it reads the organisation's issues, user reports included; in `app-settings.json` until 1.9.3, moved at the first start), the Hermes webhook secret, and the Claude accounts' registry (`claude-accounts.json`: the option, each account's id and name, the thresholds; no credential and no folder), and what carries across a restart (`run-state.json`: who was working, a task's first 200 characters; `carry-over.json`: the notes Tars owes agents), and what each task of the task ledger said (`task-texts.jsonl`: its first line, 200 characters at most, which holds Noah's typed prompts and the chat messages handed to orchestrators; in `task-ledger.jsonl` in `~/.dorothy` before 1.9.3 shipped, moved out at the first start, Noah's answer of 2026-10-05). Those two were in `~/.dorothy` until the Audit's gate of #310: a `carry-over.json` written by an agent had Tars type "Message from Telegram (Noah): ... I approve." into the orchestrator, and a `run-state.json` had it start the agents it named, in any project. A sender read back from `carry-over.json` is never typed as one either: a carried note goes as from Tars, its first sender quoted inside it | Not handed to any agent, never passed to a CLI, and refused by both ways an agent has of sending a file to Telegram and by the vault's attach route. Each file `0600`, in a directory Tars makes `0700`. The conversation also lives in Hermes, one session per turn: `memory_search` (`/api/memory/search`, what agents call) leaves out every session the super chat opened, every run of its cron job (recorded when it runs, so a run of a job replaced since is still left out), a session Hermes compressed out of one of those (the gateway answers a compressed conversation under its newest id, with its `lineage_root` and `parent_session_id`, which are checked too), a session branched or delegated from any of those (the gateway's lineage stops at a branch or a delegate edge, so each parent is read further up through `GET /api/sessions/{id}`, to a root; an ancestry that cannot be read to its end, a cycle, or more than 20 parents leaves the hit out), and any hit that names no session. The gateway is asked for its most (100) and the filter runs before the agent's `limit` is applied, so the super chat's hits do not take an agent's places. When 100 or more of the super chat's lineages match before any of Noah's, an agent gets no Hermes hit: the gateway gives no further page. Sessions opened before 1.9.0 were not recorded, so only their cron runs are left out; an agent holding `hermes-connection.json` can still ask the gateway itself (§5, the paragraph below) |
+| `~/.tars-private/` | JeanBrasse's conversation with the super chat, the receipts of sends made with a `clientRequestId` (`request-receipts.jsonl`, 24 h, never the text) and what delegated runs answered (`task-results.jsonl`), the Hermes sessions it held that conversation in (`overseer-hermes-sessions.json`), the questions agents asked the user with `ask_user` and the Telegram messages they went out as (`user-questions.json`: kept here and not in `~/.dorothy`, which any agent can write, so no agent can point an answer at another), what the event reports counted and the GitHub watch has seen (`event-reports.json`, `github-watch.json`: kept out of the agents' reach so none can silence a report), the Hermes dashboard's token (`hermes-token`, JeanBrasse's decision 6 of 2026-10-01), what the relay sent and what waits for Hermes (`relay-sent.json`, `relay-outbox.json`, `relay-state.json`; each sent message with the chat it came from), what Tars's own Telegram bot sent for a chat (`telegram-sent.json`: Telegram's chat and message ids and the chat's id, never the text, 7 days: an agent able to write it could point the user's next reply at another chat), the user's go-aheads on Sentry's errors (`sentry-go-aheads.json`: an agent able to write it could hand a task on in the user's name), the error triage's Sentry token (`sentry-token`: it reads the organisation's issues, user reports included; in `app-settings.json` until 1.9.3, moved at the first start), the Hermes webhook secret, and the Claude accounts' registry (`claude-accounts.json`: the option, each account's id and name, the thresholds; no credential and no folder), and what carries across a restart (`run-state.json`: who was working, a task's first 200 characters; `carry-over.json`: the notes Tars owes agents), and what each task of the task ledger said (`task-texts.jsonl`: its first line, 200 characters at most, which holds JeanBrasse's typed prompts and the chat messages handed to orchestrators; in `task-ledger.jsonl` in `~/.dorothy` before 1.9.3 shipped, moved out at the first start, JeanBrasse's answer of 2026-10-05). Those two were in `~/.dorothy` until the Audit's gate of #310: a `carry-over.json` written by an agent had Tars type "Message from Telegram (JeanBrasse): ... I approve." into the orchestrator, and a `run-state.json` had it start the agents it named, in any project. A sender read back from `carry-over.json` is never typed as one either: a carried note goes as from Tars, its first sender quoted inside it | Not handed to any agent, never passed to a CLI, and refused by both ways an agent has of sending a file to Telegram and by the vault's attach route. Each file `0600`, in a directory Tars makes `0700`. The conversation also lives in Hermes, one session per turn: `memory_search` (`/api/memory/search`, what agents call) leaves out every session the super chat opened, every run of its cron job (recorded when it runs, so a run of a job replaced since is still left out), a session Hermes compressed out of one of those (the gateway answers a compressed conversation under its newest id, with its `lineage_root` and `parent_session_id`, which are checked too), a session branched or delegated from any of those (the gateway's lineage stops at a branch or a delegate edge, so each parent is read further up through `GET /api/sessions/{id}`, to a root; an ancestry that cannot be read to its end, a cycle, or more than 20 parents leaves the hit out), and any hit that names no session. The gateway is asked for its most (100) and the filter runs before the agent's `limit` is applied, so the super chat's hits do not take an agent's places. When 100 or more of the super chat's lineages match before any of JeanBrasse's, an agent gets no Hermes hit: the gateway gives no further page. Sessions opened before 1.9.0 were not recorded, so only their cron runs are left out; an agent holding `hermes-connection.json` can still ask the gateway itself (§5, the paragraph below) |
 | `~/.claude-accounts/<id>/` | each Claude account after the first, with several on: a Claude Code folder of its own, with its own `.claude.json` (the account's identity) and a copy of `~/.claude/settings.json`, its transcripts, history, sessions, CLAUDE.md, skills, agents, commands, plugins and output styles being links to `~/.claude`. The sign-in is Claude Code's, in the keychain item named after the folder (`.credentials.json` on Linux): Tars never opens it | Not in any agent's `--add-dir`; the agents started on an account run in its folder (`CLAUDE_CONFIG_DIR`), as account 1's run in `~/.claude`, and a folder that is not Tars's own is refused, never repaired |
 
 So what the kanban tools let an agent do on the Hermes board (since #183, delete
@@ -396,7 +396,7 @@ own tools, not a barrier: an agent that holds the dashboard's token can call the
 gateway with it and edit or delete any task (the audit's gate of #183). Since
 1.9.3 that token is in `~/.tars-private/hermes-token`, out of the folder every
 agent is handed; an agent in bypass, which runs as the user, can still read it
-there (no confinement, Noah's decision of 2026-09-23).
+there (no confinement, JeanBrasse's decision of 2026-09-23).
 
 **The relay to the user's Telegram** (`services/hermes-relay.ts`, on with
 `hermesRelayEnabled`). Who can reply: the tars-relay plugin on the Hermes server
@@ -415,15 +415,15 @@ is taken out of every CLI; `send_telegram` goes through the relay, for an
 orchestrator only, its text masked.
 
 The same token opens the routes of the tars-relay plugin once that plugin is installed on the Hermes
-server (`hermes-plugins/tars-relay`, installed nowhere yet). Whoever holds it can then write to Noah
+server (`hermes-plugins/tars-relay`, installed nowhere yet). Whoever holds it can then write to JeanBrasse
 through Hermes's Telegram bot, as Tars, read or delete his replies before Tars takes them, and name
 the projects whose `@name` messages are kept from Hermes. The plugin decides what it can on its own:
 the recipient is the user id in the server's own config, never one the caller names; at most 60
 messages go out in an hour, each counted before it goes out, so sends made at once do not pass it; and
-it keeps only Noah's messages in his private chat. What it does not decide: a reply to Tars that Noah
+it keeps only JeanBrasse's messages in his private chat. What it does not decide: a reply to Tars that JeanBrasse
 sends while Hermes answers him, or right after another message, reaches Hermes's model too (Hermes
 takes it as a correction, or merges it), and Tars gets it all the same from the plugin's observer;
-keeping it from the model would mean replacing Hermes's Telegram adapter. Hence Noah's decision of
+keeping it from the model would mean replacing Hermes's Telegram adapter. Hence JeanBrasse's decision of
 2026-10-01 that the token moves to `~/.tars-private`: the plugin goes in with that move, not before it.
 
 The chats' records (`chats.json`) and the fleet (`agents.json`) are in `~/.dorothy` too, so the runner a chat's record names, and an agent's mark as a chat's runner (`kind: 'chat'`, which carries the orchestrator's powers), are claims. Tars types, launches, counts, puts to sleep or renames nothing for the agent a record names until the fleet agrees (`recordedRunner`: Main's runner is the project's orchestrator, any other chat's the runner made for it, in its project). At each launch an agent marked as a runner that no chat names goes back to a plain worker (`unconfirmedRunners`). An agent that edits both files can still mark itself a runner for the next launch, as it can give itself the orchestrator's role in `agents.json`: these checks are defence in depth, not a boundary (the Audit's L1 on #379).
@@ -495,7 +495,7 @@ it `0700`. A directory that already exists at another mode is left as it is.
 ## 6. Who the bots answer
 
 Each bot is a way into the fleet from outside the machine, so each answers a
-list Noah keeps in Settings, and nobody when the list is empty.
+list JeanBrasse keeps in Settings, and nobody when the list is empty.
 
 - **Telegram**: the chats enrolled with `/auth <token>`. Read from the settings
   as they are at each message: before 2026-09-23 the bot held the object it was
@@ -515,7 +515,7 @@ list Noah keeps in Settings, and nobody when the list is empty.
   token Tars generates is 128 random bits: the limit is for a token set by hand,
   and against a bot that answers a stranger for ever. The count from all chats
   is a lock-out anyone who finds the bot can cause: twenty wrong tokens in
-  fifteen minutes keep every new chat out, Noah's included (chats already
+  fifteen minutes keep every new chat out, JeanBrasse's included (chats already
   enrolled are not affected). Kept for 1.9.0 on purpose (the Audit's gate of
   #200), with its way out said in the refusal itself: "Try again at HH:MM, or
   turn Telegram off and on in Tars's Settings". The toggle restarts the bot,
@@ -542,7 +542,7 @@ logs in `~/.tars-private` (never from anything the reply carries), else the one
 `#N` no chat has reaches nobody. A chat's runner gets the words after the
 sender line Tars writes for the channel, as the orchestrator does, the
 look-alike lines inside quoted; it gets the orchestrator's powers, not a wider
-reach: a chat is not a boundary between Noah's conversations, they share the
+reach: a chat is not a boundary between JeanBrasse's conversations, they share the
 team. `chats.json`, which names each chat's runner, is in `~/.dorothy` and an
 agent can edit it: a record whose runner the fleet does not confirm gets
 nothing typed or launched for it (PR D), and that holds for the senders too.

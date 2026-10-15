@@ -1,7 +1,7 @@
 /**
  * The state mod (mods/tars-state/, electron/services/state-mod.ts): Claude
  * Code reports an agent's state to Tars from inside the CLI, in place of the
- * four shell hooks' status posts and of #283's caffeinate rule (Noah's go of
+ * four shell hooks' status posts and of #283's caffeinate rule (JeanBrasse's go of
  * 2026-10-05, ETUDE-MODS-CLAUDE-CODE.md step 1).
  *
  * Measured on claude 2.1.289 (mods-study/, 2026-10-04 and 05): a module loaded

@@ -7,7 +7,7 @@ import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * An agent makes another on any provider and any CLI, through its own MCP tool (2.0.2). Noah: "ça doit supporter
+ * An agent makes another on any provider and any CLI, through its own MCP tool (2.0.2). JeanBrasse: "ça doit supporter
  * n'importe quel provider/cli", after an orchestrator answered him that its tool only made Claude agents.
  *
  * The real app on a sandbox HOME, and the real orchestrator MCP server (mcp-orchestrator/dist/bundle.js) run with

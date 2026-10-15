@@ -8,7 +8,7 @@ import { deliverFromChannel } from './chat-senders';
 import type { AgentStatus } from '../types';
 
 /**
- * Where the user's messages through the relay go (DESIGN-RELAIS-HERMES-V2.md, step 2; Noah's rule of 2026-10-01:
+ * Where the user's messages through the relay go (DESIGN-RELAIS-HERMES-V2.md, step 2; JeanBrasse's rule of 2026-10-01:
  * only a project's orchestrator talks to Hermes, and gets the user's replies).
  *
  * - A reply to a message one of a project's chats sent the user goes to that chat, exactly (its runner, or the
@@ -38,7 +38,7 @@ async function toOrchestrator(fleet: BotFleet, orchestrator: AgentStatus, projec
     permissionMode: orchestrator.permissionMode ?? (orchestrator.skipPermissions ? 'bypass' : 'normal'),
     resume: true,
     systemPromptFile: () => (fs.existsSync(getSuperAgentInstructionsPath()) ? getSuperAgentInstructionsPath() : undefined),
-    // A short receipt, whatever became of it (Noah's answer 24 of 2026-10-05).
+    // A short receipt, whatever became of it (JeanBrasse's answer 24 of 2026-10-05).
     reply: async (outcome, detail) => {
       if (outcome === 'no-terminal') await tellUser(`Not delivered: the terminal of ${orchestrator.name} could not be opened.`, projectPath, now);
       else if (outcome === 'refused') await tellUser(`Not delivered: ${orchestrator.name}'s terminal is not taking messages.`, projectPath, now);

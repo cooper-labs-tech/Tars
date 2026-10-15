@@ -30,7 +30,7 @@ import { moveTestHome } from '../../setup/test-home';
 describe('the Windows credential stores', () => {
   it('5. none on darwin and linux', () => {
     for (const platform of ['darwin', 'linux'] as const) {
-      expect(credentialStoreDirs({ platform, home: '/Users/noah', env: { APPDATA: '/x', LOCALAPPDATA: '/y' } })).toEqual([]);
+      expect(credentialStoreDirs({ platform, home: '/Users/demo', env: { APPDATA: '/x', LOCALAPPDATA: '/y' } })).toEqual([]);
     }
   });
 

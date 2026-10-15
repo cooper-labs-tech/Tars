@@ -10,11 +10,11 @@ vi.mock('react', async (importOriginal) => ({
 
 /**
  * Claude Code's data in the window: one store for every page instead of a
- * claude:getData per page (Noah's speed list, the renderer's side). The pages
+ * claude:getData per page (JeanBrasse's speed list, the renderer's side). The pages
  * that read it are Usage, Projects, Extensions (skills and plugins), Agents,
  * Settings (its skills) and Brain's agents graph. Main keeps its answer a
  * minute (STATS_TTL_MS, the transcript scan's CACHE_TTL); past that, the next
- * read is a whole scan, 2656 to 3270 ms on Noah's machine. Written before the
+ * read is a whole scan, 2656 to 3270 ms on JeanBrasse's machine. Written before the
  * store, as the ways it can fail:
  * 1. every page asks main again: two pages mounted together, or one after the
  *    other within a poll, make two reads where one answer serves both;

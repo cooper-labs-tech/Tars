@@ -10,7 +10,7 @@ import { shHooksNotShipped } from '../../setup/platform-limits';
  * ~/.dorothy/token-stats.json is written by the status line script and by
  * nothing else, on every render of every Claude session.
  *
- * Found on Noah's machine on 2026-09-22: 0 bytes, rewritten at every tick,
+ * Found on JeanBrasse's machine on 2026-09-22: 0 bytes, rewritten at every tick,
  * and unable to recover. The script piped the file into jq. An empty file gave
  * jq no input at all, jq printed nothing and exited 0, and that nothing was
  * moved back over the file. So the Usage page's "extra usage" figure, which

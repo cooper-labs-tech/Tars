@@ -10,7 +10,7 @@ import type { OverseerModelProvider } from '@/types/electron';
  * effort behind them.
  *
  * They were three separate dropdowns in a row that also holds attach and the
- * watch cadence, which is five controls for one message box. Noah's frame
+ * watch cadence, which is five controls for one message box. JeanBrasse's frame
  * merges them: the trigger reads "<model> <effort>", and the choosing happens
  * inside, which is the submenu-inside-the-submenu he asked for.
  *

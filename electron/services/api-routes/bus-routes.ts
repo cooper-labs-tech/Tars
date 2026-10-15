@@ -33,7 +33,7 @@ import { broadcastPublication, fanOutDeliveries } from '../bus-delivery';
  * Refused when there is none, and refused here, before any room is looked at.
  * That order is what keeps the shared token out of every room: it has no agent
  * behind it, so it never reaches resolveRoom, and in particular never the
- * global room, which is Noah's conversation with the super chat. A name in a
+ * global room, which is JeanBrasse's conversation with the super chat. A name in a
  * header does not count, since any agent can read the shared token and write
  * any name beside it.
  *
@@ -82,7 +82,7 @@ function resolveRoom(
   }
   if (room.kind === 'global') {
     // Not a room of the bus at all. Its snapshot is not a bus journal: the
-    // handlers wire it to getOverseerHistory(), which is Noah's own
+    // handlers wire it to getOverseerHistory(), which is JeanBrasse's own
     // conversation with the super chat. An agent has no business reading it
     // and cannot post to it, so neither door opens.
     sendJson({ error: 'The global room is the super chat, and is not open to agents.' }, 403);
@@ -148,7 +148,7 @@ export function registerBusRoutes(app: RouteApp): void {
     // The same resolver as the write door, rather than a second copy of its
     // rules. The copy that used to live here asked only whether a *project*
     // room belonged to the caller, so `global`, which is not a project room,
-    // fell through every check: any agent could read Noah's private
+    // fell through every check: any agent could read JeanBrasse's private
     // conversation with the super chat, up to a thousand messages, under its
     // own legitimate identity. Two copies of one rule is how one of them
     // drifts; there is one now.

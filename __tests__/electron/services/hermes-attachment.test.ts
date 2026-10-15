@@ -12,7 +12,7 @@ import type { HermesConnection } from '../../../electron/types/hermes';
  * anything else has to reach /api/files/upload with an absolute path, because
  * the image endpoint answers "Upload payload must be an image" and a relative
  * path answers "Path must be absolute". Both of those 400s were observed
- * against Noah's gateway, and a mocked `hermesRequest` would assert none of it.
+ * against JeanBrasse's gateway, and a mocked `hermesRequest` would assert none of it.
  */
 
 interface Received {

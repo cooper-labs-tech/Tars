@@ -158,7 +158,7 @@ describe('an agent whose session is alive when it is handed a task', () => {
       armTaskStartWatch(agent, agent.ptyId, 'rebase onto main');
       await tick(1_000);
 
-      // The live session says it is waiting on Noah. With the owner emptied
+      // The live session says it is waiting on JeanBrasse. With the owner emptied
       // this was unowned and thrown away, so the screen kept saying running.
       expect(postStatus(app, {
         agent_id: 'a1', session_id: sid('session-live'), status: 'waiting', waiting_reason: 'idle',

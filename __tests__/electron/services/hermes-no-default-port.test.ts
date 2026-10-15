@@ -9,12 +9,12 @@ import * as path from 'node:path';
  *
  * readHermesConnection() fills whatever the file lacks, or all of it when the
  * file is missing or cannot be read, from the default: 127.0.0.1:9119, which on
- * Noah's machine is the SSH tunnel to his real Hermes. The agents' kanban stopped
+ * JeanBrasse's machine is the SSH tunnel to his real Hermes. The agents' kanban stopped
  * doing that in #183; every other reader still did (the Audit's gate of #183): the
  * overseer, the memory hub and the agents' memory routes through
  * usableHermesConnection(), and the Kanban, Schedules and memory-provider pages
  * through the Hermes IPC handlers. A sandbox or a second Tars with no connection
- * file of its own reached Noah's Hermes through any of them.
+ * file of its own reached JeanBrasse's Hermes through any of them.
  *
  * How this can fail, written before the fix:
  * 1. with no file, usableHermesConnection() answers the default port;
@@ -80,7 +80,7 @@ const BROKEN: Array<[string, string]> = [
   ['not JSON', '{"mode": "local", "localPort": 9119'],
   ['an object with no mode', '{}'],
   ['local with no port', '{"mode":"local","authMode":"token"}'],
-  ['ssh with no host', '{"mode":"ssh","ssh":{"user":"noah"}}'],
+  ['ssh with no host', '{"mode":"ssh","ssh":{"user":"demo"}}'],
 ];
 
 describe('usableHermesConnection, what the overseer and the memory hub use', () => {
@@ -97,7 +97,7 @@ describe('usableHermesConnection, what the overseer and the memory hub use', () 
   it('is the file\'s gateway when Settings wrote one, in each mode', () => {
     writeConnection('{"mode":"local","localPort":9,"authMode":"token","token":"t"}');
     expect(usableHermesConnection()).toMatchObject({ mode: 'local', localPort: 9, token: 't' });
-    writeConnection('{"mode":"ssh","ssh":{"host":"hermes.example","user":"noah"},"authMode":"token"}');
+    writeConnection('{"mode":"ssh","ssh":{"host":"hermes.example","user":"demo"},"authMode":"token"}');
     expect(usableHermesConnection()).toMatchObject({ mode: 'ssh', ssh: { host: 'hermes.example' } });
     writeConnection('{"mode":"remote","url":"https://hermes.example","authMode":"oauth"}');
     expect(usableHermesConnection()).toMatchObject({ mode: 'remote', url: 'https://hermes.example' });

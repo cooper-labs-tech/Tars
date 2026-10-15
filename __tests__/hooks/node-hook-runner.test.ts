@@ -686,9 +686,9 @@ const CASES: Case[] = [
     name: 'Gemini Notification keeps a Windows project path valid JSON',
     event: 'gemini/notification',
     payload: { session_id: S, message: 'm' },
-    env: { ...GEMINI_AGENT, DOROTHY_PROJECT_PATH: 'C:\\Users\\nicol\\new "proj"' },
+    env: { ...GEMINI_AGENT, DOROTHY_PROJECT_PATH: 'C:\\Users\\owner\\new "proj"' },
     requests: [
-      { method: 'POST', path: '/api/hooks/notification', auth: 'Bearer tok-g', body: { agent_id: 'gem-1', session_id: S, message: 'm\n', project_path: 'C:\\Users\\nicol\\new "proj"' } },
+      { method: 'POST', path: '/api/hooks/notification', auth: 'Bearer tok-g', body: { agent_id: 'gem-1', session_id: S, message: 'm\n', project_path: 'C:\\Users\\owner\\new "proj"' } },
     ],
     stdout: CONTINUE,
     nodeOnly: 'the .sh pastes the path raw into the JSON body, which then does not parse (400)',

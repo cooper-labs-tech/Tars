@@ -16,7 +16,7 @@ import type { AgentStatus } from '../types';
  *
  * Each agent is read as a terminal shows it, never as its raw stream split on
  * line breaks: Claude Code draws with cursor moves and carriage returns, and
- * the stream with its codes stripped read as one run of glued words (Noah,
+ * the stream with its codes stripped read as one run of glued words (JeanBrasse,
  * 2026-10-01). A running agent is read from its terminal's mirror, the screen
  * it shows now; one that is not, from its kept output replayed headless.
  *

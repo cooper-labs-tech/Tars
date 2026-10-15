@@ -265,7 +265,7 @@ export function handleStatusChangeNotification(
   if (statusNotificationsStopped) return;
   const prevStatus = previousAgentStatus.get(agent.id);
 
-  // Out of error: its next error is news for Noah's reports again.
+  // Out of error: its next error is news for JeanBrasse's reports again.
   if (newStatus !== 'error') agentRecovered(agent.id);
 
   if (!prevStatus) {
@@ -346,7 +346,7 @@ export function handleStatusChangeNotification(
         superAgentTelegramTask = false;
       }
     }
-    // To Noah's Telegram whatever the desktop switch says: that one is the
+    // To JeanBrasse's Telegram whatever the desktop switch says: that one is the
     // Mac's, this is his phone's (services/event-reports.ts).
     if (newStatus === 'error') {
       reportEvent({
@@ -734,7 +734,7 @@ const ptyInitLocks = new Map<string, Promise<string>>();
  * Ten minutes, and the number is measured rather than picked. A warm start
  * registers in about 1.4 seconds. A start with the network unreachable takes
  * 77 seconds. And a start against a socket that accepts but never answers, the
- * "Checking for updates" case Noah actually hit, had still not registered
+ * "Checking for updates" case JeanBrasse actually hit, had still not registered
  * after 400 seconds while being perfectly healthy. Ninety seconds would have
  * accused that agent, which is the error this whole check calls the worse one.
  *
@@ -747,7 +747,7 @@ const TASK_START_GRACE_MS = 600_000;
 /**
  * Notice a session that came up and never took its task.
  *
- * Noah watched an agent sit at a Claude Code banner with an empty prompt,
+ * JeanBrasse watched an agent sit at a Claude Code banner with an empty prompt,
  * marked `running`, for hours. Nothing was wrong with the process: it was
  * alive, it had a pty. It simply had no task, and every surface that could
  * have said so was reporting that it was working. That is the half that makes
@@ -848,7 +848,7 @@ export function armTaskStartWatch(agent: AgentStatus, ptyId: string | undefined,
     // Two audiences, two channels, and the interface is the one that was
     // missing. scheduleTick is what the Agents page and the tray read, so
     // without it the card kept saying "working", which is the whole of what
-    // Noah was looking at. emitAgentStatus is what /wait and the orchestrator
+    // JeanBrasse was looking at. emitAgentStatus is what /wait and the orchestrator
     // that dispatched it hang off.
     scheduleTick();
     emitAgentStatus(live.id);

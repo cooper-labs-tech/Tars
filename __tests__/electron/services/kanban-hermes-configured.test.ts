@@ -92,7 +92,7 @@ describe('a connection file the kanban cannot use', () => {
     ['local with no port', '{"mode":"local","authMode":"token"}'],
     ['local with a port that is not one', '{"mode":"local","localPort":"9"}'],
     ['local with port 0', '{"mode":"local","localPort":0}'],
-    ['ssh with no host', '{"mode":"ssh","ssh":{"user":"noah"}}'],
+    ['ssh with no host', '{"mode":"ssh","ssh":{"user":"demo"}}'],
     ['remote with no URL', '{"mode":"remote"}'],
   ];
 
@@ -140,7 +140,7 @@ describe('a connection file the kanban cannot use', () => {
   it('still uses a file Settings wrote, in each mode', () => {
     for (const content of [
       '{"mode":"local","localPort":9119,"authMode":"token","token":"t"}',
-      '{"mode":"ssh","ssh":{"host":"hermes.example","user":"noah"},"authMode":"token"}',
+      '{"mode":"ssh","ssh":{"host":"hermes.example","user":"demo"},"authMode":"token"}',
       '{"mode":"remote","url":"https://hermes.example","authMode":"oauth"}',
     ]) {
       writeConnection(content);

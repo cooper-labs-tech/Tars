@@ -2,7 +2,7 @@ import type { AppSettings } from '../types';
 import type { CLIProvider } from '../providers/cli-provider';
 
 /**
- * What turning the relay on changes besides the relay (Noah's decision 2 of 2026-10-01, and traps 1 and 2 of section 9
+ * What turning the relay on changes besides the relay (JeanBrasse's decision 2 of 2026-10-01, and traps 1 and 2 of section 9
  * of DESIGN-RELAIS-HERMES-V2.md): Hermes becomes the only voice on the user's Telegram.
  *
  * - Tars's own bot is not kept as a fallback: its token is erased from the settings and the bot is off.

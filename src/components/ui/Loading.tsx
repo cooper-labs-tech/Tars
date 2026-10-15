@@ -184,7 +184,7 @@ export function SlowOperation({
  * skeleton rows, grey bars in the shape of a list, and only the settings page
  * had been switched to the mark: the agents, projects, schedules, review,
  * usage and skills pages waited in grey while every other wait in the app
- * showed the mark filling. Noah noticed. There is no second look to pick now.
+ * showed the mark filling. JeanBrasse noticed. There is no second look to pick now.
  * Frame: `Loading states`.
  */
 export function LoadingState({

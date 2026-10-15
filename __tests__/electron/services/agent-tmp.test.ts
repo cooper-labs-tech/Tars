@@ -10,7 +10,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
 import { cannotSymlink } from '../../setup/symlink-privilege';
 
 /**
- * A durable temporary folder per agent (RD-REDEMARRAGE.md, 2.1; Noah's yes of 2026-10-05): macOS empties /private/tmp
+ * A durable temporary folder per agent (RD-REDEMARRAGE.md, 2.1; JeanBrasse's yes of 2026-10-05): macOS empties /private/tmp
  * and the app's /var/folders/.../T at every boot, and with them every agent's scratchpad and the output of its
  * background tasks (about 45 GB on the night of 2026-10-01). Each agent gets ~/.dorothy/tmp/<short id>/: `t/` as the
  * TMPDIR of its commands, `c/` as Claude Code's CLAUDE_CODE_TMPDIR. Kept 7 days and 20 GB in all, or the disk fills up

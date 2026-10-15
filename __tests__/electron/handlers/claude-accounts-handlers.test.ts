@@ -9,7 +9,7 @@
  * - the login terminal aimed at the wrong directory (or at account 1 with
  *   CLAUDE_CONFIG_DIR=~/.claude, which is another login), run through a shell,
  *   or not refreshing the account once it closes;
- * - the same Claude account added twice (Noah: refused). The second directory is
+ * - the same Claude account added twice (JeanBrasse: refused). The second directory is
  *   signed out again, by Claude Code, and the page says which account has it;
  * - removing an account leaving a signed-in keychain item behind: the logout
  *   runs first, and a failed logout keeps the account and its directory;

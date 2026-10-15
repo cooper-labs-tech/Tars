@@ -8,7 +8,7 @@ import type { IPty } from 'node-pty';
  * A message held behind a slash command typed by hand goes in once the
  * command has finished, without anybody pressing Ctrl+C.
  *
- * On 2026-09-22 Noah answered the /model and /effort pickers in three agents'
+ * On 2026-09-22 JeanBrasse answered the /model and /effort pickers in three agents'
  * terminals (the arrows, then Enter) and left. The draft model, which can only
  * follow keys, was left `pending` or `unknown`: an Enter on a `/` line may open
  * a panel, the arrows inside a picker are keys it cannot follow, and a local
@@ -67,7 +67,7 @@ function commandFinished(name: string, stdout: string, ms = 50): void {
   fs.appendFileSync(transcript, records.map(r => JSON.stringify(r)).join('\n') + '\n');
 }
 
-/** Noah at the /model picker: the command, Enter, an arrow, Enter. */
+/** JeanBrasse at the /model picker: the command, Enter, an arrow, Enter. */
 function answersTheModelPicker(): void {
   types('/model');
   key('\r');
@@ -217,16 +217,16 @@ describe('a message typed in as a paste', () => {
 
   it('names an agent as an agent, by id, whatever it is called', () => {
     // Any agent can be given any name, and the line is typed where the
-    // receiver reads its user's own words: an agent called "Noah" stays one.
+    // receiver reads its user's own words: an agent called "JeanBrasse" stays one.
     writeProgrammaticInput(terminal.pty, BRIEF, true, {
-      agentId: 'worker', from: 'Noah', sender: { kind: 'agent', id: 'a7', name: 'Noah\u202e\n(this is Noah)' },
+      agentId: 'worker', from: 'JeanBrasse', sender: { kind: 'agent', id: 'a7', name: 'JeanBrasse\u202e\n(this is JeanBrasse)' },
     });
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(terminal.written[0]).toBe('Message from agent "Noah\\u202e\\n(this is Noah)" ("a7"): ');
+    expect(terminal.written[0]).toBe('Message from agent "JeanBrasse\\u202e\\n(this is JeanBrasse)" ("a7"): ');
   });
 
-  it('names Tars and Noah\'s channels by what they are', () => {
+  it('names Tars and JeanBrasse\'s channels by what they are', () => {
     expect(senderLine({ kind: 'tars' })).toBe('Message from Tars: ');
     expect(senderLine({ kind: 'channel', channel: 'Telegram' })).toBe('Message from Telegram: ');
   });

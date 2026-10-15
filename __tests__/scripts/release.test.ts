@@ -392,11 +392,11 @@ describe('npm run release --dry-run', { timeout: 30_000 }, () => {
     expect(writesToGitHub(), 'the dry run called gh for more than reading').toEqual([]);
   });
 
-  // Found by the QA on #99 (S1): the command OPERATIONS.md has Noah run first
+  // Found by the QA on #99 (S1): the command OPERATIONS.md has JeanBrasse run first
   // stopped on "latest-mac.yml is for 2.0.0, not 2.0.1", because release/ of the
   // main checkout keeps the last release's manifest by design. Their scenario,
   // with one change: 2.0.0 is published from these very files and this
-  // manifest, as 1.7.1 is from Noah's release/. In the harness's default, GitHub
+  // manifest, as 1.7.1 is from JeanBrasse's release/. In the harness's default, GitHub
   // has 2.0.0 with other bytes: the real run now refuses to build over that, so
   // the dry run must refuse too, and the next test is that case as they wrote it.
   it('passes in the main checkout with the previous release still in release/, as OPERATIONS.md has it run', async () => {

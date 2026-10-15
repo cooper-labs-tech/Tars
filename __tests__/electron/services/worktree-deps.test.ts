@@ -1,5 +1,5 @@
 /**
- * An agent's new worktree gets its project's dependencies as a clone (Noah's
+ * An agent's new worktree gets its project's dependencies as a clone (JeanBrasse's
  * choice 17, 05/10): `cp -c` on APFS shares every block, 9.8 s and about 65 MB
  * of real space for a 1.2 GB node_modules (measured 01/10 for
  * scripts/worktree.mjs), where an agent ran its own `npm ci` into each

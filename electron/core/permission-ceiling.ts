@@ -3,7 +3,7 @@
  *
  * A run over ACP is started by its asker and ends with its turn: it runs at
  * the narrower of the asker's mode and the target's own, in the order
- * plan < normal < auto < bypass. A persistent worker keeps the mode Noah gave
+ * plan < normal < auto < bypass. A persistent worker keeps the mode JeanBrasse gave
  * it, which is its configuration and not the asker's grant: a message to it
  * from a narrower asker is only marked as such, before the message. So this
  * is not a boundary: an asker in plan can have a worker in bypass do anything

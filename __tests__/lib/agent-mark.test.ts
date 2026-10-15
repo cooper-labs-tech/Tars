@@ -17,7 +17,7 @@ import { agentMarkBits, agentMarkCells } from '../../src/lib/agent-mark';
  * 4. The mark is lopsided: a row's right half does not mirror its left.
  * 5. An empty name, or one with a character beyond the Basic Multilingual
  *    Plane, throws or comes out with the wrong number of squares.
- * 6. The team Noah looks at every day cannot be told apart: two of the six
+ * 6. The team JeanBrasse looks at every day cannot be told apart: two of the six
  *    agents of tars share a mark.
  */
 

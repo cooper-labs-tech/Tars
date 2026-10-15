@@ -77,7 +77,7 @@ function keptWhilePickerOpen(file: string, ms = 70): void {
   ].map(r => JSON.stringify(r)).join('\n') + '\n');
 }
 
-/** Noah at the /model picker: the command, Enter, down to Fable, Enter (the confirmation opens), Esc (back to the picker). */
+/** JeanBrasse at the /model picker: the command, Enter, down to Fable, Enter (the confirmation opens), Esc (back to the picker). */
 function backsOutOfTheConfirmation(): void {
   types('/model');
   key('\r');

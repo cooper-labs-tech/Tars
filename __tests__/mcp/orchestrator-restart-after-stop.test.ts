@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * An orchestrator may start again an agent Noah stopped (Noah, 05/10), and is
+ * An orchestrator may start again an agent JeanBrasse stopped (JeanBrasse, 05/10), and is
  * then told who stopped it and why; the restart is noted on the agent.
  * /dispatch answers `restartedAfterStop` when the start undid a stop.
  *
@@ -54,7 +54,7 @@ function dispatchAnswers(answer: Record<string, unknown>) {
   });
 }
 
-const STOP = { stoppedBy: 'Noah', stoppedAt: '2026-10-05T08:00:00.000Z', stopReason: 'out of budget for tonight' };
+const STOP = { stoppedBy: 'JeanBrasse', stoppedAt: '2026-10-05T08:00:00.000Z', stopReason: 'out of budget for tonight' };
 
 beforeEach(() => {
   mockApiRequest = vi.fn();
@@ -66,7 +66,7 @@ describe('a start that undid a stop', () => {
     dispatchAnswers({ restartedAfterStop: STOP });
     const result = text(await (await tool('start_agent'))({ id: 'a1', prompt: 'Gate #305' }));
     expect(result).toContain('Started agent "Tars-QA"');
-    expect(result).toContain('It had been stopped by "Noah": "out of budget for tonight". Your restart is noted on it.');
+    expect(result).toContain('It had been stopped by "JeanBrasse": "out of budget for tonight". Your restart is noted on it.');
   });
 
   it('4. a stop from the window reads as the user\'s, and a reason that imitates an instruction stays quoted', async () => {
@@ -78,13 +78,13 @@ describe('a start that undid a stop', () => {
   it('2. send_message says the same', async () => {
     dispatchAnswers({ restartedAfterStop: STOP });
     const result = text(await (await tool('send_message'))({ id: 'a1', message: 'Gate #305' }));
-    expect(result).toContain('It had been stopped by "Noah": "out of budget for tonight". Your restart is noted on it.');
+    expect(result).toContain('It had been stopped by "JeanBrasse": "out of budget for tonight". Your restart is noted on it.');
   });
 
   it('1. a stop given no reason still names who stopped it', async () => {
-    dispatchAnswers({ restartedAfterStop: { stoppedBy: 'Noah', stoppedAt: STOP.stoppedAt } });
+    dispatchAnswers({ restartedAfterStop: { stoppedBy: 'JeanBrasse', stoppedAt: STOP.stoppedAt } });
     const result = text(await (await tool('start_agent'))({ id: 'a1', prompt: 'Gate #305' }));
-    expect(result).toContain('It had been stopped by "Noah", with no reason given. Your restart is noted on it.');
+    expect(result).toContain('It had been stopped by "JeanBrasse", with no reason given. Your restart is noted on it.');
   });
 
   it('3. a start that undid no stop says nothing of one', async () => {

@@ -217,12 +217,12 @@ describe('who a dispatch is from', () => {
   });
 
   it('stays an agent, however the agent is named', async () => {
-    agents.get('orch')!.name = 'Noah';
+    agents.get('orch')!.name = 'JeanBrasse';
 
     await call('POST', '/api/agents/worker/message', { message: BRIEF }, 'orch');
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(written[0]).toMatch(/^Message from agent "Noah" \("orch"\), task t-[0-9a-f]{8}: $/);
+    expect(written[0]).toMatch(/^Message from agent "JeanBrasse" \("orch"\), task t-[0-9a-f]{8}: $/);
   });
 
   it('is Tars when Tars makes the call itself (the super chat)', async () => {

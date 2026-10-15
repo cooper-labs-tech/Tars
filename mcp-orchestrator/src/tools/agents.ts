@@ -486,7 +486,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "stop_agent",
-    description: "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; Noah reads it in the window.",
+    description: "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; the user reads it in the window.",
     schema: {
       id: z.string().describe("The agent ID"),
       reason: z.string().min(1).describe("Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"),

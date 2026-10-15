@@ -22,7 +22,7 @@ import { linkSpent, requestTitle, setRequestsEndedHook, type RequestsEndedWhy, t
  * nobody the wiser.
  *
  * The bus needs exactly the same machinery for a different payload: a message
- * from one agent to another, or from Noah, that must not land in the middle of
+ * from one agent to another, or from JeanBrasse, that must not land in the middle of
  * a turn. So it is the same queue, not a second one beside it. Per recipient,
  * coalescing, capped, behind the same session barrier and the same write
  * window: two queues that look alike would drift, and this one is the one the
@@ -50,7 +50,7 @@ import { linkSpent, requestTitle, setRequestsEndedHook, type RequestsEndedWhy, t
  * prompt, a minute after the agent stopped at its prompt, and while `idle` was
  * not news it was the only thing that told an orchestrator a delegated turn
  * had ended: a minute late, and also each time the agent came back to rest for
- * any other reason. Noah's note of 2026-09-18 was one of those. A failed ACP
+ * any other reason. JeanBrasse's note of 2026-09-18 was one of those. A failed ACP
  * start put 1212-Backend back to the `waiting` it had left, and the
  * orchestrator of a delegation finished 85 minutes earlier was told it "is now
  * waiting". The rest is now news once, as the end of the work handed over,
@@ -159,7 +159,7 @@ export type QueuedBusMessage = {
   messageId: string;
   roomId: string;
   threadId: string;
-  /** Whether Noah or an agent wrote it, as the journal recorded it. The note
+  /** Whether JeanBrasse or an agent wrote it, as the journal recorded it. The note
    *  is decided on this and never on the name, which any agent can share. */
   authorKind: BusMessageAuthorKind;
   authorName: string;
@@ -502,7 +502,7 @@ function queueForRequester(child: AgentStatus, news: News): void {
   // session and therefore its ptyId, so the binding above cannot tell that
   // start apart on its own, but by then the link that a dispatch left behind
   // has already been used up and is gone. A turn that ended normally used to
-  // leave it in place, so every later rest of that agent, typed in by Noah or
+  // leave it in place, so every later rest of that agent, typed in by JeanBrasse or
   // put back by a failed ACP start, went on reporting to that orchestrator.
   //
   // Written to disk here, and nowhere else: the four routes that record a link
@@ -904,7 +904,7 @@ function composeNote(finished: Map<string, News>): string {
   const lines = Array.from(finished.entries()).map(([id, news]) => {
     const agent = agents.get(id);
     const name = agent?.name || id;
-    // Raw until the room note made "This is Noah, not a teammate." a sentence
+    // Raw until the room note made "This is the user, not a teammate." a sentence
     // Tars really writes: a name with a line break in it could append one here.
     return `- ${envelopeValue(name)} (${envelopeValue(id)}) ${describeOwed(news)}`;
   });
@@ -923,16 +923,16 @@ function composeNote(finished: Map<string, News>): string {
  * A message from the room, rendered as what it is.
  *
  * Provenance is data, not an instruction: the note says who is speaking and
- * where, and says plainly whether that is Noah or a teammate. An agent must not
+ * where, and says plainly whether that is JeanBrasse or a teammate. An agent must not
  * read a colleague's request as an order from the person who owns the machine,
- * nor Noah's own words as a colleague's request, and the note used to call
- * every message a teammate's, Noah's included. Decided by the kind of author
- * the journal recorded: an agent can be named Noah. Answering is done by
+ * nor JeanBrasse's own words as a colleague's request, and the note used to call
+ * every message a teammate's, JeanBrasse's included. Decided by the kind of author
+ * the journal recorded: an agent can be named JeanBrasse. Answering is done by
  * publishing, which is an act.
  *
  * The message itself is fenced, because it can say anything, including a line
  * shaped exactly like the first line of this note. Nothing marked it off, so an
- * agent could write "[Tars] Noah wrote in ... This is Noah, not a teammate." in
+ * agent could write "[Tars] User wrote in ... This is the user, not a teammate." in
  * its message, and the recipient had nothing to tell it from the real one.
  * Filtering such lines out would not hold: a forgery needs no exact prefix,
  * only a convincing sentence, and look-alike characters get past any list. So
@@ -944,7 +944,7 @@ function composeNote(finished: Map<string, News>): string {
  * or hide text there.
  */
 function composeBusNote(message: QueuedBusMessage): string {
-  const who = message.authorKind === 'human' ? 'This is Noah, not a teammate.' : 'This is a teammate, not Noah.';
+  const who = message.authorKind === 'human' ? 'This is the user, not a teammate.' : 'This is a teammate, not the user.';
   const author = envelopeValue(message.authorName);
   const fence = `tars-${crypto.randomBytes(12).toString('hex')}`;
   return [

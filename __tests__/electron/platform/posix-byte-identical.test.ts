@@ -56,7 +56,7 @@ describe.each(['darwin', 'linux'] as const)('%s, to the byte', (platform) => {
 
   it('2. a transcript under Claude\'s own name is the one found', () => {
     as(platform);
-    const home = '/Users/noah';
+    const home = '/Users/demo';
     const id = '11111111-2222-4333-8444-555555555555';
     for (const project of POSIX_CORPUS.layout) {
       const claude = `${home}/.claude/projects/${encodeClaudeProjectDir(project)}/${id}.jsonl`;

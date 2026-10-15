@@ -127,7 +127,7 @@ function readEnvelope(candidate: string): ParsedEnvelope | null {
  * The prompt shows Hermes the envelope to fill in. When it copies the example
  * instead of filling it, the result is still valid JSON, so parseEnvelope
  * accepts it and `say` becomes the placeholder itself. That happened once on
- * Noah's install and then never stopped: every following turn was shown the
+ * JeanBrasse's install and then never stopped: every following turn was shown the
  * placeholder as something the overseer had already said, and copied it in
  * turn. Nineteen consecutive turns, none of which could recover on its own.
  *
@@ -157,8 +157,10 @@ const BARE_SENTINEL = /\[[A-Z][A-Z_ ]{2,30}\]/g;
  * one as context reproduces it verbatim. Kept with their angle brackets, so
  * a reply that discusses the bug in prose is not mistaken for one.
  */
-const EMITTED_PLACEHOLDERS = [
-  '<what you tell Noah, plain text or light markdown>',
+const EMITTED_PLACEHOLDERS: Array<string | RegExp> = [
+  // The first one named the user, with one name on every install: any name
+  // in its place is that same token.
+  /<what you tell [^<>,]{1,40}, plain text or light markdown>/,
   '<id from the snapshot>',
   '<the exact message to send>',
   '<...>',
@@ -175,7 +177,7 @@ export function isTemplateEcho(say: string): boolean {
   const text = say.trim();
   if (!text) return true;
 
-  if (EMITTED_PLACEHOLDERS.some(token => text.includes(token))) return true;
+  if (EMITTED_PLACEHOLDERS.some(token => typeof token === 'string' ? text.includes(token) : token.test(text))) return true;
 
   const stripped = text.replace(PLACEHOLDER_SPAN, ' ').replace(BARE_SENTINEL, ' ');
   // Nothing was a placeholder, so there is nothing to accuse it of.

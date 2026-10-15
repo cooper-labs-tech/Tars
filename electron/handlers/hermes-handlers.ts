@@ -59,7 +59,7 @@ const writeConnection = writeHermesConnection;
 /**
  * A call to the gateway, with the connection a file names: never the default
  * port for a file that is missing or broken (configuredHermesConnection), which
- * on Noah's machine is the SSH tunnel to his Hermes. The Settings form still
+ * on JeanBrasse's machine is the SSH tunnel to his Hermes. The Settings form still
  * shows the default, to be saved (hermes:connection:get).
  */
 async function viaGateway<T>(call: (conn: HermesConnection) => Promise<T>): Promise<T | { success: false; error: string }> {
@@ -327,7 +327,7 @@ export function registerHermesHandlers(): void {
     // The form shows the default, to be saved. The base URL is what Settings >
     // Hermes and the Chat probe as soon as they open (hermes:connection:test),
     // so it is the gateway a file names, or none: for a missing or broken file
-    // it was the default port's, the SSH tunnel to Noah's Hermes on his machine.
+    // it was the default port's, the SSH tunnel to JeanBrasse's Hermes on his machine.
     const configured = configuredHermesConnection();
     return {
       connection,

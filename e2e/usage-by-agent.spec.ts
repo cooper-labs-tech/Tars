@@ -8,7 +8,7 @@ import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, stepS
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * The Usage page by agent, in the real app (Noah, 13/10: "Dans Usage on
+ * The Usage page by agent, in the real app (JeanBrasse, 13/10: "Dans Usage on
  * pourrait check l'usage par agent et pas par tâche aussi ? Je veux avoir le
  * choix de regarder l'un ou l'autre"). Frames: `Usage · cost per agent`, and
  * the switch in `Usage · cost per task`, with their light copies.

@@ -13,13 +13,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * arguments against the tool's own schema the way the SDK does, so a flag the
  * schema does not declare is dropped here as it would be there.
  *
- * Any provider and any CLI (2.0.2, Noah: "ça doit supporter n'importe quel
+ * Any provider and any CLI (2.0.2, JeanBrasse: "ça doit supporter n'importe quel
  * provider/cli"). How it fails, written before the code (2026-10-14):
  * 6. The schema does not declare provider, model, effort, permissionMode or
  *    cliPath: they are dropped, and the agent is made on Claude.
  * 7. The description does not name the providers by id: an orchestrator has
  *    nothing to ask for but Claude, and says so ("my tool only makes Claude
- *    agents", measured by Noah on 2026-10-14).
+ *    agents", measured by JeanBrasse on 2026-10-14).
  * 8. An effort or a permission mode outside its values reaches the API.
  */
 

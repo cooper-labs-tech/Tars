@@ -61,7 +61,7 @@ describe('asleep', () => {
 describe('waking', () => {
   it('says who woke it, and how (5)', () => {
     expect(wakingLine(waking('Orchestrator', 'message'))).toBe('Waking: a message from Orchestrator');
-    expect(wakingLine(waking('Noah', 'chat'))).toBe('Waking: a chat message from Noah');
+    expect(wakingLine(waking('JeanBrasse', 'chat'))).toBe('Waking: a chat message from JeanBrasse');
     expect(wakingLine(waking('you', 'wake'))).toBe('Waking: woken by you');
     expect(wakingLine(waking('you', 'key'))).toBe('Waking: a key typed by you');
     expect(wakingLine(waking('Tars', 'start'))).toBe('Waking: started by Tars');

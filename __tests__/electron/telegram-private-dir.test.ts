@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
  * What Tars keeps out of the agents' directory cannot be sent to Telegram
  * either, by either of the two ways an agent has of sending a file.
  *
- * Found by the audit of lot 4: Noah's conversation with the super chat moved
+ * Found by the audit of lot 4: JeanBrasse's conversation with the super chat moved
  * from `~/.dorothy` to `~/.tars-private`, and both Telegram guards refuse
  * `~/.dorothy` by name, so the move took the file out of the only list that
  * kept it from being sent. One call to `send_telegram_document` with the new

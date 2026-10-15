@@ -6,13 +6,13 @@
  * `electron-builder` never cleans up after itself, so every build left another
  * 430MB in release/ and the directory reached 6.3GB across thirteen versions.
  * Two are kept rather than one so a bad release can be compared against, or
- * handed to someone, without a rebuild; two and not three, Noah's rule of
+ * handed to someone, without a rebuild; two and not three, JeanBrasse's rule of
  * 2026-10-01.
  *
  * Two rules the 1.7.1 release got around, and that this file now enforces
  * instead of assuming:
  *
- * - **The folder is the main checkout's release/**, the one Noah opens, found
+ * - **The folder is the main checkout's release/**, the one JeanBrasse opens, found
  *   through git from wherever this runs, a worktree included. It used to be
  *   release/ of the current directory: 1.7.0 and 1.7.1 were built in a
  *   worktree, the purge there saw two versions and did nothing, and the real

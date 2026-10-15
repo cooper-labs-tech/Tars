@@ -14,7 +14,7 @@ describe('a missing project folder', () => {
   // Start used to build `cd '<folder>' && claude ...` and write it into the
   // PTY. When the folder was gone bash printed "No such file or directory",
   // the && short-circuited, and the user was left at a shell prompt with no
-  // indication that anything had failed. Six of Noah's agents pointed at a
+  // indication that anything had failed. Six of JeanBrasse's agents pointed at a
   // folder that no longer existed.
   const canStart = (agent: { projectPath: string; worktreePath?: string }, exists: (p: string) => boolean) =>
     exists(agent.worktreePath || agent.projectPath);

@@ -34,12 +34,12 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *    as the user's, whatever he answers.
  * 10. An answer held for the terminal, then dropped because the CLI stopped meanwhile, leaves the question closed and
  *    the user told it went in.
- * 11. (Noah's rule of 2026-10-01) A worker asks the user: only a project's orchestrator does.
+ * 11. (JeanBrasse's rule of 2026-10-01) A worker asks the user: only a project's orchestrator does.
  * 12. With the relay off, a question leaves anyway, or the agent is not told why it cannot ask.
  * 13. With Hermes down, the question is lost, or the agent is told it went; it does not go once Hermes answers; and
  *    if it never could, the agent is not told so at the end.
  * 14. (the gate of #231) The expiry notice types the agent's own question back to it, as Tars's words.
- * 15. (Noah's answer 24 of 2026-10-05) The user's receipt is long, or says the answer went in while it waits, without
+ * 15. (JeanBrasse's answer 24 of 2026-10-05) The user's receipt is long, or says the answer went in while it waits, without
  *     saying for what.
  * 16. (ORCHESTRATOR-PER-CHAT.md 4.2, PR D, written before the code on 2026-10-12) A chat's runner, a worker with
  *     `kind: 'chat'` and the orchestrator's powers, is refused as a worker.
@@ -242,7 +242,7 @@ describe('the user\'s reply', () => {
     expect(all('a1')).toContain('Message from the user via Telegram: ');
     expect(all('a1')).toContain('Use the staging database.');
     expect(all('a2')).toBe('');
-    expect(notices().at(-1), "Noah's answer 24: one short line").toBe('Passed to Asker.');
+    expect(notices().at(-1), "JeanBrasse's answer 24: one short line").toBe('Passed to Asker.');
     // Answered: a second reply to the same message is told the question is closed.
     typed.a1.length = 0;
     await answer('again', T0 + 120_000);

@@ -5,7 +5,7 @@ import { envelopeValue } from '../utils/envelope-value';
 /**
  * After Tars stopped abruptly, the agents that were working are resumed with a
  * note, and the agents at rest stay asleep until something needs them
- * (RD-REDEMARRAGE.md, 2.2; approved by Noah on 2026-10-05).
+ * (RD-REDEMARRAGE.md, 2.2; approved by JeanBrasse on 2026-10-05).
  *
  * Nothing is replayed: an agent is started on its own conversation (the launch
  * resumes its session) with the note as its first prompt, and its last request

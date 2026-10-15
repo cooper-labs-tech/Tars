@@ -5,7 +5,7 @@ import { isSuperAgent } from '../utils';
 /**
  * Which orchestrator a message from the user is for (point E of DESIGN-RELAIS-HERMES-V2.md).
  *
- * The bots gave a free message to the first orchestrator found, all projects considered: on Noah's machine an
+ * The bots gave a free message to the first orchestrator found, all projects considered: on JeanBrasse's machine an
  * orchestrator of a project at rest, so his messages never reached the one he was writing to. Now a message names its
  * project with "@project text", the same prefix the relay's plugin reads on Telegram; without one, it goes to the
  * fleet's orchestrator only when there is exactly one. Otherwise nobody gets it, and the sender gets the list.

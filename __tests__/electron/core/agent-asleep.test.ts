@@ -6,7 +6,7 @@ import * as path from 'path';
  * An agent asleep, and how it wakes: the contract #315's frames are drawn on
  * ("Agent asleep · and how it wakes"). The state and since when, a waking
  * state with who woke it, a wake call, and the pane's last screen kept while
- * the CLI is gone. Noah's choices 5 and 6 of 2026-10-05.
+ * the CLI is gone. JeanBrasse's choices 5 and 6 of 2026-10-05.
  *
  * How it fails, written before the code:
  * 8. Asleep, the agent keeps its terminal, its task or its wait, or its killed

@@ -9,7 +9,7 @@ import type { OverseerAutoRule, OverseerSettings } from '@/types/electron';
 /**
  * What the Chat agent may do without asking.
  *
- * The overseer proposes and Noah approves, and that gate does not move: an
+ * The overseer proposes and JeanBrasse approves, and that gate does not move: an
  * enabled rule here is an approval given in advance for one narrow situation,
  * and it still goes through the same code path a pressed button does.
  *

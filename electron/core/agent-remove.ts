@@ -26,7 +26,7 @@ export interface RemovedAgent {
  *
  * Its delegated runs and permission questions end with it; its terminal is
  * killed; its uncommitted work is saved on wip/<name> first, without asking
- * (Noah, 05/10), since `--force` below removes whatever was not committed. A
+ * (JeanBrasse, 05/10), since `--force` below removes whatever was not committed. A
  * save that fails keeps the worktree where it is, and says so, as do files git
  * ignores that are not caches, a repository of its own inside it, and a
  * submodule holding work no remote has (#312, #335), and so does a removal git

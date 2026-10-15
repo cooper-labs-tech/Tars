@@ -7,7 +7,7 @@ import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * Noah's answers of 05/10, in the real app:
+ * JeanBrasse's answers of 05/10, in the real app:
  * - the window's Delete keeps an agent's uncommitted work on wip/<name>, then
  *   removes its worktree;
  * - an orchestrator that starts again an agent stopped in the window is told

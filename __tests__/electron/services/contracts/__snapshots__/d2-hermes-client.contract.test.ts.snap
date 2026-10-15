@@ -553,7 +553,7 @@ exports[`hermes-client, as recorded before the D2 refactor > sends and returns t
     "sent": [
       {
         "authorization": null,
-        "body": "{"provider":"basic","username":"noah","password":"pw","next":"/"}",
+        "body": "{"provider":"basic","username":"demo","password":"pw","next":"/"}",
         "contentType": "application/json",
         "cookie": null,
         "method": "POST",
@@ -1129,7 +1129,7 @@ exports[`hermes-client, as recorded before the D2 refactor > sends and returns t
     "sent": [
       {
         "authorization": null,
-        "body": "{"provider":"basic","username":"noah","password":"pw","next":"/"}",
+        "body": "{"provider":"basic","username":"demo","password":"pw","next":"/"}",
         "contentType": "application/json",
         "cookie": null,
         "method": "POST",
@@ -1707,7 +1707,7 @@ exports[`hermes-client, as recorded before the D2 refactor > sends and returns t
     "sent": [
       {
         "authorization": null,
-        "body": "{"provider":"basic","username":"noah","password":"pw","next":"/"}",
+        "body": "{"provider":"basic","username":"demo","password":"pw","next":"/"}",
         "contentType": "application/json",
         "cookie": null,
         "method": "POST",
@@ -2295,7 +2295,7 @@ exports[`hermes-client, as recorded before the D2 refactor > sends and returns t
     "sent": [
       {
         "authorization": null,
-        "body": "{"provider":"basic","username":"noah","password":"pw","next":"/"}",
+        "body": "{"provider":"basic","username":"demo","password":"pw","next":"/"}",
         "contentType": "application/json",
         "cookie": null,
         "method": "POST",
@@ -3009,7 +3009,7 @@ exports[`hermes-client, as recorded before the D2 refactor > sends and returns t
     "sent": [
       {
         "authorization": null,
-        "body": "{"provider":"basic","username":"noah","password":"pw","next":"/"}",
+        "body": "{"provider":"basic","username":"demo","password":"pw","next":"/"}",
         "contentType": "application/json",
         "cookie": null,
         "method": "POST",

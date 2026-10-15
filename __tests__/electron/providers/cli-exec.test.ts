@@ -75,7 +75,7 @@ import { CMD_SHIM_EXE, CMD_SHIM_NODE, GCLOUD_CMD, NODE_DIST_NPX, SH_SHIM, fakeWi
  *    logged with the reason.
  */
 
-const HOME = 'C:\\Users\\Nico Las';
+const HOME = 'C:\\Users\\Sam Lee';
 const NPM = `${HOME}\\AppData\\Roaming\\npm`;
 const LOCAL_BIN = `${HOME}\\.local\\bin`;
 const NODEJS = 'C:\\Program Files (x86)\\nodejs';

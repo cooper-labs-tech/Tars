@@ -270,7 +270,7 @@ function latestLocalCommand(lines: string): number | undefined {
  * background and stopped its turn ten seconds in.
  *
  * Read from the transcript, because that is where Claude Code records both
- * ends, and both are structured. Across a week of Noah's transcripts (329
+ * ends, and both are structured. Across a week of JeanBrasse's transcripts (329
  * background starts): a Bash start carries `toolUseResult.backgroundTaskId`,
  * a Monitor `toolUseResult.taskId`, an asynchronous Agent `agentId` with
  * `isAsync`; 322 were followed by a note naming the id with a `<status>`

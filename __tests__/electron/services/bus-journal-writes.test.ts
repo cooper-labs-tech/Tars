@@ -87,7 +87,7 @@ function putAgent(id: string): AgentStatus {
 }
 
 /** Post as the Chat page does: the real IPC handler, the real fan out. */
-async function postAsNoah(text: string): Promise<{ success: boolean; deliveries?: unknown[] }> {
+async function postAsUser(text: string): Promise<{ success: boolean; deliveries?: unknown[] }> {
   const handler = ipcHandlers.get('bus:postMessage')!;
   return await handler(null, { roomId: ROOM, text }) as { success: boolean; deliveries?: unknown[] };
 }
@@ -125,7 +125,7 @@ afterEach(() => {
 
 describe('the journal is written once per message, not once per delivery row', () => {
   it('writes once for a publication into a room of six', async () => {
-    const result = await postAsNoah('all of you, look at this');
+    const result = await postAsUser('all of you, look at this');
     expect(result.success).toBe(true);
 
     // One append, six delivery rows, six of them marked delivered: thirteen
@@ -135,13 +135,13 @@ describe('the journal is written once per message, not once per delivery row', (
   });
 
   it('grows with the messages and not with the size of the room', async () => {
-    for (let n = 0; n < 5; n++) await postAsNoah(`message ${n}`);
+    for (let n = 0; n < 5; n++) await postAsUser(`message ${n}`);
 
     expect(journalWrites).toHaveLength(5);
   });
 
   it('has every row of that publication on disk once the turn ends', async () => {
-    const posted = await postAsNoah('nothing may be dropped for the sake of one write');
+    const posted = await postAsUser('nothing may be dropped for the sake of one write');
     expect(posted.success).toBe(true);
 
     const onDisk = journalOnDisk();
@@ -157,7 +157,7 @@ describe('the journal is written once per message, not once per delivery row', (
     // A leftover temp file from an interrupted run is overwritten, never read
     // and never appended to.
     fs.writeFileSync(`${JOURNAL}.tmp`, 'half a journal, from a process that died');
-    await postAsNoah('after a crash');
+    await postAsUser('after a crash');
 
     expect(() => journalOnDisk()).not.toThrow();
     expect(fs.existsSync(`${JOURNAL}.tmp`)).toBe(false);
@@ -170,7 +170,7 @@ describe('what must not be traded for that', () => {
     // the deferred write has not fired. This is the state the app is in when
     // before-quit runs.
     store.appendMessage({
-      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'Noah', text: 'said just before quitting',
+      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'User', text: 'said just before quitting',
     });
     expect(journalWrites).toHaveLength(0);
     expect(fs.existsSync(JOURNAL)).toBe(false);
@@ -195,7 +195,7 @@ describe('what must not be traded for that', () => {
 
   it('writes nothing more after a flush, rather than twice', () => {
     store.appendMessage({
-      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'Noah', text: 'once',
+      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'User', text: 'once',
     });
     store.flushBus();
     store.flushBus();
@@ -205,7 +205,7 @@ describe('what must not be traded for that', () => {
 
   it('does not let a write from the fleet before this one land on the empty state', async () => {
     store.appendMessage({
-      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'Noah', text: 'belongs to the old fleet',
+      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'User', text: 'belongs to the old fleet',
     });
     store.flushBus();
     const before = fs.readFileSync(JOURNAL, 'utf-8');
@@ -215,7 +215,7 @@ describe('what must not be traded for that', () => {
     // that was already there, which resetBusStore clears; this is here so that
     // deferring the write cannot quietly outlive it.
     store.appendMessage({
-      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'Noah', text: 'also the old fleet',
+      roomId: ROOM, authorKind: 'human', authorId: 'human', authorName: 'User', text: 'also the old fleet',
     });
     store.resetBusStore();
     await Promise.resolve();
@@ -232,7 +232,7 @@ describe('what must not be traded for that', () => {
       version: 1,
       savedAt: '2026-09-01T00:00:00.000Z',
       threads: [{ id: 't1', roomId: ROOM, anchorMessageId: 'm1', state: 'open', round: 1, agentMessageCount: 0, openedAt: '2026-09-01T00:00:00.000Z' }],
-      messages: [{ id: 'm1', roomId: ROOM, threadId: 't1', authorKind: 'human', authorId: 'human', authorName: 'Noah', text: 'from before', mentions: [], createdAt: '2026-09-01T00:00:00.000Z' }],
+      messages: [{ id: 'm1', roomId: ROOM, threadId: 't1', authorKind: 'human', authorId: 'human', authorName: 'User', text: 'from before', mentions: [], createdAt: '2026-09-01T00:00:00.000Z' }],
       deliveries: [{ messageId: 'm1', targetAgentId: 'a', state: 'queued', queuedAt: '2026-09-01T00:00:00.000Z' }],
     }));
 

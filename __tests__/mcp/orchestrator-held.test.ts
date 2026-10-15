@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * keys cannot follow. The MCP's result type did not declare it, so all three
  * tools answered "Sent message" or "Started", and delegate_task then waited on
  * a turn that had not begun. On 2026-09-22 three agents were held that way
- * until Noah pressed Ctrl+C in each, while the orchestrator had been told the
+ * until JeanBrasse pressed Ctrl+C in each, while the orchestrator had been told the
  * messages were sent.
  *
  * The real tools, loaded as the server loads them; only the API is replaced.

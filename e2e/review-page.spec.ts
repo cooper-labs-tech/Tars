@@ -8,7 +8,7 @@ import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, seedS
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * The Review page's own side of Noah's "the Review page only half works"
+ * The Review page's own side of JeanBrasse's "the Review page only half works"
  * (01/10), from the Audit's DIAG-REVIEW.md, in the real app on throwaway git
  * repositories in the sandbox. Frames: Review · dark, Review · light and
  * Review · states. In order:

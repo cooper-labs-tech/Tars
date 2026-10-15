@@ -6,7 +6,7 @@ import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort, PORT_OFFSET } from './ports.mjs';
 
 /**
- * The effort real Claude Code sends, in each request, for agents Tars starts (Noah, 2026-10-13: "la moitié du temps
+ * The effort real Claude Code sends, in each request, for agents Tars starts (JeanBrasse, 2026-10-13: "la moitié du temps
  * les agents se réveillent avec le mauvais niveau d'effort par rapport à leur paramètre").
  *
  * effort-every-start.spec.ts pins the launch side with a stand-in: every path hands the CLI the agent's own

@@ -123,7 +123,7 @@ export function looksAgain(c: { isMain: boolean; refusal: string | null; settles
     || (c.refusal === 'field' && c.settlesInMs !== undefined);
 }
 
-/** What a send answers when every slot holds a chat that is working (Noah, 07/10: an error the user sees). */
+/** What a send answers when every slot holds a chat that is working (JeanBrasse, 07/10: an error the user sees). */
 export function chatLimitSentence(limit: number, ramGb: number, perChatGb: number, working: string[]): string {
   const one = limit === 1;
   return `${limit} ${one ? 'chat is' : 'chats are'} already working, the most this Mac runs at once `

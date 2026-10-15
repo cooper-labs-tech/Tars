@@ -302,7 +302,7 @@ async function askViaLiveSession(
       const opened = await createLiveSession(conn);
       liveSession = opened.session;
       liveControl = opened.control;
-      // Its turns are Noah's conversation: memory_search leaves them out.
+      // Its turns are JeanBrasse's conversation: memory_search leaves them out.
       rememberHermesSessions(opened.session.sessionId, opened.session.storedSessionId);
     }
   } catch (err) {

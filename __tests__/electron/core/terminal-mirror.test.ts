@@ -20,7 +20,7 @@ import { createRequire } from 'node:module';
  * mirror and into the terminal a panel that never left would be, and compare
  * the two at every chunk.
  *
- * The history a panel comes back to: the last 2,500 lines, Noah's choice of
+ * The history a panel comes back to: the last 2,500 lines, JeanBrasse's choice of
  * 05/10 for the main process's mirror (the panel's own xterm keeps 5,000, #313;
  * the mirror kept 1,000). How it fails: the mirror keeps another number, so a
  * panel back from another page has lost more of the conversation, or the

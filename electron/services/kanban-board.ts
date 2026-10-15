@@ -13,7 +13,7 @@
  * - it promotes `todo`, and `blocked` with no block event, to `ready` by itself;
  * - the gateway decomposes `triage` with its aux model (`kanban.auto_decompose`);
  * - `scheduled` is never dispatched nor promoted: an explicit unblock is the
- *   only way out, which is Noah dragging it on the board;
+ *   only way out, which is JeanBrasse dragging it on the board;
  * - a `ready` task assigned to what cannot be a Hermes profile (profile ids are
  *   `[a-z0-9][a-z0-9_-]*`: never a colon) is skipped as `skipped_nonspawnable`,
  *   Hermes's own provision for lanes that are not its workers;
@@ -22,17 +22,17 @@
  *
  * So:
  * - parked: `scheduled` on the Tars lane (`tars:unclaimed`). Hermes never takes
- *   it; Noah hands it to Hermes by moving it and giving it a Hermes profile.
+ *   it; JeanBrasse hands it to Hermes by moving it and giving it a Hermes profile.
  * - claimed: `ready` on the claiming agent's lane (`tars:<agent id>`), set in one
  *   PATCH whose assignee lands first, so the task is never `ready` on no lane.
  * - done: `done`, from the claim.
  * - deleted: by the agent that claimed it, or by the one that filed it while
- *   nobody has; the rest is another agent's, Hermes's or Noah's.
+ *   nobody has; the rest is another agent's, Hermes's or JeanBrasse's.
  *
  * Claims are atomic among Tars's agents, which all come through this process: a
  * claim reads and writes a task under that task's own lock. Hermes has no
  * compare-and-set, so this is no guard against a person moving the task on the
- * board at the same moment; that person is Noah, and the move is his to make.
+ * board at the same moment; that person is JeanBrasse, and the move is his to make.
  *
  * Each project is a Hermes tenant (its path), which the board filters on.
  */
@@ -261,7 +261,7 @@ function heldElsewhere(t: HermesTask, caller: KanbanCaller): string | null {
   const agent = nameOfLane(t.assignee);
   if (agent) return `Task ${t.id} is claimed by ${agent}: only that agent can act on it.`;
   if (t.status !== PARKED && t.status !== 'done') {
-    return `Task ${t.id} is Hermes's (${t.status}${t.assignee && t.assignee !== TARS_LANE ? `, ${t.assignee}` : ''}): only Noah moves it back.`;
+    return `Task ${t.id} is Hermes's (${t.status}${t.assignee && t.assignee !== TARS_LANE ? `, ${t.assignee}` : ''}): only the user moves it back.`;
   }
   return null;
 }
@@ -282,15 +282,15 @@ function filerOf(t: HermesTask): string | null {
 /**
  * Why the caller may not delete a task, or null. An agent deletes a task it
  * claimed, done or not, or one it filed that nobody took. heldElsewhere let any
- * parked or done task through, whoever it was: a scheduled task Noah gave to a
+ * parked or done task through, whoever it was: a scheduled task JeanBrasse gave to a
  * Hermes profile, one Hermes finished, another agent's (the Backend's gate of
- * #171, W2). Noah deletes those on the Kanban page.
+ * #171, W2). JeanBrasse deletes those on the Kanban page.
  */
 function whyNotDeletable(t: HermesTask, caller: KanbanCaller): string | null {
   if (t.assignee === laneOf(caller.agentId)) return null;
   if (t.assignee === TARS_LANE && filerOf(t) === caller.agentId) return null;
   return heldElsewhere(t, caller)
-    ?? `Task ${t.id} is not yours to delete: an agent deletes a task it filed and nobody claimed, or one it claimed. Noah deletes the others on the Kanban page.`;
+    ?? `Task ${t.id} is not yours to delete: an agent deletes a task it filed and nobody claimed, or one it claimed. The user deletes the others on the Kanban page.`;
 }
 
 // ── The tools ─────────────────────────────────────────────────────────────
@@ -380,7 +380,7 @@ export async function claimTask(
       if (other) return fail(409, `Task ${t.id} is already claimed by ${other}.`);
       if (t.status === 'done' || t.status === 'archived') return fail(409, `Task ${t.id} is done.`);
       if (t.status !== PARKED || (t.assignee && t.assignee !== TARS_LANE)) {
-        return fail(409, `Task ${t.id} is not parked: Hermes has it (${t.status}${t.assignee ? `, ${t.assignee}` : ''}). Only Noah moves it back.`);
+        return fail(409, `Task ${t.id} is not parked: Hermes has it (${t.status}${t.assignee ? `, ${t.assignee}` : ''}). Only the user moves it back.`);
       }
       // The lane lands before the status, in the same request: `ready` on the
       // agent's lane, which Hermes skips, never `ready` on no lane.
@@ -445,7 +445,7 @@ async function release(h: KanbanHermes, caller: KanbanCaller, t: HermesTask): Pr
 
 export async function moveTask(h: Conn, caller: KanbanCaller, idOrPrefix: string, column: AgentColumn): Promise<KanbanResult<AgentTask>> {
   if (column === 'planned') {
-    return fail(403, 'Handing a task to Hermes is Noah\'s choice: he moves it on the Kanban page. An agent parks a task (backlog), claims it (ongoing) or finishes it (done).');
+    return fail(403, 'Handing a task to Hermes is the user\'s choice: they move it on the Kanban page. An agent parks a task (backlog), claims it (ongoing) or finishes it (done).');
   }
   if (column === 'ongoing') return claimTask(h, caller, idOrPrefix);
   if (column === 'done') return completeTask(h, caller, idOrPrefix, `Moved to done by ${caller.name || caller.agentId}.`);
@@ -604,7 +604,7 @@ export function handOffNote(task: AgentTask, by: KanbanCaller): { message: strin
 /** A task that landed on a project, told to its orchestrator as the agent that filed it. One line. */
 export function landingNote(filer: KanbanCaller, task: AgentTask): { message: string; sender: MessageSender } {
   return {
-    message: `Filed a task on this project's Kanban board: ${envelopeValue(task.title)} (${task.id}). It is parked, and Hermes will not take it. Hand it to one of your agents with assign_task (task_id ${task.id}, agent_id), or leave it for Noah.`,
+    message: `Filed a task on this project's Kanban board: ${envelopeValue(task.title)} (${task.id}). It is parked, and Hermes will not take it. Hand it to one of your agents with assign_task (task_id ${task.id}, agent_id), or leave it for the user.`,
     sender: { kind: 'agent', id: filer.agentId, name: filer.name },
   };
 }

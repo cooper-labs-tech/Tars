@@ -8,7 +8,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * An agent created on a worktree gets its project's dependencies as a clone
- * (Noah's choice 17, 05/10), in the real app: the window's agent:create on a
+ * (JeanBrasse's choice 17, 05/10), in the real app: the window's agent:create on a
  * project whose node_modules was installed for the worktree's lock, at its
  * root and in a sub-package. Each agent used to run its own `npm ci` into its
  * worktree (46 GB in .worktrees on 01/10).

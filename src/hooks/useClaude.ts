@@ -180,7 +180,7 @@ function fromPayload(prev: ClaudeData | null, result: Record<string, unknown>): 
  * Extensions or Agents asked main again, showed its loading state until the
  * answer came, and polled on its own. Main keeps its answer a minute
  * (claude-service's STATS_TTL_MS, the transcript scan's CACHE_TTL); past that,
- * the next read is a whole transcript scan, 2656 to 3270 ms on Noah's machine,
+ * the next read is a whole transcript scan, 2656 to 3270 ms on JeanBrasse's machine,
  * and it was the page being opened that waited for it.
  *
  * Now there is one read in flight at a time, what is known shows at once, and

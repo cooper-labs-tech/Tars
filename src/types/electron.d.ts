@@ -665,7 +665,7 @@ export interface OverseerMessage {
   text: string;
   action: OverseerAction | null;
   /** Set when this message is an unprompted watch-timer check-in rather
-   *  than a reply to something Noah asked. */
+   *  than a reply to something JeanBrasse asked. */
   isBriefing?: boolean;
   timestamp: string;
   /** Files sent with this message, kept beside the text so the bubble can

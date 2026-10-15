@@ -65,12 +65,12 @@ describe('the Slack members the bot answers', () => {
   });
 
   it.each([
-    ['a name', 'noah'],
+    ['a name', 'demo'],
     ['a channel ID', 'C0ABC123'],
     ['a bot ID', 'B0ABC123'],
     ['a letter and one character', 'U1'],
     ['a dash inside', 'U0AB-C1'],
-    ['an email address', 'noah@example.com'],
+    ['an email address', 'demo@example.com'],
   ])('refuses %s, saves nothing, and says why', (_what, text) => {
     const s = slack(['U0FIRST']);
     s.type(text);
@@ -89,7 +89,7 @@ describe('the Slack members the bot answers', () => {
 
   it('forgets the refusal as soon as the ID is typed again', () => {
     const s = slack([]);
-    s.type('noah');
+    s.type('demo');
     s.add();
     expect(s.said()).toContain('is not a member ID');
     s.type('U0');

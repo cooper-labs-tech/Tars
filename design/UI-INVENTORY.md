@@ -22,7 +22,7 @@ Until then, draw anything for the Chat in `chat-redesign-a.pen` and anything
 else in `tars-redesign.pen`.
 
 A third document, `design/chat-redesign-a.pen`, holds the Chat page's redesign:
-direction A, which Noah chose on 2026-09-17 (the thread first, the team folded
+direction A, which JeanBrasse chose on 2026-09-17 (the thread first, the team folded
 into the left column), with its composer, modeled on Claude's and ChatGPT's. The
 Chat implements it since #165 (merged 2026-09-24): the room and Hermes pages in
 every state a user can meet, sheets for the team, the thread, Hermes, the
@@ -43,7 +43,7 @@ custom dashboard boards, the sidebar collapse) is deliberately absent.
 
 ## Chats per project: the new shell behind a switch, and what is still drawn only
 
-Noah's direction of 2026-10-07: a project keeps its team (the orchestrator and its
+JeanBrasse's direction of 2026-10-07: a project keeps its team (the orchestrator and its
 agents), and you open several chats in it, each a conversation with the orchestrator
 on one topic, all served by the same team, several at once. The current Chat stays as
 it is, as the super orchestrator's space, and the chats are added beside it.
@@ -52,7 +52,7 @@ it is, as the super orchestrator's space, and the chats are added beside it.
 2.0.0, frontend brief of 12/10). Since 2.0.0 that row shows to everyone, off by default:
 the preview. Before, it showed only once `"newInterface": true` in
 `~/.dorothy/app-settings.json` had turned the preview on, so that whoever did could turn
-it off (Noah, 12/10). Off, the app draws exactly as before. On:
+it off (JeanBrasse, 12/10). Off, the app draws exactly as before. On:
 
 | Surface | Frames |
 |---|---|

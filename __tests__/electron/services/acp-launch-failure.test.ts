@@ -7,12 +7,12 @@ import * as path from 'node:path';
  * An agent that cannot be launched fails the delegation. It does not reach the
  * top of the main process.
  *
- * Noah, 2026-09-18, in the installed app opened from the Dock: a window saying
+ * JeanBrasse, 2026-09-18, in the installed app opened from the Dock: a window saying
  * "Uncaught Exception: Error: spawn npx ENOENT", with the stack of
  * child_process. Two defects made it:
  * - the ACP launch ran `npx` with the app's own PATH, and an app opened from
  *   the Dock has launchd's, `/usr/bin:/bin:/usr/sbin:/sbin` (read from the
- *   environment of Noah's running Tars that day), where no npx lives. Every
+ *   environment of JeanBrasse's running Tars that day), where no npx lives. Every
  *   other launch of the main process adds what buildFullPath knows: the
  *   folders set in Settings > CLI Paths, nvm, /usr/local/bin;
  * - the session emitted the child's 'error' again, on itself, where nothing

@@ -37,7 +37,7 @@ interface AppSettings {
 const BLOCKED_DIRS = [
   ".ssh", ".gnupg", ".aws", ".claude", ".dorothy", ".config",
   ".kube", ".docker",
-  // What Tars keeps out of the agents' directory: Noah's conversation with
+  // What Tars keeps out of the agents' directory: JeanBrasse's conversation with
   // the super chat and the Hermes webhook secret. Blocking .dorothy alone made
   // them sendable again the moment they moved out of it.
   ".tars-private",

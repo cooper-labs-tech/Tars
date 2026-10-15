@@ -285,7 +285,7 @@ describe('QA #119: Amp paths the PR tests do not reach', () => {
   }, 60_000);
 });
 
-describe('one switch, and only the CLIs the fleet runs (Noah, 2026-09-23)', () => {
+describe('one switch, and only the CLIs the fleet runs (JeanBrasse, 2026-09-23)', () => {
   it.skipIf(cannotPlantPosixInstall())('U1 checks no CLI while "Check for updates" is off, says so once, and checks again once it is back on', async () => {
     const home = os.homedir();
     nativeClaude(home, '1.0.0');

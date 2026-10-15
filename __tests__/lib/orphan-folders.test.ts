@@ -48,7 +48,7 @@ import type { OrphanFolder } from '../../src/types/electron';
  *    as nothing; one of main's own sentences or a process's name is
  *    rewritten; a path inside the folder hides, turns or breaks the line,
  *    and so does a detail shown as main sent it, a process's name from lsof
- *    or /proc (written before the code, Noah's go of 07/10; that last case
+ *    or /proc (written before the code, JeanBrasse's go of 07/10; that last case
  *    added after it, at the Audit's gate of #345, and seen red on a mutant).
  */
 

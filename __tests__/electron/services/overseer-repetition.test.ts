@@ -10,10 +10,10 @@ import * as path from 'path';
  * prompt. What it did next was copy the filled in example that replaced the
  * placeholder, a plausible sentence about a sidebar width, and say that a
  * hundred and seventy eight times over twenty one hours, including straight
- * back at Noah every time he tried to talk to it. Every guard passed, because
+ * back at JeanBrasse every time he tried to talk to it. Every guard passed, because
  * every guard was about a shape of text and the problem is a behaviour.
  *
- * The fixture is Noah's real conversation, taken off his disk. These assert
+ * The fixture is JeanBrasse's real conversation, taken off his disk. These assert
  * that it comes unstuck, and that a healthy conversation is untouched, rather
  * than that some helper rejects one particular sentence.
  */
@@ -42,7 +42,7 @@ vi.mock('../../../electron/services/hermes-session', () => ({
   askLiveSession: async () => ({ ok: false, error: 'unavailable' }),
 }));
 
-/** The sentence Noah watched for a day. It is the example composeTurn used. */
+/** The sentence JeanBrasse watched for a day. It is the example composeTurn used. */
 const STUCK = 'Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.';
 
 let nextReply = 'the fleet is quiet';
@@ -80,13 +80,13 @@ function persisted(): { role: string; text: string }[] {
   return JSON.parse(fs.readFileSync(OVERSEER_FILE, 'utf-8')).messages ?? [];
 }
 
-/** Noah's conversation, exactly as it sat on his disk. */
-function seedNoahsConversation(): void {
+/** JeanBrasse's conversation, exactly as it sat on his disk. */
+function seedUsersConversation(): void {
   fs.copyFileSync(FIXTURE, OVERSEER_FILE);
 }
 
 /**
- * Noah's conversation with the stuck sentence swapped for one nothing knows
+ * JeanBrasse's conversation with the stuck sentence swapped for one nothing knows
  * about.
  *
  * His actual sentence is now refused by name, because it was the example
@@ -104,7 +104,7 @@ function seedTheSameShapeWithNewWords(): void {
     m.text === STUCK ? { ...m, text: NOVEL } : m
   ));
   // The fixture is a day old on disk. The last turn is stamped as just now,
-  // which is how the loop looked while Noah was watching it: the newest repeat
+  // which is how the loop looked while JeanBrasse was watching it: the newest repeat
   // had arrived minutes ago.
   const last = raw.messages[raw.messages.length - 1];
   last.timestamp = new Date().toISOString();
@@ -152,16 +152,16 @@ beforeEach(async () => {
   overseer = await import('../../../electron/services/overseer');
 });
 
-describe("Noah's stuck conversation", () => {
+describe("JeanBrasse's stuck conversation", () => {
   it('really is stuck, which is the precondition for the rest', () => {
-    seedNoahsConversation();
+    seedUsersConversation();
     const texts = persisted().filter(m => m.role === 'overseer').map(m => m.text);
 
     expect(texts.filter(t => t === STUCK).length).toBeGreaterThan(150);
   });
 
   it('stops being recited back to the model', async () => {
-    seedNoahsConversation();
+    seedUsersConversation();
 
     await overseer.askOverseer('ca dit quoi?');
 
@@ -195,7 +195,7 @@ describe("Noah's stuck conversation", () => {
   }, 30000);
 
   it('loses nothing from the disk in the process', async () => {
-    seedNoahsConversation();
+    seedUsersConversation();
     const before = persisted().length;
 
     await overseer.askOverseer('ca dit quoi?');
@@ -207,7 +207,7 @@ describe("Noah's stuck conversation", () => {
   }, 30000);
 
   it('does not record the same answer once more, and says so instead', async () => {
-    seedNoahsConversation();
+    seedUsersConversation();
     nextReply = JSON.stringify({ say: STUCK, action: null });
 
     const result = await overseer.askOverseer('ca dit quoi?');
@@ -223,7 +223,7 @@ describe("Noah's stuck conversation", () => {
   }, 30000);
 
   it('accepts a genuinely new answer on the very next turn', async () => {
-    seedNoahsConversation();
+    seedUsersConversation();
     nextReply = JSON.stringify({ say: 'Backend errored on the schema migration ten minutes ago and nothing has picked it up.', action: null });
 
     const result = await overseer.askOverseer('ca dit quoi?');
@@ -303,7 +303,7 @@ describe('an overseer that is still allowed to talk', () => {
 
 describe('the fleet as it is now', () => {
   it('is put after the conversation, so it reads last before the question', async () => {
-    seedNoahsConversation();
+    seedUsersConversation();
     putAgent('running');
 
     await overseer.askOverseer('ca dit quoi?');
@@ -311,7 +311,7 @@ describe('the fleet as it is now', () => {
     const prompt = promptsSent[promptsSent.length - 1];
     // A day of history used to sit between the snapshot and the question.
     expect(prompt.indexOf('=== FLEET SNAPSHOT')).toBeGreaterThan(prompt.indexOf('=== CONVERSATION SO FAR'));
-    expect(prompt.indexOf('=== FLEET SNAPSHOT')).toBeLessThan(prompt.indexOf('=== NOAH ==='));
+    expect(prompt.indexOf('=== FLEET SNAPSHOT')).toBeLessThan(prompt.indexOf('=== USER ==='));
   }, 30000);
 
   it('is labelled as now, and the conversation as the past', async () => {
@@ -338,7 +338,7 @@ describe('the example in the prompt', () => {
     // something there to copy is.
     expect(instructions).not.toContain('sidebar width for eleven minutes');
     expect(instructions).not.toContain('{"say"');
-    expect(instructions).not.toContain('<what you tell Noah');
+    expect(instructions).not.toContain('<what you tell JeanBrasse');
   }, 30000);
 
   it('is refused if it comes back anyway', () => {
@@ -357,7 +357,7 @@ describe('the example in the prompt', () => {
  * It has moved since this was first pinned, in two directions, and both moves
  * are the point of the change. The refusal now applies only to a check-in
  * nobody asked for, and only while the thing it repeats is recent. A question
- * from Noah always gets an answer, because handing him an error instead is the
+ * from JeanBrasse always gets an answer, because handing him an error instead is the
  * exact thing he could not get past, and the same answer to the same question
  * is an answer when nothing has moved.
  */
@@ -388,14 +388,14 @@ describe('the repetition boundary', () => {
   it('lets the same observation through once it has stood for long enough', async () => {
     putAgent('waiting');
     // Still blocked an hour later is not a repetition, it is the news that it
-    // has not moved. This used to be refused, which is what Noah lost.
+    // has not moved. This used to be refused, which is what JeanBrasse lost.
     seedAged(X, 61);
     nextReply = JSON.stringify({ say: X, action: null });
 
     expect((await overseer.askOverseer('fleet change', { isBriefing: true })).ok).toBe(true);
   }, 30000);
 
-  it('answers Noah even when the answer has not changed', async () => {
+  it('answers JeanBrasse even when the answer has not changed', async () => {
     putAgent('waiting');
     seedAged(X, 3);
     nextReply = JSON.stringify({ say: X, action: null });
@@ -407,7 +407,7 @@ describe('the repetition boundary', () => {
 
   // The window itself, not somewhere either side of it. 3 and 61 minutes hold
   // whatever the constant is; these two fail if it moves, which is the point:
-  // thirty minutes was chosen against Noah's own gaps (median 2.6 min between
+  // thirty minutes was chosen against JeanBrasse's own gaps (median 2.6 min between
   // repeats, 9 of 291 above the window) and a later change to it should have
   // to be deliberate.
   it('still refuses one minute inside the window', async () => {

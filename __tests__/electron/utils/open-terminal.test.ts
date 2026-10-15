@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { openTerminal, LINUX_TERMINALS, type OpenTerminalDeps } from '../../../electron/utils/open-terminal';
 
 /**
- * shell:open-terminal on Linux (Noah, 2026-09-24: "l'app doit rester
+ * shell:open-terminal on Linux (JeanBrasse, 2026-09-24: "l'app doit rester
  * compatible linux"). It ran osascript whatever the platform, which on Linux is
  * "spawn osascript ENOENT": the button did nothing and said so in words nobody
  * could act on.

@@ -1,5 +1,5 @@
 /**
- * What Noah has typed into an agent's input field and not sent, as far as Tars
+ * What JeanBrasse has typed into an agent's input field and not sent, as far as Tars
  * can know it from the keys it relays.
  *
  * Every key typed into an agent's terminal passes through the main process
@@ -10,7 +10,7 @@
  * safe answer and guessing is the unsafe one.
  *
  * Every rule below was measured on Claude Code 2.1.273 in a real terminal,
- * `tui: fullscreen` as Noah runs it, keys sent the way xterm sends them, and
+ * `tui: fullscreen` as JeanBrasse runs it, keys sent the way xterm sends them, and
  * what each submission carried read from its UserPromptSubmit hook (2026-09-18):
  * - Left and Right move over the whole text, newlines included; Home, End,
  *   Ctrl+A and Ctrl+E stop at the current line; Backspace joins lines.
@@ -297,7 +297,7 @@ export function confirmSubmitted(d: Draft): Draft {
  *
  * The caret goes to the end first, then Backspace takes every character: both
  * cross newlines. Deliberately neither Ctrl+U nor Ctrl+C. Ctrl+U stops at the
- * current line and fills the kill ring Noah may be using, and Ctrl+C on a
+ * current line and fills the kill ring JeanBrasse may be using, and Ctrl+C on a
  * field that turned out to be empty arms "press again to exit".
  */
 export function clearKeys(d: Draft): string {
@@ -311,7 +311,7 @@ export function clearKeys(d: Draft): string {
  * `[Pasted text #N]`, and a single write of 1000 characters is folded as well,
  * markers or not. Written in pieces of 100, 1000 characters stayed inline.
  * Newlines go in as Option+Enter, the only form that always inserts one. The
- * caret is then walked back to where Noah left it.
+ * caret is then walked back to where JeanBrasse left it.
  */
 export function restoreKeys(d: Draft, piece = 100): string[] {
   const writes: string[] = [];

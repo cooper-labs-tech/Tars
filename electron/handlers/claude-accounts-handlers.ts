@@ -199,7 +199,7 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
 
   /**
    * After a login: the same Claude account in two directories is refused
-   * (Noah, 28/09). The directory just signed in is signed out again, by Claude
+   * (JeanBrasse, 28/09). The directory just signed in is signed out again, by Claude
    * Code, and the page is told which account already has it.
    */
   async function afterLogin(accountId: string): Promise<void> {

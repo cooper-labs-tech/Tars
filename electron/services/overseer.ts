@@ -32,13 +32,13 @@
  *      the answer comes back - and only a real, currently-known agent
  *      resolves to a target at all.
  *   3. sendToAgent() calls resolveTarget() again, and confirmPendingAction()
- *      calls it a third time immediately before writing, because Noah's
+ *      calls it a third time immediately before writing, because JeanBrasse's
  *      approval can land minutes after the proposal and the fleet can have
  *      changed in between.
  *   4. Nothing is written until confirmPendingAction() is called with
- *      approve:true - which only happens when Noah presses send in the UI.
+ *      approve:true - which only happens when JeanBrasse presses send in the UI.
  * The model never picks the destination. It names an id, Tars resolves it
- * (repeatedly, at the point that matters), and Noah confirms. That is what
+ * (repeatedly, at the point that matters), and JeanBrasse confirms. That is what
  * makes writing to the wrong CLI impossible rather than merely unlikely.
  */
 

@@ -8,14 +8,14 @@ import { canonicalReleaseDir, main } from '../scripts/prune-releases.mjs';
 
 /**
  * Keeping the last two builds and deleting the rest, and only what GitHub
- * proves published. Two, not three: Noah's rule of 2026-10-01, the 1.9.2
+ * proves published. Two, not three: JeanBrasse's rule of 2026-10-01, the 1.9.2
  * release left three in release/.
  *
  * electron-builder never cleans up, so release/ reached 6.3GB across thirteen
  * versions. The part that has to be right first is the ordering: a string sort
  * puts 1.6.9 above 1.6.10 and would delete the newest build in the directory.
  * Then what may be deleted at all: on 16/09 the purge ran in a worktree's
- * release/ instead of the one Noah opens, and it would have deleted the last
+ * release/ instead of the one JeanBrasse opens, and it would have deleted the last
  * copy of 1.6.19, which had never been published.
  *
  * gh is a fake on the PATH throughout. No test reaches GitHub or the real

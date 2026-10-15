@@ -74,7 +74,7 @@ function seedJournal() {
     savedAt: '2026-09-17T00:00:00.000Z',
     memberOverrides: {},
     threads: [{ id: 't1', roomId: 'project:/tars', anchorMessageId: 'm1', state: 'open', round: 1, agentMessageCount: 0, openedAt: '2026-09-17T00:00:00.000Z' }],
-    messages: [{ id: 'm1', roomId: 'project:/tars', threadId: 't1', authorKind: 'human', authorId: 'human', authorName: 'Noah', text: 'seeded', mentions: [], createdAt: '2026-09-17T00:00:00.000Z' }],
+    messages: [{ id: 'm1', roomId: 'project:/tars', threadId: 't1', authorKind: 'human', authorId: 'human', authorName: 'User', text: 'seeded', mentions: [], createdAt: '2026-09-17T00:00:00.000Z' }],
     deliveries: [],
   }, null, 2));
 }

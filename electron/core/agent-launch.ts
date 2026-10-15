@@ -293,7 +293,7 @@ export function dialogOpen(agent: {
   // Refused, with "No" or Esc: Claude Code sends no hook for it, and records
   // "[Request interrupted by user" in the transcript. An interrupt recorded
   // since the dialog opened closes it (the Audit's gate of #174: without this
-  // the agent stayed deaf until Noah typed in it). Without a time the dialog
+  // the agent stayed deaf until JeanBrasse typed in it). Without a time the dialog
   // opened at, it stays open: the safe side.
   const since = agent.dialogSince ? Date.parse(agent.dialogSince) : NaN;
   if (!Number.isFinite(since)) return true;

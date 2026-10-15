@@ -6,7 +6,7 @@ import * as path from 'node:path';
 /**
  * An orchestrator told "is now waiting" about an agent that had just started.
  *
- * Noah's report of 2026-09-18 (faux-waiting-2b86): the orchestrator of
+ * JeanBrasse's report of 2026-09-18 (faux-waiting-2b86): the orchestrator of
  * 1212-Capital delegated a task to 1212-Backend and was told at once, in its
  * own terminal, that 1212-Backend "is now waiting", while it had only begun.
  * What the logs of that evening show, and what each case below replays:
@@ -208,7 +208,7 @@ function typedInto(terminal: FakePty): string[] {
 /** Everything Tars typed into the orchestrator's terminal. */
 const toldOrchestrator = () => typedInto(orchestratorTerminal);
 
-/** The desktop notifications that say an agent is waiting on Noah. */
+/** The desktop notifications that say an agent is waiting on JeanBrasse. */
 function desktopSaysWaiting(): string[] {
   return vi.mocked(ctx.sendNotificationCallback).mock.calls
     .map(([title]) => String(title))
@@ -243,7 +243,7 @@ async function idlePrompt(session = sid('sess-be')) {
 const permissionAsked = () => status('be', sid('sess-be'), { status: 'waiting', waiting_reason: 'permission' });
 
 /** The orchestrator's own turn, which decides when a held note may go out. */
-const orchestratorWorks = () => status('orch', sid('sess-orch'), { status: 'running', event: 'UserPromptSubmit', current_task: 'Noah asked for BotID' });
+const orchestratorWorks = () => status('orch', sid('sess-orch'), { status: 'running', event: 'UserPromptSubmit', current_task: 'JeanBrasse asked for BotID' });
 const orchestratorStops = () => status('orch', sid('sess-orch'), { status: 'idle' });
 
 /** post-tool-use.sh: a tool ran, so the agent is working, a permission answered. */
@@ -291,7 +291,7 @@ describe('the idle prompt of a rest that is already over', () => {
 
     expect(backend().status, 'an idle prompt raised before the work arrived put the working agent back to waiting').toBe('running');
     expect(toldOrchestrator().slice(toldBefore), 'the orchestrator was told an agent that had just been handed work is waiting').toEqual([]);
-    expect(desktopSaysWaiting(), 'Noah was told the agent is waiting while it had just been handed work').toEqual([]);
+    expect(desktopSaysWaiting(), 'JeanBrasse was told the agent is waiting while it had just been handed work').toEqual([]);
 
     run.settle({ ok: true, transport: 'acp', text: 'BotID is on', toolCalls: [] } as AcpOutcome);
     await run.answered;
@@ -332,7 +332,7 @@ describe('the idle prompt of a rest that is already over', () => {
     await pause(IDLE_PROMPT_AFTER_MS);
     const toldBefore = toldOrchestrator().length;
 
-    // Noah types into the agent's terminal at the minute. Nothing goes
+    // JeanBrasse types into the agent's terminal at the minute. Nothing goes
     // through the API: the turn itself is the only sign of the work.
     await turnStarts('a question of my own');
     await idlePrompt();
@@ -360,7 +360,7 @@ describe('the idle prompt of a rest that is already over', () => {
     expect(notes[0], 'the end of the work was told as a wait').toContain('finished');
     expect(desktopSaysWaiting()).toHaveLength(1);
 
-    // That was the end of the work handed over: a turn Noah types in its
+    // That was the end of the work handed over: a turn JeanBrasse types in its
     // terminal afterwards is nobody's delegation.
     await pause(60_000);
     await turnStarts('a question of my own');
@@ -509,7 +509,7 @@ describe('an agent that finished and then sat at its prompt for a minute', () =>
     await pause(5 * 60_000);
     const toldBefore = toldOrchestrator().length;
 
-    // Noah types into the agent's terminal himself. Nothing goes through the API.
+    // JeanBrasse types into the agent's terminal himself. Nothing goes through the API.
     await turnStarts('a question of my own');
     await pause(20_000);
     await turnEnds('an answer');
@@ -579,7 +579,7 @@ describe('a note held while the orchestrator was busy', () => {
     await permissionAsked();
     await pause(10_000);
 
-    // Noah answers the dialog in the terminal; the tool runs.
+    // JeanBrasse answers the dialog in the terminal; the tool runs.
     await toolRan();
     await orchestratorStops();
     await pause(500);
@@ -609,7 +609,7 @@ describe('an orchestrator that cannot be reached when the work ends', () => {
     orchestrator.ptyId = 'pty-orch-2';
     orchestrator.currentSessionId = sid('sess-orch-2');
 
-    // Noah types into the agent's terminal himself.
+    // JeanBrasse types into the agent's terminal himself.
     await pause(5 * 60_000);
     await turnStarts('a question of my own');
     await pause(20_000);
@@ -626,7 +626,7 @@ describe('an orchestrator that cannot be reached when the work ends', () => {
  * The note, and the long poll, saying the same thing twice.
  *
  * `delegate_task` falls back to `/dispatch` plus `GET /wait` whenever ACP
- * cannot start, which on Noah's machine is every time. The orchestrator is
+ * cannot start, which on JeanBrasse's machine is every time. The orchestrator is
  * then sitting in that poll when the turn ends, so it is told twice: the poll
  * answers, and 375 ms later the note is typed into its terminal, which costs
  * it a whole turn to read something it already has. The QA measured 35 s of

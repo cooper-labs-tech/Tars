@@ -328,7 +328,7 @@ describe('the hook routes take the terminal\'s token and no other token its agen
   });
 });
 
-describe('the super chat, which is Noah driving every project', () => {
+describe('the super chat, which is JeanBrasse driving every project', () => {
   it('reaches an agent of any project, through its own code and its own request', async () => {
     const beta = agents.get(BETA.id)!;
     const terminal = liveTerminal(beta);
@@ -336,7 +336,7 @@ describe('the super chat, which is Noah driving every project', () => {
     const result = await overseer.sendToAgent(BETA.id, 'ship the thing');
 
     expect(result, JSON.stringify(result)).toEqual({ success: true, mode: 'message' });
-    // Not "a 200 came back": the words Noah typed reached the terminal.
+    // Not "a 200 came back": the words JeanBrasse typed reached the terminal.
     expect(terminal.written.join('')).toContain('ship the thing');
   });
 
@@ -417,7 +417,7 @@ describe('the super chat, to an agent whose launch is slow (the Database Enginee
   //
   // How this fails, written before the code:
   // 1. The super chat gives up on its request before /dispatch answers, and
-  //    tells Noah the message failed while it is typed a moment later.
+  //    tells JeanBrasse the message failed while it is typed a moment later.
   // 2. It reports a bare "timeout" where /dispatch said the CLI is still
   //    starting and nothing was typed.
   afterEach(async () => { (await import('../../../electron/core/agent-launch')).resetLaunches(); });
@@ -514,7 +514,7 @@ describe('Hermes, the one caller published off this machine', () => {
   it('is not opened by an agent\'s own token, nor by Tars\'s pass', async () => {
     // The route's own check, which the door reaching it does not replace: this
     // is the one route that takes an agent id from the body without scoping,
-    // because the one caller it is for is Noah's scheduler.
+    // because the one caller it is for is JeanBrasse's scheduler.
     provisionWebhookSecret();
     const beta = agents.get(BETA.id)!;
     const terminal = liveTerminal(beta);
@@ -672,13 +672,13 @@ describe('an agent reporting to the agent that leads it', () => {
     // Any agent that handed it work leads it for that work, role or not.
     orchestrator.role = undefined;
     worker.requestedBy = { agentId: orchestrator.id, ptyId: worker.ptyId! };
-    const askedByNoah = { agentId: ALPHA.id, ptyId: orchestrator.ptyId! };
-    orchestrator.requestedBy = { ...askedByNoah };
+    const askedByUser = { agentId: ALPHA.id, ptyId: orchestrator.ptyId! };
+    orchestrator.requestedBy = { ...askedByUser };
 
     const { status, body } = await call('POST', `/api/agents/${orchestrator.id}/message`, bearer(workerToken), { message: 'done, PR #301 is up' });
 
     expect(status, JSON.stringify(body)).toBe(200);
-    expect(orchestrator.requestedBy, 'the worker became its own orchestrator\'s requester').toEqual(askedByNoah);
+    expect(orchestrator.requestedBy, 'the worker became its own orchestrator\'s requester').toEqual(askedByUser);
   });
 
   it("2. answering its project's orchestrator, with no link, makes none", async () => {
@@ -856,11 +856,11 @@ describe('/run-task, the delegation that answers with what the agent did', () =>
 });
 
 /**
- * POST /api/user/ask, what ask_user calls: an agent asks Noah on Telegram, and
+ * POST /api/user/ask, what ask_user calls: an agent asks JeanBrasse on Telegram, and
  * his answer is typed into its terminal (step 2 of the relay plan).
  *
  * How it fails, written before the code (2026-09-28):
- * 1. The shared token asks, as nobody: a question Noah would read as an
+ * 1. The shared token asks, as nobody: a question JeanBrasse would read as an
  *    agent's, and whose answer would go into no terminal, or into any.
  * 2. A delegated run's token asks: the run is one turn and has no terminal
  *    his answer could be typed into.
@@ -898,7 +898,7 @@ describe('POST /api/user/ask', () => {
     expect(String(body.error)).toMatch(/Hermes/);
   });
 
-  it('5. refuses a worker\'s own terminal token: only a project\'s orchestrator asks the user (Noah, 2026-10-01)', async () => {
+  it('5. refuses a worker\'s own terminal token: only a project\'s orchestrator asks the user (JeanBrasse, 2026-10-01)', async () => {
     const { status, body } = await ask(alphaToken, { question: 'Staging or prod?' });
     expect(status, JSON.stringify(body)).toBe(403);
     expect(String(body.error)).toMatch(/orchestrator/);

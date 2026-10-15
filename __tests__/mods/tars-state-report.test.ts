@@ -25,7 +25,7 @@
  *    timer or a background task is put to sleep, which loses both.
  * 6. It counts them otherwise than on-stop.sh: a finished task counted, or a
  *    count sent when Claude Code sent no lists (nothing is known then).
- * And mods step 4 (Noah's go): each turn's usage, for the task ledger.
+ * And mods step 4 (JeanBrasse's go): each turn's usage, for the task ledger.
  * 7. A turn's usage (turn.complete) is not posted, or without its session, or
  *    ahead of the Stop's posts that came before it.
  * 8. The event is not handed on unchanged, or a turn.complete with no usage

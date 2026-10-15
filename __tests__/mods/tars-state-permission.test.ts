@@ -43,7 +43,7 @@
  *    asked of Tars, the terminal's dialog shows it whole.
  * 11. (Low) Claude Code's rule is not sent: in bypass it is the only reason
  *    Tars is asked.
- * And from the Audit's recheck (GATE-PR318-320-RECHECK.md), agreed by Noah
+ * And from the Audit's recheck (GATE-PR318-320-RECHECK.md), agreed by JeanBrasse
  * on 05/10:
  * 12. A tool that carries content (Edit, Write, NotebookEdit) is asked of
  *    Tars, which shows its path and never its content: an allow there would

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { startFakeRelay, type FakeRelay } from '../../fixtures/fake-tars-relay';
 
 /**
- * Where the user's replies from Telegram go, through the relay (DESIGN-RELAIS-HERMES-V2.md, step 2, and Noah's rule of
+ * Where the user's replies from Telegram go, through the relay (DESIGN-RELAIS-HERMES-V2.md, step 2, and JeanBrasse's rule of
  * 2026-10-01: only a project's orchestrator talks to Hermes, and gets the user's replies).
  *
  * How this can fail, written before the code:
@@ -22,7 +22,7 @@ import { startFakeRelay, type FakeRelay } from '../../fixtures/fake-tars-relay';
  *    "@name" only for a project Tars registered).
  * 7. A project whose folder name holds a space is left out of what the plugin is told, so that the user can never
  *    write to it (the Audit's Low on #285): it is told, and reached, under its name with a dash in each space.
- * 8. The user is not told what became of a message handed on (Noah's answer 24 of 2026-10-05): no receipt, a long
+ * 8. The user is not told what became of a message handed on (JeanBrasse's answer 24 of 2026-10-05): no receipt, a long
  *    one, a reaction instead of a line, a receipt that says passed while the message waits without saying for what
  *    (what is typed in the terminal, or a dialog), or "passed" for a message the terminal refused.
  *

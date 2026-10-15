@@ -8,7 +8,7 @@ import { endWorkerRequests } from './task-requests';
 
 /**
  * Stopping an agent: it is ended, and it says who stopped it, when and why
- * (PLAN-1.9.2.md item A, Noah 28/09).
+ * (PLAN-1.9.2.md item A, JeanBrasse 28/09).
  *
  * A stop sent the terminal's shell its hangup and marked the agent `idle`.
  * Measured: on 28/09 two frozen CLIs survived stop_agent, reparented to
@@ -79,8 +79,8 @@ export async function stopAgent(
 }
 
 /**
- * A start that undoes a stop, noted beside the stop it undid (Noah, 05/10: an
- * orchestrator may start again an agent Noah stopped, whenever it needs to, a
+ * A start that undoes a stop, noted beside the stop it undid (JeanBrasse, 05/10: an
+ * orchestrator may start again an agent JeanBrasse stopped, whenever it needs to, a
  * scheduled task too). Kept on the agent until the next one; nothing when the
  * agent was not stopped. Called just before clearStop.
  */

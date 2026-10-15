@@ -9,7 +9,7 @@ vi.mock('react', async (importOriginal) => ({
 }));
 
 /**
- * The Review page's own side of Noah's "the Review page only half works"
+ * The Review page's own side of JeanBrasse's "the Review page only half works"
  * (01/10), from the Audit's DIAG-REVIEW.md. Frames: Review · dark, Review ·
  * light and Review · states, in design/tars-redesign.pen. The pure parts, the
  * list and the cut, are pinned in __tests__/lib/review.test.ts. Written before

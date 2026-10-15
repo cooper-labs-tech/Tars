@@ -8,7 +8,7 @@ import { EventEmitter } from 'node:events';
  * run on the agent's model and effort, and a change to either applies by
  * itself, at a moment that cuts nothing.
  *
- * What happened on 2026-09-22 with 1.7.9: Noah moved every agent to Opus 5.5
+ * What happened on 2026-09-22 with 1.7.9: JeanBrasse moved every agent to Opus 5.5
  * in the Agents page. The CLIs went on running the old model, and the ones he
  * relaunched from the Dashboard came back on the model their previous session
  * had answered on: Opus 5 for four Tars agents and five Parallel ones, Opus
@@ -462,7 +462,7 @@ describe('a changed model or effort', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(terminal.kill, 'the terminal was killed with a draft in it').not.toHaveBeenCalled();
 
-    // Noah deletes what he typed, character by character.
+    // JeanBrasse deletes what he typed, character by character.
     for (let i = 0; i < 'je pense quil faut'.length; i++) writeHumanInput(terminal as never, '\x7f');
     await vi.advanceTimersByTimeAsync(4_000);
     expect(terminal.kill, 'restarted less than five seconds after the last key').not.toHaveBeenCalled();
@@ -531,7 +531,7 @@ describe('a changed model or effort', () => {
   });
 
   it('drops a waiting restart once the agent was launched again on the new values', async () => {
-    // Noah, impatient, stops and starts the agent himself while its restart
+    // JeanBrasse, impatient, stops and starts the agent himself while its restart
     // waits for the turn to end. The start already reads the new model.
     const { agent, terminal } = agentWithTerminal({ foreground: '2.1.280', status: 'running', model: 'claude-opus-5' });
     await update({ id: agent.id, model: 'claude-opus-5-5' });
@@ -618,7 +618,7 @@ describe('a changed model or effort', () => {
   });
 
   it('restarts on a changed permission mode, and launches on the new one', async () => {
-    // Noah's own sequence on 2026-09-22: the model, the effort and the bypass
+    // JeanBrasse's own sequence on 2026-09-22: the model, the effort and the bypass
     // level edited together. The app applied all three; no test said so for
     // the third.
     const { agent, terminal } = agentWithTerminal({ foreground: '2.1.280', permissionMode: 'bypass' });

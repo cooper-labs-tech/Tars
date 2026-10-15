@@ -7,7 +7,7 @@ import { APP_SETTINGS_FILE, DATA_DIR } from '../../../electron/constants';
 import { hasPosixModes } from '../../setup/platform-limits';
 
 /**
- * The Sentry token, out of agents' reach (the Audit's #242 and #292 gates): it reads Noah's Sentry organisation, user
+ * The Sentry token, out of agents' reach (the Audit's #242 and #292 gates): it reads JeanBrasse's Sentry organisation, user
  * reports included, and ~/.dorothy, where app-settings.json lives, is in every agent's --add-dir. It is kept in
  * ~/.tars-private, as the Hermes token is since 1.9.2, and the settings in memory still carry it, so the triage and
  * the Settings page read it where they did.

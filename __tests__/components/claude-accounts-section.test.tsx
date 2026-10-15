@@ -18,7 +18,7 @@ vi.mock('react', async (importOriginal) => ({
  *    and a flip sends anything but setEnabled with the other value;
  * 2. it does not say that each account signs in through Claude Code itself,
  *    that Tars never sees the sign-in, and that each account must be your own
- *    and its limits are Anthropic's (Audit B4, closed by Noah on that line);
+ *    and its limits are Anthropic's (Audit B4, closed by JeanBrasse on that line);
  * 3. with the option off, the accounts or the thresholds show;
  * 4. with it on, an account is missing, out of the order main gives, or its
  *    row is told the wrong place, the wrong thresholds, or offers to remove

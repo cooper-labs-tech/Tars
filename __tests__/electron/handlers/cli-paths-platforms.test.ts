@@ -127,7 +127,7 @@ afterEach(() => {
 
 // ── win32 ─────────────────────────────────────────────────────────────────
 
-const HOME = 'C:\\Users\\Nico Las';
+const HOME = 'C:\\Users\\Sam Lee';
 const NPM = `${HOME}\\AppData\\Roaming\\npm`;
 const LOCAL_BIN = `${HOME}\\.local\\bin`;
 const SCOOP = `${HOME}\\scoop\\shims`;

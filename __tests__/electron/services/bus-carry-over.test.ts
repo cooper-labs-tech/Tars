@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 
 /**
- * A room message still waiting for its agent when Tars stopped (RD-REDEMARRAGE.md, 2.3; Noah's yes of 2026-10-05).
+ * A room message still waiting for its agent when Tars stopped (RD-REDEMARRAGE.md, 2.3; JeanBrasse's yes of 2026-10-05).
  * The journal kept its row as `queued` (or `held`, behind a draft that died with the terminal), but the queue that
  * would have typed it lived in agent-watch's memory: after the restart the row read `queued` for ever, and the agent
  * never got the message.
@@ -40,7 +40,7 @@ let ptyManager: typeof import('../../../electron/core/pty-manager');
 let events: typeof import('../../../electron/services/agent-events');
 
 const message = (id: string, text: string) => ({
-  id, roomId: 'room-tars', threadId: 'th-1', authorKind: 'human', authorId: 'human', authorName: 'Noah',
+  id, roomId: 'room-tars', threadId: 'th-1', authorKind: 'human', authorId: 'human', authorName: 'User',
   text, mentions: ['w'], createdAt: '2026-10-05T01:40:00.000Z',
 });
 const row = (messageId: string, state: string) => ({ messageId, targetAgentId: 'w', state, queuedAt: '2026-10-05T01:40:00.000Z' });

@@ -8,7 +8,7 @@ import type { AgentStatus } from '../../src/types/electron';
 import type { RoomAgent } from '../../src/hooks/useRoomAgents';
 
 /**
- * Why an agent is in error, where Noah looks for it.
+ * Why an agent is in error, where JeanBrasse looks for it.
  *
  * Since 1.7.0 `agent.error` holds the CLI's own sentence when a turn fails, and
  * only the Chat rail printed it, and only for an agent with no task. It now

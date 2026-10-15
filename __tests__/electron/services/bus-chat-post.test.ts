@@ -45,7 +45,7 @@ const put = (over: Partial<AgentStatus> & { id: string }) => {
   manager.agents.set(agent.id, agent);
   return agent;
 };
-const human = (roomId: string, text: string) => store.appendMessage({ roomId, authorKind: 'human', authorId: 'human', authorName: 'Noah', text });
+const human = (roomId: string, text: string) => store.appendMessage({ roomId, authorKind: 'human', authorId: 'human', authorName: 'User', text });
 
 beforeEach(async () => {
   vi.resetModules();

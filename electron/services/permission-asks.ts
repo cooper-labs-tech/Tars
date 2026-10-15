@@ -52,7 +52,7 @@ export type PermissionQuestion = {
  * answer kept for it are bound to it, not to the call's id alone, and every
  * decision names it: the agent's own shell holds the hook token and can read
  * its next call's id from its transcript, so a post for that id with `ls`
- * made Noah allow a `curl ... | sh` (the gate of #318, Medium 1).
+ * made JeanBrasse allow a `curl ... | sh` (the gate of #318, Medium 1).
  */
 export function questionFingerprint(tool: string, fields: Record<string, string>): string {
   return createHash('sha256').update(JSON.stringify([tool, Object.keys(fields).sort().map(k => [k, fields[k]])])).digest('hex');

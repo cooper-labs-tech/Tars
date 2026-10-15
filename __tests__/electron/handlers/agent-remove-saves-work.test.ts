@@ -1,6 +1,6 @@
 /**
  * The window's Delete saves an agent's uncommitted work before it removes the
- * agent's worktree (Noah, 05/10: "deleting an agent first saves its uncommitted
+ * agent's worktree (JeanBrasse, 05/10: "deleting an agent first saves its uncommitted
  * work on wip/<name>, without asking"). agent:remove ran
  * `git worktree remove --force`, and whatever was not committed went with it.
  *

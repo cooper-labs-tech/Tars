@@ -17,7 +17,7 @@ import type { IPty } from 'node-pty';
  * dialog is up. It was checked for a running CLI when it was handed over, and
  * not again when it finally went in: if the CLI stopped meanwhile, the text
  * went to the shell's prompt, where each newline runs a line as a command.
- * That is any held message: a teammate's, a Telegram one, Noah's answer.
+ * That is any held message: a teammate's, a Telegram one, JeanBrasse's answer.
  *
  * How it fails, written before the code (2026-09-28):
  * 1. The CLI stops while a message is held, and the message is typed into

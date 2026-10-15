@@ -380,7 +380,7 @@ async function withLock(repo, work) {
  * The main checkout on its default branch, clean, and fast-forwarded to
  * origin's: Tars shows an agent the branch of the folder it works in, and the
  * root sat on test/final-1.7.1 from 16/09 while everyone worked in
- * worktrees ("vraiment confusing", Noah, 01/10). Without an origin there is
+ * worktrees ("vraiment confusing", JeanBrasse, 01/10). Without an origin there is
  * nothing to fetch, and the local branch is the base.
  */
 async function freshMainCheckout(ctx, repo) {

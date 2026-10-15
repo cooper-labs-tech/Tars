@@ -6,7 +6,7 @@ the installed app.
 
 Target platform is macOS: `electron-builder` is invoked with `--mac` only, the code-signing
 config is `build/entitlements.mac.plist`, and the Tasmania integration reads a token out of
-`~/Library/Application Support/`. The code stays Linux compatible all the same (Noah,
+`~/Library/Application Support/`. The code stays Linux compatible all the same (JeanBrasse,
 2026-09-24): the CI runs the tests on ubuntu, and a macOS-only code path has a Linux one or
 fails cleanly.
 
@@ -175,7 +175,7 @@ npm run lint:design     # design guardrail, see below
 
 ## Tests and guardrails
 
-The rules are in CLAUDE.md, Workflow Rule 3, and they are Noah's (2026-09-23): a feature is
+The rules are in CLAUDE.md, Workflow Rule 3, and they are JeanBrasse's (2026-09-23): a feature is
 proven end to end in the real app, every E2E run leaves an artefact, a unit tested in isolation
 is written failures first, and the vitest suite stays as the regression net. Below, how to prove
 a feature, then the four gates. They do not overlap.
@@ -364,6 +364,32 @@ lot: the Kanban table was dead code, the provider colours and marks moved into
 `src/components/ui/`, the terminal theme reads the tokens, and the `theme-color` tag was
 removed after measuring that nothing in the app listens for it.
 
+### Private names: `npm run check:names`
+
+```bash
+node scripts/check-private-names.mjs              # every hit, the name masked
+node scripts/check-private-names.mjs --quiet      # exit code only
+```
+
+The repository is public, and the names that must never appear in it (real first names, e-mail
+addresses) cannot be written into a check without publishing them. So the list lives outside it,
+in `~/.tars-private/private-names.txt` (`TARS_PRIVATE_NAMES` names another file), one entry per
+line, `#` for a comment. Without that file the check says it checked nothing and passes: CI and
+contributors have no list. A list that names nobody fails it, and so does a tree git cannot list.
+
+It reads every file git tracks or would add (`git ls-files --cached --others
+--exclude-standard`), as it stands on disk, and its path, which is published as much. A single word is found where it stands as a word,
+in any case: in prose, and in an identifier or a path, where camelCase, SCREAMING_CASE,
+snake_case, a dash, a plural `s` or an escape such as `%5c` or `\n` ends it. Inside another word
+it is that word, so a hash in `package-lock.json` holds no name. Anything else, an e-mail address
+or two words, is found exactly as written. Binary files are counted, not read: look at the
+pictures. Exit 1 lists each hit as `file:line:column` with the name masked, so the report can be
+pasted into a PR.
+
+What replaces a name: JeanBrasse, or "the maintainer", in prose; a neutral home in a path
+(`/Users/demo`, `C:\Users\owner`, `C:\Users\Sam Lee` where a test needs a space); the user in
+anything Tars says to an agent, a model or the window.
+
 ### CI
 
 `.github/workflows/ci.yml` runs on PRs to `main` and pushes to `main`: `ubuntu-latest`,
@@ -376,7 +402,7 @@ visual.
 **It runs, and it is the only check made on Linux.** Measured on 2026-09-17, it had never run:
 Actions stay off on a fork until somebody enables them. They are on now, and
 `gh api repos/cooper-labs-tech/Tars/actions/runs` answered `total_count: 87` on 2026-09-24. Its result is
-part of every gate, because the code stays Linux compatible (Noah, 2026-09-24): a test that
+part of every gate, because the code stays Linux compatible (JeanBrasse, 2026-09-24): a test that
 passes on your Mac and fails there is a finding, not noise.
 
 ---
@@ -526,7 +552,7 @@ governs the CLI updates below.
 
 **`npm run release` is the only way a release is published.** Never `gh release create` by
 hand, never a script outside the repository, never a copy of the artifacts. On 16/09 all three
-happened: 1.7.0 and 1.7.1 were built in a worktree while the folder Noah opens stayed on 1.6.19,
+happened: 1.7.0 and 1.7.1 were built in a worktree while the folder JeanBrasse opens stayed on 1.6.19,
 the artifacts were copied instead of moved, and one version's `latest-mac.yml` was written over
 another's.
 
@@ -582,13 +608,13 @@ silently drops to the GitHub-API fallback.
 
 ### Which builds are kept
 
-**The kept folder is `release/` of the main checkout**, `~/tars/release/` on this machine, the one Noah
+**The kept folder is `release/` of the main checkout**, `~/tars/release/` on this machine, the one JeanBrasse
 opens. `scripts/prune-releases.mjs` finds it through git (the parent of
 `git rev-parse --git-common-dir`) from the main checkout or any worktree, and never uses
 `release/` of the current directory; tests name their folder with `--release-dir` or
 `TARS_RELEASE_DIR`.
 
-It keeps the **two newest versions** (Noah's rule, 2026-10-01) and deletes an older one **only when GitHub proves it
+It keeps the **two newest versions** (JeanBrasse's rule, 2026-10-01) and deletes an older one **only when GitHub proves it
 published**: a release `v<version>` on the repository of `build.publish` carrying its dmg and
 its zip, with the size and, where GitHub gives one, the `sha256` digest of the local files. A
 version that is not published, or published with other files, is kept and named. When the proof
@@ -723,12 +749,12 @@ to a CLI, and Tars makes it `0700` whichever write creates it:
 
 | Path | Written by | Contents |
 |---|---|---|
-| `~/.tars-private/overseer.json` | `electron/services/overseer.ts` | Noah's conversation with the super chat, plus the standing job id and the Chat's settings. Mode `0600`. Moved out of `~/.dorothy/overseer.json` at the first startup that finds it there: the copy is read back before the old file is deleted, an old file that will not parse is left exactly where it is and still read, and when both exist the private one wins and the old one is moved into the private directory rather than deleted |
+| `~/.tars-private/overseer.json` | `electron/services/overseer.ts` | JeanBrasse's conversation with the super chat, plus the standing job id and the Chat's settings. Mode `0600`. Moved out of `~/.dorothy/overseer.json` at the first startup that finds it there: the copy is read back before the old file is deleted, an old file that will not parse is left exactly where it is and still read, and when both exist the private one wins and the old one is moved into the private directory rather than deleted |
 | `~/.tars-private/hermes-webhook-secret` | `electron/services/hermes-webhook-secret.ts` (`provisionWebhookSecret`) | the bearer for `POST /api/webhooks/hermes` and the only credential that opens it: 32 random bytes hex, mode `0600`, minted the first time Settings > Hermes asks for it. Moved out of `~/.dorothy/hermes-webhook-secret` at the first startup that finds it there, value unchanged, so Hermes keeps working; read back before the old file is deleted, and while it cannot be moved the webhook opens to nobody. An old file found beside the private one opens nothing and is deleted |
 | `~/.tars-private/overseer-hermes-sessions.json` | `electron/services/overseer-store.ts` (`rememberHermesSessions`) | the ids of the Hermes sessions the super chat's turns ran in, the last 5000, mode `0600`: `memory_search` leaves them out, so no agent is handed the super chat through Hermes |
 | `~/.tars-private/claude-accounts.json` | `electron/handlers/claude-accounts-handlers.ts` | several Claude subscriptions: the option (off by default), each account's id and label, the thresholds. No credential and no folder: each account is the Claude Code folder `~/.claude-accounts/<id>`, derived from its id and signed in by `claude auth login`. `CLAUDE_CONFIG_DIR=<folder> claude auth status` says what Claude Code sees there. A file that does not parse freezes the list (every change refused, Settings says so) until it is fixed or removed; removing it leaves the folders signed in, so sign each out first with `CLAUDE_CONFIG_DIR=<folder> claude auth logout`. With the option on, Tars moves an unpinned agent to the account with most room when a limit cuts its turn (then types "Continue where you left off..." into the new session) or when a turn ends past a threshold, once per agent every ten minutes at most; each move is a `[claude-accounts] <agent>: moving from <id> to <id>` line in the main process log, and the blocks it sets are in memory only, gone at a restart of Tars |
 | `~/.tars-private/run-state.json` | `electron/services/run-state.ts` | this run's record, mode `0600`: `cleanExit: false` while it runs, `true` after a quit. Open at a launch means the last run stopped abruptly, and the agents in `working` are resumed with a note. Here because it says whom Tars starts: in `~/.dorothy`, any agent could have had any agent started at the next launch |
-| `~/.tars-private/task-texts.jsonl` | `electron/services/task-ledger.ts` | what each task of the task ledger said, `{ id, text }`, its first line, 200 characters at most, mode `0600`: Noah's typed prompts and the chat messages handed to orchestrators, which no agent is handed. Moved out of `~/.dorothy/task-ledger.jsonl` at the first start that finds texts there |
+| `~/.tars-private/task-texts.jsonl` | `electron/services/task-ledger.ts` | what each task of the task ledger said, `{ id, text }`, its first line, 200 characters at most, mode `0600`: JeanBrasse's typed prompts and the chat messages handed to orchestrators, which no agent is handed. Moved out of `~/.dorothy/task-ledger.jsonl` at the first start that finds texts there |
 | `~/.tars-private/task-results.jsonl` | `electron/services/task-ledger.ts` | what each delegated run over ACP answered, `{ id, result }`, 8,000 characters at most, mode `0600`, kept for the tasks the ledger keeps. `task_status` and `GET /api/tasks/:id` read it |
 | `~/.tars-private/request-receipts.jsonl` | `electron/services/request-receipts.ts` | one receipt per send made with a `clientRequestId`: caller, id, SHA-256 of the payload, the outcome's ids and states, time; never the text. Mode `0600`, rewritten whole at each write, entries older than 24 h dropped. Deleting it only forgets which retries were already answered |
 | `~/.tars-private/carry-over.json` | `electron/services/carry-over.ts` | what Tars owes agents (delegation and kanban notes), mode `0600`, given at their first rest after a restart. A carried kanban note is typed as from Tars, its first sender named inside it, quoted |
@@ -1370,7 +1396,7 @@ saying who sent it, as Tars verified it:
 Tars` for Tars's own notes and pass, `Message from Telegram`, `Slack` or `Hermes`. Claude Code
 2.1.280 hands a folded paste to the model as `<pasted_content>`, and a dispatch used to arrive
 with nothing outside it; the line stays outside the tag (measured once with a real account; a
-stub API with key auth never folds). Never a bare name: any agent can be named "Noah". A short
+stub API with key auth never folds). Never a bare name: any agent can be named "JeanBrasse". A short
 message used to go without the line, which let an agent type Tars's own line itself.
 
 | Symptom | Cause |
@@ -1607,11 +1633,11 @@ neither is a place to park.
   Tars claims it on that agent's lane and types it into it, as the agent that handed it.
 - **An agent cannot hand a task to Hermes**: `move_task` to `planned` is refused.
 - **An agent deletes only its own**: a task it filed that nobody claimed, or one it claimed, done
-  or not. A task Noah gave to a Hermes profile, one Hermes finished, another agent's, or one moved
-  from the local board is Noah's to delete, on the Kanban page. Who filed a task is the last line
+  or not. A task JeanBrasse gave to a Hermes profile, one Hermes finished, another agent's, or one moved
+  from the local board is JeanBrasse's to delete, on the Kanban page. Who filed a task is the last line
   of its body, `Filed by <name> (Tars agent <id>).`, which Tars writes after the agent's own
   description: the gateway records every creation as `dashboard`.
-- **Noah hands a task to Hermes**: on the Kanban page, give it a Hermes profile and move it to
+- **JeanBrasse hands a task to Hermes**: on the Kanban page, give it a Hermes profile and move it to
   `ready`.
 - **The old local board** (`~/.dorothy/kanban-tasks.json`): its open tasks move to the Hermes
   board once at launch, parked. `kanban-moved-to-hermes.json` records which, and a task left
@@ -1629,11 +1655,11 @@ neither is a place to park.
 ### The relay plugin (tars-relay)
 
 `hermes-plugins/tars-relay/` is a Hermes plugin, not part of the app: it is installed by hand on the server where
-Hermes runs, and never shipped in Tars. Through it Tars writes to Noah with Hermes's Telegram bot, and gets back his
+Hermes runs, and never shipped in Tars. Through it Tars writes to JeanBrasse with Hermes's Telegram bot, and gets back his
 replies to those messages and the messages he starts with `@project` for a project Tars registered with it. It sees
 them from its own Telegram observer, so one sent while Hermes answers, or right after another message, reaches Tars
 too; Hermes's model is spared it when Hermes admits it on its own, and gets it as Hermes handed it otherwise (a
-correction, a merged message). The model gets a read-only copy of what Tars sent, on Noah's next turn in his private
+correction, a merged message). The model gets a read-only copy of what Tars sent, on JeanBrasse's next turn in his private
 chat. Its README says how to install, check and remove it, and what it keeps. It needs Hermes 0.21.4 or later for the
 observer (`ctx.register_platform_handler`): the gateway's log says `Wired native handlers from plugin 'tars-relay'`.
 
@@ -1842,7 +1868,7 @@ Cost, measured with 20 PTYs replaying real Claude Code streams under Electron 43
 main process CPU per second for all 20 (68 chunks a second), 0.3 MB per mirror at 180×45, a
 snapshot of 2 KB in 1 to 2 ms. A mirror with its 1000 lines of history full was 2.3 to 3.7 MB
 and its snapshot 127 to 254 KB in 9 to 18 ms; a flood costs about 30 ms of CPU per MB. It keeps
-2,500 lines since 05/10 (Noah's choice; the Dashboard panel's own xterm keeps 5,000): measured
+2,500 lines since 05/10 (JeanBrasse's choice; the Dashboard panel's own xterm keeps 5,000): measured
 with 200-column lines at rest, a full mirror is 8.2 MB (3.9 MB at 1,000, 15.3 MB at 5,000) and
 its snapshot 477 KB in 24 ms (196 KB in 14 ms at 1,000, 946 KB in 55 ms at 5,000). The snapshot is
 kept until the mirror's next write or resize, so a second `agent:get` of an agent at rest costs nothing

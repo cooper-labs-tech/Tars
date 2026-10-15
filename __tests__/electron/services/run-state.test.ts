@@ -7,7 +7,7 @@ import { PRIVATE_DIR } from '../../../electron/constants';
 import { hasPosixModes } from '../../setup/platform-limits';
 
 /**
- * Whether the last run of Tars ended abruptly, and who was working when it did (RD-REDEMARRAGE.md, 2.2; Noah's yes
+ * Whether the last run of Tars ended abruptly, and who was working when it did (RD-REDEMARRAGE.md, 2.2; JeanBrasse's yes
  * of 2026-10-05). agents.json cannot say: it saves a working agent as idle, and a crash leaves it as the last save
  * had it. So a run marks its start, keeps the working agents' state as it changes, and marks a clean end.
  *

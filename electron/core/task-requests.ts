@@ -17,7 +17,7 @@ import { randomBytes } from 'crypto';
  * - **bound by its turn**: the turn whose prompt carries its id, which the
  *   sender line Tars types names (`, task t-xxxxxxxx`), takes the link, even
  *   over another delivered one: Claude Code queues what is typed during a
- *   turn, and runs it in its own turns, in order. A turn with no id (Noah
+ *   turn, and runs it in its own turns, in order. A turn with no id (JeanBrasse
  *   typing, a scheduled task, a /loop) takes nothing;
  * - **spent**: its work ended and its requester was told (agent-watch). The
  *   next delivered request takes the link: a CLI with no prompt hook still

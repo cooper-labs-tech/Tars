@@ -17,14 +17,14 @@ function readSettings(): Record<string, unknown> | null | undefined {
  * The switch has been on that page, off by default, since this server shipped,
  * and nothing read it: every agent handed these tools could publish and delete
  * on the account whatever it said (the audit's lead #12), and the privacy
- * policy says Tars posts only when Noah has turned it on. Only the switch's own
+ * policy says Tars posts only when JeanBrasse has turned it on. Only the switch's own
  * `true` turns it on; a file with no value for it, or one that cannot be read,
  * is off.
  */
 export function assertPostingEnabled(): void {
   if (readSettings()?.xPostingEnabled !== true) {
     throw new Error(
-      "Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+      "Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
     );
   }
 }

@@ -744,7 +744,7 @@ describe('Chats removed and /auth repeated, recorded before D1 part 3', () => {
     settings.telegramAuthorizedChatIds = ['42', '77'];
     liveCli('agent-orch');
     await telegram(dm('what is everyone doing?', 77));
-    // Noah removes chat 77 in Settings while the orchestrator works.
+    // JeanBrasse removes chat 77 in Settings while the orchestrator works.
     settings.telegramAuthorizedChatIds = ['42'];
     const orch = agents.get('agent-orch')!;
     orch.output = ['  ⎿  (MCP) 6 agents\n', 'Dune is rebasing onto main, Dove waits on you.\n'];

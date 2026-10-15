@@ -128,8 +128,8 @@ describe('1. darwin/linux: the same literals with the environment and platform i
 
 describe('win32', () => {
   const env = {
-    USERPROFILE: 'C:\\Users\\Nico Las',
-    APPDATA: 'C:\\Users\\Nico Las\\AppData\\Roaming',
+    USERPROFILE: 'C:\\Users\\Sam Lee',
+    APPDATA: 'C:\\Users\\Sam Lee\\AppData\\Roaming',
     Path: 'C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\Program Files\\nodejs\\;C:\\Program Files (x86)\\Tool',
   };
 
@@ -142,23 +142,23 @@ describe('win32', () => {
       'C:\\WINDOWS',
       'C:\\Program Files\\nodejs\\',
       'C:\\Program Files (x86)\\Tool',
-      'C:\\Users\\Nico Las\\.local\\bin',
-      'C:\\Users\\Nico Las\\AppData\\Roaming\\npm',
+      'C:\\Users\\Sam Lee\\.local\\bin',
+      'C:\\Users\\Sam Lee\\AppData\\Roaming\\npm',
     ]);
     expect(out).not.toContain(':\\WINDOWS:');
   });
 
   it('9. System32 comes before the default CLI dirs, so a tool dropped there never shadows it', () => {
     const out = buildFullPath([], { env, platform: 'win32' }).split(';');
-    expect(out.indexOf('C:\\WINDOWS\\system32')).toBeLessThan(out.indexOf('C:\\Users\\Nico Las\\AppData\\Roaming\\npm'));
-    expect(out.indexOf('C:\\WINDOWS\\system32')).toBeLessThan(out.indexOf('C:\\Users\\Nico Las\\.local\\bin'));
+    expect(out.indexOf('C:\\WINDOWS\\system32')).toBeLessThan(out.indexOf('C:\\Users\\Sam Lee\\AppData\\Roaming\\npm'));
+    expect(out.indexOf('C:\\WINDOWS\\system32')).toBeLessThan(out.indexOf('C:\\Users\\Sam Lee\\.local\\bin'));
   });
 
   it('5. dedupes case-insensitively and across a trailing backslash, keeping the first spelling', () => {
-    const out = buildFullPath(['c:\\windows\\SYSTEM32\\', 'C:\\Users\\nico las\\.local\\bin'], { env, platform: 'win32' });
+    const out = buildFullPath(['c:\\windows\\SYSTEM32\\', 'C:\\Users\\sam lee\\.local\\bin'], { env, platform: 'win32' });
     const entries = out.split(';');
     expect(entries.filter((e) => /system32/i.test(e))).toEqual(['c:\\windows\\SYSTEM32\\']);
-    expect(entries.filter((e) => /\.local\\bin/i.test(e))).toEqual(['C:\\Users\\nico las\\.local\\bin']);
+    expect(entries.filter((e) => /\.local\\bin/i.test(e))).toEqual(['C:\\Users\\sam lee\\.local\\bin']);
     expect(entries).toHaveLength(6);
   });
 

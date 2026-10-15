@@ -12,14 +12,14 @@ vi.mock('react', async (importOriginal) => ({
 }));
 
 /**
- * An agent's panel header on the Dashboard, after Noah's requests of 01/10 and
+ * An agent's panel header on the Dashboard, after JeanBrasse's requests of 01/10 and
  * 13/10. Frames: `Panel header · fullscreen` (and its light copy), and `Left
  * fullscreen · notice`, in design/tars-redesign.pen. Written before the code,
  * as the ways it can fail:
  * 1. the header still offers the history view: a view switch, or any control
  *    or word that says history;
  * 2. the panel's view is still named: live, or session, the one view a panel
- *    has, which named nothing to choose and took room in the header (Noah,
+ *    has, which named nothing to choose and took room in the header (JeanBrasse,
  *    13/10: "il ne sert plus à rien puisqu'on ne choisit plus une autre vue");
  * 3. fullscreen is not a button of its own in the header, outside the menu,
  *    26 px square;

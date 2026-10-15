@@ -5,7 +5,7 @@ import { POSIX_ROOT, type PosixEntry } from './posix-fake-disk';
 
 /**
  * The CLI an agent names for a new agent (create_agent's cliPath, 2.0.2), on each platform Tars runs on
- * (Noah, 2026-10-13: "Pour chaque modification, fait en sorte que ça tourne sur macos, windows et linux").
+ * (JeanBrasse, 2026-10-13: "Pour chaque modification, fait en sorte que ça tourne sur macos, windows et linux").
  *
  * How it fails, written before the code (2026-10-14):
  * 1. A cliPath Tars could not start is taken: the agent is made, and its launch fails later with no reason.

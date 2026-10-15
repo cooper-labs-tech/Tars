@@ -2,8 +2,8 @@
 
 - **App**: Tars, an Electron desktop app that runs many AI coding-agent CLIs in parallel, each in its own PTY terminal, and orchestrates them
 - **Goal**: one window where a fleet of agents (Claude Code, Codex, Gemini, Grok, OpenCode, Pi, and thirteen API-key providers) work on your projects at once, are delegated to, report back, and are billed
-- **Repo**: https://github.com/cooper-labs-tech/Tars (moved from `JeanBrasse/Tars` on 2026-10-07, Noah's decision; GitHub redirects the old URLs, so an installed 1.9.x still finds its updates), a fork of `Charlie85270/Dorothy`, renamed to Tars. Nothing is ever pushed upstream; `git remote get-url --push upstream` returns `DISABLED-no-push`
-- **Bundle**: `xyz.cooperlabs.tars`, product name `Tars`, macOS only (`electron-builder --mac`, dmg + zip). Updates are published to and fetched from the fork: `GITHUB_REPO` in `electron/constants/index.ts` and `build.publish` in `package.json` both say `cooper-labs-tech/Tars`. The code stays Linux compatible (Noah, 2026-09-24): the CI runs the tests on ubuntu, and no macOS-only code path ships without a Linux one or a clean failure.
+- **Repo**: https://github.com/cooper-labs-tech/Tars (moved from `JeanBrasse/Tars` on 2026-10-07, JeanBrasse's decision; GitHub redirects the old URLs, so an installed 1.9.x still finds its updates), a fork of `Charlie85270/Dorothy`, renamed to Tars. Nothing is ever pushed upstream; `git remote get-url --push upstream` returns `DISABLED-no-push`
+- **Bundle**: `xyz.cooperlabs.tars`, product name `Tars`, macOS only (`electron-builder --mac`, dmg + zip). Updates are published to and fetched from the fork: `GITHUB_REPO` in `electron/constants/index.ts` and `build.publish` in `package.json` both say `cooper-labs-tech/Tars`. The code stays Linux compatible (JeanBrasse, 2026-09-24): the CI runs the tests on ubuntu, and no macOS-only code path ships without a Linux one or a clean failure.
 - **Docs**: all four exist and are current. `DESIGN.md` (tokens + components) before touching a pixel, `SPECS.md` (what it is), `OPERATIONS.md` (runbook), `ETHOS.md` (how decisions get made). This line used to say only DESIGN.md had been written; the other three were added on 2026-08-23 and the README links to all of them. A fifth, `SECURITY.md`, was added on 2026-09-18: what is a boundary, what only looks like one, and the measurements behind each
 
 ## Stack
@@ -15,7 +15,7 @@
 - **Local API**: a plain `node:http` server on **31415**, bearer-token authenticated, so the CLIs' hooks and the bundled MCP servers can call back into the app
 - **MCP**: seven servers in `mcp-*/`, each bundled to `dist/bundle.js` and shipped in `extraResources`: orchestrator, memory, telegram, kanban, vault, socialdata, x
 - **Delegation**: two transports: keystrokes written into the PTY (`/dispatch`), and the Agent Client Protocol (`electron/services/acp/`), which actually returns a result
-- **Storage**: JSON + SQLite under `~/.dorothy/` (`better-sqlite3` for the vault). No server, no cloud, no database migrations. One exception: `~/.tars-private/` holds what the agents are not handed, which today is Noah's conversation with the super chat, the Hermes webhook secret and the Claude accounts' registry (`claude-accounts.json`: ids, names, thresholds, never a credential). `~/.dorothy` is in every agent's `--add-dir`; nothing under `~/.tars-private` is ever passed to a CLI. Each Claude account after the first is a Claude Code folder of its own, `~/.claude-accounts/<id>`, which the agents started on it run in
+- **Storage**: JSON + SQLite under `~/.dorothy/` (`better-sqlite3` for the vault). No server, no cloud, no database migrations. One exception: `~/.tars-private/` holds what the agents are not handed, which today is JeanBrasse's conversation with the super chat, the Hermes webhook secret and the Claude accounts' registry (`claude-accounts.json`: ids, names, thresholds, never a credential). `~/.dorothy` is in every agent's `--add-dir`; nothing under `~/.tars-private` is ever passed to a CLI. Each Claude account after the first is a Claude Code folder of its own, `~/.claude-accounts/<id>`, which the agents started on it run in
 - **Tests**: E2E first: `@playwright/test` drives the real Electron app (`e2e/`), and every run leaves an artefact. `vitest` (`__tests__/`) is the regression net and the home of units tested in isolation, written failures first. The rules are in Workflow Rule 3
 - **Node**: 22, pinned in `.nvmrc`. Run `nvm use` first. `package.json` `engines` declares `>=22.12.0`, Electron's own floor since 43, and CI runs 22
 
@@ -51,7 +51,7 @@
 | `src/lib/providers.ts` | Frontend provider registry: icon, badge, models, default model. One entry per provider; NewChatModal and Settings both read it |
 | `design/tars-redesign.pen` | Pencil source of truth, 162 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
 | `design/chat-design.pen` | 72 of the same frames (71 with the same ids; `Agent error · reason` was drawn into both after the fork, so its ids differ), the two panel history frames `tars-redesign.pen` dropped with the history view, plus the 11 frames of the Chat room, which exist nowhere else: 85 in all. A fork, not a companion. Its room frames describe the Chat before its redesign: draw anything for the Chat in `chat-redesign-a.pen`, and anything else in `tars-redesign.pen` |
-| `design/chat-redesign-a.pen` | The Chat page's redesign, direction A (chosen by Noah on 2026-09-17), with its composer: the room and Hermes pages in every state a user can meet, and sheets for the team, the thread, Hermes, the composer and the room head, dark and light. What the Chat implements since #165 (merged 2026-09-24) |
+| `design/chat-redesign-a.pen` | The Chat page's redesign, direction A (chosen by JeanBrasse on 2026-09-17), with its composer: the room and Hermes pages in every state a user can meet, and sheets for the team, the thread, Hermes, the composer and the room head, dark and light. What the Chat implements since #165 (merged 2026-09-24) |
 | `design/landing.pen` | The site in `landing/`: its page, its 404, its privacy and terms pages, and the picture link previews show. Forked from `tars-redesign.pen` on 2026-09-23, which no longer carries the landing |
 | `design/UI-INVENTORY.md` | Every surface the app can render. The E2E guard reads it. Its header names both Pencil documents and says which one owns what |
 | `e2e/surfaces.mjs` | Executable manifest: 20 pages, 18 settings sections, 3 overlays = 41 surfaces |
@@ -127,7 +127,7 @@ Four roles work this tree. They map to the long-lived branches `feat/frontend`, 
 ### QA Agent
 - **Owns**: `__tests__/`, `e2e/`, `vitest.config.mts`, `playwright.config.ts`
 - **Read-only** everywhere else: report defects, do not patch them
-- **Done when**: both `tsc` passes are clean, `npm test` is green, `npm run lint` and `npm run lint:design` are clean, `npm run e2e:auto` shows no new visual diff and no page error, and a feature's own E2E spec passes and leaves its artefact (Workflow Rule 3)
+- **Done when**: both `tsc` passes are clean, `npm test` is green, `npm run lint`, `npm run lint:design` and `npm run check:names` are clean, `npm run e2e:auto` shows no new visual diff and no page error, and a feature's own E2E spec passes and leaves its artefact (Workflow Rule 3)
 - **Refused at the gate**: a unit test written after the code it tests, a test that restates a constant, a test that only checks a mock was called, and a spec nobody has seen turn red on the old build or a mutant
 - `npm run e2e:auto` decides from the diff whether the surfaces can have moved, and runs the full suite whenever they can. It skips only when every changed file is outside the running app (`__tests__/`, `mcp-*/`, `hooks/`, `scripts/`, root markdown), and says so at length when it does. Anything it cannot classify runs. `electron/` always runs: the suite boots the real app against a seeded home, so a main process change can and does move a screenshot
 - Reach for `npm run e2e` directly to force the full suite, and `npm run e2e:guard` when a surface was added
@@ -146,13 +146,13 @@ Four roles work this tree. They map to the long-lived branches `feat/frontend`, 
 ### 1. Pencil first, always
 
 > **Mandatory again as of 2026-08-24.** Pencil was suspended for a day while its
-> MCP access sat on another project. Noah has handed it back and made it a
+> MCP access sat on another project. JeanBrasse has handed it back and made it a
 > requirement: "tu peux maintenant ré-utiliser Pencil à ta guise, et c'est
 > obligatoire de le faire pour toute modification de design, donc tu le notes
 > bien." Draw the frame before writing the TSX, every time.
 >
 > This paragraph has been reverted once by a verifying agent that read the
-> reversal as an unexplained directive flip. It is not: it is Noah's instruction,
+> reversal as an unexplained directive flip. It is not: it is JeanBrasse's instruction,
 > quoted above. Do not restore the "Suspended" wording.
 
 Every design or feature change goes through, in this order:
@@ -164,14 +164,14 @@ Every design or feature change goes through, in this order:
 
 Never the other way round. Do not "build it then draw it". If a surface is new, add it to `design/UI-INVENTORY.md` and to `e2e/surfaces.mjs` in the same change, or `npm run e2e:guard` fails.
 
-**And every user-visible change carries five more edits with it**, in the same PR. Noah asks for these every time they are missed:
+**And every user-visible change carries five more edits with it**, in the same PR. JeanBrasse asks for these every time they are missed:
 
 | What | Where | When |
 |---|---|---|
 | Changelog entry + version bump | `src/data/changelog.ts`, `package.json` | Every change a user would notice. **Once a version has been released, it is frozen** - bump the patch (1.5.0 → 1.5.1 → 1.5.2) and add a new entry rather than editing the shipped one. Only extend the top entry while `gh release list` shows it has never been cut |
 | Download link | `landing/src/app/api/download/route.ts` | It resolves the latest GitHub release at request time, so it needs **no edit**, but a new version is only downloadable once it has actually been published, and publishing goes through `npm run release`, never `gh release create` by hand. Check `gh release list --repo cooper-labs-tech/Tars` before claiming a version is available |
 | The docs that are now wrong | `README.md`, `SPECS.md`, `OPERATIONS.md`, `DESIGN.md` | Whichever ones the change falsified. A version number in the Tech Stack table, a file path in the structure tree, a limitation in §13 that is no longer true |
-| No em dashes | everywhere | `—` and `–` never appear in anything a user reads: interface copy, the changelog, the agent prompts Tars writes, the landing page, or the repo's own documents. Noah has asked for this twice. Rewrite the sentence rather than swapping in ` - ` every time. The one exception is the `next dev` block at the tail of this file, which is regenerated on every run |
+| No em dashes | everywhere | `—` and `–` never appear in anything a user reads: interface copy, the changelog, the agent prompts Tars writes, the landing page, or the repo's own documents. JeanBrasse has asked for this twice. Rewrite the sentence rather than swapping in ` - ` every time. The one exception is the `next dev` block at the tail of this file, which is regenerated on every run |
 | Screenshots | `screenshots/` | If a surface changed. They come from `npx playwright test --update-snapshots`, which photographs the real app against a seeded sandbox, never hand-made or reused from an older UI |
 
 **Draw through the `pen` CLI, not the `pencil` MCP tools.** Measured on 2026-09-11: the
@@ -216,12 +216,12 @@ Pencil traps that will cost you an afternoon:
 
 ### 3. Verify before done
 
-> **The testing rules, Noah's instruction of 2026-09-23.** "Ajuste le CLAUDE.md et les .md
+> **The testing rules, JeanBrasse's instruction of 2026-09-23.** "Ajuste le CLAUDE.md et les .md
 > pertinents avec ca: https://x.com/anshnanda/status/2101627891721371971". The post opens an
 > AGENTS.md with three lines: never write unit tests after the code; prefer E2E tests as the
 > sole testing mechanism, each ending on a verifiable and repeatable artefact; to test a system
 > in isolation, first write all the ways it could fail, then write the code. What that means in
-> this repo is below. It is Noah's rule, not an agent's preference: do not revert it.
+> this repo is below. It is JeanBrasse's rule, not an agent's preference: do not revert it.
 
 1. **E2E first.** A feature is proven by an E2E spec that drives the real app: Playwright and `launchSandboxed` from `e2e/fixture.mjs`, real claude or the recording fake CLI through the agent's `cliPath`, a sandbox `HOME`, `--user-data-dir` and `CFFIXED_USER_HOME` (the fixture sets the last two)
 2. **Every E2E run leaves an artefact** another agent can re-run and compare: the app's own trace (`E2E_TRACE=on`), the screenshots and a JSON of the values asserted, in one run directory, with the one command that reproduces it. OPERATIONS.md, "Tests and guardrails", says how
@@ -240,6 +240,7 @@ npx tsc -p electron/tsconfig.json        # main process (also emits electron/dis
 npm test                                 # vitest, __tests__/**/*.test.ts
 npm run lint                             # eslint
 npm run lint:design                      # radius / shadows / gradients / raw palette / hex
+npm run check:names                      # no private name; its list lives outside the repo, and without it the check passes
 npm run e2e:guard                        # every inventory page is covered by the manifest
 npm run e2e                              # Playwright drives the real Electron app, 41 surfaces
 ```
@@ -263,7 +264,7 @@ To see a change in a real packaged build without disturbing your live instance: 
 
 ### 6. Worktrees through `scripts/worktree.mjs`
 
-> **Noah's rule of 2026-10-01**, after the Mac crashed on a full disk (68 MB free):
+> **JeanBrasse's rule of 2026-10-01**, after the Mac crashed on a full disk (68 MB free):
 > `.worktrees/` held 46 GB across 59 worktrees, most with a full `npm ci` and a `.next`
 > of their own, and nothing ever removed one.
 

@@ -7,7 +7,7 @@ import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * A bench, not a test of the product (Noah, 2026-10-13: "la page 'usage' galère à se mettre à jour quand il y a
+ * A bench, not a test of the product (JeanBrasse, 2026-10-13: "la page 'usage' galère à se mettre à jour quand il y a
  * beaucoup d'agents et projets en même temps, l'autre fois ça a mis un temps à s'update, et après ça a fait planter
  * l'app"): the Usage page with the machine's own data, in a sandbox.
  *

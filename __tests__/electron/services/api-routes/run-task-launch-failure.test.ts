@@ -10,7 +10,7 @@ import { EventEmitter } from 'node:events';
  * delegate_task calls POST /api/agents/:id/run-task first. With the agent's
  * CLI nowhere to be found, the route used to hang on the session's
  * `initialize` for its 90 seconds, while the launch error went up to the top
- * of the main process as the "Uncaught Exception" window Noah saw on
+ * of the main process as the "Uncaught Exception" window JeanBrasse saw on
  * 2026-09-18. Here the whole chain is the real one, route, delegateOverAcp,
  * AcpSession and the spawn itself: only which command the registry names, and
  * where the MCP bundles would be, are decided by the test.
@@ -65,7 +65,7 @@ beforeEach(() => {
   uncaught.length = 0;
   process.on('uncaughtException', record);
   savedPath = process.env.PATH;
-  // Opened from the Dock, as Noah's was: launchd's PATH and nothing else.
+  // Opened from the Dock, as JeanBrasse's was: launchd's PATH and nothing else.
   process.env.PATH = DOCK_PATH;
   agents.clear();
   settings = {};

@@ -105,8 +105,8 @@ function stopOf(agent: AgentStatus): { stoppedBy?: string; stoppedAt?: string; s
 }
 
 /**
- * The stop a start just undid, for the one who started it (Noah, 05/10: an
- * orchestrator may start again an agent Noah stopped, and is told why it was
+ * The stop a start just undid, for the one who started it (JeanBrasse, 05/10: an
+ * orchestrator may start again an agent JeanBrasse stopped, and is told why it was
  * stopped). Nothing when this start undid none.
  */
 function restartedAfterStop(agent: AgentStatus, since: string): { restartedAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string } } {
@@ -712,9 +712,9 @@ type Driver = { kind: 'agent'; agent: AgentStatus } | { kind: 'tars' };
 
 function resolveDriver(req: RouteRequest, sendJson: SendJson): Driver | undefined {
   // Tars itself is not an agent and never will be. This is the super chat
-  // reaching the route over the loopback so that a message from Noah takes the
+  // reaching the route over the loopback so that a message from JeanBrasse takes the
   // same path a delegation takes, holding a pass that exists only in this
-  // process's memory. Nothing scopes it: Noah's chat drives every project,
+  // process's memory. Nothing scopes it: JeanBrasse's chat drives every project,
   // which is what it is for.
   if (req.internal) return { kind: 'tars' };
 
@@ -1391,14 +1391,14 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
     // An orchestrator is made in the Agents page and nowhere else. Made here,
     // it took the role from the project's current one and restarted it on the
-    // word of whoever held a token, with none of the confirmation Noah asked
+    // word of whoever held a token, with none of the confirmation JeanBrasse asked
     // for: the QA's gate of #123 measured a worker's own token making itself a
     // "Rogue" orchestrator of its project, and with allowCrossProject, in
     // bypass, of another one. Nothing asks for it legitimately: the MCP's
     // create_agent sends no role. Decided on 2026-09-23, for every caller.
     if (role === 'orchestrator') {
       sendJson({
-        error: 'An orchestrator is made in the Agents page of Tars, not over the API. Create the agent as a worker; Noah can make it the orchestrator there.',
+        error: 'An orchestrator is made in the Agents page of Tars, not over the API. Create the agent as a worker; the user can make it the orchestrator there.',
       }, 403);
       return;
     }

@@ -237,7 +237,7 @@ describe('a session the API started, which hands the shell its CLI to run', () =
   // exec, and for the CLI's whole life when there was none, node-pty named
   // bash: every agent the API had started read no CLI, the Dashboard offered
   // Start, and Start typed its launch line into claude's own field (measured
-  // by the Frontend on 2026-09-23, on five of Noah's six Tars agents).
+  // by the Frontend on 2026-09-23, on five of JeanBrasse's six Tars agents).
   it.each(['bash', '2.1.280'])('types nothing and says so, with %s in front', async (name) => {
     const { agent, terminal } = agentWithTerminal('idle', ['-l', '-c', `cd '${project}' && exec '/usr/local/bin/claude'`]);
     terminal.process = name;

@@ -19,7 +19,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * 4. It takes a call with no question.
  * 5. (the relay, 2026-10-01) A question that waits for Hermes is answered as if it had been asked: the agent must be
  *    told it has not reached the user yet, and goes when Hermes takes it.
- * 6. (Noah's rule of 2026-10-01) Its description lets a worker think it may ask the user: only a project's
+ * 6. (JeanBrasse's rule of 2026-10-01) Its description lets a worker think it may ask the user: only a project's
  *    orchestrator does, through the user's Hermes.
  */
 

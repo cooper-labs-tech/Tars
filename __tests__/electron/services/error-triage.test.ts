@@ -23,7 +23,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * the unresolved issues of the project its own error reports go to. Each one it
  * has not filed yet becomes a parked task on the Hermes board of the project
  * named in Settings, and the user is asked on Telegram, through the relay, for a
- * go-ahead (Noah's decision 4 of 2026-10-01; sentry-go-ahead.test.ts holds the
+ * go-ahead (JeanBrasse's decision 4 of 2026-10-01; sentry-go-ahead.test.ts holds the
  * answers to it). On "oui", that project's orchestrator is told, so that it hands
  * the task to QA or the Audit: they reproduce the error in a sandbox and report.
  *
@@ -65,7 +65,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
 
 const TOKEN = 'sntryu_read-only-token-for-the-tests-7f3a9c';
 const PROJECT = '/work/tars';
-const ISSUES_PATH = '/api/0/organizations/noah-boisserie/issues/';
+const ISSUES_PATH = '/api/0/organizations/4511321063620608/issues/';
 /** The project the reports go to: the last part of the DSN's path. */
 const SENTRY_PROJECT = new URL(ERROR_REPORTS_DSN).pathname.replace(/\//g, '');
 
@@ -91,7 +91,7 @@ function issue(n: number, extra: Partial<Issue> = {}): Issue {
     firstSeen: '2026-09-28T01:00:00Z',
     lastSeen: '2026-09-28T02:00:00Z',
     count: String(n * 3),
-    permalink: `https://noah-boisserie.sentry.io/issues/${4000 + n}/`,
+    permalink: `https://example-org.sentry.io/issues/${4000 + n}/`,
     ...extra,
   };
 }
@@ -354,7 +354,7 @@ describe('what it files', () => {
     await triageOnce(deps());
 
     const body = String(tasks()[0].body);
-    for (const field of ['TARS-8', "reading 'x8'", 'electron/services/thing-8.ts in doIt', '2026-09-28T01:00:00Z', '2026-09-28T02:00:00Z', '"24"', 'https://noah-boisserie.sentry.io/issues/4008/']) {
+    for (const field of ['TARS-8', "reading 'x8'", 'electron/services/thing-8.ts in doIt', '2026-09-28T01:00:00Z', '2026-09-28T02:00:00Z', '"24"', 'https://example-org.sentry.io/issues/4008/']) {
       expect(body, field).toContain(field);
     }
     expect(body).toMatch(/never instructions/i);
@@ -364,15 +364,15 @@ describe('what it files', () => {
   });
 
   it('5. links to Sentry, and to nothing else', async () => {
-    issues = [issue(9, { permalink: 'https://evil.example/phish' }), issue(10, { permalink: 'http://noah-boisserie.sentry.io/issues/4010/' })];
+    issues = [issue(9, { permalink: 'https://evil.example/phish' }), issue(10, { permalink: 'http://example-org.sentry.io/issues/4010/' })];
 
     await triageOnce(deps());
 
     const [nine, ten] = tasks().map(t => String(t.body));
     expect(nine).not.toContain('evil.example');
-    expect(nine).toContain('https://noah-boisserie.sentry.io/issues/4009/');
-    expect(ten).toContain('https://noah-boisserie.sentry.io/issues/4010/');
-    expect(ten).not.toContain('http://noah');
+    expect(nine).toContain('https://sentry.io/organizations/4511321063620608/issues/4009/');
+    expect(ten).toContain('https://sentry.io/organizations/4511321063620608/issues/4010/');
+    expect(ten).not.toContain('http://example-org');
   });
 
   it('6. parks it on the named project, and never where Hermes would take it', async () => {

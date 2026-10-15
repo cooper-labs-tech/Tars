@@ -8,7 +8,7 @@ import * as path from 'node:path';
  *
  * `send_telegram` from mcp-orchestrator, which every agent has, forwards a
  * model-chosen `chat_id` to POST /api/telegram/send, and the route sent to it:
- * a prompt-injected agent could have Noah's bot post to any chat that had
+ * a prompt-injected agent could have JeanBrasse's bot post to any chat that had
  * started it. mcp-telegram's own send refuses anything but the authorized
  * chats; the route now does the same. And every send read its default chat
  * from the settings as they were at startup, so a chat removed in Settings
@@ -50,7 +50,7 @@ beforeEach(() => {
 });
 
 describe('POST /api/telegram/send', () => {
-  it('refuses a chat that is not one Noah authorized, and sends nothing', async () => {
+  it('refuses a chat that is not one JeanBrasse authorized, and sends nothing', async () => {
     const { status } = await post('/api/telegram/send', { message: 'the build log', chat_id: '999' });
 
     expect(status).toBe(403);

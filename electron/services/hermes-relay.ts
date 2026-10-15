@@ -9,7 +9,7 @@ import { setReportChannel, type ReportChannel } from './event-reports';
 import { projectWord as projectWordOf } from './orchestrator-routing';
 
 /**
- * The relay to the user's Telegram through their Hermes (DESIGN-RELAIS-HERMES-V2.md, step 2; Noah's decisions of
+ * The relay to the user's Telegram through their Hermes (DESIGN-RELAIS-HERMES-V2.md, step 2; JeanBrasse's decisions of
  * 2026-10-01). Hermes is the only voice on that Telegram: Tars sends through the tars-relay plugin on the gateway it
  * already reaches (hermes-plugins/tars-relay), and the user's replies to those messages, and their "@project"
  * messages, come back from the plugin, which keeps them from Hermes's model.
@@ -350,7 +350,7 @@ async function handle(reply: PluginReply, now: number): Promise<void> {
 }
 
 /**
- * The user's receipt for a message of theirs handed on (Noah's answer 24 of
+ * The user's receipt for a message of theirs handed on (JeanBrasse's answer 24 of
  * 2026-10-05): one short line, never a reaction; when the message waits,
  * what for.
  */

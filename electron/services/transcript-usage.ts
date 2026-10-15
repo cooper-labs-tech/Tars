@@ -76,7 +76,7 @@ export interface TranscriptUsage {
   /**
    * The last 48 hours, by the hour each turn was made in, in the same shape as
    * a day. `hour` is when the hour starts, in milliseconds since the epoch.
-   * The Usage page could not show the last 24 hours (Noah, 01/10): the days
+   * The Usage page could not show the last 24 hours (JeanBrasse, 01/10): the days
    * were all there was, so at 09:00 the choice was today since midnight or
    * today and all of yesterday. The hours of a rolling 24 hours are those with
    * `hour` past now minus a day.
@@ -332,7 +332,7 @@ interface TurnEntry {
   date: string | null;
   /** When the line was written, in whole minutes since the epoch, or null:
    *  a number that small is held in the object itself, where milliseconds
-   *  took a heap number for every turn (10 MB on Noah's 2.7 GB of
+   *  took a heap number for every turn (10 MB on JeanBrasse's 2.7 GB of
    *  transcripts, measured with the hours added). */
   minute: number | null;
   counts: Counts;
@@ -377,7 +377,7 @@ function localDateKey(isoTimestamp: string): string | null {
 /**
  * One string for each day and each model, shared by every turn that names it.
  * Each turn held its own copy, parsed out of its line: hundreds of thousands
- * of identical strings on Noah's transcripts.
+ * of identical strings on JeanBrasse's transcripts.
  */
 const sharedStrings = new Map<string, string>();
 function shared<T extends string | null>(value: T): T {
@@ -661,7 +661,7 @@ export function computeTranscriptUsage(homeDir = os.homedir()): Promise<Transcri
  * What the transcripts are now: each one's path, time and size, in order. Two
  * passes that would read the same files agree on it, and a transcript added,
  * deleted, grown or rewritten changes it. A stat per file, 14 to 39 ms on
- * Noah's 1826 transcripts, where the adding up it can spare is 0.2 to 0.5 s.
+ * JeanBrasse's 1826 transcripts, where the adding up it can spare is 0.2 to 0.5 s.
  */
 async function fingerprintOf(homeDir: string): Promise<string> {
   const hash = createHash('sha1');
@@ -714,7 +714,7 @@ async function scanTranscripts(
 ): Promise<TranscriptUsage> {
   // A model's price, looked up once for this scan. costOf asked the catalogue
   // at every turn, and priceFor walks every model it lists when the id is
-  // dated: about 608 thousand walks on Noah's transcripts, and with no
+  // dated: about 608 thousand walks on JeanBrasse's transcripts, and with no
   // catalogue in memory yet (a first launch, offline) a failed read of the
   // cache file at each. The adding up took 5 to 16 s that way. Kept for the
   // scan only, so the next one prices from the catalogue as it is then.

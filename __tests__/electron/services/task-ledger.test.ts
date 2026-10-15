@@ -36,14 +36,14 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *     and all it hands on after, are filed under the worker's task, whose total then holds them (a task that cost 1
  *     showed a total of 21). A worker writing to the agent that handed it its task, or to its project's orchestrator,
  *     reports; as #302 has it for the delegation link.
- * 12. (Noah's answer of 2026-10-05) A task's text, the first line of what was handed over (Noah's own prompts, the
+ * 12. (JeanBrasse's answer of 2026-10-05) A task's text, the first line of what was handed over (JeanBrasse's own prompts, the
  *     chat messages handed to orchestrators), is written to ~/.dorothy, which every agent is handed; or to a file
  *     another account can read. Only the text moves: what a task cost and how long it took stays where it was.
  * 13. Read back, a task loses its text, or a missing or damaged text file loses the tasks.
  * 14. A ledger written before, its texts inline in ~/.dorothy, keeps them there after the first start.
  * 15. Rewritten past its bound, the ledger keeps the texts of the tasks it dropped, or loses those of the tasks it kept.
  * 16. A text line that is not one (no id, a text that is not text, a megabyte) is taken as it is.
- * 17. (mods step 4, Noah's go) A turn's usage, which the state mod reports from Claude Code's turn.complete, is not
+ * 17. (mods step 4, JeanBrasse's go) A turn's usage, which the state mod reports from Claude Code's turn.complete, is not
  *     kept, or kept on the wrong task. It arrives after the Stop that ended its task (measured on 2.1.289: 8 to 14 ms
  *     after), so it belongs to the agent's latest task in that session, ended or not; a session none of the agent's
  *     tasks ran in has no task to take it.
@@ -59,7 +59,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * (2026-10-07). The ledger kept one pending hand-off per agent, and the next turn to start took it, whoever started it:
  * 28. Two hand-offs to one worker (the bot's and an orchestrator's): the second replaces the first, and the turn that
  *     runs the first is filed under the second's sender.
- * 29. A turn with no task id in its prompt (Noah typing into the worker, a scheduled task, a /loop) takes a hand-off
+ * 29. A turn with no task id in its prompt (JeanBrasse typing into the worker, a scheduled task, a /loop) takes a hand-off
  *     Tars typed, and the turn of that hand-off then opens a task from nobody.
  * 30. A hand-off with no id (a launch's prompt, which carries no sender line) no longer opens the next turn's task.
  * 31. (the Audit's gate of #351, H1) An agent named "x, task t-<another's id>: y" files its turn under that other
@@ -359,7 +359,7 @@ describe('what is read back, from a file any agent can write', () => {
 describe("a worker's report to the agent that leads it", () => {
   it('10. is no delegation: the lead\'s next task has no parent, and what it hands on after is under that task', () => {
     const ledger = open();
-    // Noah gives the lead a task; the lead hands a gate to the worker, then rests.
+    // JeanBrasse gives the lead a task; the lead hands a gate to the worker, then rests.
     ledger.turnStarted(agent({ id: 'lead' }), { sessionId: 'sess-lead', text: 'gate #305' });
     ledger.handedOff('worker', { source: 'agent', requesterAgentId: 'lead', text: 'gate #305' });
     ledger.turnStarted(agent({ id: 'worker' }), { sessionId: 'sess-worker' });
@@ -372,8 +372,8 @@ describe("a worker's report to the agent that leads it", () => {
     ledger.handedOff('third', { source: 'agent', requesterAgentId: 'lead', text: 'merge #305' });
     ledger.turnStarted(agent({ id: 'third' }), { sessionId: 'sess-third' });
 
-    const [noahs, gate, report, merge] = ledger.tasks();
-    expect(gate).toMatchObject({ agentId: 'worker', parentTaskId: noahs.id });
+    const [usersTask, gate, report, merge] = ledger.tasks();
+    expect(gate).toMatchObject({ agentId: 'worker', parentTaskId: usersTask.id });
     expect(report).toMatchObject({ agentId: 'lead', requesterAgentId: 'worker', parentTaskId: null, text: 'gate done, MERGE' });
     expect(merge).toMatchObject({ agentId: 'third', parentTaskId: report.id });
   });
@@ -415,7 +415,7 @@ describe('an agent put to sleep (#322)', () => {
   });
 });
 
-describe('where a task\'s text is kept (Noah, 05/10)', () => {
+describe('where a task\'s text is kept (JeanBrasse, 05/10)', () => {
   const handAndRun = (ledger: ReturnType<typeof open>, text: string) => {
     ledger.handedOff('worker-1', { source: 'telegram', text });
     ledger.turnStarted(agent(), { sessionId: 'sess-1' });

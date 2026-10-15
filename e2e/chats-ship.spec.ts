@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
-import { BOT_TOKEN, NOAH, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
+import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
 
 /**
  * Two things of the chats that ship to everyone (GATE-2.0.0-BULLETS), in the real app.
@@ -205,14 +205,14 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
   const values: Record<string, unknown> = {};
   const { app, call, atRest } = await boot(home, project, port, { DOROTHY_TELEGRAM_API_URL: telegram.url }, {
     telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
-    telegramAuthorizedChatIds: [String(NOAH)], telegramChatId: String(NOAH), newInterface: false,
+    telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID), newInterface: false,
   });
   try {
     const prompts = () => lines<{ id: string; prompt: string }>(path.join(home, 'prompts.jsonl'));
     const chats = (await call('chat', 'list') as unknown as { chats: Array<{ id: string; number: number }> }).chats;
     values.chats = chats;
     expect(chats.map((c) => c.number), 'the project has only Main').toEqual([1]);
-    // The orchestrator running, as it is when Noah writes to it.
+    // The orchestrator running, as it is when JeanBrasse writes to it.
     expect(await call('chat', 'send', { chatId: chats[0].id, text: 'MAIN>> hello', clientRequestId: 'e2e-main' })).toMatchObject({ success: true });
     await atRest('o1');
 
@@ -234,7 +234,7 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
 
     // The room: under its own name.
     const roomId = `project:${project}`;
-    expect(await call('bus', 'postMessage', { roomId, text: 'ROOM>> Noah to the project' })).toMatchObject({ success: true });
+    expect(await call('bus', 'postMessage', { roomId, text: 'ROOM>> JeanBrasse to the project' })).toMatchObject({ success: true });
     await expect.poll(() => prompts().some((p) => p.id === 'o1' && p.prompt.includes('ROOM>>')), { timeout: 30_000 }).toBe(true);
     await atRest('o1');
     expect((await api('/api/bus/post', { text: 'ROOM2>> the lead answers' })).body).toMatchObject({ success: true });

@@ -9,7 +9,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 /**
  * The Logs page reads an agent's output as its terminal showed it.
  *
- * Noah, 2026-10-01: the page showed every text glued together, unreadable.
+ * JeanBrasse, 2026-10-01: the page showed every text glued together, unreadable.
  * It split the raw stream on line breaks with the escape codes stripped, and
  * Claude Code draws with cursor moves: "List the three files in this folder"
  * read "Listthethreefilesinthisfolder", and a retry countdown left its digits

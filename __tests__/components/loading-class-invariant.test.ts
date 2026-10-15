@@ -7,7 +7,7 @@ import * as ts from 'typescript';
 /**
  * No page or panel waits on grey rows or on a line of text (1.7.4).
  *
- * Noah: "on several pages the loading screen was not the cube we had". The
+ * JeanBrasse: "on several pages the loading screen was not the cube we had". The
  * ladder's middle stage defaulted to skeleton rows, and the same class lived
  * outside it: the Dashboard pane's history view drew its own grey bars, the
  * Hermes task detail said "Loading…", the custom MCP list was a row reading

@@ -327,7 +327,7 @@ export interface SendNowResult {
 
 /**
  * Send to one agent now, interrupting its turn if it is in one (#124's send
- * now, Noah's choice B: a message queues by default, and this is the button
+ * now, JeanBrasse's choice B: a message queues by default, and this is the button
  * that interrupts).
  *
  * Recorded as a human message to that agent, like postMessage. An agent at
@@ -353,7 +353,7 @@ export async function sendNow(params: {
   }
   const agentId = typeof params.agentId === 'string' ? params.agentId : '';
   const agent = agents.get(agentId);
-  // A member, or a chat's runner of this room's project: Noah's answer to what
+  // A member, or a chat's runner of this room's project: JeanBrasse's answer to what
   // that chat said in the room goes back to it (PR F).
   const runsAChatHere = !!agent && room.kind === 'project' && agent.projectPath === room.projectPath && !!chatNameOf(agent);
   if (!agent || (!room.memberIds.includes(agentId) && !runsAChatHere)) {
@@ -364,7 +364,7 @@ export async function sendNow(params: {
   if (!text && !files.attachments.length) return { success: false, interrupted: false, error: 'A message needs text' };
 
   const { message, thread, supersededThreadId } = appendMessage({
-    roomId: room.id, authorKind: 'human', authorId: 'human', authorName: 'Noah',
+    roomId: room.id, authorKind: 'human', authorId: 'human', authorName: 'User',
     text, mentions: [agentId], attachments: files.attachments,
   });
   forgetStaged(files.attachments);

@@ -7,7 +7,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * A Dashboard panel keeps 5,000 lines of history, where it kept 10,000
- * (Noah's choice 9 of 05/10, RD-RAM.md: a full panel weighed 32.6 MB at
+ * (JeanBrasse's choice 9 of 05/10, RD-RAM.md: a full panel weighed 32.6 MB at
  * 10,000 lines, 7.6 MB at 2,000). The transcript keeps everything; what a
  * panel scrolls back through is xterm's scrollback.
  *

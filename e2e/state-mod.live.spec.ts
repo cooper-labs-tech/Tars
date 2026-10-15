@@ -1,6 +1,6 @@
 // Opt-in live E2E: E2E_LIVE=1 npx playwright test e2e/state-mod.live.spec.ts
 //
-// The state mod (mods/tars-state/, mods step 1, Noah's go of 2026-10-05), in a
+// The state mod (mods/tars-state/, mods step 1, JeanBrasse's go of 2026-10-05), in a
 // sandbox Tars with real Claude Code against the fake Messages API
 // (e2e/live/fake-messages-api.mjs). Two agents on the same claude, each given
 // one task:

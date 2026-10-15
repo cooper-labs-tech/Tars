@@ -45,7 +45,7 @@ import { chatLimitOf, type Chat, type ChatStore } from './chats';
  * Main counted. A send that needs a slot when none is free puts the least
  * recently active runner the sleep rule allows to sleep (its 30 minutes
  * aside, never Main's), or answers `chat_limit` with the sentence and who
- * works: never a silent wait (Noah, 07/10). One lock holds the count, the
+ * works: never a silent wait (JeanBrasse, 07/10). One lock holds the count, the
  * choice, the sleep and the launch together, so two sends cannot both take
  * the last slot (the Audit's M5).
  */

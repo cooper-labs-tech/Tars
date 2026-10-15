@@ -10,7 +10,7 @@ import type { FleetSnapshot } from './overseer-fleet';
 //
 // They lived in ~/.dorothy/overseer.json, which is the directory every agent
 // is started with (`--add-dir ~/.dorothy`), at 0644: 146 KB and 344 messages
-// of Noah's own conversation, reachable with an `ls` and a `cat`, no API call
+// of JeanBrasse's own conversation, reachable with an `ls` and a `cat`, no API call
 // and no token. The file moves out on the first start that finds it, and
 // nothing in the private directory is ever handed to a CLI. See PRIVATE_DIR
 // for what that does and does not close.
@@ -83,7 +83,7 @@ export interface OverseerState {
 export interface OverseerSettings {
   watchIntervalMs: number;
   /** Ids of the auto-action rules turned on. Empty by default: every proposal
-   *  waits for Noah unless he has said in advance that this kind need not. */
+   *  waits for JeanBrasse unless he has said in advance that this kind need not. */
   autoActions: string[];
   model: string;
   provider: string;
@@ -110,7 +110,7 @@ function defaultState(): OverseerState {
  * Move the conversation out of the directory the agents are handed, once per
  * run of the app, before anything reads or writes it.
  *
- * It is Noah's data, so the order is: write the new file and read it back
+ * It is JeanBrasse's data, so the order is: write the new file and read it back
  * whole, and only then let go of the old one. A migration that cannot finish
  * leaves the old file exactly as it was, and stateFile() below goes on reading
  * it, so the worst case is the state before this existed rather than an empty
@@ -186,7 +186,7 @@ export function loadState(): OverseerState {
     };
   } catch (err) {
     // Never `err` itself: Node quotes the input in a JSON.parse message, and
-    // the input here is Noah's conversation.
+    // the input here is JeanBrasse's conversation.
     console.error(`[overseer] could not read the conversation (${describeSecretFileError(err)}), starting fresh`);
     return defaultState();
   }
@@ -198,7 +198,7 @@ export function saveState(state: OverseerState): void {
   try {
     writeSecretFileSync(OVERSEER_FILE, body);
   } catch (err) {
-    // The private directory could not be written. Losing what Noah just said
+    // The private directory could not be written. Losing what JeanBrasse just said
     // would be the worse failure, so it goes back to the old place and says
     // so; the next start finds it there and migrates it again.
     console.error(`[overseer] could not write the private conversation file (${describeSecretFileError(err)}); falling back to the data directory`);
@@ -250,7 +250,7 @@ export function clearOverseerHistory(): { cleared: number } {
 
 /**
  * Every Hermes session the super chat has opened, so that what searches
- * Hermes for an agent can leave them out: that conversation is Noah's, kept in
+ * Hermes for an agent can leave them out: that conversation is JeanBrasse's, kept in
  * this private directory and never handed to an agent (SECURITY.md §5), and
  * each of its turns is a Hermes session that memory_search returned with the
  * rest (the Audit's table on a3d7c125, #13).

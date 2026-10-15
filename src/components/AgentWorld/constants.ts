@@ -27,7 +27,7 @@ export const TERMINAL_CONFIG = {
   },
   cursorBlink: true,
   cursorStyle: 'bar' as const,
-  // A Dashboard panel's history, xterm's scrollback: 5,000 lines (Noah's
+  // A Dashboard panel's history, xterm's scrollback: 5,000 lines (JeanBrasse's
   // choice 9 of 05/10). A full panel weighed 32.6 MB at 10,000 lines (RD-RAM).
   // The transcript keeps everything; the terminal's mirror in main is the
   // Backend's.

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { IPty } from 'node-pty';
 
 /**
- * A message from an agent must never be submitted with what Noah was in the
+ * A message from an agent must never be submitted with what JeanBrasse was in the
  * middle of writing.
  *
  * Measured on Claude Code 2.1.273 in a real PTY, before any of this existed
@@ -13,7 +13,7 @@ import type { IPty } from 'node-pty';
  *   three keys typed inside the 300 ms the carriage return trails by:
  *                                          the note + "oui" went out as one.
  *
- * The rule Noah gave: never mix, and never block. So while he is typing the
+ * The rule JeanBrasse gave: never mix, and never block. So while he is typing the
  * message waits; at the first pause Tars sets the draft aside, sends the
  * message on its own, and types the draft back exactly as it was without
  * sending it; and if it cannot promise to give it back, it writes nothing and
@@ -129,7 +129,7 @@ describe('a terminal nobody is typing in', () => {
   });
 });
 
-describe('while Noah is typing', () => {
+describe('while JeanBrasse is typing', () => {
   it('writes nothing at all, rather than into the middle of a word', () => {
     types(terminal.pty, 'je pense quil faut');
     terminal.written.length = 0;

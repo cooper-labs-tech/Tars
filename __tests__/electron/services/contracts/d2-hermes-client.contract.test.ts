@@ -98,7 +98,7 @@ describe('hermes-client, as recorded before the D2 refactor', () => {
     const conn = { mode: 'local' as const, localPort: port, authMode: 'token' as const, token: 'tok' };
     const calls: Array<[string, () => Promise<unknown>]> = [
       ['probeHermes', () => c.probeHermes(conn)],
-      ['signInHermes', () => c.signInHermes(conn, { username: 'noah', password: 'pw' })],
+      ['signInHermes', () => c.signInHermes(conn, { username: 'demo', password: 'pw' })],
       ['fetchHermesBoard', () => c.fetchHermesBoard(conn)],
       ['fetchHermesBoard board', () => c.fetchHermesBoard(conn, 'b 1')],
       // Added when main was merged in (#171 gave the board a tenant), recorded on main's own client first.

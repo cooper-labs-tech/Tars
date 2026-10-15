@@ -5,7 +5,7 @@ import { flat } from '@/lib/stop-line';
 
 /**
  * What the Usage page says of each agent: the tasks of the timeframe and the
- * project picked, one row per agent, beside the view by task (Noah, 13/10).
+ * project picked, one row per agent, beside the view by task (JeanBrasse, 13/10).
  * Frame: `Usage · cost per agent`, and its light copy. Its failures are
  * listed, and pinned, in __tests__/lib/agent-costs.test.ts.
  *

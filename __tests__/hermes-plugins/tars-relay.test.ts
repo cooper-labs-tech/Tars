@@ -5,7 +5,7 @@ import * as path from 'path';
 /**
  * The tars-relay Hermes plugin's own tests, in the regression net.
  *
- * The plugin is Python and runs inside Noah's Hermes, never in Tars. Its rules are tested by
+ * The plugin is Python and runs inside JeanBrasse's Hermes, never in Tars. Its rules are tested by
  * hermes-plugins/tars-relay/tests (unittest, standard library only), and CI runs nothing but npm test, so this runs
  * them there.
  *

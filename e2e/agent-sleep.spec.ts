@@ -8,7 +8,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * An agent with no turn for 30 minutes is put to sleep and woken on its own conversation when it is needed;
- * orchestrators are never put to sleep (Noah's choices 5 and 6 of 2026-10-05, RD-RAM.md 2.1), in the real app.
+ * orchestrators are never put to sleep (JeanBrasse's choices 5 and 6 of 2026-10-05, RD-RAM.md 2.1), in the real app.
  *
  * Four agents, started from the window: the lead (the project's orchestrator), the worker, the busy worker (a
  * background job under its CLI) and the drafter (a half-typed line in its field). All are told to have rested for

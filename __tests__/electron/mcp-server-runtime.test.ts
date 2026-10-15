@@ -48,7 +48,7 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  * The Audit's gate of #201 (2026-09-24), written before the fix:
  * 12. The launcher follows the last Tars started, packaged or not: a dev run
  *     on the real HOME rewrote it to a worktree's Electron, and once that
- *     Electron was gone every Tars server of every claude session, Noah's own
+ *     Electron was gone every Tars server of every claude session, JeanBrasse's own
  *     included, failed to connect. The same from a copy run from a DMG or
  *     translocated by macOS, which is gone once it quits. Only a packaged Tars
  *     at a lasting place writes it; another leaves it as it is.

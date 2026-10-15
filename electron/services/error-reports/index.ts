@@ -26,7 +26,7 @@ import { errorReportsAvailable } from '../../platform/error-reports';
  * window is sandboxed and cannot load the SDK's preload.
  */
 
-/** Tars's Sentry project (the noah-boisserie organisation, EU). A DSN is public by design: it only lets a client send. */
+/** Tars's Sentry project (the maintainer's organisation, EU). A DSN is public by design: it only lets a client send. */
 export const ERROR_REPORTS_DSN = 'https://d3d853ef128291b07daad0c136b0c82d@o4511321063620608.ingest.de.sentry.io/4512140890996816';
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = { darwin: 'macOS', linux: 'Linux', win32: 'Windows' };

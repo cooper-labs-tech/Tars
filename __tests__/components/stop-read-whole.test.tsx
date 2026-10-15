@@ -26,7 +26,7 @@ vi.mock('react', async (importOriginal) => ({
  *    tick, where entering stopped is read once.
  *
  * The Kanban sync's failures 4 and 5 (a stop is no task's end) went with the
- * sync itself, when the old local board was removed (Noah, 06/10).
+ * sync itself, when the old local board was removed (JeanBrasse, 06/10).
  */
 
 type Tick = (items: AgentTickItem[]) => void;

@@ -53,7 +53,7 @@ export function resolveTarget(agentId: string): { ok: true; target: ResolvedTarg
  * It presents Tars's own pass, not `~/.dorothy/api-token`. The shared file is
  * readable by every agent, so while the super chat authenticated with it the
  * routes that drive an agent could not refuse it: refusing the file would have
- * taken Noah's chat down with whoever else had read it. The pass is minted in
+ * taken JeanBrasse's chat down with whoever else had read it. The pass is minted in
  * memory and written nowhere, so the refusal costs the super chat nothing. A
  * dedicated file elsewhere would only have moved the credential: any path
  * under $HOME is readable by the same agents.
@@ -74,7 +74,7 @@ function postLocalDispatch(agentId: string, message: string): Promise<{ status: 
       },
       // As the MCP tools: /dispatch holds a message up to SENDER_WAIT_MS (20 s)
       // on a launch still starting, and says so. At 15 s this gave up first,
-      // and Noah read "timeout" for a message typed a moment later.
+      // and JeanBrasse read "timeout" for a message typed a moment later.
       timeout: 30_000,
     }, res => {
       let raw = '';
@@ -138,13 +138,13 @@ async function dispatchApprovedAction(
   markConsumed(action.actionId);
   // Re-resolve now, immediately before writing: the fleet may have changed
   // since the overseer proposed this (agent finished, was removed, moved
-  // project) in the minutes it can take Noah to read and approve it.
+  // project) in the minutes it can take JeanBrasse to read and approve it.
   return sendToAgent(action.agentId, action.text);
 }
 
 /**
  * The user's decision on a proposed action. Nothing is written to any CLI
- * until this is called with approve:true - which only happens when Noah
+ * until this is called with approve:true - which only happens when JeanBrasse
  * presses send in the approval panel.
  *
  * The action arrives as an object handed over IPC, and it used to be taken at
@@ -188,7 +188,7 @@ export async function confirmPendingAction(
   // against the conversation, so dispatching the object that carried it meant
   // an id that passed could still deliver a target and a body that had never
   // been proposed or seen. What is sent is what the overseer actually wrote
-  // and what Noah was actually shown; the argument is a claim about which
+  // and what JeanBrasse was actually shown; the argument is a claim about which
   // proposal is meant, not the proposal itself.
   return dispatchApprovedAction(authentic);
 }
@@ -203,7 +203,7 @@ export async function confirmPendingAction(
 const REPEAT_QUIET_MS = 30 * 60 * 1000;
 
 /**
- * What Noah reads when Hermes answers with the format template.
+ * What JeanBrasse reads when Hermes answers with the format template.
  *
  * Never nothing. A guard that refuses a bad answer and leaves the thread empty
  * has not protected anybody: before, he got a wrong answer and could see it was
@@ -245,7 +245,7 @@ export async function finishTurn(
   //
   // Three conditions, because the rule had only the first and refused things
   // it should not have. Repeating an observation is not automatically a fault:
-  // "that agent is STILL blocked" an hour later is the thing Noah wants most,
+  // "that agent is STILL blocked" an hour later is the thing JeanBrasse wants most,
   // and it was being turned into an error.
   //
   // The clock is what separates the two. The repeats that ran for a day came
@@ -255,7 +255,7 @@ export async function finishTurn(
   // the conversation this exists to fix: four gaps out of a hundred and eighty
   // four are longer than this window.
   //
-  // And only a check-in nobody asked for. When Noah asks a question, the same
+  // And only a check-in nobody asked for. When JeanBrasse asks a question, the same
   // answer as last time is an answer, and refusing it hands him an error
   // instead, which is the very thing he could not get past. His turn always
   // gets through; what stops it being the stale one is the fold in
@@ -289,7 +289,7 @@ export async function finishTurn(
     };
   }
   if (echoed) {
-    // Noah asked, so Noah gets something. Refusing here is what turned a
+    // JeanBrasse asked, so JeanBrasse gets something. Refusing here is what turned a
     // visibly wrong answer into no answer at all: an error toast and an empty
     // thread, which is the failure this codebase has spent three days
     // removing from everywhere else.
@@ -305,7 +305,7 @@ export async function finishTurn(
   if (!echoed && envelope.action) {
     const resolved = resolveTarget(envelope.action.agentId);
     // If the id doesn't resolve, the proposal is silently dropped from the
-    // structured side - envelope.say still reaches Noah as the overseer's
+    // structured side - envelope.say still reaches JeanBrasse as the overseer's
     // words, but there is nothing left to approve or send.
     if (resolved.ok) {
       action = {
@@ -323,7 +323,7 @@ export async function finishTurn(
   }
 
   // Pre-authorised? Decided here, against the live fleet, and sent through
-  // the same gate Noah's own approval goes through: a rule is an approval
+  // the same gate JeanBrasse's own approval goes through: a rule is an approval
   // given in advance, not a way around the gate.
   let autoNote = '';
   if (action) {

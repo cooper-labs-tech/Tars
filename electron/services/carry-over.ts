@@ -4,7 +4,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
 
 /**
  * What Tars owes its agents, carried across a restart (RD-REDEMARRAGE.md, 2.3;
- * approved by Noah on 2026-10-05): the note that an agent finished, held for
+ * approved by JeanBrasse on 2026-10-05): the note that an agent finished, held for
  * its requester while that one works (agent-watch.ts), and the kanban notes
  * held for an agent's rest (kanban-routes.ts). Both lived in memory only, and a
  * crash, a reboot or a quit lost them.

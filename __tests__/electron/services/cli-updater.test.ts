@@ -139,7 +139,7 @@ function linkedVersion(home: string): string {
 
 /**
  * <prefix>/bin/amp -> the binary inside @ampcode/cli inside @sourcegraph/amp,
- * which is how Noah's Amp is installed. `runnable` makes the binary a copy of
+ * which is how JeanBrasse's Amp is installed. `runnable` makes the binary a copy of
  * node, a real executable a process can be kept running from; its own inode,
  * so lsof does not mistake the test runner for it.
  */
@@ -276,7 +276,7 @@ describe('claude through its native installer', () => {
   });
 
   it.skipIf(cannotPlantPosixInstall())('reads autoUpdates: false written by the native installer itself as no opinion, as claude does', async () => {
-    // Noah's ~/.claude.json, as the native installer leaves it on every install.
+    // JeanBrasse's ~/.claude.json, as the native installer leaves it on every install.
     const home = path.join(root, 'home');
     nativeClaude(home);
     fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ autoUpdates: false, installMethod: 'native', autoUpdatesProtectedForNative: true }));

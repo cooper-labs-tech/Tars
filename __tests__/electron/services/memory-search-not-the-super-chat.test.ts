@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
- * memory_search does not hand an agent Noah's conversation with the super chat
+ * memory_search does not hand an agent JeanBrasse's conversation with the super chat
  * (the Audit's table on a3d7c125, #13).
  *
  * SECURITY.md §5 says that conversation lives in ~/.tars-private and is never
@@ -18,7 +18,7 @@ import * as path from 'node:path';
  * 2. A run of the super chat's cron job is returned to an agent.
  * 3. A hit the gateway gives without a session id, which nothing can tell
  *    apart, is returned to an agent.
- * 4. Noah's own sessions stop being searchable by his agents.
+ * 4. JeanBrasse's own sessions stop being searchable by his agents.
  *
  * Added after the Audit's gate of #190 (2026-09-28), written before the fix:
  * 5. A run of the super chat's cron job, once the job was replaced (deleted on
@@ -27,7 +27,7 @@ import * as path from 'node:path';
  *    gate removed that record and the four tests above stayed green.
  * 6. The super chat's hits eat an agent's limit: the gateway was asked for
  *    `limit` hits and the filter ran on those, so an agent asking 10 could get
- *    none while Noah's own sessions matched too.
+ *    none while JeanBrasse's own sessions matched too.
  * 7. A session Hermes compressed is returned: its search hits carry the
  *    lineage's newest id (`session_id`, never recorded) with its root
  *    (`lineage_root`) and parent (`parent_session_id`), read in
@@ -49,10 +49,10 @@ import * as path from 'node:path';
  * 11. An ancestor that cannot be read (the gateway fails, the session is
  *    gone), a chain longer than the bound, or a cycle lets the hit through,
  *    or never ends.
- * 12. Over-correction: Noah's own branched sessions are dropped; or a hit
+ * 12. Over-correction: JeanBrasse's own branched sessions are dropped; or a hit
  *    with no parent costs a call to the gateway; or an ancestor shared by
  *    several hits is read once per hit; or hits are walked past the limit.
- * 13. The Brain page, which is Noah's own and filters nothing, walks
+ * 13. The Brain page, which is JeanBrasse's own and filters nothing, walks
  *    anything.
  *
  * The overseer and the memory route are the real ones; the live transport
@@ -140,17 +140,17 @@ beforeEach(() => {
 });
 
 describe('memory_search, as an agent calls it', () => {
-  it('1, 4. leaves out a session the super chat opened live, and keeps Noah\'s own', async () => {
+  it('1, 4. leaves out a session the super chat opened live, and keeps JeanBrasse\'s own', async () => {
     await overseer.askOverseer('What is everyone doing?');
     gateway.hits = [
-      { sessionId: 'live-overseer-1', title: 'overseer', snippet: 'Noah asked the super chat' },
+      { sessionId: 'live-overseer-1', title: 'overseer', snippet: 'JeanBrasse asked the super chat' },
       { sessionId: 'stored-overseer-1', title: 'overseer', snippet: 'the same, by its stored id' },
-      { sessionId: 'noah-own-1', title: 'deploy notes', snippet: 'the deploy key rotates on Fridays' },
+      { sessionId: 'user-own-1', title: 'deploy notes', snippet: 'the deploy key rotates on Fridays' },
     ];
 
     const hits = await agentSearches('deploy');
 
-    expect(hits.map(h => h.ref)).toEqual(['noah-own-1']);
+    expect(hits.map(h => h.ref)).toEqual(['user-own-1']);
   });
 
   it('2. leaves out the runs of the super chat\'s cron job', async () => {
@@ -158,7 +158,7 @@ describe('memory_search, as an agent calls it', () => {
     store.saveState({ ...state, jobId: 'job-overseer' });
     gateway.hits = [
       { sessionId: 'cron_job-overseer_20260924_101010', snippet: 'a fallback turn' },
-      { sessionId: 'cron_other-job_20260924_101010', snippet: 'another cron of Noah\'s' },
+      { sessionId: 'cron_other-job_20260924_101010', snippet: 'another cron of JeanBrasse\'s' },
     ];
 
     const hits = await agentSearches('turn');
@@ -167,11 +167,11 @@ describe('memory_search, as an agent calls it', () => {
   });
 
   it('3. leaves out a hit that names no session', async () => {
-    gateway.hits = [{ title: 'untitled', snippet: 'no session id at all' }, { sessionId: 'noah-own-2', snippet: 'kept' }];
+    gateway.hits = [{ title: 'untitled', snippet: 'no session id at all' }, { sessionId: 'user-own-2', snippet: 'kept' }];
 
     const hits = await agentSearches('id');
 
-    expect(hits.map(h => h.ref)).toEqual(['noah-own-2']);
+    expect(hits.map(h => h.ref)).toEqual(['user-own-2']);
   });
 
   it('remembers the super chat\'s live sessions across a restart of Tars', async () => {
@@ -192,38 +192,38 @@ describe('memory_search, as an agent calls it', () => {
 
     // The job is made again on the gateway, under another id.
     store.saveState({ ...store.loadState(), jobId: 'job-after' });
-    gateway.hits = [{ sessionId: gateway.runId, snippet: 'the fallback turn' }, { sessionId: 'noah-own-5', snippet: 'kept' }];
+    gateway.hits = [{ sessionId: gateway.runId, snippet: 'the fallback turn' }, { sessionId: 'user-own-5', snippet: 'kept' }];
 
-    expect((await agentSearches('turn')).map(h => h.ref)).toEqual(['noah-own-5']);
+    expect((await agentSearches('turn')).map(h => h.ref)).toEqual(['user-own-5']);
   }, 20_000);
 
-  it('6. hands an agent its limit of Noah\'s own hits, however many of the super chat\'s come first', async () => {
+  it('6. hands an agent its limit of JeanBrasse\'s own hits, however many of the super chat\'s come first', async () => {
     await overseer.askOverseer('Seed the live session.');
     gateway.hits = [
       ...Array.from({ length: 12 }, () => ({ sessionId: 'live-overseer-1', snippet: 'the super chat' })),
-      ...Array.from({ length: 15 }, (_, i) => ({ sessionId: `noah-own-${i}`, snippet: 'Noah' })),
+      ...Array.from({ length: 15 }, (_, i) => ({ sessionId: `user-own-${i}`, snippet: 'JeanBrasse' })),
     ];
 
     const hits = await agentSearches('x', 10);
 
-    expect(hits.map(h => h.ref)).toEqual(Array.from({ length: 10 }, (_, i) => `noah-own-${i}`));
+    expect(hits.map(h => h.ref)).toEqual(Array.from({ length: 10 }, (_, i) => `user-own-${i}`));
   });
 
   it('7. leaves out a compressed session whose lineage root or parent is the super chat\'s', async () => {
     await overseer.askOverseer('Seed the live session.');
-    // Noah's lineage is read up to its root, which the gateway gives with no parent.
-    gateway.parents = { 'noah-root': null };
+    // JeanBrasse's lineage is read up to its root, which the gateway gives with no parent.
+    gateway.parents = { 'user-root': null };
     gateway.hits = [
       { sessionId: 'tip-after-compression', lineageRoot: 'live-overseer-1', snippet: 'the super chat, compressed' },
       { sessionId: 'tip-2', parentSessionId: 'stored-overseer-1', snippet: 'its child' },
-      { sessionId: 'noah-tip', lineageRoot: 'noah-root', parentSessionId: 'noah-root', snippet: 'Noah, compressed' },
+      { sessionId: 'user-tip', lineageRoot: 'user-root', parentSessionId: 'user-root', snippet: 'JeanBrasse, compressed' },
     ];
 
-    expect((await agentSearches('x')).map(h => h.ref)).toEqual(['noah-tip']);
+    expect((await agentSearches('x')).map(h => h.ref)).toEqual(['user-tip']);
   });
 
   it('8. takes 10 hits when the agent names no limit', async () => {
-    gateway.hits = Array.from({ length: 15 }, (_, i) => ({ sessionId: `noah-own-${i}`, snippet: 'Noah' }));
+    gateway.hits = Array.from({ length: 15 }, (_, i) => ({ sessionId: `user-own-${i}`, snippet: 'JeanBrasse' }));
 
     expect(await agentSearches('x')).toHaveLength(10);
   });
@@ -233,10 +233,10 @@ describe('memory_search, as an agent calls it', () => {
     gateway.parents = { 'segment-7': 'segment-6', 'segment-6': 'stored-overseer-1', 'stored-overseer-1': null };
     gateway.hits = [
       { sessionId: 'branch-1', lineageRoot: 'branch-1', parentSessionId: 'segment-7', snippet: 'a delegate of the super chat' },
-      { sessionId: 'noah-own-9', lineageRoot: 'noah-own-9', snippet: 'kept' },
+      { sessionId: 'user-own-9', lineageRoot: 'user-own-9', snippet: 'kept' },
     ];
 
-    expect((await agentSearches('x')).map(h => h.ref)).toEqual(['noah-own-9']);
+    expect((await agentSearches('x')).map(h => h.ref)).toEqual(['user-own-9']);
   });
 
   it('10. leaves it out once the branch was compressed too', async () => {
@@ -263,23 +263,23 @@ describe('memory_search, as an agent calls it', () => {
     expect(gateway.detailCalls.length).toBeLessThan(60);
   });
 
-  it('12. keeps Noah\'s own branches, reads a shared ancestor once, and asks nothing for a hit with no parent or past the limit', async () => {
+  it('12. keeps JeanBrasse\'s own branches, reads a shared ancestor once, and asks nothing for a hit with no parent or past the limit', async () => {
     await overseer.askOverseer('Seed the live session.');
-    gateway.parents = { 'noah-chat': 'noah-first', 'noah-first': null };
+    gateway.parents = { 'user-chat': 'user-first', 'user-first': null };
     gateway.hits = [
-      { sessionId: 'noah-plain', lineageRoot: 'noah-plain', snippet: 'no parent' },
-      { sessionId: 'noah-branch-1', lineageRoot: 'noah-branch-1', parentSessionId: 'noah-chat', snippet: 'a branch of Noah\'s' },
-      { sessionId: 'noah-branch-2', lineageRoot: 'noah-branch-2', parentSessionId: 'noah-chat', snippet: 'another' },
-      { sessionId: 'noah-branch-3', lineageRoot: 'noah-branch-3', parentSessionId: 'never-read', snippet: 'past the limit' },
+      { sessionId: 'user-plain', lineageRoot: 'user-plain', snippet: 'no parent' },
+      { sessionId: 'user-branch-1', lineageRoot: 'user-branch-1', parentSessionId: 'user-chat', snippet: 'a branch of JeanBrasse\'s' },
+      { sessionId: 'user-branch-2', lineageRoot: 'user-branch-2', parentSessionId: 'user-chat', snippet: 'another' },
+      { sessionId: 'user-branch-3', lineageRoot: 'user-branch-3', parentSessionId: 'never-read', snippet: 'past the limit' },
     ];
 
-    expect((await agentSearches('x', 3)).map(h => h.ref)).toEqual(['noah-plain', 'noah-branch-1', 'noah-branch-2']);
-    expect(gateway.detailCalls).toEqual(['noah-chat', 'noah-first']);
+    expect((await agentSearches('x', 3)).map(h => h.ref)).toEqual(['user-plain', 'user-branch-1', 'user-branch-2']);
+    expect(gateway.detailCalls).toEqual(['user-chat', 'user-first']);
   });
 
   it('13. walks nothing for the Brain page, which filters nothing', async () => {
     const { searchMemory } = await import('../../../electron/services/memory-hub');
-    gateway.hits = [{ sessionId: 'branch-1', lineageRoot: 'branch-1', parentSessionId: 'segment-7', snippet: 'Noah\'s own view' }];
+    gateway.hits = [{ sessionId: 'branch-1', lineageRoot: 'branch-1', parentSessionId: 'segment-7', snippet: 'JeanBrasse\'s own view' }];
 
     const res = await searchMemory({ query: 'x', settings: {} as never, hermes: {} as never, sources: ['hermes'] });
 

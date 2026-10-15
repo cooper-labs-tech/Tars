@@ -45,8 +45,8 @@ describe('1. darwin and linux: the expressions they replace, to the byte', () =>
   });
 
   it('stays case-sensitive and backslash-blind there', () => {
-    expect(samePath('/Users/noah/Tars', '/users/noah/tars', 'darwin')).toBe(false);
-    expect(isUnder('/Users/noah/Tars\\x', '/Users/noah/Tars', 'linux')).toBe(false);
+    expect(samePath('/Users/demo/Tars', '/users/demo/tars', 'darwin')).toBe(false);
+    expect(isUnder('/Users/demo/Tars\\x', '/Users/demo/Tars', 'linux')).toBe(false);
   });
 });
 

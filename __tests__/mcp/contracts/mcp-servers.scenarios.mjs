@@ -86,7 +86,7 @@ const orchestratorAgent = [
   { name: "start_agent, with a model", tool: "start_agent", args: { id: "a1", prompt: "Run the tests", model: "opus", allowCrossProject: true }, tars: [started()] },
   { name: "start_agent, already running", tool: "start_agent", args: { id: "a1", prompt: "Also lint" }, tars: [messaged({ previousStatus: "waiting" })] },
   { name: "start_agent, already busy, no previous status", tool: "start_agent", args: { id: "a1", prompt: "Also lint" }, tars: [messaged()] },
-  { name: "start_agent, held with a reason", tool: "start_agent", args: { id: "a1", prompt: "Run" }, tars: [messaged({ held: true, heldReason: "Noah is typing in it." })] },
+  { name: "start_agent, held with a reason", tool: "start_agent", args: { id: "a1", prompt: "Run" }, tars: [messaged({ held: true, heldReason: "Somebody is typing in it." })] },
   { name: "start_agent, held without a reason, no name", tool: "start_agent", args: { id: "a1", prompt: "Run" }, tars: [ok({ success: true, mode: "message", held: true, agent: { id: "a1", status: "running" } })] },
   { name: "start_agent, error", tool: "start_agent", args: { id: "a1", prompt: "Run" }, tars: [fail(409, { error: "Launch in progress" })] },
 
@@ -147,7 +147,7 @@ const orchestratorAgent = [
   { name: "delegate_task, blocked on a permission", tool: "delegate_task", args: { id: "a1", prompt: "Fix" }, tars: [fail(400, { error: "no ACP mode" }), started(), ok({ status: "waiting", waitingReason: "permission" })] },
   {
     name: "delegate_task, a question, the answer is held", tool: "delegate_task", args: { id: "a1", prompt: "Fix" },
-    tars: [fail(400, { error: "no ACP mode" }), started(), asking, messaged({ held: true, heldReason: "Its field is in use by Noah." })],
+    tars: [fail(400, { error: "no ACP mode" }), started(), asking, messaged({ held: true, heldReason: "Its field is in use by the user." })],
   },
   {
     name: "delegate_task, a question answered, then completed", tool: "delegate_task", args: { id: "a1", prompt: "Fix" },
@@ -182,7 +182,7 @@ const orchestratorAgent = [
   { name: "send_discord, no channel, long", tool: "send_discord", args: { message: long }, tars: [ok({ success: true })] },
   { name: "send_discord, refused", tool: "send_discord", args: { message: "Hi", channel_id: "C-OTHER" }, tars: [fail(403, { error: "Tars posts only to the channel Settings > Discord detected" })] },
   { name: "ask_user, asked", tool: "ask_user", args: { question: "Staging or prod?", context: "The migration touches billing." }, tars: [ok({ success: true, id: "q-1", expiresAt: "2026-09-28T12:00:00.000Z" })] },
-  { name: "ask_user, one already open", tool: "ask_user", args: { question: "Again?" }, tars: [fail(409, { error: "You already have a question open for Noah" })] },
+  { name: "ask_user, one already open", tool: "ask_user", args: { question: "Again?" }, tars: [fail(409, { error: "You already have a question open for the user" })] },
   { name: "ask_user, no question", tool: "ask_user", args: { context: "nothing asked" }, tars: [] },
 
   { name: "room_post, refused with a message", tool: "room_post", args: { text: "(pass)" }, tars: [ok({ refused: "silence", message: "Nothing was published." })] },
@@ -200,7 +200,7 @@ const orchestratorAgent = [
   {
     name: "room_read, an open thread", tool: "room_read", args: { room: "r1", limit: 2 },
     tars: [ok({ room: { id: "r1", title: "alpha", memberIds: ["a1"] }, messages: [
-      { authorName: "Noah", authorKind: "human", text: "Status?", createdAt: "2026-09-24T08:00:00.000Z", mentions: [] },
+      { authorName: "User", authorKind: "human", text: "Status?", createdAt: "2026-09-24T08:00:00.000Z", mentions: [] },
       { authorName: "Dune", authorKind: "agent", text: "Green.", createdAt: "2026-09-24T08:01:00.000Z", mentions: [] },
     ], threads: [{ id: "t1", state: "open", round: 2, agentMessageCount: 3 }] })],
   },
@@ -374,17 +374,17 @@ const vaultNoToken = [
 const SOCIAL = { socialDataApiKey: "sd-key" };
 const tweet = (extra = {}) => ({
   id_str: "1001", full_text: "Hello world", tweet_created_at: "2026-09-24T08:00:00.000000Z",
-  user: { id_str: "44", name: "Noah", screen_name: "noah", description: "bio", followers_count: 12345, friends_count: 678, verified: false, profile_image_url_https: "https://img" },
+  user: { id_str: "44", name: "Demo", screen_name: "demo", description: "bio", followers_count: 12345, friends_count: 678, verified: false, profile_image_url_https: "https://img" },
   retweet_count: 1, favorite_count: 2, reply_count: 3, quote_count: 4, views_count: 5000, bookmark_count: 6, lang: "en", source: "web",
   in_reply_to_status_id_str: null, in_reply_to_screen_name: null, is_pinned: false, entities: {}, ...extra,
 });
 const user = (extra = {}) => ({
-  id_str: "44", name: "Noah", screen_name: "noah", description: "Builds Tars.", location: "Dubai", url: "https://tars.dev", protected: false, verified: true,
+  id_str: "44", name: "Demo", screen_name: "demo", description: "Builds Tars.", location: "Dubai", url: "https://tars.dev", protected: false, verified: true,
   followers_count: 1234567, friends_count: 89, listed_count: 10, favourites_count: 4321, statuses_count: 9876, created_at: "2010-01-01", profile_banner_url: "", profile_image_url_https: "", can_dm: true, ...extra,
 });
 
 const socialdata = [
-  { name: "twitter_search, a page and a cursor", tool: "twitter_search", args: { query: "from:noah tars", type: "Top", cursor: "c0" }, tars: [ok({ tweets: [tweet(), tweet({ id_str: "1002", full_text: "Second" })], next_cursor: "c1" })] },
+  { name: "twitter_search, a page and a cursor", tool: "twitter_search", args: { query: "from:demo tars", type: "Top", cursor: "c0" }, tars: [ok({ tweets: [tweet(), tweet({ id_str: "1002", full_text: "Second" })], next_cursor: "c1" })] },
   { name: "twitter_search, last page", tool: "twitter_search", args: { query: "tars" }, tars: [ok({ tweets: [tweet()], next_cursor: null })] },
   { name: "twitter_search, nothing", tool: "twitter_search", args: { query: "zzz" }, tars: [ok({ tweets: [] })] },
   { name: "twitter_search, no tweets field", tool: "twitter_search", args: { query: "zzz" }, tars: [ok({})] },
@@ -414,7 +414,7 @@ const socialdata = [
   { name: "twitter_get_tweet_comments, last page", tool: "twitter_get_tweet_comments", args: { tweet_id: "1001" }, tars: [ok({ tweets: [tweet({ full_text: "Nice" })] })] },
   { name: "twitter_get_tweet_comments, none", tool: "twitter_get_tweet_comments", args: { tweet_id: "1001" }, tars: [ok({ tweets: [] })] },
   { name: "twitter_get_tweet_comments, error", tool: "twitter_get_tweet_comments", args: { tweet_id: "1001" }, tars: [fail(500, { message: "down" })] },
-  { name: "twitter_get_user, with an @", tool: "twitter_get_user", args: { username: "@noah" }, tars: [ok(user())] },
+  { name: "twitter_get_user, with an @", tool: "twitter_get_user", args: { username: "@demo" }, tars: [ok(user())] },
   { name: "twitter_get_user, bare profile", tool: "twitter_get_user", args: { username: "ghost" }, tars: [ok(user({ description: "", location: "", url: null, protected: true, verified: false, can_dm: false }))] },
   { name: "twitter_get_user, error", tool: "twitter_get_user", args: { username: "ghost" }, tars: [fail(404, {})] },
   { name: "twitter_get_user_tweets, with replies and a cursor", tool: "twitter_get_user_tweets", args: { user_id: "44", include_replies: true, cursor: "c0" }, tars: [ok({ tweets: [tweet(), tweet({ id_str: "1003" })], next_cursor: "c3" })] },

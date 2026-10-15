@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /**
- * An agent's new worktree gets its project's dependencies as a clone (Noah's
+ * An agent's new worktree gets its project's dependencies as a clone (JeanBrasse's
  * choice 17, 05/10). Each package of the worktree (the root, and every folder
  * one level down with a package.json: mcp-*, landing) whose node_modules is
  * missing gets the project's own, cloned when it was installed for the same

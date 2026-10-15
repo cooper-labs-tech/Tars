@@ -24,7 +24,7 @@ import { isOwedByRequests } from '../core/task-requests';
  * Agents with no turn for 30 minutes are put to sleep: their CLI and all it
  * started are ended, their conversation kept, and the first thing that needs
  * them wakes them on it (core/agent-asleep.ts). Orchestrators never sleep.
- * Noah's choices 5 and 6 of 2026-10-05, on RD-RAM.md 2.1: an agent gives back
+ * JeanBrasse's choices 5 and 6 of 2026-10-05, on RD-RAM.md 2.1: an agent gives back
  * 265 to 600 MB asleep, and resuming took about a second.
  *
  * The rule refuses on any doubt, since asleep, what the CLI held is gone:

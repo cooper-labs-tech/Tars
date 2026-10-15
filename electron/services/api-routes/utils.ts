@@ -89,7 +89,7 @@ export function isSafeTelegramPath(filePath: string): boolean {
     // Blocking ~/.ssh while leaving this open was guarding the front door and
     // not the safe.
     path.join(home, DATA_DIR_NAME),
-    // And what Tars keeps out of the agents' reach: Noah's conversation with
+    // And what Tars keeps out of the agents' reach: JeanBrasse's conversation with
     // the super chat and the Hermes webhook secret. Both left the store above
     // so that no agent would be handed them, and the move took them off this
     // list with it: the conversation could be sent from where it had landed.

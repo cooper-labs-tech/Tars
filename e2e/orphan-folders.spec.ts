@@ -7,7 +7,7 @@ import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * The folders no agent owns (Noah's choice 16; the frames merged in #315), in
+ * The folders no agent owns (JeanBrasse's choice 16; the frames merged in #315), in
  * the real app: a sandbox HOME whose project holds a live worktree git knows
  * (nested as a branch name nests it), an agent's worktree, a worktree git
  * forgot, a folder with no .git, and one a real process works in.

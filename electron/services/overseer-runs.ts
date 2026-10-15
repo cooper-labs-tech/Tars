@@ -112,7 +112,7 @@ export function summariseRuns(now = Date.now(), events = readRunEvents(now)): st
 
     const parts: string[] = [];
     if (starts > 0) parts.push(plural(starts, 'run', 'runs'));
-    if (pauses > 0) parts.push(`${plural(pauses, 'pause', 'pauses')} for Noah`);
+    if (pauses > 0) parts.push(`${plural(pauses, 'pause', 'pauses')} for the user`);
     if (errors > 0) parts.push(plural(errors, 'error', 'errors'));
     if (parts.length === 0) continue;
 

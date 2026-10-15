@@ -104,7 +104,7 @@ function scrub(value: string, machine: Machine): string {
       }
     }
   }
-  // The machine's name often carries its owner's ("MacBook-Pro-de-Noah"),
+  // The machine's name often carries its owner's ("MacBook-Pro-de-JeanBrasse"),
   // inside a word the user name rule below does not look into. Its first
   // label alone is masked only when long enough to be a name: "Mac" of
   // "Mac.lan" would take the word out of every message.

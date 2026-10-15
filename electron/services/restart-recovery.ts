@@ -17,7 +17,7 @@ import { leaveRunnersAsleep } from './chat-runners';
 
 /**
  * What a run of Tars does so that the next one can recover from it, and what
- * a run does to recover from the last (RD-REDEMARRAGE.md, 2.2 and 2.3; Noah's
+ * a run does to recover from the last (RD-REDEMARRAGE.md, 2.2 and 2.3; JeanBrasse's
  * yes of 2026-10-05):
  * - the run record follows the working agents, at each change of the fleet and
  *   once a minute, so an abrupt stop is dated within a minute (run-state.ts);

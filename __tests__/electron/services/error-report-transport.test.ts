@@ -67,7 +67,7 @@ function client() {
   scope.setClient(c);
   c.init();
   scope.addBreadcrumb({ category: 'console', message: PROMPT });
-  scope.setUser({ email: 'noah@example.com', ip_address: '10.0.0.2' });
+  scope.setUser({ email: 'demo@example.com', ip_address: '10.0.0.2' });
   scope.setExtra('prompt', PROMPT);
   scope.setTag('project', `${HOME}/clients/acme`);
   scope.setContext('conversation', { text: PROMPT });
@@ -98,7 +98,7 @@ describe('what reaches the transport', () => {
     expect(bytes).toContain('"type":"Error"');
     expect(bytes).toContain('could not read ~/clients/acme/notes.md');
     expect(bytes).toContain('startAgent');
-    for (const absent of [HOME, KEY, PROMPT, 'noah@example.com', '10.0.0.2', 'transcript.txt', '"breadcrumbs"', '"extra"']) {
+    for (const absent of [HOME, KEY, PROMPT, 'demo@example.com', '10.0.0.2', 'transcript.txt', '"breadcrumbs"', '"extra"']) {
       expect(bytes, absent).not.toContain(absent);
     }
     // Every item in the envelope is the one error event.

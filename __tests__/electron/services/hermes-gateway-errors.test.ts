@@ -90,7 +90,7 @@ async function calls() {
   const session = await import('../../../electron/services/hermes-session');
   const conn = { mode: 'local' as const, localPort: port, authMode: 'token' as const, token: 'tok' };
   return {
-    signInHermes: () => c.signInHermes(conn, { username: 'noah', password: 'pw' }),
+    signInHermes: () => c.signInHermes(conn, { username: 'demo', password: 'pw' }),
     fetchHermesCrons: () => c.fetchHermesCrons(conn),
     updateHermesCron: () => c.updateHermesCron(conn, 'j1', { schedule: 'soon' }),
     setHermesModel: () => c.setHermesModel(conn, { provider: 'anthropic', model: 'm' }),

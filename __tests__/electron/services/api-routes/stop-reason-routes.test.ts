@@ -145,10 +145,10 @@ describe('POST /api/agents/:id/stop', () => {
     const w2 = agent('w2');
 
     expect((await call('POST', '/api/agents/w1/stop', { body: { reason: 'frozen' }, caller: 'orch' })).status).toBe(200);
-    expect((await call('POST', '/api/agents/w2/stop', { body: { reason: 'Noah asked' }, internal: true })).status).toBe(200);
+    expect((await call('POST', '/api/agents/w2/stop', { body: { reason: 'JeanBrasse asked' }, internal: true })).status).toBe(200);
 
     expect(w1).toMatchObject({ status: 'stopped', stoppedBy: 'Tars-Orchestrator', stopReason: 'frozen' });
-    expect(w2).toMatchObject({ status: 'stopped', stoppedBy: 'Tars', stopReason: 'Noah asked' });
+    expect(w2).toMatchObject({ status: 'stopped', stoppedBy: 'Tars', stopReason: 'JeanBrasse asked' });
   });
 
   it('3. keeps a reason on one line, without control characters, and at most 200 characters', async () => {
@@ -218,8 +218,8 @@ describe("the window's stop", () => {
   });
 });
 
-describe('a start after a stop (Noah, 05/10)', () => {
-  // An orchestrator may start again an agent Noah stopped, whenever it needs
+describe('a start after a stop (JeanBrasse, 05/10)', () => {
+  // An orchestrator may start again an agent JeanBrasse stopped, whenever it needs
   // to, a scheduled task too: the one that restarts it is told who stopped it
   // and why, and the restart is noted on the agent. How it fails, written
   // before the code (2026-10-05):

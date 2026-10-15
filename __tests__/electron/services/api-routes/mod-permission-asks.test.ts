@@ -42,7 +42,7 @@
  * 14. (Medium 1, proven) A question is known by the call's id alone: the
  *     agent's own shell holds the hook token and can read its next call's id
  *     from its transcript, post `ls` for it, and the mod's real ask for
- *     `curl ... | sh` joins the question Noah sees as `ls`, or takes the
+ *     `curl ... | sh` joins the question JeanBrasse sees as `ls`, or takes the
  *     answer kept for it. An ask for the same id with other fields must start
  *     a question of its own, shown afresh, and an answer must name what it
  *     decides (the question's fingerprint: the tool and the asked fields).

@@ -104,7 +104,7 @@ describe('deployButtonLabel', () => {
 });
 
 /**
- * The worktree an agent's settings show and send (Noah's report of 13/10: set,
+ * The worktree an agent's settings show and send (JeanBrasse's report of 13/10: set,
  * saved, and nothing kept). agent:list's branchName is the branch the agent's
  * folder is on, read from git (services/agent-truth.ts), so an agent with no
  * worktree of its own has its project's there. Written before the code. How it

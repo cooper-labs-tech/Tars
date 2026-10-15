@@ -7,7 +7,7 @@ import type { AddressInfo } from 'node:net';
  * Shared by the E2E specs that drive Tars's own Telegram bot.
  */
 
-export const NOAH = 555;
+export const OWNER_ID = 555;
 export const BOT_TOKEN = '123456:E2E-STAND-IN';
 
 /** Telegram's Bot API, as node-telegram-bot-api speaks to it: getMe, a long-polled getUpdates, sendMessage. */
@@ -48,13 +48,13 @@ export async function startFakeTelegram() {
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     sent,
-    /** Noah writes in his private chat with the bot, replying to one of its messages or not. */
+    /** JeanBrasse writes in his private chat with the bot, replying to one of its messages or not. */
     write(text: string, replyTo?: number) {
-      const chat = { id: NOAH, type: 'private' };
+      const chat = { id: OWNER_ID, type: 'private' };
       updates.push({
         update_id: nextUpdate++,
         message: {
-          message_id: nextIncoming++, date: Math.floor(Date.now() / 1000), chat, from: { id: NOAH, is_bot: false, first_name: 'Noah' }, text,
+          message_id: nextIncoming++, date: Math.floor(Date.now() / 1000), chat, from: { id: OWNER_ID, is_bot: false, first_name: 'JeanBrasse' }, text,
           ...(replyTo ? { reply_to_message: { message_id: replyTo, date: Math.floor(Date.now() / 1000), chat, text: '...' } } : {}),
         },
       });

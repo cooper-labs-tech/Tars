@@ -43,14 +43,14 @@ export interface FakeRelay {
   recreate(): void;
   /** Every request, in order: method and path. */
   calls: string[];
-  /** Noah's reply to a message the relay sent, as the plugin keeps it. */
+  /** JeanBrasse's reply to a message the relay sent, as the plugin keeps it. */
   reply(to: { messageId: string; ref?: string; project?: string }, text: string): number;
-  /** Noah's "@project text", as the plugin keeps it. */
+  /** JeanBrasse's "@project text", as the plugin keeps it. */
   projectMessage(project: string, text: string): number;
   close(): Promise<void>;
 }
 
-const NOAH = '1159000001';
+const OWNER_ID = '1159000001';
 
 /** Another route of the same gateway (an E2E's Hermes board): its answer, or undefined to let the relay's routes answer. */
 export type ExtraRoute = (req: { method: string; path: string; body: Record<string, unknown> }) => { status: number; body: unknown } | undefined;
@@ -80,7 +80,7 @@ export async function startFakeRelay(token = 'fake-dashboard-token', opts: { ext
       const seq = nextSeq++;
       fake.replies.push({
         seq, at: Date.now() / 1000, kind: 'reply', ref: to.ref ?? sent?.ref ?? '', project: to.project ?? sent?.project ?? '',
-        chat_id: NOAH, user_id: NOAH, message_id: String(nextIncoming++), reply_to_message_id: to.messageId, text,
+        chat_id: OWNER_ID, user_id: OWNER_ID, message_id: String(nextIncoming++), reply_to_message_id: to.messageId, text,
       });
       return seq;
     },
@@ -88,7 +88,7 @@ export async function startFakeRelay(token = 'fake-dashboard-token', opts: { ext
       const seq = nextSeq++;
       fake.replies.push({
         seq, at: Date.now() / 1000, kind: 'project', ref: '', project,
-        chat_id: NOAH, user_id: NOAH, message_id: String(nextIncoming++), reply_to_message_id: '', text,
+        chat_id: OWNER_ID, user_id: OWNER_ID, message_id: String(nextIncoming++), reply_to_message_id: '', text,
       });
       return seq;
     },

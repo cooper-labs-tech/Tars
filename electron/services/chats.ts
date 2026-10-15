@@ -749,7 +749,7 @@ const MIN_CHATS = 1;
 const MAX_CHATS = 8;
 
 /**
- * One chat per 5 GB of RAM, from 1 to 8 (Noah, 07/10; 4.2): a runner and its
+ * One chat per 5 GB of RAM, from 1 to 8 (JeanBrasse, 07/10; 4.2): a runner and its
  * MCP servers take 0.4 to 0.75 GB, and the rest of each 5 GB is left to the
  * workers it drives, macOS and Tars. 8 GB: 1, 16 GB: 3, 24 GB: 4, 32 GB: 6,
  * 64 GB and more: 8. A GB is 2^30 bytes, as os.totalmem() counts them.

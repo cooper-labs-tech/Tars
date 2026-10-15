@@ -17,7 +17,7 @@
  *    (not yet written) one does.
  * 3. A turn whose prompt carries a request's id (the sender line Tars typed)
  *    does not bind that request, or binds another.
- * 4. A turn with no request id (Noah typing into the worker, a scheduled task,
+ * 4. A turn with no request id (JeanBrasse typing into the worker, a scheduled task,
  *    a /loop) takes a request from the queue or changes the link.
  * 5. A request that starts a new session (its message is the launch's prompt,
  *    which carries no sender line) never binds.

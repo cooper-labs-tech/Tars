@@ -45,9 +45,9 @@
  * - a task list cut at the bottom of the window: the Usage page runs past one
  *   screen, so the window grows to its height, sidebar included, for that
  *   shot (the Audit's L1 of #330);
- * - a project of Noah's: the seed's second project is named after a real one,
+ * - a project of JeanBrasse's: the seed's second project is named after a real one,
  *   so here it is renamed to an invented one before anything reads it, and
- *   French quotes in a seeded task read as English ones (Noah's go of 07/10).
+ *   French quotes in a seeded task read as English ones (JeanBrasse's go of 07/10).
  *   A shot whose page still shows the old name or a guillemet fails the run,
  *   and no picture is written: they are taken into a folder of their own and
  *   copied into the output only once every page has passed (the Audit's L1

@@ -9,7 +9,7 @@ import { homeVariables } from './test-home';
 /**
  * The suite runs in a HOME of its own, and cannot write into the one it started in.
  *
- * Measured on 2026-09-16: Noah's real ~/.claude.json held 171 project entries
+ * Measured on 2026-09-16: JeanBrasse's real ~/.claude.json held 171 project entries
  * written by this suite, one per run since 2026-09-02, each for a temp directory
  * that no longer existed. managed-cli-env.test.ts spawns through the real
  * initAgentPty and spawnAgentSession, both call ensureProjectTrusted, and that
@@ -19,7 +19,7 @@ import { homeVariables } from './test-home';
  * redirect, three files write into the home they start in: that one and
  * task-never-started.test.ts into ~/.claude.json, and
  * agent-start-missing-skills.test.ts into ~/.dorothy/amp-settings.json, which
- * Noah's copy shows rewritten at the minute a suite ran. A rule each file has to
+ * JeanBrasse's copy shows rewritten at the minute a suite ran. A rule each file has to
  * remember is how the class got three members.
  *
  * So this does it for every file, before the file's imports, which matters for

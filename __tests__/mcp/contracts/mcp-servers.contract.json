@@ -180,7 +180,7 @@
           },
           {
             "name": "stop_agent",
-            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; Noah reads it in the window.",
+            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; the user reads it in the window.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -1604,7 +1604,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: The task for \"Dune\" is waiting for its terminal and has not been typed in yet. Noah is typing in it. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again."
+                "text": "HELD: The task for \"Dune\" is waiting for its terminal and has not been typed in yet. Somebody is typing in it. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again."
               }
             ]
           }
@@ -3721,7 +3721,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "HELD: The answer to its question for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is in use by Noah. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again. delegate_task is not waiting on it: use wait_for_agent to follow it."
+                "text": "HELD: The answer to its question for \"Dune\" is waiting for its terminal and has not been typed in yet. Its field is in use by the user. It goes in by itself once the field is free; if it still waits a few minutes on, Tars tells you again. delegate_task is not waiting on it: use wait_for_agent to follow it."
               }
             ]
           }
@@ -5266,7 +5266,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error asking the user: You already have a question open for Noah"
+                "text": "Error asking the user: You already have a question open for the user"
               }
             ],
             "isError": true
@@ -5567,7 +5567,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Room alpha: thread t1 is open, round 2, 3 agent messages so far.\n\n[2026-09-24T08:00:00.000Z] Noah (human): Status?\n[2026-09-24T08:01:00.000Z] Dune (agent): Green."
+                "text": "Room alpha: thread t1 is open, round 2, 3 agent messages so far.\n\n[2026-09-24T08:00:00.000Z] User (human): Status?\n[2026-09-24T08:01:00.000Z] Dune (agent): Green."
               }
             ]
           }
@@ -5844,7 +5844,7 @@
           },
           {
             "name": "stop_agent",
-            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; Noah reads it in the window.",
+            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; the user reads it in the window.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -6477,7 +6477,7 @@
           },
           {
             "name": "stop_agent",
-            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; Noah reads it in the window.",
+            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; the user reads it in the window.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -7036,7 +7036,7 @@
           },
           {
             "name": "stop_agent",
-            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; Noah reads it in the window.",
+            "description": "Stop an agent: its CLI and everything it started are ended, and it reads 'stopped', with your name and your reason, until it is started again. Give the reason in one line; the user reads it in the window.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -10334,7 +10334,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Task created, parked on the Hermes board: [t_3] New\nHermes will not start it. Claim it with assign_task to work on it, or leave it for Noah."
+                "text": "Task created, parked on the Hermes board: [t_3] New\nHermes will not start it. Claim it with assign_task to work on it, or leave it for the user."
               }
             ]
           }
@@ -13566,7 +13566,7 @@
           "call": {
             "tool": "twitter_search",
             "arguments": {
-              "query": "from:noah tars",
+              "query": "from:demo tars",
               "type": "Top",
               "cursor": "c0"
             }
@@ -13575,7 +13575,7 @@
             {
               "to": "https://api.socialdata.tools",
               "method": "GET",
-              "path": "/twitter/search?query=from%3Anoah+tars&type=Top&cursor=c0",
+              "path": "/twitter/search?query=from%3Ademo+tars&type=Top&cursor=c0",
               "headers": [
                 "Authorization: Bearer sd-key",
                 "Accept: application/json",
@@ -13588,7 +13588,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Found 2 tweets:\n\n@noah (Noah), 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000  🔖 6\n  Tweet ID: 1001\n\n---\n\n@noah (Noah), 2026-09-24T08:00:00.000000Z\nSecond\n  ❤️ 2  🔁 1  💬 3  👁 5000  🔖 6\n  Tweet ID: 1002\n\n📄 More results available. Use cursor: \"c1\" to get the next page."
+                "text": "Found 2 tweets:\n\n@demo (Demo), 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000  🔖 6\n  Tweet ID: 1001\n\n---\n\n@demo (Demo), 2026-09-24T08:00:00.000000Z\nSecond\n  ❤️ 2  🔁 1  💬 3  👁 5000  🔖 6\n  Tweet ID: 1002\n\n📄 More results available. Use cursor: \"c1\" to get the next page."
               }
             ]
           }
@@ -13618,7 +13618,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Found 1 tweets:\n\n@noah (Noah), 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000  🔖 6\n  Tweet ID: 1001"
+                "text": "Found 1 tweets:\n\n@demo (Demo), 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000  🔖 6\n  Tweet ID: 1001"
               }
             ]
           }
@@ -14052,7 +14052,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Tweet by @noah (Noah)\nDate: 2026-09-24T08:00:00.000000Z\nTweet ID: 1001\n\nHello world\n\nEngagement:\n  ❤️ Likes: 2\n  🔁 Retweets: 1\n  💬 Replies: 3\n  🔄 Quotes: 4\n  👁 Views: 5000\n  🔖 Bookmarks: 6\n\nIn reply to: @elon (tweet 999)\n\nHashtags: #ai #agents\n\nLinks: https://a.dev, https://b.dev\n\nMedia: photo: https://m/1.jpg\n\nMentions: @alice, @bob\n\nAuthor: @noah, 12,345 followers, 678 following"
+                "text": "Tweet by @demo (Demo)\nDate: 2026-09-24T08:00:00.000000Z\nTweet ID: 1001\n\nHello world\n\nEngagement:\n  ❤️ Likes: 2\n  🔁 Retweets: 1\n  💬 Replies: 3\n  🔄 Quotes: 4\n  👁 Views: 5000\n  🔖 Bookmarks: 6\n\nIn reply to: @elon (tweet 999)\n\nHashtags: #ai #agents\n\nLinks: https://a.dev, https://b.dev\n\nMedia: photo: https://m/1.jpg\n\nMentions: @alice, @bob\n\nAuthor: @demo, 12,345 followers, 678 following"
               }
             ]
           }
@@ -14082,7 +14082,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Tweet by @noah (Noah)\nDate: 2026-09-24T08:00:00.000000Z\nTweet ID: 1001\n\nHello world\n\nEngagement:\n  ❤️ Likes: 2\n  🔁 Retweets: 1\n  💬 Replies: 3\n  🔄 Quotes: 4\n  👁 Views: 5000\n  🔖 Bookmarks: 6\n\nAuthor: @noah, 12,345 followers, 678 following"
+                "text": "Tweet by @demo (Demo)\nDate: 2026-09-24T08:00:00.000000Z\nTweet ID: 1001\n\nHello world\n\nEngagement:\n  ❤️ Likes: 2\n  🔁 Retweets: 1\n  💬 Replies: 3\n  🔄 Quotes: 4\n  👁 Views: 5000\n  🔖 Bookmarks: 6\n\nAuthor: @demo, 12,345 followers, 678 following"
               }
             ]
           }
@@ -14144,7 +14144,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "1 comments:\n\n@noah: Nice\n  ❤️ 2  🔁 1  💬 3 | ID: 1001\n\n📄 More comments available. Use cursor: \"c2\""
+                "text": "1 comments:\n\n@demo: Nice\n  ❤️ 2  🔁 1  💬 3 | ID: 1001\n\n📄 More comments available. Use cursor: \"c2\""
               }
             ]
           }
@@ -14174,7 +14174,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "1 comments:\n\n@noah: Nice\n  ❤️ 2  🔁 1  💬 3 | ID: 1001"
+                "text": "1 comments:\n\n@demo: Nice\n  ❤️ 2  🔁 1  💬 3 | ID: 1001"
               }
             ]
           }
@@ -14245,14 +14245,14 @@
           "call": {
             "tool": "twitter_get_user",
             "arguments": {
-              "username": "@noah"
+              "username": "@demo"
             }
           },
           "requests": [
             {
               "to": "https://api.socialdata.tools",
               "method": "GET",
-              "path": "/twitter/user/noah",
+              "path": "/twitter/user/demo",
               "headers": [
                 "Authorization: Bearer sd-key",
                 "Accept: application/json",
@@ -14265,7 +14265,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Noah (@noah)\nUser ID: 44\n\nBuilds Tars.\n\n📍 Location: Dubai\n🔗 URL: https://tars.dev\n📅 Joined: 2010-01-01\n\n👥 Followers: 1,234,567\n👤 Following: 89\n📝 Tweets: 9,876\n❤️ Likes: 4,321\n📋 Listed: 10\n\nProtected: No\nVerified: Yes\nCan DM: Yes"
+                "text": "Demo (@demo)\nUser ID: 44\n\nBuilds Tars.\n\n📍 Location: Dubai\n🔗 URL: https://tars.dev\n📅 Joined: 2010-01-01\n\n👥 Followers: 1,234,567\n👤 Following: 89\n📝 Tweets: 9,876\n❤️ Likes: 4,321\n📋 Listed: 10\n\nProtected: No\nVerified: Yes\nCan DM: Yes"
               }
             ]
           }
@@ -14295,7 +14295,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Noah (@noah)\nUser ID: 44\n\n(no bio)\n\n📍 Location: Not specified\n🔗 URL: None\n📅 Joined: 2010-01-01\n\n👥 Followers: 1,234,567\n👤 Following: 89\n📝 Tweets: 9,876\n❤️ Likes: 4,321\n📋 Listed: 10\n\nProtected: Yes\nVerified: No\nCan DM: No"
+                "text": "Demo (@demo)\nUser ID: 44\n\n(no bio)\n\n📍 Location: Not specified\n🔗 URL: None\n📅 Joined: 2010-01-01\n\n👥 Followers: 1,234,567\n👤 Following: 89\n📝 Tweets: 9,876\n❤️ Likes: 4,321\n📋 Listed: 10\n\nProtected: Yes\nVerified: No\nCan DM: No"
               }
             ]
           }
@@ -14358,7 +14358,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "2 tweets:\n\n@noah, 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000 | ID: 1001\n\n---\n\n@noah, 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000 | ID: 1003\n\n📄 More tweets available. Use cursor: \"c3\""
+                "text": "2 tweets:\n\n@demo, 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000 | ID: 1001\n\n---\n\n@demo, 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000 | ID: 1003\n\n📄 More tweets available. Use cursor: \"c3\""
               }
             ]
           }
@@ -14389,7 +14389,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "1 tweets:\n\n@noah, 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000 | ID: 1001"
+                "text": "1 tweets:\n\n@demo, 2026-09-24T08:00:00.000000Z\nHello world\n  ❤️ 2  🔁 1  💬 3  👁 5000 | ID: 1001"
               }
             ]
           }
@@ -14730,7 +14730,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
               }
             ],
             "isError": true
@@ -14749,7 +14749,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
               }
             ],
             "isError": true
@@ -14768,7 +14768,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
               }
             ],
             "isError": true
@@ -14787,7 +14787,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+                "text": "Error posting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
               }
             ],
             "isError": true
@@ -15151,7 +15151,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error replying to tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+                "text": "Error replying to tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
               }
             ],
             "isError": true
@@ -15267,7 +15267,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Error deleting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. Noah turns it on there when agents may post, reply and delete."
+                "text": "Error deleting tweet: Posting is off in Tars Settings > X (Twitter), so nothing was sent. The user turns it on there when agents may post, reply and delete."
               }
             ],
             "isError": true

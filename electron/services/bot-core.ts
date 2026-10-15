@@ -468,7 +468,7 @@ export async function forwardToOrchestrator(
         return;
       }
       // Held: it goes in by itself once what holds it is gone, and whoever
-      // sent it can be told what that is (Noah's answer 24 of 2026-10-05).
+      // sent it can be told what that is (JeanBrasse's answer 24 of 2026-10-05).
       const heldBy = outcome !== 'held' ? undefined
         : dialogShown(orchestrator, ptyProcess) ? 'dialog' as const
           : heldForPerson ? 'draft' as const : undefined;

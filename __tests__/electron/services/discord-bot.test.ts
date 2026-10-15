@@ -60,7 +60,7 @@ const dc = vi.hoisted(() => ({
   destroyed: 0,
   loginFails: false,
   /** The channels the fake client can fetch. */
-  channels: new Set(['C-TEAM', 'C-OTHER', 'D-NOAH']),
+  channels: new Set(['C-TEAM', 'C-OTHER', 'D-OWNER']),
   stats: null as unknown,
 }));
 
@@ -117,7 +117,7 @@ vi.mock('discord.js', () => {
 });
 
 const BOT_ID = vi.hoisted(() => '1100000000000000001');
-const NOAH = '123456789012345678';
+const OWNER_ID = '123456789012345678';
 const STRANGER = '987654321098765432';
 
 import { agents } from '../../../electron/core/agent-manager';
@@ -150,7 +150,7 @@ const PROJECT = path.posix.join(tmpHome, 'projects', 'atlas');
 
 function baseSettings(): AppSettings {
   return {
-    discordEnabled: true, discordBotToken: 'dc-bot-token', discordChannelId: '', discordAllowedUserIds: [NOAH], discordRequireMention: true,
+    discordEnabled: true, discordBotToken: 'dc-bot-token', discordChannelId: '', discordAllowedUserIds: [OWNER_ID], discordRequireMention: true,
     cliPaths: { claude: '/opt/tars-test/bin/claude' },
   } as unknown as AppSettings;
 }
@@ -201,11 +201,11 @@ const said = (channel?: string) => dc.sent.filter(s => !channel || s.channel ===
  * cannot show up in the next one.
  */
 async function discord(m: { author?: string; bot?: boolean; content: string; channelId?: string; direct?: boolean; replies: number }): Promise<void> {
-  const channelId = m.channelId ?? (m.direct ? 'D-NOAH' : 'C-TEAM');
+  const channelId = m.channelId ?? (m.direct ? 'D-OWNER' : 'C-TEAM');
   const log = dc.sent;
   const got: string[] = [];
   const message = {
-    author: { id: m.author ?? NOAH, bot: !!m.bot },
+    author: { id: m.author ?? OWNER_ID, bot: !!m.bot },
     content: m.content,
     channelId,
     guildId: m.direct ? null : 'G-1',
@@ -276,7 +276,7 @@ describe('who the Discord bot answers', () => {
   it('answers nobody while the allowed list is empty', async () => {
     settings.discordAllowedUserIds = [];
     await discord({ content: mention('status'), replies: 1 });
-    expect(said()[0]).toContain(`Your Discord user ID is ${NOAH}`);
+    expect(said()[0]).toContain(`Your Discord user ID is ${OWNER_ID}`);
     expect(said()).toHaveLength(1);
   });
 
@@ -284,7 +284,7 @@ describe('who the Discord bot answers', () => {
     await discord({ content: 'status', replies: 0 });
     expect(said()).toEqual([]);
     await discord({ content: 'status', direct: true, replies: 1 });
-    expect(said('D-NOAH')[0]).toContain('📊 **Agents Status**');
+    expect(said('D-OWNER')[0]).toContain('📊 **Agents Status**');
   });
 
   it('answers every channel message of a member when Require @mention is off, and still ignores a stranger there', async () => {
@@ -383,9 +383,9 @@ describe('what Tars posts to Discord on its own (send_discord)', () => {
     settings.discordChannelId = 'C-TEAM';
     expect(await sendDiscordMessage('to the team', settings, 'C-TEAM')).toEqual({ ok: true });
     await discord({ content: 'hi', direct: true, replies: 1 });
-    expect(await sendDiscordMessage('to Noah', settings, 'D-NOAH')).toEqual({ ok: true });
+    expect(await sendDiscordMessage('to JeanBrasse', settings, 'D-OWNER')).toEqual({ ok: true });
     expect(said('C-TEAM')).toContain('to the team');
-    expect(said('D-NOAH')).toContain('to Noah');
+    expect(said('D-OWNER')).toContain('to JeanBrasse');
   });
 
   it('refuses any other channel the bot can see', async () => {
@@ -573,7 +573,7 @@ describe('QA, gate of #193: the guards the tests above did not hold', () => {
     const routes = new Map<string, Handler>();
     registerDiscordRoutes({ post: (p: string, h: Handler) => routes.set(p, h) } as never, { getAppSettings: () => settings } as never);
     settings.discordChannelId = 'C-TEAM';
-    const text = `@everyone @here <@${NOAH}> <@&222222222222222222> the build is green`;
+    const text = `@everyone @here <@${OWNER_ID}> <@&222222222222222222> the build is green`;
     await routes.get('/api/discord/send')!({ body: { message: text } }, () => {});
     const posted = dc.sent.filter(s => s.channel === 'C-TEAM');
     expect(posted).toHaveLength(1);

@@ -14,7 +14,7 @@ import { cannotSymlink } from '../../setup/symlink-privilege';
  * into `~/.dorothy/vault/attachments`, and `/api/local-file` serves that copy
  * with no token at all. Measured on this branch before the guard, with the
  * shared token: a file in the private directory was copied in, 200, and served
- * back, 200. That is one `vault_attach_file` call from an agent to put Noah's
+ * back, 200. That is one `vault_attach_file` call from an agent to put JeanBrasse's
  * conversation, or the webhook secret, back in the directory it was moved out
  * of. The same gap as the Telegram guards, closed here for the same directory.
  *
@@ -122,7 +122,7 @@ describe('attaching a file to a vault document', () => {
     expect(privateDir.startsWith(os.homedir() + path.sep), 'the private directory is not under this run\'s HOME').toBe(true);
     fs.mkdirSync(privateDir, { recursive: true, mode: 0o700 });
     const conversation = path.join(privateDir, 'overseer.json');
-    fs.writeFileSync(conversation, '{"messages":["what Noah said"]}', { mode: 0o600 });
+    fs.writeFileSync(conversation, '{"messages":["what JeanBrasse said"]}', { mode: 0o600 });
 
     const { status, text } = await call('POST', `/api/vault/documents/${documentId}/attach`, {
       authorization: `Bearer ${sharedToken}`,

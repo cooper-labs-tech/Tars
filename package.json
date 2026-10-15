@@ -21,6 +21,7 @@
     "e2e:update": "playwright test --update-snapshots",
     "e2e:guard": "node e2e/check-coverage.mjs",
     "check:dashes": "node scripts/check-dashes.mjs",
+    "check:names": "node scripts/check-private-names.mjs",
     "sandbox": "bash scripts/sandbox.sh",
     "build:renderer": "node scripts/build-renderer.mjs",
     "lint:design": "node scripts/design-lint.mjs"

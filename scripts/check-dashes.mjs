@@ -2,7 +2,7 @@
 /**
  * No em dashes, anywhere a person or an agent reads.
  *
- * Noah has asked for this twice. It kept coming back because the check itself
+ * JeanBrasse has asked for this twice. It kept coming back because the check itself
  * was unreliable: `grep` on this machine is ugrep, where `\|` is a literal
  * rather than alternation, and BSD `/usr/bin/grep` has no `-P` at all. Both
  * silently report CLEAN on a file full of dashes, so three separate sweeps

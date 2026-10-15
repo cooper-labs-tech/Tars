@@ -19,9 +19,9 @@ import { taskOfPrompt } from '../core/task-requests';
  * (task-cost.ts), so a price that changes later is the price shown.
  *
  * Kept in ~/.dorothy/task-ledger.jsonl, which every agent can read, without
- * what each task said: that is its first line of Noah's typed prompts and of
+ * what each task said: that is its first line of JeanBrasse's typed prompts and of
  * the chat messages handed to orchestrators, kept in ~/.tars-private, which no
- * agent is handed (`textFile`, 0600; Noah's answer of 2026-10-05), and cut to
+ * agent is handed (`textFile`, 0600; JeanBrasse's answer of 2026-10-05), and cut to
  * 200 characters. Durations, turns, sessions and costs stay in ~/.dorothy.
  */
 
@@ -616,7 +616,7 @@ export function createTaskLedger(opts: {
       // belongs to: typed in while a task was open, it is that task's. The turn
       // whose prompt carries a hand-off's id takes that one; a turn with no id
       // takes the oldest hand-off that has none (a launch's prompt), and never
-      // one Tars typed with an id: Noah typing into the worker, a scheduled
+      // one Tars typed with an id: JeanBrasse typing into the worker, a scheduled
       // task or a /loop is a task of its own.
       const list = pending.get(agent.id) ?? [];
       // Read from the envelope Tars wrote at the prompt's start, for the agent it names (the Audit's gate of #351).

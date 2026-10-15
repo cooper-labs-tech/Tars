@@ -4,12 +4,12 @@ An observer and two hooks.
 - The observer, a python-telegram-bot handler in the plugin's own group (OBSERVER_GROUP), sees each Telegram update
   as it comes, before Hermes merges messages (its batching window, its grace window) or turns one into a correction
   of a running turn: both skip pre_gateway_dispatch (the Audit's recheck of #280). It keeps for Tars a message from
-  Noah in his private chat that replies to a message Tars sent through the relay or starts with "@project". It only
+  the user in their private chat that replies to a message Tars sent through the relay or starts with "@project". It only
   looks: it never stops an update, never changes one (Hermes's answers of 2026-10-01, the deciding test on 536802c).
 - pre_gateway_dispatch spares Hermes's model a message the observer kept, when Hermes admits that very message alone.
-  An event Hermes merged it into goes on to the model whole: Noah's other words in it are his to Hermes. On a Hermes
+  An event Hermes merged it into goes on to the model whole: the user's other words in it are theirs to Hermes. On a Hermes
   without plugin handlers it keeps the message itself, as before the observer.
-- pre_llm_call attaches to Noah's next turn there a read-only copy of what Tars sent him.
+- pre_llm_call attaches to the user's next turn there a read-only copy of what Tars sent them.
 The rules are in relay_core.py; this file only reads Hermes's updates, events and session and answers its hooks.
 """
 from __future__ import annotations
@@ -113,7 +113,7 @@ def on_gateway_dispatch(event=None, **_):
                 return None
             store.keep(kept, message.get('text') or '')
     except Exception:
-        # The message goes on to Hermes rather than nowhere: Hermes answers it, so Noah sees it did not reach Tars.
+        # The message goes on to Hermes rather than nowhere: Hermes answers it, so the user sees it did not reach Tars.
         log.exception('tars-relay: could not keep a message for Tars; it goes on to Hermes')
         return None
     return {'action': 'skip', 'reason': 'tars-relay: kept for Tars'}

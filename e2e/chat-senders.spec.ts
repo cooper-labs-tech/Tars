@@ -6,7 +6,7 @@ import { execFileSync } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { startFakeRelay, type FakeRelay } from '../__tests__/fixtures/fake-tars-relay';
-import { BOT_TOKEN, NOAH, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
+import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
 
 /**
  * Who writes to "the project's orchestrator" reaches the project's inbox chat, Telegram names a chat by its number,
@@ -26,8 +26,8 @@ import { BOT_TOKEN, NOAH, startFakeTelegram } from '../__tests__/fixtures/fake-t
  * 4. through the Hermes relay: what chat #3 sends starts "[demo #3 Release]", and a reply to it lands in chat #3; a
  *    fresh "@demo #3 text" lands in chat #3, "@demo text" in the inbox, "@demo #9 text" gets the list;
  * 5. a question chat #3 asks the user is prefixed with its chat, and the user's answer lands in chat #3;
- * 6. the room: Noah's message to the project lands in the room and in Main, not in a chat's runner; chat #3's post
- *    reaches the room named "chat #3 "Release""; Noah's answer to it lands in chat #3, not in Main;
+ * 6. the room: JeanBrasse's message to the project lands in the room and in Main, not in a chat's runner; chat #3's post
+ *    reaches the room named "chat #3 "Release""; JeanBrasse's answer to it lands in chat #3, not in Main;
  * 7. a worker nobody asked for work, running and silent for 40 minutes, is reported to the inbox chat, not to Main.
  * The artefact: values.json (each answer, what each stand-in received), prompts.jsonl (every turn of every CLI).
  */
@@ -123,7 +123,7 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9',
     telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
-    telegramAuthorizedChatIds: [String(NOAH)], telegramChatId: String(NOAH), hermesRelayEnabled: false,
+    telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID), hermesRelayEnabled: false,
   }));
 
   const telegram = await startFakeTelegram();
@@ -293,7 +293,7 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
 
     // 6. The room.
     const roomId = `project:${project}`;
-    const posted = await call('bus', 'postMessage', { roomId, text: 'ROOM1>> Noah to the project' });
+    const posted = await call('bus', 'postMessage', { roomId, text: 'ROOM1>> JeanBrasse to the project' });
     keep({ posted });
     expect(posted).toMatchObject({ success: true });
     await expect.poll(() => reached('ROOM1>>'), { timeout: 30_000 }).toEqual(['o1']);
@@ -305,7 +305,7 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
     const named = room.messages.find((m) => m.text.includes('ROOM2>>'))!;
     keep({ named });
     expect(named.authorName).toContain('chat #3 "Release"');
-    const answered = await call('bus', 'postMessage', { roomId, text: 'ROOM3>> Noah answers the release chat', mentions: [named.authorId] });
+    const answered = await call('bus', 'postMessage', { roomId, text: 'ROOM3>> JeanBrasse answers the release chat', mentions: [named.authorId] });
     keep({ answered });
     expect(answered).toMatchObject({ success: true });
     await expect.poll(() => reached('ROOM3>>'), { timeout: 30_000 }).toEqual([releaseRunner]);

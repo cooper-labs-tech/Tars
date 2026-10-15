@@ -134,7 +134,7 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
       />
 
       {/* Settings · Preferences: the last row, off unless chosen. Since 2.0.0 it shows to everyone, the
-          preview; before, only once the settings file had turned it on (Noah, 12/10). */}
+          preview; before, only once the settings file had turned it on (JeanBrasse, 12/10). */}
       <SettingsRow
         label="New interface"
         description="Turns on the new shell and chats per project, a preview: the sidebar lists your chats, and Agents, Usage, Settings and the other pages open from More as cards above the app."

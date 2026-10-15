@@ -107,7 +107,7 @@ describe('a dialog on the screen', () => {
     } as AgentStatus);
     spawns.at(-1)!.emit(screen(['Delete the build folder?', '❯ 1. Yes, delete it', 'Enter to select · ↑/↓ to navigate · Esc to cancel']));
 
-    const outcome = writeProgrammaticInput(terminal, 'a room post', true, { agentId: 'racer', from: 'Noah' });
+    const outcome = writeProgrammaticInput(terminal, 'a room post', true, { agentId: 'racer', from: 'JeanBrasse' });
 
     expect(outcome).toBe('held');
     expect((terminal as unknown as FakePty).write).not.toHaveBeenCalled();

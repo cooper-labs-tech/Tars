@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
- * Reports to the user's Telegram as things happen (the design's part A2; Noah: "en fonction de ce qui se passe"),
+ * Reports to the user's Telegram as things happen (the design's part A2; JeanBrasse: "en fonction de ce qui se passe"),
  * through the relay (DESIGN-RELAIS-HERMES-V2.md).
  *
  * An event (an agent gone to error, a PR merged, changes requested on a PR) waits up to 2 minutes for others of its

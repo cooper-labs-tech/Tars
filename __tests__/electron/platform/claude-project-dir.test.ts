@@ -18,14 +18,15 @@ import golden from './posix-golden.json';
  * `C:\Users\x\proj`, so a transcript was looked for at
  * `...\.claude\projects\C:\Users\x\proj\<id>.jsonl`, every restart started a new
  * conversation, and Memory could not create a MEMORY.md. The decoder started at
- * `/`, never produced a drive and never a space: `C--Users-nicol-Documents-
- * Claude-Project-Tars` came back as `\C\Users\nicol\Documents\Claude\Project\Tars`,
+ * `/`, never produced a drive and never a space: `C--Users-owner-Documents-
+ * Claude-Project-Tars` came back as `\C\Users\owner\Documents\Claude\Project\Tars`,
  * and fs:list-projects dropped every project Claude had seen.
  *
  * How it can fail, written before the code:
  * 1. the encoder is not Claude Code's: checked against folder names Claude Code
- *    wrote on this machine (C:\Users\nicol\.claude\projects, read 2026-09-25,
- *    names only, for paths that exist);
+ *    wrote on a Windows machine (its ~\.claude\projects, read 2026-09-25,
+ *    names only, for paths that exist). The home folder in them is a neutral
+ *    name since 2026-10-16, letters for letters, which Claude keeps as they are;
  * 2. darwin/linux read a folder the old code did not, or stop reading one it
  *    did: the legacy `[/.]` spelling and the `/`-only one memory-hub tried stay
  *    readable, after Claude's own;
@@ -56,29 +57,32 @@ import golden from './posix-golden.json';
 describe('1. the encoder is Claude Code\'s', () => {
   it('gives the names Claude Code wrote on this machine', () => {
     const seen: Array<[string, string]> = [
-      ['C:\\Users\\nicol\\Documents\\Claude Project\\Tars', 'C--Users-nicol-Documents-Claude-Project-Tars'],
-      ['C:\\Users\\nicol\\.buzz', 'C--Users-nicol--buzz'],
-      ['C:\\Users\\nicol\\Documents\\Claude Project\\Monarq\\Monarq', 'C--Users-nicol-Documents-Claude-Project-Monarq-Monarq'],
-      ['C:\\Users\\nicol', 'C--Users-nicol'],
+      ['C:\\Users\\owner\\Documents\\Claude Project\\Tars', 'C--Users-owner-Documents-Claude-Project-Tars'],
+      ['C:\\Users\\owner\\.buzz', 'C--Users-owner--buzz'],
+      ['C:\\Users\\owner\\Documents\\Claude Project\\Monarq\\Monarq', 'C--Users-owner-Documents-Claude-Project-Monarq-Monarq'],
+      ['C:\\Users\\owner', 'C--Users-owner'],
     ];
     for (const [project, folder] of seen) expect(encodeClaudeProjectDir(project)).toBe(folder);
   });
 
   it('turns every other character into a dash, on any platform', () => {
-    expect(encodeClaudeProjectDir('/Users/noah/docs.octav.fi')).toBe('-Users-noah-docs-octav-fi');
-    expect(encodeClaudeProjectDir('/Users/noah/my_proj (2)@x+y')).toBe('-Users-noah-my-proj--2--x-y');
-    expect(encodeClaudeProjectDir('C:\\Users\\Nicolás\\projet')).toBe('C--Users-Nicol-s-projet');
+    expect(encodeClaudeProjectDir('/Users/demo/docs.octav.fi')).toBe('-Users-demo-docs-octav-fi');
+    expect(encodeClaudeProjectDir('/Users/demo/my_proj (2)@x+y')).toBe('-Users-demo-my-proj--2--x-y');
+    expect(encodeClaudeProjectDir('C:\\Users\\Andrés\\projet')).toBe('C--Users-Andr-s-projet');
   });
 
   // Claude Code 2.1.220 (claude.exe, read 2026-09-25): a name longer than 200
   // characters is cut to 200 and followed by `-` and a base-36 hash of the whole
   // path. The suffixes below were computed by running Claude Code's own encoder,
   // extracted from that binary, on these inputs; they are not this code's output.
+  // The first and third inputs held a person's home folder until 2026-10-16:
+  // their suffixes for a neutral one come from a Python copy of that hash,
+  // checked first against the three suffixes Claude Code gave on the old inputs.
   it('shortens a name over 200 characters exactly as Claude Code does', () => {
     const vectors: Array<[string, string]> = [
-      ['C:\\Users\\nicol\\' + 'Documents\\Claude Project\\'.repeat(8) + 'Tars', '-475b7m'],
-      ['/Users/noah/' + 'a'.repeat(188), ''],
-      ['/Users/noah/' + 'a'.repeat(189), '-fo84kw'],
+      ['C:\\Users\\owner\\' + 'Documents\\Claude Project\\'.repeat(8) + 'Tars', '-cwp4hc'],
+      ['/Users/demo/' + 'a'.repeat(188), ''],
+      ['/Users/demo/' + 'a'.repeat(189), '-w8qrzf'],
       ['/' + 'x/'.repeat(100) + 'R\u00e9union (2) \u00e9', '-u8lp63'],
     ];
     for (const [input, suffix] of vectors) {
@@ -96,9 +100,9 @@ describe('1. the encoder is Claude Code\'s', () => {
 describe('2, 3. the folder names to read, Claude\'s first', () => {
   it('darwin/linux: Claude\'s, then the two spellings Tars used to read', () => {
     for (const platform of ['darwin', 'linux'] as const) {
-      expect(claudeProjectDirNames('/Users/noah/my_proj.v2', platform))
-        .toEqual(['-Users-noah-my-proj-v2', '-Users-noah-my_proj-v2', '-Users-noah-my_proj.v2']);
-      expect(claudeProjectDirNames('/Users/noah/tars', platform)).toEqual(['-Users-noah-tars']);
+      expect(claudeProjectDirNames('/Users/demo/my_proj.v2', platform))
+        .toEqual(['-Users-demo-my-proj-v2', '-Users-demo-my_proj-v2', '-Users-demo-my_proj.v2']);
+      expect(claudeProjectDirNames('/Users/demo/tars', platform)).toEqual(['-Users-demo-tars']);
       for (const p of POSIX_CORPUS.paths) {
         expect(claudeProjectDirNames(p, platform), p).toContain(golden.encode[p as keyof typeof golden.encode]);
       }
@@ -133,33 +137,33 @@ describe('2, 3. the folder names to read, Claude\'s first', () => {
 describe('11, 12. what Memory names and reads back', () => {
   it('11. win32: Memory creates a project\'s folder under Claude\'s own name', () => {
     expect(memoryProjectDirName('C:\\Users\\x\\My Project', 'win32')).toBe('C--Users-x-My-Project');
-    expect(memoryProjectDirName('/Users/noah/my_proj.v2', 'win32')).toBe('-Users-noah-my-proj-v2');
+    expect(memoryProjectDirName('/Users/demo/my_proj.v2', 'win32')).toBe('-Users-demo-my-proj-v2');
   });
 
   it('13. darwin/linux: Claude\'s own name, for Memory and for transcripts', () => {
     for (const platform of ['darwin', 'linux'] as const) {
-      expect(memoryProjectDirName('/Users/noah/My Project', platform)).toBe('-Users-noah-My-Project');
-      expect(memoryProjectDirName('/Users/noah/my_proj.v2', platform)).toBe('-Users-noah-my-proj-v2');
+      expect(memoryProjectDirName('/Users/demo/My Project', platform)).toBe('-Users-demo-My-Project');
+      expect(memoryProjectDirName('/Users/demo/my_proj.v2', platform)).toBe('-Users-demo-my-proj-v2');
       expect(transcriptProjectDirName('/private/tmp/tars naming_~probe', platform)).toBe('-private-tmp-tars-naming--probe');
-      const long = '/Users/noah/' + 'a'.repeat(300);
+      const long = '/Users/demo/' + 'a'.repeat(300);
       expect(memoryProjectDirName(long, platform)).toBe(encodeClaudeProjectDir(long));
       expect(transcriptProjectDirName(long, platform)).toBe(encodeClaudeProjectDir(long));
     }
   });
 
   it('12. win32: each folder name a known project gives is that project, the first known one winning', () => {
-    const known = knownProjectsByFolder(['C:\\Users\\x\\My Project', '', '/Users/noah/my_proj.v2', 'C:\\Users\\x\\My-Project'], 'win32');
+    const known = knownProjectsByFolder(['C:\\Users\\x\\My Project', '', '/Users/demo/my_proj.v2', 'C:\\Users\\x\\My-Project'], 'win32');
     expect(known.get('C--Users-x-My-Project')).toBe('C:\\Users\\x\\My Project');
-    expect(known.get('-Users-noah-my-proj-v2')).toBe('/Users/noah/my_proj.v2');
-    expect(known.get('-Users-noah-my_proj-v2')).toBe('/Users/noah/my_proj.v2');
+    expect(known.get('-Users-demo-my-proj-v2')).toBe('/Users/demo/my_proj.v2');
+    expect(known.get('-Users-demo-my_proj-v2')).toBe('/Users/demo/my_proj.v2');
     expect([...known.values()]).not.toContain('');
   });
 
   it('14. darwin/linux: a folder Claude named for a known project is that project', () => {
     for (const platform of ['darwin', 'linux'] as const) {
-      const known = knownProjectsByFolder(['/Users/noah/My Project', '/Users/noah/my_proj'], platform);
-      expect(known.get('-Users-noah-My-Project')).toBe('/Users/noah/My Project');
-      expect(known.get('-Users-noah-my-proj')).toBe('/Users/noah/my_proj');
+      const known = knownProjectsByFolder(['/Users/demo/My Project', '/Users/demo/my_proj'], platform);
+      expect(known.get('-Users-demo-My-Project')).toBe('/Users/demo/My Project');
+      expect(known.get('-Users-demo-my-proj')).toBe('/Users/demo/my_proj');
     }
   });
 });
@@ -192,15 +196,15 @@ describe('the decoder on win32 (an injected disk, so it runs on any host)', () =
 
   it('4, 5. rebuilds the drive and every character Claude turned into a dash', () => {
     const disk = [
-      'C:\\Users\\nicol\\Documents\\Claude Project\\Tars',
-      'C:\\Users\\nicol\\.buzz',
+      'C:\\Users\\owner\\Documents\\Claude Project\\Tars',
+      'C:\\Users\\owner\\.buzz',
       'D:\\Unreal Projects\\the_black.sea',
-      'C:\\Users\\nicol\\Téléchargements\\a+b (2)',
+      'C:\\Users\\owner\\Téléchargements\\a+b (2)',
     ];
-    expect(decode('C--Users-nicol-Documents-Claude-Project-Tars', disk)).toBe('C:\\Users\\nicol\\Documents\\Claude Project\\Tars');
-    expect(decode('C--Users-nicol--buzz', disk)).toBe('C:\\Users\\nicol\\.buzz');
+    expect(decode('C--Users-owner-Documents-Claude-Project-Tars', disk)).toBe('C:\\Users\\owner\\Documents\\Claude Project\\Tars');
+    expect(decode('C--Users-owner--buzz', disk)).toBe('C:\\Users\\owner\\.buzz');
     expect(decode('D--Unreal-Projects-the-black-sea', disk)).toBe('D:\\Unreal Projects\\the_black.sea');
-    expect(decode('C--Users-nicol-T-l-chargements-a-b--2-', disk)).toBe('C:\\Users\\nicol\\Téléchargements\\a+b (2)');
+    expect(decode('C--Users-owner-T-l-chargements-a-b--2-', disk)).toBe('C:\\Users\\owner\\Téléchargements\\a+b (2)');
     expect(decode('C--', disk)).toBe('C:\\');
   });
 
@@ -210,26 +214,26 @@ describe('the decoder on win32 (an injected disk, so it runs on any host)', () =
   });
 
   it('7. matches without case, and keeps the disk\'s own spelling', () => {
-    expect(decode('c--users-nicol-proj', ['C:\\Users\\Nicol\\Proj'])).toBe('c:\\Users\\Nicol\\Proj');
+    expect(decode('c--users-owner-proj', ['C:\\Users\\Owner\\Proj'])).toBe('c:\\Users\\Owner\\Proj');
   });
 
   it('8, 10. a project that is gone keeps its drive and its raw words, without throwing', () => {
-    expect(decode('C--Users-nicol-gone-away', ['C:\\Users\\nicol'])).toBe('C:\\Users\\nicol\\gone\\away');
+    expect(decode('C--Users-owner-gone-away', ['C:\\Users\\owner'])).toBe('C:\\Users\\owner\\gone\\away');
     expect(decode('Z--nothing-here', [])).toBe('Z:\\nothing\\here');
   });
 
   it('9. is not the decoder for darwin, linux, or a name with no drive', () => {
-    const disk = ['C:\\Users\\nicol'];
-    expect(decodeWindowsClaudeProjectDir('C--Users-nicol', { platform: 'darwin', readdir: fakeDisk(disk).readdir })).toBeNull();
-    expect(decodeWindowsClaudeProjectDir('C--Users-nicol', { platform: 'linux', readdir: fakeDisk(disk).readdir })).toBeNull();
-    for (const name of ['-Users-noah-tars', '--srv-share-p', 'CD--x', '', '-']) {
+    const disk = ['C:\\Users\\owner'];
+    expect(decodeWindowsClaudeProjectDir('C--Users-owner', { platform: 'darwin', readdir: fakeDisk(disk).readdir })).toBeNull();
+    expect(decodeWindowsClaudeProjectDir('C--Users-owner', { platform: 'linux', readdir: fakeDisk(disk).readdir })).toBeNull();
+    for (const name of ['-Users-demo-tars', '--srv-share-p', 'CD--x', '', '-']) {
       expect(decodeWindowsClaudeProjectDir(name, { platform: 'win32', readdir: fakeDisk(disk).readdir }), name).toBeNull();
     }
   });
 
   it('lists each directory once per level, not once per guess', () => {
-    const { readdir, listed } = fakeDisk(['C:\\Users\\nicol\\Documents\\Claude Project\\Tars']);
-    decodeWindowsClaudeProjectDir('C--Users-nicol-Documents-Claude-Project-Tars', { platform: 'win32', readdir });
+    const { readdir, listed } = fakeDisk(['C:\\Users\\owner\\Documents\\Claude Project\\Tars']);
+    decodeWindowsClaudeProjectDir('C--Users-owner-Documents-Claude-Project-Tars', { platform: 'win32', readdir });
     expect(listed).toHaveLength(5);
   });
 });

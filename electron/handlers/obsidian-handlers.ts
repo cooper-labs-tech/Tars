@@ -106,8 +106,8 @@ export function registerObsidianHandlers(deps: ObsidianHandlerDeps): void {
     }
 
     // Confinement used to be a bare `fullPath.startsWith(path.resolve(vaultPath))`,
-    // a string prefix test with no separator: with a vault of `/Users/noah/Notes`,
-    // a filePath of `/Users/noah/Notes-backup/x.md` or `/Users/noah/Notes.private/secrets.md`
+    // a string prefix test with no separator: with a vault of `/Users/demo/Notes`,
+    // a filePath of `/Users/demo/Notes-backup/x.md` or `/Users/demo/Notes.private/secrets.md`
     // resolved to a string that starts with the vault path and was accepted, so the
     // handler wrote outside the vault the user actually registered. isWithinVault()
     // appends path.sep (and allows the vault dir itself), which is what the read side

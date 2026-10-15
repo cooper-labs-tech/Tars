@@ -27,7 +27,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 8. A reply whose handler throws stops the ones after it, or is never acked.
  * 9. With the relay on, the event reports do not go through it, or go under no project; with it off, they still go.
  * 11. The plugin's store is made again (reinstalled, moved, cleaned) and numbers its replies from 1 again: Tars skips
- *    every reply at or below the last number it took, acks it, and the plugin deletes it, Noah told nothing
+ *    every reply at or below the last number it took, acks it, and the plugin deletes it, JeanBrasse told nothing
  *    (GATE-PR285.md); or Tars, starting over, hands over again a reply of the same store whose ack was lost.
  * 10. The plugin keeps "@name" for Tars only for the projects Tars registered with it (the Audit's Low on #280): the
  *    fleet's projects are not registered, and every "@project" goes to Hermes's model; a folder name that is not one

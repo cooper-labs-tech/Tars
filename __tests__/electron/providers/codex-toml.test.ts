@@ -186,7 +186,7 @@ describe('codex config.toml fallback', () => {
     fs.mkdirSync(path.join(tmpDir, '.codex'), { recursive: true });
     fs.writeFileSync(path.join(tmpDir, '.codex', 'config.toml'), 'model = "gpt-5.3-codex"\n');
     await p.registerMcpServer('claude-mgr-orchestrator', 'node', ['/Applications/Tars.app/Contents/Resources/mcp-orchestrator/dist/bundle.js']);
-    await p.registerMcpServer('tasmania.local', 'npx', ['tsx', '/Users/noah/tasmania/src/index.ts']);
+    await p.registerMcpServer('tasmania.local', 'npx', ['tsx', '/Users/demo/tasmania/src/index.ts']);
 
     expect(configOf('.codex')).toBe([
       'model = "gpt-5.3-codex"',
@@ -197,7 +197,7 @@ describe('codex config.toml fallback', () => {
       '',
       '[mcp_servers."tasmania.local"]',
       'command = "npx"',
-      'args = ["tsx", "/Users/noah/tasmania/src/index.ts"]',
+      'args = ["tsx", "/Users/demo/tasmania/src/index.ts"]',
       '',
     ].join('\n'));
   });

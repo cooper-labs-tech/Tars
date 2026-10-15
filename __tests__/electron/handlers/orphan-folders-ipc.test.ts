@@ -1,5 +1,5 @@
 /**
- * The window's side of the folders no agent owns (Noah's choice 16; the frames
+ * The window's side of the folders no agent owns (JeanBrasse's choice 16; the frames
  * of #315): system:disk, system:orphanFolders, system:removeOrphanFolders and
  * the progress event, through the real handlers.
  *

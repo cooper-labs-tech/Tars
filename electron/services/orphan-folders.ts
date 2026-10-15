@@ -5,7 +5,7 @@ import * as path from 'path';
 import { diskUsage } from '../platform/disk-usage';
 
 /**
- * The folders no agent owns (Noah's choice 16 of 05/10; the frames merged in
+ * The folders no agent owns (JeanBrasse's choice 16 of 05/10; the frames merged in
  * #315, "Settings · System · folders no agent owns").
  *
  * A folder under a project's `.worktrees` that no git worktree holds: git

@@ -1,6 +1,6 @@
 // Opt-in live E2E: E2E_LIVE=1 npx playwright test e2e/turn-usage.live.spec.ts
 //
-// Each turn's usage in the task ledger (mods step 4, Noah's go of 2026-10-06),
+// Each turn's usage in the task ledger (mods step 4, JeanBrasse's go of 2026-10-06),
 // in a sandbox Tars with real Claude Code against the fake Messages API
 // (e2e/live/fake-messages-api.mjs), so no quota is spent. One agent, on the
 // state mod, given two turns:

@@ -18,7 +18,7 @@ import { DATA_DIR } from '../../../electron/constants';
  * costOf asked the catalogue at every turn. priceFor walks every model the
  * catalogue lists when a transcript's id is dated, and with no catalogue in
  * memory (a first launch, a machine offline) catalogSync tries to read the
- * missing cache file at every call. On Noah's 1826 transcripts, about 608
+ * missing cache file at every call. On JeanBrasse's 1826 transcripts, about 608
  * thousand turns, the adding up took 5 to 16 s that way, and 0.24 to 0.34 s
  * with the catalogue loaded (the Frontend's template, measured 2026-09-28).
  *

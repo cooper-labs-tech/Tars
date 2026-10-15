@@ -15,7 +15,7 @@ import { shHooksNotShipped } from '../setup/platform-limits';
  * How it fails, written before the code (2026-09-24):
  * 1. The post carries no time of its own.
  * 2. The time is taken with a BSD-only or GNU-only `date` flag, and is missing
- *    or wrong on the other system (Noah: "l'app doit rester compatible linux").
+ *    or wrong on the other system (JeanBrasse: "l'app doit rester compatible linux").
  */
 
 const HOOK = path.join(__dirname, '../../hooks/permission-request.sh');

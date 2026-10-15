@@ -12,7 +12,7 @@ vi.mock('react', async (importOriginal) => ({
 /**
  * The loading ladder every page and panel waits on (1.7.4).
  *
- * Noah: "on several pages the loading screen was not the cube we had". The
+ * JeanBrasse: "on several pages the loading screen was not the cube we had". The
  * ladder's middle stage defaulted to grey skeleton rows, and only Settings had
  * asked for the mark. It is the mark for everyone now, with no second look to
  * pick: nothing under 400 ms, the mark filling over a line naming the wait

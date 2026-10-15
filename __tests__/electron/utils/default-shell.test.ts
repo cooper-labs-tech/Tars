@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
 /**
- * The shell a terminal Tars opens runs, when SHELL is not set (Noah,
+ * The shell a terminal Tars opens runs, when SHELL is not set (JeanBrasse,
  * 2026-09-24: "l'app doit rester compatible linux").
  *
  * How it fails, written before the code (2026-09-24):

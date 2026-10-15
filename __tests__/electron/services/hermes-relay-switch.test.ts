@@ -4,13 +4,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 /**
- * Turning the relay on (Noah's decisions 2 and 6 of 2026-10-01, DESIGN-RELAIS-HERMES-V2.md, traps 1 and 2 of its
+ * Turning the relay on (JeanBrasse's decisions 2 and 6 of 2026-10-01, DESIGN-RELAIS-HERMES-V2.md, traps 1 and 2 of its
  * section 9): Hermes becomes the only voice on the user's Telegram. Tars's own bot is not kept as a fallback, and
  * mcp-telegram, which sends with that bot's token straight to Telegram whatever Tars's switch says, leaves every CLI.
  *
  * How this can fail, written before the code:
  * 1. With the relay on, the Tars bot's token stays in the settings, or the bot stays on: two voices, and a fallback
- *    Noah refused.
+ *    JeanBrasse refused.
  * 2. With the relay on, mcp-telegram stays registered in a CLI's MCP config: an agent could still write to Telegram
  *    with the bot's token, past the relay and its rules.
  * 3. The start of Tars registers mcp-telegram again while the relay is on.

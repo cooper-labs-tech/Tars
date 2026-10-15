@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { hasPosixModes } from '../../setup/platform-limits';
 
 /**
- * The Hermes dashboard's token moves from ~/.dorothy to ~/.tars-private (Noah's decision 6 of 2026-10-01,
+ * The Hermes dashboard's token moves from ~/.dorothy to ~/.tars-private (JeanBrasse's decision 6 of 2026-10-01,
  * DESIGN-RELAIS-HERMES-V2.md). ~/.dorothy is in every agent's --add-dir: an agent could read the token there, and with
  * the relay plugin installed the token also lets its holder write to the user as Tars, and read or delete their
  * replies. Nothing under ~/.tars-private is passed to a CLI.

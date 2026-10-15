@@ -185,7 +185,7 @@ async function makeAgentWorktree(projectPath: string, branchName: string): Promi
       git(exists ? ['worktree', 'add', worktreePath, branchName] : ['worktree', 'add', '-b', branchName, worktreePath]);
     }
     // Its dependencies, cloned from the project's where they were installed
-    // for this lock (Noah's choice 17, 05/10): each agent ran its own npm ci
+    // for this lock (JeanBrasse's choice 17, 05/10): each agent ran its own npm ci
     // into its worktree.
     await logDependencies(worktreePath, await cloneDependencies(projectPath, worktreePath));
     return { worktreePath, branchName };
@@ -1258,7 +1258,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     return out;
   });
 
-  // The disk and the folders no agent owns (Settings · System; Noah's choice
+  // The disk and the folders no agent owns (Settings · System; JeanBrasse's choice
   // 16 of 05/10). The projects are Tars's own: those added by hand and those
   // its agents work in; an agent's worktree is never offered.
   const orphanScope = () => ({

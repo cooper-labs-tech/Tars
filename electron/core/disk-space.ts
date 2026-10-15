@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 
 /**
- * No agent starts on a nearly full disk (Noah, 05/10). On 2026-10-01 the Mac
+ * No agent starts on a nearly full disk (JeanBrasse, 05/10). On 2026-10-01 the Mac
  * stopped with 68 MB free: worktrees, transcripts and builds kept writing
  * until there was nothing left. Under LAUNCH_MIN_FREE_BYTES a launch is
  * refused, and the refusal says how much is free and what the floor is.

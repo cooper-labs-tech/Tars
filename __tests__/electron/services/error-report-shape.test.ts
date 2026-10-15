@@ -114,7 +114,7 @@ function sdkEvent(overrides: Record<string, unknown> = {}) {
     },
     breadcrumbs: [{ category: 'console', message: PROMPT }, { category: 'fetch', data: { url: `http://127.0.0.1:31415/api?token=${KEY}` } }],
     request: { url: 'app://-/chat', data: PROMPT, headers: { Authorization: `Bearer ${KEY}` }, cookies: { a: 'b' } },
-    user: { id: 'noah', email: 'noah@example.com', ip_address: '10.0.0.2', username: 'somebody' },
+    user: { id: 'demo', email: 'demo@example.com', ip_address: '10.0.0.2', username: 'somebody' },
     extra: { prompt: PROMPT },
     tags: { 'event.process': 'renderer', project: 'acme' },
     contexts: {
@@ -207,7 +207,7 @@ describe('the report built from an event', () => {
     expect(report.exception.values[0].mechanism).toEqual({ type: 'onuncaughtexception', handled: false });
     expect(Object.keys(report.exception.values[0].stacktrace!.frames[0]).sort())
       .toEqual(['colno', 'filename', 'function', 'in_app', 'lineno']);
-    for (const absent of [PROMPT, 'Acme Corp', 'noah@example.com', '10.0.0.2', 'MacBook', 'Asia/Dubai', 'some-module', 'Bearer', 'cookies']) {
+    for (const absent of [PROMPT, 'Acme Corp', 'demo@example.com', '10.0.0.2', 'MacBook', 'Asia/Dubai', 'some-module', 'Bearer', 'cookies']) {
       expect(text, absent).not.toContain(absent);
     }
   });

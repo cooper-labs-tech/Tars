@@ -101,7 +101,7 @@ describe('after the live session was refused', () => {
 
   for (const [change, run] of [
     ['a connection is saved', () => call('hermes:connection:save', CONNECTION)],
-    ['Noah signs in again', () => call('hermes:signIn', { connection: CONNECTION, username: 'noah', password: 'pw' })],
+    ['JeanBrasse signs in again', () => call('hermes:signIn', { connection: CONNECTION, username: 'demo', password: 'pw' })],
     ['Hermes Desktop\'s connection is imported', () => call('hermes:connection:import')],
   ] as const) {
     it(`tries it again once ${change}`, async () => {

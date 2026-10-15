@@ -425,7 +425,7 @@ right of the gap the status as a word in its tone and `provider · model` in
 mono, start or stop, a 26px fullscreen button (lucide `maximize-2`, and
 `minimize-2` while the pane fills the window), and the `···` menu with clear,
 and remove outside fullscreen. No word names the pane's view: it has one, its
-session (Noah, 13/10). Frames: `Dashboard · dark`, `Agent error · reason`,
+session (JeanBrasse, 13/10). Frames: `Dashboard · dark`, `Agent error · reason`,
 `Panel header · fullscreen`, `Agent stopped · who and why`. xterm gets its palette
 as a JS object rather than from CSS variables, and there are two of them:
 `src/components/Terminal.tsx` draws on `#0D0B08`, while `TERMINAL_THEME` in
@@ -455,7 +455,7 @@ in cards, panel headers, the Chat's team and fleet and each New team member; 24
 where it redraws as the name is typed. It is hidden from assistive tech: the
 name beside it is what is read.
 
-It replaced the emoji faces and the character picker (Noah's choice, 2026-09-23,
+It replaced the emoji faces and the character picker (JeanBrasse's choice, 2026-09-23,
 option C of the identity board). The `character` field stays in an agent's
 data and nothing draws it. With it went the coloured provider badges: where a
 provider is a fact about an agent, it is a plain mono word in `text-muted`,

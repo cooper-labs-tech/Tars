@@ -7,7 +7,7 @@ import { AgentDialogSuperAgentSidebar } from '../../src/components/AgentWorld/Ag
 import type { AgentStatus } from '../../src/types/electron';
 
 /**
- * A stopped agent where Noah looks at it: its card on the Agents page, its
+ * A stopped agent where JeanBrasse looks at it: its card on the Agents page, its
  * pane's header on the Dashboard, its window's header, and the rail of an
  * orchestrator's window. Frame: `Agent stopped · who and why` in
  * design/tars-redesign.pen. Written before the code. How each can fail:

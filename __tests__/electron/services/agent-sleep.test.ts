@@ -6,7 +6,7 @@ import type { AgentStatus } from '../../../electron/types';
 import type { Proc } from '../../../electron/services/stall-watch';
 
 /**
- * Which agent is put to sleep: Noah's choices 5 and 6 of 2026-10-05, "an agent
+ * Which agent is put to sleep: JeanBrasse's choices 5 and 6 of 2026-10-05, "an agent
  * with no turn for 30 minutes is put to sleep and woken on its own
  * conversation when it is needed; orchestrators are never put to sleep"
  * (RD-RAM.md, 2.1: 265 to 600 MB given back per agent).

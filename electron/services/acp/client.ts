@@ -468,7 +468,7 @@ export class AcpSession extends EventEmitter {
     // reported here and only here: no 'exit' follows it. It used to be emitted
     // again on this session, where nothing listened, and an 'error' nobody
     // hears is thrown: in the main process, the "Uncaught Exception" window
-    // Noah saw on 2026-09-18, while the initialize below waited out its 90
+    // JeanBrasse saw on 2026-09-18, while the initialize below waited out its 90
     // seconds. It fails what is waiting instead, that initialize first.
     child.on('error', err => this.fail(launchFailure(err, this.launch.command, this.options.cwd, getPath(env, process.platform))));
     // The same class on the way in: writing to an agent that has stopped

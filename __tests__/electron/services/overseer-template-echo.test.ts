@@ -11,7 +11,7 @@ import * as path from 'path';
  * rather than filling it, which is still valid JSON, so it was accepted and
  * written to the conversation. Every turn after that was shown the placeholder
  * as something the overseer had already said, and copied it in turn: nineteen
- * consecutive turns on Noah's install, none able to recover on its own.
+ * consecutive turns on JeanBrasse's install, none able to recover on its own.
  *
  * So the assertions are about the two artifacts that carry the loop, not about
  * a helper returning true: what ends up in overseer.json, and what is in the
@@ -54,7 +54,7 @@ vi.mock('../../../electron/services/hermes-session', () => ({
   askLiveSession: async () => ({ ok: false, error: 'unavailable' }),
 }));
 
-const TEMPLATE = '<what you tell Noah, plain text or light markdown>';
+const TEMPLATE = '<what you tell JeanBrasse, plain text or light markdown>';
 
 /** What the gateway answers on the next turn. */
 let nextReply = 'the fleet is quiet';
@@ -192,7 +192,7 @@ beforeEach(async () => {
 });
 
 describe('a reply that is the format template', () => {
-  it('never reaches the conversation, and never leaves Noah with nothing', async () => {
+  it('never reaches the conversation, and never leaves JeanBrasse with nothing', async () => {
     nextReply = JSON.stringify({ say: TEMPLATE, action: null });
 
     const result = await overseer.askOverseer('salut');
@@ -204,7 +204,7 @@ describe('a reply that is the format template', () => {
     // What he gets says what happened. What Hermes actually sent does not go
     // in: the template in a message would be folded away as an echo itself.
     expect(result.ok && result.message.text).toMatch(/instead of an answer/i);
-    expect(JSON.stringify(persisted())).not.toContain('what you tell Noah');
+    expect(JSON.stringify(persisted())).not.toContain('what you tell JeanBrasse');
   }, 30000);
 
   it('leaves the next turn free to answer properly', async () => {
@@ -216,7 +216,7 @@ describe('a reply that is the format template', () => {
 
     expect(second.ok).toBe(true);
     // The refused turn left nothing behind for this one to copy.
-    expect(promptsSent[promptsSent.length - 1]).not.toContain('OVERSEER: <what you tell Noah');
+    expect(promptsSent[promptsSent.length - 1]).not.toContain('OVERSEER: <what you tell JeanBrasse');
     const texts = persisted().map(m => m.text);
     expect(texts).toContain('Frontend is waiting on you.');
     expect(texts).not.toContain(TEMPLATE);
@@ -224,7 +224,7 @@ describe('a reply that is the format template', () => {
 
   it('catches the bare gateway sentinel too', async () => {
     // Not JSON and not in the repo: the gateway's own "produce no output"
-    // marker, which used to be shown to Noah as if it were a message.
+    // marker, which used to be shown to JeanBrasse as if it were a message.
     nextReply = '[SILENT]';
 
     const result = await overseer.askOverseer('salut');
@@ -246,10 +246,10 @@ describe('a reply that is the format template', () => {
 });
 
 describe('a conversation that is already poisoned', () => {
-  /** Noah's file: two real answers, then the echo on every turn after. */
+  /** JeanBrasse's file: two real answers, then the echo on every turn after. */
   const poisoned = [
     { role: 'user', text: 'salut' },
-    { role: 'overseer', text: 'Salut Noah. Rien de bloque, mais un agent t attend.' },
+    { role: 'overseer', text: 'Salut JeanBrasse. Rien de bloque, mais un agent t attend.' },
     ...Array.from({ length: 17 }, () => ({ role: 'overseer', text: TEMPLATE })),
     { role: 'user', text: 'ca dit quoi?' },
   ];
@@ -265,7 +265,7 @@ describe('a conversation that is already poisoned', () => {
     expect(history).toHaveLength(poisoned.length);
     expect(history.filter(m => m.templateEcho)).toHaveLength(17);
     expect(persisted()).toHaveLength(poisoned.length);
-    expect(fs.readFileSync(OVERSEER_FILE, 'utf-8')).toContain('what you tell Noah');
+    expect(fs.readFileSync(OVERSEER_FILE, 'utf-8')).toContain('what you tell JeanBrasse');
   });
 
   it('flags only the echoes, and never a real message', async () => {
@@ -279,14 +279,14 @@ describe('a conversation that is already poisoned', () => {
   it('leaves the file untouched even after a full turn runs against it', async () => {
     seed(poisoned);
     const before = fs.readFileSync(OVERSEER_FILE, 'utf-8');
-    expect((before.match(/what you tell Noah/g) || []).length).toBe(17);
+    expect((before.match(/what you tell JeanBrasse/g) || []).length).toBe(17);
 
     nextReply = JSON.stringify({ say: 'Frontend is waiting on you.', action: null });
     await overseer.askOverseer('et maintenant?');
 
     const after = fs.readFileSync(OVERSEER_FILE, 'utf-8');
     // The turn appended; it did not prune.
-    expect((after.match(/what you tell Noah/g) || []).length).toBe(17);
+    expect((after.match(/what you tell JeanBrasse/g) || []).length).toBe(17);
     expect(persisted()).toHaveLength(poisoned.length + 2);
   }, 30000);
 
@@ -295,7 +295,7 @@ describe('a conversation that is already poisoned', () => {
 
     const texts = overseer.getOverseerHistory().map(m => m.text);
 
-    expect(texts).toContain('Salut Noah. Rien de bloque, mais un agent t attend.');
+    expect(texts).toContain('Salut JeanBrasse. Rien de bloque, mais un agent t attend.');
     expect(texts).toContain('salut');
     expect(texts).toContain('ca dit quoi?');
   });
@@ -310,7 +310,7 @@ describe('a conversation that is already poisoned', () => {
     // must not appear in it under any speaker.
     expect(conversation).not.toContain(TEMPLATE);
     // The real turns still do, or the fix would have cost the context.
-    expect(conversation).toContain('Salut Noah. Rien de bloque');
+    expect(conversation).toContain('Salut JeanBrasse. Rien de bloque');
   }, 30000);
 
   /**
@@ -341,10 +341,10 @@ describe('a conversation that is already poisoned', () => {
     expect(instructions).toContain('"action"');
     // But nothing in it is a ready made answer.
     expect(instructions).not.toContain('{"say"');
-    expect(instructions).not.toMatch(/<what you tell Noah/);
+    expect(instructions).not.toMatch(/<what you tell JeanBrasse/);
     expect(instructions).not.toMatch(/<id from the snapshot>/);
     // The old ones are still recognised, for conversations already holding them.
-    expect(overseer.isTemplateEcho('<what you tell Noah, plain text or light markdown>')).toBe(true);
+    expect(overseer.isTemplateEcho('<what you tell JeanBrasse, plain text or light markdown>')).toBe(true);
   }, 30000);
 });
 
@@ -453,7 +453,7 @@ describe('a refusal during an automatic check-in', () => {
  * A guard that leaves the user with nothing has not protected anybody.
  *
  * Shipped in 1.6.18: Hermes kept returning the template, the guard correctly
- * refused it, and Noah got "la page chat ne fonctionne pas, aucun message" plus
+ * refused it, and JeanBrasse got "la page chat ne fonctionne pas, aucun message" plus
  * an error toast every time he wrote. A visibly wrong answer had been turned
  * into no answer, which is the failure this codebase has spent days removing
  * from everywhere else. The refusal was right; stopping there was not.
@@ -529,7 +529,7 @@ describe('a question that Hermes answers with the template', () => {
     // The loop stays shut: whatever Hermes returned is not in the prompt, and
     // the notice that replaced it is a Tars line, not an observation to copy.
     const conversation = conversationOf(promptsSent[promptsSent.length - 1]);
-    expect(conversation).not.toContain('what you tell Noah');
+    expect(conversation).not.toContain('what you tell JeanBrasse');
   }, 30000);
 });
 
@@ -592,7 +592,7 @@ describe('the proposal attached to a reply', () => {
     expect(result.success).toBe(true);
     expect(dispatched).toHaveLength(1);
     // The stored proposal went out, whole: the agent the overseer named and
-    // the words Noah was shown.
+    // the words JeanBrasse was shown.
     expect(dispatched[0].url).toContain('/api/agents/a1/dispatch');
     expect(JSON.parse(dispatched[0].body)).toEqual({ message: 'Can you rebase onto main?' });
     // And nothing the caller substituted reached the wire.
@@ -627,16 +627,16 @@ describe('the proposal attached to a reply', () => {
 });
 
 describe('a template wrapped in a few words of its own', () => {
-  const WRAPPED = 'Voici ma reponse: <what you tell Noah, plain text or light markdown>.';
+  const WRAPPED = 'Voici ma reponse: <what you tell JeanBrasse, plain text or light markdown>.';
 
-  it('does not reach the conversation, and still answers Noah', async () => {
+  it('does not reach the conversation, and still answers JeanBrasse', async () => {
     nextReply = JSON.stringify({ say: WRAPPED, action: null });
 
     const result = await overseer.askOverseer('salut');
 
     expect(result.ok).toBe(true);
     expect(result.ok && result.message.text).toMatch(/instead of an answer/i);
-    expect(JSON.stringify(persisted())).not.toContain('what you tell Noah');
+    expect(JSON.stringify(persisted())).not.toContain('what you tell JeanBrasse');
   }, 30000);
 
   it('is never quoted back to the model when it is already on disk', async () => {
@@ -652,12 +652,12 @@ describe('a template wrapped in a few words of its own', () => {
     // The conversation, not the whole prompt: the instructions carry the
     // bracketed shape deliberately, so that a copy of it is recognisable.
     expect(conversation).not.toContain(TEMPLATE);
-    expect(conversation).not.toContain('what you tell Noah');
+    expect(conversation).not.toContain('what you tell JeanBrasse');
     expect(conversation).toContain('Frontend is waiting on you.');
   }, 30000);
 
   it('covers every placeholder this app has ever shown the model', () => {
-    for (const token of ['<what you tell Noah, plain text or light markdown>', '<id from the snapshot>', '<the exact message to send>', '<...>']) {
+    for (const token of ['<what you tell JeanBrasse, plain text or light markdown>', '<id from the snapshot>', '<the exact message to send>', '<...>']) {
       expect(overseer.isTemplateEcho(`Reponse: ${token} voila.`), token).toBe(true);
     }
   });

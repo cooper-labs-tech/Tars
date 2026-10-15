@@ -5,7 +5,7 @@ import * as path from 'path';
 
 /**
  * An agent's uncommitted work, saved on wip/<name> before its worktree goes
- * (Noah, 05/10: deleting an agent saves it first, without asking). The window's
+ * (JeanBrasse, 05/10: deleting an agent saves it first, without asking). The window's
  * delete removed the worktree with `git worktree remove --force`, and whatever
  * was not committed went with it.
  *

@@ -5,7 +5,7 @@ import { DATA_DIR } from '../constants';
 
 /**
  * A durable temporary folder per agent (RD-REDEMARRAGE.md, 2.1, approved by
- * Noah on 2026-10-05).
+ * JeanBrasse on 2026-10-05).
  *
  * macOS empties /private/tmp and the app's /var/folders/.../T at every boot,
  * and every agent's scratchpad and background task output went with them on
@@ -327,7 +327,7 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
   };
 
   // A project's folder is its absolute path, every other character a dash:
-  // `-Users-noah-tars`, `C--Users-noah-tars` on Windows. Beside them Claude
+  // `-Users-demo-tars`, `C--Users-demo-tars` on Windows. Beside them Claude
   // Code keeps `bash-edit-diff` and `bundled-skills/<version>/<hash>`, as deep.
   const PROJECT_FOLDER = /^(-|[A-Za-z]--)/;
   /**

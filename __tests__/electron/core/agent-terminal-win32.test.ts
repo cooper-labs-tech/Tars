@@ -107,7 +107,7 @@ const noFs: FsProbe = {
 const PWSH_DIR = 'C:\\Program Files\\PowerShell\\7';
 const PWSH = `${PWSH_DIR}\\pwsh.exe`;
 const GIT_BASH = 'C:\\Program Files\\Git\\bin\\bash.exe';
-const CLI_DIR = 'C:\\Users\\Nico Las\\.local\\bin';
+const CLI_DIR = 'C:\\Users\\Sam Lee\\.local\\bin';
 const CLAUDE_EXE = `${CLI_DIR}\\claude.exe`;
 
 beforeEach(() => {

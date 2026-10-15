@@ -19,7 +19,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Asserted, in order:
  * 1. two requests typed in, each sender line naming its own task; the link is
  *    the first asker's (main overwrote it with the second's);
- * 2. a turn Noah types takes nothing: the link and the queue are unchanged;
+ * 2. a turn JeanBrasse types takes nothing: the link and the queue are unchanged;
  * 3. the first task's end is told to Lead only, and the second's to Bot only;
  * 4. a message held behind a half-typed line, whose terminal then dies, is
  *    told to its asker as never run;
@@ -33,9 +33,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * made a real one; red on 2ee8c416 and 34c1a7e9): a request typed in during
  * another request's turn moved the worker's `workHandedAt`, so the turn in
  * hand no longer counted as handed work: its end told nobody, its link stayed,
- * and Noah's next turn was reported to the first asker as its result. The
+ * and JeanBrasse's next turn was reported to the first asker as its result. The
  * second asker is held to the same once (QA, 2026-10-12): a link kept after
- * B's end reported Noah's turn to Bot, and only Lead's count was asserted.
+ * B's end reported JeanBrasse's turn to Bot, and only Lead's count was asserted.
  */
 
 type Agent = { id: string; cliRunning?: boolean };
@@ -118,7 +118,7 @@ test("each result goes back to the agent that asked for that piece of work", asy
     await hook({ status: 'idle', source: 'startup' });
 
     // 1. Two askers, one busy worker.
-    await hook({ status: 'running', event: 'UserPromptSubmit', current_task: 'something Noah asked earlier' });
+    await hook({ status: 'running', event: 'UserPromptSubmit', current_task: 'something JeanBrasse asked earlier' });
     const a = await api('/api/agents/w1/message', 'o1', { message: 'TASK-A review #280' });
     const b = await api('/api/agents/w1/message', 'b1', { message: 'TASK-B write the release notes' });
     await expect.poll(() => read('w1').includes('TASK-B'), { timeout: 20_000 }).toBe(true);
@@ -133,9 +133,9 @@ test("each result goes back to the agent that asked for that piece of work", asy
     expect(refA).not.toBe(refB);
     expect((await worker()).requestedBy).toMatchObject({ agentId: 'o1', taskRef: refA });
 
-    // 2. A turn Noah types takes nothing.
+    // 2. A turn JeanBrasse types takes nothing.
     await hook({ status: 'running', event: 'UserPromptSubmit', current_task: 'fix the typo in the README first' });
-    steps.noahTurn = await worker();
+    steps.userTurn = await worker();
     expect((await worker()).requestedBy).toMatchObject({ agentId: 'o1', taskRef: refA });
     expect((await worker()).queue.map((q: string[]) => q[0])).toEqual([refA, refB]);
 
@@ -294,17 +294,17 @@ test('a request sent during another request\'s turn: each end goes to its own as
     await expect.poll(() => told('b1'), { timeout: 20_000 }).toBeGreaterThan(0);
     steps.afterB = { o1: read('o1'), b1: read('b1'), worker: await worker() };
 
-    // 5. Noah's own turn.
+    // 5. JeanBrasse's own turn.
     await new Promise(r => setTimeout(r, 1100));
     await hook({ status: 'running', event: 'UserPromptSubmit', current_task: 'what does this function return' });
     await hook({ status: 'idle', hook: 'Stop' });
     await new Promise(r => setTimeout(r, 8000));
-    steps.afterNoah = { leadTold: told('o1'), botTold: told('b1'), o1: read('o1'), worker: await worker() };
+    steps.afterUser = { leadTold: told('o1'), botTold: told('b1'), o1: read('o1'), worker: await worker() };
 
     recordValues({ steps, received: { w1: read('w1'), o1: read('o1'), b1: read('b1') } });
     expect(leadToldOfA, 'Lead is told when turn A ends').toBe(true);
-    expect(told('o1'), 'Lead is told once, of A, and not of Noah\'s turn').toBe(1);
-    expect(told('b1'), 'Bot is told once, of B, and not of Noah\'s turn').toBe(1);
+    expect(told('o1'), 'Lead is told once, of A, and not of JeanBrasse\'s turn').toBe(1);
+    expect(told('b1'), 'Bot is told once, of B, and not of JeanBrasse\'s turn').toBe(1);
     expect((await worker()).queue, 'nothing left queued').toEqual([]);
   } finally {
     await app.close().catch(() => {});

@@ -90,7 +90,7 @@ Two agents agreeing on a change is a strong signal. It is not a mandate. The use
 always has context that agents lack: product direction, UX intuitions, constraints
 not yet shared. When agents align on "merge these two things" and the user says
 "keep them separate," the user is right. Always. The accent rules came out of the
-design because Noah said "c'est pas possible", not because a metric moved; 79 of
+design because JeanBrasse said "c'est pas possible", not because a metric moved; 79 of
 them, everywhere, in one commit.
 
 **This principle is also the product's threat model.** Tars runs on the user's

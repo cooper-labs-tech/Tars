@@ -4,7 +4,7 @@ import { launchAgent, sessionStarting } from './agent-launch';
 import { isKeystroke } from './input-draft';
 
 /**
- * An agent asleep, and how it wakes (Noah's choices 5 and 6 of 2026-10-05;
+ * An agent asleep, and how it wakes (JeanBrasse's choices 5 and 6 of 2026-10-05;
  * services/agent-sleep.ts decides who sleeps, and ends the CLI).
  *
  * Asleep: `status` is `asleep` from `asleepSince`, no terminal, its

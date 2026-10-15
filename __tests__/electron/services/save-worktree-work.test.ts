@@ -1,6 +1,6 @@
 /**
  * Deleting an agent saves its uncommitted work first, on wip/<name>, without
- * asking (Noah, 05/10). The window's delete removed the agent's worktree with
+ * asking (JeanBrasse, 05/10). The window's delete removed the agent's worktree with
  * `git worktree remove --force`, and everything not committed went with it
  * (electron/services/save-worktree-work.ts, agent:remove).
  *

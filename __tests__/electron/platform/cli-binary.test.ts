@@ -85,7 +85,7 @@ const OLD_CMD_SHIM = [
 ].join('\r\n');
 const SH_SHIM = '#!/bin/sh\nbasedir=$(dirname "$(echo "$0" | sed -e \'s,\\\\,/,g\')")\nexec node "$basedir/node_modules/x/cli.js" "$@"\n';
 
-const HOME = 'C:\\Users\\Nico Las';
+const HOME = 'C:\\Users\\Sam Lee';
 const NPM = `${HOME}\\AppData\\Roaming\\npm`;
 const LOCAL = `${HOME}\\.local\\bin`;
 const NODEJS = 'C:\\Program Files (x86)\\nodejs';

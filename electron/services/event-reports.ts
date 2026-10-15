@@ -5,7 +5,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
 import { redactSecrets } from '../utils/redact-secrets';
 
 /**
- * Reports to the user's Telegram as things happen (the design's part A2; Noah:
+ * Reports to the user's Telegram as things happen (the design's part A2; JeanBrasse:
  * "en fonction de ce qui se passe"), through the relay to their Hermes
  * (hermes-relay.ts, which hands this module its channel while it is on).
  *

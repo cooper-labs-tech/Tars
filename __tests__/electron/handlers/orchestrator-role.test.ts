@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /**
- * The Orchestrator toggle is the role (Noah, 2026-09-22).
+ * The Orchestrator toggle is the role (JeanBrasse, 2026-09-22).
  *
  * Until now the role was read from the name and the toggle only removed the
  * editing tools, which every launch already did for an orchestrator: flipping
@@ -381,7 +381,7 @@ describe('the permission mode', () => {
   });
 
   it('restarts once for a model, an effort and a permission mode saved together', async () => {
-    // Noah's edit of 2026-09-22: Opus 5.5, its effort and "le niveau de bypass".
+    // JeanBrasse's edit of 2026-09-22: Opus 5.5, its effort and "le niveau de bypass".
     const { agent, terminal } = running('worker', { model: 'claude-opus-5', effort: 'high', permissionMode: 'auto' });
     const before = spawned.length;
 

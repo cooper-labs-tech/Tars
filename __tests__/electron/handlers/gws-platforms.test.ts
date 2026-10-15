@@ -118,7 +118,7 @@ function setEnv(values: Record<string, string>) {
   }
 }
 
-const AUTH = { user: 'noah@example.com', token_valid: true, has_refresh_token: true, auth_method: 'oauth2', scopes: ['https://www.googleapis.com/auth/drive'] };
+const AUTH = { user: 'demo@example.com', token_valid: true, has_refresh_token: true, auth_method: 'oauth2', scopes: ['https://www.googleapis.com/auth/drive'] };
 
 beforeEach(() => {
   vi.resetModules();
@@ -150,7 +150,7 @@ afterEach(() => {
 
 describe.runIf(process.platform === 'win32')('win32 (real files; the lookup itself is tested on every host in cli-exec.test.ts)', () => {
   function installWindowsGws() {
-    const home = path.join(tmpDir, 'Nico Las');
+    const home = path.join(tmpDir, 'Sam Lee');
     const appData = path.join(home, 'AppData', 'Roaming');
     const localAppData = path.join(home, 'AppData', 'Local');
     const npm = path.join(appData, 'npm');
@@ -199,7 +199,7 @@ describe.runIf(process.platform === 'win32')('win32 (real files; the lookup itse
     expect(call.argv).toEqual(['auth', 'status', '--json']);
     expect(call.path.split(';')[0]).toBe(sdk);
     expect(status.authenticated).toBe(true);
-    expect(status.user).toBe('noah@example.com');
+    expect(status.user).toBe('demo@example.com');
     expect(shellLines).toEqual([]);
   });
 

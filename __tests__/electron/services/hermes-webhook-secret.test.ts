@@ -8,7 +8,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * The Hermes webhook secret lives where the agents are not pointed.
  *
  * It opens the one route that dispatches to any agent of any project, which is
- * the reach of Noah's own chat. Until lot 4 it sat in `~/.dorothy`, the
+ * the reach of JeanBrasse's own chat. Until lot 4 it sat in `~/.dorothy`, the
  * directory every agent is started with, next to the shared token that the
  * webhook also accepted: closing the second and leaving the first there would
  * only have changed which file an agent reads to drive the fleet.

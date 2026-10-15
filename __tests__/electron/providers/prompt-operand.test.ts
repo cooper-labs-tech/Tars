@@ -122,7 +122,7 @@ function fullParams(prompt: string, withSkills: boolean) {
   const mcpConfigPath = path.join(tmpDir, 'mcp.json');
   const systemPromptFile = path.join(tmpDir, 'system-prompt.md');
   const secondaryProjectPath = path.join(tmpDir, 'second project');
-  const vault = path.join(tmpDir, "Noah's vault");
+  const vault = path.join(tmpDir, "JeanBrasse's vault");
   return {
     binaryPath: fakeBinary(),
     prompt,
@@ -148,7 +148,7 @@ beforeEach(() => {
   fs.writeFileSync(path.join(tmpDir, 'mcp.json'), '{}');
   fs.writeFileSync(path.join(tmpDir, 'system-prompt.md'), '# system');
   fs.mkdirSync(path.join(tmpDir, 'second project'), { recursive: true });
-  fs.mkdirSync(path.join(tmpDir, "Noah's vault"), { recursive: true });
+  fs.mkdirSync(path.join(tmpDir, "JeanBrasse's vault"), { recursive: true });
   fs.mkdirSync(path.join(tmpDir, '.dorothy'), { recursive: true });
 });
 

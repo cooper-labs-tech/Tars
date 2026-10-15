@@ -10,7 +10,7 @@ import type { TaskEntry } from '../../src/types/electron';
 
 /**
  * What the Usage page says of each agent: the tasks of the timeframe and the
- * project picked, one row per agent (Noah, 13/10: "l'usage par agent et pas par
+ * project picked, one row per agent (JeanBrasse, 13/10: "l'usage par agent et pas par
  * tâche aussi ? Je veux avoir le choix de regarder l'un ou l'autre"). Frame:
  * `Usage · cost per agent`, and its light copy. Written before the code. How it
  * can fail:

@@ -62,17 +62,17 @@ const old = {
 };
 
 const POSIX = [
-  '/Users/noah/Projects/tars',
-  '/home/noah/tars',
-  '/Users/noah',
-  '/Users/noah/',
-  '/Users/noah/atlas/',
-  '/home/noah/atlas//',
+  '/Users/demo/Projects/tars',
+  '/home/demo/tars',
+  '/Users/demo',
+  '/Users/demo/',
+  '/Users/demo/atlas/',
+  '/home/demo/atlas//',
   '/Users/Shared/tars',
-  '/Users/noah/a\\b',
-  '/Users/noah/C:\\x',
-  "/Users/noah/o'neil proj (x86)/app",
-  '/Users/noah/.claude/CLAUDE.md',
+  '/Users/demo/a\\b',
+  '/Users/demo/C:\\x',
+  "/Users/demo/o'neil proj (x86)/app",
+  '/Users/demo/.claude/CLAUDE.md',
   '/opt/work/tars',
   '//server/share/tars',
   '/a//b',
@@ -199,7 +199,7 @@ describe('display-path on Windows paths', () => {
   });
 
   it('7. calls absolute on win32 what Windows does: a drive, a share, a rooted path', () => {
-    for (const p of ['C:\\Users\\you\\vault', 'C:/vault', 'c:\\x', '\\\\srv\\share\\x', '/Users/noah/vault', '\\x']) {
+    for (const p of ['C:\\Users\\you\\vault', 'C:/vault', 'c:\\x', '\\\\srv\\share\\x', '/Users/demo/vault', '\\x']) {
       expect(isAbsolutePath(p, 'win32'), p).toBe(true);
     }
     for (const p of ['C:x', 'C:', 'vault\\x', '~\\vault', '~/vault', '', ' C:\\x', './x']) {

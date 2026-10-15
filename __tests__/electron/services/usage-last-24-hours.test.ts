@@ -8,7 +8,7 @@ import { usageByProvider, ledgerPath } from '../../../electron/services/usage-le
 /**
  * Usage fine enough for a rolling "last 24 hours", and filed under the session that spent it.
  *
- * The Usage page cannot show the last 24 hours (Noah, 01/10): the transcripts are added up by local day, and so are
+ * The Usage page cannot show the last 24 hours (JeanBrasse, 01/10): the transcripts are added up by local day, and so are
  * the ledger's rows, so at 09:00 "the last 24 hours" can only be read as today since midnight, or as today and the
  * whole of yesterday. And the Audit (AUDIT-USAGE-COMPTES.md, 01/10) measured how usage is lost or misfiled: the
  * transcripts under a user's own CLAUDE_CONFIG_DIR are never read; a model served through OpenRouter or Ollama is

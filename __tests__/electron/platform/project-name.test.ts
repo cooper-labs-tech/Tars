@@ -25,16 +25,16 @@ import { projectName } from '../../../electron/platform/project-name';
 
 describe('projectName', () => {
   it('1. win32: the last folder, with either separator', () => {
-    expect(projectName('C:\\Users\\nicol\\projects\\atlas', 'win32')).toBe('atlas');
-    expect(projectName('C:/Users/nicol/projects/atlas', 'win32')).toBe('atlas');
-    expect(projectName('C:\\Users\\nicol/projects\\o\'neil proj (x86)', 'win32')).toBe('o\'neil proj (x86)');
+    expect(projectName('C:\\Users\\owner\\projects\\atlas', 'win32')).toBe('atlas');
+    expect(projectName('C:/Users/owner/projects/atlas', 'win32')).toBe('atlas');
+    expect(projectName('C:\\Users\\owner/projects\\o\'neil proj (x86)', 'win32')).toBe('o\'neil proj (x86)');
     expect(projectName('\\\\server\\share\\team\\atlas', 'win32')).toBe('atlas');
   });
 
   it('2. win32: a trailing separator is dropped', () => {
-    expect(projectName('C:\\Users\\nicol\\atlas\\', 'win32')).toBe('atlas');
-    expect(projectName('C:\\Users\\nicol\\atlas\\\\', 'win32')).toBe('atlas');
-    expect(projectName('C:/Users/nicol/atlas/', 'win32')).toBe('atlas');
+    expect(projectName('C:\\Users\\owner\\atlas\\', 'win32')).toBe('atlas');
+    expect(projectName('C:\\Users\\owner\\atlas\\\\', 'win32')).toBe('atlas');
+    expect(projectName('C:/Users/owner/atlas/', 'win32')).toBe('atlas');
   });
 
   it('3. win32: a root is no name', () => {
@@ -43,11 +43,11 @@ describe('projectName', () => {
 
   it('4. darwin/linux: the last `/` segment, as every caller had it, backslashes and trailing `/` alike', () => {
     for (const platform of ['darwin', 'linux'] as const) {
-      expect(projectName('/Users/noah/Projects/tars', platform)).toBe('tars');
-      expect(projectName('/Users/noah/a\\b', platform)).toBe('a\\b');
+      expect(projectName('/Users/demo/Projects/tars', platform)).toBe('tars');
+      expect(projectName('/Users/demo/a\\b', platform)).toBe('a\\b');
       expect(projectName('relative/name', platform)).toBe('name');
       expect(projectName('/', platform)).toBe('');
-      for (const p of ['/Users/noah/atlas/', '/home/noah/atlas//', 'C:\\x\\atlas\\', '//', 'a//b']) {
+      for (const p of ['/Users/demo/atlas/', '/home/demo/atlas//', 'C:\\x\\atlas\\', '//', 'a//b']) {
         expect(projectName(p, platform), p).toBe(p.split('/').pop());
       }
     }

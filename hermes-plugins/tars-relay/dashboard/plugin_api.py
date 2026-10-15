@@ -80,7 +80,7 @@ async def _send_plain(chat_id: str, text: str):
 @router.get('/status')
 def status():
     store = _store()
-    return {'plugin': core.PLUGIN_ID, 'version': core.VERSION, 'configured': core.noah_of(_settings()) is not None,
+    return {'plugin': core.PLUGIN_ID, 'version': core.VERSION, 'configured': core.user_of(_settings()) is not None,
             'sends_last_hour': store.sends_last_hour(), 'waiting_replies': store.waiting_replies(),
             'projects': store.projects(), 'store_id': store.store_id}
 
@@ -95,22 +95,22 @@ async def send(request: Request):
         outgoing = core.check_send(body)
     except core.Refused as refused:
         raise HTTPException(status_code=400, detail=str(refused))
-    noah = core.noah_of(_settings())
-    if noah is None:
+    user = core.user_of(_settings())
+    if user is None:
         raise HTTPException(status_code=503, detail='tars-relay has no user_id in its settings')
     store = await asyncio.to_thread(_store)
     # The place is taken before the message goes out, so that sends made at once cannot all pass the count.
-    slot = await asyncio.to_thread(store.reserve, noah)
+    slot = await asyncio.to_thread(store.reserve, user)
     if slot is None:
         raise HTTPException(status_code=429, detail='%d sends in the last hour already' % core.SENDS_PER_HOUR)
     try:
-        message = await _send_plain(noah, outgoing['text'])
+        message = await _send_plain(user, outgoing['text'])
     except Exception as error:
         await asyncio.to_thread(store.release, slot)
         # The class only: an error from the HTTP client can carry the request's URL, and the bot token is in it.
         log.warning('tars-relay: Telegram did not take a message (%s)', type(error).__name__)
         raise HTTPException(status_code=502, detail='Telegram did not take the message (%s)' % type(error).__name__)
-    await asyncio.to_thread(store.record_sent, chat_id=noah, message_id=str(message.message_id), ref=outgoing['ref'],
+    await asyncio.to_thread(store.record_sent, chat_id=user, message_id=str(message.message_id), ref=outgoing['ref'],
                             kind=outgoing['kind'], project=outgoing['project'], text=outgoing['text'], slot=slot)
     return {'message_id': str(message.message_id)}
 

@@ -16,12 +16,12 @@ import * as fs from 'node:fs';
  *    enrolled all the same;
  * 3. the refusal tells a right guess from a wrong one, so it is an oracle;
  * 4. the limit never lifts: a chat that mistyped is shut out until a restart;
- * 5. one chat's misses shut out another, Noah's own included;
+ * 5. one chat's misses shut out another, JeanBrasse's own included;
  * 6. misses spread over many chats escape a limit kept per chat;
  * 7. what is not a guess counts as one: `/auth` with no token, or /auth while
  *    Settings holds no auth token.
  * 8. (gate of #200) the lock-out has no way out that anyone is told of: twenty
- *    misses from anywhere shut out every new chat, Noah's too, and the refusal
+ *    misses from anywhere shut out every new chat, JeanBrasse's too, and the refusal
  *    names neither the time it lifts nor the one thing that lifts it sooner,
  *    turning Telegram off and on in Settings, which restarts the bot.
  *

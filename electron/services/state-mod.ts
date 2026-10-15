@@ -8,7 +8,7 @@ import { readAppSettingsFromDisk } from '../providers/cli-provider';
  * The state mod: Claude Code reports an agent's state to Tars from inside the
  * CLI (mods/tars-state/, a hooks module of Claude Code's function hooks).
  *
- * Noah's go of 2026-10-05, step 1 of ETUDE-MODS-CLAUDE-CODE.md. The mod posts
+ * JeanBrasse's go of 2026-10-05, step 1 of ETUDE-MODS-CLAUDE-CODE.md. The mod posts
  * what the four shell hooks post (SessionStart's registration,
  * UserPromptSubmit's running, Stop's output and idle, StopFailure's error),
  * marked `via: 'mod'`, and a heartbeat every 15 s from the CLI's own event

@@ -17,7 +17,7 @@ import * as path from 'node:path';
  * run on the agent's model and effort, and a change to either applies by
  * itself, at a moment that cuts nothing.
  *
- * What happened on 2026-09-22 with 1.7.9: Noah moved every agent to Opus 5.5
+ * What happened on 2026-09-22 with 1.7.9: JeanBrasse moved every agent to Opus 5.5
  * in the Agents page. The CLIs went on running the old model, and the ones he
  * relaunched from the Dashboard came back on the model their previous session
  * had answered on: Opus 5 for four Tars agents and five Parallel ones, Opus

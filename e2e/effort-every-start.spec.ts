@@ -5,10 +5,10 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
-import { BOT_TOKEN, NOAH, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
+import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
 
 /**
- * Every start of an agent's CLI runs at that agent's own effort (Noah, 2026-10-13: "la moitié du temps les agents se
+ * Every start of an agent's CLI runs at that agent's own effort (JeanBrasse, 2026-10-13: "la moitié du temps les agents se
  * réveillent avec le mauvais niveau d'effort par rapport à leur paramètre", and nothing tested it), in the real app.
  *
  * Six agents, each at its own level: the lead (the orchestrator) at max, and workers at low, medium, high and xhigh,
@@ -172,7 +172,7 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { additionalPaths: [bin] },
     telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
-    telegramAuthorizedChatIds: [String(NOAH)], telegramChatId: String(NOAH),
+    telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID),
   }));
   const launchesFile = path.join(home, 'launches.jsonl');
   const launchesOf = (id: string) => lines<Launch>(launchesFile).filter((l) => l.id === id);

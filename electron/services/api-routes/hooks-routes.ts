@@ -159,7 +159,7 @@ function fromAnotherCli(agent: AgentStatus, req: RouteRequest): boolean | Promis
  * Claude Code raises its idle prompt about sixty seconds after StopFailure,
  * exactly as it does after a turn that ended well, and the prompt reaches Tars
  * twice: as a `waiting` status post from notification.sh, and as the desktop
- * notification "X is waiting". Both told Noah the agent wanted his answer when
+ * notification "X is waiting". Both told JeanBrasse the agent wanted his answer when
  * it had stopped and could do nothing until he logged it in again, and the
  * notification went on saying so after the card had been fixed to say the
  * opposite.
@@ -189,7 +189,7 @@ const IDLE_PROMPT_DELAY_MS = 60_000;
  * delegate_task's first attempt, is how: it sets `running` and leaves the
  * terminal alone, so the claude in it goes on counting the minute since its
  * last Stop. Taken, the prompt put the working agent back to `waiting`, told
- * Noah on the desktop that it waited on him, and told the orchestrator it was
+ * JeanBrasse on the desktop that it waited on him, and told the orchestrator it was
  * waiting. /dispatch cannot do this: an agent still `idle` gets a new session,
  * and the posts of the old one are a tombstone's.
  *
@@ -226,7 +226,7 @@ function dialogOpenedAt(openedAt: unknown): string {
 const TURN_FAILURE_TEXT_MAX = 500;
 
 /**
- * What to tell Noah about a turn that failed: the CLI's own words.
+ * What to tell JeanBrasse about a turn that failed: the CLI's own words.
  *
  * Verbatim, because they are what he needs and what he could not see. The
  * night this was found, every terminal read "Not logged in · Please run
@@ -808,7 +808,7 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       //
       // Only the idle prompt. A permission prompt belongs to a turn in
       // progress, which has already left `error`, and it is a question that
-      // really does wait on Noah.
+      // really does wait on JeanBrasse.
       if (isStoppedOnAFailure(agent)) {
         sendJson({ success: true, suppressed: 'the agent stopped on a failure and is not waiting' });
         return;

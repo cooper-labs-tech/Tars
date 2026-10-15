@@ -16,7 +16,7 @@ import { readTaskCosts, selectTasks, taskReport, withDescendants, type TaskQuery
  */
 
 export const TASK_LEDGER_FILE = path.join(DATA_DIR, 'task-ledger.jsonl');
-/** Each task's text, where no agent is handed it (Noah's answer of 2026-10-05). */
+/** Each task's text, where no agent is handed it (JeanBrasse's answer of 2026-10-05). */
 export const TASK_TEXT_FILE = privatePath('task-texts.jsonl');
 /** What each delegated run answered, beside the texts (PR B, 4.4 item 3). */
 export const TASK_RESULT_FILE = privatePath('task-results.jsonl');

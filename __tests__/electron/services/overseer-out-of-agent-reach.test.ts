@@ -6,7 +6,7 @@ import { format } from 'util';
 import { hasPosixModes } from '../../setup/platform-limits';
 
 /**
- * Noah's conversation with the super chat leaves the directory the agents are
+ * JeanBrasse's conversation with the super chat leaves the directory the agents are
  * handed, and no message is lost on the way.
  *
  * Measured on b17db0f: `~/.dorothy/overseer.json`, 148,654 bytes, 344 message
@@ -22,7 +22,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * directory the agent is given, on the listing it gets for free. Closing the
  * rest takes a sandbox.
  *
- * So what is tested here is the migration, because it handles Noah's own data:
+ * So what is tested here is the migration, because it handles JeanBrasse's own data:
  * it moves, it verifies before it deletes, it leaves the old file alone when
  * it cannot finish, it does not run twice, and the Chat keeps reading the
  * history throughout.
@@ -104,7 +104,7 @@ function conversation(texts: string[]): string {
   }, null, 2);
 }
 
-const NOAH_SAID = ['what is the fleet doing', 'three agents are running', 'ship it'];
+const USER_SAID = ['what is the fleet doing', 'three agents are running', 'ship it'];
 
 function textsOf(o: Overseer): string[] {
   return o.getOverseerHistory().map(m => m.text);
@@ -118,54 +118,54 @@ beforeEach(() => {
 
 describe('a conversation still in the directory the agents are handed', () => {
   it('moves out of it, whole, and the Chat reads it where it lands', async () => {
-    fs.writeFileSync(LEGACY, conversation(NOAH_SAID), { mode: 0o644 });
+    fs.writeFileSync(LEGACY, conversation(USER_SAID), { mode: 0o644 });
 
     const overseer = await start();
     const history = textsOf(overseer);
 
-    expect(history).toEqual(NOAH_SAID);
+    expect(history).toEqual(USER_SAID);
     expect(fs.existsSync(PRIVATE), 'the conversation never reached the private directory').toBe(true);
     expect(fs.existsSync(LEGACY), 'it is still readable in the directory every agent is given').toBe(false);
     // Byte for byte: a migration that reserialised could drop a field the
     // state file carries and nothing here would notice.
-    expect(fs.readFileSync(PRIVATE, 'utf-8')).toBe(conversation(NOAH_SAID));
+    expect(fs.readFileSync(PRIVATE, 'utf-8')).toBe(conversation(USER_SAID));
   });
 
   it.skipIf(!hasPosixModes())('lands at 0600, where it used to sit at 0644 for every account on the machine', async () => {
-    fs.writeFileSync(LEGACY, conversation(NOAH_SAID), { mode: 0o644 });
+    fs.writeFileSync(LEGACY, conversation(USER_SAID), { mode: 0o644 });
 
     await start();
 
     expect(fs.statSync(PRIVATE).mode & 0o777).toBe(0o600);
-    // Not a defence against the agents, which run as Noah. It is the other
+    // Not a defence against the agents, which run as JeanBrasse. It is the other
     // accounts on the machine, and it costs nothing.
     expect(fs.statSync(PRIVATE_DIR).mode & 0o077).toBe(0);
   });
 
   it('does not run again on the next start, and writes nothing back into the old place', async () => {
-    fs.writeFileSync(LEGACY, conversation(NOAH_SAID));
+    fs.writeFileSync(LEGACY, conversation(USER_SAID));
     await start();
 
     const second = await start();
     second.setOverseerSettings({ watchIntervalMs: 120000 });
 
-    expect(textsOf(second)).toEqual(NOAH_SAID);
+    expect(textsOf(second)).toEqual(USER_SAID);
     expect(fs.existsSync(LEGACY), 'a save put the conversation back where the agents are').toBe(false);
     expect(fs.readdirSync(tmp).filter(f => f !== 'private')).toEqual([]);
   });
 });
 
 describe('a migration that could not be made', () => {
-  it('keeps reading the old file rather than starting Noah an empty chat', async () => {
-    fs.writeFileSync(LEGACY, conversation(NOAH_SAID));
+  it('keeps reading the old file rather than starting JeanBrasse an empty chat', async () => {
+    fs.writeFileSync(LEGACY, conversation(USER_SAID));
     // The private directory cannot be created: a file already holds the name.
     fs.writeFileSync(PRIVATE_DIR, 'not a directory');
 
     const overseer = await start();
 
-    expect(textsOf(overseer)).toEqual(NOAH_SAID);
+    expect(textsOf(overseer)).toEqual(USER_SAID);
     expect(fs.existsSync(LEGACY), 'the only copy was deleted').toBe(true);
-    expect(fs.readFileSync(LEGACY, 'utf-8')).toBe(conversation(NOAH_SAID));
+    expect(fs.readFileSync(LEGACY, 'utf-8')).toBe(conversation(USER_SAID));
   });
 
   it('leaves an unreadable old file exactly where it is, and starts fresh', async () => {
@@ -181,25 +181,25 @@ describe('a migration that could not be made', () => {
   });
 
   it('never deletes the old file against a copy that did not land', async () => {
-    fs.writeFileSync(LEGACY, conversation(NOAH_SAID));
+    fs.writeFileSync(LEGACY, conversation(USER_SAID));
     // The write says it succeeded and put down something else.
     truncateNextPrivateWrite = true;
 
     const overseer = await start();
 
-    expect(fs.existsSync(LEGACY), "Noah's conversation was deleted against a half copy").toBe(true);
+    expect(fs.existsSync(LEGACY), "JeanBrasse's conversation was deleted against a half copy").toBe(true);
     expect(fs.existsSync(PRIVATE), 'a half file was left for the next start to adopt').toBe(false);
-    expect(textsOf(overseer)).toEqual(NOAH_SAID);
+    expect(textsOf(overseer)).toEqual(USER_SAID);
   });
 
   it('gets the conversation across on the start after that one', async () => {
-    fs.writeFileSync(LEGACY, conversation(NOAH_SAID));
+    fs.writeFileSync(LEGACY, conversation(USER_SAID));
     truncateNextPrivateWrite = true;
     await start();
 
     const second = await start();
 
-    expect(textsOf(second)).toEqual(NOAH_SAID);
+    expect(textsOf(second)).toEqual(USER_SAID);
     expect(fs.existsSync(PRIVATE)).toBe(true);
     expect(fs.existsSync(LEGACY)).toBe(false);
   });
@@ -210,7 +210,7 @@ describe('a save the private directory cannot take', () => {
   // deleted, and the read that takes the file out again could lose its
   // migration, with every test in this file still green.
 
-  it('goes back to the old place rather than lose what Noah just set', async () => {
+  it('goes back to the old place rather than lose what JeanBrasse just set', async () => {
     // The private directory cannot be created: a file already holds the name.
     fs.writeFileSync(PRIVATE_DIR, 'not a directory');
     const overseer = await start();
@@ -245,15 +245,16 @@ describe('a save the private directory cannot take', () => {
 describe('a conversation file that does not parse', () => {
   it('starts fresh without quoting a word of it into the log', async () => {
     // Node's JSON.parse quotes the start of its input in its message, and the
-    // input here is Noah's conversation: logging the error itself, rather
+    // input here is JeanBrasse's conversation: logging the error itself, rather
     // than what kind it is, put his words in a log that is not 0600. The QA's
     // gate of this lot made that change with every test green (24f1889). The
     // witness first: these bytes are quoted by the parser, so a log line that
-    // carried the error would carry them.
-    const said = 'Noah told the chat: ship it';
+    // carried the error would carry them. It quotes ten characters: the words
+    // fit in them.
+    const said = 'Sam told the chat: ship it';
     let parserSays = '';
     try { JSON.parse(said); } catch (err) { parserSays = String(err); }
-    expect(parserSays, 'the parser does not quote this input, so nothing below could fail').toContain('Noah told');
+    expect(parserSays, 'the parser does not quote this input, so nothing below could fail').toContain('Sam told');
 
     fs.mkdirSync(PRIVATE_DIR, { recursive: true });
     fs.writeFileSync(PRIVATE, said);
@@ -269,7 +270,7 @@ describe('a conversation file that does not parse', () => {
 
     expect(history).toEqual([]);
     expect(logged.some(line => line.includes('could not read the conversation')), 'the read never failed').toBe(true);
-    expect(logged.filter(line => line.includes('Noah told'))).toEqual([]);
+    expect(logged.filter(line => line.includes('Sam told'))).toEqual([]);
   });
 });
 
@@ -277,14 +278,14 @@ describe('both files at once', () => {
   it('keeps the private one and takes the old one out of the agents\' reach without deleting it', async () => {
     // A migration interrupted between the copy and the delete, or an older
     // build run after the move, which would have started a fresh file in the
-    // old place and written Noah's next lines into it.
+    // old place and written JeanBrasse's next lines into it.
     fs.mkdirSync(PRIVATE_DIR, { recursive: true });
-    fs.writeFileSync(PRIVATE, conversation(NOAH_SAID));
+    fs.writeFileSync(PRIVATE, conversation(USER_SAID));
     fs.writeFileSync(LEGACY, conversation(['said to an older build']));
 
     const overseer = await start();
 
-    expect(textsOf(overseer), 'the few lines of the old file hid the whole history').toEqual(NOAH_SAID);
+    expect(textsOf(overseer), 'the few lines of the old file hid the whole history').toEqual(USER_SAID);
     expect(fs.existsSync(LEGACY), 'the old conversation stayed where the agents are').toBe(false);
     const kept = fs.readdirSync(PRIVATE_DIR).filter(f => f.startsWith('overseer.superseded-'));
     expect(kept, 'the old file was deleted rather than kept').toHaveLength(1);
@@ -306,7 +307,7 @@ describe('the app itself', () => {
   });
 
   it('moves the file when it starts, not when something first reads it', () => {
-    // A run in which Noah never opens the Chat reads no state, so a migration
+    // A run in which JeanBrasse never opens the Chat reads no state, so a migration
     // that only happens on the first read never happens at all, and the file
     // stays in ~/.dorothy for the length of that run. The call belongs in
     // whenReady, which is the one place that runs once per start.
@@ -361,11 +362,11 @@ describe('nothing to migrate', () => {
   it('does not migrate a second time in the same run, and reads the private file when both exist', async () => {
     const overseer = await start();
     overseer.setOverseerSettings({ watchIntervalMs: 120000 });
-    fs.writeFileSync(PRIVATE, conversation(NOAH_SAID));
+    fs.writeFileSync(PRIVATE, conversation(USER_SAID));
     // An older build running beside this one, writing where it always did.
     fs.writeFileSync(LEGACY, conversation(['said to an older build']));
 
-    expect(textsOf(overseer), 'the old file was preferred to the private one').toEqual(NOAH_SAID);
+    expect(textsOf(overseer), 'the old file was preferred to the private one').toEqual(USER_SAID);
     expect(fs.existsSync(LEGACY), 'the migration ran a second time in the same run').toBe(true);
   });
 });

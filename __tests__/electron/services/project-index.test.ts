@@ -5,7 +5,7 @@ import * as path from 'path';
 
 /**
  * Decoding a project folder's name back to its path probes the disk segment by
- * segment: 101 ms for Noah's 27 folders, paid again by every call of
+ * segment: 101 ms for JeanBrasse's 27 folders, paid again by every call of
  * fs:list-projects, memory:list-projects, fs:read-project-files and the project
  * scan of claude:getData. The index decodes each folder once.
  */

@@ -4,7 +4,7 @@ import type { AgentStatus } from '../../../electron/types';
 
 /**
  * The Orchestrator toggle is the role, a project has one orchestrator, and the
- * name decides nothing: Noah's decision of 2026-09-22 after the audit showed
+ * name decides nothing: JeanBrasse's decision of 2026-09-22 after the audit showed
  * the toggle changed nothing for an orchestrator and the name was the switch.
  *
  * The orchestrator's powers (ORCHESTRATOR-PER-CHAT.md v2.2, 4.2, PR D): its

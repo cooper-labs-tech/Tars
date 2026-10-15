@@ -7,7 +7,7 @@ import * as zlib from 'node:zlib';
 /**
  * The Logs page: searching and reading every agent's output as lines.
  *
- * Noah, 01/10: the page showed every text glued together, unreadable. The
+ * JeanBrasse, 01/10: the page showed every text glued together, unreadable. The
  * lines were the raw PTY stream with its escape codes stripped, split on \n.
  * Claude Code draws its screen with cursor moves and carriage returns, not
  * line breaks: a space is a cursor move one cell right, a row is a cursor

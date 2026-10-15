@@ -397,7 +397,7 @@ describe('an expired memo, scanned again only when a transcript moved', () => {
   /**
    * Past the minute, the memo was rebuilt whether a transcript had moved or
    * not: the walk, a stat per file and the whole adding up, 0.2 to 0.5 s on
-   * Noah's 1826 transcripts, once a minute for as long as a page polls, all
+   * JeanBrasse's 1826 transcripts, once a minute for as long as a page polls, all
    * night. It is kept now while every transcript has the path, the size and the
    * time it had (and the prices are the ones it was priced with:
    * transcript-usage-pricing.test.ts).

@@ -459,7 +459,7 @@ function currentRound(threadId: string): { round: number; heard: Set<string> } {
  *
  * A human message closes the anchor in flight and opens a new one, which is
  * the contract's rule: the turn already running finishes, and the discussion
- * starts again at round one from what Noah just said. Nothing here cancels a
+ * starts again at round one from what JeanBrasse just said. Nothing here cancels a
  * turn.
  */
 export function appendMessage(input: {
@@ -557,7 +557,7 @@ export function publishAgentMessage(input: {
 
   // The latest anchor, open or not. Asking for the open one made the three
   // refusals below unreachable: a thread that had just been stopped by hand
-  // answered `no_open_thread`, so an agent Noah had deliberately silenced was
+  // answered `no_open_thread`, so an agent JeanBrasse had deliberately silenced was
   // told no conversation had ever existed. Every other refusal here is true;
   // that one lied, and the page renders these reasons to a human.
   const thread = latestThreadOf(input.roomId);
@@ -610,7 +610,7 @@ export function publishAgentMessage(input: {
 
   const agent = agents.get(input.agentId);
   // An agent that runs a chat speaks in the room as that chat (PR F), once its
-  // project has several: Noah's answer to it goes back to it by its id. With
+  // project has several: JeanBrasse's answer to it goes back to it by its id. With
   // only Main, the orchestrator posts under its own name, as in 1.9.7.
   const chat = agent ? namedChatOf(agent) : undefined;
   const { message, thread: updated } = appendMessage({

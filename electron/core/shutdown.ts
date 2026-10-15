@@ -8,7 +8,7 @@
  * and so has a turn's worth of messages still in memory when the quit lands.
  * Both sat behind calls that had no reason to throw, which is not the same as
  * cannot: a sequence in which the fourth statement decides whether the fifth
- * runs at all is one refactor away from losing Noah's conversation, and
+ * runs at all is one refactor away from losing JeanBrasse's conversation, and
  * nothing would say so. `flushBus()` was the fifth.
  *
  * So: the two that persist go first, every step is caught on its own, and a

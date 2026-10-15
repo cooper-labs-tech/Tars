@@ -9,9 +9,9 @@ import { EventEmitter } from 'node:events';
  *
  * The switch has been on the Settings page, off by default, since the X server
  * shipped, and nothing read it: every agent handed `x_post_tweet`,
- * `x_reply_tweet` and `x_delete_tweet` could publish and delete on Noah's
+ * `x_reply_tweet` and `x_delete_tweet` could publish and delete on JeanBrasse's
  * account whatever the page said (the audit's lead #12). The privacy policy
- * says Tars posts only when Noah has turned it on.
+ * says Tars posts only when JeanBrasse has turned it on.
  *
  * How this can fail, written before the fix:
  * 1. with Posting off, a post, a reply or a delete goes out anyway;

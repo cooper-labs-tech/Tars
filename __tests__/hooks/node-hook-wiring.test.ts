@@ -96,7 +96,7 @@ function dorothyInstall(): string {
   fs.writeFileSync(path.join(hooks, '_hooks-common.ps1'), '');
   return hooks;
 }
-const DOROTHY_AS_INSTALLED = 'C:\\Users\\nicol\\AppData\\Local\\Programs\\Dorothy\\resources\\app.asar.unpacked\\hooks';
+const DOROTHY_AS_INSTALLED = 'C:\\Users\\owner\\AppData\\Local\\Programs\\Dorothy\\resources\\app.asar.unpacked\\hooks';
 
 const CLAUDE_EVENTS: Array<[string, string, string | undefined]> = [
   ['PostToolUse', 'post-tool-use', '*'],

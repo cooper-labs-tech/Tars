@@ -4,7 +4,7 @@ import * as fs from 'node:fs';
 
 /**
  * Stopping an agent ends it, and says who stopped it, when and why
- * (PLAN-1.9.2.md item A, Noah 28/09).
+ * (PLAN-1.9.2.md item A, JeanBrasse 28/09).
  *
  * Measured: on 28/09 two frozen CLIs survived stop_agent, reparented to
  * launchd; on 30/09, after a stopped QA, its bench (gate.sh, then npm exec
@@ -148,7 +148,7 @@ describe('stopping an agent', () => {
     const save = vi.fn(() => seen.push(`saved:${agent.status}:${agent.stoppedBy}`));
     const announce = vi.fn(() => seen.push(`announced:${agent.status}`));
 
-    await stopAgent(agent, { by: 'Tars', reason: 'asked by Noah' }, { save, announce });
+    await stopAgent(agent, { by: 'Tars', reason: 'asked by JeanBrasse' }, { save, announce });
     agentStatusEmitter.off('status:a1', heard);
 
     expect(seen).toEqual(['saved:stopped:Tars', 'emitted:stopped', 'announced:stopped']);

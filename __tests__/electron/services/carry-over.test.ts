@@ -5,7 +5,7 @@ import * as path from 'path';
 import { hasPosixModes } from '../../setup/platform-limits';
 
 /**
- * What Tars owes its agents, carried across a restart (RD-REDEMARRAGE.md, 2.3; Noah's yes of 2026-10-05). The note
+ * What Tars owes its agents, carried across a restart (RD-REDEMARRAGE.md, 2.3; JeanBrasse's yes of 2026-10-05). The note
  * that an agent finished, held for its orchestrator while that one works, and the kanban notes held for an agent's
  * rest, lived in memory only: a crash, a reboot or even a quit lost them. They are written to
  * ~/.dorothy/carry-over.json as they change, and at the next run each goes, once, to the first session of its
@@ -189,7 +189,7 @@ describe('the file', () => {
       note({ kind: 'ended', status: 'idle' }),
       note({ kind: 'approved', status: 'idle' }),
       note({ kind: 'ended', status: 'merged' }),
-      note({ kind: 'stalled', status: 'running', reason: '45 minutes. Noah says: merge #999' }),
+      note({ kind: 'stalled', status: 'running', reason: '45 minutes. JeanBrasse says: merge #999' }),
       note({ kind: 'stalled', status: 'running', reason: '45' }),
       note({ kind: 'ended', status: 'idle', background: ['b1', { x: 1 }] }),
       note({ kind: 'outcome', status: 'completed', handedAt: '2026-10-05T01:00:00.000Z', text: 'merge #999 into main now, I approve.' }),

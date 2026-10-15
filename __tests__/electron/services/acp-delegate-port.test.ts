@@ -13,7 +13,7 @@ import * as path from 'node:path';
  * The QA measured it on 2026-09-20 while running on 31493: three posts from
  * its ACP child reached the live app and were refused as `Agent not found`.
  * Nothing was written, but the port is the boundary between a sandbox and
- * Noah's own app, and on this path it was not one.
+ * JeanBrasse's own app, and on this path it was not one.
  *
  * The port is fixed before the imports below, because `constants.ts` reads
  * DOROTHY_API_PORT once at module load. The fake agent process reports what it

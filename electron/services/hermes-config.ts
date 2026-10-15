@@ -15,7 +15,7 @@ export const HERMES_CONNECTION_FILE = path.join(DATA_DIR, 'hermes-connection.jso
 /**
  * The dashboard's session token, apart from the rest of the connection: in
  * ~/.tars-private, which no agent is handed, where ~/.dorothy is in every
- * agent's --add-dir (Noah's decision 6, 2026-10-01). Whoever holds it can drive
+ * agent's --add-dir (JeanBrasse's decision 6, 2026-10-01). Whoever holds it can drive
  * the dashboard, and, with the tars-relay plugin on the server, write to the
  * user as Tars and read or delete their replies.
  */
@@ -81,7 +81,7 @@ export function writeHermesConnection(conn: HermesConnection): void {
 /**
  * The connection the file names, for what must never guess. readHermesConnection()
  * fills whatever the file lacks, or all of it when the file cannot be read, from
- * the default, 127.0.0.1:9119, which on Noah's machine is the SSH tunnel to his
+ * the default, 127.0.0.1:9119, which on JeanBrasse's machine is the SSH tunnel to his
  * Hermes: a broken file sent a sandbox's kanban to his board (the Backend's gate
  * of #171). Here the file must read, parse to an object and name the address its
  * mode needs. Null when there is no file; otherwise the reason, which never quotes
@@ -122,7 +122,7 @@ let lastUnusable: string | null = null;
 /**
  * A connection worth attempting: one a file names (configuredHermesConnection).
  * It was readHermesConnection()'s answer, the default port for a file missing or
- * broken: 127.0.0.1:9119, the SSH tunnel to Noah's Hermes on his machine, which a
+ * broken: 127.0.0.1:9119, the SSH tunnel to JeanBrasse's Hermes on his machine, which a
  * sandbox's overseer and memory hub reached (the Audit's gate of #183). What is
  * wrong with a broken file is logged once, when it changes; its callers say
  * Hermes is not configured.

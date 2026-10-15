@@ -1,5 +1,5 @@
 /**
- * The folders no agent owns (Noah's choice 16 of 05/10; the frames merged in
+ * The folders no agent owns (JeanBrasse's choice 16 of 05/10; the frames merged in
  * #315, "Settings · System · folders no agent owns"): the folders under a
  * project's .worktrees that no git worktree holds, listed with their size and
  * last change, and removed only when the window says so, one at a time.

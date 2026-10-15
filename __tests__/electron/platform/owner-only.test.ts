@@ -212,7 +212,7 @@ describe.runIf(onWindows)('restrictToOwnerSync on NTFS, with the real icacls', {
 
 describe('parseWhoamiUserSid (case 5)', () => {
   it('reads the SID from the last field of `whoami /user /fo csv /nh`', () => {
-    expect(parseWhoamiUserSid('"warmachine\\nicol","S-1-5-21-1252805805-404670591-934153705-1001"\r\n'))
+    expect(parseWhoamiUserSid('"warmachine\\owner","S-1-5-21-1252805805-404670591-934153705-1001"\r\n'))
       .toBe('S-1-5-21-1252805805-404670591-934153705-1001');
   });
 
@@ -221,7 +221,7 @@ describe('parseWhoamiUserSid (case 5)', () => {
   });
 
   it('refuses anything that is not a SID', () => {
-    for (const out of ['', 'ERROR: access denied', '"a\\b","nicol"', '"a\\b","S-1-5-21-1-2;rm"', '"a\\b","S-1-"']) {
+    for (const out of ['', 'ERROR: access denied', '"a\\b","owner"', '"a\\b","S-1-5-21-1-2;rm"', '"a\\b","S-1-"']) {
       expect(parseWhoamiUserSid(out), out).toBeNull();
     }
   });

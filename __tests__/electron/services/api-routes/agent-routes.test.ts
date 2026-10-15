@@ -288,7 +288,7 @@ describe('agent-routes', () => {
   });
 
   /**
-   * An agent makes another on any provider and CLI (2.0.2, Noah: "ça doit supporter n'importe quel
+   * An agent makes another on any provider and CLI (2.0.2, JeanBrasse: "ça doit supporter n'importe quel
    * provider/cli"). How it fails, written before the code (2026-10-14):
    * 1. An unknown provider is refused without the providers that exist: the caller cannot correct it.
    * 2. A provider run through an API key, without its key, is created, and its first launch is refused

@@ -121,14 +121,14 @@ describe('a transcript read as a chat', () => {
       user('Message from Tars: [Tars] "Backend" ("w1") has finished its turn'),
       user('[Tars] 2 agents you dispatched have reached a result:'),
       user('Message from the user via Telegram: ship it'),
-      user('plain words from Noah'),
+      user('plain words from JeanBrasse'),
     ]), 's1');
     expect(items.map((i) => [i.kind, i.from ?? null, i.text])).toEqual([
       ['message', 'Backend', 'PR #364 is open'],
       ['note', 'Tars', '[Tars] "Backend" ("w1") has finished its turn'],
       ['note', 'Tars', '[Tars] 2 agents you dispatched have reached a result:'],
       ['message', 'Telegram', 'ship it'],
-      ['user', null, 'plain words from Noah'],
+      ['user', null, 'plain words from JeanBrasse'],
     ]);
   });
 

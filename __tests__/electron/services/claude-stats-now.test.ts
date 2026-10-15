@@ -6,7 +6,7 @@ import * as path from 'node:path';
  * The Usage page's claude:getData, served from what the scan last found.
  *
  * The first claude:getData after a launch waited for the whole transcript scan:
- * 2.4 to 3 s on Noah's 1826 transcripts (the Frontend's harness of #233), and
+ * 2.4 to 3 s on JeanBrasse's 1826 transcripts (the Frontend's harness of #233), and
  * each one after the minute's memo ran out waited again. The scan starts at
  * launch now, and the page is handed the last numbers at once while a stale
  * memo is refreshed behind it: its poll, every 10 s, picks the new ones up.

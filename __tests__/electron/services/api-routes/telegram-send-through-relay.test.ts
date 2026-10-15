@@ -6,7 +6,7 @@ import { EventEmitter } from 'node:events';
 import { startFakeRelay, type FakeRelay } from '../../../fixtures/fake-tars-relay';
 
 /**
- * The orchestrator's send tool with the relay on (trap 2 of DESIGN-RELAIS-HERMES-V2.md, section 9; Noah's rule of
+ * The orchestrator's send tool with the relay on (trap 2 of DESIGN-RELAIS-HERMES-V2.md, section 9; JeanBrasse's rule of
  * 2026-10-01): one way to write to the user, the orchestrator's, through Hermes, masked. `send_telegram`
  * (mcp-orchestrator) posts to /api/telegram/send.
  *

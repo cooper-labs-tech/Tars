@@ -7,13 +7,13 @@ import { launchSandboxed, recordValues, removeHome, stepShot } from './fixture.m
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * An agent's worktree set in its settings, from the Agents page (Noah's report of 13/10: "cela
+ * An agent's worktree set in its settings, from the Agents page (JeanBrasse's report of 13/10: "cela
  * n'enregistre absolument rien"). Edit agent, Options, Its own worktree on, a branch, Save
  * changes; then the settings opened again.
  *
  * A sandbox HOME with two projects and an agent in each, whose CLI is a stand-in that records
  * the folder it is launched in. One project is a git repository, the other is a plain folder, as
- * many of Noah's projects are.
+ * many of JeanBrasse's projects are.
  * 1. In the repository: the worktree is made, the settings opened again show it on, its branch
  *    and locked, agents.json holds it, and the agent's next launch runs in it.
  * 2. In the plain folder, where git can make no worktree: the dialog does not close as if it had

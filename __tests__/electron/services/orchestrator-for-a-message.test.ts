@@ -5,7 +5,7 @@ import * as os from 'node:os';
  * Which orchestrator a chat message is for (point E of DESIGN-RELAIS-HERMES-V2.md).
  *
  * The bots handed a free message to `getSuperAgent(agents)` with no project: the first orchestrator found, all
- * projects considered (electron/main.ts:260). On Noah's machine that was Sak-Orchestrator, of a project at rest: his
+ * projects considered (electron/main.ts:260). On JeanBrasse's machine that was Sak-Orchestrator, of a project at rest: his
  * messages never reached the orchestrator he was writing to. The relay's "@project" has the same question to answer.
  *
  * How this can fail, written before the code:

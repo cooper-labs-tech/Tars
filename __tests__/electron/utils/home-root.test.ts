@@ -26,7 +26,7 @@ import { coversHome, withoutHomeCover, isUnderSafeRoot } from '../../../electron
  *    case-insensitive volume, the Data volume's firmlink on macOS) is not
  *    caught: only the spelling is compared, where the device and inode tell.
  * 4. A project under the home, a sibling sharing the home's prefix
- *    (`/Users/noahx` beside `/Users/noah`), or a folder on another branch is
+ *    (`/Users/demox` beside `/Users/demo`), or a folder on another branch is
  *    caught: the check refuses legitimate projects.
  * 5. A root, or a home, that cannot be read throws, where it is judged by its
  *    spelling alone.
@@ -49,7 +49,7 @@ afterAll(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force
 const linkDir = (to: string, at: string) => fs.symlinkSync(to, at, 'junction');
 
 const ROOT = path.parse(process.cwd()).root;
-const HOME = path.join(ROOT, 'Users', 'noah');
+const HOME = path.join(ROOT, 'Users', 'demo');
 const noStat = () => undefined;
 
 describe('coversHome, by spelling', () => {
@@ -132,7 +132,7 @@ describe('7. a home that is itself a link', () => {
   it('refuses the folders above the real home, and the real home', () => {
     const box = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-home-moved-')));
     made.push(box);
-    const realHome = path.join(box, 'data', 'home', 'noah');
+    const realHome = path.join(box, 'data', 'home', 'demo');
     fs.mkdirSync(path.join(realHome, 'projects', 'atlas'), { recursive: true });
     fs.mkdirSync(path.join(box, 'data', 'other'), { recursive: true });
     const home = path.join(box, 'home-link');
@@ -145,7 +145,7 @@ describe('7. a home that is itself a link', () => {
   });
 
   it('refuses them by identity when only the real path names them (injected)', () => {
-    const real = path.join(ROOT, 'data', 'home', 'noah');
+    const real = path.join(ROOT, 'data', 'home', 'demo');
     const ids: Record<string, { dev: bigint; ino: bigint }> = {
       [HOME]: { dev: BigInt(1), ino: BigInt(10) },
       [path.join(ROOT, 'Users')]: { dev: BigInt(1), ino: BigInt(5) },

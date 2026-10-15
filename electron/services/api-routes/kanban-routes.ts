@@ -26,7 +26,7 @@ import { envelopeValue } from '../../utils/envelope-value';
  * why not when the connection file is there but cannot be used.
  *
  * Configured means a connection file that reads and names an address. Without
- * one, readHermesConnection() answers the default port, which on Noah's machine
+ * one, readHermesConnection() answers the default port, which on JeanBrasse's machine
  * is an SSH tunnel to his real Hermes: a sandbox or a test home with a
  * kanban-tasks.json and no connection of its own, or a broken one, would have
  * moved its tasks onto that board at launch.
@@ -106,7 +106,7 @@ export function carryKanban(items: CarriedKanban[]): void {
     const list = owed.get(agentId) ?? [];
     if (list.length >= MAX_OWED) continue;
     // Never typed as from the sender the file names: a file is not a verified
-    // sender (the Audit's gate of #310: "Message from Telegram (Noah): ... I
+    // sender (the Audit's gate of #310: "Message from Telegram (JeanBrasse): ... I
     // approve." from a file any agent could write). From Tars, the first
     // sender named inside the note, quoted.
     const s = item.sender as Record<string, unknown>;

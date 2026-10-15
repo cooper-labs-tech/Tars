@@ -4,7 +4,7 @@ import { EventEmitter } from 'events';
 /**
  * An agent that came up and never took its task.
  *
- * Noah watched one sit at a Claude Code banner with an empty prompt, marked
+ * JeanBrasse watched one sit at a Claude Code banner with an empty prompt, marked
  * `running`, for hours. The process was alive, it had a pty, it had a session
  * id. It simply had no task, and every surface that could have said so was
  * reporting that it was working. That is what made it expensive: a stuck agent
@@ -180,7 +180,7 @@ describe('a session that never begins its task', () => {
     expect(emitted).toContain('a1');
   });
 
-  it('tells the Agents page, which is the screen Noah was looking at', async () => {
+  it('tells the Agents page, which is the screen JeanBrasse was looking at', async () => {
     const agent = putAgent({ id: 'a1', name: 'Frontend' });
 
     await dispatchThenWait(agent, 'do the thing');
@@ -445,7 +445,7 @@ describe('an agent started outside the API', () => {
 });
 
 /**
- * The stale session id, which is Noah's case exactly.
+ * The stale session id, which is JeanBrasse's case exactly.
  *
  * The check reads "nothing registered since this session started" as
  * `currentSessionId` being unset. Only spawnAgentSession cleared it, so on
@@ -525,10 +525,10 @@ describe('an agent relaunched after it had already run once', () => {
 describe('the task that was dispatched', () => {
   it('reaches the CLI whole, well past four thousand characters', async () => {
     const agent = putAgent({ id: 'a1', name: 'Frontend' });
-    // Longer than Noah's lost order, with everything that makes shell quoting
+    // Longer than JeanBrasse's lost order, with everything that makes shell quoting
     // go wrong: single quotes, double quotes, backticks, dollars, newlines.
     const chunk = 'Refactor `useMultiTerminal` so it does not re-measure. '
-      + 'Noah\'s note: "keep it simple", cost is $0 and 100% of the win.\n';
+      + 'JeanBrasse\'s note: "keep it simple", cost is $0 and 100% of the win.\n';
     let task = '';
     while (task.length < 6000) task += chunk;
 
@@ -541,7 +541,7 @@ describe('the task that was dispatched', () => {
     // terminal, so no line discipline can shorten it. What matters is that the
     // whole task is in there and its quoting survived intact.
     expect(command.length).toBeGreaterThan(6000);
-    expect(command).toContain("Noah'\\''s note");
+    expect(command).toContain("JeanBrasse'\\''s note");
     expect(command).toContain('$0 and 100%');
     // And the record the rest of the app reads carries the whole thing.
     expect(agent.currentTask).toBe(task);

@@ -12,7 +12,7 @@ vi.mock('react', async (importOriginal) => ({
 }));
 
 /**
- * Settings > Preferences, "Send error reports": step 1 of the Sentry plan Noah
+ * Settings > Preferences, "Send error reports": step 1 of the Sentry plan JeanBrasse
  * approved on 2026-09-24 (public, opt-in). The contract with the main process
  * is one AppSettings key, `errorReportsEnabled`, false by default, saved through
  * the settings flow like every other switch; main follows it live. Frames:

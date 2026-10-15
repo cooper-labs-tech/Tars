@@ -17,7 +17,7 @@ import type { AgentStatus } from '../types';
  *
  * A CLI reads its model, its effort and its other flags once, when it starts.
  * Saving new ones in the Agents page changed the record and nothing else: the
- * CLI in the terminal went on as it was, until Noah relaunched every session
+ * CLI in the terminal went on as it was, until JeanBrasse relaunched every session
  * himself. So when a setting the CLI only reads at launch changes, the agent's
  * CLI is restarted on it, through the same launch every window uses
  * (core/agent-launch.ts, which is `agent:start`), continuing its conversation.

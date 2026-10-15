@@ -92,8 +92,8 @@ const NO_AGENT = `This call has no agent identity, so it cannot be placed in a r
 const NO_IDENTITY_TO_DRIVE =
   'Driving an agent takes an identity of your own, and this call has none: it presents the '
   + `shared token, which every agent can read and which therefore names nobody. ${REMEDY}`;
-/** A line of Noah's conversation with the super chat, which is what the global room serves. */
-const SUPER_CHAT_LINE = 'noah-private-line-7f3a';
+/** A line of JeanBrasse's conversation with the super chat, which is what the global room serves. */
+const SUPER_CHAT_LINE = 'user-private-line-7f3a';
 
 let alphaToken: string;
 let sharedToken: string;
@@ -167,7 +167,7 @@ beforeAll(async () => {
     threadId: busStore.GLOBAL_ROOM_ID,
     authorKind: 'human',
     authorId: 'human',
-    authorName: 'Noah',
+    authorName: 'User',
     text: SUPER_CHAT_LINE,
     mentions: [],
     createdAt: new Date().toISOString(),
@@ -295,7 +295,7 @@ describe('a call on the shared token', () => {
     // Refused for having no agent, before any room is looked at. Were a call
     // with no agent behind it treated as the interface, it would get further:
     // to resolveRoom's refusal of agents, a different message, or, with that
-    // gone too, to Noah's conversation.
+    // gone too, to JeanBrasse's conversation.
     expect(body.error).toBe(NO_AGENT);
     expect(JSON.stringify(body)).not.toContain(SUPER_CHAT_LINE);
   });

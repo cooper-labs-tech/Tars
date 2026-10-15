@@ -76,7 +76,7 @@ describe('the summary', () => {
     const out = runs.summariseRuns(NOW);
     expect(out).toContain('Frontend');
     expect(out).toContain('2 runs');
-    expect(out).toContain('2 pauses for Noah');
+    expect(out).toContain('2 pauses for the user');
   });
 
   it('names a task the agent keeps coming back to', () => {

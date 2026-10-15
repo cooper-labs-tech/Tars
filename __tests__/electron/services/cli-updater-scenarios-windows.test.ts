@@ -322,7 +322,7 @@ describe.skipIf(!onWindows)('QA #119: Amp paths the PR tests do not reach, on Wi
   });
 });
 
-describe.skipIf(!onWindows)('one switch, and only the CLIs the fleet runs (Noah, 2026-09-23), on Windows', () => {
+describe.skipIf(!onWindows)('one switch, and only the CLIs the fleet runs (JeanBrasse, 2026-09-23), on Windows', () => {
   it('U1 checks no CLI while "Check for updates" is off, says so once, and checks again once it is back on', async () => {
     await withScheduledEnv({ FAKE_NEXT: '1.0.1' }, async home => {
       nativeClaudeExe(home, '1.0.0');

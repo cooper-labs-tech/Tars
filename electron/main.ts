@@ -472,7 +472,7 @@ app.whenReady().then(async () => {
   // ledger and the vault were readable by every account on the machine.
   narrowDataDir(DATA_DIR);
 
-  // Take Noah's conversation with the super chat out of ~/.dorothy, which is
+  // Take JeanBrasse's conversation with the super chat out of ~/.dorothy, which is
   // the directory every agent is handed. Here rather than on the first read of
   // it: a run in which the Chat is never opened would otherwise leave the file
   // sitting there for its whole length.
@@ -693,7 +693,7 @@ app.whenReady().then(async () => {
   // copy answers immediately, the network refresh lands whenever it lands.
   loadCatalog().catch(() => { /* cached or floor prices carry the app */ });
   // The transcript scan, started now rather than by the first page to ask for
-  // it: 2.4 to 3 s on Noah's 1826 transcripts, which that page used to wait for.
+  // it: 2.4 to 3 s on JeanBrasse's 1826 transcripts, which that page used to wait for.
   // After loadCatalog, which installs a fresh disk copy as it is called: a scan
   // started before it priced with another object, and the first minute past it
   // scanned everything again for the swap.

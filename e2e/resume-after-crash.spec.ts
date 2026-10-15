@@ -6,7 +6,7 @@ import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * Tars stops abruptly while its agents work, and starts again (RD-REDEMARRAGE.md, 2.2 and 2.3; Noah's yes of
+ * Tars stops abruptly while its agents work, and starts again (RD-REDEMARRAGE.md, 2.2 and 2.3; JeanBrasse's yes of
  * 2026-10-05), in the real app.
  *
  * Before the crash: the lead, typed into by hand, hands a quick task to the helper and a long one to the worker, and

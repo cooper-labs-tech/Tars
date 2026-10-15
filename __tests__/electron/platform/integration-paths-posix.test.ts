@@ -30,8 +30,8 @@ const env = { APPDATA: 'D:\\Roam', ProgramFiles: 'C:\\Program Files', PATH: '/us
 
 describe.each(['darwin', 'linux'] as const)('%s, to the byte', (platform) => {
   it('1. Hermes Desktop connection.json', () => {
-    expect(hermesDesktopConfigPath({ platform, home: '/Users/noah', env }))
-      .toBe('/Users/noah/Library/Application Support/Hermes/connection.json');
+    expect(hermesDesktopConfigPath({ platform, home: '/Users/demo', env }))
+      .toBe('/Users/demo/Library/Application Support/Hermes/connection.json');
   });
 
   it('2. the tailscale candidates', () => {
@@ -40,7 +40,7 @@ describe.each(['darwin', 'linux'] as const)('%s, to the byte', (platform) => {
   });
 
   it('1. the Tasmania token', () => {
-    expect(tasmaniaTokenPath({ platform, home: '/Users/noah' }))
-      .toEqual({ ok: true, path: '/Users/noah/Library/Application Support/Tasmania/.control-api-token' });
+    expect(tasmaniaTokenPath({ platform, home: '/Users/demo' }))
+      .toEqual({ ok: true, path: '/Users/demo/Library/Application Support/Tasmania/.control-api-token' });
   });
 });

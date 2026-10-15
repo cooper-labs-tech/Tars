@@ -130,7 +130,7 @@ export function agentForToken(token: string): string | undefined {
  * it over the loopback.
  *
  * One caller: the super chat. It posts to /api/agents/:id/dispatch rather than
- * writing to a terminal by hand, so that a message from Noah takes exactly the
+ * writing to a terminal by hand, so that a message from JeanBrasse takes exactly the
  * path a delegation takes. It authenticated with `~/.dorothy/api-token`, and
  * that is precisely why that token could not be refused on the routes that
  * drive an agent: every agent can read the file (`--add-dir ~/.dorothy`, and

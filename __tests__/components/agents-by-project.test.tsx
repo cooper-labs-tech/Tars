@@ -14,7 +14,7 @@ vi.mock('react', async (importOriginal) => ({
 /**
  * The Agents page, organised by project (PR #118).
  *
- * Noah could not sort his agents by project. The page now shows one section
+ * JeanBrasse could not sort his agents by project. The page now shows one section
  * per project, in the order he gave the Dashboard's tabs, and a picker that
  * leaves one project on the page. What has to hold, and what these tests pin:
  * the sections follow the tab order and never invent or lose a project; the

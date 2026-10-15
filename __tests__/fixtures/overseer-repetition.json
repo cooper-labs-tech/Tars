@@ -35,7 +35,7 @@
   {
    "id": "6918705e-af26-4544-918f-94690a8ef8d5",
    "role": "overseer",
-   "text": "Salut Noah. Rien de bloqu\u00e9 \u00e0 chaud, mais un agent t'attend explicitement et un autre point reste critique :\n\n1. **Sakartvelo** \u2014 l'Orchestrator est coinc\u00e9 sur une session morte : il voit l'agent Audit en `idle`, mais `delegate_task`/`start_agent`/`send_message` \u00e9chouent en `Not found` (probable session tmux/pty morte). Il te pose la question directement : red\u00e9marrer Audit c\u00f4t\u00e9 outil d'orchestration, ou l'autoriser \u00e0 faire la revue lui-m\u00eame pour cette fois. Par ailleurs Database a confirm\u00e9 le fix `country_code` (d\u00e9faut NOT NULL + filtrage des 26 sites `.from(\"properties\")`) comme critique avant le premier scrape grec \u2014 je maintiens ma reco de s\u00e9quen\u00e7age : migration en priorit\u00e9, avant merge de PR #137. QA a valid\u00e9 PR #136 (mergeable, invariants OK).\n\n2. **Parallel-protocol** \u2014 premier run des 6 agents (23 min), pas encore de visibilit\u00e9 sur leur output dans le snapshot ; je surveille et remonterai leurs premi\u00e8res d\u00e9cisions d\u00e8s qu'elles \u00e9mergent.\n\nEn attente de toi sans urgence : Dorothy-fix (3 d\u00e9cisions : garde-fou `count_tokens`, exposition gbrain :8765, m\u00e9moire longue Hermes) et 1212-Capital (CLAUDE.md qui pointe vers des specs fant\u00f4mes \u2014 Backend et Orchestrator ont signal\u00e9 la m\u00eame anomalie ind\u00e9pendamment).",
+   "text": "Salut JeanBrasse. Rien de bloqu\u00e9 \u00e0 chaud, mais un agent t'attend explicitement et un autre point reste critique :\n\n1. **Sakartvelo** \u2014 l'Orchestrator est coinc\u00e9 sur une session morte : il voit l'agent Audit en `idle`, mais `delegate_task`/`start_agent`/`send_message` \u00e9chouent en `Not found` (probable session tmux/pty morte). Il te pose la question directement : red\u00e9marrer Audit c\u00f4t\u00e9 outil d'orchestration, ou l'autoriser \u00e0 faire la revue lui-m\u00eame pour cette fois. Par ailleurs Database a confirm\u00e9 le fix `country_code` (d\u00e9faut NOT NULL + filtrage des 26 sites `.from(\"properties\")`) comme critique avant le premier scrape grec \u2014 je maintiens ma reco de s\u00e9quen\u00e7age : migration en priorit\u00e9, avant merge de PR #137. QA a valid\u00e9 PR #136 (mergeable, invariants OK).\n\n2. **Parallel-protocol** \u2014 premier run des 6 agents (23 min), pas encore de visibilit\u00e9 sur leur output dans le snapshot ; je surveille et remonterai leurs premi\u00e8res d\u00e9cisions d\u00e8s qu'elles \u00e9mergent.\n\nEn attente de toi sans urgence : Dorothy-fix (3 d\u00e9cisions : garde-fou `count_tokens`, exposition gbrain :8765, m\u00e9moire longue Hermes) et 1212-Capital (CLAUDE.md qui pointe vers des specs fant\u00f4mes \u2014 Backend et Orchestrator ont signal\u00e9 la m\u00eame anomalie ind\u00e9pendamment).",
    "action": null,
    "timestamp": "2026-08-24T15:54:23.043Z"
   },
@@ -63,7 +63,7 @@
   {
    "id": "d02cf8cd-ab1f-4839-8a0b-a5966a47f39e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T20:26:43.535Z",
    "isBriefing": true
@@ -71,7 +71,7 @@
   {
    "id": "d2c2148d-e304-4efd-bdb4-492a038cd663",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T20:31:43.254Z",
    "isBriefing": true
@@ -79,7 +79,7 @@
   {
    "id": "0fa95f48-057e-4182-ba77-9ed30a4a4b40",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T20:52:24.241Z",
    "isBriefing": true
@@ -87,7 +87,7 @@
   {
    "id": "be8ffa3e-6afd-4e17-8381-4e6cd46a585e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T20:54:22.004Z",
    "isBriefing": true
@@ -95,7 +95,7 @@
   {
    "id": "a7ffccb1-3926-4dbe-a633-2e7084f9370b",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T20:56:38.273Z",
    "isBriefing": true
@@ -103,7 +103,7 @@
   {
    "id": "3aa8870f-dc23-468b-abac-2b0ac519c161",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T20:57:38.075Z",
    "isBriefing": true
@@ -111,7 +111,7 @@
   {
    "id": "f4e60341-adad-4501-b50e-8274d8a87f54",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:01:05.588Z",
    "isBriefing": true
@@ -119,7 +119,7 @@
   {
    "id": "5435384e-2677-4c5e-b1d4-b23b336eac10",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:04:54.803Z",
    "isBriefing": true
@@ -127,7 +127,7 @@
   {
    "id": "e617c3a4-1b79-46f7-b045-65b8f5a5950b",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:07:16.313Z",
    "isBriefing": true
@@ -135,7 +135,7 @@
   {
    "id": "d3286134-e200-4fae-99bb-e2a5eb1ad0f2",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:12:51.827Z",
    "isBriefing": true
@@ -143,7 +143,7 @@
   {
    "id": "acac429a-3868-4247-a666-63af25cdea58",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:18:04.903Z",
    "isBriefing": true
@@ -151,7 +151,7 @@
   {
    "id": "5340d3a2-d4f9-4388-9bfa-141675c462da",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:20:02.691Z",
    "isBriefing": true
@@ -159,7 +159,7 @@
   {
    "id": "4a7a5d8b-4ed7-4f9a-9cb0-7f4843b0ce8c",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:22:12.101Z",
    "isBriefing": true
@@ -167,7 +167,7 @@
   {
    "id": "a43c1d5c-7b5e-40c4-9b41-d5fb1f002d46",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:24:39.719Z",
    "isBriefing": true
@@ -182,14 +182,14 @@
   {
    "id": "2e34f5ef-2481-4aaa-bdf1-4b5c726bc9ef",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:31:24.225Z"
   },
   {
    "id": "de0d6330-53d0-47e9-9163-6f44ff8d2d5e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:36:59.645Z",
    "isBriefing": true
@@ -197,7 +197,7 @@
   {
    "id": "5327374a-78cf-4ee2-9015-76107360d18c",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:41:24.227Z",
    "isBriefing": true
@@ -205,7 +205,7 @@
   {
    "id": "2ceeba65-9f82-4c53-841f-5bd9de787e37",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:47:43.127Z",
    "isBriefing": true
@@ -213,7 +213,7 @@
   {
    "id": "e0966b16-a4ee-459b-ae7a-bd6e6687caef",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:50:15.328Z",
    "isBriefing": true
@@ -221,7 +221,7 @@
   {
    "id": "4dfccbc5-e456-4a92-a743-ca2574a2ea33",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-24T21:58:06.680Z",
    "isBriefing": true
@@ -229,7 +229,7 @@
   {
    "id": "b9673e2a-4173-4a1e-a75e-778c1cc49bec",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T06:23:53.181Z",
    "isBriefing": true
@@ -237,7 +237,7 @@
   {
    "id": "42e6ad1b-58d8-47ec-a41a-7fcb31855fc0",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T06:32:14.415Z",
    "isBriefing": true
@@ -245,7 +245,7 @@
   {
    "id": "5be110da-97df-4c2e-b8a2-cf09430b1b46",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T06:50:16.398Z",
    "isBriefing": true
@@ -253,7 +253,7 @@
   {
    "id": "fcb27270-b6eb-4787-94e5-ba83754f145a",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:01:03.789Z",
    "isBriefing": true
@@ -261,7 +261,7 @@
   {
    "id": "0f4a9df8-13af-43f5-908c-891fb48f7816",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:02:27.825Z",
    "isBriefing": true
@@ -269,7 +269,7 @@
   {
    "id": "d436020d-993b-4063-a34c-1d708beceebc",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:09:35.309Z",
    "isBriefing": true
@@ -277,7 +277,7 @@
   {
    "id": "cac5e9a6-4d7d-4873-8b1d-f8fd6ab0a8d6",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:11:21.674Z",
    "isBriefing": true
@@ -285,7 +285,7 @@
   {
    "id": "8b65059f-b48b-4c7f-98b7-af5c461677cc",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:25:34.229Z",
    "isBriefing": true
@@ -293,7 +293,7 @@
   {
    "id": "233f8022-3f14-49f7-80e9-c179a1063314",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:27:53.063Z",
    "isBriefing": true
@@ -301,7 +301,7 @@
   {
    "id": "a28dad12-f618-4d4e-a140-70a913cb2de7",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:28:49.741Z",
    "isBriefing": true
@@ -309,7 +309,7 @@
   {
    "id": "beaf4340-ee06-4807-b39c-f226740db212",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:30:10.160Z",
    "isBriefing": true
@@ -317,7 +317,7 @@
   {
    "id": "c7178e7a-fed4-4fa1-88cd-b31cd9e5f735",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:34:44.664Z",
    "isBriefing": true
@@ -325,7 +325,7 @@
   {
    "id": "66e85266-17c3-42c1-9413-b8d4ae061803",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:35:58.897Z",
    "isBriefing": true
@@ -333,7 +333,7 @@
   {
    "id": "acebdb38-a43e-4f85-81d4-50e8a3f0d946",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:46:04.239Z",
    "isBriefing": true
@@ -341,7 +341,7 @@
   {
    "id": "14f1fd08-b50d-43c3-9c7e-1834f70449b6",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:47:20.296Z",
    "isBriefing": true
@@ -349,7 +349,7 @@
   {
    "id": "9f2bdff8-7c7e-4594-b8e3-4378bdf84d6c",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T07:52:39.690Z",
    "isBriefing": true
@@ -357,7 +357,7 @@
   {
    "id": "52914a7d-66ed-450b-8bad-a072738cf5fd",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:04:48.121Z",
    "isBriefing": true
@@ -365,7 +365,7 @@
   {
    "id": "a2d87792-00ce-4600-927a-680cbf57f91c",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:07:35.927Z",
    "isBriefing": true
@@ -373,7 +373,7 @@
   {
    "id": "6d03bb72-e10b-4ea9-833a-f03db7d98fe9",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:19:02.913Z",
    "isBriefing": true
@@ -381,7 +381,7 @@
   {
    "id": "7a893481-c62c-4ccf-8c11-3e4fefa124e6",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:20:24.176Z",
    "isBriefing": true
@@ -389,7 +389,7 @@
   {
    "id": "d7582203-e53b-4af8-933c-79c039e8657e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:24:01.289Z",
    "isBriefing": true
@@ -397,7 +397,7 @@
   {
    "id": "c13e9c84-e04c-49d1-9eaf-c47c277fcc43",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:38:04.756Z",
    "isBriefing": true
@@ -405,7 +405,7 @@
   {
    "id": "d5371097-1670-4b45-8a1d-346bc9ff18d9",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:39:41.895Z",
    "isBriefing": true
@@ -413,7 +413,7 @@
   {
    "id": "d3f74100-e3fd-4288-843d-3c8ce59a9f91",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:49:59.863Z",
    "isBriefing": true
@@ -421,7 +421,7 @@
   {
    "id": "dc15c20f-6214-46fe-864b-26c334cdcf19",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:51:07.091Z",
    "isBriefing": true
@@ -429,7 +429,7 @@
   {
    "id": "241d467c-7279-4672-b05c-ace1170511cc",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T08:58:32.036Z",
    "isBriefing": true
@@ -437,7 +437,7 @@
   {
    "id": "7b605687-c042-4325-8c6b-7e0f371064a3",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T09:00:10.864Z",
    "isBriefing": true
@@ -445,7 +445,7 @@
   {
    "id": "266d1259-8668-4fa7-94fa-12e82efc060f",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T09:12:25.164Z",
    "isBriefing": true
@@ -453,7 +453,7 @@
   {
    "id": "589731fc-545e-492f-8db0-799b26ebf415",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T10:04:03.158Z",
    "isBriefing": true
@@ -461,7 +461,7 @@
   {
    "id": "4c8bc9af-088a-4e77-b195-5b0038e66089",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T11:00:03.674Z",
    "isBriefing": true
@@ -469,7 +469,7 @@
   {
    "id": "e7d14b11-f25a-4e12-9339-95f7c82ca288",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T13:10:07.871Z",
    "isBriefing": true
@@ -477,7 +477,7 @@
   {
    "id": "471e4b66-e75c-41d8-a9e6-9a86f08afa4a",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:13:14.370Z",
    "isBriefing": true
@@ -485,7 +485,7 @@
   {
    "id": "f4c536a3-544d-49c8-a044-7d342ecf7388",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:15:09.681Z",
    "isBriefing": true
@@ -493,7 +493,7 @@
   {
    "id": "3fbcc7a3-70ea-4b92-9ffb-14c169b5349a",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:25:12.609Z",
    "isBriefing": true
@@ -501,7 +501,7 @@
   {
    "id": "c6ba7d6f-de70-4db2-bd30-8f447f4339e6",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:29:12.223Z",
    "isBriefing": true
@@ -509,7 +509,7 @@
   {
    "id": "885636ee-7227-4999-a06e-555200a68f04",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:30:45.788Z",
    "isBriefing": true
@@ -517,7 +517,7 @@
   {
    "id": "6844a13d-565e-431b-9c62-41a8b9e26a9a",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:35:09.205Z",
    "isBriefing": true
@@ -525,7 +525,7 @@
   {
    "id": "f9dc6546-4067-4561-9698-7478db195ff9",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:38:19.943Z",
    "isBriefing": true
@@ -533,7 +533,7 @@
   {
    "id": "a41c2db0-6f75-4340-9dc4-997d3779dc68",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:49:33.723Z",
    "isBriefing": true
@@ -541,7 +541,7 @@
   {
    "id": "9d988e5b-db25-4ee1-8222-9e0efdd5ba7b",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:53:52.492Z",
    "isBriefing": true
@@ -549,7 +549,7 @@
   {
    "id": "6d45d4b6-bedd-47ec-9792-87267f275726",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T19:58:53.292Z",
    "isBriefing": true
@@ -557,7 +557,7 @@
   {
    "id": "7f9dd0fc-7b02-4f5c-a6a4-0119d77e226b",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:11:19.954Z",
    "isBriefing": true
@@ -565,7 +565,7 @@
   {
    "id": "24e087b2-4050-46c1-afcc-572dc01fcd26",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:12:32.627Z",
    "isBriefing": true
@@ -573,7 +573,7 @@
   {
    "id": "f65a22b1-aa38-4ffa-ba81-7aa7814eab86",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:13:58.564Z",
    "isBriefing": true
@@ -581,7 +581,7 @@
   {
    "id": "a7e15234-f8e4-4b24-bb5a-6108ebc6465e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:17:06.218Z",
    "isBriefing": true
@@ -589,7 +589,7 @@
   {
    "id": "1b71de29-8d36-4484-97f9-ee013a84a327",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:20:59.575Z",
    "isBriefing": true
@@ -597,7 +597,7 @@
   {
    "id": "734dabd3-a51a-4051-be51-351d04f25338",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:21:56.204Z",
    "isBriefing": true
@@ -605,7 +605,7 @@
   {
    "id": "fadd74f9-6da0-4919-8053-511488fc8a79",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:35:28.773Z",
    "isBriefing": true
@@ -613,7 +613,7 @@
   {
    "id": "3b793fdd-367c-41d5-94ea-1da327194c8e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:37:52.615Z",
    "isBriefing": true
@@ -621,7 +621,7 @@
   {
    "id": "9d581a47-1845-4064-b13a-615d8a3f4c61",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:41:17.390Z",
    "isBriefing": true
@@ -629,7 +629,7 @@
   {
    "id": "9bb01ee9-91dd-4d65-a869-66f18ffe0f06",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:44:27.131Z",
    "isBriefing": true
@@ -637,7 +637,7 @@
   {
    "id": "f49a38e8-0e77-4c95-b307-e0d8108751d4",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:47:29.208Z",
    "isBriefing": true
@@ -645,7 +645,7 @@
   {
    "id": "90e3da26-f4d4-4530-8dee-17da101675af",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:48:43.306Z",
    "isBriefing": true
@@ -653,7 +653,7 @@
   {
    "id": "ff89eff1-ec3e-48d3-af91-073189f2a66b",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:50:00.830Z",
    "isBriefing": true
@@ -661,7 +661,7 @@
   {
    "id": "2b66fd15-7f39-4c5e-9c6a-46340a039b68",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:54:27.293Z",
    "isBriefing": true
@@ -669,7 +669,7 @@
   {
    "id": "445de1e3-4698-4ba3-8814-4558273adc33",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:56:11.233Z",
    "isBriefing": true
@@ -677,7 +677,7 @@
   {
    "id": "78badcee-471b-457c-a368-bbac4cfe0ff0",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T20:58:50.878Z",
    "isBriefing": true
@@ -685,7 +685,7 @@
   {
    "id": "f102a65b-0fda-4f3f-80da-10b11e076388",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:02:17.713Z",
    "isBriefing": true
@@ -693,7 +693,7 @@
   {
    "id": "8e61fa96-1c8b-4ad7-a336-612b6173b99c",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:03:15.484Z",
    "isBriefing": true
@@ -701,7 +701,7 @@
   {
    "id": "abb1dd1c-1313-47fd-8e05-b9af2308d8c5",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:06:22.889Z",
    "isBriefing": true
@@ -709,7 +709,7 @@
   {
    "id": "c5a5ea09-662b-4a12-b8b7-34a8ebb8b316",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:10:51.065Z",
    "isBriefing": true
@@ -717,7 +717,7 @@
   {
    "id": "c18efb8b-18f4-49ea-a3cd-fd6f10454f4e",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:11:51.940Z",
    "isBriefing": true
@@ -725,7 +725,7 @@
   {
    "id": "a0c72cfd-352a-4ac0-92dc-644907bad129",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:13:02.497Z",
    "isBriefing": true
@@ -733,7 +733,7 @@
   {
    "id": "38bb9847-baa6-4b06-bcde-dcb933d0a363",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:28:29.131Z",
    "isBriefing": true
@@ -741,7 +741,7 @@
   {
    "id": "c79da91a-d8bf-4e0d-a9a7-1d567fb96ba3",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:30:17.169Z",
    "isBriefing": true
@@ -749,7 +749,7 @@
   {
    "id": "ffb24ef1-52d8-4cfe-a8e4-a24edb4986ce",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:32:12.787Z",
    "isBriefing": true
@@ -757,7 +757,7 @@
   {
    "id": "1b548217-d2e3-421f-ae3a-1fbf87de6acd",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:33:45.611Z",
    "isBriefing": true
@@ -765,7 +765,7 @@
   {
    "id": "f7f55b86-921e-46d8-a3dd-a527449ed4b1",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:43:58.216Z",
    "isBriefing": true
@@ -773,7 +773,7 @@
   {
    "id": "f78c0c72-be49-4d63-9903-8a16f5125968",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:50:19.124Z",
    "isBriefing": true
@@ -781,7 +781,7 @@
   {
    "id": "424bee98-1687-43c1-8418-ac194550e2ab",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:53:00.629Z",
    "isBriefing": true
@@ -789,7 +789,7 @@
   {
    "id": "6410c319-99dc-4f3e-81ce-d1a48d7d320a",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:55:00.510Z",
    "isBriefing": true
@@ -797,7 +797,7 @@
   {
    "id": "b570d8ad-1aa3-45b5-90eb-d0f1642cba57",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T21:57:34.788Z",
    "isBriefing": true
@@ -805,7 +805,7 @@
   {
    "id": "ad06989d-7ea2-4f32-be06-c3f0c6ec5b28",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:01:23.025Z",
    "isBriefing": true
@@ -813,7 +813,7 @@
   {
    "id": "453dbf33-c709-4d88-814e-ab8973b27f12",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:02:39.186Z",
    "isBriefing": true
@@ -821,7 +821,7 @@
   {
    "id": "9c5f7b4b-d944-4004-9a76-bacbe242b0b3",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:04:45.732Z",
    "isBriefing": true
@@ -829,7 +829,7 @@
   {
    "id": "9a3c919a-4eb4-460f-baca-ad9b46853243",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:08:59.147Z",
    "isBriefing": true
@@ -837,7 +837,7 @@
   {
    "id": "9f65f061-c80e-4fd8-833f-58b9b45c5635",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:15:42.456Z",
    "isBriefing": true
@@ -845,7 +845,7 @@
   {
    "id": "f443d508-9f93-412f-8b08-27ab16d7b994",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:16:39.787Z",
    "isBriefing": true
@@ -853,7 +853,7 @@
   {
    "id": "3b11e754-23d2-4b31-9f67-2c37dd1351c4",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:19:11.335Z",
    "isBriefing": true
@@ -861,7 +861,7 @@
   {
    "id": "dab37058-3fd6-4cfe-9f1f-cc124430dd03",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:21:22.554Z",
    "isBriefing": true
@@ -869,7 +869,7 @@
   {
    "id": "6e10464f-5a60-41b0-bf2d-20a146d97e45",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:22:42.451Z",
    "isBriefing": true
@@ -877,7 +877,7 @@
   {
    "id": "9ed89e12-b2f7-4793-8660-fd137e123a5c",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:23:56.702Z",
    "isBriefing": true
@@ -885,7 +885,7 @@
   {
    "id": "ead93475-c232-4bb6-a649-57e9395f0cde",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:27:22.930Z",
    "isBriefing": true
@@ -893,7 +893,7 @@
   {
    "id": "a383f8d8-9928-4edc-ac02-ac752f913767",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:32:02.161Z",
    "isBriefing": true
@@ -901,7 +901,7 @@
   {
    "id": "a99f35c7-9ae5-4992-af98-fab489e8ba12",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:33:59.607Z",
    "isBriefing": true
@@ -909,7 +909,7 @@
   {
    "id": "d6cf770d-7b63-4d4c-bf39-0043182496e5",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:36:23.254Z",
    "isBriefing": true
@@ -917,7 +917,7 @@
   {
    "id": "ab18d0ac-bed5-4a42-acc4-e5861951d17b",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:39:43.529Z",
    "isBriefing": true
@@ -925,7 +925,7 @@
   {
    "id": "73d58cd0-dfb5-4113-ab34-a26bf0d6c742",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:46:03.968Z",
    "isBriefing": true
@@ -933,7 +933,7 @@
   {
    "id": "ce032710-0975-4a75-93e9-97e109542c90",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:49:58.777Z",
    "isBriefing": true
@@ -941,7 +941,7 @@
   {
    "id": "0ad7f21f-1997-46ce-9003-885b2eb24e2a",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:53:08.570Z",
    "isBriefing": true
@@ -949,7 +949,7 @@
   {
    "id": "962103a9-d6f0-44ab-9a5f-be9033ce4c33",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:55:10.595Z",
    "isBriefing": true
@@ -957,7 +957,7 @@
   {
    "id": "39c47149-2acd-4c0e-9a7b-189b2e43ebc0",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:57:32.311Z",
    "isBriefing": true
@@ -965,7 +965,7 @@
   {
    "id": "140dbd39-f77f-4602-a0a7-bfe3c75bc71f",
    "role": "overseer",
-   "text": "<what you tell Noah, plain text or light markdown>",
+   "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
    "timestamp": "2026-08-25T22:59:20.372Z",
    "isBriefing": true

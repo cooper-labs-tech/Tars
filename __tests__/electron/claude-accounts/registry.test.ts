@@ -7,7 +7,7 @@
  * - account 1 disappears: `default` (today's ~/.claude, launched without
  *   CLAUDE_CONFIG_DIR) is always in the list, can be renamed and disabled but
  *   never removed, and a file without it gets it back;
- * - a sixth account: Noah's ceiling is five at once;
+ * - a sixth account: JeanBrasse's ceiling is five at once;
  * - an id is reused: an account's directory names its keychain item, so a new
  *   account given a removed one's id would sign in as whoever that was if the
  *   logout had failed. Ids are random, not the next free number;

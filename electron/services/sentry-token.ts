@@ -6,7 +6,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
  * The Sentry token, apart from the rest of the settings: in ~/.tars-private,
  * which no agent is handed, where app-settings.json is in ~/.dorothy, in every
  * agent's --add-dir (the Audit's gates of #242 and #292). Read-only, it still
- * reads Noah's Sentry organisation, user reports included. The settings the app
+ * reads JeanBrasse's Sentry organisation, user reports included. The settings the app
  * holds in memory carry it as before, so the triage and the Settings page read
  * it where they did; only what is written to disk changes, as for the Hermes
  * token (hermes-config.ts).

@@ -340,7 +340,7 @@ test('a panel whose claude left fullscreen', async () => {
     for (const name of Object.values(NAMES)) values.wheel[name] = await wheelOver(name);
     fact('wheel', values.wheel);
 
-    // ---- Copy Output from Full's context menu, into a recorder rather than Noah's clipboard.
+    // ---- Copy Output from Full's context menu, into a recorder rather than JeanBrasse's clipboard.
     await page.evaluate(() => {
       window.__copied = null;
       Object.defineProperty(navigator.clipboard, 'writeText', { configurable: true, value: async t => { window.__copied = t; } });

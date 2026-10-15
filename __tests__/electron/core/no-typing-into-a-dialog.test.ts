@@ -12,7 +12,7 @@ import { sid } from '../../fixtures/session-id';
  * than it (1.7.9 has it): a bus message pasted into an open "Do you want to
  * proceed? 1. Yes" dialog, and its Enter said Yes: the command ran and the
  * message was lost. Bypass does not protect: an AskUserQuestion ("Delete the
- * build folder?") was answered "Yes, delete it" by Noah's room post.
+ * build folder?") was answered "Yes, delete it" by JeanBrasse's room post.
  * AskUserQuestion fires PermissionRequest in bypass too, so Tars already knew
  * (waiting, permission): /message answered 409, and the bus, the delegation
  * notes, "send held" and the bots typed anyway (the Audit's census,
@@ -93,7 +93,7 @@ function answered(id: string): void {
 
 const settle = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function noahWrites(text: string, mentions: string[]): Promise<string> {
+async function userWrites(text: string, mentions: string[]): Promise<string> {
   const r = await ipcHandlers.get('bus:postMessage')!(null, { roomId: ROOM, text, mentions }) as { success: boolean; error?: string; messageId: string };
   expect(r.success, r.error).toBe(true);
   return r.messageId;
@@ -133,7 +133,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     putAgent({ id: 'alpha', status: 'idle' });
     dialogOpens('alpha');
 
-    const id = await noahWrites('Clean the build folder, please.', ['alpha']);
+    const id = await userWrites('Clean the build folder, please.', ['alpha']);
     await settle(1500);
 
     expect(alpha.written, 'typed into the dialog').toEqual([]);
@@ -167,7 +167,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     dialogOpens('alpha');
 
     const r = await watch.releaseBusMessagesNow('alpha', [{
-      messageId: 'm1', roomId: ROOM, threadId: 't1', authorKind: 'human', authorName: 'Noah', text: 'held for you',
+      messageId: 'm1', roomId: ROOM, threadId: 't1', authorKind: 'human', authorName: 'User', text: 'held for you',
     }]);
 
     expect(r.written).toEqual([]);
@@ -215,10 +215,10 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
       agent_id: 'alpha', session_id: sid('sess-alpha'), status: 'waiting', waiting_reason: 'permission', tool_name: 'AskUserQuestion',
     }, params: {} }, vi.fn(), ctx);
 
-    await noahWrites('Keep going.', ['alpha']);
+    await userWrites('Keep going.', ['alpha']);
     await settle(1500);
 
-    expect(alpha.typed, 'Noah\'s post answered the question').not.toContain('Keep going.');
+    expect(alpha.typed, 'JeanBrasse\'s post answered the question').not.toContain('Keep going.');
   });
 
   it('8. goes in after a person answers the dialog with the arrows and Enter, whose keys never reached the field', async () => {
@@ -228,7 +228,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     const alpha = terminalFor('alpha');
     putAgent({ id: 'alpha', status: 'idle' });
     dialogOpens('alpha');
-    await noahWrites('After your answer.', ['alpha']);
+    await userWrites('After your answer.', ['alpha']);
     const ptyProcess = pty.ptyProcesses.get('pty-alpha')!;
 
     pty.writeHumanInput(ptyProcess, '\x1b[B');
@@ -243,7 +243,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
   // The Audit's gate of #174: refusing a permission ("No" or Esc) sends no hook,
   // neither Stop nor idle_prompt, so the agent stayed waiting/permission with
   // its screen back at the input, and everything held for it stayed held until
-  // Noah typed there himself. The transcript records the refusal:
+  // JeanBrasse typed there himself. The transcript records the refusal:
   // "[Request interrupted by user for tool use]".
   async function permissionPosted(id: string, extra: Record<string, unknown> = {}): Promise<void> {
     const { registerHooksRoutes } = await import('../../../electron/services/api-routes/hooks-routes');
@@ -276,7 +276,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     putAgent({ id: 'alpha', status: 'running' });
     await permissionPosted('alpha');
     expect(manager.agents.get('alpha')!.status).toBe('waiting');
-    await noahWrites('After the refusal.', ['alpha']);
+    await userWrites('After the refusal.', ['alpha']);
     await settle(1500);
     expect(alpha.typed).not.toContain('After the refusal.');
 
@@ -292,7 +292,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     putAgent({ id: 'alpha', status: 'running' });
     interruptRecorded('alpha', new Date(Date.now() - 60_000));
     await permissionPosted('alpha');
-    await noahWrites('Not before the answer.', ['alpha']);
+    await userWrites('Not before the answer.', ['alpha']);
     await settle(3000);
 
     expect(alpha.typed).not.toContain('Not before the answer.');
@@ -308,7 +308,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     await permissionPosted('alpha', { opened_at: openedAt });
 
     expect(manager.agents.get('alpha')!.dialogSince).toBe(new Date(openedAt).toISOString());
-    await noahWrites('After the early refusal.', ['alpha']);
+    await userWrites('After the early refusal.', ['alpha']);
     await settle(2500);
     expect(alpha.typed).toContain('After the early refusal.');
   });
@@ -329,7 +329,7 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
   it('12. reads an interruption recorded during a turn as the turn\'s end, and delivers what waited for it', async () => {
     const alpha = terminalFor('alpha');
     putAgent({ id: 'alpha', status: 'running', lastTurnStartedAt: new Date(Date.now() - 10_000).toISOString() });
-    const id = await noahWrites('After the Esc.', ['alpha']);
+    const id = await userWrites('After the Esc.', ['alpha']);
     await settle(500);
     expect(alpha.typed).not.toContain('After the Esc.');
 

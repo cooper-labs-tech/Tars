@@ -10,7 +10,7 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * A gateway clears a cookie by sending `name=""`. That is two characters, not
  * zero, so a jar testing the value for emptiness without unquoting kept the
  * quotes as if they were a token, sent them back on every request, and went on
- * reporting a session. Noah had `hasHermesSession` saying yes, the test button
+ * reporting a session. JeanBrasse had `hasHermesSession` saying yes, the test button
  * green, and Schedules answering Unauthorized, all reading the same jar, for a
  * week.
  *
@@ -163,7 +163,7 @@ describe('Max-Age against Expires', () => {
 
 describe('the lie that cost a week', () => {
   it('does not call a jar full of cleared cookies a session', async () => {
-    // Exactly what Noah's jar held: every name present, every value two
+    // Exactly what JeanBrasse's jar held: every name present, every value two
     // quotes. `hasHermesSession` read the names and answered yes, so the
     // Settings page said signed in while every authenticated call was 401.
     await respondWith(
@@ -189,7 +189,7 @@ describe('cookie names that only mean something over https', () => {
     'does not keep %s handed over a plain http origin',
     async name => {
       // No browser stores these off https, and sending them back turned three
-      // session cookies into nine in the jar Noah had to read.
+      // session cookies into nine in the jar JeanBrasse had to read.
       await respondWith(`${name}=realtoken; Path=/`);
 
       expect(await cookiesSentNext()).not.toContain(name);

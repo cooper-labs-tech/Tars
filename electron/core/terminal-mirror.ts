@@ -65,7 +65,7 @@ const xterm = loadAsNode();
  */
 
 /** Lines of history kept above the screen, which a panel that comes back is
- *  handed: 2,500, Noah's choice of 05/10 for the main process (the panel's own
+ *  handed: 2,500, JeanBrasse's choice of 05/10 for the main process (the panel's own
  *  xterm keeps 5,000, #313). It kept 1,000. */
 export const MIRROR_SCROLLBACK = 2500;
 
@@ -281,7 +281,7 @@ export function dialogOnScreen(pty: IPty | undefined): boolean {
  * and a row it rewrote after a carriage return (a spinner, a countdown) is the
  * row as it ended. The Logs page split the raw stream on line breaks instead,
  * and Claude Code, which draws with cursor moves, read as one run of glued
- * words (Noah, 2026-10-01). Claude Code 2.1.286 draws on the alternate screen
+ * words (JeanBrasse, 2026-10-01). Claude Code 2.1.286 draws on the alternate screen
  * by default, where the normal one stays empty.
  */
 function textOf(term: Terminal): string[] {

@@ -18,7 +18,7 @@ vi.mock('react', async (importOriginal) => ({
  * Until 1.7.9 only the cost chart obeyed it: the tiles, the provider rows and
  * the budget summed everything ever recorded, the tokens and messages charts
  * took the last fourteen days that had any data, and the page added cost up
- * four different ways. Measured on Noah's history: $10,143.27 in TOTAL COST
+ * four different ways. Measured on JeanBrasse's history: $10,143.27 in TOTAL COST
  * on every timeframe, beside fourteen bars that added up to $3,717.75.
  *
  * The seed puts spend in six regions, a power of ten each, so a figure summed

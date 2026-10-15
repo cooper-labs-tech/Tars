@@ -94,7 +94,7 @@ async function providersUnder(homeDir: string): Promise<Providers> {
 /** Everything under the home an interactive command can name, created so the existsSync checks pass. */
 function interactiveParams(homeDir: string) {
   const secondaryProjectPath = path.join(homeDir, 'second project');
-  const vault = path.join(homeDir, "Noah's vault");
+  const vault = path.join(homeDir, "JeanBrasse's vault");
   const mcpConfigPath = path.join(homeDir, 'mcp.json');
   const systemPromptFile = path.join(homeDir, 'instructions.md');
   for (const dir of [secondaryProjectPath, vault]) fs.mkdirSync(dir, { recursive: true });

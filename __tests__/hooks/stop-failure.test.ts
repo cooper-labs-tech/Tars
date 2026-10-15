@@ -276,7 +276,7 @@ describe.skipIf(shHooksNotShipped())('a turn that fails on an API error', () => 
     await failTurn(MEASURED_STOP_FAILURE);
     expect(agent.error).toBe(CLI_MESSAGE);
 
-    // Noah runs /login in that terminal and sends the task again.
+    // JeanBrasse runs /login in that terminal and sends the task again.
     post({ agent_id: 'a1', session_id: SESSION, status: 'running', event: 'UserPromptSubmit' });
 
     expect(agent.status).toBe('running');
@@ -329,7 +329,7 @@ describe.skipIf(shHooksNotShipped())('a failed turn left alone', () => {
     // Still in error when the turn begins, or this would test another transition.
     expect(agent.status).toBe('error');
 
-    // Noah runs /login in that terminal and types the task again.
+    // JeanBrasse runs /login in that terminal and types the task again.
     const posts = await runHook(PROMPT_HOOK, MEASURED_NEXT_PROMPT);
     expect(posts.map(p => p.url)).toEqual(['/api/hooks/status']);
     send(posts[0].url, posts[0].body);
@@ -354,7 +354,7 @@ describe.skipIf(shHooksNotShipped())('a failed turn left alone', () => {
 /**
  * The same idle prompt, on the other channel it reaches: the desktop
  * notification "X is waiting". The status guard above kept the card honest
- * while this still told Noah, a minute after the failure, that the agent was
+ * while this still told JeanBrasse, a minute after the failure, that the agent was
  * waiting for his answer.
  *
  * The settings are the app's defaults on purpose. The suite's are empty, and
@@ -400,7 +400,7 @@ describe.skipIf(shHooksNotShipped())('the waiting notification after a failed tu
     for (const p of await runHook(NOTIFICATION_HOOK, MEASURED_IDLE_PROMPT)) send(p.url, p.body);
     expect(waitingAlerts()).toEqual([]);
 
-    // Noah logs in again in that terminal and sends the task.
+    // JeanBrasse logs in again in that terminal and sends the task.
     for (const p of await runHook(PROMPT_HOOK, MEASURED_NEXT_PROMPT)) send(p.url, p.body);
     expect(agent.status).toBe('running');
     // The turn ends with its Stop, and the idle prompt comes a minute later.
@@ -419,7 +419,7 @@ describe.skipIf(shHooksNotShipped())('the waiting notification after a failed tu
    * The guard is for the idle prompt only, as hooks-routes.ts and OPERATIONS.md
    * both say, and nothing held it to that: holding back every notification of
    * an agent in error passed the whole file. A permission prompt comes from a
-   * turn in progress and waits on Noah's answer, so if one ever meets an agent
+   * turn in progress and waits on JeanBrasse's answer, so if one ever meets an agent
    * still marked `error`, a turn whose start Tars missed, hiding it would leave
    * that turn blocked with nobody told.
    *

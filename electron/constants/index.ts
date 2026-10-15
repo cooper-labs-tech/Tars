@@ -37,7 +37,7 @@ export const dataPath = (...segments: string[]) => path.join(DATA_DIR, ...segmen
  *
  * Every agent is started with `--add-dir ~/.dorothy`: the directory holds the
  * Tars CLAUDE.md they are meant to read and the vault they are meant to write,
- * so it is handed over deliberately. Noah's own conversation with the super
+ * so it is handed over deliberately. JeanBrasse's own conversation with the super
  * chat was in it too, in clear, and reading it took no API call and no token -
  * an `ls` of the directory the agent was given, and a `cat`.
  *
@@ -78,7 +78,7 @@ export const API_TOKEN_FILE = path.join(DATA_DIR, 'api-token');
 /** The agent bus journal: rooms, threads, messages and deliveries. One file,
  *  written the way agents.json is (temp file then rename), no new service. */
 export const BUS_FILE = path.join(DATA_DIR, 'bus.json');
-/** Noah's conversation with the super chat: the private directory, not the
+/** JeanBrasse's conversation with the super chat: the private directory, not the
  *  one the agents are handed. OVERSEER_LEGACY_FILE is where it used to be,
  *  read and migrated away from at startup. */
 export const OVERSEER_FILE = path.join(PRIVATE_DIR, 'overseer.json');

@@ -8,8 +8,8 @@ import { describeSecretFileError, writeSecretFileSync } from '../utils/secret-fi
  * this machine, and the only one that opens `POST /api/webhooks/hermes`.
  *
  * Through that route Hermes dispatches to any agent of any project, named by
- * id or by name, because a cron job goes wherever Noah points it. That is the
- * reach of Noah's own chat, so the secret is kept where his conversation is
+ * id or by name, because a cron job goes wherever JeanBrasse points it. That is the
+ * reach of JeanBrasse's own chat, so the secret is kept where his conversation is
  * kept, in the directory no agent is handed.
  *
  * It was minted into `~/.dorothy`, which every agent is started with, one
@@ -23,7 +23,7 @@ import { describeSecretFileError, writeSecretFileSync } from '../utils/secret-fi
  * new one, and giving Hermes that.
  *
  * What the move is not: an agent that goes looking for the private directory
- * still reads it, as it reads Noah's conversation there. See SECURITY.md.
+ * still reads it, as it reads JeanBrasse's conversation there. See SECURITY.md.
  */
 
 function readTrimmed(file: string): string {

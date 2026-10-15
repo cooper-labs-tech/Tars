@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import * as pty from 'node-pty';
 
 /**
- * A launch on a nearly full disk is refused, saying why (Noah, 05/10). On
+ * A launch on a nearly full disk is refused, saying why (JeanBrasse, 05/10). On
  * 01/10 the Mac stopped with 68 MB free, worktrees and agents writing until
  * there was nothing left (electron/core/disk-space.ts).
  *

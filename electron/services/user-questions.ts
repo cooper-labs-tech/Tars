@@ -17,7 +17,7 @@ import { dialogShown } from '../core/agent-launch';
  * ask_user: a project's orchestrator asks the user a question on their Telegram, through their Hermes (the relay,
  * DESIGN-RELAIS-HERMES-V2.md), and their answer is typed into that orchestrator's terminal.
  *
- * - Only an orchestrator asks (Noah's rule of 2026-10-01): a worker asks its orchestrator, which decides whether to
+ * - Only an orchestrator asks (JeanBrasse's rule of 2026-10-01): a worker asks its orchestrator, which decides whether to
  *   ask the user, and passes the answer on.
  * - A question is recorded (id, agent, time, expiry) and sent through the relay as plain text under the agent's and
  *   the project's names, every line of the agent's words quoted, so none can pass for Tars's own, and every secret

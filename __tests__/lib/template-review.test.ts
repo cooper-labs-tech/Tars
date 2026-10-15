@@ -140,7 +140,7 @@ describe('each field is shown as it will be used, or the file is refused (2 to 7
   });
 
   it('on Windows, accepts the folders Windows calls absolute (15)', () => {
-    const folders = ['C:\\Users\\you\\Documents\\vault', 'D:/work/notes', '\\\\server\\share\\vault', '/Users/noah/vault'];
+    const folders = ['C:\\Users\\you\\Documents\\vault', 'D:/work/notes', '\\\\server\\share\\vault', '/Users/demo/vault'];
     const review = reviewTemplateFile(file([{ displayName: 'A', obsidianVaultPaths: folders }]), 'win32');
     if (!review.ok) throw new Error(`expected the file to be accepted, got: ${review.error}`);
     expect(review.templates[0].input.obsidianVaultPaths).toEqual(folders);

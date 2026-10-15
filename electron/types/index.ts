@@ -635,7 +635,7 @@ export interface BusMessage {
   roomId: string;
   threadId: string;
   authorKind: BusMessageAuthorKind;
-  /** Agent id, or `human` for Noah. */
+  /** Agent id, or `human` for JeanBrasse. */
   authorId: string;
   authorName: string;
   text: string;

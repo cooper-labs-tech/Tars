@@ -49,7 +49,7 @@ import { _electron as electron } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { launchSandboxed, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
@@ -73,7 +73,19 @@ const PICTURES = {
 };
 
 /** Words no picture may show: this machine's, and the stand-ins'. */
-const NEVER = [/\/Users\//, /\bnoah\b/i, /stand-in/i, /\bHOLD\b/, /\be2e\b/i, /dorothy/i];
+const NEVER = [/\/Users\//, /stand-in/i, /\bHOLD\b/, /\be2e\b/i, /dorothy/i];
+/**
+ * Nor a name from the private list `npm run check:names` reads, which no file
+ * here may spell: ~/.tars-private/private-names.txt, or TARS_PRIVATE_NAMES.
+ * Without it, none.
+ */
+const PRIVATE_NAMES = (() => {
+  let list = '';
+  try { list = readFileSync(process.env.TARS_PRIVATE_NAMES || join(homedir(), '.tars-private', 'private-names.txt'), 'utf8'); } catch { return []; }
+  return list.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#'))
+    .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .map((name) => new RegExp(`(?<!\\p{L})${name}(?!\\p{L})`, 'iu'));
+})();
 
 /** What each chat's orchestrator, and each worker, says and does in its turn: by the words it was started with. */
 const SCRIPTS = [
@@ -241,6 +253,7 @@ async function guard(page, name) {
   const shown = await page.evaluate(() => document.body.innerText);
   const hit = NEVER.find((word) => word.test(shown));
   if (hit) throw new Error(`${name} would show ${hit}: no picture was written`);
+  if (PRIVATE_NAMES.some((word) => word.test(shown))) throw new Error(`${name} would show a name from the private list: no picture was written`);
 }
 
 freshRoot();

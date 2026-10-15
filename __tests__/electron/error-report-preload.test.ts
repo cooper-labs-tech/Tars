@@ -59,7 +59,7 @@ describe('the Sentry bridge in the preload', () => {
 
   it('2. passes nothing else: no scope, feedback, log, metric or status', async () => {
     sent.length = 0;
-    bridge.sendScope(JSON.stringify({ user: { email: 'noah@example.com' }, extra: { prompt: 'x' } }));
+    bridge.sendScope(JSON.stringify({ user: { email: 'demo@example.com' }, extra: { prompt: 'x' } }));
     await bridge.sendFeedback('feedback envelope');
     bridge.sendStructuredLog({ body: 'a log' });
     bridge.sendMetric({ name: 'm' });

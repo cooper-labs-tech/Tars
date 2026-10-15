@@ -90,7 +90,7 @@ const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-replaced-exit-home-'));
 const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-replaced-exit-project-'));
 let restoreHome: () => void;
 
-const CLAUDE_EXE = 'C:\\Users\\Nico Las\\.local\\bin\\claude.exe';
+const CLAUDE_EXE = 'C:\\Users\\Sam Lee\\.local\\bin\\claude.exe';
 const disk: FsProbe = {
   isFile: (p) => p.toLowerCase() === CLAUDE_EXE.toLowerCase(),
   readFile: (p) => { throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' }); },
@@ -106,7 +106,7 @@ function agentNamed(id: string): AgentStatus {
 }
 
 function launchFor(agent: AgentStatus): DirectLaunch {
-  return toLaunch("'claude' -- 'the task'", project, { Path: 'C:\\Users\\Nico Las\\.local\\bin', CLAUDE_AGENT_ID: agent.id }, 'win32', { fs: disk }) as DirectLaunch;
+  return toLaunch("'claude' -- 'the task'", project, { Path: 'C:\\Users\\Sam Lee\\.local\\bin', CLAUDE_AGENT_ID: agent.id }, 'win32', { fs: disk }) as DirectLaunch;
 }
 
 const completes = (ptyId?: string) => broadcasts.filter(b => b.channel === 'agent:complete' && (ptyId === undefined || b.payload.ptyId === ptyId));
