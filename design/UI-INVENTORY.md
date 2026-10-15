@@ -31,7 +31,9 @@ Draw anything for the Chat in `chat-redesign-a.pen`.
 
 A fourth document, `design/landing.pen`, holds the site in `landing/`:
 `Landing · desktop` (its `Preview` section shows the new interface as the preview
-of 2.0.0, with a picture of a chat's page that e2e/new-interface-pictures.mjs takes), `Landing · 404`, `Landing · privacy and terms` (the two
+of 2.0.0, with a picture of a chat's page that e2e/new-interface-pictures.mjs takes, and its Get Tars section a card per system),
+`Landing · downloads per OS` (what the hero and Get Tars offer by the visitor's system, before and
+after each one has a build), `Landing · 404`, `Landing · privacy and terms` (the two
 legal pages, drawn once: they share one layout), and `Landing · social image`,
 the picture link previews show. It was forked from `tars-redesign.pen` on 2026-09-23 with
 only the landing kept, and the landing frame left the first two documents in the
