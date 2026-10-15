@@ -157,20 +157,25 @@ function writeCustomProjects(list: string[]): void {
 }
 
 /**
- * An agent's own worktree, set in its settings (agent:update): made, or why
- * not, before the record changes. The answer is what the Agents page shows
- * after "Not saved:": git's own reason, without its progress or "fatal: ".
+ * An agent's own worktree, for a new agent (agent:create) or set in its
+ * settings (agent:update): made, or why not, before anything else is. The
+ * answer is what the window shows, after "Not saved:" on the Agents page and
+ * beside a member New team could not make: git's own reason, without its
+ * progress or "fatal: ".
  */
 async function makeAgentWorktree(projectPath: string, branchName: string): Promise<{ worktreePath: string; branchName: string } | { error: string }> {
+  // resolveWorktreePath refuses `..`: the old regex allowed both `.` and `/`,
+  // so `../../../etc` passed it, resolved outside the project, and an existing
+  // folder there was then reused as the agent's cwd.
   const worktreePath = resolveWorktreePath(projectPath, branchName);
   if (!worktreePath) return { error: 'Invalid branch name' };
   try {
     fs.mkdirSync(path.join(projectPath, '.worktrees'), { recursive: true });
     if (!fs.existsSync(worktreePath)) {
       // argv, not a shell string: worktreePath comes from the project path, so
-      // a quote or a space in it used to break the command (or run its own).
-      // See the same fix in agent:create. In the C locale: gitRefusal reads
-      // git's "fatal:", which a translated git would not write.
+      // a quote or a space in it ("Bob's Projects") used to break the command,
+      // or run its own. In the C locale: gitRefusal reads git's "fatal:",
+      // which a translated git would not write.
       const git = (args: string[]) => execFileSync(gitCommand(), args, { cwd: projectPath, stdio: 'pipe', env: { ...process.env, LC_ALL: 'C' } });
       // An existing branch is checked out there, a new one is made: only the
       // add that applies runs, so a refusal is git's reason for it. Any failure
@@ -180,10 +185,13 @@ async function makeAgentWorktree(projectPath: string, branchName: string): Promi
       try { git(['rev-parse', '--verify', '--quiet', branchName]); } catch { exists = false; }
       git(exists ? ['worktree', 'add', worktreePath, branchName] : ['worktree', 'add', '-b', branchName, worktreePath]);
     }
+    // Its dependencies, cloned from the project's where they were installed
+    // for this lock (Noah's choice 17, 05/10): each agent ran its own npm ci
+    // into its worktree.
     await logDependencies(worktreePath, await cloneDependencies(projectPath, worktreePath));
     return { worktreePath, branchName };
   } catch (err) {
-    console.error('Failed to create worktree on update:', err);
+    console.error('Failed to create an agent worktree:', err);
     const stderr = String((err as { stderr?: unknown }).stderr ?? '').trim();
     return { error: `The worktree could not be made: ${stderr ? gitRefusal(stderr) : (err as Error).message}` };
   }
@@ -366,67 +374,19 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     let worktreePath: string | undefined;
     let branchName: string | undefined;
 
-    // Create git worktree if enabled
+    // Create git worktree if enabled. As a save makes one: git's own reason when
+    // it refuses, in the C locale. This path used to retry any refusal as a new
+    // branch, so a branch checked out elsewhere read the retry's "a branch named
+    // ... already exists", inside git's whole command line (the Audit's Low 1
+    // on #405). And never the shared checkout instead: a worktree that could not
+    // be made used to leave the agent writing straight into the user's main
+    // workspace, with nothing on screen to say so.
     if (config.worktree?.enabled && config.worktree?.branchName) {
-      branchName = config.worktree.branchName;
-      const worktreesDir = path.join(cwd, '.worktrees');
-      // resolveWorktreePath refuses `..`: the old regex allowed both `.` and
-      // `/`, so `../../../etc` passed it, resolved outside the project, and
-      // the "already exists, reusing it" branch below then made it the cwd.
-      worktreePath = resolveWorktreePath(cwd, branchName);
-      if (!worktreePath) {
-        throw new Error('Invalid branch name');
-      }
-
-      console.log(`Creating git worktree for agent ${id} at ${worktreePath} on branch ${branchName}`);
-
-      try {
-        // Create .worktrees directory if it doesn't exist
-        if (!fs.existsSync(worktreesDir)) {
-          fs.mkdirSync(worktreesDir, { recursive: true });
-        }
-
-        // Check if worktree already exists
-        if (fs.existsSync(worktreePath)) {
-          console.log(`Worktree already exists at ${worktreePath}, reusing it`);
-        } else {
-          // git is invoked as argv, never as a shell string. These commands
-          // used to be built by concatenation into single quotes, and
-          // worktreePath derives from the caller's projectPath: an ordinary
-          // folder like "Bob's Projects" broke the quoting (git never ran, the
-          // catch below swallowed it, and the agent silently worked in the
-          // shared repository instead of the isolated worktree it asked for),
-          // and a folder named `x';touch /tmp/pwned;'` ran its own command.
-          const { execFileSync } = await import('child_process');
-
-          // Check if branch already exists
-          try {
-            execFileSync(gitCommand(), ['rev-parse', '--verify', branchName], { cwd, stdio: 'pipe' });
-            // Branch exists, create worktree using existing branch
-            execFileSync(gitCommand(), ['worktree', 'add', worktreePath, branchName], { cwd, stdio: 'pipe' });
-          } catch {
-            // Branch doesn't exist, create worktree with new branch
-            execFileSync(gitCommand(), ['worktree', 'add', '-b', branchName, worktreePath], { cwd, stdio: 'pipe' });
-          }
-        }
-        // Its dependencies, cloned from the project's where they were installed
-        // for this lock (Noah's choice 17, 05/10): each agent ran its own npm ci
-        // into its worktree.
-        await logDependencies(worktreePath, await cloneDependencies(cwd, worktreePath));
-
-        // Use the worktree path as the working directory
-        cwd = worktreePath;
-      } catch (err) {
-        // Do not degrade to the shared checkout. This used to drop the
-        // worktree and carry on with cwd = projectPath, so a worktree that
-        // could not be created turned into an agent writing straight into the
-        // user's main workspace with nothing on screen to say so (only
-        // DeployTeamDialog ever inspected branchName afterwards).
-        console.error(`Failed to create git worktree:`, err);
-        throw new Error(
-          `Failed to create git worktree for branch ${branchName}: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
+      console.log(`Creating git worktree for agent ${id} on branch ${config.worktree.branchName}`);
+      const made = await makeAgentWorktree(cwd, config.worktree.branchName);
+      if ('error' in made) throw new Error(made.error);
+      ({ worktreePath, branchName } = made);
+      cwd = worktreePath;
     }
 
     console.log(`Creating PTY for agent ${id} with shell ${shell} in ${cwd}`);

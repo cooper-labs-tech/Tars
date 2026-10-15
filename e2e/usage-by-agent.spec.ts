@@ -27,6 +27,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *   of that agent's rows in the task view, and of the tokens and costs
  *   usage.tasks gave for the window: own costs, so the lead's delegations are
  *   counted once, in the agents that did them.
+ * - The window rule (the Audit's Low 1 on #408, its words at #416's gate): a
+ *   row holds the tasks begun in the timeframe, each at its own cost, and the
+ *   note under the rows says so, and what the charts hold that no row does. The lead's task begun half a minute before the 14 days wrote its reply
+ *   inside them: the charts above count it, by turn, and no row does, so the
+ *   total cost is the rows' sum and that task's own cost.
  * - The agent picked in the task view steps aside in the agent view and is
  *   kept for the task view; the project picked applies to both.
  * - The view picked is kept: the page opens on it again. 24 hours, then light.
@@ -40,7 +45,7 @@ const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
 
 type TaskRow = { text: string; agent: string; own: string };
 type AgentRow = { agent: string; project: string; provider: string; also: string; tasks: string; time: string; tokens: string; cost: string; partial: string };
-type Entry = { agentId: string; startedAt: number; costUSD: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null };
+type Entry = { id: string; agentId: string; startedAt: number; costUSD: number | null; tokens: { input: number; output: number; cacheRead: number; cacheWrite: number } | null };
 type Report = { tasks: Entry[]; agentNames: Record<string, string> };
 type Api = { electronAPI: { usage: { tasks(q?: { sinceDays?: number }): Promise<Report> } } };
 
@@ -184,7 +189,7 @@ test('the usage page shows its tasks by agent, each agent the sum of its own tas
     await expect(panel.locator('[data-agent-row]')).toHaveCount(5);
     await expect(panel.locator('[data-task-row]')).toHaveCount(0);
     await expect(panel).toContainText('5 agents · 1 task not counted');
-    await expect(panel).toContainText('A row adds up the agent\'s tasks, which Tars records since 1.9.3');
+    await expect(panel).toContainText('A row adds up the agent\'s tasks begun in this timeframe, each at its own cost from its first turn to its last. The charts above count by turn, and also hold what no row does: a task begun earlier, what came before Tars recorded tasks (1.9.3), and Claude Code sessions Tars did not start.');
     await expect(panel.getByRole('button', { name: 'Show the tasks of one agent' })).toHaveCount(0);
     await expect(panel.getByRole('button', { name: 'Show the tasks of one project' })).toBeVisible();
     const agents = await agentRows();
@@ -220,6 +225,17 @@ test('the usage page shows its tasks by agent, each agent the sum of its own tas
       expect(a.cost, a.agent).toBe(sums[a.agent].cost === null ? 'not counted' : fmtUsd(sums[a.agent].cost as number));
       expect(a.tokens, a.agent).toBe(sums[a.agent].tokens === null ? '-' : fmtTokens(sums[a.agent].tokens as number));
     }
+
+    // The window rule: the lead's task begun half a minute before the 14 days
+    // is in no row, and its reply, written inside them, is in the charts'
+    // total, which counts by turn.
+    const edge = report.tasks.find(t => t.id === 'task-edge');
+    expect(edge?.startedAt).toBeLessThan(windowStart);
+    expect(edge?.costUSD).toBeGreaterThan(0);
+    const rowsSum = Object.values(sums).reduce((sum, s) => sum + (s.cost ?? 0), 0);
+    const totalCost = page.getByText('TOTAL COST', { exact: true }).locator('xpath=..').locator('p').first();
+    seen.windowRule = { rowsSum, edgeTask: edge?.costUSD, totalCost: await totalCost.textContent() };
+    await expect(totalCost).toHaveText(fmtUsd(rowsSum + (edge?.costUSD ?? 0)));
     await shot('02-by-agent');
 
     // The agent picked in the task view steps aside in the agent view, and is

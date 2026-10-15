@@ -68,10 +68,32 @@ const ZERO: Counts = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, write1h
 interface ReadFile { ino: number; offset: number; mtimeMs: number; size: number; lines: TimedLine[]; usedAt: number }
 const fileCache = new Map<string, ReadFile>();
 const KEEP_UNUSED_MS = 10 * 60_000;
+/**
+ * And all of it once no reader has asked for ten minutes: the prune at each
+ * call ran only when the next call came, so the files of the page's last
+ * figures (up to about 90 MB at 30 days) stayed in the main process after it
+ * closed, until usage:tasks was asked again, which may be never (the Audit's
+ * Low 1 on #410). Stopped while a reading runs, armed again when it ends;
+ * unref'd, it never keeps Tars running.
+ */
+let dropTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Forgets every transcript read, for a test that starts over. */
 export function clearTaskCostCache(): void {
+  clearTimeout(dropTimer);
+  dropTimer = undefined;
   fileCache.clear();
+}
+
+export async function readTaskCosts(tasks: TaskRecord[], opts: { homeDir?: string } = {}): Promise<Map<string, TaskCost>> {
+  clearTimeout(dropTimer);
+  try {
+    return await costsOf(tasks, opts);
+  } finally {
+    clearTimeout(dropTimer);
+    dropTimer = setTimeout(clearTaskCostCache, KEEP_UNUSED_MS);
+    dropTimer.unref();
+  }
 }
 
 async function timedLinesOf(file: string, now: number): Promise<{ mtimeMs: number; lines: TimedLine[] } | null> {
@@ -119,7 +141,7 @@ function filesOfSession(task: TaskRecord, sessionId: string, homeDir: string): s
   return [];
 }
 
-export async function readTaskCosts(tasks: TaskRecord[], opts: { homeDir?: string } = {}): Promise<Map<string, TaskCost>> {
+async function costsOf(tasks: TaskRecord[], opts: { homeDir?: string }): Promise<Map<string, TaskCost>> {
   const homeDir = opts.homeDir ?? os.homedir();
   const out = new Map<string, TaskCost>();
 

@@ -1,9 +1,7 @@
-import { describe, it, expect, afterEach } from 'vitest';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cliPathProblem } from '../../../electron/platform/cli-path';
 import type { FsProbe } from '../../../electron/platform/fs-probe';
+import { POSIX_ROOT, type PosixEntry } from './posix-fake-disk';
 
 /**
  * The CLI an agent names for a new agent (create_agent's cliPath, 2.0.2), on each platform Tars runs on
@@ -18,7 +16,24 @@ import type { FsProbe } from '../../../electron/platform/fs-probe';
  *    stream (codex.exe:evil) taken; a UNC path refused; a .cmd that is no npm shim taken. Tars starts a CLI
  *    on win32 the way electron/platform/cli-binary.ts resolves it, and the check must agree with it.
  * 4. The platform read once at import, or from the host: the rule must be the one of process.platform.
+ * 5. Added on 2026-10-15, when Nexarion434 ran these on Windows: the host read for the platform, by the rule or by
+ *    its cases. The darwin and linux rule calling a C:\ path absolute because the host does; or a case built from
+ *    os.tmpdir() and the host's disk, which on a Windows host gave the darwin and linux cases a C:\ path and no
+ *    execute bit. Each case builds its paths for its own platform, on a disk in memory: posix-fake-disk.ts for
+ *    darwin and linux, an FsProbe for win32.
  */
+
+const posixDisk = vi.hoisted(() => new Map<string, PosixEntry>());
+vi.mock('fs', async (importOriginal) => (await import('./posix-fake-disk')).onPosixDisk(await importOriginal<typeof import('fs')>(), posixDisk));
+
+const exe = `${POSIX_ROOT}/my-cli`;
+const plain = `${POSIX_ROOT}/plain`;
+const unbitted = `${POSIX_ROOT}/tool.exe`;
+posixDisk
+  .set(POSIX_ROOT, { kind: 'dir', mode: 0o755 })
+  .set(exe, { kind: 'file', mode: 0o755 })
+  .set(plain, { kind: 'file', mode: 0o644 })
+  .set(unbitted, { kind: 'file', mode: 0o644 });
 
 const real = Object.getOwnPropertyDescriptor(process, 'platform')!;
 function onPlatform(platform: NodeJS.Platform): void {
@@ -27,22 +42,21 @@ function onPlatform(platform: NodeJS.Platform): void {
 afterEach(() => Object.defineProperty(process, 'platform', real));
 
 describe.each(['darwin', 'linux'] as const)('on %s', (platform) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `cli-path-${platform}-`));
-  const exe = path.join(dir, 'my-cli');
-  fs.writeFileSync(exe, '#!/bin/sh\n', { mode: 0o755 });
-  const plain = path.join(dir, 'plain');
-  fs.writeFileSync(plain, 'x', { mode: 0o644 });
-
   it('2. takes an absolute path to a file with an execute bit, and says why otherwise', () => {
     onPlatform(platform);
     expect(cliPathProblem(exe)).toBeNull();
     expect(cliPathProblem('my-cli')).toMatch(/absolute/);
     expect(cliPathProblem('./bin/my-cli')).toMatch(/absolute/);
-    expect(cliPathProblem(path.join(dir, 'missing'))).toMatch(/no file/);
-    expect(cliPathProblem(dir)).toMatch(/not a file/);
+    expect(cliPathProblem(`${POSIX_ROOT}/missing`)).toMatch(/no file/);
+    expect(cliPathProblem(POSIX_ROOT)).toMatch(/not a file/);
     expect(cliPathProblem(plain)).toMatch(/not executable/);
     expect(cliPathProblem('')).toMatch(/absolute/);
     expect(cliPathProblem(42)).toMatch(/absolute/);
+  });
+
+  it('5. calls a Windows path relative, whatever the host', () => {
+    onPlatform(platform);
+    expect(cliPathProblem('C:\\tools\\my-cli')).toMatch(/absolute/);
   });
 });
 
@@ -88,12 +102,9 @@ describe('on win32', () => {
 
 describe('the platform it reads', () => {
   it('4. is process.platform at the call, not the host', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-path-host-'));
-    const exe = path.join(dir, 'tool.exe');
-    fs.writeFileSync(exe, '', { mode: 0o644 });
     onPlatform('darwin');
-    expect(cliPathProblem(exe)).toMatch(/not executable/);
+    expect(cliPathProblem(unbitted)).toMatch(/not executable/);
     onPlatform('win32');
-    expect(cliPathProblem(exe, { isFile: () => false, readFile: () => '' }, {})).toMatch(/absolute/);
+    expect(cliPathProblem(unbitted, { isFile: () => false, readFile: () => '' }, {})).toMatch(/absolute/);
   });
 });

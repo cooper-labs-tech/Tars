@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -33,6 +33,16 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * The figures stay those of a whole read: no reply counted twice or lost, whatever happened between two reads.
  * 7 and 8 prove a file was not read by making it unreadable, which Windows has no mode for: they run on macOS and
  * Linux, and the rest on all three.
+ *
+ * And the cache's ten minutes, from the Audit's Lows on #410 (GATE-PR410.md), written before the code (2026-10-15):
+ * 9. A transcript no call has asked for in ten minutes stays while the page asks for others: the prune at each call
+ *    must let it go (with it deleted, every case above passed).
+ * 10. The cache stays when no call comes at all: the prune ran only at the next call, so the files of the page's last
+ *     figures (up to about 90 MB at 30 days) stayed in the main process after the page closed, until usage:tasks
+ *     was asked again, which may be never. Ten minutes after the last call, with none since, it must be gone.
+ * 11. A reading in progress loses the cache it is using, when the ten minutes of the call before it end meanwhile.
+ * 12. Its timer keeps Tars running.
+ * 9 to 11 see a whole read again by bytes changed in place, as 2 does, so they run on all three platforms.
  */
 
 const T0 = Date.UTC(2026, 9, 13, 8, 0, 0);
@@ -79,6 +89,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   for (const dir of [path.join(home, '.claude', 'projects', '-work-tars')]) {
     try { for (const f of fs.readdirSync(dir)) fs.chmodSync(path.join(dir, f), 0o644); } catch { /* none */ }
   }
@@ -161,5 +172,65 @@ describe('the cost of each task, read from what a transcript gained', () => {
     for (let i = 0; i < 40; i += 1) fs.chmodSync(fileOf(`s${i}`), 0o000);
     const second = await readTaskCosts(t, { homeDir: home });
     expect(t.map((x) => second.get(x.id)?.tokens?.input)).toEqual(t.map((_, i) => i + 1));
+  });
+});
+
+describe("the cache's ten minutes", () => {
+  /** The clock and the timers, the reader's breaths (setImmediate) left real. */
+  const fakeClock = () => vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  /** s1's first line changed in place, then a line more: a read from where it stopped gives 150, a whole one 50. */
+  const changeUnderTheCache = (first: string) => {
+    overwriteAt('s1', 0, JSON.stringify({ type: 'note' }).padEnd(first.length, ' '));
+    append('s1', `${reply('m2', 50)}\n`);
+  };
+
+  it('9. a transcript no call asked for in ten minutes goes at the next call, while the page asks for others', async () => {
+    fakeClock();
+    const first = reply('m1', 100);
+    write('s1', `${first}\n`);
+    write('s2', `${reply('m5', 1)}\n`);
+    expect(await tokens([task('a', 's1')])).toBe(100);
+    // The page asks every minute, for s2 alone.
+    for (let minute = 1; minute <= 11; minute += 1) {
+      vi.advanceTimersByTime(60_000);
+      expect(await tokens([task('b', 's2')])).toBe(1);
+    }
+    changeUnderTheCache(first);
+    expect(await tokens([task('a', 's1')])).toBe(50);
+  });
+
+  it('10. ten minutes with no call: the cache is gone, with no call to prune it', async () => {
+    fakeClock();
+    const first = reply('m1', 100);
+    write('s1', `${first}\n`);
+    expect(await tokens([task('a', 's1')])).toBe(100);
+    vi.advanceTimersByTime(10 * 60_000 + 1);
+    changeUnderTheCache(first);
+    expect(await tokens([task('a', 's1')])).toBe(50);
+  });
+
+  it('11. a reading in progress keeps the cache it uses, when the ten minutes of the call before end meanwhile', async () => {
+    fakeClock();
+    const both = [task('a', 's1'), task('b', 's2')];
+    const first = reply('m1', 100);
+    write('s1', `${first}\n`);
+    write('s2', `${reply('m5', 1)}\n`);
+    expect(await tokens(both)).toBe(100);
+    vi.advanceTimersByTime(9 * 60_000);
+    // s2 grew: the next reading takes s1 from the cache, then waits on s2's bytes.
+    append('s2', `${reply('m6', 2)}\n`);
+    const reading = readTaskCosts(both, { homeDir: home });
+    vi.advanceTimersByTime(2 * 60_000);
+    expect((await reading).get('b')?.tokens?.input).toBe(3);
+    changeUnderTheCache(first);
+    expect(await tokens(both)).toBe(150);
+  });
+
+  it('12. its timer never keeps Tars running', async () => {
+    write('s1', `${reply('m1', 100)}\n`);
+    const timers = () => process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
+    const before = timers();
+    expect(await tokens([task('a', 's1')])).toBe(100);
+    expect(timers()).toBe(before);
   });
 });

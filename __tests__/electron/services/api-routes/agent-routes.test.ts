@@ -46,10 +46,14 @@ vi.mock('../../../../electron/utils/path-builder', () => ({
   buildFullPath: vi.fn(() => '/usr/bin'),
 }));
 
+// The CLIs of POST /api/agents' case 4, on a POSIX disk in memory: this file runs
+// as darwin or linux on every host (below), and a Windows host's own disk has
+// C:\ paths and no execute bit.
+const cliDisk = vi.hoisted(() => new Map<string, PosixEntry>());
+vi.mock('fs', async (importOriginal) => (await import('../../platform/posix-fake-disk')).onPosixDisk(await importOriginal<typeof import('fs')>(), cliDisk));
+
 import * as pty from 'node-pty';
-import * as fs from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { POSIX_ROOT, type PosixEntry } from '../../platform/posix-fake-disk';
 import { getAllProviders } from '../../../../electron/providers';
 import { registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
 import { resetLaunches } from '../../../../electron/core/agent-launch';
@@ -325,13 +329,14 @@ describe('agent-routes', () => {
     });
 
     it('4. takes a cliPath only when it is an absolute path to an executable file, and says why otherwise', async () => {
-      const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-path-'));
-      const exe = path.join(dir, 'my-cli');
-      fs.writeFileSync(exe, '#!/bin/sh\n', { mode: 0o755 });
-      const plain = path.join(dir, 'plain');
-      fs.writeFileSync(plain, 'x', { mode: 0o644 });
+      const exe = `${POSIX_ROOT}/my-cli`;
+      const plain = `${POSIX_ROOT}/plain`;
+      cliDisk
+        .set(POSIX_ROOT, { kind: 'dir', mode: 0o755 })
+        .set(exe, { kind: 'file', mode: 0o755 })
+        .set(plain, { kind: 'file', mode: 0o644 });
       for (const [cliPath, why] of [
-        ['my-cli', /absolute/], [path.join(dir, 'missing'), /no file/], [dir, /not a file/], [plain, /not executable/],
+        ['my-cli', /absolute/], [`${POSIX_ROOT}/missing`, /no file/], [POSIX_ROOT, /not a file/], [plain, /not executable/],
       ] as const) {
         const [answer, status] = await create({ cliPath });
         expect(status, cliPath).toBe(400);

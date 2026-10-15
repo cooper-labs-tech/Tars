@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -27,12 +27,41 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. A refused save changes the record anyway: agent:list gives the new name, and agents.json takes it at the next
  *    save of any agent.
  * 6. A refused save with a new CLI kills the running terminal.
+ * And from the Audit's Lows on #405 (GATE-PR405.md), written before the fix (2026-10-15, 2.0.3):
+ * 7. agent:create, the other way an agent's worktree is made, kept the retry and git's whole command line: a new
+ *    agent on a branch checked out in the project was refused with "Failed to create git worktree for branch main:
+ *    Command failed: git worktree add -b main ..." and the retry's "a branch named 'main' already exists", which
+ *    New team lists for the member it could not make. It must be git's reason, as for a save; and a branch git
+ *    takes still makes the worktree.
+ * 8. A git that answers in the user's language: gitRefusal reads "fatal:", so a translated git's refusal came out
+ *    as "git refused it without saying why". Every git that makes an agent's worktree runs in the C locale. The git
+ *    of this Mac has no translations: here the app's git is a stand-in first on its PATH that answers in French
+ *    under LANG=fr_FR, as a translated git does, unless LC_ALL or LC_MESSAGES says otherwise.
+ * 9. The secondary path, the refusal that came after the writes until 2.0.2: a save with a rename and a secondary
+ *    path that does not exist must be refused, and leave the name.
  * The answers are git's lines without the "fatal: " and without its progress, as gitRefusal (#399) gives them, in
  * the C locale. The artefact: values.json with each answer.
  */
 
 type Answer = { success: boolean; error?: string };
 type Listed = { id: string; name?: string; cliPath?: string; cliRunning?: boolean; ptyId?: string };
+
+/** git as a translated one answers (8.): in the language of LC_ALL, else LC_MESSAGES, else LANG. */
+const frenchGit = (real: string) => [
+  '#!/bin/sh',
+  'case "${LC_ALL:-${LC_MESSAGES:-$LANG}}" in fr*) ;; *) exec "' + real + '" "$@" ;; esac',
+  'err=$(mktemp) || exit 1',
+  '"' + real + '" "$@" 2>"$err"',
+  'code=$?',
+  "sed -e 's/^fatal: /fatal : /' -e 's/^error: /erreur : /' -e 's/is already checked out at/est déjà extraite dans/'"
+    + " -e 's/a branch named \\(.*\\) already exists/une branche nommée \\1 existe déjà/'"
+    + " -e \"s/is not a valid branch name/n'est pas un nom de branche valide/\""
+    + " -e \"s/not a git repository (or any of the parent directories)/ni ceci ni aucun de ses répertoires parents n'est un dépôt git/\""
+    + ' "$err" >&2',
+  'rm -f "$err"',
+  'exit $code',
+  '',
+].join('\n');
 
 /** A CLI that only waits at its prompt, as an idle claude does. */
 const STAND_IN = String.raw`
@@ -63,14 +92,26 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     projectPath, skills: [], createdAt: '2026-10-13T08:00:00.000Z', lastActivity: '2026-10-13T08:00:00.000Z',
   });
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-    agent('p1', plain), agent('r1', repo), agent('r2', repo), agent('r3', repo), { ...agent('r4', repo), cliPath: cli },
+    agent('p1', plain), agent('r1', repo), agent('r2', repo), agent('r3', repo), { ...agent('r4', repo), cliPath: cli }, agent('r5', repo),
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([plain, repo]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  // 7. A team of one, on the branch checked out in the project.
+  fs.writeFileSync(path.join(dir, 'team-templates.json'), JSON.stringify({ user: [{
+    id: 'checked-out', name: 'Checked out', description: '', icon: '', createdAt: '2026-10-15T08:00:00.000Z', updatedAt: '2026-10-15T08:00:00.000Z',
+    members: [{ name: 'Builder', character: 'robot', provider: 'claude', permissionMode: 'normal', skills: [], worktreeBranch: 'main' }],
+  }] }));
+  // 8. The app's git, in French unless LC_ALL or LC_MESSAGES says otherwise.
+  const gitDir = path.join(home, 'git-fr');
+  fs.mkdirSync(gitDir);
+  fs.writeFileSync(path.join(gitDir, 'git'), frenchGit(execFileSync('which', ['git'], { encoding: 'utf8' }).trim()), { mode: 0o755 });
 
   const app = await launchSandboxed(electron, home, {
-    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31436), DOROTHY_E2E: '1' },
+    env: {
+      NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31436), DOROTHY_E2E: '1',
+      PATH: `${gitDir}:${process.env.PATH}`, LANG: 'fr_FR.UTF-8', LC_ALL: '', LC_MESSAGES: '',
+    },
   });
   const values: Record<string, unknown> = {};
   try {
@@ -101,10 +142,42 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     values.refusedWithChanges = await page.evaluate(([cli]) => (window as unknown as { electronAPI: { agent: { update(p: unknown): Promise<Answer> } } }).electronAPI.agent.update({
       id: 'r4', name: 'Renamed', cliPath: cli, worktree: { enabled: true, branchName: 'feat/.hidden' },
     }), [otherCli] as const);
+    // 9. A rename, and a secondary path that does not exist.
+    values.secondaryMissing = await page.evaluate(([nowhere]) => (window as unknown as { electronAPI: { agent: { update(p: unknown): Promise<Answer> } } }).electronAPI.agent.update({
+      id: 'r5', name: 'Renamed', secondaryProjectPath: nowhere,
+    }), [path.join(home, 'nowhere')] as const);
     // The next save of any agent writes agents.json whole.
     expect(await page.evaluate(() => (window as unknown as { electronAPI: { agent: { update(p: unknown): Promise<Answer> } } }).electronAPI.agent.update({ id: 'r1', name: 'r1' }))).toMatchObject({ success: true });
     const after = await r4();
     values.r4 = { before: { name: before.name, cliPath: before.cliPath, ptyId: before.ptyId }, after: { name: after.name, cliPath: after.cliPath, ptyId: after.ptyId, cliRunning: after.cliRunning } };
+    values.r5 = (await list()).find((a) => a.id === 'r5')!.name;
+
+    // 7, 8. agent:create, the other way an agent's worktree is made.
+    type Made = { id?: string; worktreePath?: string | null; error?: string };
+    const create = (config: Record<string, unknown>) => page.evaluate(async (config): Promise<Made> => {
+      try {
+        const made = await (window as unknown as { electronAPI: { agent: { create(c: unknown): Promise<{ id: string; worktreePath?: string }> } } }).electronAPI.agent.create(config);
+        return { id: made.id, worktreePath: made.worktreePath ?? null };
+      } catch (err) {
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
+    }, config);
+    const fleet = (await list()).length;
+    values.createCheckedOut = await create({ projectPath: repo, name: 'n-main', skills: [], worktree: { enabled: true, branchName: 'main' } });
+    values.createNotGit = await create({ projectPath: plain, name: 'n-plain', skills: [], worktree: { enabled: true, branchName: 'feat/y' } });
+    values.createdByRefusals = (await list()).length - fleet;
+    values.createTaken = await create({ projectPath: repo, name: 'n-new', skills: [], worktree: { enabled: true, branchName: 'feat/new' } });
+    // 7. New team lists the member it could not make, with that answer.
+    await page.getByRole('button', { name: '+ Team', exact: true }).click();
+    const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'New team', exact: true }) });
+    await modal.getByRole('button', { name: 'Start from', exact: true }).click();
+    await page.getByRole('option').filter({ hasText: 'Checked out' }).first().click();
+    await modal.getByRole('button', { name: 'Project', exact: true }).click();
+    await page.getByRole('option').filter({ hasText: 'projects/repo' }).first().click();
+    await modal.getByRole('button', { name: 'Deploy 1 agent', exact: true }).click();
+    const listed = modal.getByText(/^Builder: /);
+    await expect(listed).toBeVisible({ timeout: 30_000 });
+    values.teamLine = await listed.innerText();
     values.saved = saved().map((a) => ({ id: a.id, worktreePath: a.worktreePath ?? null, branchName: a.branchName ?? null }));
     recordValues(values);
 
@@ -125,7 +198,21 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     expect(byId.r3.worktreePath).toBe(path.join(repo, '.worktrees', 'feat', 'ok'));
     expect(fs.existsSync(path.join(repo, '.worktrees', 'feat', 'ok', 'README.md'))).toBe(true);
     for (const id of ['p1', 'r1', 'r2']) expect(byId[id].worktreePath, `${id} saved no worktree`).toBeUndefined();
+
+    expect.soft(values.secondaryMissing, '9. a secondary path that does not exist').toEqual({ success: false, error: 'Secondary project path does not exist' });
+    expect.soft(values.r5, '9. a refused save renamed the agent').toBe('r5');
+    expect.soft((byId.r5 as unknown as { name?: string }).name, '9. agents.json took the refused name').toBe('r5');
+    const notGitsReason = /[Ff]ailed to create git worktree|Command failed|fatal|a branch named|refused it without saying why|déjà|dépôt/;
+    expect.soft(values.createCheckedOut, '7. checked out in the project').toEqual({ error: expect.stringMatching(/'main' is already checked out at/) });
+    expect.soft(values.createNotGit, '7, 8. not a git repository').toEqual({ error: expect.stringMatching(/The worktree could not be made: not a git repository/) });
+    for (const made of [values.createCheckedOut, values.createNotGit] as Made[]) expect.soft(made.error ?? '').not.toMatch(notGitsReason);
+    expect.soft(values.createdByRefusals, '7. a refused create made an agent').toBe(0);
+    expect.soft(values.teamLine, '7. New team lists git\'s reason').toMatch(/^Builder: .*'main' is already checked out at/);
+    expect.soft(values.teamLine).not.toMatch(notGitsReason);
+    expect(values.createTaken, '7. a branch git takes').toMatchObject({ worktreePath: path.join(repo, '.worktrees', 'feat', 'new') });
+    expect(fs.existsSync(path.join(repo, '.worktrees', 'feat', 'new', 'README.md'))).toBe(true);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });
