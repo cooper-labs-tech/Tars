@@ -24,7 +24,6 @@ export { toLaunch, LaunchError, type Launch, type PosixLaunch, type DirectLaunch
 export { killTree, KillTreeError, type KillTreeResult, type KillTreeDeps, type KillTreeErrorCode } from './kill-tree';
 export { samePath, isUnder, isInsideWorktreesDir, isFilesystemRoot, pathKey } from './path-compare';
 export { isUnsafePathSegment } from './windows-names';
-export { errorReportsAvailable } from './error-reports';
 export { processExists } from './process-exists';
 export { processStartOf } from './process-start';
 export { projectName } from './project-name';
