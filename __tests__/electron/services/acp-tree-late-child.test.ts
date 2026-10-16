@@ -26,6 +26,14 @@ import { World } from '../process-world';
  *    on once the quit has ended its tree, signals that tree again, where a new process may have taken a group's id.
  * 9. A round reads before it stops: a process that starts a child only while it runs starts one between that read
  *    and its stop, and the round, its read finding no group more, ends the freeze without it.
+ * And from the QA's Info on #358 (QA-PR358-2.md), written before the code (2026-10-17):
+ * 10. A ps slowed by load uses up the quit's time. Its reads shared one deadline with its grace, a second and a half
+ *     from the start: a first read of 600 ms left the freeze's read 400, which a ps that slow cannot meet. That read
+ *     was not made, and the process born during the first was left. Measured: 1 survivor in 60 quits at load 180 on
+ *     the QA's bench, 2 in 5 on mine at load 230 with each ps made 600 ms slower.
+ * 11. Over-correction: a ps that hangs holds the quit longer than it did (the Audit's bound on #199: every read waited
+ *     out its own timeout). A ps that hangs is run once, for a second at most, and the quit then watches the groups
+ *     it knows by a signal of 0, which still get theirs.
  * The processes are a table in memory (process-world.ts), ps's lines and what each signal does to the processes of a
  * group, so the race is the same at every run and on every host: what is born during a read is born right after its
  * snapshot.
@@ -38,6 +46,12 @@ const state = vi.hoisted(() => ({
   holdFrom: Infinity,
   asyncReads: 0,
   held: [] as Array<() => void>,
+  /** How long each synchronous ps takes on `clock` (10., 11.): one past its timeout fails at the timeout, as
+   *  execFileSync's does. 0: no time at all, as everywhere else in this file. */
+  psMs: 0,
+  clock: 0,
+  /** The timeouts the synchronous reads of ps were given. */
+  psTimeouts: [] as number[],
 }));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
@@ -55,7 +69,18 @@ vi.mock('child_process', async (importOriginal) => {
       else reply();
       return {} as never;
     }) as typeof actual.execFile,
-    execFileSync: ((file: string, args: unknown) => answer(file, args)) as typeof actual.execFileSync,
+    execFileSync: ((file: string, args: unknown, opts?: { timeout?: number }) => {
+      if (file === 'ps' && state.psMs) {
+        const timeout = opts?.timeout ?? Infinity;
+        state.psTimeouts.push(timeout);
+        if (state.psMs > timeout) {
+          state.clock += timeout;
+          throw Object.assign(new Error('spawnSync ps ETIMEDOUT'), { code: 'ETIMEDOUT' });
+        }
+        state.clock += state.psMs;
+      }
+      return answer(file, args);
+    }) as typeof actual.execFileSync,
   };
 });
 
@@ -99,6 +124,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   Object.defineProperty(process, 'platform', real);
   state.holdFrom = Infinity;
+  state.psMs = 0;
 });
 
 /** A session whose agent is the root, as start() leaves it. */
@@ -222,5 +248,35 @@ describe('on win32', () => {
     expect(state.taskkills).toEqual([['/PID', String(ROOT), '/T', '/F'], ['/PID', String(ROOT), '/T', '/F']]);
     expect(world.reads).toBe(0);
     expect(world.signals).toEqual([]);
+  });
+});
+
+describe.each(['darwin', 'linux'] as const)('on %s, a ps slowed by load (the QA\'s Info on #358)', (platform) => {
+  /** The quit on a clock that only ps moves: each read costs `psMs`. Returns how long the quit took on it. */
+  function quitWith(psMs: number): number {
+    state.psMs = psMs;
+    state.psTimeouts.length = 0;
+    state.clock = 1_000_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => state.clock);
+    endProcessTreesNow([ROOT]);
+    return state.clock - 1_000_000;
+  }
+
+  it.each([600, 900])('10. ends the process born during its first read when each ps takes %i ms', (psMs) => {
+    use(lateChildWorld(), platform);
+    quitWith(psMs);
+    expect(world.alive(LATE), 'the late grandchild').toBe(false);
+    expect([ROOT, COMMAND].filter(pid => world.alive(pid))).toEqual([]);
+    expectNothingLeftStopped();
+    expectTarsAndInitSpared();
+  });
+
+  it('11. runs a ps that hangs once, for a second at most, and still ends what it knows', () => {
+    use(lateChildWorld(), platform);
+    const took = quitWith(Infinity);
+    expect(state.psTimeouts, 'the reads of ps and their timeouts').toEqual([1_000]);
+    expect(took).toBeLessThanOrEqual(2_000);
+    expect(world.signals.filter(s => s.sig === 'SIGTERM').map(s => s.target)).toContain(-ROOT);
+    expect(world.alive(ROOT), 'the root').toBe(false);
   });
 });
