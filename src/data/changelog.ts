@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On Linux, Tars works with its tray icon as it does on Windows: the icon has a menu to show Tars or quit it, and closing the window keeps your agents running in the background, after asking once. This needs a desktop that shows tray icons (KDE, or GNOME with the AppIndicator extension, as in Ubuntu); on one that shows none, closing the window quits Tars, as before. The File, Edit and View menu bar no longer appears, and with it went shortcuts like Ctrl+W and Ctrl+R that closed or reloaded the window over your terminals.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-15',
