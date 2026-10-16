@@ -175,9 +175,9 @@ describe('the line under the hero\'s buttons (5)', () => {
   const today: Builds = { mac: '2.0.2', windows: null, linux: null };
   const allOut: Builds = { mac: '2.0.4', windows: '2.0.4', linux: '2.0.4' };
 
-  it('tells a Mac that Windows and Linux come with their version, in one sentence', () => {
-    const line = othersLine('mac', today);
-    expect(words(line)).toBe(`Windows and Linux come with ${COMES_WITH.windows}.`);
+  it('says two systems that come with one version in one sentence, and links neither', () => {
+    const line = othersLine('mac', today, { windows: '2.0.4', linux: '2.0.4' });
+    expect(words(line)).toBe('Windows and Linux come with 2.0.4.');
     expect(links(line)).toEqual([]);
   });
 

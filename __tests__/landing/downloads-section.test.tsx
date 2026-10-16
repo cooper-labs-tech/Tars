@@ -145,7 +145,7 @@ describe('Get Tars, as the frames draw it (1, 2, 3)', () => {
   it('links only the systems that have a build today, and says when the others come', () => {
     const markup = renderToStaticMarkup(<GetTars builds={TODAY} />);
     expect(linksOf(markup)).toEqual([['/api/download?os=mac', 'Download for Mac']]);
-    expect(textOf(markup).match(/Comes with 2\.0\.4/g)).toHaveLength(2);
+    expect(textOf(markup).match(/Comes with \d+\.\d+\.\d+/g)).toHaveLength(2);
   });
 
   it('has each card its own download once all three have a build', () => {
