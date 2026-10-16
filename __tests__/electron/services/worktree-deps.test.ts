@@ -25,13 +25,24 @@
  * 8. (Audit) A committed link at <package>/node_modules that points nowhere is
  *    read as absent, and the failure branch then deletes it: anything there,
  *    a link included, is left alone.
+ * And on Windows (the parity program's P7, R5, 2026-10-17), where there is no
+ * cp -c: Windows 11 24H2 clones a file's blocks when CopyFile copies it within
+ * one ReFS volume (a Dev Drive), and Node's fs.cp copies each file with it.
+ * 9. On win32 nothing is ever cloned, a Dev Drive included.
+ * 10. On win32 a copy is made where it would not share blocks, gigabytes per
+ *    worktree: before Windows 11 24H2, on NTFS or a file system that cannot be
+ *    read, across two volumes, on a volume mounted in a folder (the drive's own
+ *    file system is not its), or on a path with no drive. It clones or does
+ *    nothing (6).
+ * 11. The copy follows a link inside node_modules (a workspace's junction, an
+ *    npm link) and copies what it points to, where cp -R keeps the link.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { cloneDependencies, cloneArgs } from '../../../electron/services/worktree-deps';
+import { cloneDependencies, cloneArgs, windowsClone, windowsDriveFormat, type WindowsCloneFacts } from '../../../electron/services/worktree-deps';
 import { cannotSymlink } from '../../setup/symlink-privilege';
 
 let root: string;
@@ -164,5 +175,63 @@ describe("a new worktree's dependencies", () => {
     expect(cloneArgs('darwin', '/a', '/b')).toEqual(['-c', '-R', '/a', '/b']);
     expect(cloneArgs('linux', '/a', '/b')).toEqual(['-R', '--reflink=always', '/a', '/b']);
     expect(cloneArgs('win32', '/a', '/b')).toBeNull();
+  });
+});
+
+describe("on Windows (the parity program's P7, R5)", () => {
+  const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  afterEach(() => { Object.defineProperty(process, 'platform', hostPlatform); });
+
+  /** A Dev Drive: Windows 11 24H2, one ReFS volume with a drive letter of its own. */
+  const devDrive: WindowsCloneFacts = { release: () => '10.0.26100', rootOf: () => 'D:\\', devOf: () => 7, driveFormat: async () => 'ReFS' };
+  const cloneOn = (facts: Partial<WindowsCloneFacts>) =>
+    cloneDependencies(project, worktree, { copy: (source, target) => windowsClone(source, target, { ...devDrive, ...facts }) });
+
+  it('9. a Dev Drive on Windows 11 24H2 or later gets each package\'s clone', async () => {
+    const result = await cloneOn({});
+    expect(result.cloned.sort()).toEqual(['', 'mcp-x']);
+    expect(fs.readFileSync(path.join(worktree, 'node_modules', 'left', 'index.js'), 'utf8')).toContain('1.0.0');
+    expect(fs.readFileSync(path.join(worktree, 'mcp-x', 'node_modules', 'right', 'index.js'), 'utf8')).toContain('2.0.0');
+  });
+
+  it.skipIf(cannotSymlink())('11. a link inside node_modules is copied as the link it is', async () => {
+    const linked = path.join(root, 'linked-pkg');
+    fs.mkdirSync(linked);
+    fs.writeFileSync(path.join(linked, 'index.js'), 'linked');
+    fs.symlinkSync(linked, path.join(project, 'node_modules', 'linked'), 'junction');
+    await cloneOn({});
+    expect(fs.lstatSync(path.join(worktree, 'node_modules', 'linked')).isSymbolicLink()).toBe(true);
+    expect(fs.realpathSync(path.join(worktree, 'node_modules', 'linked'))).toBe(fs.realpathSync(linked));
+  });
+
+  it.each([
+    ['Windows 11 23H2', { release: () => '10.0.22631' }, /24H2/],
+    ['Windows 10', { release: () => '10.0.19045' }, /24H2/],
+    ['NTFS', { driveFormat: async () => 'NTFS' }, /not ReFS \(NTFS\)/],
+    ['a file system it cannot read', { driveFormat: async () => undefined }, /not ReFS \(unknown\)/],
+    ['two volumes', { devOf: (p: string) => (p.startsWith(worktree) ? 8 : 7) }, /another volume/],
+    ['a volume mounted in a folder', { devOf: (p: string) => (p === 'D:\\' ? 9 : 7) }, /mounted in a folder/],
+    ['no drive letter', { rootOf: () => '\\\\server\\share\\' }, /not on a drive/],
+  ] as Array<[string, Partial<WindowsCloneFacts>, RegExp]>)('10. copies nothing where blocks would not be shared: %s', async (_name, facts, why) => {
+    const result = await cloneOn(facts);
+    expect(result.cloned).toEqual([]);
+    expect(fs.existsSync(path.join(worktree, 'node_modules'))).toBe(false);
+    expect(result.skipped).toContainEqual({ dir: '', why: expect.stringMatching(why) });
+  });
+
+  it.skipIf(hostPlatform.value === 'win32')('9. on win32 the copier asks Windows, not cp', async () => {
+    Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'win32' });
+    // This host is no Windows 11 24H2: the clone is refused, by Windows's rule.
+    const result = await cloneDependencies(project, worktree);
+    expect(result.cloned).toEqual([]);
+    expect(result.skipped).toContainEqual({ dir: '', why: expect.stringMatching(/24H2/) });
+  });
+
+  it.runIf(hostPlatform.value === 'win32')('10. reads the real drive\'s file system, and clones only where it shares blocks', async () => {
+    expect(await windowsDriveFormat(path.win32.parse(root).root)).toMatch(/^(NTFS|ReFS|FAT32|exFAT)$/);
+    const result = await cloneDependencies(project, worktree);
+    if (result.cloned.length) return;
+    expect(result.skipped).toContainEqual({ dir: '', why: expect.stringMatching(/24H2|not ReFS \((NTFS|FAT32|exFAT)\)|another volume|mounted/) });
+    expect(fs.existsSync(path.join(worktree, 'node_modules'))).toBe(false);
   });
 });
