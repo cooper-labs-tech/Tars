@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Select, Dropdown } from '@/components/ui';
+import { Button, Select, Dropdown } from '@/components/ui';
 import { Toggle } from './Toggle';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
@@ -7,6 +7,7 @@ import type { ClaudeInfo, AppSettings } from './types';
 import { PRIVACY_POLICY_URL } from './constants';
 import { PROVIDER_REGISTRY, computeProviderAvailability } from '@/lib/providers';
 import { errorReportsOffered } from '@/lib/error-reports';
+import { diagnosticLine } from '@/lib/diagnostic';
 
 interface GeneralSectionProps {
   info: ClaudeInfo | null;
@@ -61,6 +62,8 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
         description={
           <>
             <span className="block">{"Sends Sentry the error, where it happened in Tars's code, the version, the system and a random install id."}</span>
+            {/* The abrupt-end note under the same switch (services/health/abrupt-end.ts): the crash type is macOS's own, read without memory. */}
+            <span className="block">When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.</span>
             {/* True of what the main process sends (PR 221): a path under home as ~/..., one outside it whole. */}
             <span className="block">File paths keep their names, with your home folder shown as ~.</span>
             <span className="block">
@@ -77,6 +80,9 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
           />
         }
       />}
+
+      {/* Under the same switch, and hidden with it on Windows. Frame: `Settings · Preferences · diagnostic`. */}
+      {reportsOffered && <DiagnosticRow enabled={appSettings.errorReportsEnabled === true} />}
 
       <SettingsRow
         label="Start agents when Tars opens"
@@ -150,3 +156,45 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
     </SettingsCard>
   );
 };
+
+/**
+ * Send a diagnostic: the last 24 hours of health samples main keeps, sent now
+ * (`diagnostic:send`). The button is off while the switch is, and while a send
+ * runs, about ten seconds on a slow network; then one line says what main
+ * answered (lib/diagnostic.ts).
+ */
+function DiagnosticRow({ enabled }: { enabled: boolean }) {
+  const [sending, setSending] = useState(false);
+  const [line, setLine] = useState<string | null>(null);
+
+  const send = async () => {
+    setSending(true);
+    setLine(null);
+    let answer: unknown;
+    try {
+      answer = await window.electronAPI?.diagnostic?.send();
+    } catch {
+      // The call itself failed: diagnosticLine reads no answer as nothing sent.
+    }
+    setLine(diagnosticLine(answer, new Date()));
+    setSending(false);
+  };
+
+  return (
+    <SettingsRow
+      wrap
+      label="Diagnostic"
+      description={
+        <>
+          <span className="block">Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.</span>
+          {line && <span data-diagnostic-line className="block mt-1 font-mono text-foreground">{line}</span>}
+        </>
+      }
+      control={
+        <Button size="sm" className="font-mono lowercase" disabled={!enabled || sending} onClick={send}>
+          {sending ? 'sending…' : 'send a diagnostic'}
+        </Button>
+      }
+    />
+  );
+}
