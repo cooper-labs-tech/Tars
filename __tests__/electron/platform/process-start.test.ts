@@ -93,7 +93,8 @@ describe('when the process under a pid started', () => {
       expect(script(call)).not.toMatch(/4242/);
       expect(call.env?.TARS_PID).toBe('4242');
       expect(call.env && 'PSModulePath' in call.env).toBe(false);
-      for (const root of ['Windows', '.\\Windows', '\\\\server\\share', '']) {
+      // Relative or empty; a UNC one is plain absolute (cli-binary.ts isPlainAbsolute, as sound.ts takes it).
+      for (const root of ['Windows', '.\\Windows', 'C:Windows', '']) {
         const again = asking('1');
         windowsProcessCreatedAt(4242, { execFileSync: again.execFileSync, env: { SystemRoot: root } });
         expect(again.calls[0].file, root).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
