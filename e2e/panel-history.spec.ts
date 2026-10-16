@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type Locator, type Page } from '@p
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, seedSandbox, stepShot, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, seedSandbox, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -12,7 +12,14 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * panel scrolls back through is xterm's scrollback.
  *
  * The CLI writes 7,000 numbered lines in the normal buffer, more than 5,000
- * and fewer than 10,000, then waits. The panel's buffer is read from its DOM:
+ * and fewer than 10,000, then waits. It writes them once the panel shows its
+ * first line and a key is typed into it: written before the panel is there,
+ * they reach it through the terminal's mirror (core/terminal-mirror.ts), which
+ * keeps 2,500, and that is not what this measures. Measured on a Windows
+ * runner on 2026-10-08: the writer was done before the Dashboard drew its
+ * panel, which held the mirror's 2,500 lines and its 30 rows.
+ *
+ * The panel's buffer is read from its DOM:
  * the viewport's scroll height over the height of a row is the number of lines
  * xterm holds, the screen's rows included; scrolled to the top, its first row
  * is the oldest line kept. Kept 10,000, the panel held all 7,001 lines and
@@ -26,13 +33,21 @@ const AGENT = { id: 'history-writer', name: 'Writer of a long history' };
 const WRITTEN = 7000;
 const KEPT = 5000;
 
+/** The key that starts the history: in nothing a terminal answers on its own, such as ConPTY's cursor report. */
+const GO = 'g';
+
 function writer(): string {
-  return `#!${process.execPath}
-process.stdin.setRawMode(true);
+  return `process.stdin.setRawMode(true);
 process.stdin.resume();
-let out = '';
-for (let i = 1; i <= ${WRITTEN}; i++) out += 'line ' + i + '\\n';
-process.stdout.write(out + 'history written');
+process.stdout.write('ready for the history\\n');
+let written = false;
+process.stdin.on('data', data => {
+  if (written || !String(data).includes('${GO}')) return;
+  written = true;
+  let out = '';
+  for (let i = 1; i <= ${WRITTEN}; i++) out += 'line ' + i + '\\n';
+  process.stdout.write(out + 'history written');
+});
 `;
 }
 
@@ -73,8 +88,8 @@ test('a Dashboard panel keeps the last 5,000 lines of history, not 10,000', asyn
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-panel-history-'));
   seedSandbox(home);
   const project = path.join(home, 'projects', 'tars');
-  const cli = path.join(home, `${AGENT.id}.cjs`);
-  fs.writeFileSync(cli, writer(), { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux, npm's shim beside it on Windows.
+  const cli = writeNodeCli(path.join(home, `${AGENT.id}.cjs`), writer());
   // The writer alone, idle and without a terminal, so the board's auto start
   // runs it through the agent's own CLI path.
   fs.writeFileSync(path.join(home, '.dorothy', 'agents.json'), JSON.stringify([{
@@ -93,6 +108,9 @@ test('a Dashboard panel keeps the last 5,000 lines of history, not 10,000', asyn
     await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
 
     const screen = await screenOf(page, AGENT.name);
+    await expect(screen.locator('.xterm-rows')).toContainText('ready for the history', { timeout: 60_000 });
+    await screen.click();
+    await page.keyboard.press(GO);
     await expect(screen.locator('.xterm-rows')).toContainText('history written', { timeout: 60_000 });
     const kept = await measure(screen);
     recordValues({ written: WRITTEN + 1, kept });

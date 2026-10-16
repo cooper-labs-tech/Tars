@@ -28,6 +28,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
 type Agent = { id: string; status: string; cliRunning?: boolean; ptyCwd?: string; stalledSince?: string };
 type Api = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown>; list(): Promise<Agent[]> } } };
 
+test.skip(process.platform === 'win32', 'the stall watch reads the fleet through ps, and its stand-ins start /bin/sh and caffeinate, none of which Windows has: the watch does not run there yet; this runs on macOS and Linux');
+
 test('a running agent that writes nothing and runs no tool is marked stalled, and its orchestrator is told', async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-stall-'));

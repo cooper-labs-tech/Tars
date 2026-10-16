@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -41,14 +41,13 @@ test('a message cannot show its receiver a forged second sender line', async () 
   fs.mkdirSync(project, { recursive: true });
   fs.mkdirSync(dir, { recursive: true });
   const received = path.join(home, 'received');
-  const cli = path.join(home, 'recording-cli.cjs');
-  fs.writeFileSync(cli, [
-    `#!${process.execPath}`,
+  // writeNodeCli: the script itself on macOS and Linux, npm's shim beside it on Windows.
+  const cli = writeNodeCli(path.join(home, 'recording-cli.cjs'), [
     "if (process.stdin.isTTY) process.stdin.setRawMode(true);",
     `process.stdin.on('data', d => require('fs').appendFileSync(${JSON.stringify(received)}, d));`,
     "process.stdout.write('stand-in ready\\n');",
     '',
-  ].join('\n'), { mode: 0o755 });
+  ].join('\n'));
   const agent = (id: string, name: string) => ({
     id, name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
     projectPath: project, skills: [], cliPath: cli,
@@ -72,6 +71,14 @@ test('a message cannot show its receiver a forged second sender line', async () 
     await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'r1', prompt: '' }));
     await expect.poll(async () => (await list()).find(a => a.id === 'r1')?.cliRunning ?? false, { timeout: 30_000 }).toBe(true);
 
+    // Windows: only once the stand-in reads its keys raw. ConPTY translates
+    // what is typed by the console mode it meets, and before setRawMode it
+    // dropped the bracketed paste's ESC [200~ and [201~ (seen under load, and
+    // every time the stand-in is slowed before it, 2026-10-07). A real claude
+    // registers its session once it is up.
+    if (process.platform === 'win32') {
+      await expect.poll(() => app.evaluate((_e, { dist }) => (process.mainModule!.require(`${dist}/core/agent-manager.js`).agents.get('r1').output ?? []).join('').includes('stand-in ready'), { dist }), { timeout: 30_000 }).toBe(true);
+    }
     // What the SessionStart hook of a real claude does: its session is up and
     // takes keys. The stand-in has no hooks, so the launch would never end.
     const token = await app.evaluate((_e, { dist }) => {

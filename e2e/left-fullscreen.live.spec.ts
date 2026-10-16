@@ -14,6 +14,7 @@
 // main 3387518); committed at QA's gate of #131, from the Frontend's proof.
 import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
 import { launchSandboxed } from './fixture.mjs';
@@ -42,8 +43,9 @@ function resolveClaude() {
 
 /** Its own HOME under /tmp, a throwaway git project, and three agents on that claude. */
 function seed(claude) {
-  // Spelled /tmp, not /private/tmp: the fixture compares the app's folders with it.
-  const home = fs.mkdtempSync('/tmp/tars-lfs-');
+  // Spelled /tmp, not /private/tmp: the fixture compares the app's folders with
+  // it. Windows has no /tmp (the literal made C:\tmp): the temp dir there.
+  const home = fs.mkdtempSync(path.join(process.platform === 'win32' ? os.tmpdir() : '/tmp', 'tars-lfs-'));
   const project = path.join(home, 'projects', 'lfs');
   for (const dir of [path.join(home, '.claude'), path.join(home, '.dorothy'), path.join(home, 'bin'), project]) fs.mkdirSync(dir, { recursive: true });
   execFileSync('git', ['init', '-q', project]);
@@ -104,6 +106,9 @@ const countReports = s => (s.match(/\x1b\[<\d+;\d+;\d+M/g) || []).length;
 
 test('a panel whose claude left fullscreen', async () => {
   test.skip(process.env.E2E_LIVE !== '1', 'live: E2E_LIVE=1 and a native claude');
+  // Its inline agent starts claude through a bash script, and finds claude with
+  // `which`: Windows starts only a .exe or an npm .cmd shim (cli-binary.ts).
+  test.skip(process.platform === 'win32', 'the inline agent is a bash script that execs claude, which Windows cannot start (cli-binary.ts starts a .exe or an npm .cmd shim); this runs on macOS and Linux');
   test.setTimeout(10 * 60_000);
   const CLAUDE = resolveClaude();
   test.skip(!CLAUDE, 'no claude: set E2E_CLAUDE or put claude on PATH');

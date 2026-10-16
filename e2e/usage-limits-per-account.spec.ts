@@ -35,6 +35,8 @@ async function budgetRows(page: Page) {
   }));
 }
 
+test.skip(process.platform === 'win32', 'several Claude accounts are off on a Windows build until they are ported; this runs on macOS and Linux');
+
 test('Budget & limits shows each Claude account\'s windows, and Claude\'s own with the option off', async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-limits-per-account-'));

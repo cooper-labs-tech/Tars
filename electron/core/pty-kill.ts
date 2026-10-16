@@ -80,6 +80,17 @@ export function killPty(pty: IPty, deps: PtyKillDeps = {}): void {
   pty.kill();
 }
 
+/**
+ * win32: whether node-pty 1.1 reports this terminal's shell still running,
+ * which is while its pid is still its own (pty-manager.ts ends the tree under
+ * it by that pid). False for any other terminal, and on darwin/linux.
+ */
+export function shellStillRuns(pty: IPty, deps: { platform?: NodeJS.Platform; nodePtyVersion?: string | null } = {}): boolean {
+  if ((deps.platform ?? process.platform) !== 'win32') return false;
+  const agent = inboxConptyAgent(pty, deps.nodePtyVersion);
+  return agent !== null && agent.exitCode === undefined;
+}
+
 /** The agent of a node-pty 1.1 terminal on the inbox ConPTY, or null for anything else. */
 function inboxConptyAgent(pty: IPty, nodePtyVersion: string | null | undefined): ConptyAgent | null {
   const version = nodePtyVersion !== undefined ? nodePtyVersion : installedNodePtyVersion();

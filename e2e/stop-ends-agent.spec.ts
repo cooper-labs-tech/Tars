@@ -29,6 +29,8 @@ const alive = (pid: number) => {
   try { process.kill(pid, 0); return true; } catch { return false; }
 };
 
+test.skip(process.platform === 'win32', 'a stop or quit ends the whole tree of a CLI deaf to the hangup through ps and process groups, which Windows has neither of: there the ConPTY console is ended through killPty (pty-kill.spec.ts, quit-time.win32.spec.ts) and the rest of the tree is not ended there yet; this runs on macOS and Linux');
+
 test('stopping an agent ends its CLI deaf to the hangup, and records who stopped it and why', async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-stop-'));

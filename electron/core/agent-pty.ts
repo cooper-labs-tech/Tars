@@ -7,7 +7,7 @@ import { rememberTerminalOwner, terminalExited } from './pty-manager';
 import { attachTerminalMirror, panelSizeOf } from './terminal-mirror';
 import { accountEnvFor, withAccountEnv } from './account-env';
 import { refuseWhileQuitting } from './quit-state';
-import { childEnv, type Env } from '../platform';
+import { childEnv, currentFolderLookupsOff, type Env } from '../platform';
 import { refuseOnFullDisk } from './disk-space';
 import { stateModLaunchEnv } from '../services/state-mod';
 import { agentTmpEnvOrNone } from '../services/agent-tmp';
@@ -154,6 +154,10 @@ export function spawnAgentPty(opts: {
       // parent's value, and the app that spawns a CLI is the app that CLI must
       // report to.
       CLAUDE_MGR_API_URL: `http://127.0.0.1:${API_PORT}`,
+      // On Windows, the CLI looks git and rg up by name in the project it runs
+      // in: nothing out of that folder (platform/git-command.ts). After the
+      // caller's env, which cannot take it back.
+      ...currentFolderLookupsOff(),
       // What this CLI is, provably. CLAUDE_AGENT_ID travels in the same
       // environment and says who the agent is, but anything that can read an
       // environment can repeat it, so it was a claim and not a proof. This

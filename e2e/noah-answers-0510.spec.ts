@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -48,8 +48,8 @@ test('Delete keeps the work on wip/, a restart after a stop says whose stop, a f
   fs.writeFileSync(path.join(wt, 'a.txt'), 'one\nwork in progress\n');
   fs.writeFileSync(path.join(wt, 'notes.md'), 'not committed\n');
 
-  const cli = path.join(home, 'waiting-cli.cjs');
-  fs.writeFileSync(cli, [`#!${process.execPath}`, "process.stdout.write('stand-in ready\\n');", 'process.stdin.resume();', ''].join('\n'), { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux, npm's shim beside it on Windows.
+  const cli = writeNodeCli(path.join(home, 'waiting-cli.cjs'), ["process.stdout.write('stand-in ready\\n');", 'process.stdin.resume();', ''].join('\n'));
   const agent = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
     id, name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
     projectPath: project, skills: [], cliPath: cli,

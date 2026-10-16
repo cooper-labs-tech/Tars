@@ -27,6 +27,7 @@ import { factsOf, sleepNow, sleepRefusal } from './agent-sleep';
 import { readProcesses } from './stall-watch';
 import { cloneDependencies, logDependencies } from './worktree-deps';
 import { chatLimitOf, type Chat, type ChatStore } from './chats';
+import { gitCommand } from '../platform/git-command';
 
 /**
  * A chat's conversation, run (ORCHESTRATOR-PER-CHAT.md v2.2, 4.2; PR D of 2.0.0).
@@ -187,7 +188,7 @@ type Git = { code: number; stdout: string; stderr: string };
 /** In the C locale: gitRefusal reads git's "fatal:" and "error:", which a translated git would not write. */
 function git(cwd: string, args: string[]): Promise<Git> {
   return new Promise((resolve) => {
-    execFile('git', args, { cwd, env: { ...process.env, LC_ALL: 'C' }, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(gitCommand(), args, { cwd, env: { ...process.env, LC_ALL: 'C' }, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
       const code = err ? (typeof (err as NodeJS.ErrnoException & { code?: unknown }).code === 'number' ? (err as { code: number }).code : 1) : 0;
       resolve({ code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
     });

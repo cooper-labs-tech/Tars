@@ -1,8 +1,7 @@
 import { test, expect, _electron as electron, ElectronApplication, Page } from '@playwright/test';
-import * as fs from 'fs';
 import { CHAT_ROOMS, recordPageErrors, SCREENSHOT_TOLERANCE, volatileMasks } from './surfaces.mjs';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
-import { launchSandboxed, listenForErrors, markWhatsNewSeen, seedSandbox, removeHome } from './fixture.mjs';
+import { launchSandboxed, listenForErrors, makeShotSandbox, markWhatsNewSeen, removeShotSandbox, roomListSettled, seedSandbox, splashGone } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -28,13 +27,18 @@ const pageErrors: string[] = [];
 
 type ChatSurface = { name: string; route: string; clickText?: string; shows: string; placeholder?: string };
 
+/** The rooms this suite opens, which the seeded journal lists: every surface stands on that list. */
+const LISTED_ROOMS = [...new Set((CHAT_ROOMS as ChatSurface[]).flatMap(s => (s.clickText ? [s.clickText] : [])))];
+
 test.beforeAll(async () => {
   // Under /tmp, not os.tmpdir(): a room's head prints its project's path, so a
   // path that follows TMPDIR moves the head with the machine (3,842 to 5,111 px
   // between /tmp and macOS's /var/folders, measured for 1.9.0) and, once long,
   // cuts the room's name to its first letter. Spelled /tmp, not /private/tmp:
-  // the fixture compares the app's folders with it.
-  sandboxHome = fs.mkdtempSync('/tmp/dorothy-e2e-chat-');
+  // the fixture compares the app's folders with it. Windows has no /tmp (the
+  // literal made C:\tmp) and its temp dir follows the user: there a root of
+  // fixed length, and references of its own (makeShotSandbox in the fixture).
+  sandboxHome = makeShotSandbox('dorothy-e2e-chat-', '/tmp');
   seedSandbox(sandboxHome, { chatRooms: true });
   app = await launchSandboxed(electron, sandboxHome, {
     timezoneId: 'UTC',
@@ -58,7 +62,7 @@ test.beforeAll(async () => {
 
 test.afterAll(async () => {
   await app?.close();
-  await removeHome(sandboxHome);
+  await removeShotSandbox(sandboxHome);
 });
 
 for (const surface of CHAT_ROOMS as ChatSurface[]) {
@@ -66,6 +70,9 @@ for (const surface of CHAT_ROOMS as ChatSurface[]) {
     const errorsBefore = pageErrors.length;
 
     await page.goto(DEV_URL + surface.route, { waitUntil: 'domcontentloaded' });
+    // Photographed once the launch splash, shown again by every load, has gone.
+    await splashGone(page);
+    await roomListSettled(page, LISTED_ROOMS);
 
     if (surface.clickText) {
       // The room is chosen in the conversation list, which is the only way in:

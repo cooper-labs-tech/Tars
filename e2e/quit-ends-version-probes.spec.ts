@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -27,17 +27,23 @@ test('quitting ends a version probe still running, and what it started', async (
   const dir = path.join(home, '.dorothy');
   fs.mkdirSync(dir, { recursive: true });
   const writes = path.join(home, 'writes');
-  const amp = path.join(home, 'slow-amp');
-  fs.writeFileSync(amp, [
-    `#!${process.execPath}`,
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim
+  // beside it, which the probe reads through to node and the script
+  // (version-probe.ts), and whose tree the quit ends with taskkill /T. Tars
+  // reads a shim through only to a .js script, hence the .cjs there.
+  const amp = writeNodeCli(path.join(home, process.platform === 'win32' ? 'slow-amp.cjs' : 'slow-amp'), [
     "const fs = require('fs'); const { spawn } = require('child_process');",
     `const log = ${JSON.stringify(writes)};`,
     "const write = who => fs.appendFileSync(log, `${Date.now()} ${who}\\n`);",
-    "spawn(process.execPath, ['-e', `setInterval(() => require('fs').appendFileSync(${JSON.stringify(log)}, Date.now() + ' child\\\\n'), 50)`], { stdio: 'ignore' });",
+    // Detached on Windows only: there libuv puts every other child of node in a
+    // job that dies with node, so the child would end with the probe whatever
+    // Tars does. A CLI's own children (claude.exe is not libuv) are in no such
+    // job, and only taskkill /T ends them. Elsewhere it stays in the probe's group.
+    "spawn(process.execPath, ['-e', `setInterval(() => require('fs').appendFileSync(${JSON.stringify(log)}, Date.now() + ' child\\\\n'), 50)`], { stdio: 'ignore', detached: process.platform === 'win32' });",
     "setInterval(() => write('amp'), 50);",
     "setTimeout(() => { console.log('amp 0.0.1'); process.exit(0); }, 60000);",
     '',
-  ].join('\n'), { mode: 0o755 });
+  ].join('\n'));
   fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));

@@ -1,0 +1,163 @@
+name: CI - Windows
+
+# Tars for Windows on windows-latest, measured, not blocking yet: the same
+# stance as the test-windows job of ci.yml, until every Windows failure is
+# understood. Both jobs carry continue-on-error, so a red one shows in the run
+# without failing the workflow, and each runs whatever the other did.
+#
+# - checks: both type checks, both lints, the dash check and the E2E coverage
+#   guard, each run even when one before it failed. The unit tests are not run
+#   here: test-windows in ci.yml runs `npm test` on Windows, with its report.
+# - e2e: the Playwright suite driving the real app, compared against
+#   e2e/__screenshots__/win32/, the Windows references. When it fails, the run
+#   directories are uploaded (artifact e2e-runs-windows): each surface whose
+#   picture differs leaves <name>-actual.png beside <name>-diff.png there. To
+#   take a change of design into the Windows references, check the diff, then
+#   copy <name>-actual.png over e2e/__screenshots__/win32/<name>.png; or, on a
+#   Windows machine, run npm run e2e:update (OPERATIONS.md, E2E on Windows).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Checks (windows-latest, measuring)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 30
+
+    steps:
+      # The repo has no .gitattributes, and the runner's git converts to CRLF by
+      # default: the .sh hooks and the files the checks read are LF-sensitive.
+      # Must run before the checkout, which is when the files are written.
+      - name: Keep line endings and long paths as committed
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          git config --global core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      # One command per step: pwsh on the runner exits with the step's last
+      # native exit code only, so a chain would hide an earlier failure.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check (renderer)
+        if: ${{ !cancelled() }}
+        run: npx tsc --noEmit
+
+      - name: Type check (main process)
+        if: ${{ !cancelled() }}
+        run: npx tsc -p electron/tsconfig.json
+
+      - name: Lint
+        if: ${{ !cancelled() }}
+        run: npm run lint
+
+      - name: Design lint
+        if: ${{ !cancelled() }}
+        run: npm run lint:design
+
+      - name: No em or en dashes
+        if: ${{ !cancelled() }}
+        run: npm run check:dashes
+
+      - name: E2E coverage guard
+        if: ${{ !cancelled() }}
+        run: npm run e2e:guard
+
+  e2e:
+    name: E2E (windows-latest, measuring)
+    runs-on: windows-latest
+    continue-on-error: true
+    timeout-minutes: 60
+
+    steps:
+      - name: Keep line endings and long paths as committed
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          git config --global core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # npm ci leaves the Electron binary to its first use; fetched up front,
+      # three tries, as ci.yml does: GitHub has answered that download 500 or 503.
+      - name: Install the Electron binary
+        shell: bash
+        run: |
+          for try in 1 2 3; do
+            npx install-electron && exit 0
+            echo "Electron's download failed (try $try of 3), trying again in 30 s"
+            sleep 30
+          done
+          exit 1
+
+      # Nothing in the E2E path compiles the main process (OPERATIONS.md).
+      - name: Build the main process
+        run: npx tsc -p electron/tsconfig.json
+
+      # The runner's display is 1024x768; the specs that capture and click the
+      # real screen need their window on it (.github/scripts/display-resolution.ps1).
+      - name: A 1920x1080 display
+        shell: pwsh
+        run: ./.github/scripts/display-resolution.ps1 -Width 1920 -Height 1080
+
+      # E2E_TRACE=on: each spec keeps the app's own trace (app-trace.zip, its
+      # pages, DOM and screenshots) beside its artefacts, uploaded on failure.
+      - name: Run E2E
+        env:
+          E2E_TRACE: 'on'
+        run: npx playwright test
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report-windows
+          path: e2e/report/
+          retention-days: 14
+
+      # Each surface whose picture differs leaves <name>-actual.png here: what
+      # refreshes e2e/__screenshots__/win32/ once the change is meant.
+      - name: Upload the run artefacts
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-runs-windows
+          path: test-results/runs/**
+          retention-days: 14

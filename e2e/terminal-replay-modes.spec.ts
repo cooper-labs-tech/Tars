@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type Locator, type Page } from '@p
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, seedSandbox, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, seedSandbox, splashGone, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -40,8 +40,7 @@ const REPAINTS = 1000;
  * writes, then a long turn of repaints that set no mode.
  */
 function recorder(log: string, resizes: string): string {
-  return `#!${process.execPath}
-const fs = require('fs');
+  return `const fs = require('fs');
 process.stdin.setRawMode(true);
 process.stdin.resume();
 process.stdin.on('data', chunk => fs.appendFileSync(${JSON.stringify(log)}, chunk));
@@ -80,8 +79,7 @@ test('a panel remounted after a long turn, and the agent window, still send the 
   const resizes = path.join(home, 'resizes.txt');
   fs.writeFileSync(log, '');
   fs.writeFileSync(resizes, '');
-  const cli = path.join(home, `${AGENT.id}.cjs`);
-  fs.writeFileSync(cli, recorder(log, resizes), { mode: 0o755 });
+  const cli = writeNodeCli(path.join(home, `${AGENT.id}.cjs`), recorder(log, resizes));
   // The reader alone, idle and without a terminal, so the board's auto start
   // runs it through the agent's own CLI path.
   fs.writeFileSync(path.join(home, '.dorothy', 'agents.json'), JSON.stringify([{
@@ -99,12 +97,26 @@ test('a panel remounted after a long turn, and the agent window, still send the 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForLoadState('domcontentloaded');
     await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
+    // Hydrated first: until React holds the page, nothing the checks below wait
+    // for can render, and on a runner slow to hydrate their bounds ran out on an
+    // empty page on a slow runner. splashGone waits as long as the
+    // spec allows for that, then holds the splash to its own cap.
+    await splashGone(page);
 
     const sent = async (phase: string, gesture: () => Promise<void>) => {
       const before = fs.statSync(log).size;
       await gesture();
-      // Long enough for a byte to cross IPC and the pty.
-      await page.waitForTimeout(800);
+      // Until the bytes have crossed IPC and the pty, and then nothing more for
+      // 400 ms: a fixed 800 ms read an empty paste on CI's windows-latest, whose
+      // wheel before it had landed. Bounded: 15 s with none
+      // is what the assertion then reports.
+      const size = () => fs.statSync(log).size;
+      const until = Date.now() + 15_000;
+      while (size() === before && Date.now() < until) await page.waitForTimeout(50);
+      for (let last = -1; size() !== last && Date.now() < until;) {
+        last = size();
+        await page.waitForTimeout(400);
+      }
       const bytes = fs.readFileSync(log).subarray(before).toString('latin1');
       console.log(`REPLAY ${phase}: ${Buffer.byteLength(bytes, 'latin1')} bytes ${JSON.stringify(bytes.slice(0, 60))}`);
       return bytes;

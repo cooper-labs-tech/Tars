@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -34,8 +34,12 @@ const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const log = (o) => fs.appendFileSync(process.env.HOME + '/stand-in.jsonl', JSON.stringify({ at: Date.now(), ...o }) + '\n');
 // Its session registers as Claude Code's does, through Tars's own hook: until then, Tars types nothing into it.
+// Windows runs that hook through the Node runner, macOS and Linux through bash.
 const sid = crypto.randomUUID();
-spawnSync('/bin/bash', [path.join(HOOKS, 'session-start.sh')], {
+const [hookRunner, ...hookArgs] = process.platform === 'win32'
+  ? [process.execPath, path.join(HOOKS, 'tars-hook.mjs'), 'session-start']
+  : ['/bin/bash', path.join(HOOKS, 'session-start.sh')];
+spawnSync(hookRunner, hookArgs, {
   input: JSON.stringify({ session_id: sid, cwd: process.cwd(), hook_event_name: 'SessionStart', source: 'startup' }), env: process.env, timeout: 20000,
 });
 process.stdin.setRawMode(true);
@@ -56,8 +60,10 @@ test("a message to an idle agent goes in after its panel answered the terminal's
   const dir = path.join(home, '.dorothy');
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux, npm's shim beside it on Windows,
+  // `claude.cmd` running `claude.cjs` there, as npm's shim runs Claude Code's .js.
+  const script = path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude');
+  const cli = writeNodeCli(script, `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
     id: 'worker', name: 'Held Worker', character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
     projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',

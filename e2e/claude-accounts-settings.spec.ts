@@ -85,6 +85,8 @@ const hhmm = (at: number) => { const d = new Date(at); return `${String(d.getHou
 /** Main's sentence for a registry that does not parse (#263, registryProblem). */
 const UNREADABLE = '~/.tars-private/claude-accounts.json does not read as a list of accounts. Nothing is changed until it is fixed or removed.';
 
+test.skip(process.platform === 'win32', 'several Claude accounts are off on a Windows build until they are ported; this runs on macOS and Linux');
+
 test('claude accounts: the section, the sign-in terminal, and an agent pinned from its card', async () => {
   test.setTimeout(180_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-accounts-ui-'));

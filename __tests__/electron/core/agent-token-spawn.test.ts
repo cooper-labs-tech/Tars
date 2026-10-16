@@ -137,3 +137,20 @@ describe('the token an agent process starts with', () => {
     expect(env.CLAUDE_MGR_API_TOKEN).toBeUndefined();
   });
 });
+
+describe('no program looked up out of the folder the agent works in (platform/git-command.ts)', () => {
+  // The CLI looks git and rg up by name in the project; on Windows, a bare
+  // name is looked up in the current folder first unless this is set in the
+  // CLI's own environment.
+  it('is turned off in every agent process on win32, whatever the caller gave, and left as given elsewhere', () => {
+    const plain = spawnWith({});
+    const undone = spawnWith({ NoDefaultCurrentDirectoryInExePath: '0' });
+    if (process.platform === 'win32') {
+      expect(plain.NoDefaultCurrentDirectoryInExePath).toBe('1');
+      expect(undone.NoDefaultCurrentDirectoryInExePath, 'the caller took it back').toBe('1');
+    } else {
+      expect(plain.NoDefaultCurrentDirectoryInExePath).toBeUndefined();
+      expect(undone.NoDefaultCurrentDirectoryInExePath).toBe('0');
+    }
+  });
+});

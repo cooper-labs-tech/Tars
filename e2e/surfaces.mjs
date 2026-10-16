@@ -90,7 +90,13 @@ const SETTINGS_TREE = [
   ['memory-backends', 'Workspace', 'Memory Backends'],
 ];
 
-export const SETTINGS_SECTIONS = SETTINGS_TREE.map(([name, group, child]) => ({
+// Claude accounts is not offered on a Windows build until it is ported
+// (src/lib/claude-accounts-offered.ts): no surface to photograph there.
+const SETTINGS_SHOWN = process.platform === 'win32'
+  ? SETTINGS_TREE.filter(([name]) => name !== 'claude-accounts')
+  : SETTINGS_TREE;
+
+export const SETTINGS_SECTIONS = SETTINGS_SHOWN.map(([name, group, child]) => ({
   name: 'settings-' + name,
   route: '/settings',
   clickText: group,
@@ -245,7 +251,14 @@ export const VOLATILE = {
   },
   'cli-versions': {
     surfaces: ['settings-ai-providers'],
-    selector: 'text=/^[a-z][a-z-]* · \\d+\\.\\d+/',
+    // A CLI may name itself before its number: `codex --version` prints
+    // `codex-cli 0.120.0`, so its row reads `codex · codex-cli 0.120.0`, which
+    // the bare `name · 1.2` form let through into the Windows reference
+    // recorded on 2026-09-26 (Codex is installed on that machine). Not on
+    // Windows since: the app gets a PATH without the user's folders there
+    // (windowsSystemPath in e2e/fixture.mjs), finds no CLI and prints no version.
+    platforms: ['darwin', 'linux'],
+    selector: 'text=/^[a-z][a-z-]* · (?:[a-z][a-z-]* )?\\d+\\.\\d+/',
     why: 'the version of each CLI installed on the machine recording; Claude Code updates itself weekly',
   },
   'log-chunk-counts': {
@@ -257,6 +270,25 @@ export const VOLATILE = {
     surfaces: ['whats-new'],
     selector: 'div.space-y-2:has(ul li)',
     why: 'every changelog entry, which is new text on this page at every release; the page frame stays compared',
+  },
+  // Windows only (`platforms`), so the darwin pictures, recorded without them,
+  // compare as they always have. The Hermes webhook row reads the recording
+  // machine's own Tailscale: its state and its tailnet name on one line, the
+  // tailnet URL in the field. Measured on 2026-09-26: `tailscale serve active ·
+  // <host>.<tailnet>.ts.net` on the Windows machine recording, where a clean
+  // runner reads `no tailscale · a VPS cannot reach this machine`. The line is
+  // masked in every state, so it is the same picture on any machine.
+  'tailscale-state': {
+    surfaces: ['settings-hermes'],
+    platforms: ['win32'],
+    selector: 'text=/tailscale/',
+    why: "the recording machine's Tailscale state and tailnet host name",
+  },
+  'webhook-url': {
+    surfaces: ['settings-hermes'],
+    platforms: ['win32'],
+    selector: 'input[value*="/api/webhooks/hermes"]',
+    why: "the webhook URL, on the recording machine's tailnet when it has one",
   },
   'marketplace-plugin-count': {
     surfaces: ['extensions-plugins'],
@@ -274,12 +306,18 @@ export const VOLATILE = {
  */
 export const USAGE_DAY = new Date(2026, 8, 16, 12).getTime();
 
+/** Whether a VOLATILE entry masks on this platform: every platform unless it lists some. */
+export function maskApplies(entry, platform = process.platform) {
+  return !entry.platforms || entry.platforms.includes(platform);
+}
+
 /** The masks for one surface, and the keys that actually matched something. */
 export async function volatileMasks(page, surface) {
   const masks = [];
   const used = [];
   for (const [key, entry] of Object.entries(VOLATILE)) {
     if (entry.surfaces !== 'all' && !entry.surfaces.includes(surface)) continue;
+    if (!maskApplies(entry)) continue;
     const locator = page.locator(entry.selector);
     masks.push(locator);
     if (await locator.count() > 0) used.push(key);

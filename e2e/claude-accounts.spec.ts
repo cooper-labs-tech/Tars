@@ -118,6 +118,8 @@ async function login(page: Page, id: string): Promise<{ data: string; exit?: num
   return page.evaluate(p => (window as unknown as Win).loginSeen![p], started.ptyId);
 }
 
+test.skip(process.platform === 'win32', 'several Claude accounts are off on a Windows build until they are ported; this runs on macOS and Linux');
+
 test('claude accounts: added, signed in by their own login, refused twice, saved', async () => {
   test.setTimeout(150_000);
   // As the OS spells it (the fixture checks the app's folders against it), and

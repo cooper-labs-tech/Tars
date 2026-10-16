@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -43,7 +43,11 @@ const record = (file, o) => fs.appendFileSync(path.join(process.env.HOME, file),
 const dashes = args.indexOf('--');
 const launchPrompt = dashes === -1 ? '' : args.slice(dashes + 1).join(' ');
 record('launches.jsonl', { pid: process.pid, sid, resume: resumed === -1 ? null : args[resumed + 1], prompt: launchPrompt });
-const hook = (name, payload) => spawnSync('/bin/bash', [path.join(HOOKS, name)], {
+// Tars's own hooks, as it installs them: the .sh under bash on macOS and Linux, their Node runner on Windows.
+const hookCommand = (name) => (process.platform === 'win32'
+  ? [process.execPath, [path.join(HOOKS, 'tars-hook.mjs'), name.replace(/\.sh$/, '')]]
+  : ['/bin/bash', [path.join(HOOKS, name)]]);
+const hook = (name, payload) => spawnSync(...hookCommand(name), {
   input: JSON.stringify({ session_id: sid, cwd: process.cwd(), transcript_path: transcript, ...payload }), env: process.env, timeout: 20000,
 });
 const line = (o) => fs.appendFileSync(transcript, JSON.stringify(o) + '\n');
@@ -85,6 +89,8 @@ process.stdin.resume();
 const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 const alive = (pid: number) => {
   try { process.kill(pid, 0); } catch { return false; }
+  // Windows has no ps, and no zombie for it to show.
+  if (process.platform === 'win32') return true;
   try { return !String(execFileSync('ps', ['-o', 'stat=', '-p', String(pid)])).trim().startsWith('Z'); } catch { return false; }
 };
 
@@ -95,13 +101,15 @@ test('an agent waiting on its own timer or background agent is not put to sleep;
   const dir = path.join(home, '.dorothy');
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
+  // only to a .js script, hence the .cjs there.
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
   const agent = (id: string, name: string) => ({
     id, name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker', permissionMode: 'normal',
     projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',
   });
-  const ids = ['worker', 'looper', 'delegator', 'delegator-mac'];
+  // delegator-mac stands for macOS, whose caffeinate Windows has none of: there it is not started.
+  const ids = ['worker', 'looper', 'delegator', 'delegator-mac'].filter((id) => process.platform !== 'win32' || id !== 'delegator-mac');
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
     agent('worker', 'Build Worker'), agent('looper', 'CI Looper'), agent('delegator', 'Delegator'), agent('delegator-mac', 'Delegator Mac'),
   ], null, 2));
@@ -125,10 +133,10 @@ test('an agent waiting on its own timer or background agent is not put to sleep;
     for (const id of ids) {
       await page.evaluate((p) => (window as unknown as Api).electronAPI.agent.start(p), { id, prompt: id === 'worker' ? '' : 'GO>> start' });
     }
-    await expect.poll(async () => (await list()).filter((a) => a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(4);
-    await expect.poll(() => lines(stopsFile).length, { timeout: 60_000, message: 'the three turns ended' }).toBe(3);
+    await expect.poll(async () => (await list()).filter((a) => a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(ids.length);
+    await expect.poll(() => lines(stopsFile).length, { timeout: 60_000, message: 'the turns of the agents given GO>> ended' }).toBe(ids.length - 1);
     const first = Object.fromEntries(lines(launchesFile).map((l) => [l.id, l]));
-    await expect.poll(() => String(execFileSync('ps', ['-A', '-o', 'ppid=,command='])).split('\n')
+    if (ids.includes('delegator-mac')) await expect.poll(() => String(execFileSync('ps', ['-A', '-o', 'ppid=,command='])).split('\n')
       .some((l) => l.trim().startsWith(`${first['delegator-mac'].pid} `) && /caffeinate/.test(l)), { timeout: 30_000, message: 'delegator-mac holds its caffeinate' }).toBe(true);
 
     /** What Tars itself can read of each agent's pending work, before anything is put to sleep. */
@@ -143,7 +151,7 @@ test('an agent waiting on its own timer or background agent is not put to sleep;
     }, { dist, ids });
 
     /** Every agent rested 40 minutes, then the pass that runs every minute, once. */
-    const restAndCheck = () => app.evaluate(async (_e, { dist }) => {
+    const restAndCheck = () => app.evaluate(async (_e, { dist, windows }) => {
       const req = process.mainModule!.require;
       const { agents } = req(`${dist}/core/agent-manager.js`);
       const fortyMinutesAgo = new Date(Date.now() - 40 * 60_000).toISOString();
@@ -152,8 +160,18 @@ test('an agent waiting on its own timer or background agent is not put to sleep;
         a.lastTurnStartedAt = undefined;
         a.workHandedAt = undefined;
       }
-      return req(`${dist}/services/agent-sleep.js`).checkSleep() as Promise<Array<{ agentId: string; slept: boolean; why?: string }>>;
-    }, { dist });
+      // Windows has no process table for the pass to read (agent-sleep.ts reads
+      // ps: there it refuses every agent). It is handed the
+      // one this spec is about, each CLI its terminal's own process with nothing
+      // under it, so that what decides is the work each CLI holds in-process, as
+      // the Stop hook (the Node runner there) and the transcript tell it.
+      const { ptyProcesses } = req(`${dist}/core/pty-manager.js`);
+      const read = windows ? {
+        procs: async () => [...agents.values()].filter((a) => a.ptyId && ptyProcesses.has(a.ptyId))
+          .map((a) => ({ pid: ptyProcesses.get(a.ptyId).pid, ppid: process.pid, stat: 'S', age: 2400, command: 'node claude' })),
+      } : undefined;
+      return req(`${dist}/services/agent-sleep.js`).checkSleep(undefined, read) as Promise<Array<{ agentId: string; slept: boolean; why?: string }>>;
+    }, { dist, windows: process.platform === 'win32' });
 
     // Passes until the control sleeps (what a turn just ended leaves under a CLI is busy for a moment), then three
     // more, so that each of the others has been looked at with nothing of its last turn left under it.
@@ -178,7 +196,7 @@ test('an agent waiting on its own timer or background agent is not put to sleep;
     recordValues({ known, stops: lines(stopsFile), passes, verdict, statuses, cliAlive });
 
     expect.soft(verdict.worker.slept, 'control: an agent at rest with nothing pending sleeps').toBe(true);
-    expect.soft(verdict['delegator-mac'].slept, 'macOS: the caffeinate a running background agent keeps shows it busy').toBe(false);
+    if (ids.includes('delegator-mac')) expect.soft(verdict['delegator-mac'].slept, 'macOS: the caffeinate a running background agent keeps shows it busy').toBe(false);
     expect.soft(verdict.looper.slept, 'an agent waiting on its own ScheduleWakeup is not put to sleep').toBe(false);
     expect.soft(verdict.delegator.slept, 'an agent whose background Agent is still running (no caffeinate: Linux) is not put to sleep').toBe(false);
   } finally {

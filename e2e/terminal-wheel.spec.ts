@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type CDPSession } from '@playwrigh
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, seedSandbox, removeHome } from './fixture.mjs';
+import { launchSandboxed, removeHome, seedSandbox, splashGone } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -24,7 +24,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * makes every "nothing was sent" above it mean something.
  *
  * The terminal is the Projects page's shell, `Terminal.tsx`: a login zsh in the
- * sandbox's HOME, whose .zshrc hands the terminal to the recorder.
+ * sandbox's HOME, whose .zshrc hands the terminal to the recorder. Windows has
+ * no zsh, and its PowerShell reads a profile from the account's Documents,
+ * which no variable moves into the sandbox: there the shell is Git for
+ * Windows' bash, chosen the way a user chooses it (the terminalShell setting),
+ * whose .bash_profile in the sandbox's HOME does the same.
  */
 
 
@@ -63,6 +67,15 @@ const ZSHRC = `if [[ -o interactive && -t 0 && -n "$TARS_TERMINAL_RECORDER" ]]; 
 fi
 `;
 
+/** The same, for Git Bash's login shell on Windows, which runs the recorder through node. */
+const BASH_PROFILE = `if [[ $- == *i* && -t 0 && -n "$TARS_TERMINAL_RECORDER" ]]; then
+  exec "$TARS_TERMINAL_NODE" "$TARS_TERMINAL_RECORDER"
+fi
+`;
+
+const onWindows = process.platform === 'win32';
+const GIT_BASH = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Git', 'bin', 'bash.exe');
+
 /** One notch of a mouse wheel, as Chromium reports it. */
 const NOTCH = 100;
 
@@ -78,10 +91,14 @@ const APPLICATION_ARROWS = /^(\x1bOA)+$/;
 
 test('the wheel types nothing into a full-screen program, and the keys still do', async () => {
   test.setTimeout(120_000);
+  test.skip(onWindows && !fs.existsSync(GIT_BASH), `Windows runs the recorder through Git for Windows' bash, and there is none at ${GIT_BASH}`);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-wheel-'));
   seedSandbox(home);
   // Nothing else starts: the recorder is the only program in a terminal.
-  fs.writeFileSync(path.join(home, '.dorothy', 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false }, null, 2));
+  fs.writeFileSync(path.join(home, '.dorothy', 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false,
+    ...(onWindows ? { terminalShell: GIT_BASH } : {}),
+  }, null, 2));
   // The app keeps the folders added by hand as a list of paths and drops any
   // entry that is not a string, so the objects the shared seed writes there
   // leave the Projects page empty. This sandbox lists its project the way the
@@ -92,7 +109,7 @@ test('the wheel types nothing into a full-screen program, and the keys still do'
   fs.writeFileSync(recorder, RECORDER, { mode: 0o755 });
   const log = path.join(home, 'received.bin');
   fs.writeFileSync(log, '');
-  fs.writeFileSync(path.join(home, '.zshrc'), ZSHRC);
+  fs.writeFileSync(path.join(home, onWindows ? '.bash_profile' : '.zshrc'), onWindows ? BASH_PROFILE : ZSHRC);
 
   const app = await launchSandboxed(electron, home, {
     env: {
@@ -100,7 +117,8 @@ test('the wheel types nothing into a full-screen program, and the keys still do'
       DOROTHY_DEV_URL: DEV_URL,
       DOROTHY_API_PORT: apiPort(31493),
       DOROTHY_E2E: '1',
-      SHELL: '/bin/zsh',
+      // SHELL names the shell on macOS and Linux; Windows reads the setting above.
+      ...(onWindows ? { TARS_TERMINAL_NODE: process.execPath } : { SHELL: '/bin/zsh' }),
       TARS_TERMINAL_RECORDER: recorder,
       TARS_TERMINAL_LOG: log,
     },
@@ -111,8 +129,14 @@ test('the wheel types nothing into a full-screen program, and the keys still do'
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForLoadState('domcontentloaded');
     await page.goto(`${DEV_URL}/projects`, { waitUntil: 'domcontentloaded' });
+    // Hydrated first: until React holds the page, nothing the checks below wait
+    // for can render, and on a runner slow to hydrate their bounds ran out on an
+    // empty page on a slow runner. splashGone waits as long as the
+    // spec allows for that, then holds the splash to its own cap.
+    await splashGone(page);
 
-    await page.locator(`p[title="${project}"]`)
+    // Escaped for the CSS string: a Windows path's `\` would read as escapes.
+    await page.locator(`p[title="${project.replace(/["\\]/g, '\\$&')}"]`)
       .locator('xpath=ancestor::div[.//button[normalize-space()="open"]][1]')
       .getByRole('button', { name: 'open', exact: true })
       .click({ timeout: 20_000 });

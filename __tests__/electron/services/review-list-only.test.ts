@@ -49,7 +49,7 @@ vi.mock('child_process', async (importOriginal) => {
   const { promisify } = await import('util');
   const { appendFileSync } = await import('fs');
   const note = (file: unknown, args: unknown) => {
-    if (file === 'git' && Array.isArray(args)) appendFileSync(recorder.log, `${args.join(' ')}\n`);
+    if ((file === 'git' || /[\\/]git\.exe$/i.test(String(file))) && Array.isArray(args)) appendFileSync(recorder.log, `${args.join(' ')}\n`);
   };
   const original = actual.execFile as unknown as ((...a: unknown[]) => unknown) & { [key: symbol]: (...a: unknown[]) => unknown };
   const execFile = Object.assign((file: unknown, args: unknown, ...rest: unknown[]) => {

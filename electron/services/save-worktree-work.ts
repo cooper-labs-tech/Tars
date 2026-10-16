@@ -2,6 +2,7 @@ import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { gitCommand } from '../platform/git-command';
 
 /**
  * An agent's uncommitted work, saved on wip/<name> before its worktree goes
@@ -16,7 +17,7 @@ import * as path from 'path';
 
 function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = process.env): Promise<string> {
   return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, env, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(gitCommand(), args, { cwd, env, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) reject(new Error(`git ${args[0]} failed: ${String(stderr || err.message).trim().slice(0, 300)}`));
       else resolve(String(stdout).trim());
     });

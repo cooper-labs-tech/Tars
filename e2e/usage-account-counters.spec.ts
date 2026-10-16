@@ -23,6 +23,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
 type Window = { usedPercentage: number; resetsAt: number } | null;
 type Api = { electronAPI: { claude: { getData(): Promise<{ accountRateLimits: Array<{ accountId: string; label: string; fiveHour: Window; sevenDay: Window }> } | null> } } };
 
+test.skip(process.platform === 'win32', 'several Claude accounts are off on a Windows build until they are ported; this runs on macOS and Linux');
+
 test('the Usage page is handed each Claude account its own 5 h and weekly counters', async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-account-counters-'));

@@ -4,6 +4,7 @@ import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { reportEvent, type ReportEvent } from './event-reports';
 import { buildFullPath } from '../utils/path-builder';
+import { gitCommand } from '../platform/git-command';
 
 /**
  * What Tars reads from GitHub for the event reports (step 4 of the relay
@@ -102,7 +103,7 @@ export async function pollProjects(projectPaths: string[], now: number = Date.no
   const projectOfRepo = new Map<string, string>();
   for (const project of new Set(projectPaths)) {
     try {
-      const repo = githubRepoOf(await run('git', ['-C', project, 'remote', 'get-url', 'origin']));
+      const repo = githubRepoOf(await run(gitCommand(), ['-C', project, 'remote', 'get-url', 'origin']));
       if (repo && !projectOfRepo.has(repo)) projectOfRepo.set(repo, project);
     } catch { /* not a repository */ }
   }

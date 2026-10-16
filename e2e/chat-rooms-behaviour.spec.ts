@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
-import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, seedSandbox, stepShot, removeHome } from './fixture.mjs';
+import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, removeHome, roomListSettled, seedSandbox, stepShot } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { splitPageErrors } from './surfaces.mjs';
 
@@ -82,8 +82,12 @@ async function setAgents(patches: Record<string, Record<string, unknown>>) {
   }, { dist, patches });
 }
 
-/** Opens a room from the conversation list and waits for its own words. */
+/**
+ * Opens a room from the conversation list and waits for its own words. The list
+ * is read first, and a read that failed fails here with the page's note.
+ */
 async function openRoom(title: string, says: string) {
+  await roomListSettled(page, [title]);
   const entry = page.getByRole('button', { name: title, exact: false }).filter({ hasText: title }).first();
   await entry.waitFor({ state: 'visible', timeout: 20_000 });
   await entry.click();

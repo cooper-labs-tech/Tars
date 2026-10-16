@@ -5,7 +5,8 @@ import { ProcessTree, processTable, processTableNow } from '../services/acp/clie
 import { beginQuit, isQuitting, refuseWhileQuitting } from './quit-state';
 import * as pty from 'node-pty';
 import { resolveShell, shellArgs, childEnv } from '../platform';
-import { holdExitUntilTerminalsExit, killPty as endTerminal } from './pty-kill';
+import { holdExitUntilTerminalsExit, killPty as endTerminal, shellStillRuns } from './pty-kill';
+import { killTree } from '../platform/kill-tree';
 import { v4 as uuidv4 } from 'uuid';
 import * as os from 'os';
 import { app, BrowserWindow } from 'electron';
@@ -122,6 +123,10 @@ async function endTerminals(trees: pty.IPty[], shells: pty.IPty[], graceMs: numb
     const done = () => { ended.add(t); resolve(); };
     try { t.onExit(done); } catch { done(); }
   }));
+  // win32: no ps, and no hangup for a shell to relay. Each agent terminal's
+  // tree is ended while its shell still runs, then its console closed; the
+  // user's own shells keep their jobs, as elsewhere.
+  if (process.platform === 'win32') await Promise.all(trees.map(endTreeBeforeConsole));
   for (const t of terminals) {
     try { endTerminal(t); } catch { /* already gone */ }
   }
@@ -153,6 +158,29 @@ async function endTerminals(trees: pty.IPty[], shells: pty.IPty[], graceMs: numb
     const until = Date.now() + 500;
     while (Date.now() < until && tree.anyLeft(await processTable())) await pause();
     if (opts.waitForExits) await Promise.race([allExited, pause(300)]);
+  }
+}
+
+/**
+ * win32: an agent terminal's whole process tree, ended by taskkill /T while
+ * its shell still runs, before its console is closed.
+ *
+ * Closing the pseudo console ends what is attached to it, and Node and Bun
+ * end the children they started with them (libuv's job). A process the CLI's
+ * tools started detached, with no console (a server started in the
+ * background, PowerShell's Start-Process), is neither: it outlived the stop
+ * and the quit. taskkill walks the tree from the shell's pid, so it runs
+ * first, as a delegated run's stop does (acp/client.ts). Only for a terminal
+ * node-pty reports still running (shellStillRuns): an exited shell's id may
+ * be another process's by now. Should taskkill fail, the console is closed
+ * all the same, and it is said.
+ */
+async function endTreeBeforeConsole(terminal: pty.IPty): Promise<void> {
+  if (!shellStillRuns(terminal)) return;
+  try {
+    await killTree(terminal.pid, 'win32');
+  } catch (err) {
+    console.warn(`[pty] could not end the processes under ${terminal.pid}, closing its console all the same:`, err);
   }
 }
 

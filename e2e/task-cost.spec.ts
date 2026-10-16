@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -48,8 +48,12 @@ const dir = path.join(process.env.HOME, '.claude', 'projects', process.cwd().rep
 fs.mkdirSync(dir, { recursive: true });
 const transcript = path.join(dir, sid + '.jsonl');
 const log = (line) => fs.appendFileSync(path.join(process.env.HOME, 'stand-in.log'), new Date().toISOString() + ' ' + id + ' ' + line + '\n');
+// Tars's own hooks, as it installs them: the .sh under bash on macOS and Linux, their Node runner on Windows.
+const hookCommand = (name) => (process.platform === 'win32'
+  ? [process.execPath, [path.join(HOOKS, 'tars-hook.mjs'), name.replace(/\.sh$/, '')]]
+  : ['/bin/bash', [path.join(HOOKS, name)]]);
 const hook = (name, payload) => {
-  const out = spawnSync('/bin/bash', [path.join(HOOKS, name)], {
+  const out = spawnSync(...hookCommand(name), {
     input: JSON.stringify({ session_id: sid, cwd: process.cwd(), transcript_path: transcript, ...payload }),
     env: process.env, timeout: 20000, encoding: 'utf8',
   });
@@ -128,8 +132,9 @@ test('a task handed on is priced under the task it was handed for, from the tran
   fs.mkdirSync(project, { recursive: true });
   fs.mkdirSync(dir, { recursive: true });
   fs.mkdirSync(bin, { recursive: true });
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
+  // only to a .js script, hence the .cjs there.
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
   const agent = (id: string, name: string, role = 'worker') => ({
     id, name, character: 'robot', provider: 'claude', status: 'idle', role,
     projectPath: project, skills: [], cliPath: cli,
@@ -198,7 +203,8 @@ test('a task handed on is priced under the task it was handed for, from the tran
     expect(ledger).not.toContain('review the build');
     const texts = path.join(home, '.tars-private', 'task-texts.jsonl');
     expect(fs.readFileSync(texts, 'utf8')).toContain('review the build');
-    expect(fs.statSync(texts).mode & 0o777).toBe(0o600);
+    // POSIX mode bits, which Windows has none of (Node reads 666 there).
+    if (process.platform !== 'win32') expect(fs.statSync(texts).mode & 0o777).toBe(0o600);
   } finally {
     await app.close();
   }
@@ -237,9 +243,11 @@ test('a run over ACP and a session started for an agent are tasks under the task
   const dir = path.join(home, '.dorothy');
   const bin = path.join(home, 'bin');
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-  const cli = path.join(bin, 'claude');
-  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
-  fs.writeFileSync(path.join(bin, 'opencode'), `#!${process.execPath}\n${FAKE_ACP}`, { mode: 0o755 });
+  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
+  // only to a .js script, hence the .cjs there.
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
+  // On Windows opencode.cmd beside the script, which Tars finds on the PATH and reads through to node.
+  writeNodeCli(path.join(bin, process.platform === 'win32' ? 'opencode.cjs' : 'opencode'), FAKE_ACP);
   const agent = (id: string, name: string, role = 'worker', provider = 'claude') => ({
     id, name, character: 'robot', provider, status: 'idle', role, projectPath: project, skills: [], cliPath: cli,
     createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',

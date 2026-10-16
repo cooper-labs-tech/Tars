@@ -141,8 +141,8 @@ function terminal(kind: Job, opts: { disowned?: boolean; deafShell?: boolean; ex
 
 // The fixture is a bash process group read through ps: POSIX only. On Windows a
 // terminal is a ConPTY console, which the quit ends through killPty
-// (pty-kill.test.ts); its whole tree is not read there yet. Without bash the
-// fixture's pids read 0, and these cases would pass on nothing.
+// (pty-kill.test.ts), its tree by taskkill first (windows-terminal-tree.test.ts).
+// Without bash the fixture's pids read 0, and these cases would pass on nothing.
 const posixGroups = describe.skipIf(process.platform === 'win32');
 
 const settle = async (t: { job: () => number; grandchild: () => number }) => {
