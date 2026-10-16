@@ -664,10 +664,13 @@ app.whenReady().then(async () => {
   // its last health sample, now that every handler is registered.
   if (previousRun) {
     const samples = lastRunSamples.map((s) => onlyKnown(s, healthWords));
-    const payload = abruptEndPayload(previousRun, samples, crashTypeSince(previousRun.startedAt));
-    void errorReports.sendHealth('abrupt-end', payload as unknown as Record<string, unknown>).then((result) => {
-      if (!result.sent) console.log(`[health] the abrupt end of the last run was not reported: ${result.reason}`);
-    });
+    // The crash type is read aside: on Linux and Windows a program answers it.
+    const ended = previousRun;
+    void crashTypeSince(ended.startedAt)
+      .then((crashType) => errorReports.sendHealth('abrupt-end', abruptEndPayload(ended, samples, crashType) as unknown as Record<string, unknown>))
+      .then((result) => {
+        if (!result.sent) console.log(`[health] the abrupt end of the last run was not reported: ${result.reason}`);
+      });
   }
   const restarted = startRestartRecovery(previousRun);
   recovery = restarted;
