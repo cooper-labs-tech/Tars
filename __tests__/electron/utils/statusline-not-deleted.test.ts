@@ -35,10 +35,8 @@ vi.mock('../../../electron/constants', async (importOriginal) => {
 
 const SETTINGS = path.join(tmpHome, '.claude', 'settings.json');
 const OUR_SCRIPT = path.join(tmpData, 'statusline.sh');
-/** What turning it on points the entry at: the script above, or on win32 the Node status line. */
-const OUR_COMMAND = process.platform === 'win32'
-  ? `node "${path.join(process.cwd(), 'hooks', 'statusline.mjs').replace(/\\/g, '/')}"`
-  : OUR_SCRIPT;
+/** What turning it on points the entry at: the Node status line, on every platform since 2.0.4 (no launcher prepared here). */
+const OUR_COMMAND = `node "${path.join(process.cwd(), 'hooks', 'statusline.mjs').replace(/\\/g, '/')}"`;
 
 /** The shape of the real file: the key under test, and the nine around it. */
 function settingsWith(statusLine: unknown): Record<string, unknown> {
