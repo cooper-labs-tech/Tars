@@ -2329,12 +2329,14 @@ export interface ElectronAPI {
   // Get home path helper
   getHomePath?: () => string;
 
-  // The Windows desktop shell: its title bar and its shells. detectShells is null on
-  // darwin and linux; setTitleBarOverlay only acts on Windows.
+  // The desktop shell: its title bar and its shells. detectShells offers the shells
+  // of Settings > Terminal on every platform: on Windows by id (pwsh, powershell, cmd,
+  // git-bash); on macOS and Linux the login shells /etc/shells lists, each keyed by its
+  // path and named by its shell (zsh, bash, fish). setTitleBarOverlay only acts on Windows.
   desktopShell?: {
     detectShells: () => Promise<{
       defaultPath: string;
-      choices: { id: 'pwsh' | 'powershell' | 'cmd' | 'git-bash'; path: string | null }[];
+      choices: { id: 'pwsh' | 'powershell' | 'cmd' | 'git-bash' | (string & {}); path: string | null; name?: string }[];
     } | null>;
     setTitleBarOverlay: (colours: { color: string; symbolColor: string }) => Promise<{ success: boolean; error?: string }>;
   };

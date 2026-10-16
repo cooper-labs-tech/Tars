@@ -433,11 +433,13 @@ export interface AppSettings {
   chatsReadEachOther: boolean;
   cliPaths: CLIPaths;
   /**
-   * The shell a terminal runs on Windows: a path (Git Bash is
+   * The shell a person's terminal runs, set by Settings > Terminal (the Shell
+   * row: a shell it found, or a path typed in). Windows: a path (Git Bash is
    * `C:\Program Files\Git\bin\bash.exe`; a bare `bash` finds WSL's first), or a
-   * name on the PATH such as `pwsh`. Unset: pwsh.exe, else Windows PowerShell,
-   * else cmd.exe. Read on Windows only, where Settings > Terminal sets it (the
-   * Shell row: a shell it found, or a path typed in).
+   * name on the PATH such as `pwsh`; unset, pwsh.exe, else Windows PowerShell,
+   * else cmd.exe. macOS and Linux (since 2.0.4): an absolute path, a shell
+   * /etc/shells lists; unset or anything else, $SHELL. An agent's own terminal
+   * waits in /bin/bash there whatever it says, the launch line being bash.
    */
   terminalShell?: string;
   /** Windows: the first close has explained that Tars keeps running in the tray. */
