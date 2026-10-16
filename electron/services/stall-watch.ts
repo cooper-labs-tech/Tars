@@ -10,6 +10,7 @@ import { spellingsOf, transcriptPath } from '../utils/resume-session';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { scheduleTick } from '../utils/agents-tick';
 import { modBeatFor } from './state-mod';
+import { readWindowsCommandLine, readWindowsProcesses } from '../platform';
 
 /**
  * A running agent that is doing nothing (PLAN-1.9.2.md item B).
@@ -40,8 +41,11 @@ import { modBeatFor } from './state-mod';
 export const STALL_AFTER_MS = 30 * 60_000;
 export const CHECK_EVERY_MS = 60_000;
 
-/** `age`: seconds since the process started, from ps's etime. */
-export type Proc = { pid: number; ppid: number; stat: string; age?: number; command: string };
+/**
+ * `age`: seconds since the process started, from ps's etime or Windows's
+ * creation date. `stat`: ps's state; Windows lists none, and keeps no zombie.
+ */
+export type Proc = { pid: number; ppid: number; stat?: string; age?: number; command: string };
 
 /** ps's elapsed time, `[[dd-]hh:]mm:ss`, in seconds. */
 function seconds(etime: string): number | undefined {
@@ -60,7 +64,9 @@ export function parseProcesses(out: string): Proc[] {
   return procs;
 }
 
+/** The process table: ps on macOS and Linux, Win32_Process on Windows, which has no ps (platform/windows-processes.ts). */
 export function readProcesses(): Promise<Proc[] | undefined> {
+  if (process.platform === 'win32') return readWindowsProcesses();
   return new Promise(done => {
     execFile('ps', ['-A', '-o', 'pid=,ppid=,stat=,etime=,command='], { maxBuffer: 16 * 1024 * 1024, timeout: 5_000 }, (err, stdout) => {
       done(err ? undefined : parseProcesses(String(stdout)));
@@ -68,14 +74,33 @@ export function readProcesses(): Promise<Proc[] | undefined> {
   });
 }
 
-/** claude itself, or the script node runs for it: Claude Code installed by npm is `node <...>/bin/claude`. */
+/**
+ * claude itself, or the script node runs for it: Claude Code installed by npm
+ * is `node <...>/bin/claude`. On Windows the command line is Windows's (a path
+ * quoted for its spaces, `claude.exe` in any case), and npm's shim is read
+ * through to `node.exe <...>\@anthropic-ai\claude-code\cli.js`
+ * (platform/cli-binary.ts); a script named claude stands in for it there too.
+ */
 const isClaude = (command: string) => {
+  if (process.platform === 'win32') return isClaudeOnWindows(command);
   const [first, second] = command.split(/\s+/).map(word => path.basename(word));
   return first === 'claude' || (first === 'node' && second === 'claude');
 };
+
+const CLAUDE_CODE_SCRIPT = /[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.(c|m)?js$/i;
+
+function isClaudeOnWindows(command: string): boolean {
+  const [first, script] = readWindowsCommandLine(command);
+  const name = (word: string) => path.win32.basename(word).toLowerCase();
+  const program = first ? name(first).replace(/\.exe$/, '') : '';
+  if (program === 'claude') return true;
+  return program === 'node' && !!script
+    && (name(script).replace(/\.(c|m)?js$/, '') === 'claude' || CLAUDE_CODE_SCRIPT.test(script));
+}
+
 const isMcpServer = (command: string) => /mcp|bundle\.js/i.test(command);
 const isCaffeinate = (command: string) => /(^|\/|\()caffeinate\b/.test(command);
-const isZombie = (proc: Proc) => proc.stat.startsWith('Z');
+const isZombie = (proc: Proc) => proc.stat?.startsWith('Z') === true;
 
 function childrenOf(pid: number, procs: Proc[]): Proc[] {
   return procs.filter(proc => proc.ppid === pid);

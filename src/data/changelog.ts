@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On Windows, an agent with no turn for 30 minutes is put to sleep and one frozen mid-turn is marked stalled, as on macOS and Linux: both need the computer\'s list of processes, which Tars read with ps, a program Windows does not have, so neither ever happened there. Tars now asks Windows itself for that list.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-15',

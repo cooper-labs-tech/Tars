@@ -73,3 +73,54 @@ export function buildWindowsCommandLine(argv: string[]): string {
   }
   return line;
 }
+
+const isBlank = (c: string | undefined) => c === ' ' || c === '\t';
+
+/**
+ * A command line split back into its argv, as the program it started splits
+ * it (CommandLineToArgvW for the program, the C runtime's rules of MSVC 2008
+ * and later for the rest): what Windows reports of a process, Win32_Process's
+ * CommandLine, read by the sleep and the stall passes to find an agent's CLI.
+ * The inverse of buildWindowsCommandLine.
+ *
+ * The program runs to the next " when it starts with one, else to whitespace,
+ * with no escapes. Then: 2n backslashes and a " are n backslashes and a quote
+ * that opens or closes, 2n+1 are n backslashes and a " kept, other
+ * backslashes are themselves, and "" inside quotes is one ". A quote never
+ * closed runs to the end.
+ */
+export function readWindowsCommandLine(line: string): string[] {
+  if (!line) return [];
+  const argv: string[] = [];
+  let i = 0;
+  let word = '';
+  if (line[0] === '"') {
+    const end = line.indexOf('"', 1);
+    word = end < 0 ? line.slice(1) : line.slice(1, end);
+    i = end < 0 ? line.length : end + 1;
+  } else {
+    while (i < line.length && !isBlank(line[i])) word += line[i++];
+  }
+  argv.push(word);
+  for (;;) {
+    while (isBlank(line[i])) i++;
+    if (i >= line.length) return argv;
+    word = '';
+    let quoted = false;
+    while (i < line.length && (quoted || !isBlank(line[i]))) {
+      let backslashes = 0;
+      while (line[i] === '\\') { backslashes++; i++; }
+      if (line[i] !== '"') {
+        word += '\\'.repeat(backslashes);
+        if (i < line.length && (quoted || !isBlank(line[i]))) word += line[i++];
+        continue;
+      }
+      word += '\\'.repeat(Math.floor(backslashes / 2));
+      if (backslashes % 2 === 1) word += '"';
+      else if (quoted && line[i + 1] === '"') { word += '"'; i++; }
+      else quoted = !quoted;
+      i++;
+    }
+    argv.push(word);
+  }
+}
