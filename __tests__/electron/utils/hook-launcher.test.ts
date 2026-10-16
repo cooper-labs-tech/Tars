@@ -40,7 +40,6 @@ import {
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-hook-launcher-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
 const posix = process.platform !== 'win32';
-const CONTINUE = '{"continue":true,"suppressOutput":true}';
 const HOOKS = path.join(__dirname, '../../../hooks');
 
 /** A stand-in Node that prints `tag`, ELECTRON_RUN_AS_NODE, its argv and its stdin, and exits 7; `-p` answers `version`. */

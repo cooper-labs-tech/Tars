@@ -86,8 +86,8 @@ const runnerCmd = (event: string) => `node "${fwd(path.join(HOOKS_DIR, 'tars-hoo
 const LAUNCHER = '"/home/dev/.dorothy/bin/tars-hook"';
 const launched = (event: string, script = 'tars-hook.mjs') => `${LAUNCHER} "${fwd(path.join(HOOKS_DIR, script))}"${event ? ` ${event}` : ''}`;
 async function useLauncher(firstWord: string | null) {
-  const { useHookLauncher } = await import('../../electron/utils/hook-launcher');
-  useHookLauncher(firstWord);
+  const { setHookLauncherWord } = await import('../../electron/utils/hook-launcher');
+  setHookLauncherWord(firstWord);
 }
 
 /** A dev checkout of an older Tars: its hooks folder holds tars-hook.sh beside the scripts. */

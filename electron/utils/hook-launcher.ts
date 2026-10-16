@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DATA_DIR } from '../constants';
 import { childEnv } from '../platform/child-env';
+import type { Env } from '../platform/fs-probe';
 import { isPlainAbsolute } from '../platform/cli-binary';
 import { envValue, pathEntries } from '../platform/path-env';
 import { lastingAppBinary } from './mcp-node';
@@ -145,7 +146,7 @@ type Run = (file: string) => Promise<string>;
 
 /** The first `node` on the PATH that answers a version of 16 or later, by absolute path; null when none does. */
 export async function findHookNode({ env, platform, run, isFile, timeoutMs = NODE_PROBE_MS }: {
-  env: NodeJS.ProcessEnv;
+  env: Env;
   platform: NodeJS.Platform;
   run?: Run;
   isFile?: (p: string) => boolean;
@@ -155,8 +156,9 @@ export async function findHookNode({ env, platform, run, isFile, timeoutMs = NOD
   const name = platform === 'win32' ? 'node.exe' : 'node';
   const probe = run ?? ((file: string) => new Promise<string>((resolve, reject) => {
     // Without NODE_OPTIONS: a flag of Tars's own environment is no business of a version probe.
-    const { NODE_OPTIONS: _ignored, ...rest } = process.env;
-    execFile(file, ['-p', 'process.versions.node'], { timeout: timeoutMs, windowsHide: true, env: rest, encoding: 'utf8' },
+    const probeEnv = { ...process.env };
+    delete probeEnv.NODE_OPTIONS;
+    execFile(file, ['-p', 'process.versions.node'], { timeout: timeoutMs, windowsHide: true, env: probeEnv, encoding: 'utf8' },
       (err, stdout) => (err ? reject(err) : resolve(stdout)));
   }));
   const exists = isFile ?? ((file: string) => {
@@ -239,7 +241,7 @@ export function writeHookLauncher({ platform, node, app, dataDir = DATA_DIR }: {
 let firstWord: string | null = null;
 
 /** What the hook commands start with from now on: the launcher as a command line names it, or null for `node`. */
-export function useHookLauncher(word: string | null): void {
+export function setHookLauncherWord(word: string | null): void {
   firstWord = word;
 }
 
@@ -267,7 +269,7 @@ export async function prepareHookLauncher(platform: NodeJS.Platform = process.pl
     const short = await windowsShortPath(file);
     word = short ? launcherFirstWord(short, platform) : null;
   }
-  useHookLauncher(word);
+  setHookLauncherWord(word);
   console.log(`[hooks] the hooks start through ${word ?? 'node'}, on ${named ?? (app ? 'the app\'s own Node' : 'the node of the PATH')}`);
   return hookRunnerFirstWord();
 }
