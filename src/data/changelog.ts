@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'With Send error reports on, the report of a run that ended without quitting names the crash\'s type on Linux and Windows too, as on macOS: the signal systemd-coredump recorded on Linux, the exception Windows Error Reporting logged on Windows. Nothing else of the crash leaves.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-15',
