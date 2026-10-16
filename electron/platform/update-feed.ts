@@ -14,13 +14,16 @@
  * platform's file, and no update offered while the release carries no setup.
  *
  * linux: this architecture's AppImage (`Tars-<version>-<arch>.AppImage`,
- * package.json build.linux.artifactName), added by release:linux, never another
+ * package.json build.linux.artifactName, the architecture as electron-builder
+ * writes it: x86_64 for x64, linux-artifact-arch.json), added by release:linux, never another
  * platform's file or architecture's, and no update offered while the release
  * carries none for it (the maintainer's parity rule of 2026-10-16).
  *
  * darwin: the .dmg, then the .zip, and every newer release offered, byte for
  * byte what update-checker.ts did before this layer.
  */
+
+import APPIMAGE_ARCH from './linux-artifact-arch.json';
 
 type ReleaseAsset = { name: string; browser_download_url?: string };
 
@@ -40,7 +43,8 @@ export function installerAssetFor<T extends ReleaseAsset>(assets: T[], platform:
     return setups.find(a => a.name.toLowerCase().includes(arch.toLowerCase())) ?? setups[0];
   }
   if (platform === 'linux') {
-    return assets.find(a => a.name.toLowerCase().endsWith(`-${arch.toLowerCase()}.appimage`));
+    const named = (APPIMAGE_ARCH as Record<string, string>)[arch];
+    return named ? assets.find(a => a.name.toLowerCase().endsWith(`-${named.toLowerCase()}.appimage`)) : undefined;
   }
   const dmgAsset = assets.find(a => a.name.endsWith('.dmg'));
   const zipAsset = assets.find(a => a.name.endsWith('.zip') && !WINDOWS_ZIP.test(a.name));

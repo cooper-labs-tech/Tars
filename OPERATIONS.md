@@ -577,7 +577,7 @@ fallback says up to date. Those two decisions are `electron/platform/update-feed
 **Linux reads them too.** An AppImage's `electron-updater` reads `latest-linux.yml` on x64 and
 `latest-linux-arm64.yml` on arm64, from the same `build.publish` (`build.linux` has no
 `publish` of its own), and the fallback offers this architecture's
-`Tars-<version>-<arch>.AppImage`, never another platform's file, and no update while the
+`Tars-<version>-<arch>.AppImage` (`x86_64` on x64, as electron-builder names it, `arm64` on arm64: `electron/platform/linux-artifact-arch.json`, which `release:linux` reads too), never another platform's file, and no update while the
 release carries none for it, as on Windows.
 
 Auto-check fires 5 s after `whenReady()` and every 30 minutes, and each tick reads `appSettings.autoCheckUpdates`:

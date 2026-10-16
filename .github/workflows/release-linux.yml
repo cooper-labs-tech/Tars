@@ -48,7 +48,8 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: 'npm'
+          # No npm cache: ci.yml's runs, a fork's PR among them, can write the
+          # cache a release build would then restore (the Audit's Info on #431).
 
       - name: Install dependencies
         run: npm ci

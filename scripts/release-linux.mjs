@@ -60,6 +60,13 @@ export const RELEASE_BRANCH = 'main';
 export const WORKFLOW = 'release-linux.yml';
 /** The architectures a release carries, each built on a runner of its own. */
 export const ARCHES = ['x64', 'arm64'];
+/**
+ * How electron-builder writes each architecture in an AppImage's name: x64 as
+ * x86_64 (builder-util's getArtifactArchName). One file, read by this script
+ * and by the update feed (electron/platform/update-feed.ts), so the name the
+ * release checks and uploads is the one an install looks for.
+ */
+const APPIMAGE_ARCH = JSON.parse(readFileSync(new URL('../electron/platform/linux-artifact-arch.json', import.meta.url), 'utf8'));
 /** How long the build may take on the runners before this stops waiting. */
 const RUN_DEADLINE_MS = 60 * 60_000;
 const firstLine = text => text.trim().split('\n')[0] ?? '';
@@ -89,7 +96,7 @@ export function artifactNames(pkg, version, arch) {
   if (!ARCHES.includes(arch)) throw new Refusal(`no Linux build for ${arch}: release:linux builds ${ARCHES.join(' and ')}`);
   const pattern = pkg.build?.linux?.artifactName;
   if (!pattern) throw new Refusal('package.json build.linux.artifactName is not set: the AppImage would be named by electron-builder\'s default');
-  const appImage = pattern.replace(/\$\{version\}/g, version).replace(/\$\{arch\}/g, arch).replace(/\$\{ext\}/g, 'AppImage');
+  const appImage = pattern.replace(/\$\{version\}/g, version).replace(/\$\{arch\}/g, APPIMAGE_ARCH[arch]).replace(/\$\{ext\}/g, 'AppImage');
   return { appImage, yml: arch === 'x64' ? 'latest-linux.yml' : `latest-linux-${arch}.yml` };
 }
 
