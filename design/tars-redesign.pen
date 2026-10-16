@@ -25528,6 +25528,19 @@
                                         },
                                         {
                                           "type": "text",
+                                          "id": "Y5ziU",
+                                          "name": "abrupt",
+                                          "fill": "$text-secondary",
+                                          "textGrowth": "fixed-width",
+                                          "width": 560,
+                                          "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font-ui",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
                                           "id": "LmA85",
                                           "name": "paths",
                                           "fill": "$text-secondary",
@@ -25594,6 +25607,86 @@
                                       "fill": "$text-secondary",
                                       "width": 12,
                                       "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vxc9e",
+                              "name": "row Diagnostic",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "bIYup",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Rw25B",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Diagnostic",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "qqLcF",
+                                      "name": "h",
+                                      "fill": "$text-secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Ne2xN",
+                                  "name": "b send a diagnostic",
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "padding": [
+                                    6,
+                                    11
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Gbx0G",
+                                      "name": "l",
+                                      "fill": "$text-muted",
+                                      "content": "send a diagnostic",
+                                      "lineHeight": 1.35,
+                                      "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -139426,6 +139519,19 @@
                                         },
                                         {
                                           "type": "text",
+                                          "id": "dM8jU",
+                                          "name": "abrupt",
+                                          "fill": "$text-secondary",
+                                          "textGrowth": "fixed-width",
+                                          "width": 560,
+                                          "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font-ui",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
                                           "id": "c74i3",
                                           "name": "paths",
                                           "fill": "$text-secondary",
@@ -139492,6 +139598,86 @@
                                       "fill": "$text-secondary",
                                       "width": 12,
                                       "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "O5Ckgc",
+                              "name": "row Diagnostic",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "p1NWJz",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "wMTAr",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Diagnostic",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "z2TgF",
+                                      "name": "h",
+                                      "fill": "$text-secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "oA1CW",
+                                  "name": "b send a diagnostic",
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "padding": [
+                                    6,
+                                    11
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "d82pR",
+                                      "name": "l",
+                                      "fill": "$text-muted",
+                                      "content": "send a diagnostic",
+                                      "lineHeight": 1.35,
+                                      "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -278534,6 +278720,19 @@
                                         },
                                         {
                                           "type": "text",
+                                          "id": "J7IEhs",
+                                          "name": "abrupt",
+                                          "fill": "$text-secondary",
+                                          "textGrowth": "fixed-width",
+                                          "width": 560,
+                                          "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font-ui",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
                                           "id": "UBrTN",
                                           "name": "paths",
                                           "fill": "$text-secondary",
@@ -278600,6 +278799,86 @@
                                       "fill": "$text-secondary",
                                       "width": 12,
                                       "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "puJff",
+                              "name": "row Diagnostic",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "WDsKW",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "ZzaDN",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Diagnostic",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "fOcsa",
+                                      "name": "h",
+                                      "fill": "$text-secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Iaijc",
+                                  "name": "b send a diagnostic",
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "padding": [
+                                    6,
+                                    11
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "Gmxd2",
+                                      "name": "l",
+                                      "fill": "$text-muted",
+                                      "content": "send a diagnostic",
+                                      "lineHeight": 1.35,
+                                      "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -280024,6 +280303,19 @@
                                         },
                                         {
                                           "type": "text",
+                                          "id": "tNKfZ",
+                                          "name": "abrupt",
+                                          "fill": "$text-secondary",
+                                          "textGrowth": "fixed-width",
+                                          "width": 560,
+                                          "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                                          "lineHeight": 1.4,
+                                          "fontFamily": "$font-ui",
+                                          "fontSize": 11,
+                                          "fontWeight": "normal"
+                                        },
+                                        {
+                                          "type": "text",
                                           "id": "qcyo8",
                                           "name": "paths",
                                           "fill": "$text-secondary",
@@ -280090,6 +280382,86 @@
                                       "fill": "$text-secondary",
                                       "width": 12,
                                       "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "A4pEEp",
+                              "name": "row Diagnostic",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "U76vR",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "hkKVa",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "Diagnostic",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "SgaOB",
+                                      "name": "h",
+                                      "fill": "$text-secondary",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "UoITK",
+                                  "name": "b send a diagnostic",
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "padding": [
+                                    6,
+                                    11
+                                  ],
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "TgyG9",
+                                      "name": "l",
+                                      "fill": "$text-muted",
+                                      "content": "send a diagnostic",
+                                      "lineHeight": 1.35,
+                                      "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
                                     }
                                   ]
                                 }
@@ -280341,6 +280713,2170 @@
                               ]
                             }
                           ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "vSyKd",
+      "x": 9240,
+      "y": 5000,
+      "name": "Settings · Preferences · diagnostic",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "jrx4b",
+          "name": "t",
+          "fill": "$text-primary",
+          "content": "Settings · Preferences · a diagnostic, and what Send error reports covers",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "R2yZe",
+          "name": "intro",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "Send error reports covers three sends now, under one consent, and never on Windows, where neither row shows: an error Tars did not expect, as before; at the next launch after a run that did not quit (a crash, a kill, a power cut), a note saying so, with the version, how long it ran, the crash type macOS gives and its last health sample; and a diagnostic sent from here, the samples of the last 24 hours, at most once a day. Tars records a sample every 5 minutes, the switch on or off, in ~/.dorothy/health-samples.jsonl, readable by its owner only, 24 hours and 256 KB at most: the main process's memory, the event loop's delay, the three slowest calls of the 5 minutes, how many agents there are and how many run, the page open. Numbers, with the names of Tars's own calls and pages: no file path, no name, no content. The button is off while the switch is, and while a send runs, about ten seconds on a slow network; then one line says what main answered: how many samples went, from when to when, in local time, or main's own sentence for why nothing did.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "wVtAz",
+          "name": "col",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "LZBI7",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "the switch on, at rest: the button on",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "Y5gFE",
+              "name": "card on",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "rLcIa",
+                  "name": "row Send error reports",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "RAFyl",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Wdmc3",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Send error reports",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "hl2pH",
+                          "name": "h",
+                          "width": 560,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "TPrvp",
+                              "name": "sent",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "Sends Sentry the error, where it happened in Tars's code, the version, the system and a random install id.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "eURQZ",
+                              "name": "abrupt",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "XCgDv",
+                              "name": "paths",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "File paths keep their names, with your home folder shown as ~.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "gifz1",
+                              "name": "never",
+                              "gap": 3,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "NOi8G",
+                                  "name": "text",
+                                  "fill": "$text-secondary",
+                                  "content": "Never your code, prompts, conversations or keys.",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "p5ZlbV",
+                                  "name": "link",
+                                  "fill": "$accent",
+                                  "content": "Privacy policy",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "E2o6X",
+                      "name": "Toggle on",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$accent",
+                      "stroke": "$accent",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ZXtYb",
+                          "x": 16,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$bg",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FgtQf",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "AeZ3A",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "TkHdv",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "oIr8K",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "t3JASP",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L12bCk",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "lVtQt",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "sending: the button off, and saying so, until main answers",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "J6nDGH",
+              "name": "card sending",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "xe41n",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "f8oSX4",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dZT7w",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "euVKp",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XlI3w",
+                      "name": "b sending…",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PGsCS",
+                          "name": "l",
+                          "fill": "$text-muted",
+                          "content": "sending…",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "yMvZh",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "sent: how many samples, from when to when, in local time",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "yWzgr",
+              "name": "card sent",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VuVb6",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hj8xs",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FHz6d",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uiGUV",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "L1dfxW",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sent 288 samples from 14 Oct 09:05 to 15 Oct 09:00.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "c1r4P",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "RMZ6F",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "sDX3Y",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "refused or failed: main's sentence, as it gives it",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "cUCza",
+              "name": "card refused",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "uTjGb",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "sgABT",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lcLbK",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "bvauh",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "crlzE",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "A diagnostic was already sent in the last 24 hours.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RtgCI",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "koCfz",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Z19dbr",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "f4RlG",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DmrdJ",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "fzr9X",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Sjp8S",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Nothing has been recorded yet: Tars records its health every 5 minutes.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zlwLP",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "O2dt1",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Yn3I3",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "g0fyYD",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VXy8g",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "E2kuy",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "u76Bzb",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sentry could not be reached. Nothing was sent.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zHd9X",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "NUfSo",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "LNaXI",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "the switch off: the button off; on Windows neither row shows",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "cnO2x",
+              "name": "card off",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "op6Mi",
+                  "name": "row Send error reports",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ty1Fx",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n1ccP",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Send error reports",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "KlrT8",
+                          "name": "h",
+                          "width": 560,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "tIc5A",
+                              "name": "sent",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "Sends Sentry the error, where it happened in Tars's code, the version, the system and a random install id.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "R8aVW",
+                              "name": "abrupt",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "oa9ps",
+                              "name": "paths",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "File paths keep their names, with your home folder shown as ~.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ylxeV",
+                              "name": "never",
+                              "gap": 3,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "XaH4M",
+                                  "name": "text",
+                                  "fill": "$text-secondary",
+                                  "content": "Never your code, prompts, conversations or keys.",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "mN38D",
+                                  "name": "link",
+                                  "fill": "$accent",
+                                  "content": "Privacy policy",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "WI5hS",
+                      "name": "Toggle off",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Gh1Lh",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yc9dd",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "fzyQh",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BEtVZ",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "yosLn",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mU6vX",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZL0ji",
+                          "name": "l",
+                          "fill": "$text-muted",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "t5cVG",
+      "x": 10780,
+      "y": 5000,
+      "name": "Settings · Preferences · diagnostic · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "U0gcrQ",
+          "name": "t",
+          "fill": "$text-primary",
+          "content": "Settings · Preferences · a diagnostic, and what Send error reports covers",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "JX0pi",
+          "name": "intro",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "Send error reports covers three sends now, under one consent, and never on Windows, where neither row shows: an error Tars did not expect, as before; at the next launch after a run that did not quit (a crash, a kill, a power cut), a note saying so, with the version, how long it ran, the crash type macOS gives and its last health sample; and a diagnostic sent from here, the samples of the last 24 hours, at most once a day. Tars records a sample every 5 minutes, the switch on or off, in ~/.dorothy/health-samples.jsonl, readable by its owner only, 24 hours and 256 KB at most: the main process's memory, the event loop's delay, the three slowest calls of the 5 minutes, how many agents there are and how many run, the page open. Numbers, with the names of Tars's own calls and pages: no file path, no name, no content. The button is off while the switch is, and while a send runs, about ten seconds on a slow network; then one line says what main answered: how many samples went, from when to when, in local time, or main's own sentence for why nothing did.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "xiJEy",
+          "name": "col",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "Alkft",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "the switch on, at rest: the button on",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "g3sy8",
+              "name": "card on",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Ec4V6",
+                  "name": "row Send error reports",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DnE93",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Tu9Hb",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Send error reports",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u8AhOC",
+                          "name": "h",
+                          "width": 560,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "rTFaZ",
+                              "name": "sent",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "Sends Sentry the error, where it happened in Tars's code, the version, the system and a random install id.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "k62OfC",
+                              "name": "abrupt",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "u01yR",
+                              "name": "paths",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "File paths keep their names, with your home folder shown as ~.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ITIxH",
+                              "name": "never",
+                              "gap": 3,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "rfQ9Y",
+                                  "name": "text",
+                                  "fill": "$text-secondary",
+                                  "content": "Never your code, prompts, conversations or keys.",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "xeHcQ",
+                                  "name": "link",
+                                  "fill": "$accent",
+                                  "content": "Privacy policy",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "WczLg",
+                      "name": "Toggle on",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$accent",
+                      "stroke": "$accent",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "TORn1",
+                          "x": 16,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$bg",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FK15I",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "K7scmQ",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YjYlg",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "o8j8KZ",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zfBHy",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "KvKah",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "wJttp",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "sending: the button off, and saying so, until main answers",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "zvEOa",
+              "name": "card sending",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "W0Am6P",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "R88mv",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ngb88",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "VmOMR",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Rkgj8",
+                      "name": "b sending…",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "I9q6w8",
+                          "name": "l",
+                          "fill": "$text-muted",
+                          "content": "sending…",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "DlQzg",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "sent: how many samples, from when to when, in local time",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "U2Hdn",
+              "name": "card sent",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "J2oqoF",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "G611h",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wMxuq",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "s9psQM",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "mKy89",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sent 288 samples from 14 Oct 09:05 to 15 Oct 09:00.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Emv2S",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZRDEM",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "W4HdRK",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "refused or failed: main's sentence, as it gives it",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "X3Qsj1",
+              "name": "card refused",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "OwJ5X",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LqOq5",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "aUFeG",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "M3b6V",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "C76K2z",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "A diagnostic was already sent in the last 24 hours.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Iy7kV",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "wGliO",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "te35c",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "U0w6Ce",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "o56JE",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "tYADq",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "w8rpT",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Nothing has been recorded yet: Tars records its health every 5 minutes.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "e8Seh9",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L69vq",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "MZoiB",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "cCMdO",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "G3ntoT",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "RwwwN",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "jzuTp",
+                          "name": "result",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sentry could not be reached. Nothing was sent.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IU9Lf",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "IrEGd",
+                          "name": "l",
+                          "fill": "$text-secondary",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "Pratd",
+              "name": "state",
+              "fill": "$text-muted",
+              "content": "the switch off: the button off; on Windows neither row shows",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "BNsnc",
+              "name": "card off",
+              "width": 978,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "padding": [
+                0,
+                16
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "msZ5g",
+                  "name": "row Send error reports",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "DUaYb",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qkRBZ",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Send error reports",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "QUETA",
+                          "name": "h",
+                          "width": 560,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xyE1d",
+                              "name": "sent",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "Sends Sentry the error, where it happened in Tars's code, the version, the system and a random install id.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "HV8yY",
+                              "name": "abrupt",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "When Tars ended abruptly, the next launch says so: how long it ran, the crash type macOS gives, and its last health numbers.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Z3umhC",
+                              "name": "paths",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 560,
+                              "content": "File paths keep their names, with your home folder shown as ~.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "wIYAJ",
+                              "name": "never",
+                              "gap": 3,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "E4oKql",
+                                  "name": "text",
+                                  "fill": "$text-secondary",
+                                  "content": "Never your code, prompts, conversations or keys.",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "VGZSY",
+                                  "name": "link",
+                                  "fill": "$accent",
+                                  "content": "Privacy policy",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LAjuc",
+                      "name": "Toggle off",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "U7QQjO",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Sg0cd",
+                  "name": "row Diagnostic",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "gap": 16,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "P17eSJ",
+                      "name": "l",
+                      "width": 560,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DotIX",
+                          "name": "n",
+                          "fill": "$text-primary",
+                          "content": "Diagnostic",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uSw1r",
+                          "name": "h",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Sends the last 24 hours of health numbers now, at most once a day, while Send error reports is on. Tars records them here every 5 minutes: memory, the slowest calls, how many agents run, the page open. No file path, no name, no content.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QxTGx",
+                      "name": "b send a diagnostic",
+                      "height": 26,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        6,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qTfJl",
+                          "name": "l",
+                          "fill": "$text-muted",
+                          "content": "send a diagnostic",
+                          "lineHeight": 1.35,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     }

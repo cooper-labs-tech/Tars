@@ -1,13 +1,13 @@
 # Tars Privacy Policy
 
-Last updated: 2026-10-01.
+Last updated: 2026-10-15.
 
 This policy covers two things: the Tars desktop app, and the website that offers it for download.
 
 ## The short version
 
 - Tars is a desktop app that runs on your Mac. There is no Tars server and no Tars account, and the app collects no analytics.
-- Error reports are off unless you turn them on. Turned on, Tars sends Sentry a short report when it meets an error it did not expect: what failed, where in Tars's own code, the version, your system and a random id for your installation. Reports are built to leave out your code, prompts and keys, but an error's message can name a file or folder.
+- Error reports are off unless you turn them on. Turned on, Tars sends Sentry a short report when it meets an error it did not expect: what failed, where in Tars's own code, the version, your system and a random id for your installation. Reports are built to leave out your code, prompts and keys, but an error's message can name a file or folder. The same switch sends a short note at the next launch after Tars ended abruptly, and lets you send a diagnostic from Settings: Tars's health numbers of the last 24 hours, which it keeps on your machine. They are numbers, with the names of Tars's own calls and pages: no content, no file path, no name.
 - What Tars stores, it stores in folders in your home directory, on your machine.
 - Data leaves your machine only toward services you connect yourself: the AI providers whose command-line tools or API keys you use, integrations such as Telegram, Slack or Discord that you turn on, and Sentry if you turn error reports on. Each of them receives data under its own terms, not ours.
 - The website uses Vercel Web Analytics, which sets no cookies, and counts downloads from GitHub's own release figures.
@@ -34,7 +34,8 @@ Tars keeps its data in these places:
   - Claude rate-limit and token counters;
   - a log of CLI updates;
   - the token that local programs use to talk to Tars;
-  - if you turned error reports on, the random id of your installation and when the last reports left (`error-reports.json`).
+  - if you turned error reports on, the random id of your installation and when the last reports left (`error-reports.json`);
+  - Tars's health numbers, one sample every 5 minutes while it runs, the last 24 hours and at most 256 KB, readable by your account only (`health-samples.jsonl`): what a sample holds is listed under Error reports, below.
 
   At every start, Tars closes this folder to the other accounts on your Mac: the folder and its subfolders can be opened by your user account only, and the files directly in it are readable by your account only.
 - **`~/.tars-private/`**: your conversation with the super chat (the fleet overseer), the list of Hermes sessions that conversation was held in, the Hermes webhook secret, and, if you use several Claude accounts, their list: each account's name, its place in the order and the thresholds, never a credential. This folder is readable by your user account only, and Tars does not point the agents it starts at it. When an agent searches memory, the super chat's Hermes sessions are left out of what it gets back.
@@ -85,6 +86,17 @@ Nothing below happens unless you set it up, except where a sentence says otherwi
 
   A report never holds the contents of your files, your code or your conversations as such, screenshots, memory dumps, a record of what you did before the error, your computer's language or time zone, your email or account names, sessions, performance traces, recordings of the window, or any other file. At most one report of the same error leaves in 24 hours, and at most 20 in any 24 hours.
 
+  The same switch sends two more kinds of report, built the same way, each saying which kind it is and carrying a report's usual fields: Tars's version, the name and version of your operating system, the version of Electron, the random id and the time. At the next launch after a run of Tars that did not quit (a crash, a kill, a power cut), a note saying so: the version that stopped, how many minutes it ran, on macOS the exception type macOS recorded for the crash and nothing else of its report, and the last health sample. And when you press Send a diagnostic in Settings > Preferences, the health samples of the last 24 hours. Tars records a sample every 5 minutes whether the switch is on or not, and keeps them on your machine; they leave it only in these two reports. A sample holds these numbers and nothing else:
+
+  - when it was taken;
+  - the memory Tars's main process uses: its heap, used and total, and its resident memory, in megabytes;
+  - how late its event loop ran: the median and the 95th percentile, in milliseconds;
+  - its three slowest calls of those 5 minutes: the name of each one's channel, such as `usage:tasks`, and how long it took;
+  - how many agents there were, and how many ran;
+  - the path of the page open in the window, such as `/usage`.
+
+  A note or a sample never holds a memory dump, a stack, a file path, a name, your computer's name or any content. Each of the two kinds leaves at most once in 24 hours, inside the limit of 20 reports in any 24 hours; a send that fails is not counted, and quitting Tars sends nothing. Neither is sent on Windows, where error reports are not available yet.
+
   Like any connection, the report reaches Sentry from your network address; the report itself does not carry it, and Sentry is set not to store it. Sentry stores reports in its European Union data region. Cooper Labs uses them only to find and fix bugs in Tars. Turn the switch off and nothing more is sent from that moment, without restarting.
 - **Marketplaces and installs.** Opening the Extensions page reads the public skills.sh catalogue and plugin lists on GitHub. Installing a skill or a plugin downloads it from GitHub or npm.
 
@@ -101,7 +113,7 @@ The download site is separate from the app.
 ## What you control, and how to delete it
 
 - Every integration is off until you set it up. Turn it off, or remove its credentials, in Settings.
-- Error reports are off until you turn them on, and turning them off stops them at once. Deleting `~/.dorothy/error-reports.json` gives your installation a new random id the next time reports are on. To have the reports you already sent deleted, write to contact@cooperlabs.xyz with the id that file holds.
+- Error reports are off until you turn them on, and turning them off stops them at once. Deleting `~/.dorothy/error-reports.json` gives your installation a new random id the next time reports are on. To have the reports you already sent deleted, write to contact@cooperlabs.xyz with the id that file holds. Tars's health numbers stay in `~/.dorothy/health-samples.jsonl`; deleting it removes the samples kept so far.
 - To remove everything Tars stored, quit Tars and delete:
   - `~/.dorothy/` and `~/.tars-private/`;
   - `~/Library/Application Support/Tars/`;
