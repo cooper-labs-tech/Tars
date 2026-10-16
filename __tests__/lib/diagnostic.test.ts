@@ -53,6 +53,9 @@ describe('a time that does not read (3)', () => {
     const line = diagnosticLine({ sent: true, samples: 5, from: 'yesterday', to: '' }, NOW);
     expect(line).toBe('Sent 5 samples.');
     expect(line).not.toMatch(/Invalid|NaN/);
+    // Each time on its own: one that reads does not carry one that does not.
+    expect(diagnosticLine({ sent: true, samples: 5, from: 'yesterday', to: local(2026, 9, 15, 9, 0) }, NOW)).toBe('Sent 5 samples.');
+    expect(diagnosticLine({ sent: true, samples: 5, from: local(2026, 9, 14, 9, 5), to: 'soon' }, NOW)).toBe('Sent 5 samples.');
   });
 });
 
@@ -77,7 +80,8 @@ describe('refused (4)', () => {
 
 describe('an answer of another shape (5)', () => {
   it('never reads it as sent', () => {
-    for (const answer of [undefined, null, 'sent', {}, { sent: 'yes' }, { sent: true }, { sent: true, samples: '288' }] as unknown[]) {
+    const times = { from: local(2026, 9, 14, 9, 5), to: local(2026, 9, 15, 9, 0) };
+    for (const answer of [undefined, null, 'sent', {}, { sent: 'yes' }, { sent: true }, { sent: true, samples: '288' }, { sent: 'yes', samples: 3, ...times }, { sent: 1, samples: 3, ...times }] as unknown[]) {
       expect(diagnosticLine(answer as never, NOW)).toBe('Nothing was sent.');
     }
   });
