@@ -8,7 +8,7 @@ Target platforms are macOS and Windows: `electron-builder` is invoked with `--ma
 `npm run release` and with `--win` by `npm run release:win` (*Cut a release*), the macOS
 code-signing config is `build/entitlements.mac.plist` (the Windows build is not signed), and
 on macOS the Tasmania integration reads a token out of `~/Library/Application Support/`. The
-code stays Linux compatible all the same (Noah,
+code stays Linux compatible all the same (the maintainer,
 2026-09-24): the CI runs the tests on ubuntu, and a macOS-only code path has a Linux one or
 fails cleanly.
 
