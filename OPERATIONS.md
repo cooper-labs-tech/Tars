@@ -724,9 +724,9 @@ work.
 | `~/.dorothy/vault/` + `vault/attachments/` | same | vault file bodies |
 | `~/.dorothy/telegram-downloads/` | `electron/services/telegram-bot.ts` | inbound media |
 | `~/.dorothy/CLAUDE.md` | `electron/utils/index.ts` | copied from the repo at every boot, loaded by agents via `--add-dir` |
-| `~/.dorothy/statusline.sh` | `electron/utils/statusline.ts` | installed only when the statusline is enabled |
-| `~/.dorothy/rate-limits.d/<account>.json` | the `statusline.sh` it installs | each Claude account's last 5 h and weekly counters, `default` for account 1; what Tars chooses an agent's account from when several are on, and what the Usage page shows per account (`accountRateLimits` of `claude:getData`). With several accounts on, Tars also asks Claude Code itself every 10 minutes (`get_usage`, `usage-probe.ts`), so an account no agent ran on, or one used on claude.ai, is still read; a failed probe is a `[claude-accounts] the usage of <id> was not read` line in the main process's log, and the account keeps its status line's figures. An account whose own `projects/` is a real folder holding something gets no agent (they start on account 1, and Settings says why): move its contents into `~/.claude/projects` and delete it; an empty one is made the link at the next launch |
-| `~/.dorothy/token-stats.json` | the `statusline.sh` it installs | one entry per Claude session (tokens, cost, model, provider, account), rewritten at every render; anything that is not one JSON object starts again from `{}` |
+| `~/.dorothy/bin/tars-hook` (`tars-hook.cmd` on Windows) | `electron/utils/hook-launcher.ts` | what every hook and the status line start through, rewritten at each start; its `NODE=` line is the Node they run on. Until 2.0.4 a bash status line lived at `~/.dorothy/statusline.sh`, removed when the status line is turned on |
+| `~/.dorothy/rate-limits.d/<account>.json` | `hooks/statusline.mjs`, the status line | each Claude account's last 5 h and weekly counters, `default` for account 1; what Tars chooses an agent's account from when several are on, and what the Usage page shows per account (`accountRateLimits` of `claude:getData`). With several accounts on, Tars also asks Claude Code itself every 10 minutes (`get_usage`, `usage-probe.ts`), so an account no agent ran on, or one used on claude.ai, is still read; a failed probe is a `[claude-accounts] the usage of <id> was not read` line in the main process's log, and the account keeps its status line's figures. An account whose own `projects/` is a real folder holding something gets no agent (they start on account 1, and Settings says why): move its contents into `~/.claude/projects` and delete it; an empty one is made the link at the next launch |
+| `~/.dorothy/token-stats.json` | `hooks/statusline.mjs`, the status line | one entry per Claude session (tokens, cost, model, provider, account), rewritten at every render; anything that is not one JSON object starts again from `{}` |
 
 These files live outside that directory, on purpose, in `~/.tars-private`. `~/.dorothy` is handed to
 every agent through `--add-dir`; this directory is handed to nothing, no path under it is ever passed
@@ -1415,12 +1415,13 @@ tail -f ~/.dorothy/logs/hooks-debug.log    # on-stop, verbose
 # every user and shared by every Tars on the machine, a sandbox's included. Tars
 # removes those two at startup, when HOME is the user's own (never from a sandbox).
 
-# are they installed and pointing at a file that exists?
+# are they installed? each command starts with the launcher (or `node`) and names hooks/tars-hook.mjs
 jq -r '.hooks | to_entries[] | "\(.key)\t\(.value[0].hooks[0].command)"' ~/.claude/settings.json
-jq -r '.hooks | to_entries[] | .value[0].hooks[0].command' ~/.claude/settings.json | xargs -I{} test -x {} || echo MISSING
 
-# the hooks need jq and curl
-which jq curl
+# which Node they run on (2.0.4 and later): the NODE line, then the app's own (APP), then node on the PATH
+grep -E '^(NODE|APP)=' ~/.dorothy/bin/tars-hook
+# one hook by hand, as the CLI runs it, outside Tars: a skipped event answers at once
+echo '{"session_id":"x"}' | sh -c "$(jq -r '.hooks.Stop[0].hooks[0].command' ~/.claude/settings.json)"
 ```
 
 A hook post that is refused (`401` or `403` in those logs) comes from a CLI whose
@@ -1431,7 +1432,7 @@ quitting kills every agent terminal and each comes back with a token.
 
 | Symptom | Cause |
 |---|---|
-| agents stuck `idle` while clearly working | `jq` not on the hook's PATH: every script `exit 0`s with `{"continue":true}` and posts nothing |
+| agents stuck `idle` while clearly working | the launcher names no Node that still runs and the app it names has moved, or (before 2.0.4) `jq` not on the hook's PATH. Restart Tars: it finds a Node and writes the launcher again at each start |
 | status posts ignored after a restart | `SessionStart` registration was lost; the stale-session guard drops later posts. Stop and re-dispatch the agent |
 | no memory injected at session start | `/api/memory/context` returned empty, or `$HOME/.dorothy/api-token` is unreadable; `/api/memory/*` is **not** auth-exempt |
 | sandbox/E2E agent status shows up in prod | fixed in 1.7.0: the hooks follow `CLAUDE_MGR_API_URL`. On an older build they hardcoded `31415`; see *Run a second Tars beside your live one* |

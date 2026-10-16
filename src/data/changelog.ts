@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On macOS and Linux, the hooks Tars installs in Claude Code and Gemini CLI, and the Claude Code status line, no longer need jq, curl, bash or awk: they run on Node, as on Windows, through a small launcher Tars writes at each start in ~/.dorothy/bin. It uses a Node of your computer when one of version 16 or later is found, else the one inside Tars, so nothing has to be installed. In a Claude Code session Tars did not start, the hooks that have nothing to do there now answer at once without starting anything: a Stop hook took about 260 ms there, and now takes about 30.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-15',
