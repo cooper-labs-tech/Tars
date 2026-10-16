@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Error reports on a Windows build too (the maintainer's parity rule of
@@ -43,6 +43,11 @@ vi.mock('electron', async () => {
 
 import { HEALTH_REFUSALS } from '../../../electron/services/error-reports';
 
+const HOST = process.platform;
+/** startErrorReports reads no platform: each case says which one it stands for. */
+const on = (platform: NodeJS.Platform) => Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+afterEach(() => { on(HOST); });
+
 beforeEach(() => {
   loaded.count = 0;
   init.mockReset();
@@ -56,50 +61,55 @@ async function fresh() {
 describe('error reports on a Windows build', () => {
   it('1. load and start the SDK, with the setting on', async () => {
     const start = await fresh();
-    await start(() => true, 'win32').sync();
+    on('win32');
+    await start(() => true).sync();
     expect(loaded.count).toBe(1);
     expect(init).toHaveBeenCalledTimes(1);
   });
 
   it('2. and when the setting is turned on while Tars runs', async () => {
-    let on = false;
+    let enabled = false;
+    on('win32');
     const start = await fresh();
-    const reports = start(() => on, 'win32');
+    const reports = start(() => enabled);
     await reports.sync();
     expect(init).not.toHaveBeenCalled();
-    on = true;
+    enabled = true;
     await reports.sync();
     expect(init).toHaveBeenCalledTimes(1);
   });
 
   it('3. never load it with the setting off', async () => {
     const start = await fresh();
-    await start(() => false, 'win32').sync();
+    on('win32');
+    await start(() => false).sync();
     expect(loaded.count).toBe(0);
     expect(init).not.toHaveBeenCalled();
   });
 
   it('4. the diagnostic and the abrupt end are refused only by the switch, as elsewhere', async () => {
+    on('win32');
     const start = await fresh();
-    let on = true;
-    const reports = start(() => on, 'win32');
+    let enabled = true;
+    const reports = start(() => enabled);
     expect(reports.refusal()).toBeNull();
-    on = false;
+    enabled = false;
     expect(reports.refusal()).toBe(HEALTH_REFUSALS.off);
     expect(Object.keys(HEALTH_REFUSALS)).not.toContain('windows');
   });
 
   it('5. the same on the three platforms, for the same settings', async () => {
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
-      for (const on of [true, false]) {
+      for (const enabled of [true, false]) {
         loaded.count = 0;
         init.mockReset();
         vi.resetModules();
+        on(platform);
         const start = await fresh();
-        const reports = start(() => on, platform);
+        const reports = start(() => enabled);
         await reports.sync();
-        expect({ platform, on, started: init.mock.calls.length, refusal: reports.refusal() })
-          .toEqual({ platform, on, started: on ? 1 : 0, refusal: on ? null : HEALTH_REFUSALS.off });
+        expect({ platform, enabled, started: init.mock.calls.length, refusal: reports.refusal() })
+          .toEqual({ platform, enabled, started: enabled ? 1 : 0, refusal: enabled ? null : HEALTH_REFUSALS.off });
       }
     }
   });
