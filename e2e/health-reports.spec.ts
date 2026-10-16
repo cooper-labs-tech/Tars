@@ -18,8 +18,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * reaches Sentry, with its version, uptime and last sample (page /usage) and nothing of the machine. "Send a diagnostic"
  * (diagnostic:send): refused while Sentry answers 503, without spending the budget; then sent, its samples in it; then
  * refused for 24 hours. A clean quit, then a launch: no report. With the switch off: a kill and a launch send nothing,
- * and the diagnostic is refused with the reason. On Windows error reports are not offered: nothing is sent, and the
- * diagnostic says why.
+ * and the diagnostic is refused with the reason. The same on Windows (2.0.4, the parity rule): nothing there differs.
  * A second Tars on the same home while the first runs (macOS and Linux hold no single-instance lock; the Audit's M1 on
  * #418, its probe): no abrupt end is reported, and the record stays the first's, so a kill of the first while the
  * second runs is reported once, at the next launch after both. And a crashed Tars whose pid another process of the user
@@ -118,28 +117,23 @@ test('an abrupt end is reported once at the next launch, a diagnostic sends the 
     const leftByThatRun = samplesIn(samplesFile);
 
     ({ app, page } = await boot(home, sentry.dsn, port));
-    if (onWindows) {
-      await page.waitForTimeout(5_000);
-      expect(sentry.events).toEqual([]);
-    } else {
-      await expect.poll(() => sentry.ofKind('abrupt-end').length, { timeout: 30_000, message: 'the abrupt end reported' }).toBe(1);
-      const report = sentry.ofKind('abrupt-end')[0];
-      values.abruptEnd = report;
-      const tars = report.contexts!.tars!;
-      const version = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version as string;
-      expect(report.exception!.values![0].type).toBe('TarsEndedAbruptly');
-      expect(tars.previousVersion).toBe(version);
-      expect(typeof tars.uptimeMinutes).toBe('number');
-      // The last sample of that run, whole, its slowest handlers included, as it is on disk: nothing lost on the wire.
-      expect(tars.lastSample).toEqual(leftByThatRun.at(-1));
-      expect(tars.lastSample).toMatchObject({ page: '/usage', agents: 2, running: 0 });
-      expect(Object.keys(tars).sort()).toEqual(['crashType', 'lastSample', 'previousVersion', 'uptimeMinutes']);
-      // Nothing of this machine in what left.
-      for (const text of sentry.raw) {
-        expect(text).not.toContain(home);
-        expect(text).not.toContain(os.hostname());
-        expect(text).not.toContain(os.userInfo().username);
-      }
+    await expect.poll(() => sentry.ofKind('abrupt-end').length, { timeout: 30_000, message: 'the abrupt end reported' }).toBe(1);
+    const report = sentry.ofKind('abrupt-end')[0];
+    values.abruptEnd = report;
+    const tars = report.contexts!.tars!;
+    const version = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8')).version as string;
+    expect(report.exception!.values![0].type).toBe('TarsEndedAbruptly');
+    expect(tars.previousVersion).toBe(version);
+    expect(typeof tars.uptimeMinutes).toBe('number');
+    // The last sample of that run, whole, its slowest handlers included, as it is on disk: nothing lost on the wire.
+    expect(tars.lastSample).toEqual(leftByThatRun.at(-1));
+    expect(tars.lastSample).toMatchObject({ page: '/usage', agents: 2, running: 0 });
+    expect(Object.keys(tars).sort()).toEqual(['crashType', 'lastSample', 'previousVersion', 'uptimeMinutes']);
+    // Nothing of this machine in what left.
+    for (const text of sentry.raw) {
+      expect(text).not.toContain(home);
+      expect(text).not.toContain(os.hostname());
+      expect(text).not.toContain(os.userInfo().username);
     }
     keep();
 
@@ -148,39 +142,34 @@ test('an abrupt end is reported once at the next launch, a diagnostic sends the 
     // A line as an agent could write it (~/.dorothy is theirs too): words in a channel's and a page's pattern.
     const planted = { ...samplesIn(samplesFile).at(-1)!, at: Date.now() - 500, slowest: [{ channel: 'ship-it-tonight', ms: 5 }], page: '/acme-merger' };
     fs.appendFileSync(samplesFile, `${JSON.stringify(planted)}\n`);
-    if (onWindows) {
-      values.diagnosticWindows = await diagnostic(page);
-      expect(values.diagnosticWindows).toEqual({ sent: false, reason: expect.stringContaining('Windows') });
-    } else {
-      sentry.state.status = 503;
-      values.diagnosticUnreachable = await diagnostic(page);
-      expect(values.diagnosticUnreachable).toEqual({ sent: false, reason: expect.stringContaining('could not be reached') });
-      sentry.state.status = 200;
-      values.diagnosticSent = await diagnostic(page);
-      expect(values.diagnosticSent).toMatchObject({ sent: true, samples: expect.any(Number) });
-      expect((values.diagnosticSent as Answer).samples).toBeGreaterThanOrEqual(3);
-      const sent = sentry.ofKind('diagnostic');
-      expect(sent.length).toBe(1);
-      // As many samples as the window was told, each whole, as it is on disk.
-      const received = sent[0].contexts!.tars!.samples as Sample[];
-      expect(received.length).toBe((values.diagnosticSent as Answer).samples);
-      const onDisk = new Map(samplesIn(samplesFile).map((s) => [s.at, s]));
-      for (const s of received.filter((r) => r.at !== planted.at)) expect(s, `the sample of ${new Date(s.at).toISOString()} as on disk`).toEqual(onDisk.get(s.at));
-      // The planted line leaves without its words: no channel this Tars registered, no page of the app.
-      expect(received.find((r) => r.at === planted.at)).toEqual({ ...planted, slowest: [], page: null });
-      expect(sentry.raw.join('\n')).not.toMatch(/ship-it-tonight|acme-merger/);
-      expect(received.some((s) => s.slowest.length > 0), 'a sample with its slowest handlers').toBe(true);
-      values.diagnosticAgain = await diagnostic(page);
-      expect(values.diagnosticAgain).toEqual({ sent: false, reason: expect.stringContaining('already sent') });
-      expect(sentry.ofKind('diagnostic').length).toBe(1);
-    }
+    sentry.state.status = 503;
+    values.diagnosticUnreachable = await diagnostic(page);
+    expect(values.diagnosticUnreachable).toEqual({ sent: false, reason: expect.stringContaining('could not be reached') });
+    sentry.state.status = 200;
+    values.diagnosticSent = await diagnostic(page);
+    expect(values.diagnosticSent).toMatchObject({ sent: true, samples: expect.any(Number) });
+    expect((values.diagnosticSent as Answer).samples).toBeGreaterThanOrEqual(3);
+    const sent = sentry.ofKind('diagnostic');
+    expect(sent.length).toBe(1);
+    // As many samples as the window was told, each whole, as it is on disk.
+    const received = sent[0].contexts!.tars!.samples as Sample[];
+    expect(received.length).toBe((values.diagnosticSent as Answer).samples);
+    const onDisk = new Map(samplesIn(samplesFile).map((s) => [s.at, s]));
+    for (const s of received.filter((r) => r.at !== planted.at)) expect(s, `the sample of ${new Date(s.at).toISOString()} as on disk`).toEqual(onDisk.get(s.at));
+    // The planted line leaves without its words: no channel this Tars registered, no page of the app.
+    expect(received.find((r) => r.at === planted.at)).toEqual({ ...planted, slowest: [], page: null });
+    expect(sentry.raw.join('\n')).not.toMatch(/ship-it-tonight|acme-merger/);
+    expect(received.some((s) => s.slowest.length > 0), 'a sample with its slowest handlers').toBe(true);
+    values.diagnosticAgain = await diagnostic(page);
+    expect(values.diagnosticAgain).toEqual({ sent: false, reason: expect.stringContaining('already sent') });
+    expect(sentry.ofKind('diagnostic').length).toBe(1);
     keep();
 
     // ── A clean quit, then a launch: nothing ──
     await app.close();
     ({ app, page } = await boot(home, sentry.dsn, port));
     await page.waitForTimeout(5_000);
-    expect(sentry.ofKind('abrupt-end').length).toBe(onWindows ? 0 : 1);
+    expect(sentry.ofKind('abrupt-end').length).toBe(1);
     await app.close();
     expect(fs.statSync(samplesFile).size).toBeLessThanOrEqual(256 * 1024);
     keep();
@@ -199,7 +188,7 @@ test('an abrupt end is reported once at the next launch, a diagnostic sends the 
     ({ app, page } = await boot(off, sentry.dsn, port));
     await page.waitForTimeout(5_000);
     values.diagnosticOff = await diagnostic(page);
-    expect(values.diagnosticOff).toEqual({ sent: false, reason: expect.stringContaining(onWindows ? 'Windows' : 'Turn on Send error reports') });
+    expect(values.diagnosticOff).toEqual({ sent: false, reason: expect.stringContaining('Turn on Send error reports') });
     expect(sentry.events.length).toBe(before);
     await app.close();
     keep();
@@ -236,13 +225,8 @@ test('a second Tars on the same home reports no abrupt end while the first runs,
     await second.close();
     second = undefined;
     ({ app: first } = await boot(home, sentry.dsn, port));
-    if (onWindows) {
-      await first.firstWindow().then((p) => p.waitForTimeout(5_000));
-      expect(sentry.events).toEqual([]);
-    } else {
-      await expect.poll(() => sentry.ofKind('abrupt-end').length, { timeout: 30_000, message: "the first's abrupt end, reported at the next launch" }).toBe(1);
-      values.abruptEndAfter = sentry.ofKind('abrupt-end')[0];
-    }
+    await expect.poll(() => sentry.ofKind('abrupt-end').length, { timeout: 30_000, message: "the first's abrupt end, reported at the next launch" }).toBe(1);
+    values.abruptEndAfter = sentry.ofKind('abrupt-end')[0];
     recordValues({ ...values, events: sentry.events });
   } finally {
     await second?.close().catch(() => {});
