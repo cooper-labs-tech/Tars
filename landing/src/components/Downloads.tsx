@@ -60,8 +60,9 @@ export function HeroDownload({ visitor, arch = null, builds, count }: {
           <Github className="w-4 h-4" />
           Source
         </a>
-        {/* GitHub's own count of .dmg downloads (src/lib/downloads.ts).
-            Nothing while there is none, or when GitHub did not answer. */}
+        {/* GitHub's own count of installer downloads, every system's
+            (src/lib/downloads.ts). Nothing while there is none, or when
+            GitHub did not answer. */}
         {count !== null && count > 0 && (
           <span className="font-mono text-xs text-ink-muted">{`${count.toLocaleString()} downloads`}</span>
         )}

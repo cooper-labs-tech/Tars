@@ -30,10 +30,11 @@ export const NEEDS: Record<Os, string> = {
 };
 /**
  * The version each system's first build comes with, said while no release has
- * one: Windows once release:win has run, Linux once its build is published.
- * macOS has a build in every release; its entry is never shown while one does.
+ * one: Windows with 2.0.3 (release:win attaches its setup right after the
+ * macOS files), Linux with 2.0.4. macOS has a build in every release; its
+ * entry is never shown while one does.
  */
-export const COMES_WITH: Record<Os, string> = { mac: '2.0.2', windows: '2.0.4', linux: '2.0.4' };
+export const COMES_WITH: Record<Os, string> = { mac: '2.0.2', windows: '2.0.3', linux: '2.0.4' };
 
 export interface Asset {
   name: string;
@@ -108,6 +109,20 @@ export function readVisitor(nav: NavigatorLike): { os: Os | null; arch: Arch | n
 
 const isArm = (name: string) => /arm64|aarch64/i.test(name);
 
+/**
+ * The system a release file installs, or null for anything else: the .dmg
+ * on a Mac, the NSIS setup .exe on Windows, the .AppImage on Linux. Never an
+ * update file (a .blockmap, a latest*.yml), a zip, or another system's file.
+ * The download route and the counter both read it.
+ */
+export function installerOs(fileName: string): Os | null {
+  const name = fileName.toLowerCase();
+  if (name.endsWith('.dmg')) return 'mac';
+  if (name.endsWith('.exe') && name.includes('setup')) return 'windows';
+  if (name.endsWith('.appimage')) return 'linux';
+  return null;
+}
+
 /** Of a system's installers, the one for this architecture: arm64 by name, x64 the others. */
 function forArch(files: Asset[], arch: Arch | null | undefined, prefer: Arch): Asset | undefined {
   const want = arch ?? prefer;
@@ -120,10 +135,8 @@ function forArch(files: Asset[], arch: Arch | null | undefined, prefer: Arch): A
  * Windows, the .AppImage on Linux.
  */
 export function installerFor(os: Os, assets: Asset[], arch?: Arch | null): Asset | undefined {
-  const name = (a: Asset) => a.name.toLowerCase();
-  if (os === 'mac') return forArch(assets.filter(a => name(a).endsWith('.dmg')), null, 'arm64');
-  if (os === 'windows') return forArch(assets.filter(a => name(a).endsWith('.exe') && name(a).includes('setup')), arch, 'x64');
-  return forArch(assets.filter(a => name(a).endsWith('.appimage')), arch, 'x64');
+  const files = assets.filter(a => installerOs(a.name) === os);
+  return os === 'mac' ? forArch(files, null, 'arm64') : forArch(files, arch, 'x64');
 }
 
 const published = (r: Release) => !r.draft && !r.prerelease;
