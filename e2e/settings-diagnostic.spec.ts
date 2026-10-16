@@ -10,10 +10,10 @@ import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, stepS
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * Send a diagnostic, in Settings > Preferences (JeanBrasse's go on monitoring,
- * 15/10). Frames: `Settings · Preferences` and its copies, and `Settings ·
- * Preferences · diagnostic` with its light copy. In the real app, on a home
- * where nothing starts, main sampling its health every second
+ * Send a diagnostic, in Settings > Preferences (the maintainer's go on
+ * monitoring, 15/10). Frames: `Settings · Preferences` and its copies, and
+ * `Settings · Preferences · diagnostic` with its light copy. In the real app,
+ * on a home where nothing starts, main sampling its health every second
  * (DOROTHY_HEALTH_EVERY_MS, under DOROTHY_E2E) and its reports pointed at a
  * stand-in for Sentry the spec runs (DOROTHY_ERROR_REPORTS_DSN):
  * - Send error reports says what it covers now, the abrupt-end note included;

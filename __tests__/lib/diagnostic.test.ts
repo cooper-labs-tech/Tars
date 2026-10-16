@@ -3,9 +3,9 @@ import { diagnosticLine } from '../../src/lib/diagnostic';
 
 /**
  * The line under Settings > Preferences > Diagnostic once main has answered
- * `diagnostic:send` (JeanBrasse's go on monitoring, 15/10). Frame: `Settings ·
- * Preferences · diagnostic`, and its light copy. Written before the code. How
- * it can fail:
+ * `diagnostic:send` (the maintainer's go on monitoring, 15/10). Frame:
+ * `Settings · Preferences · diagnostic`, and its light copy. Written before
+ * the code. How it can fail:
  * 1. the count: "1 samples", or a count that is not a whole number of samples
  *    read as one;
  * 2. the times: main's ISO times shown as they come, in UTC, instead of in
