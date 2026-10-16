@@ -2402,7 +2402,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 704,
-                      "content": "Error reports are off unless you turn them on. Turned on, Tars sends Sentry a short report when it meets an error it did not expect: what failed, where in Tars's own code, the version, your system and a random id for your installation. Reports are built to leave out your code, prompts and keys, but an error's message can name a file or folder. The same switch sends a short note at the next launch after Tars ended abruptly, and lets you send a diagnostic from Settings: Tars's health numbers of the last 24 hours, which it keeps on your machine. They are numbers only: no content, no file path, no name.",
+                      "content": "Error reports are off unless you turn them on. Turned on, Tars sends Sentry a short report when it meets an error it did not expect: what failed, where in Tars's own code, the version, your system and a random id for your installation. Reports are built to leave out your code, prompts and keys, but an error's message can name a file or folder. The same switch sends a short note at the next launch after Tars ended abruptly, and lets you send a diagnostic from Settings: Tars's health numbers of the last 24 hours, which it keeps on your machine. They are numbers, with the names of Tars's own calls and pages: no content, no file path, no name.",
                       "lineHeight": 1.7,
                       "fontFamily": "$font-ui",
                       "fontSize": 15,
