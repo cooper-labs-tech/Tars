@@ -20,10 +20,17 @@ import { installerAssetFor, offersUpdate } from '../../../electron/platform/upda
  *    architecture's installer, or a macOS file when there is no setup .exe;
  *  - a release that carries no Windows installer yet offered on win32, which
  *    sends the user to a page with nothing to install;
- *  - darwin and linux no longer get the .dmg first, then the .zip, or no
- *    longer get every newer release offered;
- *  - darwin and linux, on a release with no .dmg, offered the Windows zip
- *    listed beside the macOS one.
+ *  - darwin no longer gets the .dmg first, then the .zip, or no longer gets
+ *    every newer release offered;
+ *  - darwin, on a release with no .dmg, offered the Windows zip listed beside
+ *    the macOS one.
+ * And from the parity audit's G5, written before the change (2026-10-17):
+ *  - linux offered another platform's file: the .dmg, the macOS zip, the
+ *    Windows setup or zip. There is no Linux build yet, so it was a macOS file;
+ *  - linux offered a newer release at all while it carries nothing for Linux,
+ *    which sends the user to a page with nothing to install;
+ *  - the offer decided apart from the installer, so that the Linux build to
+ *    come (2.0.4's P1) would have two places to change instead of one.
  */
 
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -61,16 +68,20 @@ describe('which asset is offered', () => {
     expect(installerAssetFor([asset('tars-setup-2.0.0.EXE')], 'win32', 'x64')?.name).toBe('tars-setup-2.0.0.EXE');
   });
 
-  it('darwin and linux: unchanged, the .dmg, then the .zip', () => {
+  it('darwin: unchanged, the .dmg, then the .zip', () => {
     expect(installerAssetFor(release, 'darwin', 'arm64')?.name).toBe('Tars-1.9.6-arm64.dmg');
     expect(installerAssetFor([asset('Tars-1.9.6-arm64-mac.zip')], 'darwin', 'arm64')?.name).toBe('Tars-1.9.6-arm64-mac.zip');
-    expect(installerAssetFor(release, 'linux', 'x64')?.name).toBe('Tars-1.9.6-arm64.dmg');
   });
 
-  it('darwin and linux: with no .dmg, the macOS zip, never the Windows zip listed beside it', () => {
+  it('linux: nothing from a release, no macOS file and no Windows one, while there is no Linux build', () => {
+    expect(installerAssetFor(release, 'linux', 'x64')).toBeUndefined();
+    expect(installerAssetFor(release, 'linux', 'arm64')).toBeUndefined();
+    expect(installerAssetFor([asset('Tars-1.9.6-arm64-mac.zip')], 'linux', 'x64')).toBeUndefined();
+  });
+
+  it('darwin: with no .dmg, the macOS zip, never the Windows zip listed beside it', () => {
     const windowsFirst = [asset('Tars-Windows-1.9.6-x64.zip'), asset('Tars-1.9.6-arm64-mac.zip'), asset('Tars-Setup-1.9.6.exe')];
     expect(installerAssetFor(windowsFirst, 'darwin', 'arm64')?.name).toBe('Tars-1.9.6-arm64-mac.zip');
-    expect(installerAssetFor(windowsFirst, 'linux', 'x64')?.name).toBe('Tars-1.9.6-arm64-mac.zip');
     expect(installerAssetFor([asset('Tars-Windows-1.9.6-x64.zip'), asset('Tars-Setup-1.9.6.exe')], 'darwin', 'arm64')).toBeUndefined();
   });
 
@@ -89,10 +100,18 @@ describe('whether a newer release is offered', () => {
     expect(offersUpdate('win32', undefined)).toBe(false);
   });
 
-  it('darwin and linux: always, as before, whatever the release carries', () => {
-    for (const platform of ['darwin', 'linux'] as const) {
-      expect(offersUpdate(platform, asset('Tars-1.9.6-arm64.dmg'))).toBe(true);
-      expect(offersUpdate(platform, undefined)).toBe(true);
-    }
+  it('darwin: always, as before, whatever the release carries', () => {
+    expect(offersUpdate('darwin', asset('Tars-1.9.6-arm64.dmg'))).toBe(true);
+    expect(offersUpdate('darwin', undefined)).toBe(true);
+  });
+
+  it('linux: not while the release carries nothing for Linux', () => {
+    expect(offersUpdate('linux', installerAssetFor([asset('Tars-1.9.6-arm64.dmg'), asset('Tars-Setup-1.9.6.exe')], 'linux', 'x64'))).toBe(false);
+    expect(offersUpdate('linux', undefined)).toBe(false);
+  });
+
+  it('linux: as soon as installerAssetFor finds a file for it, with nothing else to change', () => {
+    // What 2.0.4's Linux build will give installerAssetFor to find.
+    expect(offersUpdate('linux', asset('Tars-2.0.4-x86_64.AppImage'))).toBe(true);
   });
 });

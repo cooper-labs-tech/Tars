@@ -53,3 +53,4 @@ export {
 export { installerAssetFor, offersUpdate } from './update-feed';
 export { gitCommand, currentFolderLookupsOff } from './git-command';
 export { nodeMissing } from './node-check';
+export { hookToolsMissing } from './hook-tools-check';

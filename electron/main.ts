@@ -156,7 +156,7 @@ import {
 } from './utils';
 import { endVersionProbes } from './core/version-probe';
 import { endAuthCommands } from './services/claude-accounts/auth';
-import { cliEnv, currentFolderLookupsOff, nodeMissing } from './platform';
+import { cliEnv, currentFolderLookupsOff, hookToolsMissing, nodeMissing } from './platform';
 
 // ============== App Settings Management ==============
 
@@ -548,6 +548,10 @@ app.whenReady().then(async () => {
   // claude.exe does not bring. Said at each launch until it is installed.
   const noNode = nodeMissing(cliEnv() ?? process.env);
   if (noNode) void dialog.showMessageBox({ type: 'warning', ...noNode });
+  // macOS and Linux: the hooks are the .sh scripts, which need jq and curl on
+  // the PATH the agents' terminals get. Said at each launch too.
+  const noHookTools = hookToolsMissing(process.env);
+  if (noHookTools) void dialog.showMessageBox({ type: 'warning', ...noHookTools });
 
   // Register all IPC handlers
   const deps = createIpcDependencies();

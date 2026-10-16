@@ -20,6 +20,8 @@ export const CHANGELOG: Release[] = [
       'Tars draws its own title bar under the Windows buttons, in the theme\'s colours. Closing the window keeps your agents working, with Tars in the tray; Quit Tars in the tray\'s menu ends it. Fixed by Nexarion434.',
       'Settings, Terminal picks the shell a terminal opens: PowerShell 7, Windows PowerShell, the Command Prompt or Git Bash. Fixed by Nexarion434.',
       'Not on Windows yet: several Claude accounts, putting an idle agent to sleep, marking a frozen agent stalled, and removing the folders Settings, System lists.',
+      'On macOS and Linux, Tars says at launch when jq or curl is missing from the PATH its agents get, and how to install it. Its hooks read and post the agents\' status with them: without jq, no status moved and nothing said why.',
+      'On Linux, which has no build of its own yet, the update check no longer offers the macOS file: it offers nothing until there is a Linux one.',
     ],
   },
   {
