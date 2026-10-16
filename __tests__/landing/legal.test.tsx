@@ -8,7 +8,7 @@ import { SiteFooter } from '../../landing/src/components/SiteFooter';
 /**
  * The landing's privacy and terms pages (landing/src/app/privacy, terms), which
  * show Cooper Labs's two documents as they were written, the privacy policy of
- * 2026-09-28 and the terms of 2026-09-24, through a small renderer for the
+ * 2026-10-15 and the terms of 2026-09-24, through a small renderer for the
  * markdown they use (landing/src/lib/markdown.tsx).
  * Written before the code, as the ways it can fail:
  * 1. a word of a document is dropped, changed or moved on its way to the page;
@@ -70,16 +70,19 @@ describe('the structure of a document (3)', () => {
     expect(stays.items).toHaveLength(6);
     const [dorothy, , claude] = stays.items;
     expect(dorothy.map(b => b.kind)).toEqual(['paragraph', 'list', 'paragraph']);
-    expect(lists(dorothy)[0].items).toHaveLength(14);
+    expect(lists(dorothy)[0].items).toHaveLength(15);
+    expect(text(lists(dorothy)[0].items[14][0])).toMatch(/^Tars's health numbers, one sample every 5 minutes/);
     expect(text(dorothy[2])).toMatch(/^At every start, Tars closes this folder/);
     expect(claude.map(b => b.kind)).toEqual(['paragraph', 'list', 'paragraph']);
     expect(text(claude[2])).toMatch(/^Claude Code writes its own conversation transcripts/);
-    // An item with a nested list and three paragraphs after it keeps all of them.
+    // An item with two nested lists and paragraphs between and after them keeps all of them.
     const leaves = lists(privacy).find(l => text(l.items[0][0]).startsWith('AI coding CLIs you installed'))!;
     const errors = leaves.items.find(item => text(item[0]).startsWith('Error reports, to Sentry'))!;
-    expect(errors.map(b => b.kind)).toEqual(['paragraph', 'list', 'paragraph', 'paragraph', 'paragraph']);
+    expect(errors.map(b => b.kind)).toEqual(['paragraph', 'list', 'paragraph', 'paragraph', 'paragraph', 'list', 'paragraph', 'paragraph']);
     expect(lists(errors)[0].items).toHaveLength(5);
-    expect(text(errors[4])).toMatch(/^Like any connection, the report reaches Sentry/);
+    expect(text(errors[4])).toMatch(/^The same switch sends two more kinds of report/);
+    expect(lists(errors)[1].items).toHaveLength(6);
+    expect(text(errors[7])).toMatch(/^Like any connection, the report reaches Sentry/);
     // The list ends where the unindented paragraph starts.
     expect(text(privacy[privacy.indexOf(stays) + 1])).toBe('Local traffic stays local. Tars listens on 127.0.0.1 only: port 31415 for its hooks and tools, and 31416 for its OpenAI-compatible bridge. It does not accept connections from other machines.');
     // The lists, items and paragraphs of the markup, every other tag and attribute out.
@@ -118,7 +121,7 @@ describe('bold, code and what is not markup (4, 5)', () => {
 });
 
 describe('the reviewed documents (6)', () => {
-  it.each([['privacy', 'Tars Privacy Policy', '2026-10-01'], ['terms', 'Tars Terms of Use', '2026-09-24']])('the %s page opens on its title, then its date', (name, title, day) => {
+  it.each([['privacy', 'Tars Privacy Policy', '2026-10-15'], ['terms', 'Tars Terms of Use', '2026-09-24']])('the %s page opens on its title, then its date', (name, title, day) => {
     const [heading, date] = parseMarkdown(doc(name));
     expect(heading).toEqual({ kind: 'heading', level: 1, spans: [{ text: title, strong: false, code: false }] });
     expect(date).toEqual({ kind: 'paragraph', spans: [{ text: `Last updated: ${day}.`, strong: false, code: false }] });
