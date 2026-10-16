@@ -44,6 +44,7 @@ import {
   revealMainWindow,
 } from './core/window-manager';
 import { claimSingleInstance, installDesktopShell } from './core/desktop-lifecycle';
+import { linuxTrayShown } from './platform/linux-tray';
 
 import {
   agents,
@@ -555,9 +556,15 @@ app.whenReady().then(async () => {
 
   // Create the main window
   createWindow();
-  // Windows: no menu, toasts, close to the tray (desktop-lifecycle.ts).
+  // Windows and Linux: no menu, close to the tray; Windows: toasts and the
+  // session end (desktop-lifecycle.ts). Linux hides on close only once the
+  // session bus says a tray is shown, asked here in the background: until it
+  // answers, a close closes, as before.
+  let linuxTray = false;
+  if (process.platform === 'linux') void linuxTrayShown().then((shown) => { linuxTray = shown; });
   installDesktopShell({
     getMainWindow,
+    trayShown: () => linuxTray,
     explanation: {
       explained: () => appSettings.closeToTrayExplained === true,
       markExplained: () => {

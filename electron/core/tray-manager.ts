@@ -3,7 +3,7 @@ import * as path from 'path';
 import { toggleTrayPanel, destroyTrayPanel } from './tray-panel-manager';
 import { setTrayAttentionCallback } from '../utils/agents-tick';
 import { revealMainWindow } from './window-manager';
-import { isWindowsShell } from '../platform/desktop-shell';
+import { hasTrayMenu, isWindowsShell } from '../platform/desktop-shell';
 
 let tray: Tray | null = null;
 let normalIcon: NativeImage | null = null;
@@ -59,9 +59,11 @@ function resourcePath(name: string): string {
 let contextMenu: Menu | null = null;
 
 /**
- * The tray's right-click menu on Windows: the only way to quit once closing
- * the window hides it (desktop-lifecycle.ts). Quit Tars is app.quit(), so
- * before-quit saves the fleet and kills every terminal, as it always has.
+ * The tray's menu on Windows (its right click) and Linux (an AppIndicator
+ * opens it on any click, and sends no click event): the only way to quit once
+ * closing the window hides it (desktop-lifecycle.ts). Quit Tars is
+ * app.quit(), so before-quit saves the fleet and kills every terminal, as it
+ * always has.
  */
 export function trayContextMenu(): Menu {
   contextMenu ??= Menu.buildFromTemplate([
@@ -108,6 +110,8 @@ export function initTray() {
 
   tray = new Tray(icon);
   tray.setToolTip('Tars');
+  // Linux: the tray is an AppIndicator, its menu all it does (hasTrayMenu).
+  if (hasTrayMenu(process.platform)) tray.setContextMenu(trayContextMenu());
 
   tray.on('click', () => {
     if (tray) {

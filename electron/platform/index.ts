@@ -46,9 +46,11 @@ export {
 export { detectShells, type DetectedShells, type ShellChoice, type ShellChoiceId } from './shell-choices';
 export {
   TITLE_BAR_OVERLAY_HEIGHT, WINDOWS_APP_USER_MODEL_ID, TRAY_PANEL_MARGIN,
-  isWindowsShell, titleBarOptions, parseTitleBarOverlay, closeAction, isClickThatClosedPanel, taskbarEdge, trayPanelPosition,
+  isWindowsShell, removesApplicationMenu, hasTrayMenu, titleBarOptions, parseTitleBarOverlay, closeAction, isClickThatClosedPanel,
+  taskbarEdge, trayPanelPosition,
   type Rect, type DisplayArea, type TaskbarEdge,
 } from './desktop-shell';
+export { linuxTrayShown } from './linux-tray';
 export {
   hermesDesktopConfigPath, tailscaleCandidates, tasmaniaTokenPath, type TasmaniaToken,
 } from './integration-paths';
