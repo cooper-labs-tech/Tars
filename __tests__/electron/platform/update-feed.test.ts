@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { createRequire } from 'node:module';
 import { installerAssetFor, offersUpdate } from '../../../electron/platform/update-feed';
 
 /**
@@ -26,7 +27,8 @@ import { installerAssetFor, offersUpdate } from '../../../electron/platform/upda
  *    the macOS one;
  * And from the Linux build (the maintainer's parity rule of 2026-10-16, P1):
  *  - linux offered a macOS or a Windows file (a .dmg it cannot open), the other
- *    architecture's AppImage, or anything when the release has no AppImage
+ *    architecture's AppImage, or none on x64 because it looks for `-x64` where
+ *    electron-builder writes `-x86_64` (the Audit's High on #431), or anything when the release has no AppImage
  *    for it yet; or a release with no AppImage offered at all, sending the
  *    user to a page with nothing to install, as Windows was before its setup.
  */
@@ -78,8 +80,8 @@ describe('which asset is offered', () => {
   });
 
   it('linux: this architecture\'s AppImage, never a macOS or a Windows file, nor the other architecture\'s', () => {
-    const all = [...release, asset('Tars-2.0.4-arm64.AppImage'), asset('Tars-2.0.4-x64.AppImage'), asset('latest-linux.yml'), asset('latest-linux-arm64.yml')];
-    expect(installerAssetFor(all, 'linux', 'x64')?.name).toBe('Tars-2.0.4-x64.AppImage');
+    const all = [...release, asset('Tars-2.0.4-arm64.AppImage'), asset('Tars-2.0.4-x86_64.AppImage'), asset('latest-linux.yml'), asset('latest-linux-arm64.yml')];
+    expect(installerAssetFor(all, 'linux', 'x64')?.name).toBe('Tars-2.0.4-x86_64.AppImage');
     expect(installerAssetFor(all, 'linux', 'arm64')?.name).toBe('Tars-2.0.4-arm64.AppImage');
     expect(installerAssetFor(release, 'linux', 'x64'), 'a release with no AppImage').toBeUndefined();
     expect(installerAssetFor([asset('Tars-2.0.4-arm64.AppImage')], 'linux', 'x64'), 'only the other architecture').toBeUndefined();
@@ -87,7 +89,10 @@ describe('which asset is offered', () => {
 
   it('linux: the AppImage named as package.json has electron-builder name it', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-    const named = (arch: string) => String(pkg.build.linux.artifactName).replace('${version}', '2.0.4').replace('${arch}', arch).replace('${ext}', 'AppImage');
+    // electron-builder's own naming (builder-util), not this repository's: x64 is written x86_64.
+    const builderArch = createRequire(__filename)('builder-util/out/arch') as { Arch: Record<string, number>; getArtifactArchName(arch: number, ext: string): string };
+    const named = (arch: string) => String(pkg.build.linux.artifactName).replace('${version}', '2.0.4')
+      .replace('${arch}', builderArch.getArtifactArchName(builderArch.Arch[arch], 'AppImage')).replace('${ext}', 'AppImage');
     for (const arch of ['x64', 'arm64']) {
       expect(installerAssetFor([asset(named('x64')), asset(named('arm64'))], 'linux', arch)?.name).toBe(named(arch));
     }
@@ -114,7 +119,7 @@ describe('whether a newer release is offered', () => {
   });
 
   it('linux: only when it carries an AppImage for it, as Windows with its setup', () => {
-    expect(offersUpdate('linux', asset('Tars-2.0.4-x64.AppImage'))).toBe(true);
+    expect(offersUpdate('linux', asset('Tars-2.0.4-x86_64.AppImage'))).toBe(true);
     expect(offersUpdate('linux', undefined)).toBe(false);
   });
 });

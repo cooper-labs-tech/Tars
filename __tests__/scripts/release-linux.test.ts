@@ -9,6 +9,12 @@ import {
   ARCHES, artifactNames, builderArgs, buildSteps, main, parseArgs, verifyLinuxBuild, WORKFLOW,
 } from '../../scripts/release-linux.mjs';
 import { Refusal } from '../../scripts/release.mjs';
+import { createRequire } from 'node:module';
+
+/** electron-builder's own naming of an artifact's architecture (builder-util), the reference the names are held to. */
+const builderArch = createRequire(__filename)('builder-util/out/arch') as { Arch: Record<string, number>; getArtifactArchName(arch: number, ext: string): string };
+const builderAppImage = (version: string, arch: string) => String(REAL_PKG.build.linux.artifactName)
+  .replace('${version}', version).replace('${arch}', builderArch.getArtifactArchName(builderArch.Arch[arch], 'AppImage')).replace('${ext}', 'AppImage');
 
 /**
  * `npm run release:linux`: the Linux build of a version `npm run release` has
@@ -23,7 +29,10 @@ import { Refusal } from '../../scripts/release.mjs';
  *  - the names: an AppImage named by electron-builder's default (no
  *    build.linux.artifactName), the arm64 build's feed named latest-linux.yml
  *    (it would overwrite x64's, and arm64 installs read latest-linux-arm64.yml),
- *    an architecture that is not built taken;
+ *    an architecture that is not built taken; or a name electron-builder never
+ *    writes: it calls the x64 AppImage `x86_64`, not `x64` (the Audit's High on
+ *    #431), so the names are checked against electron-builder's own code, not
+ *    against this script;
  *  - package.json: no Linux target, an AppImage for one architecture only, or a
  *    Linux feed of its own (build.linux.publish) instead of build.publish;
  *  - the build on a runner: run off Linux (its native modules would be the
@@ -57,7 +66,7 @@ const VERSION = '2.0.4';
 const REPO = 'acme/tars';
 const PKG = { ...REAL_PKG, version: VERSION, build: { ...REAL_PKG.build, publish: { provider: 'github', owner: 'acme', repo: 'tars' } } };
 const MCPS = REAL_PKG.build.extraResources.map((e: { from: string }) => e.from).filter((from: string) => from.startsWith('mcp-'));
-const LINUX_FILES = [`Tars-${VERSION}-x64.AppImage`, `Tars-${VERSION}-arm64.AppImage`, 'latest-linux.yml', 'latest-linux-arm64.yml'];
+const LINUX_FILES = [`Tars-${VERSION}-x86_64.AppImage`, `Tars-${VERSION}-arm64.AppImage`, 'latest-linux.yml', 'latest-linux-arm64.yml'];
 
 const sha512 = (content: string | Buffer) => createHash('sha512').update(content).digest('base64');
 
@@ -156,11 +165,15 @@ describe('what it is asked', () => {
 describe('the names, and package.json', () => {
   it('one AppImage per architecture, and each its own feed: latest-linux.yml on x64, latest-linux-arm64.yml on arm64', () => {
     expect(ARCHES).toEqual(['x64', 'arm64']);
-    expect(artifactNames(PKG, VERSION, 'x64')).toEqual({ appImage: `Tars-${VERSION}-x64.AppImage`, yml: 'latest-linux.yml' });
+    expect(artifactNames(PKG, VERSION, 'x64')).toEqual({ appImage: `Tars-${VERSION}-x86_64.AppImage`, yml: 'latest-linux.yml' });
     expect(artifactNames(PKG, VERSION, 'arm64')).toEqual({ appImage: `Tars-${VERSION}-arm64.AppImage`, yml: 'latest-linux-arm64.yml' });
     expect(() => artifactNames(PKG, VERSION, 'ia32')).toThrow(/no Linux build for ia32/);
     const noName = { ...PKG, build: { ...PKG.build, linux: { ...PKG.build.linux, artifactName: undefined } } };
     expect(() => artifactNames(noName, VERSION, 'x64')).toThrow(/build\.linux\.artifactName is not set/);
+  });
+
+  it('names each AppImage as electron-builder does: x86_64 on x64, arm64 on arm64', () => {
+    for (const arch of ARCHES) expect(artifactNames(PKG, VERSION, arch).appImage, arch).toBe(builderAppImage(VERSION, arch));
   });
 
   it('package.json builds the AppImage for both, and feeds Linux from build.publish, as macOS and Windows', () => {
@@ -192,7 +205,7 @@ describe('the build on a runner', () => {
       try {
         linuxBuild(dir, VERSION, arch);
         expect(verifyLinuxBuild(dir, VERSION, { repo: REPO, pkg: PKG, arch })).toEqual({
-          appImage: path.join(dir, `Tars-${VERSION}-${arch}.AppImage`), yml: path.join(dir, arch === 'x64' ? 'latest-linux.yml' : 'latest-linux-arm64.yml'),
+          appImage: path.join(dir, builderAppImage(VERSION, arch)), yml: path.join(dir, arch === 'x64' ? 'latest-linux.yml' : 'latest-linux-arm64.yml'),
         });
       } finally {
         fs.rmSync(dir, { recursive: true, force: true });
@@ -203,7 +216,7 @@ describe('the build on a runner', () => {
   it.each<[string, Breakage, RegExp]>([
     ['a feed for another version', { ymlVersion: '2.0.3' }, /latest-linux\.yml is for 2\.0\.3, not 2\.0\.4/],
     ['a feed whose sha512 is not the AppImage\'s', { wrongSha: true }, /the sha512 in latest-linux\.yml is not that of/],
-    ['a feed whose size is not the AppImage\'s', { wrongSize: true }, /gives Tars-2\.0\.4-x64\.AppImage \d+ bytes, the file has/],
+    ['a feed whose size is not the AppImage\'s', { wrongSize: true }, /gives Tars-2\.0\.4-x86_64\.AppImage \d+ bytes, the file has/],
     ['an app fed from another repository', { feedOwner: 'someone-else' }, /feeds github someone-else\/tars, not github acme\/tars/],
     ['an app that says another version', { appVersion: '2.0.3' }, /the built app says 2\.0\.3, not 2\.0\.4/],
     ['no Linux pty.node', { noPty: true }, /no pty\.node: no terminal can start/],
@@ -403,11 +416,11 @@ describe('npm run release:linux', { timeout: 60_000 }, () => {
 
   it('reads back what GitHub serves: a digest that is not the file\'s is said', async () => {
     const { dir, head } = co();
-    gh.setState({ ...released(head), workflow: { artifacts: artifacts(head) }, serveAfterUpload: { digests: { [`Tars-${VERSION}-x64.AppImage`]: sha256('tampered') } } });
+    gh.setState({ ...released(head), workflow: { artifacts: artifacts(head) }, serveAfterUpload: { digests: { [`Tars-${VERSION}-x86_64.AppImage`]: sha256('tampered') } } });
     gh.allowPublishing();
     const { code, out } = await releaseLinux(dir);
     expect(code).toBe(1);
-    expect(out).toMatch(/GitHub serves Tars-2\.0\.4-x64\.AppImage with sha256:/);
+    expect(out).toMatch(/GitHub serves Tars-2\.0\.4-x86_64\.AppImage with sha256:/);
   });
 
   it('--build refuses to run off Linux', async () => {
