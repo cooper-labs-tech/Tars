@@ -2,2424 +2,2424 @@
  "jobId": "job-1",
  "messages": [
   {
-   "id": "0f17f764-c0be-420c-be72-3a2519db9c33",
+   "id": "b90f0c0f-9bec-502c-b27a-512a870b399e",
    "role": "overseer",
-   "text": "{\"say\": \"**Sakartvelo (greece-launch)** \u2014 Le point chaud du moment. Database agent a identifi\u00e9 le blocage critique pr\u00e9-d\u00e9ploiement : `neighborhood_snapshots` et `seasonal_profiles` n'ont pas de d\u00e9faut `country_code` NOT NULL, et 26 sites `.from(\\\"properties\\\")` (scrapers, dashboard, cron, comps, score-updater) ne filtrent pas par pays. \u00c0 traiter avant le premier scrape grec, sinon les donn\u00e9es Gr\u00e8ce se m\u00e9langent \u00e0 la G\u00e9orgie. En parall\u00e8le : QA valide PR #136 (mergeable, invariant math\u00e9matique Fixed+Variable v\u00e9rifi\u00e9, `selfManaged` respect\u00e9) ; Orchestrator a PR #137 gros (+20 669/\u221211 408, build vert, 268 tests, 6 \u00e9checs pr\u00e9-existants non imputables) et a tranch\u00e9 le sujet \u00ab scraping pour un ami \u00bb : pas de chemin gratuit, alertes email Spitogatos ou licence Casafari \u00e0 n\u00e9gocier. Frontend attend le `.pen` pour trancher 3 divergences d'orthographe avant de rebrancher le registre `neighborhoodsByCity`.\n\n**1212-Capital** \u2014 Deux agents (Backend et Orchestrator) signalent ind\u00e9pendamment la m\u00eame anomalie : le CLAUDE.md de `landing-page/` r\u00e9f\u00e9rence `guidelines/SPECS.md`, `ARCHITECTURE.md`, `DEVELOPMENT_PLAN.md` et `tasks/todo.md`, mais ces fichiers sont \u00e0 la racine de `landing-page/` et ARCHITECTURE.md/DEVELOPMENT_PLAN.md/tasks/ n'existent pas dans le clone. Risque de d\u00e9salignement des agents sur des specs fant\u00f4mes \u2014 \u00e0 corriger c\u00f4t\u00e9 repo.\n\n**Dorothy-fix** \u2014 Trois d\u00e9cisions t'attendent, pos\u00e9es par Orchestrator-Dorothy : (1) le garde-fou `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC` contre le bug Ollama `count_tokens` est pos\u00e9 mais non confirm\u00e9 ; (2) exposer gbrain :8765 sur le tailnet ou le faire tourner localement \u2014 d\u00e9cision r\u00e9seau qui t'appartient ; (3) m\u00e9moire longue Hermes \u00e9teinte (`active: \\\"\\\"`), `holographic` pr\u00eat. Les 3 agents Dorothy sont en lecture seule et align\u00e9s.\n\n**Tars** \u2014 Flotte idle, align\u00e9e, aucun chevauchement de p\u00e9rim\u00e8tre. Rien \u00e0 signaler.\n\nJe propose de nudge l'Orchestrator Sakartvelo sur le s\u00e9quen\u00e7age du fix `country_code` pour qu'il ne passe pas sous le merge de PR #137.\", \"action\": {\"kind\": \"message_agent\", \"agent_id\": \"57f0c6ff-a228-4afa-8d19-1cec6791a58a\", \"text\": \"Orchestrator, point de s\u00e9quen\u00e7age : Database a identifi\u00e9 le fix `country_code` (d\u00e9faut NOT NULL sur `neighborhood_snapshots`/`seasonal_profiles` + filtrage pays sur les 26 sites `.from(\\\"properties\\\")`) comme critique avant tout d\u00e9ploiement du lancement grec. Confirme que la migration Database passe en priorit\u00e9 sur la file, avant le merge de PR #137 et avant le premier scrape Gr\u00e8ce \u2014 sinon les donn\u00e9es grecques contaminent le jeu g\u00e9orgien.\"}}",
+   "text": "**atlas** Le point du moment: Backend attend une revue de la migration du schema depuis une heure, et QA a mis sa suite en pause en attendant. Frontend finit la page des reglages. Rien d'autre ne bloque.",
    "action": null,
-   "timestamp": "2026-08-24T06:23:26.029Z",
+   "timestamp": "2026-09-01T07:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "4628049a-a9fa-482e-954b-55bbbb6916ed",
+   "id": "83dbba9c-e9da-5d9f-ab0e-5dbd1f231a1f",
    "role": "overseer",
-   "text": "Nothing worth flagging \u2014 the Dorothy-fix agents (now running 21m) are still in their read-only alignment phase: all four simply re-confirmed their CLAUDE.md roles and are awaiting tasks. The three decisions already surfaced (count_tokens guard, gbrain port, Hermes long memory) still sit with you, and nothing else in the fleet has changed since the last report.",
+   "text": "Backend a fini la migration du schema. QA relance sa suite sur la branche.",
    "action": null,
-   "timestamp": "2026-08-24T06:43:09.837Z",
+   "timestamp": "2026-09-01T07:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "137cfe95-9fe0-406e-b1dc-79f5c3227d01",
+   "id": "770665e3-d9e0-5619-952b-356ef34a25e2",
    "role": "overseer",
-   "text": "**Parallel-protocol** \u2014 Nouvelle activation : les 6 agents (Orchestrator, Frontend, Backend, QA, Audit, Database) tournent depuis 23 min, premier run de la fen\u00eatre d'observation. Je n'ai encore aucune visibilit\u00e9 sur leur output (pas dans le snapshot) \u2014 je surveille et je remonterai leurs premi\u00e8res d\u00e9cisions d\u00e8s qu'elles \u00e9mergent. Si c'est un run de setup/lecture comme sur les autres projets, \u00e7a devrait se stabiliser en idle dans l'heure.\n\n**Reste de la flotte** \u2014 Inchang\u00e9 depuis le dernier check : Sakartvelo continue (5 agents running, le s\u00e9quen\u00e7age `country_code` avant merge PR #137 est toujours le point critique), Dorothy-fix et tars en idle, 1212-Capital idle avec l'anomalie CLAUDE.md \u2192 specs fant\u00f4mes toujours ouverte.",
+   "text": "QA a deux tests rouges sur la migration et attend que Backend regarde l'index manquant.",
    "action": null,
-   "timestamp": "2026-08-24T15:26:21.604Z",
+   "timestamp": "2026-09-01T07:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d29e6441-96cf-4270-8551-0693ae926f42",
+   "id": "be54ebb7-77d7-5904-90d8-8420086c3ce7",
    "role": "user",
-   "text": "salut",
+   "text": "bonjour",
    "action": null,
-   "timestamp": "2026-08-24T15:53:38.508Z"
+   "timestamp": "2026-09-01T07:48:00.000Z"
   },
   {
-   "id": "6918705e-af26-4544-918f-94690a8ef8d5",
+   "id": "1d5fab87-1a05-56fb-a71c-d21d86c17415",
    "role": "overseer",
-   "text": "Salut JeanBrasse. Rien de bloqu\u00e9 \u00e0 chaud, mais un agent t'attend explicitement et un autre point reste critique :\n\n1. **Sakartvelo** \u2014 l'Orchestrator est coinc\u00e9 sur une session morte : il voit l'agent Audit en `idle`, mais `delegate_task`/`start_agent`/`send_message` \u00e9chouent en `Not found` (probable session tmux/pty morte). Il te pose la question directement : red\u00e9marrer Audit c\u00f4t\u00e9 outil d'orchestration, ou l'autoriser \u00e0 faire la revue lui-m\u00eame pour cette fois. Par ailleurs Database a confirm\u00e9 le fix `country_code` (d\u00e9faut NOT NULL + filtrage des 26 sites `.from(\"properties\")`) comme critique avant le premier scrape grec \u2014 je maintiens ma reco de s\u00e9quen\u00e7age : migration en priorit\u00e9, avant merge de PR #137. QA a valid\u00e9 PR #136 (mergeable, invariants OK).\n\n2. **Parallel-protocol** \u2014 premier run des 6 agents (23 min), pas encore de visibilit\u00e9 sur leur output dans le snapshot ; je surveille et remonterai leurs premi\u00e8res d\u00e9cisions d\u00e8s qu'elles \u00e9mergent.\n\nEn attente de toi sans urgence : Dorothy-fix (3 d\u00e9cisions : garde-fou `count_tokens`, exposition gbrain :8765, m\u00e9moire longue Hermes) et 1212-Capital (CLAUDE.md qui pointe vers des specs fant\u00f4mes \u2014 Backend et Orchestrator ont signal\u00e9 la m\u00eame anomalie ind\u00e9pendamment).",
+   "text": "Frontend a livre la page des reglages et attend la revue. Backend et QA travaillent.",
    "action": null,
-   "timestamp": "2026-08-24T15:54:23.043Z"
+   "timestamp": "2026-09-01T07:50:00.000Z"
   },
   {
-   "id": "8159f6c0-c13e-4c0a-87c1-4e5cdf2640e5",
+   "id": "6d33c32d-4436-5758-95af-3c757682316e",
    "role": "user",
-   "text": "salut",
+   "text": "status ?",
    "action": null,
-   "timestamp": "2026-08-24T16:17:20.041Z"
+   "timestamp": "2026-09-01T07:51:00.000Z"
   },
   {
-   "id": "1ccf3d26-421b-494a-af23-fae704615075",
+   "id": "42c4cd20-fce9-5a54-a4cb-8a7595abc123",
    "role": "overseer",
    "text": "[SILENT]",
    "action": null,
-   "timestamp": "2026-08-24T16:18:18.940Z"
+   "timestamp": "2026-09-01T07:52:30.000Z"
   },
   {
-   "id": "1361378b-4edb-4323-9268-dff2efd3f1be",
+   "id": "0e7cf0e9-a472-5eba-ad14-eb37d41cb269",
    "role": "user",
-   "text": "salut",
+   "text": "et QA ?",
    "action": null,
-   "timestamp": "2026-08-24T16:36:35.883Z"
+   "timestamp": "2026-09-01T07:53:30.000Z"
   },
   {
-   "id": "d02cf8cd-ab1f-4839-8a0b-a5966a47f39e",
+   "id": "5790d220-3e88-558e-a8b0-dc2f849892f0",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T20:26:43.535Z",
+   "timestamp": "2026-09-01T08:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "d2c2148d-e304-4efd-bdb4-492a038cd663",
+   "id": "9419c3e1-360a-5a29-b4c1-c93684295f34",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T20:31:43.254Z",
+   "timestamp": "2026-09-01T08:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "0fa95f48-057e-4182-ba77-9ed30a4a4b40",
+   "id": "5c001e3c-8790-5218-aa64-22e6ce9a1ee0",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T20:52:24.241Z",
+   "timestamp": "2026-09-01T09:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "be8ffa3e-6afd-4e17-8381-4e6cd46a585e",
+   "id": "a972d583-3045-5643-a7c2-7d90f82bf574",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T20:54:22.004Z",
+   "timestamp": "2026-09-01T09:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a7ffccb1-3926-4dbe-a633-2e7084f9370b",
+   "id": "70f6e223-d1f2-5111-b4f6-f760e1a9c8ca",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T20:56:38.273Z",
+   "timestamp": "2026-09-01T09:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3aa8870f-dc23-468b-abac-2b0ac519c161",
+   "id": "15b95162-9dc9-5fa9-b5cb-90f4c9c9dc07",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T20:57:38.075Z",
+   "timestamp": "2026-09-01T09:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f4e60341-adad-4501-b50e-8274d8a87f54",
+   "id": "f4ddf0da-c84a-5364-9bc8-a8b3f42bbef4",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:01:05.588Z",
+   "timestamp": "2026-09-01T09:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5435384e-2677-4c5e-b1d4-b23b336eac10",
+   "id": "4d653885-faff-595a-b019-61b184593730",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:04:54.803Z",
+   "timestamp": "2026-09-01T09:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "e617c3a4-1b79-46f7-b045-65b8f5a5950b",
+   "id": "52d2dbf7-2e80-5611-a6da-bd141f1f1e5c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:07:16.313Z",
+   "timestamp": "2026-09-01T09:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d3286134-e200-4fae-99bb-e2a5eb1ad0f2",
+   "id": "bf078e21-2a80-5b2f-bb5a-23e86d08ec82",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:12:51.827Z",
+   "timestamp": "2026-09-01T09:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "acac429a-3868-4247-a666-63af25cdea58",
+   "id": "6c99b8ad-e755-5e04-b697-01346fdf1450",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:18:04.903Z",
+   "timestamp": "2026-09-01T09:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5340d3a2-d4f9-4388-9bfa-141675c462da",
+   "id": "0cde44c7-ede0-5cd6-a586-e72f0031ef20",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:20:02.691Z",
+   "timestamp": "2026-09-01T09:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "4a7a5d8b-4ed7-4f9a-9cb0-7f4843b0ce8c",
+   "id": "44f18988-f3fa-5aa6-80ae-f3a7feb827f3",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:22:12.101Z",
+   "timestamp": "2026-09-01T09:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a43c1d5c-7b5e-40c4-9b41-d5fb1f002d46",
+   "id": "2da50fac-5629-5a15-b582-21280f6c8f52",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:24:39.719Z",
+   "timestamp": "2026-09-01T09:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "e1a5f727-2578-44b5-adad-0bbe9551cef3",
+   "id": "c503ad72-2de3-5e3a-bf36-a273e8a671a5",
    "role": "user",
-   "text": "ca dit quoi?",
+   "text": "tu es bloque ?",
    "action": null,
-   "timestamp": "2026-08-24T21:31:15.533Z"
+   "timestamp": "2026-09-01T09:33:00.000Z"
   },
   {
-   "id": "2e34f5ef-2481-4aaa-bdf1-4b5c726bc9ef",
+   "id": "e60d5bfa-bcbf-5b95-92b7-6d50a8aecee2",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:31:24.225Z"
+   "timestamp": "2026-09-01T09:35:00.000Z"
   },
   {
-   "id": "de0d6330-53d0-47e9-9163-6f44ff8d2d5e",
+   "id": "e9ed0ff9-9e66-5c0a-a10b-f4f634fae8d2",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:36:59.645Z",
+   "timestamp": "2026-09-01T09:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5327374a-78cf-4ee2-9015-76107360d18c",
+   "id": "52fc2f61-47db-5353-9efc-fdddcf0225f6",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:41:24.227Z",
+   "timestamp": "2026-09-01T09:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "2ceeba65-9f82-4c53-841f-5bd9de787e37",
+   "id": "d8a2fe70-4a1c-5ae8-ba40-f28a3050464c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:47:43.127Z",
+   "timestamp": "2026-09-01T09:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "e0966b16-a4ee-459b-ae7a-bd6e6687caef",
+   "id": "0abaeb42-a0f3-5a96-8b11-67d55eadaf8b",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:50:15.328Z",
+   "timestamp": "2026-09-01T09:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "4dfccbc5-e456-4a92-a743-ca2574a2ea33",
+   "id": "fc5885b6-a1d9-577f-a44f-a7b19ed1a22f",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-24T21:58:06.680Z",
+   "timestamp": "2026-09-01T09:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "b9673e2a-4173-4a1e-a75e-778c1cc49bec",
+   "id": "876dea4d-2586-563f-bc2f-64b7701bb69c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T06:23:53.181Z",
+   "timestamp": "2026-09-01T11:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "42e6ad1b-58d8-47ec-a41a-7fcb31855fc0",
+   "id": "a0c73921-4fa0-5685-bdff-e4b28d332652",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T06:32:14.415Z",
+   "timestamp": "2026-09-01T11:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5be110da-97df-4c2e-b8a2-cf09430b1b46",
+   "id": "0f91221e-b717-5ff6-a66e-c790c55604ca",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T06:50:16.398Z",
+   "timestamp": "2026-09-01T11:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "fcb27270-b6eb-4787-94e5-ba83754f145a",
+   "id": "92d8ea3d-3b0e-58cc-9b0e-e0df7cd477d1",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:01:03.789Z",
+   "timestamp": "2026-09-01T11:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "0f4a9df8-13af-43f5-908c-891fb48f7816",
+   "id": "5bbf5d70-d23a-543b-a698-2fcf10f6a3e6",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:02:27.825Z",
+   "timestamp": "2026-09-01T11:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d436020d-993b-4063-a34c-1d708beceebc",
+   "id": "8dee0167-bd61-55f2-87b8-2460362e009e",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:09:35.309Z",
+   "timestamp": "2026-09-01T11:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "cac5e9a6-4d7d-4873-8b1d-f8fd6ab0a8d6",
+   "id": "b11e4747-08e5-584f-824e-0ecdf35aac7b",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:11:21.674Z",
+   "timestamp": "2026-09-01T11:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "8b65059f-b48b-4c7f-98b7-af5c461677cc",
+   "id": "6eb4f37d-b385-511a-b19b-9d959b77ab1c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:25:34.229Z",
+   "timestamp": "2026-09-01T11:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "233f8022-3f14-49f7-80e9-c179a1063314",
+   "id": "7af29055-2768-5c29-95a1-bff89c0b0dd7",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:27:53.063Z",
+   "timestamp": "2026-09-01T11:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a28dad12-f618-4d4e-a140-70a913cb2de7",
+   "id": "893a3abe-a237-582c-9f02-e7792ef1bdb7",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:28:49.741Z",
+   "timestamp": "2026-09-01T11:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "beaf4340-ee06-4807-b39c-f226740db212",
+   "id": "22adca1b-82ab-5f65-a103-647b0a2655a9",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:30:10.160Z",
+   "timestamp": "2026-09-01T11:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c7178e7a-fed4-4fa1-88cd-b31cd9e5f735",
+   "id": "d057a8cd-ede6-5aa2-a1a1-36795ed8a03d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:34:44.664Z",
+   "timestamp": "2026-09-01T11:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "66e85266-17c3-42c1-9413-b8d4ae061803",
+   "id": "d3e85a95-0f8b-50bd-a9b8-e676d46cd127",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:35:58.897Z",
+   "timestamp": "2026-09-01T11:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "acebdb38-a43e-4f85-81d4-50e8a3f0d946",
+   "id": "8b08d392-ccf7-5a8a-a37d-848946dc4919",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:46:04.239Z",
+   "timestamp": "2026-09-01T11:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "14f1fd08-b50d-43c3-9c7e-1834f70449b6",
+   "id": "216842e9-b5f3-55be-b9a5-6b4c50146d62",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:47:20.296Z",
+   "timestamp": "2026-09-01T11:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9f2bdff8-7c7e-4594-b8e3-4378bdf84d6c",
+   "id": "441cb7bf-b419-5969-b7fe-a8c3f217894d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T07:52:39.690Z",
+   "timestamp": "2026-09-01T11:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "52914a7d-66ed-450b-8bad-a072738cf5fd",
+   "id": "b87e8e27-0b59-5ccb-bf39-05f7fe48db25",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:04:48.121Z",
+   "timestamp": "2026-09-01T11:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "a2d87792-00ce-4600-927a-680cbf57f91c",
+   "id": "be88fae2-9fc9-5f3e-9255-fa1779cfb822",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:07:35.927Z",
+   "timestamp": "2026-09-01T11:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "6d03bb72-e10b-4ea9-833a-f03db7d98fe9",
+   "id": "aa1282af-f8d3-5785-a5c3-7d5687c48b19",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:19:02.913Z",
+   "timestamp": "2026-09-01T12:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7a893481-c62c-4ccf-8c11-3e4fefa124e6",
+   "id": "ab917df3-6dcf-5e7c-91c5-8de590badcbd",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:20:24.176Z",
+   "timestamp": "2026-09-01T12:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d7582203-e53b-4af8-933c-79c039e8657e",
+   "id": "670c356a-1af7-55d7-8d3d-ca98c18012cd",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:24:01.289Z",
+   "timestamp": "2026-09-01T12:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c13e9c84-e04c-49d1-9eaf-c47c277fcc43",
+   "id": "36f2d72b-f9f6-5dcb-8d1d-e8855ca7db4c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:38:04.756Z",
+   "timestamp": "2026-09-01T12:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "d5371097-1670-4b45-8a1d-346bc9ff18d9",
+   "id": "692cb23e-feb1-528e-be67-d7d50b18174d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:39:41.895Z",
+   "timestamp": "2026-09-01T12:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "d3f74100-e3fd-4288-843d-3c8ce59a9f91",
+   "id": "3da6b9ab-e7f8-519e-9cfb-f1fa363ff9b2",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:49:59.863Z",
+   "timestamp": "2026-09-01T12:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "dc15c20f-6214-46fe-864b-26c334cdcf19",
+   "id": "9e64457a-19b1-5814-b6f9-39c3900d5e16",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:51:07.091Z",
+   "timestamp": "2026-09-01T12:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "241d467c-7279-4672-b05c-ace1170511cc",
+   "id": "ea0451d7-5a0b-5b85-92c5-24885a616e55",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T08:58:32.036Z",
+   "timestamp": "2026-09-01T12:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7b605687-c042-4325-8c6b-7e0f371064a3",
+   "id": "c53d3f77-ce1c-5464-ac4f-5cdbdafc34a0",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T09:00:10.864Z",
+   "timestamp": "2026-09-01T12:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "266d1259-8668-4fa7-94fa-12e82efc060f",
+   "id": "1a3326ec-9a3a-5bb5-aef8-49d89ddb694a",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T09:12:25.164Z",
+   "timestamp": "2026-09-01T12:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "589731fc-545e-492f-8db0-799b26ebf415",
+   "id": "5222dc18-9d10-5f5b-8df4-69218bbf1fd5",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T10:04:03.158Z",
+   "timestamp": "2026-09-01T13:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "4c8bc9af-088a-4e77-b195-5b0038e66089",
+   "id": "cda4ce8c-af34-5041-aed4-f9407fa166ce",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T11:00:03.674Z",
+   "timestamp": "2026-09-01T14:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "e7d14b11-f25a-4e12-9339-95f7c82ca288",
+   "id": "9051b4ec-6410-5e4f-84e5-77c2561cab31",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T13:10:07.871Z",
+   "timestamp": "2026-09-01T15:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "471e4b66-e75c-41d8-a9e6-9a86f08afa4a",
+   "id": "8936fbe5-bf57-556c-9b1f-5726f2aec3cf",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:13:14.370Z",
+   "timestamp": "2026-09-01T16:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f4c536a3-544d-49c8-a044-7d342ecf7388",
+   "id": "9de6e2a2-7c75-56c9-be2f-15f04cb6c3d2",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:15:09.681Z",
+   "timestamp": "2026-09-01T17:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3fbcc7a3-70ea-4b92-9ffb-14c169b5349a",
+   "id": "437d4adb-0ec7-55a5-a5af-e36c8ca8b512",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:25:12.609Z",
+   "timestamp": "2026-09-01T17:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c6ba7d6f-de70-4db2-bd30-8f447f4339e6",
+   "id": "36ba59b1-92d5-5370-a57b-3de2e07a9ac5",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:29:12.223Z",
+   "timestamp": "2026-09-01T17:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "885636ee-7227-4999-a06e-555200a68f04",
+   "id": "5f9ed956-76c2-53f3-8d82-6e67929216c6",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:30:45.788Z",
+   "timestamp": "2026-09-01T17:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "6844a13d-565e-431b-9c62-41a8b9e26a9a",
+   "id": "eff8d63d-4a96-59cf-a038-8c17c6fd1bf6",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:35:09.205Z",
+   "timestamp": "2026-09-01T17:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f9dc6546-4067-4561-9698-7478db195ff9",
+   "id": "917e1352-f448-5585-b825-cb103f893cde",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:38:19.943Z",
+   "timestamp": "2026-09-01T17:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a41c2db0-6f75-4340-9dc4-997d3779dc68",
+   "id": "3d0670d3-bd11-5512-8562-88ea5f16c8bd",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:49:33.723Z",
+   "timestamp": "2026-09-01T17:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9d988e5b-db25-4ee1-8222-9e0efdd5ba7b",
+   "id": "5ceba960-b4cf-5dcf-b930-ba798a35d09b",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:53:52.492Z",
+   "timestamp": "2026-09-01T17:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "6d45d4b6-bedd-47ec-9792-87267f275726",
+   "id": "3501df2a-0d28-5c32-b064-33163608425a",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T19:58:53.292Z",
+   "timestamp": "2026-09-01T17:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "7f9dd0fc-7b02-4f5c-a6a4-0119d77e226b",
+   "id": "723595be-e6eb-5ecf-bcbc-b0c120787066",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:11:19.954Z",
+   "timestamp": "2026-09-01T17:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "24e087b2-4050-46c1-afcc-572dc01fcd26",
+   "id": "2a1799be-be4b-509a-8946-735c5e43478e",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:12:32.627Z",
+   "timestamp": "2026-09-01T17:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "f65a22b1-aa38-4ffa-ba81-7aa7814eab86",
+   "id": "4c1d6133-d10b-593d-aa37-6f426ad9c152",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:13:58.564Z",
+   "timestamp": "2026-09-01T17:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a7e15234-f8e4-4b24-bb5a-6108ebc6465e",
+   "id": "0dee3094-e902-5a04-9ad1-ad8316a5f92b",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:17:06.218Z",
+   "timestamp": "2026-09-01T17:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "1b71de29-8d36-4484-97f9-ee013a84a327",
+   "id": "06fa1897-3bb8-561d-904e-a547f6c75494",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:20:59.575Z",
+   "timestamp": "2026-09-01T17:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "734dabd3-a51a-4051-be51-351d04f25338",
+   "id": "acff3e10-c0df-5e51-be7b-5c9259724987",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:21:56.204Z",
+   "timestamp": "2026-09-01T17:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "fadd74f9-6da0-4919-8053-511488fc8a79",
+   "id": "11fbbb0a-24d5-5283-a770-33d292ddcd7f",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:35:28.773Z",
+   "timestamp": "2026-09-01T17:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3b793fdd-367c-41d5-94ea-1da327194c8e",
+   "id": "4a9d404e-42f4-503f-b4e4-ef58e55c5716",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:37:52.615Z",
+   "timestamp": "2026-09-01T17:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9d581a47-1845-4064-b13a-615d8a3f4c61",
+   "id": "8a3279d0-535e-5224-97db-2fa1ca53463c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:41:17.390Z",
+   "timestamp": "2026-09-01T17:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9bb01ee9-91dd-4d65-a869-66f18ffe0f06",
+   "id": "f418c3f3-3f1a-58ac-8a87-c4b1c73032f9",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:44:27.131Z",
+   "timestamp": "2026-09-01T17:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f49a38e8-0e77-4c95-b307-e0d8108751d4",
+   "id": "e1db7f99-dbad-5796-9e1b-76ad0c3133b4",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:47:29.208Z",
+   "timestamp": "2026-09-01T17:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "90e3da26-f4d4-4530-8dee-17da101675af",
+   "id": "b4f0e657-6d20-56ba-857f-cd34596c80c4",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:48:43.306Z",
+   "timestamp": "2026-09-01T18:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ff89eff1-ec3e-48d3-af91-073189f2a66b",
+   "id": "38c2b23f-0c74-591c-8d41-5f23d220ef80",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:50:00.830Z",
+   "timestamp": "2026-09-01T18:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "2b66fd15-7f39-4c5e-9c6a-46340a039b68",
+   "id": "301f9307-1956-5f60-878b-ff805e5a33f9",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:54:27.293Z",
+   "timestamp": "2026-09-01T18:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "445de1e3-4698-4ba3-8814-4558273adc33",
+   "id": "3ca0ec96-fa19-507e-8965-06cb47a871f1",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:56:11.233Z",
+   "timestamp": "2026-09-01T18:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "78badcee-471b-457c-a368-bbac4cfe0ff0",
+   "id": "1f59c211-f1c1-53f7-b62a-633271ca32c4",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T20:58:50.878Z",
+   "timestamp": "2026-09-01T18:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f102a65b-0fda-4f3f-80da-10b11e076388",
+   "id": "2daffc96-0856-568f-9ced-0d7f4ad0dc8a",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:02:17.713Z",
+   "timestamp": "2026-09-01T18:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "8e61fa96-1c8b-4ad7-a336-612b6173b99c",
+   "id": "a9343e38-dbb2-54b1-9604-8487b98288ed",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:03:15.484Z",
+   "timestamp": "2026-09-01T18:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "abb1dd1c-1313-47fd-8e05-b9af2308d8c5",
+   "id": "03310bb2-6488-5a7d-a435-fb44925897b8",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:06:22.889Z",
+   "timestamp": "2026-09-01T18:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c5a5ea09-662b-4a12-b8b7-34a8ebb8b316",
+   "id": "8df370e5-6cde-589a-8178-8b03afadf176",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:10:51.065Z",
+   "timestamp": "2026-09-01T18:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "c18efb8b-18f4-49ea-a3cd-fd6f10454f4e",
+   "id": "68428599-e2ee-5775-893c-a68415456988",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:11:51.940Z",
+   "timestamp": "2026-09-01T18:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "a0c72cfd-352a-4ac0-92dc-644907bad129",
+   "id": "c47a7f2b-a4a0-5f22-924d-b3082299c33d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:13:02.497Z",
+   "timestamp": "2026-09-01T18:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "38bb9847-baa6-4b06-bcde-dcb933d0a363",
+   "id": "aed69c95-106f-594d-91ac-fdf4c93a96b5",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:28:29.131Z",
+   "timestamp": "2026-09-01T18:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c79da91a-d8bf-4e0d-a9a7-1d567fb96ba3",
+   "id": "58e40b68-036b-539b-8b73-35fb943b65ec",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:30:17.169Z",
+   "timestamp": "2026-09-01T18:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ffb24ef1-52d8-4cfe-a8e4-a24edb4986ce",
+   "id": "4e4f5393-502c-528a-9e87-fe579bd0cf35",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:32:12.787Z",
+   "timestamp": "2026-09-01T18:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "1b548217-d2e3-421f-ae3a-1fbf87de6acd",
+   "id": "4e87dd35-860f-5a66-8faf-4c449158267c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:33:45.611Z",
+   "timestamp": "2026-09-01T18:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f7f55b86-921e-46d8-a3dd-a527449ed4b1",
+   "id": "74f67f90-a887-5bf8-ae64-98f9ba9c9553",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:43:58.216Z",
+   "timestamp": "2026-09-01T18:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "f78c0c72-be49-4d63-9903-8a16f5125968",
+   "id": "8250699f-9c51-57aa-8ca1-2b6ed29a73e8",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:50:19.124Z",
+   "timestamp": "2026-09-01T18:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "424bee98-1687-43c1-8418-ac194550e2ab",
+   "id": "e57678e1-884c-5b90-bb2a-2e5608a4df0d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:53:00.629Z",
+   "timestamp": "2026-09-01T18:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "6410c319-99dc-4f3e-81ce-d1a48d7d320a",
+   "id": "2362d16b-ecf7-5a31-bbff-84db10b4a9f4",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:55:00.510Z",
+   "timestamp": "2026-09-01T18:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "b570d8ad-1aa3-45b5-90eb-d0f1642cba57",
+   "id": "27fbc92c-1a6e-5250-b4f6-2960cfc910aa",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T21:57:34.788Z",
+   "timestamp": "2026-09-01T18:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "ad06989d-7ea2-4f32-be06-c3f0c6ec5b28",
+   "id": "53db8e2e-2857-54dc-b47b-c7e0789ff6ca",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:01:23.025Z",
+   "timestamp": "2026-09-01T19:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "453dbf33-c709-4d88-814e-ab8973b27f12",
+   "id": "a237b48e-6a32-5bcf-9db7-334f64cd0500",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:02:39.186Z",
+   "timestamp": "2026-09-01T19:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9c5f7b4b-d944-4004-9a76-bacbe242b0b3",
+   "id": "b9102a98-0636-5bd4-98a9-65bb3c5722a9",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:04:45.732Z",
+   "timestamp": "2026-09-01T19:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9a3c919a-4eb4-460f-baca-ad9b46853243",
+   "id": "ae17a709-bc06-5936-8d60-52e6b15282c9",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:08:59.147Z",
+   "timestamp": "2026-09-01T19:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "9f65f061-c80e-4fd8-833f-58b9b45c5635",
+   "id": "5717cb81-2a38-5f92-9cab-57a9316371d5",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:15:42.456Z",
+   "timestamp": "2026-09-01T19:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f443d508-9f93-412f-8b08-27ab16d7b994",
+   "id": "44e11e28-d32a-5dc6-b3a3-49dd7c2adb7a",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:16:39.787Z",
+   "timestamp": "2026-09-01T19:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3b11e754-23d2-4b31-9f67-2c37dd1351c4",
+   "id": "17c9cac6-1dad-51b7-8319-b42fce959077",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:19:11.335Z",
+   "timestamp": "2026-09-01T19:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "dab37058-3fd6-4cfe-9f1f-cc124430dd03",
+   "id": "1c04cb70-1402-5a21-9305-5ad43740d178",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:21:22.554Z",
+   "timestamp": "2026-09-01T19:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "6e10464f-5a60-41b0-bf2d-20a146d97e45",
+   "id": "b6563b0e-c437-558e-8cbc-9e20d432579d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:22:42.451Z",
+   "timestamp": "2026-09-01T19:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "9ed89e12-b2f7-4793-8660-fd137e123a5c",
+   "id": "1c703ed2-e20f-52f2-a4c0-fa3fad6641ac",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:23:56.702Z",
+   "timestamp": "2026-09-01T19:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "ead93475-c232-4bb6-a649-57e9395f0cde",
+   "id": "21ebb79f-df15-5a69-b3dc-b3b80725952b",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:27:22.930Z",
+   "timestamp": "2026-09-01T19:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a383f8d8-9928-4edc-ac02-ac752f913767",
+   "id": "3d3d6fbb-d506-5048-afb8-06a611e7679d",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:32:02.161Z",
+   "timestamp": "2026-09-01T19:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a99f35c7-9ae5-4992-af98-fab489e8ba12",
+   "id": "2bc8ac49-3512-5a25-ae51-c1fa4a43fdda",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:33:59.607Z",
+   "timestamp": "2026-09-01T19:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d6cf770d-7b63-4d4c-bf39-0043182496e5",
+   "id": "c9078465-4fe5-54b5-902a-345f8263c617",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:36:23.254Z",
+   "timestamp": "2026-09-01T19:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "ab18d0ac-bed5-4a42-acc4-e5861951d17b",
+   "id": "1d8a7d88-d9b8-5ba6-a85c-25dc702bfd6c",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:39:43.529Z",
+   "timestamp": "2026-09-01T19:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "73d58cd0-dfb5-4113-ab34-a26bf0d6c742",
+   "id": "66034663-1823-5a52-b8ff-fb7d0c7e62f6",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:46:03.968Z",
+   "timestamp": "2026-09-01T19:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ce032710-0975-4a75-93e9-97e109542c90",
+   "id": "b0464710-1248-5f1b-ab95-eabe4795abe3",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:49:58.777Z",
+   "timestamp": "2026-09-01T19:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "0ad7f21f-1997-46ce-9003-885b2eb24e2a",
+   "id": "8a2c27ec-6e33-5330-8ac7-e6592ca62f8f",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:53:08.570Z",
+   "timestamp": "2026-09-01T19:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "962103a9-d6f0-44ab-9a5f-be9033ce4c33",
+   "id": "6588539c-c987-548f-a540-e443e02ec237",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:55:10.595Z",
+   "timestamp": "2026-09-01T19:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "39c47149-2acd-4c0e-9a7b-189b2e43ebc0",
+   "id": "787036b4-762e-5433-9d07-503787267a95",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:57:32.311Z",
+   "timestamp": "2026-09-01T19:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "140dbd39-f77f-4602-a0a7-bfe3c75bc71f",
+   "id": "163003b6-ea38-51b4-a049-5608ca266b0a",
    "role": "overseer",
    "text": "<what you tell JeanBrasse, plain text or light markdown>",
    "action": null,
-   "timestamp": "2026-08-25T22:59:20.372Z",
+   "timestamp": "2026-09-01T20:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3090f656-3e9f-4991-9e1d-2e65b26f47dd",
+   "id": "ede8ca61-685e-56f3-bf7a-290790009bc7",
    "role": "user",
-   "text": "salut",
+   "text": "ping",
    "action": null,
-   "timestamp": "2026-08-25T23:14:47.554Z"
+   "timestamp": "2026-09-01T20:01:00.000Z"
   },
   {
-   "id": "47fd78b0-55b1-4e61-97d2-d68d3cea8c25",
+   "id": "b1345504-d228-5af9-b198-83415adcba62",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:14:53.633Z"
+   "timestamp": "2026-09-01T20:02:00.000Z"
   },
   {
-   "id": "7a5384ad-adcf-4862-b8cf-899c0a435fb0",
+   "id": "ec05e9f5-c98d-5f22-bee8-e70784d88f19",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:22:54.317Z",
+   "timestamp": "2026-09-01T20:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3d60b929-36cb-4649-b89d-fa3ce1bd42de",
+   "id": "73e37e8a-9fae-5f10-84be-29e4a2f76bb3",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:27:32.768Z",
+   "timestamp": "2026-09-01T20:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "339ed999-b519-4159-a8e3-3b08ae16526f",
+   "id": "97ce4fc1-9a68-5eab-8422-c054ecedcae5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:31:59.216Z",
+   "timestamp": "2026-09-01T20:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "4d6479f8-d5fd-4f39-a926-d431dbb2828a",
+   "id": "4abc0ae1-85dc-5625-9c8f-7ec338ae9eb5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:32:33.642Z",
+   "timestamp": "2026-09-01T20:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "81b2d890-3a84-4a76-a9ee-f485b5347aa5",
+   "id": "b0f5f10b-d00d-568a-938d-eeda8a0f0056",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:33:01.209Z",
+   "timestamp": "2026-09-01T20:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "1804205a-9db2-4691-8bda-60d7a23dcaa5",
+   "id": "12d8e165-39e5-568c-8dcc-3cb654608628",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:35:16.141Z",
+   "timestamp": "2026-09-01T20:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "fbe470d5-821a-4ae9-8ef1-623585fd9057",
+   "id": "6fd2700f-84f7-5466-98e1-6f068f440d37",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:36:19.803Z",
+   "timestamp": "2026-09-01T20:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "2ce937f4-5f7b-4ebc-8ad5-2d177c844d8e",
+   "id": "80f110a3-35ea-56de-b351-b7e644ff38b9",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:38:14.077Z",
+   "timestamp": "2026-09-01T20:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "cc535d6e-0c2f-43ad-955b-53d18ffcda3b",
+   "id": "6b5e16ec-be9a-543c-b42b-3a9c9164f28a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:39:12.074Z",
+   "timestamp": "2026-09-01T20:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "062af0fb-a23c-43a5-80e5-f7fa9023d232",
+   "id": "e14e451f-321f-5972-bdad-ff966e86f278",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:41:05.393Z",
+   "timestamp": "2026-09-01T20:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "5998e7b7-bd2c-454e-a592-87134ee36ab8",
+   "id": "75f3d0b0-e8f8-5170-adfb-4354e13c3d8e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:43:07.082Z",
+   "timestamp": "2026-09-01T20:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "22a206da-1bc2-4fdf-8f55-bcaa352d1a2e",
+   "id": "7f53887a-f28e-513a-a69a-80b4eb8c12c4",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:45:41.507Z",
+   "timestamp": "2026-09-01T20:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "17edacba-904c-49e5-8908-530eb2c27e95",
+   "id": "04f38a5e-b856-57e8-bbd0-c442a7a6ec61",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:46:32.371Z",
+   "timestamp": "2026-09-01T20:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "44f09397-05fd-49d0-a59e-1023e4484cc9",
+   "id": "bbea4170-0306-5f87-827f-20fca4f5d204",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:47:25.962Z",
+   "timestamp": "2026-09-01T20:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "dc5233be-6d3e-46fb-81f4-15c521814bf2",
+   "id": "7c653a8b-7e3e-5aed-82ba-e612d6b8fc5d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:49:57.568Z",
+   "timestamp": "2026-09-01T20:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "0bd72600-eef4-453e-9fef-20c407b5b969",
+   "id": "2539bdad-4d3b-591d-bd47-b5fa8731480e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:52:39.122Z",
+   "timestamp": "2026-09-01T20:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "dc187753-1ebe-4df2-ac77-a45ae6e487f5",
+   "id": "0466dcaf-dc8e-56ad-be7e-c84c4e16b654",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:56:59.189Z",
+   "timestamp": "2026-09-01T20:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "028c4b8c-86bd-4e85-a26f-921115779d47",
+   "id": "2fe1a910-c199-561c-92bc-66545b2c768a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:57:40.093Z",
+   "timestamp": "2026-09-01T20:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "9ce371b7-dbb3-4af6-ad5f-53ae4f61cfb4",
+   "id": "9a85fcda-6a39-5d3f-b0da-1b8ed5a73179",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-25T23:58:26.774Z",
+   "timestamp": "2026-09-01T21:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "af2201e1-b1e1-4687-ba9f-2aebf8d66a1b",
+   "id": "fde612c4-7801-5a9c-abb7-debefef41fd3",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:02:22.375Z",
+   "timestamp": "2026-09-01T21:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "00d81f55-4bf9-4714-890a-fc78fcaa41bf",
+   "id": "ce1c6916-32e2-5db9-9deb-ff325058125f",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:03:18.757Z",
+   "timestamp": "2026-09-01T21:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "e04849c6-87bc-4a89-9681-610615851584",
+   "id": "75409596-8429-5e98-b05c-e14d40d282ca",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:04:09.365Z",
+   "timestamp": "2026-09-01T21:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "fa35256e-57b2-44a7-8769-78d9a99796ab",
+   "id": "84c84008-51c5-5699-9111-aa9923ca983d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:05:33.023Z",
+   "timestamp": "2026-09-01T21:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "3f1b3ed3-9fbe-4957-8f2d-14ca31781eec",
+   "id": "bae62ece-cc6e-562f-a790-3ffd820c383c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:15:09.597Z",
+   "timestamp": "2026-09-01T21:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9d6a1480-82c8-4c71-a0f1-50fa365a700b",
+   "id": "7a02a793-dcb9-52c3-9530-d49593077efb",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:16:05.365Z",
+   "timestamp": "2026-09-01T21:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "8b4c82ad-225e-41be-9bcc-87709c47bf30",
+   "id": "139457cc-e171-5369-aaff-40038317b34e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:17:05.587Z",
+   "timestamp": "2026-09-01T21:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "1de28c8f-daee-4038-a8d3-4e151fdd666d",
+   "id": "d00b11ff-e9f5-50ff-85e5-1ce9ec042778",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:18:58.556Z",
+   "timestamp": "2026-09-01T21:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "a4c8c24a-991f-4592-89a8-e770371cf3b7",
+   "id": "9385d6c3-92bf-5760-abb9-e198d7e69076",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:22:33.916Z",
+   "timestamp": "2026-09-01T21:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "7e9d0945-029d-4d22-9ac3-7e56a5d119ea",
+   "id": "c35d01eb-eae6-5e17-9cfa-dda69f1cf24f",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:24:55.508Z",
+   "timestamp": "2026-09-01T21:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "672f5123-daab-4e97-a256-ded9eacfb63c",
+   "id": "cb9f452d-2995-5b6d-9ac5-f2bc5d76b185",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:25:47.228Z",
+   "timestamp": "2026-09-01T21:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3eb84ed0-be98-49b9-8948-f386176e711d",
+   "id": "faeceea4-7fa3-5754-927b-d9f4e08d6758",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:26:50.172Z",
+   "timestamp": "2026-09-01T21:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "126e4a2e-8665-42ab-a3d9-7d8f20b24537",
+   "id": "24fc6357-6f96-552e-8e7c-e77ee3079fe4",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:28:26.006Z",
+   "timestamp": "2026-09-01T21:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "df111c80-4fef-4bc1-ae8b-308ee8910976",
+   "id": "d8a58826-65ed-5509-a2c8-b3fb48a910c7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:29:49.251Z",
+   "timestamp": "2026-09-01T21:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "afb3fc1f-9c48-4555-8eaa-a977a67a3783",
+   "id": "4552a5e1-b7df-57bc-ab34-cee6c2c3cbd7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:32:36.617Z",
+   "timestamp": "2026-09-01T21:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7174e0eb-b151-44d2-b0a0-63fcb202278e",
+   "id": "25c3a1aa-508d-5330-a552-93f087ed3248",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:33:39.954Z",
+   "timestamp": "2026-09-01T21:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "050c84a6-5fd0-43b6-97df-4af30afe2d9c",
+   "id": "0abd1098-4f00-535b-b06e-5bf726f0007a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:34:55.024Z",
+   "timestamp": "2026-09-01T21:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d6b578a7-cb66-4702-a1c6-a7b63852d513",
+   "id": "5492e3d1-4a15-51ea-b5a0-cd7bad5a75f5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:35:56.993Z",
+   "timestamp": "2026-09-01T21:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "b67b0526-9853-424b-8692-fbd031a7f680",
+   "id": "b2702f23-b634-5cbb-b3ef-1deb7f1e284e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:37:58.690Z",
+   "timestamp": "2026-09-01T21:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5942c95a-68ac-46eb-af89-a92bd2c72801",
+   "id": "f21e38c3-eae4-5ed2-b5a4-381718524608",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:38:55.219Z",
+   "timestamp": "2026-09-01T22:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "b8567c39-fb61-4417-aef7-6da4e5eb9e01",
+   "id": "3121c4f8-cf9c-5b8d-8dcc-f079596722e9",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:41:05.439Z",
+   "timestamp": "2026-09-01T22:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d7c69963-4cdb-43cd-b987-b52d4cdc151c",
+   "id": "615d7a6b-4e41-5104-a5df-a75c9b0e5dae",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:44:37.807Z",
+   "timestamp": "2026-09-01T22:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "abbe5fc9-7e88-447a-b39c-39777c5c7faa",
+   "id": "470dc6f3-3f4f-5835-b7d7-c5dd71259507",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:46:52.799Z",
+   "timestamp": "2026-09-01T22:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5fd41c29-ca12-4fe4-a922-bd514419956b",
+   "id": "a44e92cf-9843-5351-9bbe-496599c6a3fb",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:50:54.515Z",
+   "timestamp": "2026-09-01T22:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f0f6bb11-cdee-42a7-a5d8-f4c74f32283c",
+   "id": "7e73f12c-f161-5428-990b-e987b2bd99ec",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:52:00.745Z",
+   "timestamp": "2026-09-01T22:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "8a264243-b737-48fd-972f-d5472aef7bfa",
+   "id": "6d4bb572-e1e4-5d8f-83ba-6f99a079e7e3",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:52:38.199Z",
+   "timestamp": "2026-09-01T22:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "16f45ff4-c1eb-4740-b259-eecdc274ca4c",
+   "id": "e3b031c6-e7c5-58b1-9b7d-48f9fcc42ab7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T00:54:39.841Z",
+   "timestamp": "2026-09-01T22:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "4154e333-be6e-47cb-8864-962cbabc34c2",
+   "id": "c414f108-0550-5beb-b293-0ac3f49d00e0",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:03:21.581Z",
+   "timestamp": "2026-09-01T22:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "30dd54ba-2b23-471d-89d6-76e939484a49",
+   "id": "5aa0aed3-eb84-5aa4-9e1f-12acb6a6c468",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:11:14.210Z",
+   "timestamp": "2026-09-01T22:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "448bf17d-3a14-49ac-b1ac-5fbe17b87f4f",
+   "id": "fca33d57-4b72-53f5-bb17-b7064e5fe3bf",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:16:48.310Z",
+   "timestamp": "2026-09-01T22:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "5c256333-b0a5-4822-84bb-047ab80fc675",
+   "id": "f276adb0-a032-596e-bb22-f986abc19204",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:18:35.035Z",
+   "timestamp": "2026-09-01T22:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "6c7307ca-973d-45e4-9238-40bd5bb1a1f3",
+   "id": "52b1b96b-734e-5c6d-8cfc-1cf3780b57b8",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:21:05.830Z",
+   "timestamp": "2026-09-01T22:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d75100cf-c38d-47d1-82b1-a53936b41a97",
+   "id": "ecb04831-de4f-525f-b08c-6b0561390db4",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:22:05.931Z",
+   "timestamp": "2026-09-01T22:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "250d2af5-951a-4661-b434-22441918aa9e",
+   "id": "1a0ef7c6-b052-5d54-a701-219af211da0a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:22:34.476Z",
+   "timestamp": "2026-09-01T22:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f8afb26a-d82d-4239-bf8d-cfb14a459a34",
+   "id": "16cd070f-4f02-5fef-bfac-060382dd7c5a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:24:11.099Z",
+   "timestamp": "2026-09-01T22:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c65e2131-d403-49b7-8205-4cb2c61ee169",
+   "id": "adddf8d7-7848-5c9b-8a2c-f25e54247315",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:26:19.678Z",
+   "timestamp": "2026-09-01T22:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "34790221-5825-446d-96ae-e4bc6695a2bf",
+   "id": "d2017a9d-0218-5ea9-8218-c0237111344d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:27:35.704Z",
+   "timestamp": "2026-09-01T22:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9f7c71a2-8b2c-4c66-a646-7446b8fdd140",
+   "id": "c988e033-2638-5bad-9d01-c2c2474a30fb",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:30:34.818Z",
+   "timestamp": "2026-09-01T22:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "c804010f-a189-404a-a8e1-c7648278714b",
+   "id": "128a80c1-fe7f-56d3-bd00-708c38d73314",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:35:25.683Z",
+   "timestamp": "2026-09-01T22:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f1d0f6db-a1a7-4592-8039-40379c3be151",
+   "id": "942b02fe-d94a-5155-8835-fafea2ae58c7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:41:42.990Z",
+   "timestamp": "2026-09-01T23:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "4d651e7b-f6f0-4441-b278-7431120edb16",
+   "id": "bafad4d1-a1bb-5056-a5aa-d4b10a26911f",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T01:44:53.544Z",
+   "timestamp": "2026-09-01T23:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3bb77f7e-0926-4bc8-9576-6fe824369446",
+   "id": "eea83476-c740-525a-9891-c1c3bef8ab5b",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:01:33.499Z",
+   "timestamp": "2026-09-01T23:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "1c861b8a-6553-427b-b86c-173479178670",
+   "id": "ceac1b26-c30a-5a62-b57a-956bdfeaa18e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:02:31.958Z",
+   "timestamp": "2026-09-01T23:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "303eaa8b-e534-467a-b673-dc061d07e1b7",
+   "id": "f83b3593-2f9a-58ff-9c74-6e54489ccd18",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:05:33.616Z",
+   "timestamp": "2026-09-01T23:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "a3ca4363-913e-4c03-aea9-322215c0357c",
+   "id": "cf220e6e-81b1-5e47-8a87-c097139d8d86",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:07:05.891Z",
+   "timestamp": "2026-09-01T23:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "dfc0a52c-fc67-41b3-91b5-2c04d3c3511d",
+   "id": "969b7d21-274c-52aa-954d-b470ba1e08c1",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:12:33.835Z",
+   "timestamp": "2026-09-01T23:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a3fe1f5e-7c4d-4b6f-8fd2-596874c163ad",
+   "id": "1e88870f-bc87-596f-8f13-44328e768455",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:17:32.503Z",
+   "timestamp": "2026-09-01T23:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d1b15401-07b8-48ad-9c67-df1b5af98b03",
+   "id": "d152b26d-130e-565e-9c42-b2fc5ccc8c73",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:19:02.899Z",
+   "timestamp": "2026-09-01T23:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "4900ef8a-8c32-480a-95de-29cbddff6b62",
+   "id": "884f606c-c904-5e36-bf23-3ef990a4110e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:21:01.832Z",
+   "timestamp": "2026-09-01T23:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "f8a5ddbd-a28a-49f0-83ec-ce3a83bbfb02",
+   "id": "3a9d536c-2221-5772-b3ac-ac48500d4d90",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:22:14.870Z",
+   "timestamp": "2026-09-01T23:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "35994ddf-e673-483d-bacd-5b4a4575ebc2",
+   "id": "5a6003c2-cece-585e-8f98-5f426640506d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:30:45.948Z",
+   "timestamp": "2026-09-01T23:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "809cde1a-a29b-4129-8232-16c81a83eae7",
+   "id": "2d553a32-5db5-55af-b489-986bf3f62868",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:35:04.215Z",
+   "timestamp": "2026-09-01T23:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "62315ef8-e1b8-49d1-b11f-28804b8726c5",
+   "id": "66f195f3-c235-5ba6-9367-d44c27e1baeb",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T02:51:13.537Z",
+   "timestamp": "2026-09-01T23:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "27811e35-a762-4832-9d53-066497bc1335",
+   "id": "b50e81f8-470a-5897-b5e0-cecdab26781f",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T03:10:20.954Z",
+   "timestamp": "2026-09-01T23:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "1bc05cd9-1cda-4ebd-b269-891e0ea35c5f",
+   "id": "4a035a11-25fd-5a57-9809-216bc19e40f6",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T03:11:20.912Z",
+   "timestamp": "2026-09-01T23:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "6d6ac4a8-1c2b-43ca-ac68-ff4e328cefe1",
+   "id": "cd7ee1b2-1bc5-55d8-b06e-0dcacffe0312",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T04:34:18.889Z",
+   "timestamp": "2026-09-02T01:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d5b1613f-25b6-4489-9743-eb84aa707019",
+   "id": "ce3472a9-0943-59ec-87d5-d948ab224ea7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T04:40:10.449Z",
+   "timestamp": "2026-09-02T01:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "75c9a194-e17a-4f1e-baf8-003e887c546d",
+   "id": "ea8ea25a-dad4-53e6-8137-7af094159ccc",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T05:03:53.079Z",
+   "timestamp": "2026-09-02T01:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "1c392343-dd80-433b-bc30-1adc7d361d3d",
+   "id": "d949577f-5f43-5b36-945c-a3ec688a43f8",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T05:16:07.284Z",
+   "timestamp": "2026-09-02T01:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "6e53b75f-0d03-4054-9668-d39f5787c5f4",
+   "id": "b95a2f69-54c2-581d-b88c-3dbd21abb5bd",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T05:18:37.594Z",
+   "timestamp": "2026-09-02T01:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "23d74030-fd50-4e18-b9ed-f0816cd69579",
+   "id": "ec598e89-ee21-50b5-b3e2-27b37bff3c26",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T05:22:32.764Z",
+   "timestamp": "2026-09-02T01:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9e2356e1-d350-438f-bee1-f338635cf097",
+   "id": "3511f3d2-1a7e-5d7b-8b20-bb8a341f16c4",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T05:49:31.663Z",
+   "timestamp": "2026-09-02T01:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "379e470f-e1ff-4424-8214-3d206cacc1f6",
+   "id": "038cf755-1730-50c9-b42c-0d834e4215bd",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:21:50.879Z",
+   "timestamp": "2026-09-02T02:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "b4ff2f3a-d5db-45ad-be6b-66632dd01aa4",
+   "id": "220c35e6-e321-54e2-ae59-c06f4feff36e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:26:44.341Z",
+   "timestamp": "2026-09-02T02:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "391f73c5-1395-42a1-9e57-b56e5d6a9e8d",
+   "id": "c7ee9af1-a8c7-534e-8ef8-59fd2d9c8a99",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:29:16.827Z",
+   "timestamp": "2026-09-02T02:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "00eedea4-d5b9-491d-9f83-497b0cb6624e",
+   "id": "4123b09c-7552-5389-8e79-58b457241f4b",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:30:51.722Z",
+   "timestamp": "2026-09-02T02:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "20641e0c-6f10-475f-b259-19977c206bf9",
+   "id": "90c7ee5c-f16d-5258-bf04-d7d20a5f69e6",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:34:05.751Z",
+   "timestamp": "2026-09-02T02:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "3aa31e09-f630-44a3-aed3-291e4f90dda0",
+   "id": "38449526-cf66-5f25-9879-189e54b2c5d4",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:37:53.857Z",
+   "timestamp": "2026-09-02T02:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9ecef5bd-5516-4c8c-a8a8-8316ed6a5c29",
+   "id": "64801e57-1b4d-530c-b924-d946c248b4bc",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:39:18.924Z",
+   "timestamp": "2026-09-02T02:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "e0bb6c74-3e95-4e97-9bde-fec38091b0f7",
+   "id": "42322bd3-7818-5e96-80f8-ba1cedfd4892",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T06:40:33.901Z",
+   "timestamp": "2026-09-02T02:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "9ff3efc6-59c1-46b0-b374-966d6429cf8c",
+   "id": "bfa7557d-53d7-55ea-8691-c31fc0089fe6",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T07:48:29.566Z",
+   "timestamp": "2026-09-02T03:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "6c6ae00b-fd77-4654-8e16-b535d848ada4",
+   "id": "7b3685ea-a55a-50cc-bf8c-14bc5f36d75d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T07:49:48.256Z",
+   "timestamp": "2026-09-02T03:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "4a76d794-e9db-49e5-a6ea-78458c015bc9",
+   "id": "5ada28a6-71d6-5076-acb7-e0c1b8e7b0a7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T07:51:02.129Z",
+   "timestamp": "2026-09-02T03:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7dba0f9e-d757-42d3-8b32-974c1fe79ae4",
+   "id": "3f059616-0207-57e3-82ba-4aec117c3797",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T07:59:06.868Z",
+   "timestamp": "2026-09-02T03:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "30134995-a8a4-41f0-b017-bebdc4796cb6",
+   "id": "c40e5053-26e0-53bd-b93b-2cd0dc58f24b",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:17:50.353Z",
+   "timestamp": "2026-09-02T03:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "09781f30-40b5-4f30-b0a9-855c0d41662e",
+   "id": "806010d1-1af6-5aaf-b0d7-f3b708597bb1",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:19:05.108Z",
+   "timestamp": "2026-09-02T03:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "ee8502a7-02bb-40ab-85e4-64c96794a8ac",
+   "id": "fe20f3b9-6734-5ce0-9e90-a55aa85ead08",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:22:32.445Z",
+   "timestamp": "2026-09-02T03:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "03246762-6a60-4dbf-955a-b43498193141",
+   "id": "c50ebf02-27f1-5e6d-96f2-fccfef038bd2",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:27:56.066Z",
+   "timestamp": "2026-09-02T04:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "464c1481-92f8-4d23-81aa-ffb07d693372",
+   "id": "4c8f99c5-6c9e-5a99-8251-8041b8a6bc8e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:32:12.049Z",
+   "timestamp": "2026-09-02T04:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "309facf2-9eb6-4bcd-92ed-33cdff38e870",
+   "id": "773d4d13-5842-5ee5-8d49-13db94a85452",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:35:20.054Z",
+   "timestamp": "2026-09-02T04:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "2c8d10cf-2076-43ea-9e55-c87f848df2e9",
+   "id": "94874fe9-5a1e-526e-90bc-d7f144666123",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:35:55.529Z",
+   "timestamp": "2026-09-02T04:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "98f9c6c5-0180-4966-a689-cc2a38536763",
+   "id": "210df23e-5584-50c2-add8-f3c73f92132c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:40:58.371Z",
+   "timestamp": "2026-09-02T04:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "cc5eb330-2491-4b70-899f-5563a6a7f57c",
+   "id": "d7dcf683-d684-5139-8cbd-2b5add9493a9",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:42:23.011Z",
+   "timestamp": "2026-09-02T04:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "b8d26e35-4d98-4f09-a677-1e63f8d81033",
+   "id": "e7f15d07-dc58-5240-b2db-045dd314f89c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:43:52.954Z",
+   "timestamp": "2026-09-02T04:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "2b0d8c63-e5fb-45bc-98a3-fbb0329b4ada",
+   "id": "5f73a117-4767-561d-a9ba-609a5a2c6005",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:45:50.138Z",
+   "timestamp": "2026-09-02T04:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7d3a90a4-849e-4008-9b0f-0865e8f4113e",
+   "id": "c3e70cdd-0883-52e6-8b64-1d280e439feb",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:48:28.549Z",
+   "timestamp": "2026-09-02T04:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "a98cce56-4457-444c-82c6-58371ca60928",
+   "id": "54b6d77e-8c6d-5e56-98c8-6d79a29aa1e2",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:52:04.919Z",
+   "timestamp": "2026-09-02T04:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "dd49ee52-5af4-43d0-ab6a-8a9b17244848",
+   "id": "357a5e74-395b-50ef-8638-603a61025c23",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T08:55:32.092Z",
+   "timestamp": "2026-09-02T04:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9bf1ecaf-27ec-4fff-a506-d4cae8c44d17",
+   "id": "af748ef2-e796-5391-9c3c-77f4b619caea",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:03:05.826Z",
+   "timestamp": "2026-09-02T04:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "95a1473f-00af-4993-82a7-cde9e4067724",
+   "id": "82fbf993-0fde-58fc-ba4c-03109f703c37",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:04:35.731Z",
+   "timestamp": "2026-09-02T04:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "915a61dd-19d4-4265-a283-0ef98a12d9df",
+   "id": "e28a9b77-7ce2-5966-a2b1-d1cb91ae7665",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:05:58.371Z",
+   "timestamp": "2026-09-02T04:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "42b61e8c-7fbc-4b94-9c4e-5ba1cce78ecf",
+   "id": "41c56b13-7edb-50d2-bb08-50b1cd4d1570",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:06:24.114Z",
+   "timestamp": "2026-09-02T04:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "a5eee787-366f-4beb-8cbe-363bb18ebf2e",
+   "id": "cd01a477-9070-5f1c-b449-1f2993dd2a1a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:11:40.233Z",
+   "timestamp": "2026-09-02T04:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "63f7738c-c655-4626-8996-ed05a008eefa",
+   "id": "2234c834-e034-5e78-ba42-a5dd9ee7aa16",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:17:45.394Z",
+   "timestamp": "2026-09-02T04:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "163b5509-89c2-4b10-8886-d4f5ed8b8325",
+   "id": "dda61774-e228-5a3f-8518-abfe496aaeb6",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:20:54.496Z",
+   "timestamp": "2026-09-02T04:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "0eec3b2d-b9a6-44e1-ba80-11eb6012fd99",
+   "id": "227a2ef9-850f-5f88-ad50-1779c55279a5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:23:01.956Z",
+   "timestamp": "2026-09-02T04:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "da388df6-c527-43a3-a632-01f75e7c66b1",
+   "id": "d7ef900e-648e-55f2-87d6-ebb45e15d4e4",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:24:26.944Z",
+   "timestamp": "2026-09-02T04:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "c8e1fd02-a771-45cb-83f7-fe42e9edffc3",
+   "id": "3a4cdfe4-3caa-5b2a-aa07-c3907886e684",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:25:42.617Z",
+   "timestamp": "2026-09-02T05:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "d59a61ef-b649-4c7a-a3b8-76303763d142",
+   "id": "c2284368-25db-5de6-9cf4-5717bb7b70f0",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:26:55.913Z",
+   "timestamp": "2026-09-02T05:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9d584fce-a466-47f1-8078-fcb433c2331d",
+   "id": "c8178cd4-46d0-52eb-8854-398b7ebd70a5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:27:57.249Z",
+   "timestamp": "2026-09-02T05:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "335b3395-6fc3-43ab-b398-7865c04eb80b",
+   "id": "17c99ae2-d06f-52b7-ad2f-752b50f045d5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:30:34.023Z",
+   "timestamp": "2026-09-02T05:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "5c004184-bf48-4485-a46b-bd565e0ccfaf",
+   "id": "7232f3f3-8b0e-5ed5-9e0a-0816e55aa9ec",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:32:48.276Z",
+   "timestamp": "2026-09-02T05:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "aecea0a9-7e0a-4628-8d77-4167eec36965",
+   "id": "51aa731f-e077-594b-adcc-0b2d1b3c2e1a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:36:22.018Z",
+   "timestamp": "2026-09-02T05:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9ed69853-0341-424b-bf38-d8d86faeb4bf",
+   "id": "7f58fb02-0cbe-5cd6-ba34-1661e5433b5c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:37:52.966Z",
+   "timestamp": "2026-09-02T05:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "4955c560-8c98-4c73-9518-d990736fb095",
+   "id": "a7c78c84-0923-5c5f-bb45-c0ee471b9f4a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:39:55.293Z",
+   "timestamp": "2026-09-02T05:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "0efe49c0-4a29-43e4-8503-ca2544d0e3bc",
+   "id": "21915e02-14ee-5623-9af8-9650388f7c43",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:40:58.562Z",
+   "timestamp": "2026-09-02T05:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "1548c6cc-f694-4fff-b969-c691ed279bc6",
+   "id": "77e90214-579c-5892-86b5-efa1e5773e24",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:42:05.500Z",
+   "timestamp": "2026-09-02T05:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "ba15a958-682d-40fc-a429-a7fa2fd60b74",
+   "id": "6c44f9c2-4f6c-5fd5-87b6-3feb5ab5410f",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:44:53.779Z",
+   "timestamp": "2026-09-02T05:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "b32b8e4e-6736-4543-9b2e-63072c31fb52",
+   "id": "a096a814-d828-58d3-8800-6e895ce7bb67",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:46:40.941Z",
+   "timestamp": "2026-09-02T05:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ec769456-92fe-4611-a2d1-2fa1d98fa6e3",
+   "id": "a3b9bd16-6644-5f1b-bf2a-24988ca2db90",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:47:37.705Z",
+   "timestamp": "2026-09-02T05:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "28826a18-d4b0-4608-93f0-bd42a3d69ff0",
+   "id": "45ceb2e9-8ea3-542a-b041-ad9d144e93ea",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:50:13.010Z",
+   "timestamp": "2026-09-02T05:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "d03bd0cd-91b5-4d6c-bba0-ba54a123ee8a",
+   "id": "44137647-c5a8-5027-b595-71f9285b183d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:51:27.465Z",
+   "timestamp": "2026-09-02T05:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "23ca2c42-5fc8-47b0-88cc-d1164e330b60",
+   "id": "68d6a1e2-2b1b-5887-b76d-cd2f706ba0cd",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T09:55:57.864Z",
+   "timestamp": "2026-09-02T05:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "bee1724f-8242-438c-8173-3d34bd0ee74d",
+   "id": "4cea1198-2699-5eac-bb43-319421c14671",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:02:48.015Z",
+   "timestamp": "2026-09-02T05:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "de4c5f3d-513f-4bf2-bce9-34f5f93fe10e",
+   "id": "f48627ba-9a73-5baa-999e-d4a1430e4cd2",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:06:17.146Z",
+   "timestamp": "2026-09-02T05:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ee3344d0-a09a-4aa3-8969-e99c89611c86",
+   "id": "45a10309-fc44-54b1-ad38-60900aad11a7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:08:36.297Z",
+   "timestamp": "2026-09-02T05:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "64700b5c-30a0-42c3-b3fd-b1e08d8e0901",
+   "id": "b914fcd1-3324-56ef-803e-986c9f948877",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:10:51.434Z",
+   "timestamp": "2026-09-02T05:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "e013fb93-be13-4220-8f0f-521c51786312",
+   "id": "f45497a2-f123-538f-aa56-5dd8daa535a6",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:15:57.235Z",
+   "timestamp": "2026-09-02T06:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "8ef91aad-8818-4153-ba37-ceba6a50a8db",
+   "id": "ea8965df-cd9f-53c9-8f9d-65b89ed38349",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:20:54.191Z",
+   "timestamp": "2026-09-02T06:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "09ac408b-62b0-4d3c-a77f-f511c4a664c7",
+   "id": "0a3d68f8-9ad1-59fb-9b39-6f1006e998b0",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:21:42.883Z",
+   "timestamp": "2026-09-02T06:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "51abe000-e8d6-4e5c-b369-8a539fe82756",
+   "id": "31376c10-08ee-52d7-a0f4-c708e6ba793a",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:25:34.299Z",
+   "timestamp": "2026-09-02T06:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "72578032-22c7-4d98-b77d-071735142fe2",
+   "id": "d276f5cd-deda-5c4a-ae6c-e54f082ac2ae",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:40:26.821Z",
+   "timestamp": "2026-09-02T06:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "fa0d05bc-6936-46e9-8212-9efcf35b5661",
+   "id": "7de37495-bd6e-5393-a039-e36aa6a94c10",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:40:56.737Z",
+   "timestamp": "2026-09-02T06:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a1b957e2-1d0c-4fcd-8326-17fc475dc53f",
+   "id": "ca05be75-4313-55b3-a0e1-118ad9e41b38",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:43:20.078Z",
+   "timestamp": "2026-09-02T06:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7bc15485-2d71-4535-96cf-b6289466fbdc",
+   "id": "cc87f646-6c56-5e1d-b48a-2029ec3a6f7f",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:45:17.281Z",
+   "timestamp": "2026-09-02T06:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7cdb73eb-2124-4c0a-bd2c-f770082b01ff",
+   "id": "41d27bc1-c55b-517b-8279-c2e33f76c2f1",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:49:36.095Z",
+   "timestamp": "2026-09-02T06:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "90eb68f6-34f6-41c7-8fc0-43553198e238",
+   "id": "ec284985-adf3-5ef0-85d0-4dea88918909",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:50:53.586Z",
+   "timestamp": "2026-09-02T06:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "7d47b735-5b18-4c59-967e-141802956728",
+   "id": "eccc8fbe-de7d-5e38-ba7e-73641c0d4676",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:52:41.946Z",
+   "timestamp": "2026-09-02T06:30:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ce7d7950-152a-473c-9a65-fe8f19bbf8bd",
+   "id": "3e709a97-0cf4-58ab-a412-401e8c5d0ce5",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:55:42.054Z",
+   "timestamp": "2026-09-02T06:32:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "69ab2044-1dfb-4ac6-86d5-5d445cf5208c",
+   "id": "be1e82e4-f572-567a-883b-9ffe1301c7dd",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T10:57:43.352Z",
+   "timestamp": "2026-09-02T06:35:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "8d019157-81ee-43e8-890a-3b9ddf95b137",
+   "id": "9833cec1-ee6b-5ade-991a-7e5f23fb0620",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:06:27.229Z",
+   "timestamp": "2026-09-02T06:37:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "621df62b-06b1-4092-9a2f-c3e0a22bfd2f",
+   "id": "39868b7c-7641-5725-838a-c9c7a0ee2fe7",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:09:47.895Z",
+   "timestamp": "2026-09-02T06:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "da0e72a5-559f-4342-9bf6-964081c0f119",
+   "id": "f8aa4345-6d47-5a30-9004-4304d6c5bf22",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:14:05.711Z",
+   "timestamp": "2026-09-02T06:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "0043fbd7-5931-4544-95f1-2a7e3a56c7d0",
+   "id": "9bbb3b54-726f-596b-a58e-113b8bedda0c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:16:28.690Z",
+   "timestamp": "2026-09-02T06:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "2029cb2e-f74d-4b56-9de6-3b7a44d19996",
+   "id": "3bb89499-08bf-5dad-87b7-9c92e73a164b",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:20:50.333Z",
+   "timestamp": "2026-09-02T06:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ff7863fe-4762-44f8-9758-5296a63f7cbe",
+   "id": "930b633c-858b-58aa-9e88-f2d18beba55b",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:22:11.502Z",
+   "timestamp": "2026-09-02T06:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "3ac2ad3f-d38f-48a8-b9e5-e0a4e9b15a06",
+   "id": "c6843f61-02b0-566b-b557-4d0a00f9b954",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:25:20.575Z",
+   "timestamp": "2026-09-02T06:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "883efbab-d703-4e78-b295-407fa9851802",
+   "id": "b8d700b7-ed43-5c07-815e-9fd304ca2303",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:25:53.737Z",
+   "timestamp": "2026-09-02T07:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "814036ac-ee8e-4db3-ab81-bbfa7a35ec94",
+   "id": "409fbd9f-439b-5090-8f54-a72e74a1d373",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:26:52.100Z",
+   "timestamp": "2026-09-02T07:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "ad922dbf-cddc-46de-b3c7-f753d8690f11",
+   "id": "3d8fdc9e-4715-598f-99c1-8a7d0a93a512",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:29:58.527Z",
+   "timestamp": "2026-09-02T07:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "6024423a-3ba9-4b53-905f-d223bb32745f",
+   "id": "090d4d5a-48bd-516d-a4d5-24341a2d797e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:34:38.728Z",
+   "timestamp": "2026-09-02T07:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "9d7d51df-0db4-44d6-8683-0b1323f9f406",
+   "id": "59687ac8-59d9-5b01-853d-b2d8b2015d3c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:42:45.152Z",
+   "timestamp": "2026-09-02T07:11:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "d96075cc-76a7-4b90-a23d-3a75f4a4b48a",
+   "id": "bbc9bd63-effa-51f5-b725-879b50c3f05d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:48:02.825Z",
+   "timestamp": "2026-09-02T07:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "b4e7f354-9f93-4d7a-8ed1-f17ec20ebb8a",
+   "id": "33698f2e-d26e-5663-85b3-64a8020902fd",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T11:54:58.898Z",
+   "timestamp": "2026-09-02T07:17:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "a1e3ebe3-0734-419d-8823-8355b3f11df3",
+   "id": "c4894874-8f3f-5b3c-bcc0-2841e5994ddb",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T12:03:00.009Z",
+   "timestamp": "2026-09-02T07:20:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "132ddaab-6600-41ed-ad26-7b311fd40f08",
+   "id": "1254dd34-9d10-5474-a198-604653b1ed11",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T12:10:18.444Z",
+   "timestamp": "2026-09-02T07:22:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "7dde0fd1-b35e-41e1-8664-5d8aa5b7e4e8",
+   "id": "01bf5d7d-4245-5b19-8f61-4bf0890e1e30",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T12:25:54.514Z",
+   "timestamp": "2026-09-02T07:26:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "6601edf1-c6d5-4f95-ae38-122203f44eb4",
+   "id": "9b726ed9-3a62-52b8-a472-f9f415c20f20",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T19:43:09.288Z",
+   "timestamp": "2026-09-02T08:41:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "e0584155-0c4f-4a3d-a4a9-c74bb2c48e16",
+   "id": "78c79731-7c2c-5fdb-9f39-189731f9ae9e",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T19:49:58.240Z",
+   "timestamp": "2026-09-02T08:45:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "18bc21da-5265-4809-b452-bbb19ac505d8",
+   "id": "60c1a66e-7562-5898-8550-bf3331870d70",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T19:55:00.487Z",
+   "timestamp": "2026-09-02T08:47:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "7cb0548d-93b5-43c4-a793-077a23fb6d28",
+   "id": "6133526b-1bcd-5747-9d73-d0b05d6428fe",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T19:59:13.402Z",
+   "timestamp": "2026-09-02T08:50:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "c37ae529-e21f-4244-a08d-21194166fa1f",
+   "id": "cd1c4d06-561d-527b-82dd-bf6296896858",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:03:18.931Z",
+   "timestamp": "2026-09-02T08:52:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "1e504813-fc32-496f-a25f-8d5f9f326d87",
+   "id": "5e626955-08b3-57b0-ad54-e708a58cad63",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:06:57.228Z",
+   "timestamp": "2026-09-02T08:56:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "e66936ae-2ccb-4aba-a710-d3f0f426bae5",
+   "id": "692ce510-1de5-592d-9321-01b9a142e3f0",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:11:41.644Z",
+   "timestamp": "2026-09-02T09:00:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "fb1d1374-19dd-4254-af9e-6fd308e7a8d1",
+   "id": "99d5a8b4-93f6-560b-88a5-43ba236cebc0",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:12:16.521Z",
+   "timestamp": "2026-09-02T09:02:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "9c36d0dc-db25-4cda-9abc-0ac622c32088",
+   "id": "a8afc6a7-3b3c-583d-990f-a51866a04162",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:16:49.878Z",
+   "timestamp": "2026-09-02T09:05:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "39185f05-90be-4549-8167-78f1716eeb09",
+   "id": "b6d7a27d-c5f1-5318-9807-d62e8fbc070d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:25:50.526Z",
+   "timestamp": "2026-09-02T09:07:30.000Z",
    "isBriefing": true
   },
   {
-   "id": "fa8b6d9d-eba2-4393-8235-639f2ceed043",
+   "id": "ad667358-ff5a-5798-8778-753c04be0b27",
    "role": "user",
-   "text": "salut",
+   "text": "et alors ?",
    "action": null,
-   "timestamp": "2026-08-26T20:29:00.150Z"
+   "timestamp": "2026-09-02T09:08:30.000Z"
   },
   {
-   "id": "778df0e3-f03b-43ed-890a-ab3693e14503",
+   "id": "89d5165f-0d5a-5e7f-abdb-1eacce6b1510",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:29:07.046Z"
+   "timestamp": "2026-09-02T09:11:30.000Z"
   },
   {
-   "id": "0da8a4fb-9216-4bd4-9d34-29129bf1e537",
+   "id": "5398d4d8-c329-54b9-8dac-59037a09167c",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:33:46.096Z",
+   "timestamp": "2026-09-02T09:15:00.000Z",
    "isBriefing": true
   },
   {
-   "id": "aa58b4ca-f564-46cb-a147-44fcef4c7ed2",
+   "id": "6e54f461-acde-5064-9e60-47ba8f57fa3d",
    "role": "overseer",
    "text": "Frontend has been waiting on your answer about the sidebar width for eleven minutes. Nothing else is blocked.",
    "action": null,
-   "timestamp": "2026-08-26T20:34:35.292Z",
+   "timestamp": "2026-09-02T09:17:00.000Z",
    "isBriefing": true
   }
  ],

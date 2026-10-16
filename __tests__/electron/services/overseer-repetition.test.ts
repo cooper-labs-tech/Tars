@@ -13,9 +13,13 @@ import * as path from 'path';
  * back at JeanBrasse every time he tried to talk to it. Every guard passed, because
  * every guard was about a shape of text and the problem is a behaviour.
  *
- * The fixture is JeanBrasse's real conversation, taken off his disk. These assert
- * that it comes unstuck, and that a healthy conversation is untouched, rather
- * than that some helper rejects one particular sentence.
+ * The fixture has the shape of JeanBrasse's real conversation and none of its
+ * words (since 2026-10-17): the same turns in the same order, the stuck
+ * sentence and the placeholder echoes where they were, and each check-in on
+ * the same side of the 30-minute window as before. The user's lines and the
+ * overseer's few real answers are invented. These assert that it comes
+ * unstuck, and that a healthy conversation is untouched, rather than that some
+ * helper rejects one particular sentence.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-overseer-rep-'));
@@ -80,13 +84,13 @@ function persisted(): { role: string; text: string }[] {
   return JSON.parse(fs.readFileSync(OVERSEER_FILE, 'utf-8')).messages ?? [];
 }
 
-/** JeanBrasse's conversation, exactly as it sat on his disk. */
+/** The conversation, as the fixture holds it. */
 function seedUsersConversation(): void {
   fs.copyFileSync(FIXTURE, OVERSEER_FILE);
 }
 
 /**
- * JeanBrasse's conversation with the stuck sentence swapped for one nothing knows
+ * The same conversation with the stuck sentence swapped for one nothing knows
  * about.
  *
  * His actual sentence is now refused by name, because it was the example
@@ -103,7 +107,7 @@ function seedTheSameShapeWithNewWords(): void {
   raw.messages = raw.messages.map((m: { text: string }) => (
     m.text === STUCK ? { ...m, text: NOVEL } : m
   ));
-  // The fixture is a day old on disk. The last turn is stamped as just now,
+  // The fixture's turns are weeks old. The last turn is stamped as just now,
   // which is how the loop looked while JeanBrasse was watching it: the newest repeat
   // had arrived minutes ago.
   const last = raw.messages[raw.messages.length - 1];
