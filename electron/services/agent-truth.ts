@@ -285,13 +285,36 @@ function latestLocalCommand(lines: string): number | undefined {
  */
 /**
  * The lines of a transcript that can say something about background work, kept
- * while the file is unchanged (size and modification time). At a rest two
- * watches ask (agent-watch, to tell a requester; task-watch, to end a task),
- * and each read the whole transcript, megabytes, synchronously (the Audit's
- * Low 3 on #305): the second now reads nothing.
+ * per transcript and read incrementally. At a rest two watches ask
+ * (agent-watch, to tell a requester; task-watch, to end a task).
+ *
+ * It read the whole transcript as one string and split it, at every rest, and
+ * kept the matching lines. V8 makes a line split out of a large flat string a
+ * sliced string pointing into it, so the few kept lines held every byte of the
+ * 32 latest transcripts alive in the main process (99 lines of 72 characters
+ * held a 102 MB transcript; the live ones run to 194 MB), and each rest added a
+ * transcript-sized string on top: the V8 fatals of 2026-10-13 and 2026-10-16,
+ * both in a file read creating a string at the heap limit
+ * (__tests__/electron/services/background-work-heap.test.ts).
+ *
+ * Now a transcript, which only grows, is read from where the last read stopped
+ * (the last complete line), in Buffers, a chunk at a time, and only a matching
+ * line becomes a string, made from its own bytes. A file replaced (another
+ * inode), cut shorter, or written over (the bytes before where the last read
+ * stopped are no longer the ones it read) is read again from its start; a
+ * line not ended yet waits for its newline.
  */
-const backgroundLines = new Map<string, { size: number; mtimeMs: number; lines: string[] }>();
+type BackgroundLines = { ino: number; size: number; offset: number; tail: Buffer; lines: string[] };
+const backgroundLines = new Map<string, BackgroundLines>();
 const BACKGROUND_LINES_KEPT = 32;
+/** What is read at once. */
+const CHUNK_BYTES = 4 * 1024 * 1024;
+/** The bytes kept from just before where a read stopped, to tell a file written over from one appended to. */
+const TAIL_BYTES = 64;
+/** What a line must hold to be kept: each as bytes, all ASCII. */
+const BACKGROUND_WORDS = ['backgroundTaskId', 'isAsync', 'taskId', 'task-notification', 'Monitor', 'TaskStop', 'KillShell', 'KillBash']
+  .map(word => Buffer.from(word, 'utf-8'));
+const NEWLINE = 0x0a;
 
 function backgroundLinesOf(file: string): string[] | undefined {
   let st: fs.Stats;
@@ -300,20 +323,52 @@ function backgroundLinesOf(file: string): string[] | undefined {
   } catch {
     return undefined;
   }
-  const kept = backgroundLines.get(file);
-  if (kept && kept.size === st.size && kept.mtimeMs === st.mtimeMs) return kept.lines;
-  let raw: string;
+  let kept = backgroundLines.get(file);
+  if (kept && kept.ino === st.ino && kept.size === st.size) return kept.lines;
+  const fresh = (): BackgroundLines => ({ ino: st.ino, size: 0, offset: 0, tail: Buffer.alloc(0), lines: [] });
+  if (!kept || kept.ino !== st.ino || st.size < kept.offset) kept = fresh();
+  let fd: number;
   try {
-    raw = fs.readFileSync(file, 'utf-8');
+    fd = fs.openSync(file, 'r');
   } catch {
     return undefined;
   }
-  // Most lines are none of these, and a transcript runs to megabytes.
-  const lines = raw.split('\n').filter(line => /backgroundTaskId|isAsync|taskId|task-notification|Monitor|TaskStop|KillShell|KillBash/.test(line));
+  try {
+    if (kept.tail.length > 0) {
+      const before = Buffer.alloc(kept.tail.length);
+      const got = fs.readSync(fd, before, 0, before.length, kept.offset - before.length);
+      if (got !== before.length || !before.equals(kept.tail)) kept = fresh();
+    }
+    // The bytes of a line not ended within one chunk, joined to the next.
+    let carry: Buffer | undefined;
+    let at = kept.offset;
+    const chunk = Buffer.allocUnsafe(CHUNK_BYTES);
+    while (at < st.size) {
+      const read = fs.readSync(fd, chunk, 0, Math.min(CHUNK_BYTES, st.size - at), at);
+      if (read <= 0) break;
+      at += read;
+      const data = carry ? Buffer.concat([carry, chunk.subarray(0, read)]) : chunk.subarray(0, read);
+      let start = 0;
+      for (let nl = data.indexOf(NEWLINE, start); nl !== -1; nl = data.indexOf(NEWLINE, start)) {
+        const line = data.subarray(start, nl);
+        if (BACKGROUND_WORDS.some(word => line.includes(word))) kept.lines.push(line.toString('utf-8'));
+        start = nl + 1;
+      }
+      // Copied: `data` may be the reused chunk, which the next read overwrites.
+      carry = start < data.length ? Buffer.from(data.subarray(start)) : undefined;
+      if (start > 0) kept.tail = Buffer.from(data.subarray(Math.max(0, start - TAIL_BYTES), start));
+      kept.offset = at - (carry?.length ?? 0);
+    }
+  } catch {
+    return undefined;
+  } finally {
+    fs.closeSync(fd);
+  }
+  kept.size = st.size;
   backgroundLines.delete(file);
-  backgroundLines.set(file, { size: st.size, mtimeMs: st.mtimeMs, lines });
+  backgroundLines.set(file, kept);
   while (backgroundLines.size > BACKGROUND_LINES_KEPT) backgroundLines.delete(backgroundLines.keys().next().value as string);
-  return lines;
+  return kept.lines;
 }
 
 export function pendingBackgroundWork(
