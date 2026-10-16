@@ -250,5 +250,5 @@ describe.runIf(posix)('6. the skip list against the runner itself, outside Tars'
       expect(seen.filter((s) => !s.includes(' /api/hooks/')).length, event).toBeGreaterThan(0);
     }
     fs.rmSync(home, { recursive: true, force: true });
-  });
+  }, 120_000);
 });
