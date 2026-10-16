@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On Windows, a second Tars started with another profile on the same account no longer reports that the first one stopped abruptly, nor starts again the agents the first is running. Tars took any process still running under the first one\'s process id for another program, and now asks Windows when that process was created, only in that case and not at each launch.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-15',
