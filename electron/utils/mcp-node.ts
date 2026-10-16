@@ -90,7 +90,7 @@ function isPackaged(): boolean {
 }
 
 /** The app's path as it will still be once it quits: an AppImage's file, not its mount. $APPIMAGE is set by the AppImage runtime only. */
-function lastingAppBinary(): string {
+export function lastingAppBinary(): string {
   return process.env.APPIMAGE || process.execPath;
 }
 

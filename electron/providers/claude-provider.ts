@@ -15,7 +15,7 @@ import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuo
 import { DATA_DIR } from '../constants';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
-import { usesNodeHooks, mergeNodeHooks, legacyShCommand } from '../utils/hook-command';
+import { mergeNodeHooks, legacyShCommand } from '../utils/hook-command';
 
 export class ClaudeProvider implements CLIProvider {
   readonly id = 'claude' as const;
@@ -183,7 +183,7 @@ export class ClaudeProvider implements CLIProvider {
     };
   }
 
-  async configureHooks(hooksDir: string, platform: NodeJS.Platform = process.platform): Promise<void> {
+  async configureHooks(hooksDir: string): Promise<void> {
     const settingsPath = path.join(this.configDir, 'settings.json');
 
     type HookEntry = { matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> };
@@ -214,43 +214,11 @@ export class ClaudeProvider implements CLIProvider {
         settings.hooks = {};
       }
 
-      // Windows: the Node runner, not the .sh, which cannot run there (see hook-command.ts).
-      if (usesNodeHooks(platform)) {
-        const specs = hookFiles.map(({ type, file, matcher }) => ({
-          type, matcher, event: file.replace(/\.sh$/, ''), isLegacy: legacyShCommand(file, this.configDir, hooksDir),
-        }));
-        return mergeNodeHooks(settings.hooks, specs, hooksDir, 30) ? settings : undefined;
-      }
-
-      let updated = false;
-
-      for (const { type, file, matcher } of hookFiles) {
-        const commandPath = path.join(hooksDir, file);
-        if (!fs.existsSync(commandPath)) continue;
-
-        const existing: HookEntry[] = settings.hooks[type] || [];
-        const entryIndex = existing.findIndex((h: HookEntry) =>
-          h.hooks?.some((hh: { command?: string }) => hh.command?.includes(file))
-        );
-
-        if (entryIndex >= 0) {
-          const entry: HookEntry = existing[entryIndex];
-          const hookIndex = entry.hooks.findIndex((hh: { command?: string }) => hh.command?.includes(file));
-          if (hookIndex >= 0 && entry.hooks[hookIndex].command !== commandPath) {
-            entry.hooks[hookIndex].command = commandPath;
-            updated = true;
-          }
-        } else {
-          const hookConfig: { matcher?: string; hooks: Array<{ type: string; command: string; timeout: number }> } = {
-            hooks: [{ type: 'command', command: commandPath, timeout: 30 }]
-          };
-          if (matcher) hookConfig.matcher = matcher;
-          settings.hooks[type] = [...existing, hookConfig];
-          updated = true;
-        }
-      }
-
-      return updated ? settings : undefined;
+      // The Node runner on every platform: no bash, jq or curl (see hook-command.ts).
+      const specs = hookFiles.map(({ type, file, matcher }) => ({
+        type, matcher, event: file.replace(/\.sh$/, ''), isLegacy: legacyShCommand(file, this.configDir, hooksDir),
+      }));
+      return mergeNodeHooks(settings.hooks, specs, hooksDir, 30) ? settings : undefined;
     }, { createMode: 0o644 });
 
     if (outcome === 'written') {

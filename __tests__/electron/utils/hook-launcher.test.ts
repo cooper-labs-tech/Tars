@@ -152,6 +152,10 @@ describe.runIf(posix)('the launcher, run as a CLI runs a hook', () => {
     const ino = fs.statSync(file).ino;
     expect(writeHookLauncher(plan)).toBe(file);
     expect([fs.statSync(file).mtimeMs, fs.statSync(file).ino]).toEqual([mtime, ino]);
+    // Changed: a new file renamed over it, never the old one rewritten under a hook that reads it.
+    expect(writeHookLauncher({ ...plan, node: '/opt/node/bin/node' })).toBe(file);
+    expect(fs.statSync(file).ino).not.toBe(ino);
+    expect(fs.readFileSync(file, 'utf8')).toContain("NODE='/opt/node/bin/node'");
   });
 
   it('4. not written through a symlinked folder or file', () => {
@@ -191,7 +195,8 @@ describe.runIf(posix)('the launcher, run as a CLI runs a hook', () => {
   it('5. outside Tars: a skipped event answers before any Node starts; kept ones and the status line still run', () => {
     const node = fakeNode(path.join(tmp, 's-node'), '22.0.0');
     const file = writeHookLauncher({ platform: process.platform, node, app: null, dataDir: path.join(home, '.dorothy') })!;
-    const outside = { PATH: '/nonexistent' };
+    // No node here (a skipped event's exact answer, which no stand-in Node would give, shows none started).
+    const outside = { PATH: '/usr/bin:/bin' };
     for (const [event, answer] of Object.entries(SKIPPED_OUTSIDE_TARS)) {
       const r = run(file, ['/h/tars-hook.mjs', event], outside);
       expect([r.status, r.stdout, r.stderr], event).toEqual([0, answer, '']);

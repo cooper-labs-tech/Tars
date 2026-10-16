@@ -4,8 +4,7 @@ import * as fs from 'fs';
 import { execCliSync, cliFailureText, CliNotRunnableError } from './cli-exec';
 import type { AppSettings } from '../types';
 import { DATA_DIR } from '../constants';
-import { legacyShCommand, usesNodeHooks } from '../utils/hook-command';
-import { allowAgentToken, configureGeminiNodeHooks } from '../utils/gemini-node-hooks';
+import { configureGeminiNodeHooks } from '../utils/gemini-node-hooks';
 import type {
   CLIProvider,
   InteractiveCommandParams,
@@ -149,108 +148,14 @@ export class GeminiProvider implements CLIProvider {
     };
   }
 
-  async configureHooks(hooksDir: string, platform: NodeJS.Platform = process.platform): Promise<void> {
+  async configureHooks(hooksDir: string): Promise<void> {
     const geminiHooksDir = path.join(hooksDir, 'gemini');
     if (!fs.existsSync(geminiHooksDir)) {
       console.log('Gemini hooks directory not found at', geminiHooksDir);
       return;
     }
-    // Windows: the Node runner, not the .sh, which cannot run there (see hook-command.ts).
-    if (usesNodeHooks(platform)) {
-      configureGeminiNodeHooks(this.configDir, hooksDir);
-      return;
-    }
-
-    const settingsPath = path.join(this.configDir, 'settings.json');
-
-    if (!fs.existsSync(this.configDir)) {
-      fs.mkdirSync(this.configDir, { recursive: true });
-    }
-
-    let settings: {
-      hooks?: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
-      [key: string]: unknown;
-    } = {};
-
-    if (fs.existsSync(settingsPath)) {
-      try {
-        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      } catch {
-        settings = {};
-      }
-    }
-
-    if (!settings.hooks) {
-      settings.hooks = {};
-    }
-
-    const hookFiles = [
-      { type: 'AfterTool', file: 'post-tool-use.sh', matcher: '*' },
-      { type: 'AfterAgent', file: 'on-stop.sh', matcher: undefined },
-      { type: 'SessionStart', file: 'session-start.sh', matcher: '*' },
-      { type: 'SessionEnd', file: 'session-end.sh', matcher: '*' },
-      { type: 'Notification', file: 'notification.sh', matcher: '*' },
-      // BeforeAgent: Gemini CLI fires no UserPromptSubmit
-      // (https://geminicli.com/docs/hooks/), and a Gemini agent read idle while
-      // it worked. win32 had moved already (utils/gemini-node-hooks.ts).
-      { type: 'BeforeAgent', file: 'user-prompt-submit.sh', matcher: undefined },
-    ];
-
-    let updated = false;
-
-    type HookEntry = { matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> };
-
-    // The entry an older Tars wrote on UserPromptSubmit goes; the user's own
-    // entries in that event stay, and so do another app's of the same name
-    // (isTarsHooksFile decides, as on win32).
-    const former = settings.hooks.UserPromptSubmit;
-    if (Array.isArray(former)) {
-      const isOlderTars = legacyShCommand('gemini/user-prompt-submit.sh', this.configDir, hooksDir);
-      const kept = former
-        .map((entry: HookEntry) => ({ ...entry, hooks: (entry.hooks ?? []).filter((hh) => !(typeof hh.command === 'string' && isOlderTars(hh.command))) }))
-        .filter((entry: HookEntry) => entry.hooks.length > 0);
-      if (kept.length !== former.length || kept.some((entry: HookEntry, i: number) => entry.hooks.length !== former[i].hooks?.length)) {
-        if (kept.length) settings.hooks.UserPromptSubmit = kept;
-        else delete settings.hooks.UserPromptSubmit;
-        updated = true;
-      }
-    }
-
-    for (const { type, file, matcher } of hookFiles) {
-      const commandPath = path.join(geminiHooksDir, file);
-      if (!fs.existsSync(commandPath)) continue;
-
-      const existing: HookEntry[] = settings.hooks![type] || [];
-      const entryIndex = existing.findIndex((h: HookEntry) =>
-        h.hooks?.some((hh: { command?: string }) => hh.command?.includes(`gemini/${file}`))
-      );
-
-      if (entryIndex >= 0) {
-        const entry: HookEntry = existing[entryIndex];
-        const hookIndex = entry.hooks.findIndex((hh: { command?: string }) => hh.command?.includes(`gemini/${file}`));
-        if (hookIndex >= 0 && entry.hooks[hookIndex].command !== commandPath) {
-          entry.hooks[hookIndex].command = commandPath;
-          updated = true;
-        }
-      } else {
-        const hookConfig: { matcher?: string; hooks: Array<{ type: string; command: string; timeout: number }> } = {
-          hooks: [{ type: 'command', command: commandPath, timeout: 10000 }]
-        };
-        if (matcher) hookConfig.matcher = matcher;
-        settings.hooks![type] = [...existing, hookConfig];
-        updated = true;
-      }
-    }
-
-    // The agent token through Gemini's environment redaction, as on win32.
-    if (allowAgentToken(settings)) updated = true;
-
-    if (updated) {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
-      console.log('Gemini hooks configured/updated in', settingsPath);
-    } else {
-      console.log('Gemini hooks already configured');
-    }
+    // The Node runner on every platform, on Gemini's own events (see hook-command.ts and gemini-node-hooks.ts).
+    configureGeminiNodeHooks(this.configDir, hooksDir);
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
