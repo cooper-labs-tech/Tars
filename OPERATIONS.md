@@ -1811,6 +1811,11 @@ project, and the main process log says why (`[orphan-folders] git cannot list th
 own. The window's remove asks first, then removes the folders it showed, and only those, one at a time; a folder a process
 works in stays listed as `in-use`, with the process named, and when `lsof` cannot be read every
 folder stays (`unknown-use`). To see what a process holds there: `lsof -a -d cwd +D <folder>`.
+On Windows each folder is first renamed beside itself (`<name>.removing-<pid>-<ms>`), which Windows
+refuses while a program has a file open in it or works in it: such a folder stays `in-use`, with no
+program named. To find it: Resource Monitor (`resmon`), CPU, Associated Handles, searched for the
+folder's name. A `<name>.removing-...` folder left behind is one whose removal failed after the move
+and could not be put back: it is listed, and goes the same way.
 
 ### A deleted agent's work
 

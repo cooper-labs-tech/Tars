@@ -71,7 +71,7 @@ import {
   listOrphanFolders, removeOrphanFolders, diskSpace, DISK_FLOOR_BYTES, procCwds,
 } from '../../../electron/services/orphan-folders';
 import { cannotSymlink } from '../../setup/symlink-privilege';
-import { makeUnreadable } from '../../setup/file-access';
+import { makeUnreadable, makeUnremovable } from '../../setup/file-access';
 
 let root: string;
 let project: string;
@@ -83,29 +83,6 @@ function file(p: string, bytes: number, when?: Date): void {
   fs.mkdirSync(path.dirname(p), { recursive: true });
   fs.writeFileSync(p, Buffer.alloc(bytes, 120));
   if (when) fs.utimesSync(p, when, when);
-}
-
-/**
- * `file` in `folder` cannot be removed. macOS and Linux: the folder at 0555,
- * as this test always did. Windows has no mode bits, and a read-only folder
- * still lets its children go: there access control entries deny this account
- * deleting the file and the folder deleting its children, since either one
- * alone still lets the file go (measured 2026-10-07). The failure there is
- * EPERM where POSIX says EACCES.
- */
-function makeUnremovable(folder: string, file: string): () => void {
-  if (process.platform !== 'win32') {
-    fs.chmodSync(folder, 0o555);
-    return () => fs.chmodSync(folder, 0o755);
-  }
-  const icacls = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'icacls.exe');
-  const account = os.userInfo().username;
-  execFileSync(icacls, [file, '/deny', `${account}:(DE)`], { stdio: 'pipe' });
-  execFileSync(icacls, [folder, '/deny', `${account}:(DC)`], { stdio: 'pipe' });
-  return () => {
-    execFileSync(icacls, [folder, '/remove:d', account], { stdio: 'pipe' });
-    execFileSync(icacls, [file, '/remove:d', account], { stdio: 'pipe' });
-  };
 }
 
 /** A worktree git made, then forgot: its .git points to a gitdir that is gone. */

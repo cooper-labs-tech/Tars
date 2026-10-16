@@ -47,6 +47,27 @@ export function makeUnwritable(dir: string, restoreMode = 0o700): () => void {
 }
 
 /**
+ * `file` in `folder` cannot be removed. macOS and Linux: the folder at 0555,
+ * as this test always did. Windows has no mode bits, and a read-only folder
+ * still lets its children go: there access control entries deny this account
+ * deleting the file and the folder deleting its children, since either one
+ * alone still lets the file go (measured 2026-10-07). The failure there is
+ * EPERM where POSIX says EACCES.
+ */
+export function makeUnremovable(folder: string, file: string): () => void {
+  if (process.platform !== 'win32') {
+    fs.chmodSync(folder, 0o555);
+    return () => fs.chmodSync(folder, 0o755);
+  }
+  const restoreFile = deny(file, 'DE');
+  const restoreFolder = deny(folder, 'DC');
+  return () => {
+    restoreFolder();
+    restoreFile();
+  };
+}
+
+/**
  * `file` unreadable to every process, whatever its privileges, until the
  * returned function is called: on Windows another process holds it open with
  * no sharing (FileShare.None), so each open for its data fails with a sharing
