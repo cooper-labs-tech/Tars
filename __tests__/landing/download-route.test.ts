@@ -22,7 +22,10 @@ import { GET as stats } from '../../landing/src/app/api/stats/route';
  * 6. GitHub does not answer, or answers an error, and the visitor is sent
  *    anywhere but the releases page;
  * 7. the stats say nothing of which systems have a build, or say a system has
- *    one when GitHub did not answer.
+ *    one when GitHub did not answer;
+ * 8. (the Audit's Medium on #430, before its code) the stats leave out the
+ *    newest published release, so the page cannot tell a promised version
+ *    from one already out.
  */
 
 const asset = (name: string) => ({ name, browser_download_url: `https://github.com/cooper-labs-tech/Tars/releases/download/x/${name}`, download_count: 1 });
@@ -94,16 +97,19 @@ describe('the stats the page reads (7)', () => {
     github(async () => json(RELEASES));
     const body = await (await stats()).json();
     expect(body.builds).toEqual({ mac: '2.0.4', windows: '2.0.3', linux: '2.0.4' });
+    expect(body.latest).toBe('2.0.4');
     expect(typeof body.total).toBe('number');
   });
 
   it('says no system has a build today but macOS', async () => {
     github(async () => json(MAC_ONLY));
-    expect((await (await stats()).json()).builds).toEqual({ mac: '2.0.2', windows: null, linux: null });
+    const body = await (await stats()).json();
+    expect(body.builds).toEqual({ mac: '2.0.2', windows: null, linux: null });
+    expect(body.latest).toBe('2.0.2');
   });
 
   it('says nothing of builds when GitHub did not answer, rather than that none has one', async () => {
     github(async () => json({}, 502));
-    expect(await (await stats()).json()).toEqual({ total: null, builds: null });
+    expect(await (await stats()).json()).toEqual({ total: null, builds: null, latest: null });
   });
 });

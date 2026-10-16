@@ -14,7 +14,7 @@
  * the maintainer's to reverse.
  */
 
-import { builds, installerOs, type Builds, type Release as PlatformRelease } from './platforms';
+import { builds, installerOs, newestPublished, type Builds, type Release as PlatformRelease } from './platforms';
 
 export const REPO = 'cooper-labs-tech/Tars';
 
@@ -80,12 +80,14 @@ export async function downloadCount(fetchImpl: typeof fetch = fetch): Promise<nu
 }
 
 /**
- * What the page reads: the count, and for each system the version of its
- * newest build (src/lib/platforms.ts), so a system no release has a build for
- * says when it comes. Both null when GitHub did not answer whole.
+ * What the page reads: the count, for each system the version of its newest
+ * build, and the newest published release (src/lib/platforms.ts), so a system
+ * no release has a build for says when it comes, and names a version only
+ * while that version is still to come. All null when GitHub did not answer
+ * whole.
  */
-export async function releaseStats(fetchImpl: typeof fetch = fetch): Promise<{ total: number | null; builds: Builds | null }> {
+export async function releaseStats(fetchImpl: typeof fetch = fetch): Promise<{ total: number | null; builds: Builds | null; latest: string | null }> {
   const releases = await readReleases(fetchImpl);
-  if (!releases) return { total: null, builds: null };
-  return { total: countInstallerDownloads(releases), builds: builds(releases) };
+  if (!releases) return { total: null, builds: null, latest: null };
+  return { total: countInstallerDownloads(releases), builds: builds(releases), latest: newestPublished(releases) };
 }

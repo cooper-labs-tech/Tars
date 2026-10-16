@@ -22,7 +22,11 @@ import type { Builds } from '../../landing/src/lib/platforms';
  *    than the list of all three;
  * 6. the download counter shows 0, or shows when GitHub did not answer;
  * 7. the page still says "Download for Mac" or "macOS desktop app" of its own,
- *    beside or instead of these.
+ *    beside or instead of these;
+ * 8. (the Audit's Medium on #430, before its code) a version promised after it
+ *    is out without the system's build: 2.0.3 published with no Windows setup,
+ *    and 2.0.3 still promised in the hero, its line or a card; or the page not
+ *    handing the newest release from /api/stats down to them.
  */
 
 const ROOT = path.resolve(__dirname, '../..');
@@ -66,7 +70,7 @@ const state = (n: number) => {
 
 const TODAY: Builds = { mac: '2.0.2', windows: null, linux: null };
 const ALL_OUT: Builds = { mac: '2.0.4', windows: '2.0.4', linux: '2.0.4' };
-const hero = (props: Partial<Parameters<typeof HeroDownload>[0]>) => renderToStaticMarkup(<HeroDownload visitor={null} builds={TODAY} count={5} {...props} />);
+const hero = (props: Partial<Parameters<typeof HeroDownload>[0]>) => renderToStaticMarkup(<HeroDownload visitor={null} builds={TODAY} latest="2.0.2" count={5} {...props} />);
 
 describe('the hero, state by state, as the frame draws it (1, 2, 3, 5)', () => {
   it('a Mac, today: its download, and when Windows and Linux come', () => {
@@ -93,7 +97,7 @@ describe('the hero, state by state, as the frame draws it (1, 2, 3, 5)', () => {
   });
 
   it('Windows, once all three have a build: its download, and the other two offered', () => {
-    const markup = hero({ visitor: 'windows', builds: ALL_OUT });
+    const markup = hero({ visitor: 'windows', builds: ALL_OUT, latest: '2.0.4' });
     expect(linksOf(markup)).toContainEqual(['/api/download?os=windows', lineOf(find(find(state(4), 'cta')!, 'dl'))]);
     expect(textOf(markup)).toContain(lineOf(find(state(4), 'others')));
     expect(linksOf(markup)).toEqual(expect.arrayContaining([['/api/download?os=mac', 'macOS'], ['/api/download?os=linux', 'Linux']]));
@@ -109,8 +113,8 @@ describe('the hero, state by state, as the frame draws it (1, 2, 3, 5)', () => {
 
 describe('the link keeps the visitor\'s architecture (4)', () => {
   it('asks for arm64 when the visitor is on arm64, and nothing more otherwise', () => {
-    expect(hero({ visitor: 'linux', arch: 'arm64', builds: ALL_OUT })).toContain('/api/download?os=linux&amp;arch=arm64');
-    expect(hero({ visitor: 'linux', arch: 'x64', builds: ALL_OUT })).toContain('href="/api/download?os=linux"');
+    expect(hero({ visitor: 'linux', arch: 'arm64', builds: ALL_OUT, latest: '2.0.4' })).toContain('/api/download?os=linux&amp;arch=arm64');
+    expect(hero({ visitor: 'linux', arch: 'x64', builds: ALL_OUT, latest: '2.0.4' })).toContain('href="/api/download?os=linux"');
   });
 });
 
@@ -126,7 +130,7 @@ describe('Get Tars, as the frames draw it (1, 2, 3)', () => {
   const desktop = rootNamed('Landing · desktop');
 
   it('says what Tars is in the frame\'s sentence, and has a card per system in its order', () => {
-    const markup = renderToStaticMarkup(<GetTars builds={TODAY} />);
+    const markup = renderToStaticMarkup(<GetTars builds={TODAY} latest="2.0.2" />);
     // The section itself, a child of the page: the nav has a link named Download too.
     const section = desktop.children?.find(child => child.name === 'Download');
     expect(textOf(markup)).toContain(lineOf(find(section!, 'p')));
@@ -143,22 +147,52 @@ describe('Get Tars, as the frames draw it (1, 2, 3)', () => {
   });
 
   it('links only the systems that have a build today, and says when the others come', () => {
-    const markup = renderToStaticMarkup(<GetTars builds={TODAY} />);
+    const markup = renderToStaticMarkup(<GetTars builds={TODAY} latest="2.0.2" />);
     expect(linksOf(markup)).toEqual([['/api/download?os=mac', 'Download for Mac']]);
     expect(textOf(markup).match(/Comes with \d+\.\d+\.\d+/g)).toHaveLength(2);
   });
 
   it('has each card its own download once all three have a build', () => {
-    const markup = renderToStaticMarkup(<GetTars builds={ALL_OUT} />);
+    const markup = renderToStaticMarkup(<GetTars builds={ALL_OUT} latest="2.0.4" />);
     const cards = (find(state(6), 'oses')?.children ?? []).map(card => lineOf(find(card, 'dl')));
     expect(linksOf(markup).map(([, words]) => words)).toEqual(cards);
     expect(linksOf(markup).map(([href]) => href)).toEqual(['/api/download?os=mac', '/api/download?os=windows', '/api/download?os=linux']);
   });
 
   it('links every system when GitHub did not answer, and lets the route decide', () => {
-    const markup = renderToStaticMarkup(<GetTars builds={null} />);
+    const markup = renderToStaticMarkup(<GetTars builds={null} latest={null} />);
     expect(linksOf(markup).map(([href]) => href)).toEqual(['/api/download?os=mac', '/api/download?os=windows', '/api/download?os=linux']);
     expect(textOf(markup)).not.toContain('Comes with');
+  });
+});
+
+describe('once 2.0.3 is out without its Windows setup, as state 7 draws it (8)', () => {
+  const AFTER: Builds = { mac: '2.0.3', windows: null, linux: null };
+
+  it('tells a Windows visitor Tars for Windows is coming, with no version, and keeps Linux\'s', () => {
+    const markup = hero({ visitor: 'windows', builds: AFTER, latest: '2.0.3' });
+    expect(textOf(markup)).toContain(lineOf(find(state(7), 'soon')));
+    expect(textOf(markup)).toContain(lineOf(find(state(7), 'others')));
+    expect(textOf(markup)).not.toContain('2.0.3');
+  });
+
+  it('says Coming on the Windows card, Comes with 2.0.4 on Linux\'s, and 2.0.3 nowhere', () => {
+    const markup = renderToStaticMarkup(<GetTars builds={AFTER} latest="2.0.3" />);
+    const cards = (find(state(7), 'oses')?.children ?? []).map(card => wordsOf(card));
+    let at = 0;
+    for (const words of cards) {
+      for (const word of words) {
+        const found = textOf(markup).indexOf(word, at);
+        expect(found, `${word} after what came before`).toBeGreaterThanOrEqual(0);
+        at = found;
+      }
+    }
+    expect(textOf(markup)).not.toContain('2.0.3');
+  });
+
+  it('is handed the newest release by the page, from /api/stats', () => {
+    const page = read('landing/src/app/page.tsx');
+    expect(page.match(/latest=\{stats\?\.latest \?\? null\}/g)).toHaveLength(2);
   });
 });
 

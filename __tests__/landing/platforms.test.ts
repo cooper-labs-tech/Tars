@@ -6,7 +6,9 @@ import {
   heroPrimary,
   installerFor,
   newestBuild,
+  newestPublished,
   othersLine,
+  promised,
   readVisitor,
   visitorArch,
   visitorOs,
@@ -44,6 +46,12 @@ import {
  *    system is not known;
  * 7. the browser the page runs in: its client hints, its touch points or its
  *    user agent left unread, or a browser without userAgentData throwing.
+ *
+ * Added with the Audit's Medium on #430, before its code:
+ * 9. a version promised for a system once that version is out without its
+ *    build: 2.0.3 published with no Windows setup, and the page still saying
+ *    Windows comes with 2.0.3; or versions compared as text, 2.0.10 read as
+ *    older than 2.0.9.
  *
  * Added after the code, for a mutant of its bench that survived (M11):
  * 8. the Windows zip, or the setup's .blockmap, taken for its installer when
@@ -176,40 +184,40 @@ describe('the line under the hero\'s buttons (5)', () => {
   const allOut: Builds = { mac: '2.0.4', windows: '2.0.4', linux: '2.0.4' };
 
   it('says two systems that come with one version in one sentence, and links neither', () => {
-    const line = othersLine('mac', today, { windows: '2.0.4', linux: '2.0.4' });
+    const line = othersLine('mac', today, '2.0.2', { windows: '2.0.4', linux: '2.0.4' });
     expect(words(line)).toBe('Windows and Linux come with 2.0.4.');
     expect(links(line)).toEqual([]);
   });
 
   it('offers Windows macOS, and says when Linux comes', () => {
-    const line = othersLine('windows', today);
+    const line = othersLine('windows', today, '2.0.2');
     expect(words(line)).toBe(`Also for macOS. Linux comes with ${COMES_WITH.linux}.`);
     expect(links(line)).toEqual(['mac']);
   });
 
   it('offers every other system once each has a build, and never the visitor\'s own', () => {
-    const line = othersLine('windows', allOut);
+    const line = othersLine('windows', allOut, '2.0.4');
     expect(words(line)).toBe('Also for macOS and Linux.');
     expect(links(line)).toEqual(['mac', 'linux']);
   });
 
   it('says the versions apart when two systems come with different ones', () => {
-    const line = othersLine('mac', today, { windows: '2.0.3', linux: '2.0.4' });
+    const line = othersLine('mac', today, '2.0.2', { windows: '2.0.3', linux: '2.0.4' });
     expect(words(line)).toBe('Windows comes with 2.0.3. Linux comes with 2.0.4.');
   });
 
   it('offers every other system when GitHub did not answer, rather than say one is to come', () => {
-    expect(words(othersLine('linux', null))).toBe('Also for macOS and Windows.');
+    expect(words(othersLine('linux', null, null))).toBe('Also for macOS and Windows.');
   });
 
   it('has no line for a visitor whose system is not known', () => {
-    expect(othersLine(null, today)).toEqual([]);
+    expect(othersLine(null, today, '2.0.2')).toEqual([]);
   });
 
   it('never writes undefined or null for a version, whoever visits', () => {
     for (const visitor of OSES) {
       for (const b of [today, allOut, { mac: null, windows: null, linux: null }]) {
-        expect(words(othersLine(visitor, b))).not.toMatch(/undefined|null/);
+        expect(words(othersLine(visitor, b, '2.0.2'))).not.toMatch(/undefined|null/);
       }
     }
   });
@@ -219,14 +227,14 @@ describe('the hero\'s own button (6)', () => {
   const today: Builds = { mac: '2.0.2', windows: null, linux: null };
 
   it('is a download for a system with a build, and a promise for one without', () => {
-    expect(heroPrimary('mac', today)).toEqual({ kind: 'download', os: 'mac' });
-    expect(heroPrimary('windows', today)).toEqual({ kind: 'comes', os: 'windows', version: COMES_WITH.windows });
-    expect(heroPrimary('linux', { ...today, linux: '2.0.4' })).toEqual({ kind: 'download', os: 'linux' });
+    expect(heroPrimary('mac', today, '2.0.2')).toEqual({ kind: 'download', os: 'mac' });
+    expect(heroPrimary('windows', today, '2.0.2')).toEqual({ kind: 'comes', os: 'windows', version: COMES_WITH.windows });
+    expect(heroPrimary('linux', { ...today, linux: '2.0.4' }, '2.0.4')).toEqual({ kind: 'download', os: 'linux' });
   });
 
   it('sends a visitor whose system is not known to the list, and offers the download when GitHub did not answer', () => {
-    expect(heroPrimary(null, today)).toEqual({ kind: 'list' });
-    expect(heroPrimary('windows', null)).toEqual({ kind: 'download', os: 'windows' });
+    expect(heroPrimary(null, today, '2.0.2')).toEqual({ kind: 'list' });
+    expect(heroPrimary('windows', null, null)).toEqual({ kind: 'download', os: 'windows' });
   });
 });
 
@@ -243,3 +251,41 @@ describe('the browser the page runs in (7)', () => {
     expect(readVisitor({})).toEqual({ os: null, arch: null });
   });
 });
+
+describe('a version is promised only while it is newer than the newest release (9)', () => {
+  const released = (tag: string, names: string[], extra: Record<string, unknown> = {}) => ({ tag_name: tag, assets: names.map(asset), ...extra });
+
+  it('reads the newest published release, without its v, past drafts and prereleases', () => {
+    expect(newestPublished([
+      released('v2.0.5', ['Tars-2.0.5-arm64.dmg'], { draft: true }),
+      released('v2.0.4', ['Tars-2.0.4-arm64.dmg'], { prerelease: true }),
+      released('v2.0.3', ['Tars-2.0.3-arm64.dmg']),
+    ])).toBe('2.0.3');
+    expect(newestPublished([])).toBeNull();
+  });
+
+  it('reads the highest version, when GitHub lists an older line\'s patch first', () => {
+    expect(newestPublished([released('v1.9.8', ['Tars-1.9.8-arm64.dmg']), released('v2.0.3', ['Tars-2.0.3-arm64.dmg'])])).toBe('2.0.3');
+  });
+
+  it('promises a version newer than the newest release, and none once that version is out', () => {
+    expect(promised('windows', '2.0.2', { windows: '2.0.3' })).toBe('2.0.3');
+    expect(promised('windows', '2.0.3', { windows: '2.0.3' })).toBeNull();
+    expect(promised('windows', '2.0.4', { windows: '2.0.3' })).toBeNull();
+    expect(promised('windows', null, { windows: '2.0.3' })).toBeNull();
+  });
+
+  it('compares versions as numbers, not as text', () => {
+    expect(promised('linux', '2.0.9', { linux: '2.0.10' })).toBe('2.0.10');
+    expect(promised('linux', '2.0.10', { linux: '2.0.9' })).toBeNull();
+    expect(promised('linux', '2.1.0', { linux: '2.0.10' })).toBeNull();
+  });
+
+  it('says a system is coming, with no number, once its version is out without its build', () => {
+    const afterRelease: Builds = { mac: '2.0.3', windows: null, linux: null };
+    expect(words(othersLine('mac', afterRelease, '2.0.3', { windows: '2.0.3', linux: '2.0.4' }))).toBe('Windows is coming. Linux comes with 2.0.4.');
+    expect(words(othersLine('mac', { mac: '2.0.4', windows: null, linux: null }, '2.0.4', { windows: '2.0.3', linux: '2.0.4' }))).toBe('Windows and Linux are coming.');
+    expect(heroPrimary('windows', afterRelease, '2.0.3')).toEqual({ kind: 'comes', os: 'windows', version: null });
+  });
+});
+

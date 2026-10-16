@@ -6,8 +6,10 @@
  * The visitor's system is read in the browser, from what it says of itself,
  * and kept nowhere: a download link names the system it asks for, and the
  * route serves that system's file from the newest release that has one. A
- * system no release has a build for yet says the version it comes with, and
- * its button appears once a release carries its file, with no change here.
+ * system no release has a build for yet says the version it comes with while
+ * that version is still to come, and that it is coming once the version is out
+ * without it; its button appears once a release carries its file, with no
+ * change here.
  *
  * Imported by the root's tests: no landing-only package, no `@/` path.
  */
@@ -30,9 +32,10 @@ export const NEEDS: Record<Os, string> = {
 };
 /**
  * The version each system's first build comes with, said while no release has
- * one: Windows with 2.0.3 (release:win attaches its setup right after the
- * macOS files), Linux with 2.0.4. macOS has a build in every release; its
- * entry is never shown while one does.
+ * one and the newest release is older than it (promised): Windows with 2.0.3
+ * (release:win attaches its setup right after the macOS files), Linux with
+ * 2.0.4. macOS has a build in every release; its entry is never shown while
+ * one does.
  */
 export const COMES_WITH: Record<Os, string> = { mac: '2.0.2', windows: '2.0.3', linux: '2.0.4' };
 
@@ -156,6 +159,43 @@ export function newestBuild(os: Os, releases: Release[], arch?: Arch | null): { 
   return null;
 }
 
+/** Versions compared as numbers, part by part: 2.0.10 comes after 2.0.9. */
+function compareVersions(a: string, b: string): number {
+  const pa = a.split('.').map(n => Number.parseInt(n, 10) || 0);
+  const pb = b.split('.').map(n => Number.parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i += 1) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+/**
+ * The version of the newest published release, whatever files it has, or
+ * null when there is none: the highest, since GitHub lists by date and an
+ * older line's patch can come after it.
+ */
+export function newestPublished(releases: Release[]): string | null {
+  let newest: string | null = null;
+  for (const release of releases) {
+    if (!published(release)) continue;
+    const version = versionOf(release);
+    if (version && (!newest || compareVersions(version, newest) > 0)) newest = version;
+  }
+  return newest;
+}
+
+/**
+ * The version a system without a build is said to come with: its entry of
+ * COMES_WITH while that version is newer than the newest release, and none
+ * once it is out without the system's build, or when the newest release is
+ * not known. A page that names none says the system is coming.
+ */
+export function promised(os: Os, latest: string | null, comesWith: Partial<Record<Os, string>> = COMES_WITH): string | null {
+  const version = comesWith[os] ?? COMES_WITH[os];
+  return latest && compareVersions(version, latest) > 0 ? version : null;
+}
+
 /** For each system, the version of its newest build, or null. */
 export function builds(releases: Release[]): Builds {
   return {
@@ -176,11 +216,12 @@ const and = (names: string[]) => (names.length < 2 ? names.join('') : `${names.s
 /**
  * The line under the hero's buttons: the other systems, those with a build as
  * links ("Also for macOS and Linux."), those without one with the version they
- * come with ("Windows and Linux come with 2.0.4."). None for a visitor whose
+ * come with ("Windows and Linux come with 2.0.4."), or, once that version is
+ * out without them, as coming ("Windows is coming."). None for a visitor whose
  * system is not known; when GitHub did not answer, every other system is
  * offered, and the route decides.
  */
-export function othersLine(visitor: Os | null, known: Builds | null, comesWith: Partial<Record<Os, string>> = COMES_WITH): Part[] {
+export function othersLine(visitor: Os | null, known: Builds | null, latest: string | null, comesWith: Partial<Record<Os, string>> = COMES_WITH): Part[] {
   if (!visitor) return [];
   const others = OSES.filter(os => os !== visitor);
   const out = known ? others.filter(os => known[os]) : others;
@@ -194,22 +235,27 @@ export function othersLine(visitor: Os | null, known: Builds | null, comesWith: 
     parts.push({ text: '.' });
   }
   const coming = known ? others.filter(os => !known[os]) : [];
-  const versions = [...new Set(coming.map(os => comesWith[os] ?? COMES_WITH[os]))];
+  const versions = [...new Set(coming.map(os => promised(os, latest, comesWith)))];
   for (const version of versions) {
-    const names = coming.filter(os => (comesWith[os] ?? COMES_WITH[os]) === version).map(os => OS_NAME[os]);
+    const names = coming.filter(os => promised(os, latest, comesWith) === version).map(os => OS_NAME[os]);
+    const many = names.length > 1;
     if (parts.length) parts.push({ text: ' ' });
-    parts.push({ text: `${and(names)} ${names.length > 1 ? 'come' : 'comes'} with ${version}.` });
+    parts.push({ text: version ? `${and(names)} ${many ? 'come' : 'comes'} with ${version}.` : `${and(names)} ${many ? 'are' : 'is'} coming.` });
   }
   return parts;
 }
 
-/** The hero's own button: the visitor's download, the version it comes with, or the list of all three. */
-export type Primary = { kind: 'download'; os: Os } | { kind: 'comes'; os: Os; version: string } | { kind: 'list' };
+/**
+ * The hero's own button: the visitor's download, the version it comes with
+ * (null once that version is out without it: the system is coming), or the
+ * list of all three.
+ */
+export type Primary = { kind: 'download'; os: Os } | { kind: 'comes'; os: Os; version: string | null } | { kind: 'list' };
 
-export function heroPrimary(visitor: Os | null, known: Builds | null): Primary {
+export function heroPrimary(visitor: Os | null, known: Builds | null, latest: string | null): Primary {
   if (!visitor) return { kind: 'list' };
   if (!known || known[visitor]) return { kind: 'download', os: visitor };
-  return { kind: 'comes', os: visitor, version: COMES_WITH[visitor] };
+  return { kind: 'comes', os: visitor, version: promised(visitor, latest) };
 }
 
 /** The route a download link asks: the system, and arm64 when the visitor is on it. */

@@ -1,13 +1,13 @@
 import { Download, Github } from 'lucide-react';
 import {
   BUTTON_NAME,
-  COMES_WITH,
   NEEDS,
   OSES,
   OS_NAME,
   downloadHref,
   heroPrimary,
   othersLine,
+  promised,
   type Arch,
   type Builds,
   type Os,
@@ -17,8 +17,9 @@ import {
  * The landing's downloads, macOS, Windows and Linux alike, as
  * design/landing.pen draws them: `Landing · desktop` (a Mac today) and
  * `Landing · downloads per OS` (each visitor's system, before and after its
- * build). The page reads the visitor's system in the browser and the builds
- * from /api/stats, and hands them here: these take no state of their own.
+ * build). The page reads the visitor's system in the browser, and the builds
+ * and the newest release from /api/stats, and hands them here: these take no
+ * state of their own.
  *
  * Imported by the root's tests: no landing-only package, no `@/` path.
  */
@@ -26,18 +27,21 @@ import {
 const ACCENT = 'flex items-center gap-2 px-5 py-2.5 bg-accent text-bg text-sm font-medium hover:bg-accent-deep transition-colors';
 
 /**
- * The hero's buttons: the visitor's download, or the version it comes with,
- * or, for a system not known, Download to the list below; then Source and
- * GitHub's count; under them, the other systems.
+ * The hero's buttons: the visitor's download, or the version it comes with
+ * (that it is coming, once that version is out without it), or, for a system
+ * not known, Download to the list below; then Source and GitHub's count;
+ * under them, the other systems.
  */
-export function HeroDownload({ visitor, arch = null, builds, count }: {
+export function HeroDownload({ visitor, arch = null, builds, latest, count }: {
   visitor: Os | null;
   arch?: Arch | null;
   builds: Builds | null;
+  /** The newest published release, null when GitHub did not answer. */
+  latest: string | null;
   count: number | null;
 }) {
-  const primary = heroPrimary(visitor, builds);
-  const line = othersLine(visitor, builds);
+  const primary = heroPrimary(visitor, builds, latest);
+  const line = othersLine(visitor, builds, latest);
   return (
     <>
       <div className="flex flex-wrap items-center gap-3">
@@ -48,7 +52,7 @@ export function HeroDownload({ visitor, arch = null, builds, count }: {
           </a>
         )}
         {primary.kind === 'comes' && (
-          <span className="py-2.5 text-sm text-ink-soft">{`Tars for ${OS_NAME[primary.os]} comes with ${primary.version}.`}</span>
+          <span className="py-2.5 text-sm text-ink-soft">{primary.version ? `Tars for ${OS_NAME[primary.os]} comes with ${primary.version}.` : `Tars for ${OS_NAME[primary.os]} is coming.`}</span>
         )}
         {primary.kind === 'list' && (
           <a href="#download" className={ACCENT}>
@@ -78,13 +82,19 @@ export function HeroDownload({ visitor, arch = null, builds, count }: {
   );
 }
 
+/** What a card without a build says: the version it comes with, or Coming. */
+const comingText = (version: string | null) => (version ? `Comes with ${version}` : 'Coming');
+
 /**
  * Get Tars: a card per system, in the frame's order, with what it runs on and
- * its download, or the version it comes with. The visitor's architecture goes
- * on their own system's link only.
+ * its download, or the version it comes with (Coming, once that version is out
+ * without it). The visitor's architecture goes on their own system's link
+ * only.
  */
-export function GetTars({ builds, visitor = null, arch = null }: {
+export function GetTars({ builds, latest, visitor = null, arch = null }: {
   builds: Builds | null;
+  /** The newest published release, null when GitHub did not answer. */
+  latest: string | null;
   visitor?: Os | null;
   arch?: Arch | null;
 }) {
@@ -106,7 +116,7 @@ export function GetTars({ builds, visitor = null, arch = null }: {
                   {`Download for ${BUTTON_NAME[os]}`}
                 </a>
               ) : (
-                <p className="py-2.5 text-sm text-ink-soft">{`Comes with ${COMES_WITH[os]}`}</p>
+                <p className="py-2.5 text-sm text-ink-soft">{comingText(promised(os, latest))}</p>
               )}
             </div>
           </li>

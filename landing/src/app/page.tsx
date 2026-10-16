@@ -70,14 +70,14 @@ const FEATURES = [
 ];
 
 export default function Home() {
-  // Undefined until /api/stats answers; its builds are null when GitHub did not.
-  const [stats, setStats] = useState<{ total: number | null; builds: Builds | null }>();
+  // Undefined until /api/stats answers; its builds and newest release are null when GitHub did not.
+  const [stats, setStats] = useState<{ total: number | null; builds: Builds | null; latest: string | null }>();
   // The visitor's system, read in the browser and kept nowhere.
   const [visitor, setVisitor] = useState<{ os: Os | null; arch: Arch | null }>();
 
   useEffect(() => {
     setVisitor(readVisitor(navigator));
-    fetch('/api/stats').then(r => r.json()).then(d => setStats({ total: d.total ?? null, builds: d.builds ?? null })).catch(() => setStats({ total: null, builds: null }));
+    fetch('/api/stats').then(r => r.json()).then(d => setStats({ total: d.total ?? null, builds: d.builds ?? null, latest: d.latest ?? null })).catch(() => setStats({ total: null, builds: null, latest: null }));
   }, []);
 
   // Until both are known, Download goes to the list below rather than name a system.
@@ -98,7 +98,7 @@ export default function Home() {
           click, one memory they all share, and delegation that comes back with what each task did and
           what it cost.
         </p>
-        <HeroDownload visitor={os} arch={visitor?.arch ?? null} builds={stats?.builds ?? null} count={stats?.total ?? null} />
+        <HeroDownload visitor={os} arch={visitor?.arch ?? null} builds={stats?.builds ?? null} latest={stats?.latest ?? null} count={stats?.total ?? null} />
       </section>
 
       {/* The product itself: the Dashboard of a real Tars, four Claude Code
@@ -160,7 +160,7 @@ export default function Home() {
       </section>
 
       {/* Download: a card per system (Landing · desktop, Get Tars). */}
-      <GetTars builds={stats?.builds ?? null} visitor={os} arch={visitor?.arch ?? null} />
+      <GetTars builds={stats?.builds ?? null} latest={stats?.latest ?? null} visitor={os} arch={visitor?.arch ?? null} />
 
       <SiteFooter />
     </main>

@@ -4136,6 +4136,366 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "UQ5AC",
+          "name": "state 7",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 14,
+          "children": [
+            {
+              "type": "text",
+              "id": "EjnyK",
+              "name": "label",
+              "fill": "$accent",
+              "content": "7. Windows, once 2.0.3 is out without its setup: no version is promised, it is coming",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "rehEP",
+              "name": "cta",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SvBoN",
+                  "name": "soon",
+                  "height": 40,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CBhNo",
+                      "name": "l",
+                      "fill": "#9B9B9B",
+                      "content": "Tars for Windows is coming.",
+                      "lineHeight": 1.55,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KXp5w",
+                  "name": "src",
+                  "height": 40,
+                  "fill": "$bg",
+                  "stroke": "#3A3A3A",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    20
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "qmslj",
+                      "name": "ic",
+                      "fill": "#9B9B9B",
+                      "width": 11,
+                      "height": 11
+                    },
+                    {
+                      "type": "text",
+                      "id": "L0yNdT",
+                      "name": "l",
+                      "fill": "#9B9B9B",
+                      "content": "Source",
+                      "lineHeight": 1.55,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "YvckF",
+                  "name": "count",
+                  "fill": "$text-muted",
+                  "content": "5 downloads",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "x0MyU",
+              "name": "others",
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "S36m5",
+                  "name": "t 0",
+                  "fill": "$text-muted",
+                  "content": "Also for ",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "gKrRk",
+                  "name": "link 1",
+                  "fill": "#F5F4F2",
+                  "content": "macOS",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "gq5xj",
+                  "name": "t 2",
+                  "fill": "$text-muted",
+                  "content": ". Linux comes with 2.0.4.",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bmiuB",
+              "name": "oses",
+              "gap": 20,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SLUwg",
+                  "name": "os macOS",
+                  "width": 320,
+                  "fill": "$bg",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    24,
+                    24
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CV8UO",
+                      "name": "name",
+                      "fill": "#F5F4F2",
+                      "content": "macOS",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 26,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "XWARt",
+                      "name": "needs",
+                      "fill": "$text-muted",
+                      "content": "macOS 13 or later, Apple silicon",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Tzg4Z",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 14
+                    },
+                    {
+                      "type": "frame",
+                      "id": "O5N7O",
+                      "name": "dl",
+                      "height": 40,
+                      "fill": "$accent",
+                      "stroke": "$accent",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": [
+                        0,
+                        20
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "o0vixw",
+                          "name": "ic",
+                          "fill": "#121212",
+                          "width": 11,
+                          "height": 11
+                        },
+                        {
+                          "type": "text",
+                          "id": "ecHxg",
+                          "name": "l",
+                          "fill": "#121212",
+                          "content": "Download for Mac",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kqIBW",
+                  "name": "os Windows",
+                  "width": 320,
+                  "fill": "$bg",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    24,
+                    24
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "VNSdi",
+                      "name": "name",
+                      "fill": "#F5F4F2",
+                      "content": "Windows",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 26,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "CfBfB",
+                      "name": "needs",
+                      "fill": "$text-muted",
+                      "content": "Windows 10 or later, x64",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ph047",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 14
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VUzvK",
+                      "name": "soon",
+                      "height": 40,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Nd9Z4",
+                          "name": "l",
+                          "fill": "#9B9B9B",
+                          "content": "Coming",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "kJ8j7",
+                  "name": "os Linux",
+                  "width": 320,
+                  "fill": "$bg",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 6,
+                  "padding": [
+                    24,
+                    24
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WdaCp",
+                      "name": "name",
+                      "fill": "#F5F4F2",
+                      "content": "Linux",
+                      "lineHeight": 1.1,
+                      "fontFamily": "$font-display",
+                      "fontSize": 26,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "fbaPE",
+                      "name": "needs",
+                      "fill": "$text-muted",
+                      "content": "AppImage, x64",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wuDbE",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 14
+                    },
+                    {
+                      "type": "frame",
+                      "id": "I3rL3X",
+                      "name": "soon",
+                      "height": 40,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "l6oMYe",
+                          "name": "l",
+                          "fill": "#9B9B9B",
+                          "content": "Comes with 2.0.4",
+                          "lineHeight": 1.55,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     }
