@@ -37,8 +37,11 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 14. A record written before the start was kept (2.0.2) reads as another Tars whenever its pid lives.
  * 15. A live pid whose start cannot be read now is taken for a crash: the agents are resumed twice. Unknown stays
  *     "another Tars", and it is said.
- * 16. win32 reads a live pid as another Tars: the lock ends a second Tars before it reads the record, so there it is
- *     always a reused pid.
+ * 16. (2.0.4, parity) win32 takes a live pid for a reused one. The single-instance lock is per profile: a second Tars
+ *     started with another profile on the same home reads the first's open record while the first runs, reports its
+ *     abrupt end and resumes its working agents. There, a live pid is the record's Tars when its process was created
+ *     before the record was opened: the Tars held its pid from its creation to its end, so a process that took the pid
+ *     was created after. Over-correction: a later one read as the Tars; one whose creation cannot be read read as ended.
  * 17. The record does not keep when this run's process started, so the next launch cannot compare.
  */
 
@@ -208,10 +211,49 @@ describe('the run record', () => {
       }
     });
 
-    it('16. win32: a live pid is a reused one, never another Tars', () => {
-      fs.writeFileSync(file, firstRecord());
-      clock = T0 + 60_000;
-      expect(beginRun({ ...second([FIRST]), platform: 'win32' as NodeJS.Platform })).toMatchObject({ startedAt: T0 });
+    describe('16. on Windows', () => {
+      /** A record as a Windows Tars writes it: no start of its own (platform/process-start.ts). */
+      const windowsRecord = () => firstRecord().replace(`"processStart":"${FIRST_START}",`, '');
+      const onWindows = (alive: number[], created: Record<number, number | null>) => ({
+        ...second(alive), platform: 'win32' as NodeJS.Platform,
+        startOf: () => { throw new Error('no start is read on win32'); },
+        createdAt: (p: number) => (p in created ? created[p] : null),
+      });
+
+      it('the first, created before its record was opened, still runs (two profiles on one home): no abrupt end, its record left', () => {
+        fs.writeFileSync(file, windowsRecord());
+        clock = T0 + 60_000;
+        expect(beginRun(onWindows([FIRST], { [FIRST]: T0 - 2_500 }))).toBeNull();
+        recordRun([agent('x', 'running')], onWindows([FIRST], { [FIRST]: T0 - 2_500 }));
+        expect(fs.readFileSync(file, 'utf8')).toBe(windowsRecord());
+      });
+
+      it('a process created after the record was opened took the pid: the run ended', () => {
+        fs.writeFileSync(file, windowsRecord());
+        clock = T0 + 3_600_000;
+        expect(beginRun(onWindows([FIRST], { [FIRST]: T0 + 600_000 }))).toMatchObject({ startedAt: T0, working: [{ agentId: 'w' }] });
+      });
+
+      it('gone, or rebooted since: the run ended, and nothing is asked', () => {
+        const never = { ...onWindows([], {}), createdAt: () => { throw new Error('asked'); } };
+        fs.writeFileSync(file, windowsRecord());
+        clock = T0 + 60_000;
+        expect(beginRun(never)).toMatchObject({ startedAt: T0 });
+        fs.writeFileSync(file, windowsRecord());
+        expect(beginRun({ ...never, isAlive: () => true, bootedAt: T0 + 40_000 })).toMatchObject({ startedAt: T0 });
+      });
+
+      it('alive and its creation unreadable: another Tars, and it is said', () => {
+        fs.writeFileSync(file, windowsRecord());
+        clock = T0 + 60_000;
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+        try {
+          expect(beginRun(onWindows([FIRST], {}))).toBeNull();
+          expect(warn.mock.calls.flat().join(' ')).toMatch(/could not be read/);
+        } finally {
+          warn.mockRestore();
+        }
+      });
     });
 
     it('17. the record keeps when this run\'s process started', () => {

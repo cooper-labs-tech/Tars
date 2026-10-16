@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
-import { processStartOf } from '../../../electron/platform/process-start';
+import { processStartOf, windowsProcessCreatedAt } from '../../../electron/platform/process-start';
 
 /**
  * When the process under a pid started, as the OS says it (2.0.3, the Audit's Low on #418's M1): a live pid in the
@@ -10,8 +10,9 @@ import { processStartOf } from '../../../electron/platform/process-start';
  * a live pid is compared on that.
  * - linux: field 22 of /proc/<pid>/stat (start time in clock ticks since boot).
  * - darwin: `ps -o lstart= -p <pid>` (to the second), from /bin/ps, in the C locale.
- * - win32: none. The single-instance lock ends a second Tars before it reads the record (core/desktop-lifecycle.ts),
- *   so a live pid there is never another Tars.
+ * - win32: none, by this function: there is no ps, and asking PowerShell for this run's own start would hold the first
+ *   window back at every launch. win32 asks instead, only when a live pid must be judged, when its process was
+ *   created (windowsProcessCreatedAt below; services/run-state.ts says how that judges it).
  *
  * How it fails, written before the code:
  * 1. darwin: ps is looked up on PATH (the packaged main process has a bare one), or answers in the user's locale, or
@@ -20,6 +21,14 @@ import { processStartOf } from '../../../electron/platform/process-start';
  * 3. win32 and others: a program runs, or an answer is made up.
  * 4. A process that is gone, a program that fails, an answer that is empty or malformed throws, or gives an answer.
  * 5. Real: the same process reads differently twice, or two processes started a second apart read the same.
+ * And when a process was created, on Windows (2.0.4, parity: the single-instance lock is per profile, so a second Tars
+ * started with another profile on the same home reads the first's open record, and win32 took any live pid there for
+ * a reused one: a false abrupt end, and the first's working agents resumed by the second while the first runs them):
+ * 6. Nothing is asked of Windows, so the record's Tars cannot be told from a process that took its pid.
+ * 7. PowerShell is the one found on the PATH or under a relative SystemRoot, or a PowerShell 7 parent's PSModulePath
+ *    is passed on (child-env.ts), or the pid is written into the script.
+ * 8. A process that is gone, a PowerShell that fails, an answer that is empty or not a time throws, or gives a time;
+ *    a pid that is not a positive whole number reaches PowerShell; another platform asks Windows.
  */
 
 const LSTART = 'Thu Oct 15 20:57:01 2026';
@@ -57,6 +66,65 @@ describe('when the process under a pid started', () => {
     expect(processStartOf(4242, 'linux', { readFile: () => '4242 (tars) S 1 2' })).toBeNull();
     expect(processStartOf(4242, 'linux', { readFile: () => stat('tars', 'x12') })).toBeNull();
     for (const pid of [0, -1, Number.NaN, 1.5]) expect(processStartOf(pid, 'darwin', { execFileSync: fail })).toBeNull();
+  });
+
+  describe('when a process was created, on Windows', () => {
+    type Call = { file: string; args: readonly string[]; env?: NodeJS.ProcessEnv };
+    const asking = (answer: string | (() => string)) => {
+      const calls: Call[] = [];
+      const execFileSync = (file: string, args: readonly string[], opts: { env?: NodeJS.ProcessEnv }) => {
+        calls.push({ file, args, env: opts.env });
+        return typeof answer === 'string' ? answer : answer();
+      };
+      return { calls, execFileSync };
+    };
+    const script = (call: Call) => Buffer.from(String(call.args[call.args.indexOf('-EncodedCommand') + 1]), 'base64').toString('utf16le');
+
+    it('6-7. asks Win32_Process, through the PowerShell under SystemRoot, the pid in the environment', () => {
+      const ask = asking('1792185661123\r\n');
+      const env = { SystemRoot: 'D:\\Win', PSModulePath: 'C:\\pwsh7\\Modules', Path: 'C:\\evil' };
+      expect(windowsProcessCreatedAt(4242, { execFileSync: ask.execFileSync, env })).toBe(1792185661123);
+      expect(ask.calls).toHaveLength(1);
+      const [call] = ask.calls;
+      expect(call.file).toBe('D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+      expect(call.args.slice(0, 2)).toEqual(['-NoProfile', '-NonInteractive']);
+      expect(script(call)).toMatch(/Get-CimInstance Win32_Process/);
+      expect(script(call)).toMatch(/CreationDate/);
+      expect(script(call)).not.toMatch(/4242/);
+      expect(call.env?.TARS_PID).toBe('4242');
+      expect(call.env && 'PSModulePath' in call.env).toBe(false);
+      for (const root of ['Windows', '.\\Windows', '\\\\server\\share', '']) {
+        const again = asking('1');
+        windowsProcessCreatedAt(4242, { execFileSync: again.execFileSync, env: { SystemRoot: root } });
+        expect(again.calls[0].file, root).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+      }
+    });
+
+    it('8. gone, failing or not a time: none, and nothing thrown; nothing asked for a bad pid', () => {
+      const fail = () => { throw Object.assign(new Error('Get-CimInstance failed'), { status: 1 }); };
+      expect(windowsProcessCreatedAt(4242, { execFileSync: asking(fail).execFileSync, env: {} })).toBeNull();
+      for (const odd of ['', '\r\n', '17 oct. 2026 02:12', '-5', '1792185661123.5', '12345678901234567890']) {
+        expect(windowsProcessCreatedAt(4242, { execFileSync: asking(odd).execFileSync, env: {} }), odd).toBeNull();
+      }
+      for (const pid of [0, -1, Number.NaN, 1.5]) {
+        const ask = asking('1');
+        expect(windowsProcessCreatedAt(pid, { execFileSync: ask.execFileSync, env: {} })).toBeNull();
+        expect(ask.calls).toEqual([]);
+      }
+    });
+  });
+
+  it.runIf(process.platform === 'win32')('9. real, on Windows: this process was created before now, and a child after it', async () => {
+    const own = windowsProcessCreatedAt(process.pid);
+    expect(own).not.toBeNull();
+    expect(own!).toBeLessThanOrEqual(Date.now());
+    const kid = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 30000)'], { stdio: 'ignore' });
+    try {
+      await new Promise((r) => setTimeout(r, 200));
+      expect(windowsProcessCreatedAt(kid.pid!)!).toBeGreaterThan(own!);
+    } finally {
+      kid.kill();
+    }
   });
 
   it.runIf(process.platform === 'darwin' || process.platform === 'linux')('5. real: one process reads the same twice; two started a second apart differ', async () => {
