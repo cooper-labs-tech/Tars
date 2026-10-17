@@ -37,6 +37,10 @@ function facts(budget: ReportBudget): ReportFacts {
     release: `tars@${app.getVersion()}`,
     home: os.homedir(),
     host: os.hostname(),
+    // Windows: where the home's 8.3 short form is read (platform/home-spellings.ts).
+    ...(process.platform === 'win32'
+      ? { tempDirs: [os.tmpdir(), process.env.TEMP, process.env.TMP].filter((d): d is string => typeof d === 'string' && d.length > 0) }
+      : {}),
     os: {
       name: OS_NAMES[process.platform] ?? process.platform,
       version: typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : os.release(),
