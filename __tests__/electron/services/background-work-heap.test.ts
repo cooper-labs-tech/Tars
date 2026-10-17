@@ -25,6 +25,12 @@ import { pendingBackgroundWork } from '../../../electron/services/agent-truth';
  * 4. Over-correction: a line still being written (no newline yet) is taken, then lost once it is whole.
  * 5. Over-correction: a line longer than what is read at once, or cut across two reads, is lost or taken in halves.
  * 6. Over-correction: text that is not ASCII in a kept line comes out mangled (a multi-byte character cut).
+ * And from the Audit's Medium on #435: what is kept is not "a few lines". The words a line must hold to be read
+ * (Monitor, taskId, task-notification...) also appear inside tool results, so the largest transcripts of the live
+ * machine kept 17.7 to 28.3 MB of lines each (about 74 MB for the five largest), all parsed as JSON again at every rest.
+ * 7. The kept lines of a transcript whose tool results hold those words weigh what those results weigh.
+ * 8. A transcript rewritten in place to the same size, its bytes just before the last read's end unchanged, is not
+ *    read again: the answer goes on from what the old file said (the Audit's Info: the size and that tail alone).
  */
 
 const v8gc = (() => {
@@ -133,5 +139,32 @@ describe('what the background-work reader keeps', () => {
     const id = 'tâche-é-🚀-终';
     fs.writeFileSync(file, `${filler(100)}\n${started(id, T0 + 1000, 'déjà vu, 你好 '.repeat(1000))}\n`);
     expect(pendingBackgroundWork(agent, T0, home)).toEqual([id]);
+  });
+
+  it('7. a transcript whose tool results hold the words keeps the few facts the check reads, not those results', () => {
+    const before = heapAfterGc();
+    const { agent, file } = agentWith('0941a7e6-7262-4068-ba83-68b7e0de1778', '/work/noisy');
+    // A tool result of a Read or a Grep over Tars's own code: it names Monitor, taskId and task-notification.
+    const noisy = `${JSON.stringify({ type: 'user', timestamp: at(T0 + 900), message: { content: [{ type: 'tool_result', tool_use_id: 'r', content: 'Monitor taskId task-notification TaskStop '.repeat(500) }] } })}\n`;
+    const fd = fs.openSync(file, 'w');
+    for (let i = 0; i < 1500; i++) fs.writeSync(fd, noisy);
+    fs.writeSync(fd, `${started('n1')}\n`);
+    fs.closeSync(fd);
+    expect(pendingBackgroundWork(agent, T0, home)).toEqual(['n1']);
+    expect(pendingBackgroundWork(agent, T0, home)).toEqual(['n1']);
+    const retained = heapAfterGc() - before;
+    expect(retained, `${(retained / 1e6).toFixed(1)} MB kept for a ${(fs.statSync(file).size / 1e6).toFixed(0)} MB transcript of noisy tool results`).toBeLessThan(2e6);
+  });
+
+  it('8. a transcript rewritten in place to the same size is read again', () => {
+    const { agent, file } = agentWith('0941a7e6-7262-4068-ba83-68b7e0de1779', '/work/rewritten');
+    const tail = `${filler(300)}\n`;
+    fs.writeFileSync(file, `${started('aaa1')}\n${tail}`);
+    expect(pendingBackgroundWork(agent, T0, home)).toEqual(['aaa1']);
+    // The same size, the same last bytes, another task at the start, and a later modification time.
+    fs.writeFileSync(file, `${started('bbb2')}\n${tail}`);
+    const later = new Date(Date.now() + 5_000);
+    fs.utimesSync(file, later, later);
+    expect(pendingBackgroundWork(agent, T0, home)).toEqual(['bbb2']);
   });
 });
