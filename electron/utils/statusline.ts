@@ -3,11 +3,17 @@ import * as path from 'path';
 import * as os from 'os';
 import { DATA_DIR_SHELL, dataPath } from '../constants';
 import { updateSharedJsonSync } from './shared-file';
-import { usesNodeHooks, nodeHookCommand, parseNodeHookCommand, isTarsHooksFile } from './hook-command';
+import { nodeHookCommand, parseNodeHookCommand, isTarsHooksFile } from './hook-command';
 import { getHooksPath } from './hooks-path';
 import { unlinkRetryingSync } from '../platform/rename-replacing';
 
-const STATUSLINE_SCRIPT = `#!/usr/bin/env bash
+/**
+ * The bash status line Tars installed on macOS and Linux until 2.0.4, which
+ * needs bash, jq and awk. Not installed any more: hooks/statusline.mjs does
+ * what it does, on every platform. Kept as the reference that port follows,
+ * which the status line tests run beside it.
+ */
+export const STATUSLINE_SCRIPT = `#!/usr/bin/env bash
 # Dev Bar statusline for Claude Code
 # Style: ◆ Model │ ctx: NN% ▰▰▰▱▱ (Nk/Nk) │ branch │ NNm │ +N -N │ ↑Nk ↓Nk
 # Based on https://github.com/LLRHook/claude-statusline
@@ -294,18 +300,7 @@ const SCRIPT_PATH = dataPath('statusline.sh');
 const CLAUDE_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
 
 /**
- * Install the statusline script to ~/.dorothy/statusline.sh
- */
-function installScript(): void {
-  const dir = path.dirname(SCRIPT_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  fs.writeFileSync(SCRIPT_PATH, STATUSLINE_SCRIPT, { mode: 0o755 });
-}
-
-/**
- * Remove the statusline script from ~/.dorothy/statusline.sh
+ * Remove the bash status line an older Tars installed in ~/.dorothy/statusline.sh
  */
 function removeScript(): void {
   if (fs.existsSync(SCRIPT_PATH)) {
@@ -354,14 +349,15 @@ function updateClaudeSettings(change: (settings: Record<string, unknown>) => Rec
   if (outcome === 'busy') console.warn(`[statusline] ${CLAUDE_SETTINGS_PATH} kept changing, left as Claude Code wrote it`);
 }
 
-/** Where the platform decision and the hooks folder come from; the app passes neither. */
+/** Where the platform and the hooks folder come from; the app passes neither. */
 type StatusLineOptions = { platform?: NodeJS.Platform; hooksDir?: string };
 
 /**
- * On win32 the status line is hooks/statusline.mjs run by Node, not a bash
- * script, which would find no bash, jq or awk to run on there: nothing is
- * installed in ~/.dorothy, the command names the bundled file, quoted for Git
- * Bash and PowerShell alike.
+ * The status line is hooks/statusline.mjs run by the Node runner's launcher
+ * (hook-launcher.ts), or `node`, on every platform: nothing is installed in
+ * ~/.dorothy, the command names the bundled file, quoted for Git Bash and
+ * PowerShell alike. Until 2.0.4 macOS and Linux ran a bash script that needs
+ * jq and awk (STATUSLINE_SCRIPT above).
  */
 function nodeStatusLineCommand(hooksDir: string): string {
   return nodeHookCommand(path.join(hooksDir, 'statusline.mjs'));
@@ -380,13 +376,11 @@ function isTarsNodeStatusLine(command: unknown, hooksDir: string): boolean {
 }
 
 /**
- * Enable the statusline: install script + add config to Claude settings.json
+ * Enable the statusline: point Claude settings.json at statusline.mjs, and
+ * remove the bash one an older Tars installed.
  */
-export function enableStatusLine({ platform = process.platform, hooksDir }: StatusLineOptions = {}): void {
-  const nodeForm = usesNodeHooks(platform);
-  const command = nodeForm ? nodeStatusLineCommand(hooksDir ?? getHooksPath()) : SCRIPT_PATH;
-  if (!nodeForm) installScript();
-
+export function enableStatusLine({ hooksDir }: StatusLineOptions = {}): void {
+  const command = nodeStatusLineCommand(hooksDir ?? getHooksPath());
   updateClaudeSettings(settings => ({
     ...settings,
     statusLine: {
@@ -395,6 +389,7 @@ export function enableStatusLine({ platform = process.platform, hooksDir }: Stat
       padding: 1,
     },
   }));
+  removeScript();
 }
 
 /**
@@ -411,8 +406,7 @@ export function disableStatusLine({ platform = process.platform, hooksDir }: Sta
     const configured = settings.statusLine as { command?: unknown } | undefined;
     const isOurs = !!configured
       && typeof configured === 'object'
-      && (configured.command === SCRIPT_PATH
-        || (usesNodeHooks(platform) && isTarsNodeStatusLine(configured.command, hooksDir ?? getHooksPath())));
+      && (configured.command === SCRIPT_PATH || isTarsNodeStatusLine(configured.command, hooksDir ?? getHooksPath()));
     if (!isOurs) return undefined;
     const withoutOurs = { ...settings };
     delete withoutOurs.statusLine;

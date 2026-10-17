@@ -85,7 +85,7 @@ import { getAllProviders } from '../../electron/providers';
 import { setupMemoryBackends, setupOrchestratorSetupHandler, setupOrchestratorRemoveHandler } from '../../electron/services/mcp-orchestrator';
 import { enableStatusLine, disableStatusLine } from '../../electron/utils/statusline';
 import { nodeHookCommand } from '../../electron/utils/hook-command';
-import { KANBAN_FILE, dataPath } from '../../electron/constants';
+import { KANBAN_FILE } from '../../electron/constants';
 import type { AppSettings } from '../../electron/types';
 import { cannotSymlink } from '../setup/symlink-privilege';
 
@@ -369,10 +369,8 @@ describe("Claude's settings.json, through the hooks Tars installs at every launc
   const settingsNow = { env: { A: '1' }, permissions: { allow: ['Bash(git:*)'], deny: [] }, statusLine: { type: 'command', command: 'statusline.sh' } };
   const configureHooks = () => new ClaudeProvider().configureHooks(HOOKS_DIR);
   const stopHook = () => (readAsJson(claudeSettings()) as { hooks?: { Stop?: Array<{ hooks: Array<{ command: string }> }> } }).hooks?.Stop?.[0]?.hooks?.[0]?.command;
-  /** What the Stop entry runs: the .sh on darwin and linux, the Node runner on win32 (hook-command.ts). */
-  const OUR_STOP = process.platform === 'win32'
-    ? nodeHookCommand(path.join(HOOKS_DIR, 'tars-hook.mjs'), 'on-stop')
-    : path.join(HOOKS_DIR, 'on-stop.sh');
+  /** What the Stop entry runs: the Node runner, on every platform since 2.0.4 (hook-command.ts). */
+  const OUR_STOP = nodeHookCommand(path.join(HOOKS_DIR, 'tars-hook.mjs'), 'on-stop');
 
   beforeEach(() => {
     fs.mkdirSync(path.dirname(claudeSettings()), { recursive: true });
@@ -587,14 +585,12 @@ describe("Claude's settings.json, through the status line Tars turns on at every
   const settingsDir = () => path.dirname(claudeSettings());
   const statusLine = () => (readAsJson(claudeSettings()) as { statusLine?: { command?: string } }).statusLine;
   /**
-   * The command Tars's status line runs: its bash script in the data folder on
-   * darwin and linux, the bundled statusline.mjs through Node on win32.
+   * The command Tars's status line runs: the bundled statusline.mjs through
+   * the Node runner, on every platform since 2.0.4.
    * The bundled hooks folder is where the electron mock above
    * puts the app, this checkout.
    */
-  const OUR_STATUS_LINE = process.platform === 'win32'
-    ? nodeHookCommand(path.join(process.cwd(), 'hooks', 'statusline.mjs'))
-    : dataPath('statusline.sh');
+  const OUR_STATUS_LINE = nodeHookCommand(path.join(process.cwd(), 'hooks', 'statusline.mjs'));
   const withoutStatusLine = () => {
     const rest = { ...(readAsJson(claudeSettings()) as Record<string, unknown>) };
     delete rest.statusLine;

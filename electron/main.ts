@@ -106,6 +106,7 @@ import {
   getClaudeHistory,
 } from './services/claude-service';
 import { configureStatusHooks, removeLegacyHookLogs } from './services/hooks-manager';
+import { prepareHookLauncher } from './utils/hook-launcher';
 import { loadCatalog } from './services/model-catalog';
 import { startAgentAutosave, stopAgentAutosave, wireDialogProbe, stopStatusNotifications } from './core/agent-manager';
 import {
@@ -507,23 +508,6 @@ app.whenReady().then(async () => {
   // Write Tars's CLAUDE.md to ~/.dorothy/ so all spawned agents can load it
   ensureAgentInstructions();
 
-  // Install/update statusline script if enabled (ensures script is always up-to-date after app updates)
-  // statusLineEnabled defaults to true for new users
-  try {
-    const { enableStatusLine, disableStatusLine } = await import('./utils/statusline');
-    // Only an explicit choice acts here. This runs on every launch and is not
-    // a user action: it exists to refresh the script after an update. Reading
-    // an absent setting as "off" turned that refresh into a deletion in
-    // another program's configuration file, once per launch, for anyone who
-    // had never opened that switch.
-    if (appSettings.statusLineEnabled === true) {
-      enableStatusLine();
-    } else if (appSettings.statusLineEnabled === false) {
-      disableStatusLine();
-    }
-  } catch {
-    // ignore statusline errors on startup
-  }
 
   // Migrate data from ~/.claude-manager if it exists (rebrand migration)
   migrateFromClaudeManager();
@@ -750,7 +734,30 @@ app.whenReady().then(async () => {
   void setupMcpOrchestrator(appSettings).catch(err =>
     console.error('MCP registration failed:', err));
   setupMemoryBackends(appSettings);
+  // The launcher every hook and the status line start through, before either
+  // is configured: it finds a Node once, which takes a probe of each candidate
+  // (utils/hook-launcher.ts). After the window, so it never holds it back.
+  await prepareHookLauncher();
   await configureStatusHooks();
+  // The status line through the same launcher, refreshed at each start (it
+  // names this app's hooks folder, which moves with an update).
+  // statusLineEnabled defaults to true for new users
+  try {
+    const { enableStatusLine, disableStatusLine } = await import('./utils/statusline');
+    // Only an explicit choice acts here. This runs on every launch and is not
+    // a user action: it exists to refresh the script after an update. Reading
+    // an absent setting as "off" turned that refresh into a deletion in
+    // another program's configuration file, once per launch, for anyone who
+    // had never opened that switch.
+    if (appSettings.statusLineEnabled === true) {
+      enableStatusLine();
+    } else if (appSettings.statusLineEnabled === false) {
+      disableStatusLine();
+    }
+  } catch {
+    // ignore statusline errors on startup
+  }
+
   removeLegacyHookLogs();
 
   // Initialize electron-updater (wires up IPC events for progress, downloaded, error)

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { enableStatusLine } from '../../../electron/utils/statusline';
+import { STATUSLINE_SCRIPT } from '../../../electron/utils/statusline';
 import { shHooksNotShipped } from '../../setup/platform-limits';
 
 /**
@@ -28,8 +28,10 @@ beforeAll(() => {
   if (shHooksNotShipped()) return;
   const jq = spawnSync('jq', ['--version'], { encoding: 'utf-8' });
   if (jq.status !== 0) throw new Error('jq is not on PATH: the status line needs it, and so do these cases');
-  enableStatusLine();
+  // The bash status line, the reference hooks/statusline.mjs follows: Tars runs that one everywhere since 2.0.4.
   script = path.join(os.homedir(), '.dorothy', 'statusline.sh');
+  fs.mkdirSync(path.dirname(script), { recursive: true });
+  fs.writeFileSync(script, STATUSLINE_SCRIPT, { mode: 0o755 });
 });
 
 beforeEach(() => {

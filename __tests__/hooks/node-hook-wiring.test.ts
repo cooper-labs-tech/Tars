@@ -9,9 +9,11 @@ import { moveTestHome } from '../setup/test-home';
  * Where the hooks are wired: `configureHooks` of the Claude and Gemini
  * providers, and the statusline, which write the CLIs' settings files.
  *
- * On win32 they write `node "<abs>/tars-hook.mjs" <event>`. On
- * darwin and linux they write exactly what they wrote before: the same tests
- * pass against the code before this change, which is the proof.
+ * They write `<launcher> "<abs>/tars-hook.mjs" <event>` on every platform
+ * since 2.0.4 (parity P4): the hook launcher Tars writes at each start
+ * (electron/utils/hook-launcher.ts), or `node` when it could write none (and
+ * on win32 when its path cannot start a command line unquoted). Until then
+ * darwin and linux wrote the bare `.sh` paths, which need bash, jq and curl.
  *
  * How the wiring can fail, written before the code:
  *  1. win32 keeps writing the bare `.sh` path: bash eats its backslashes, and
@@ -63,12 +65,30 @@ import { moveTestHome } from '../setup/test-home';
  *     entry (5) by the name in its command takes a user's own
  *     `.../gemini/user-prompt-submit.sh`, or an installed Dorothy's, for
  *     Tars's and deletes it. The same rule as 10 and 12 decides.
+ * And since 2.0.4 (P4), the runner on darwin and linux too:
+ * 15. darwin or linux keep writing the .sh paths, which need jq and curl (and
+ *     bash, awk for the status line), or write the runner without the launcher
+ *     Tars prepared, or with it where it could prepare none.
+ * 16. The .sh entries a previous Tars wrote on darwin or linux stay beside the
+ *     runner's, so each event runs twice; or the user's own hooks go with them.
+ * 17. An entry written through the launcher is not recognised as Tars's at the
+ *     next start (from this checkout or another), and a second one is added.
+ * 18. The status line stays the bash script, keeps installing it, or leaves an
+ *     older Tars's statusline.sh behind; or turning it off does not recognise
+ *     the launcher form as Tars's.
  */
 
 const HOOKS_DIR = path.join(__dirname, '../../hooks');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-hook-wiring-'));
 const fwd = (p: string) => p.replace(/\\/g, '/');
 const runnerCmd = (event: string) => `node "${fwd(path.join(HOOKS_DIR, 'tars-hook.mjs'))}" ${event}`;
+/** The first word of a command once Tars has written its launcher, as hook-launcher.ts quotes it. */
+const LAUNCHER = '"/home/dev/.dorothy/bin/tars-hook"';
+const launched = (event: string, script = 'tars-hook.mjs') => `${LAUNCHER} "${fwd(path.join(HOOKS_DIR, script))}"${event ? ` ${event}` : ''}`;
+async function useLauncher(firstWord: string | null) {
+  const { setHookLauncherWord } = await import('../../electron/utils/hook-launcher');
+  setHookLauncherWord(firstWord);
+}
 
 /** A dev checkout of an older Tars: its hooks folder holds tars-hook.sh beside the scripts. */
 function oldCheckout(): string {
@@ -142,38 +162,78 @@ const claudeSettingsFile = () => path.join(home, '.claude', 'settings.json');
 const geminiSettingsFile = () => path.join(home, '.gemini', 'settings.json');
 const read = (f: string) => JSON.parse(fs.readFileSync(f, 'utf-8'));
 
-describe('on darwin and linux the .sh wiring stays, Gemini on the event it fires', () => {
+describe('on darwin and linux too, the Node runner through the launcher, Gemini on the event it fires', () => {
   for (const platform of ['darwin', 'linux'] as const) {
-    it(`Claude writes the bare .sh path, timeout 30, the same matchers (${platform})`, async () => {
-      const p = await claude();
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
+    const configure = async (provider: { configureHooks: unknown }) =>
+      (provider.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
+
+    it(`15. Claude writes one launcher entry per event, timeout 30, the same matchers (${platform})`, async () => {
+      await useLauncher(LAUNCHER);
+      await configure(await claude());
       const expected: Record<string, unknown> = {};
       for (const [type, name, matcher] of CLAUDE_EVENTS) {
-        expected[type] = [{ hooks: [{ type: 'command', command: path.join(HOOKS_DIR, `${name}.sh`), timeout: 30 }], ...(matcher ? { matcher } : {}) }];
+        expected[type] = [{ hooks: [{ type: 'command', command: launched(name), timeout: 30 }], ...(matcher ? { matcher } : {}) }];
       }
       expect(read(claudeSettingsFile())).toEqual({ hooks: expected });
-      // Key order inside each entry, as JSON.stringify writes it.
-      expect(JSON.stringify(read(claudeSettingsFile()).hooks.PostToolUse[0])).toBe(
-        JSON.stringify({ hooks: [{ type: 'command', command: path.join(HOOKS_DIR, 'post-tool-use.sh'), timeout: 30 }], matcher: '*' }),
-      );
     });
 
-    it(`Gemini writes the .sh paths, BeforeAgent, timeout 10000, the same file text (${platform})`, async () => {
-      const p = await gemini();
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
-      const g = (f: string) => path.join(HOOKS_DIR, 'gemini', f);
-      const expected = {
+    it(`15. with no launcher prepared, the runner on node (${platform})`, async () => {
+      await useLauncher(null);
+      await configure(await claude());
+      expect(read(claudeSettingsFile()).hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: runnerCmd('on-stop'), timeout: 30 }] }]);
+    });
+
+    it(`16-17. replaces an older Tars's .sh entries in place, keeps the user's own, and writes nothing the second time (${platform})`, async () => {
+      await useLauncher(LAUNCHER);
+      const mine = { type: 'command', command: '/Users/me/bin/notify.sh', timeout: 5 };
+      fs.mkdirSync(path.dirname(claudeSettingsFile()), { recursive: true });
+      fs.writeFileSync(claudeSettingsFile(), JSON.stringify({ model: 'opus', hooks: {
+        Stop: [{ hooks: [mine, { type: 'command', command: path.join(HOOKS_DIR, 'on-stop.sh'), timeout: 30 }] }],
+        PostToolUse: [{ matcher: '*', hooks: [{ type: 'command', command: path.join(oldCheckout(), 'post-tool-use.sh'), timeout: 30 }] }],
+      } }));
+      const p = await claude();
+      await configure(p);
+      const settings = read(claudeSettingsFile());
+      expect(settings.model).toBe('opus');
+      expect(settings.hooks.Stop).toEqual([{ hooks: [mine, { type: 'command', command: launched('on-stop'), timeout: 30 }] }]);
+      expect(settings.hooks.PostToolUse).toEqual([{ matcher: '*', hooks: [{ type: 'command', command: launched('post-tool-use'), timeout: 30 }] }]);
+      const text = fs.readFileSync(claudeSettingsFile(), 'utf-8');
+      const mtime = fs.statSync(claudeSettingsFile()).mtimeMs;
+      await configure(p);
+      expect(fs.readFileSync(claudeSettingsFile(), 'utf-8')).toBe(text);
+      expect(fs.statSync(claudeSettingsFile()).mtimeMs).toBe(mtime);
+    });
+
+    it(`17. an entry another checkout wrote through its launcher, or on node, is this checkout's now (${platform})`, async () => {
+      await useLauncher(LAUNCHER);
+      const other = oldCheckout();
+      fs.writeFileSync(path.join(other, 'tars-hook.mjs'), '// Tars\n');
+      fs.mkdirSync(path.dirname(claudeSettingsFile()), { recursive: true });
+      fs.writeFileSync(claudeSettingsFile(), JSON.stringify({ hooks: {
+        Stop: [{ hooks: [{ type: 'command', command: `'/Users/other/.dorothy/bin/tars-hook' "${fwd(path.join(other, 'tars-hook.mjs'))}" on-stop`, timeout: 30 }] }],
+        SessionEnd: [{ matcher: '*', hooks: [{ type: 'command', command: `node "${fwd(path.join(other, 'tars-hook.mjs'))}" session-end`, timeout: 30 }] }],
+      } }));
+      await configure(await claude());
+      const hooks = read(claudeSettingsFile()).hooks;
+      expect(hooks.Stop).toEqual([{ hooks: [{ type: 'command', command: launched('on-stop'), timeout: 30 }] }]);
+      expect(hooks.SessionEnd).toEqual([{ matcher: '*', hooks: [{ type: 'command', command: launched('session-end'), timeout: 30 }] }]);
+    });
+
+    it(`15. Gemini writes the runner on its events, BeforeAgent, timeout 10000 (${platform})`, async () => {
+      await useLauncher(LAUNCHER);
+      await configure(await gemini());
+      const g = (event: string) => launched(`gemini/${event}`);
+      expect(read(geminiSettingsFile())).toEqual({
         hooks: {
-          AfterTool: [{ hooks: [{ type: 'command', command: g('post-tool-use.sh'), timeout: 10000 }], matcher: '*' }],
-          AfterAgent: [{ hooks: [{ type: 'command', command: g('on-stop.sh'), timeout: 10000 }] }],
-          SessionStart: [{ hooks: [{ type: 'command', command: g('session-start.sh'), timeout: 10000 }], matcher: '*' }],
-          SessionEnd: [{ hooks: [{ type: 'command', command: g('session-end.sh'), timeout: 10000 }], matcher: '*' }],
-          Notification: [{ hooks: [{ type: 'command', command: g('notification.sh'), timeout: 10000 }], matcher: '*' }],
-          BeforeAgent: [{ hooks: [{ type: 'command', command: g('user-prompt-submit.sh'), timeout: 10000 }] }],
+          AfterTool: [{ hooks: [{ type: 'command', command: g('post-tool-use'), timeout: 10000 }], matcher: '*' }],
+          AfterAgent: [{ hooks: [{ type: 'command', command: g('on-stop'), timeout: 10000 }] }],
+          SessionStart: [{ hooks: [{ type: 'command', command: g('session-start'), timeout: 10000 }], matcher: '*' }],
+          SessionEnd: [{ hooks: [{ type: 'command', command: g('session-end'), timeout: 10000 }], matcher: '*' }],
+          Notification: [{ hooks: [{ type: 'command', command: g('notification'), timeout: 10000 }], matcher: '*' }],
+          BeforeAgent: [{ hooks: [{ type: 'command', command: g('user-prompt-submit'), timeout: 10000 }] }],
         },
         security: { environmentVariableRedaction: { allowed: ['CLAUDE_MGR_API_TOKEN'] } },
-      };
-      expect(fs.readFileSync(geminiSettingsFile(), 'utf-8')).toBe(JSON.stringify(expected, null, 2));
+      });
     });
 
     it(`6. Gemini lets the agent token through its redaction, the user's own settings kept (${platform})`, async () => {
@@ -182,26 +242,28 @@ describe('on darwin and linux the .sh wiring stays, Gemini on the event it fires
         security: { environmentVariableRedaction: { enabled: true, allowed: ['MY_KEY'] }, folderTrust: { enabled: true } },
       }, null, 2));
       const p = await gemini();
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
+      await configure(p);
+      await configure(p);
       expect(read(geminiSettingsFile()).security).toEqual({
         environmentVariableRedaction: { enabled: true, allowed: ['MY_KEY', 'CLAUDE_MGR_API_TOKEN'] }, folderTrust: { enabled: true },
       });
     });
 
-    it(`5. Gemini moves an older Tars's UserPromptSubmit entry to BeforeAgent, and keeps the user's own (${platform})`, async () => {
+    it(`5, 16. Gemini moves an older Tars's .sh UserPromptSubmit entry to the runner on BeforeAgent, and keeps the user's own (${platform})`, async () => {
+      await useLauncher(LAUNCHER);
       const g = (f: string) => path.join(HOOKS_DIR, 'gemini', f);
       const mine = { hooks: [{ type: 'command', command: '/Users/me/bin/log-prompt.sh', timeout: 5000 }] };
       fs.mkdirSync(path.dirname(geminiSettingsFile()), { recursive: true });
       fs.writeFileSync(geminiSettingsFile(), JSON.stringify({ hooks: {
         UserPromptSubmit: [{ hooks: [{ type: 'command', command: g('user-prompt-submit.sh'), timeout: 10000 }] }, mine],
+        BeforeAgent: [{ hooks: [{ type: 'command', command: g('user-prompt-submit.sh'), timeout: 10000 }] }],
       } }, null, 2));
       const p = await gemini();
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
+      await configure(p);
+      await configure(p);
       const hooks = read(geminiSettingsFile()).hooks;
       expect(hooks.UserPromptSubmit).toEqual([mine]);
-      expect(hooks.BeforeAgent).toEqual([{ hooks: [{ type: 'command', command: g('user-prompt-submit.sh'), timeout: 10000 }] }]);
+      expect(hooks.BeforeAgent).toEqual([{ hooks: [{ type: 'command', command: launched('gemini/user-prompt-submit'), timeout: 10000 }] }]);
     });
 
     it(`14. Gemini leaves a user's own and Dorothy's user-prompt-submit.sh on UserPromptSubmit, and removes an older Tars's (${platform})`, async () => {
@@ -216,8 +278,7 @@ describe('on darwin and linux the .sh wiring stays, Gemini on the event it fires
       fs.writeFileSync(geminiSettingsFile(), JSON.stringify({ hooks: {
         UserPromptSubmit: [userOwn, userElsewhere, dorothy, olderTars],
       } }, null, 2));
-      const p = await gemini();
-      await (p.configureHooks as (d: string, pl?: NodeJS.Platform) => Promise<void>)(HOOKS_DIR, platform);
+      await configure(await gemini());
       expect(read(geminiSettingsFile()).hooks.UserPromptSubmit).toEqual([userOwn, userElsewhere, dorothy]);
     });
   }
@@ -604,11 +665,20 @@ describe('the statusline on win32', () => {
     expect(fs.existsSync(script)).toBe(true);
   });
 
-  it('on darwin still installs statusline.sh and points at it', async () => {
+  it.each(['darwin', 'linux'] as const)('18. on %s too: statusline.mjs through the launcher, an older Tars\'s statusline.sh removed, turned off cleanly', async (platform) => {
     const s = await statusline();
-    s.enableStatusLine({ platform: 'darwin' });
-    const script = path.join(home, '.dorothy', 'statusline.sh');
-    expect(read(claudeSettingsFile()).statusLine).toEqual({ type: 'command', command: script, padding: 1 });
-    expect(fs.readFileSync(script, 'utf-8').startsWith('#!/usr/bin/env bash')).toBe(true);
+    await useLauncher(LAUNCHER);
+    const old = path.join(home, '.dorothy', 'statusline.sh');
+    fs.mkdirSync(path.dirname(old), { recursive: true });
+    fs.writeFileSync(old, '#!/usr/bin/env bash\n', { mode: 0o755 });
+    fs.mkdirSync(path.dirname(claudeSettingsFile()), { recursive: true });
+    fs.writeFileSync(claudeSettingsFile(), JSON.stringify({ model: 'opus', statusLine: { type: 'command', command: old, padding: 1 } }));
+
+    s.enableStatusLine({ platform, hooksDir: HOOKS_DIR });
+    expect(read(claudeSettingsFile())).toEqual({ model: 'opus', statusLine: { type: 'command', command: launched('', 'statusline.mjs'), padding: 1 } });
+    expect(fs.existsSync(old)).toBe(false);
+
+    s.disableStatusLine({ platform, hooksDir: HOOKS_DIR });
+    expect(read(claudeSettingsFile())).toEqual({ model: 'opus' });
   });
 });

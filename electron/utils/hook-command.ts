@@ -1,28 +1,26 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { hookRunnerFirstWord } from './hook-launcher';
 
 /**
  * How Tars's hooks are started by the CLIs that run them, and how their
  * entries are kept in the CLIs' settings files.
  *
- * On win32 every hook is the one Node runner,
- * `node "<abs>/hooks/tars-hook.mjs" <event>` (and `statusline.mjs` for the
- * status line), because the .sh scripts cannot run there: bash eats the
- * backslashes of their unquoted path, jq is not installed, and Git Bash's
- * curl cannot read the `-H @<(...)` process substitution that carries the
- * token. On darwin and linux nothing here is used: the providers keep writing
- * the .sh paths they always wrote.
+ * Every hook is the one Node runner,
+ * `<launcher> "<abs>/hooks/tars-hook.mjs" <event>` (and `statusline.mjs` for
+ * the status line), on every platform since 2.0.4: the launcher Tars writes at
+ * each start (hook-launcher.ts), or `node` when it has none. Until then
+ * darwin and linux ran the .sh scripts, which need bash, jq and curl; on win32
+ * they cannot run at all (bash eats the backslashes of their unquoted path, jq
+ * is not installed, and Git Bash's curl cannot read the `-H @<(...)` process
+ * substitution that carries the token).
  *
  * The one place that decides.
  */
 
-/** Whether this platform's CLIs run the Node runner instead of the .sh hooks. */
-export function usesNodeHooks(platform: NodeJS.Platform = process.platform): boolean {
-  return platform === 'win32';
-}
-
 /**
- * The shell-form command a CLI runs for a Node hook: `node "<script>" <args>`.
+ * The shell-form command a CLI runs for a Node hook:
+ * `<launcher> "<script>" <args>`, or `node "<script>" <args>`.
  *
  * Shell form, not Claude Code's exec form (`command` + `args`): an older
  * claude that predates `args` would run bare `node` and feed it the hook's
@@ -57,7 +55,7 @@ export function nodeHookCommand(script: string, ...args: string[]): string {
   for (const arg of args) {
     if (!/^[A-Za-z0-9/_.-]+$/.test(arg)) throw new Error(`Not a hook event name: ${arg}`);
   }
-  return ['node', quoted, ...args].join(' ');
+  return [hookRunnerFirstWord(), quoted, ...args].join(' ');
 }
 
 /**
@@ -100,12 +98,18 @@ export function legacyShCommand(rel: string, cliConfigDir: string, hooksDir: str
   return command => isTarsHooksFile(command, rel, cliConfigDir, hooksDir);
 }
 
-/** A Node hook command Tars wrote, from any checkout: which script it runs and with what event. */
+/**
+ * A Node hook command Tars wrote, from any checkout: which script it runs and
+ * with what event. Its first word is `node`, or a hook launcher of any Tars
+ * (`tars-hook`, `tars-hook.cmd`), quoted or bare.
+ */
 export function parseNodeHookCommand(command: unknown): { script: string; event?: string } | undefined {
   if (typeof command !== 'string') return undefined;
-  const m = /^node\s+(["'])(.+?)\1(?:\s+(\S+))?\s*$/.exec(command.trim());
+  const m = /^(?:(["'])(.+?)\1|(\S+))\s+(["'])(.+?)\4(?:\s+(\S+))?\s*$/.exec(command.trim());
   if (!m) return undefined;
-  return { script: m[2], event: m[3] };
+  const first = m[2] ?? m[3];
+  if (first !== 'node' && !/(^|[\\/])tars-hook(\.cmd)?$/i.test(first)) return undefined;
+  return { script: m[5], event: m[6] };
 }
 
 type Hook = { type?: string; command?: string; timeout?: number; [key: string]: unknown };
