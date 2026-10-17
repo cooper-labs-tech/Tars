@@ -35,6 +35,8 @@ export interface ReportFacts {
   home: string;
   /** os.hostname(): masked wherever it appears, never sent. */
   host: string;
+  /** Windows: the user's temp folders (TEMP, TMP, os.tmpdir()), where the home's 8.3 short form is read. */
+  tempDirs?: string[];
   os: { name: string; version: string };
   electron: string;
 }
@@ -89,17 +91,17 @@ const NAME_START = '(?<![A-Za-z0-9._-])';
  * a space: `cwd /Users/x, exit 1` and `/Users/x;` left the whole path (the
  * Audit's gate of #221).
  */
-type Machine = Pick<ReportFacts, 'home' | 'host'>;
+type Machine = Pick<ReportFacts, 'home' | 'host' | 'tempDirs'>;
 const MIN_SHORT_HOST = 6;
 
 function scrub(value: string, machine: Machine): string {
-  const { home, host } = machine;
+  const { home, host, tempDirs = [] } = machine;
   let out = value.replace(/file:\/\//g, '');
   // The home folder first: it may itself be under a temp folder. /var is
   // /private/var on macOS, so a folder there reaches an error by either name.
   // The longer name goes first, or /private<home> would read /private~.
   if (home && home !== '/') {
-    const homes = [...new Set([home, home.startsWith('/private/') ? home.slice('/private'.length) : `/private${home}`, ...windowsHomeSpellings(home)])]
+    const homes = [...new Set([home, home.startsWith('/private/') ? home.slice('/private'.length) : `/private${home}`, ...windowsHomeSpellings(home, tempDirs)])]
       .sort((a, b) => b.length - a.length);
     for (const h of homes) {
       for (const slash of ['/', '%2F', '%252F']) {

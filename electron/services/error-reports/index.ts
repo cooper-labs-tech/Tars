@@ -6,7 +6,6 @@ import { ReportBudget } from './budget';
 import { errorReportOptions } from './options';
 import { randomUUID } from 'crypto';
 import { healthEvent, reportFingerprint, toReport, type HealthKind, type ReportFacts } from './report';
-import { errorReportsAvailable } from '../../platform/error-reports';
 
 /**
  * Error reports to Sentry, off unless the user turns them on in Settings
@@ -38,6 +37,10 @@ function facts(budget: ReportBudget): ReportFacts {
     release: `tars@${app.getVersion()}`,
     home: os.homedir(),
     host: os.hostname(),
+    // Windows: where the home's 8.3 short form is read (platform/home-spellings.ts).
+    ...(process.platform === 'win32'
+      ? { tempDirs: [os.tmpdir(), process.env.TEMP, process.env.TMP].filter((d): d is string => typeof d === 'string' && d.length > 0) }
+      : {}),
     os: {
       name: OS_NAMES[process.platform] ?? process.platform,
       version: typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : os.release(),
@@ -108,7 +111,6 @@ function guardRendererBridge(): void {
 export type HealthSendResult = { sent: true } | { sent: false; reason: string };
 
 export const HEALTH_REFUSALS = {
-  windows: 'Error reports are not available on Windows yet.',
   off: 'Turn on Send error reports in Settings to send a diagnostic.',
   budget: 'A diagnostic was already sent in the last 24 hours.',
   unreachable: 'Sentry could not be reached. Nothing was sent.',
@@ -119,7 +121,7 @@ const HEALTH_SEND_MS = 10_000;
 
 export interface ErrorReports {
   sync(): Promise<void>;
-  /** Why nothing may be sent now (Windows, the switch off), or null. */
+  /** Why nothing may be sent now (the switch off), or null. */
   refusal(): string | null;
   /**
    * A report of Tars's health (2.0.3): the abrupt end at the next launch, or
@@ -129,8 +131,11 @@ export interface ErrorReports {
   sendHealth(kind: HealthKind, payload: Record<string, unknown>): Promise<HealthSendResult>;
 }
 
-/** Never on a platform whose build may not send (errorReportsAvailable: not on win32). */
-export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Platform = process.platform): ErrorReports {
+/**
+ * The same on every platform (the maintainer's parity rule of 2026-10-16):
+ * on Windows too since 2.0.4, where the reports were off until then.
+ */
+export function startErrorReports(isEnabled: () => boolean): ErrorReports {
   let starting: Promise<void> | undefined;
   let sentryOf: typeof import('@sentry/electron/main') | undefined;
   let budgetOf: ReportBudget | undefined;
@@ -139,7 +144,7 @@ export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Pla
   const answers = new Map<string, number>();
   const sync = (): Promise<void> => {
     if (starting) return starting;
-    if (!errorReportsAvailable(platform) || !isEnabled()) return Promise.resolve();
+    if (!isEnabled()) return Promise.resolve();
     starting = (async () => {
       try {
         const sentry = await import('@sentry/electron/main');
@@ -176,7 +181,6 @@ export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Pla
     return starting;
   };
   const refusal = (): string | null => {
-    if (!errorReportsAvailable(platform)) return HEALTH_REFUSALS.windows;
     if (!isEnabled()) return HEALTH_REFUSALS.off;
     return null;
   };

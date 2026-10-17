@@ -22,23 +22,35 @@ import { toReport, type ReportFacts } from '../../../electron/services/error-rep
  * 6. Over-correction: a macOS or Linux home gets other spellings, and its
  *    reports change (error-report-shape.test.ts holds them as they were);
  *    here, a POSIX home's user name is still the part after its last `/`.
+ * And from the Audit's Medium on #433 (2.0.4):
+ * 7. A home with a space or an accent, as a file URL writes it
+ *    (`file:///C:/Users/Ana%20L%C3%BAcia/...`, encodeURI of the forward
+ *    spelling), leaves whole: the other encodings did not match it.
+ * 8. The home's 8.3 short form, which TEMP, TMP and os.tmpdir() often hold
+ *    (`C:\Users\ANALC~1\AppData\Local\Temp`) and the paths made under
+ *    them carry (the launch folder, the CLI updater's scratch,
+ *    save-worktree-work), leaves whole, in any of the home's spellings.
+ * 9. Over-correction: a temp folder elsewhere (`C:\Windows\Temp`,
+ *    `D:\Temp`) or a sibling that is no short form (`C:\Users\Public`) is
+ *    taken for the home, and those paths are rewritten as ~.
  */
 
-const facts = (home: string): ReportFacts => ({
+const facts = (home: string, tempDirs?: string[]): ReportFacts => ({
   installId: '3b1f6c2e-5d7a-4e8b-9c0d-1a2b3c4d5e6f',
   release: 'tars@1.9.1',
   home,
   os: { name: 'Windows', version: '10.0.26200' },
   electron: '44.4.4',
+  ...(tempDirs ? { tempDirs } : {}),
 });
 
 const HOME = 'C:\\Users\\somebody';
 
 /** The report of one error with this message and this frame file name, as JSON. */
-function reported(message: string, filename: string, home = HOME): string {
+function reported(message: string, filename: string, home = HOME, tempDirs?: string[]): string {
   const report = toReport({
     exception: { values: [{ type: 'Error', value: message, stacktrace: { frames: [{ filename, function: 'startAgent', lineno: 1, colno: 1, in_app: true }] } }] },
-  }, facts(home));
+  }, facts(home, tempDirs));
   expect(report).not.toBeNull();
   return JSON.stringify(report);
 }
@@ -80,5 +92,35 @@ describe('an error report from Windows', () => {
     expect(text).not.toMatch(/somebody/i);
     expect(text).toContain('<user>@host');
     expect(text).toContain('~/acme');
+  });
+
+  it('7. writes the home as ~ in a file URL, a space or an accent in it', () => {
+    const home = 'C:\\Users\\Ana Lúcia';
+    const text = reported('ENOENT: C:/Users/Ana%20L%C3%BAcia/projects/acme/notes.md', 'file:///C:/Users/Ana%20L%C3%BAcia/AppData/Local/Programs/Tars/resources/app.asar/electron/dist/main.js', home);
+    expect(text).not.toMatch(/L%C3%BAcia|Lúcia/i);
+    expect(text).toContain('~/projects/acme/notes.md');
+    expect(text).toContain('~/AppData/Local/Programs/Tars');
+  });
+
+  it('8. writes the home\'s 8.3 short form as ~, as the temp folders spell it', () => {
+    const home = 'C:\\Users\\Ana Lúcia';
+    const temp = ['C:\\Users\\ANALC~1\\AppData\\Local\\Temp'];
+    const text = reported(
+      'EPERM: C:\\Users\\ANALC~1\\AppData\\Local\\Temp\\tars-launch-1\\cmd.txt, and "C:\\\\Users\\\\ANALC~1\\\\x"',
+      'C:/Users/ANALC~1/AppData/Local/Temp/tars-cli-update/npm.js', home, temp,
+    );
+    expect(text).not.toMatch(/ANALC/i);
+    expect(text).toContain('~\\\\AppData\\\\Local\\\\Temp\\\\tars-launch-1');
+    expect(text).toContain('~/AppData/Local/Temp/tars-cli-update');
+  });
+
+  it('9. takes no other folder for the home: a temp elsewhere, or a sibling that is no short form', () => {
+    const temp = ['C:\\Windows\\Temp', 'D:\\Temp', 'C:\\Users\\Public\\Temp', 'D:\\PROGRA~1\\Temp'];
+    const text = reported('EBUSY C:\\Windows\\Temp\\a, D:\\Temp\\b, C:\\Users\\Public\\c, D:\\PROGRA~1\\d', 'C:/Users/Public/x.js', HOME, temp);
+    expect(text).toContain('D:\\\\PROGRA~1\\\\d');
+    expect(text).toContain('C:\\\\Windows\\\\Temp\\\\a');
+    expect(text).toContain('D:\\\\Temp\\\\b');
+    expect(text).toContain('C:\\\\Users\\\\Public\\\\c');
+    expect(text).toContain('C:/Users/Public/x.js');
   });
 });

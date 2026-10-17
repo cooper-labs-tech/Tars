@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On Windows, Send error reports is offered as on macOS and Linux, off unless you turn it on. With it on, an error, a run that ended without quitting and a diagnostic you send reach the developers as they do from the other two, with no folder of your account and no user name in them.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-15',
