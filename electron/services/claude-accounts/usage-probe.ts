@@ -3,6 +3,8 @@ import type { ClaudeAccountWindow } from '../../types';
 import { refuseWhileQuitting } from '../../core/quit-state';
 import { accountEnv } from './auth';
 import { buildFullPath } from '../../utils/path-builder';
+import { endProbe } from '../../core/version-probe';
+import { resolveCliBinary, withPath, type Env } from '../../platform';
 
 /**
  * Each Claude account's 5 h and weekly windows, read from Claude Code itself.
@@ -97,16 +99,15 @@ export function parseUsageAnswer(raw: unknown): ProbedUsage {
  * traffic switch, which empties the answer.
  */
 export function usageProbeEnv(configDir: string | null, base: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...accountEnv(configDir, base), PATH: buildFullPath() };
+  // The PATH written once, under the spelling Windows already has (Path).
+  const env = withPath(accountEnv(configDir, base) as Env, buildFullPath(), process.platform) as NodeJS.ProcessEnv;
   delete env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC;
   return env;
 }
 
-/** The probe's whole group, then the probe itself should it have left it. */
+/** The probe's whole group, then the probe itself should it have left it; on Windows, which has no groups, its tree by taskkill (endProbe). */
 function end(child: ChildProcess): void {
-  if (child.pid === undefined) return;
-  try { process.kill(-child.pid, 'SIGKILL'); } catch { /* already gone */ }
-  try { child.kill('SIGKILL'); } catch { /* already gone */ }
+  endProbe(child);
 }
 
 const running = new Set<ChildProcess>();
@@ -128,18 +129,23 @@ export function probeUsage(binary: string, env: NodeJS.ProcessEnv, timeoutMs = P
   } catch (err) {
     return Promise.reject(err);
   }
+  // As the platform starts it: on Windows an npm shim is read through to node and its script.
+  const cli = resolveCliBinary(binary, env as Env, process.platform);
+  if (!cli.ok) return Promise.reject(new Error(cli.detail));
   return new Promise((resolve, reject) => {
-    // detached: a group of its own, which end() signals whole.
+    // detached: a group of its own, which end() signals whole. Not on Windows,
+    // where it would open a console window of its own and taskkill ends the tree.
     // No settings and no MCP server of the account's: a probe is one control
     // request, and a whole session ran the account's SessionStart hooks (Tars's
     // session-start.sh then asked Hermes for memory) and started its MCP
     // servers, ten for account 1, to kill them a second later (the Audit's
     // gate). Measured on 2.1.289: the reading is the same with both flags.
-    const child = spawn(binary, [
+    const child = spawn(cli.file, [
+      ...cli.prefixArgs,
       '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
       '--strict-mcp-config', '--setting-sources', '',
     ], {
-      env, detached: true, stdio: ['pipe', 'pipe', 'ignore'],
+      env, detached: process.platform !== 'win32', windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'],
     });
     running.add(child);
     const requestId = `tars-usage-${Date.now()}`;

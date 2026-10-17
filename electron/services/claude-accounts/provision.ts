@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { updateSharedJsonSync } from '../../utils/shared-file';
 import { writeSecretFileSync } from '../../utils/secret-file';
+import { closesByAccessList, ownerOnlyDirProblemSync, ownerOnlyDirSync } from '../../platform/owner-only';
 import { accountsRoot } from './registry';
 
 /**
@@ -40,7 +41,15 @@ import { accountsRoot } from './registry';
  * The folder must be Tars's own before anything is written (accountDirProblem).
  * One that is not is refused, never repaired. Nothing else in it is opened,
  * listed or read: the credential (the keychain item named after the folder, or
- * .credentials.json on Linux) is Claude Code's alone.
+ * .credentials.json on Linux and Windows) is Claude Code's alone.
+ *
+ * Windows (the parity program's P6): a folder is closed and read by its access
+ * list, the user and SYSTEM alone (platform/owner-only.ts), where macOS and
+ * Linux use its mode and uid. A symbolic link needs Developer Mode or an
+ * administrator there, so a shared folder is joined by a junction, and a
+ * shared file by a symbolic link when Windows allows one, else by a hard link
+ * to the same file; at the next launch each is recognised as Tars's own, and a
+ * hard link that is no longer the same file is reported, as anything real is.
  */
 
 export const SHARED_ENTRIES = ['projects', 'history.jsonl', 'sessions', 'CLAUDE.md', 'skills', 'agents', 'commands', 'plugins', 'output-styles'] as const;
@@ -98,6 +107,10 @@ function folderProblem(p: string, what: string): string | null {
   if (!st) return `${what} does not exist.`;
   if (st.isSymbolicLink()) return `${what} is a link, not a folder Tars made.`;
   if (!st.isDirectory()) return `${what} is not a folder.`;
+  if (closesByAccessList()) {
+    const open = ownerOnlyDirProblemSync(p);
+    return open ? `${what} ${open}.` : null;
+  }
   const uid = typeof process.getuid === 'function' ? process.getuid() : st.uid;
   if (st.uid !== uid) return `${what} belongs to another user.`;
   if ((st.mode & 0o077) !== 0) return `${what} is open to other users.`;
@@ -174,9 +187,54 @@ function withoutCredentials(settings: Record<string, unknown>): Record<string, u
 }
 
 function ensureOwnFolder(p: string, what: string): void {
-  if (!lstatOrNull(p)) fs.mkdirSync(p, { mode: 0o700 });
+  if (!lstatOrNull(p)) {
+    // A mode closes nothing on Windows: there the folder is made with its access list.
+    if (closesByAccessList()) ownerOnlyDirSync(p);
+    else fs.mkdirSync(p, { mode: 0o700 });
+  }
   const problem = folderProblem(p, what);
   if (problem) throw new Error(problem);
+}
+
+/** The same file, by its volume and its id: a hard link to `b` is one. */
+function sameFile(a: string, b: string): boolean {
+  try {
+    const x = fs.statSync(a, { bigint: true });
+    const y = fs.statSync(b, { bigint: true });
+    return x.ino === y.ino && x.dev === y.dev;
+  } catch {
+    return false;
+  }
+}
+
+/** A path as Windows compares it: no long-path prefix, no trailing separator, any case. */
+const windowsKey = (p: string) => path.win32.resolve(p.replace(/^\\\\\?\\/, '')).replace(/[\\/]+$/, '').toLowerCase();
+
+/** Whether what is at `link` is Tars's link to `target`: a symbolic link or a junction to it, or on Windows a hard link to it. */
+function linksTo(link: string, current: fs.Stats, target: string): boolean {
+  if (current.isSymbolicLink()) {
+    const to = fs.readlinkSync(link);
+    return closesByAccessList() ? windowsKey(to) === windowsKey(target) : to === target;
+  }
+  return closesByAccessList() && current.isFile() && sameFile(link, target);
+}
+
+/** A symbolic link; on Windows, a junction for a folder, and for a file a hard link when Windows refuses a symbolic one. */
+function makeLink(target: string, link: string): void {
+  if (!closesByAccessList()) {
+    fs.symlinkSync(target, link);
+    return;
+  }
+  if (fs.statSync(target).isDirectory()) {
+    fs.symlinkSync(target, link, 'junction');
+    return;
+  }
+  try {
+    fs.symlinkSync(target, link, 'file');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'EPERM') throw err;
+    fs.linkSync(target, link);
+  }
 }
 
 function linkShared(configDir: string, claudeDir: string, conflicts: string[]): void {
@@ -206,16 +264,17 @@ function linkShared(configDir: string, claudeDir: string, conflicts: string[]): 
       }
     }
     if (current) {
+      if (linksTo(link, current, target)) continue;
       if (!current.isSymbolicLink()) {
         conflicts.push(name);
         continue;
       }
-      if (fs.readlinkSync(link) === target) continue;
-      // A link, and only a link, is removed: it is Tars's own.
+      // A link, and only a link, is removed: it is Tars's own. A junction too:
+      // libuv unlinks one as a link, the folder it points to untouched.
       fs.unlinkSync(link);
     }
     if (!lstatOrNull(target)) continue;
-    fs.symlinkSync(target, link);
+    makeLink(target, link);
   }
 }
 
