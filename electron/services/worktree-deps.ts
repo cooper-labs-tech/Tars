@@ -1,6 +1,8 @@
 import { execFile } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
+import { childEnv, envValue, isPlainAbsolute, type Env } from '../platform';
 
 /**
  * An agent's new worktree gets its project's dependencies as a clone (JeanBrasse's
@@ -13,7 +15,9 @@ import * as path from 'path';
  *
  * Clone or nothing: a system that cannot clone (another file system, no
  * reflink) gets no copy of gigabytes, and the agent installs as before. A
- * clone that fails is taken away whole.
+ * clone that fails is taken away whole. Windows has no cp -c: there a copy
+ * shares blocks only on a Dev Drive (ReFS) from Windows 11 24H2
+ * (windowsClone).
  */
 
 export type DepsResult = { cloned: string[]; skipped: Array<{ dir: string; why: string }> };
@@ -63,7 +67,78 @@ function noCloneOnMac(source: string, targetDir: string): Promise<string | null>
   });
 }
 
+/** What windowsClone reads of the system; a test hands in another Windows. */
+export type WindowsCloneFacts = {
+  /** os.release(): `10.0.<build>`. */
+  release: () => string;
+  /** The drive a path is on, `D:\`, from its real path. */
+  rootOf: (p: string) => string;
+  /** The volume a path is on (its serial number, as fs.stat gives it there). */
+  devOf: (p: string) => number;
+  /** The drive's file system as Windows names it: NTFS, ReFS. */
+  driveFormat: (root: string) => Promise<string | undefined>;
+};
+
+/** Windows 11 24H2 and Windows Server 2025: CopyFile clones blocks within a ReFS volume. */
+const BLOCK_CLONE_BUILD = 26100;
+
+/** The file system of a drive (`D:\`), read by the Windows PowerShell under %SystemRoot%; undefined when it cannot be. */
+export function windowsDriveFormat(root: string): Promise<string | undefined> {
+  const configured = envValue(process.env as Env, 'SystemRoot', 'win32');
+  const systemRoot = configured && isPlainAbsolute(configured) ? configured : 'C:\\Windows';
+  const file = path.win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const env = { ...childEnv(file, process.env as Env, 'win32'), TARS_DRIVE: root } as unknown as NodeJS.ProcessEnv;
+  return new Promise(resolve => {
+    execFile(file, ['-NoProfile', '-NonInteractive', '-Command', '[IO.DriveInfo]::new($env:TARS_DRIVE).DriveFormat'],
+      { env, windowsHide: true, timeout: 15_000 },
+      (err, stdout) => resolve(err ? undefined : String(stdout).trim() || undefined));
+  });
+}
+
+const realWindowsFacts: WindowsCloneFacts = {
+  release: () => os.release(),
+  rootOf: p => path.win32.parse(p).root,
+  devOf: p => fs.statSync(p).dev,
+  driveFormat: windowsDriveFormat,
+};
+
+/**
+ * Why a copy from `source` into `targetDir` would not share blocks on
+ * Windows, or null when it will: Windows 11 24H2 or later, both ends on one
+ * volume, that volume a drive of its own (one mounted in a folder has a file
+ * system its drive's root does not tell), and that file system ReFS, a Dev
+ * Drive's. There CopyFile, which fs.cp copies each file with, clones the
+ * file's blocks; anywhere else it copies in full.
+ */
+async function noCloneOnWindows(source: string, targetDir: string, facts: WindowsCloneFacts): Promise<string | null> {
+  const release = facts.release();
+  if (!(Number(release.split('.')[2]) >= BLOCK_CLONE_BUILD)) {
+    return `Windows ${release} copies in full: it shares blocks from Windows 11 24H2 (build ${BLOCK_CLONE_BUILD}), on a Dev Drive`;
+  }
+  try {
+    const from = fs.realpathSync(source);
+    const to = fs.realpathSync(targetDir);
+    const root = facts.rootOf(from);
+    if (!/^[A-Za-z]:\\$/.test(root)) return `not on a drive (${root || from}): its file system cannot be read`;
+    if (facts.devOf(from) !== facts.devOf(to)) return 'another volume: there is nothing to share';
+    if (facts.devOf(root) !== facts.devOf(from)) return 'a volume mounted in a folder: its drive does not say its file system';
+    const format = await facts.driveFormat(root);
+    if (format !== 'ReFS') return `not ReFS (${format ?? 'unknown'}): a copy would be in full`;
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
+}
+
+/** A copy that shares every block, on a Dev Drive (noCloneOnWindows), else none. A link inside is copied as a link, as cp -R does. */
+export async function windowsClone(source: string, target: string, facts: WindowsCloneFacts = realWindowsFacts): Promise<void> {
+  const why = await noCloneOnWindows(source, path.dirname(target), facts);
+  if (why) throw new Error(why);
+  await fs.promises.cp(source, target, { recursive: true, verbatimSymlinks: true, errorOnExist: true, force: false });
+}
+
 const cpClone: Copy = async (source, target) => {
+  if (process.platform === 'win32') return windowsClone(source, target);
   const args = cloneArgs(process.platform, source, target);
   if (!args) throw new Error('this system has no clone that shares blocks');
   if (process.platform === 'darwin') {

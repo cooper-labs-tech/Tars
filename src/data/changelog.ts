@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On Windows 11 24H2 and later, an agent\'s new worktree on a Dev Drive gets its project\'s dependencies as a copy that shares the disk with them, as on macOS and on Linux file systems that can: it got none. Elsewhere on Windows, as before, it gets nothing and the agent installs them.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-17',
