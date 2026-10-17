@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 61,
+    version: '2.0.4',
+    date: '2026-10-17',
+    updates: [
+      'On Windows, Settings · System removes the folders no agent owns, as on macOS and Linux: it kept every one, since it could not read whether a program works in one. Windows itself now says so: a folder a program has a file open in, or works in, is kept and shown in use.',
+    ],
+  },
+  {
     id: 60,
     version: '2.0.3',
     date: '2026-10-17',

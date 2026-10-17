@@ -280,9 +280,12 @@ export function procCwds(root = '/proc', self = process.pid): ProcessCwd[] | nul
 /**
  * Every process's working directory: /proc on Linux, lsof elsewhere. Null when
  * neither answers, and then nothing is removed. As scripts/worktree.mjs reads it.
+ * Windows names none, and has neither: there Windows itself says whether a
+ * program holds a folder, when the removal moves it (moveAside).
  */
 export async function processCwds(): Promise<ProcessCwd[] | null> {
   if (process.platform === 'linux') return procCwds();
+  if (process.platform === 'win32') return [];
   const found: ProcessCwd[] = [];
   const r = await run('lsof', ['-w', '-a', '-d', 'cwd', '-F', 'pcn']);
   if (r.code !== 0 && !r.stdout) return null;
@@ -296,6 +299,70 @@ export async function processCwds(): Promise<ProcessCwd[] | null> {
 }
 
 let removing = false;
+
+type Rename = (from: string, to: string) => void;
+
+/** How often a refused move is tried, and the pause between two: about a second in all. */
+const MOVE_TRIES = 5;
+const MOVE_PAUSE_MS = 250;
+/** What Windows answers a move while a program holds the folder (ERROR_ACCESS_DENIED, ERROR_SHARING_VIOLATION). */
+const MOVE_REFUSED = new Set(['EPERM', 'EACCES', 'EBUSY']);
+
+/**
+ * Windows will not move a folder while a program has a file open in it or
+ * works in it (Explorer's "the folder or a file in it is open in another
+ * program"). So there a folder is first renamed beside itself, then removed
+ * under that name: the move is the check, and nothing can start using the
+ * folder between the two. A refusal is tried again for about a second, since
+ * an antivirus scan holds a file for a moment; one that lasts keeps the
+ * folder whole. Windows does not say which program, and refuses the same way a
+ * folder this account may not move. Any other failure is thrown.
+ */
+async function moveAside(dir: string, rename: Rename): Promise<{ moved: string } | { refused: string }> {
+  const moved = path.join(path.dirname(dir), `${path.basename(dir)}.removing-${process.pid}-${Date.now()}`);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      rename(dir, moved);
+      return { moved };
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (!MOVE_REFUSED.has(code)) throw err;
+      if (attempt >= MOVE_TRIES) return { refused: code };
+      await new Promise(resolve => setTimeout(resolve, MOVE_PAUSE_MS));
+    }
+  }
+}
+
+/**
+ * Removes a folder, moved aside first on Windows: null once it is gone, else
+ * why it stays. What could not be removed goes back under its own name, where
+ * the window showed it and where a removal elsewhere leaves it.
+ */
+async function removeFolder(dir: string, rename: Rename): Promise<{ reason: KeptReason; detail: string } | null> {
+  let target = dir;
+  if (process.platform === 'win32') {
+    let aside: Awaited<ReturnType<typeof moveAside>>;
+    try {
+      aside = await moveAside(dir, rename);
+    } catch (err) {
+      return { reason: 'failed', detail: failureOf(err, dir) };
+    }
+    if ('refused' in aside) {
+      return { reason: 'in-use', detail: `Windows would not move it (${aside.refused}): a program has a file open in it or works in it, or it is not this account's to move` };
+    }
+    target = aside.moved;
+  }
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+    return null;
+  } catch (err) {
+    const detail = failureOf(err, target);
+    if (target !== dir) {
+      try { rename(target, dir); } catch { /* stays under the name it was moved to, listed as such next time */ }
+    }
+    return { reason: 'failed', detail };
+  }
+}
 
 /**
  * Why a removal failed, for the window: the error's code and the path within
@@ -322,6 +389,8 @@ export async function removeOrphanFolders(opts: {
   /** The folders the window showed and the person confirmed (OrphanFolder.path): nothing else is removed. */
   paths: string[];
   processCwds?: () => Promise<ProcessCwd[] | null>;
+  /** How a folder is moved aside on Windows (fs.renameSync); a test refuses it as Windows does. */
+  rename?: Rename;
   onProgress?: (progress: RemovalProgress) => void;
 }): Promise<RemovalReport> {
   if (removing) throw new Error('a removal is already under way');
@@ -358,12 +427,12 @@ export async function removeOrphanFolders(opts: {
         } else if (orphanReason(folder.path) === null) {
           keep('failed', 'it holds a git repository or a live worktree now, or could not be read');
         } else {
-          try {
-            fs.rmSync(folder.path, { recursive: true, force: true });
+          const stays = await removeFolder(folder.path, opts.rename ?? fs.renameSync);
+          if (stays) {
+            keep(stays.reason, stays.detail);
+          } else {
             report.removed++;
             report.freedBytes += folder.sizeBytes;
-          } catch (err) {
-            keep('failed', failureOf(err, folder.path));
           }
         }
       }
