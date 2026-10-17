@@ -156,7 +156,9 @@ import {
 } from './utils';
 import { endVersionProbes } from './core/version-probe';
 import { endAuthCommands } from './services/claude-accounts/auth';
-import { cliEnv, currentFolderLookupsOff, hookToolsMissing, nodeMissing } from './platform';
+import { cliEnv, currentFolderLookupsOff, hookToolsMissing, nodeMissing, realFs } from './platform';
+import { readAppSettingsFromDisk } from './providers/cli-provider';
+import { cliPathDirs } from './utils/cli-path-dirs';
 
 // ============== App Settings Management ==============
 
@@ -550,7 +552,8 @@ app.whenReady().then(async () => {
   if (noNode) void dialog.showMessageBox({ type: 'warning', ...noNode });
   // macOS and Linux: the hooks are the .sh scripts, which need jq and curl on
   // the PATH the agents' terminals get. Said at each launch too.
-  const noHookTools = hookToolsMissing(process.env);
+  // On the PATH the agents get: with the folders named for their CLIs in Settings, as every agent start reads them.
+  const noHookTools = hookToolsMissing(process.env, process.platform, realFs, cliPathDirs(readAppSettingsFromDisk().cliPaths));
   if (noHookTools) void dialog.showMessageBox({ type: 'warning', ...noHookTools });
 
   // Register all IPC handlers

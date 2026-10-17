@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import * as nodeFs from 'node:fs';
+import * as nodePath from 'node:path';
 
 import { hookToolsMissing } from '../../../electron/platform/hook-tools-check';
 import type { FsProbe } from '../../../electron/platform/fs-probe';
@@ -28,6 +30,14 @@ import type { FsProbe } from '../../../electron/platform/fs-probe';
  *    terminals get (buildFullPath, as agent-manager builds theirs): a Tars
  *    opened from the Finder has launchd's bare PATH, and a jq Homebrew
  *    installed is said missing to every Mac that has one.
+ *
+ * And from the Audit's gate of #432 (Low 1, 2026-10-17):
+ * 9. The folders the user named for their CLIs in Settings (cliPaths), which
+ *    every agent's PATH gets (cliPathDirs, as agent-manager, agent-routes,
+ *    ipc-handlers and the ACP delegate pass them), are left out: a jq kept
+ *    only there (MacPorts' /opt/local/bin, a Nix profile, ~/bin) is said
+ *    missing at every launch.
+ * 10. main.ts asks without them: the check is right, and never told.
  */
 
 function fakeFs(files: string[]): FsProbe & { asked: string[] } {
@@ -104,5 +114,21 @@ describe('hookToolsMissing', () => {
     const finder = { PATH: '/usr/bin:/bin:/usr/sbin:/sbin', HOME: '/nonexistent-home' };
     expect(hookToolsMissing(finder, 'darwin', fakeFs(['/opt/homebrew/bin/jq', '/usr/bin/curl']))).toBeNull();
     expect(hookToolsMissing(finder, 'linux', fakeFs(['/usr/local/bin/jq', '/usr/bin/curl']))).toBeNull();
+  });
+});
+
+describe('the folders named for the CLIs in Settings (the Audit of #432, Low 1)', () => {
+  const env = { PATH: '/usr/bin:/bin', HOME: '/nonexistent-home' };
+  const fs = () => fakeFs(['/Users/sam/tools/jq', '/usr/bin/curl']);
+
+  it.each(['darwin', 'linux'] as const)("9. counts them on %s, as every agent's PATH has them", (platform) => {
+    expect(hookToolsMissing(env, platform, fs())).not.toBeNull();
+    expect(hookToolsMissing(env, platform, fs(), ['/Users/sam/tools'])).toBeNull();
+  });
+
+  it('10. main.ts asks with the folders of the settings on disk, as every agent start reads them', () => {
+    const main = nodeFs.readFileSync(nodePath.join(__dirname, '../../../electron/main.ts'), 'utf-8');
+    const call = /hookToolsMissing\(([^;]*)\);/.exec(main)?.[1] ?? '';
+    expect(call).toMatch(/cliPathDirs\(readAppSettingsFromDisk\(\)\.cliPaths\)/);
   });
 });

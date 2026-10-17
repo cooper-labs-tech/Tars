@@ -18,12 +18,19 @@ const HOOK_TOOLS = ['jq', 'curl'] as const;
  *
  * `env` is Tars's own environment. The tools are looked up on the PATH its
  * agents' terminals get from it (buildFullPath, as agent-manager builds
- * theirs), in its absolute entries: a Tars opened from the Finder has
+ * theirs), with `extraPaths`, the folders the user named for their CLIs in
+ * Settings, which every agent's PATH gets too (cliPathDirs; the Audit's gate
+ * of #432), in its absolute entries: a Tars opened from the Finder has
  * launchd's bare PATH, without Homebrew's folder, where the agents' has it.
  */
-export function hookToolsMissing(env: Env, platform: NodeJS.Platform = process.platform, fs: FsProbe = realFs): { message: string; detail: string } | null {
+export function hookToolsMissing(
+  env: Env,
+  platform: NodeJS.Platform = process.platform,
+  fs: FsProbe = realFs,
+  extraPaths: string[] = [],
+): { message: string; detail: string } | null {
   if (platform === 'win32') return null;
-  const agentsPath = buildFullPath([], { env: env as NodeJS.ProcessEnv, platform });
+  const agentsPath = buildFullPath(extraPaths, { env: env as NodeJS.ProcessEnv, platform });
   const dirs = pathEntries(agentsPath, platform).filter((dir) => path.posix.isAbsolute(dir));
   const missing = HOOK_TOOLS.filter((tool) => !dirs.some((dir) => fs.isFile(path.posix.join(dir, tool))));
   if (!missing.length) return null;
