@@ -304,6 +304,31 @@ node scripts/worktree.mjs prune --dry-run      # what the cleanup would remove, 
   is wiped at every reboot
 - Never delete with a variable or a glob in the path, only a literal absolute one
 
+### 7. Parity: macOS, Windows and Linux, never a difference
+
+> **JeanBrasse's rule of 2026-10-16**, after the parity audit of the Windows work: "Et cela doit
+> toujours être à parité, jamais de différence." A feature or a fix a user can see never exists
+> on one platform only.
+
+- The implementation may differ per platform (the Dock or the tray, `taskkill /T` or process
+  groups, the keychain or a file); what the user gets may not. Platform code lives in
+  `electron/platform/` for the main process and in `src/lib/` for the renderer (which cannot
+  import the former), each branch beside the others
+- This supersedes the Bundle line's "or a clean failure": a platform that fails cleanly where
+  another works is a difference too. What is published is parity as well: each platform gets its
+  build and its updates
+- A PR that adds or fixes something for one platform brings the other two in the same PR, or names
+  the follow-up PR that does, merged before the next release. This holds for every contributor,
+  Nexarion434's Windows work included
+- Every gate, the Audit's and the QA's, has a "Parity" section: what each platform gets from the
+  PR. A user-visible difference between platforms is a finding
+- The differences known on 2026-10-16 are being closed, and no PR adds one: one instance and the
+  edit menu off Windows, jq for the hooks on macOS and Linux, no Linux build, the Linux tray and
+  close, the shell picker off Windows; and on Windows, error reports, several Claude accounts, the
+  sleep and stall passes, the orphan-folder removal, the dependency clone and some E2E specs
+- Proof: macOS locally; Linux and Windows through the on-demand workflows `ci.yml` and
+  `ci-windows.yml` (OPERATIONS.md, CI) and, for the desktop itself, a real machine or a test VM
+
 ---
 
 ## Memory System
