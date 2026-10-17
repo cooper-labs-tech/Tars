@@ -23,6 +23,7 @@ import { statusWord } from './constants';
 import type { AgentPermissionMode } from '@/types/agent';
 import { templateModeOf } from '@/lib/plan-mode';
 import { agentDeletedNotice, type DeletedNotice } from '@/lib/chat-deleted';
+import { ipcReason } from '@/lib/ipc-error';
 
 // The words the cards print, in the frames' order: stopped sits between idle
 // and error (`Agent stopped · who and why`), asleep between idle and stopped
@@ -164,9 +165,9 @@ export default function AgentsPage() {
       setShowNewChatModal(false);
     } catch (error) {
       console.error('Failed to create agent:', error);
-      // Tells the modal not to wipe what the user typed - there is nothing to
-      // resume into otherwise, since the failure never reaches the screen.
-      return false;
+      // The dialog keeps what was typed and says why: main's reason, git's for
+      // a worktree it could not make, without Electron's words before it.
+      return { error: ipcReason(error, 'no reason was given') };
     }
   }, [createAgent, startAgent]);
 

@@ -4,7 +4,8 @@ import { app, ipcMain } from 'electron';
 import { DATA_DIR } from '../../constants';
 import { ReportBudget } from './budget';
 import { errorReportOptions } from './options';
-import type { ReportFacts } from './report';
+import { randomUUID } from 'crypto';
+import { healthEvent, reportFingerprint, toReport, type HealthKind, type ReportFacts } from './report';
 import { errorReportsAvailable } from '../../platform/error-reports';
 
 /**
@@ -103,9 +104,39 @@ function guardRendererBridge(): void {
   }
 }
 
+/** What a health report's send answers: sent, or why not, in a sentence the window shows as is. */
+export type HealthSendResult = { sent: true } | { sent: false; reason: string };
+
+export const HEALTH_REFUSALS = {
+  windows: 'Error reports are not available on Windows yet.',
+  off: 'Turn on Send error reports in Settings to send a diagnostic.',
+  budget: 'A diagnostic was already sent in the last 24 hours.',
+  unreachable: 'Sentry could not be reached. Nothing was sent.',
+} as const;
+
+/** How long a health report waits for Sentry's answer before it says it could not be reached. */
+const HEALTH_SEND_MS = 10_000;
+
+export interface ErrorReports {
+  sync(): Promise<void>;
+  /** Why nothing may be sent now (Windows, the switch off), or null. */
+  refusal(): string | null;
+  /**
+   * A report of Tars's health (2.0.3): the abrupt end at the next launch, or
+   * the diagnostic the user sends. Through the same switch and budget as an
+   * error, counted before it leaves and given back when Sentry was not reached.
+   */
+  sendHealth(kind: HealthKind, payload: Record<string, unknown>): Promise<HealthSendResult>;
+}
+
 /** Never on a platform whose build may not send (errorReportsAvailable: not on win32). */
-export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Platform = process.platform): { sync(): Promise<void> } {
+export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Platform = process.platform): ErrorReports {
   let starting: Promise<void> | undefined;
+  let sentryOf: typeof import('@sentry/electron/main') | undefined;
+  let budgetOf: ReportBudget | undefined;
+  const preAdmitted = new Set<string>();
+  const healthPayloads = new Map<string, Record<string, unknown>>();
+  const answers = new Map<string, number>();
   const sync = (): Promise<void> => {
     if (starting) return starting;
     if (!errorReportsAvailable(platform) || !isEnabled()) return Promise.resolve();
@@ -113,6 +144,7 @@ export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Pla
       try {
         const sentry = await import('@sentry/electron/main');
         const budget = new ReportBudget(path.join(DATA_DIR, 'error-reports.json'));
+        budgetOf = budget;
         sentry.init({
           ...errorReportOptions({
             dsn: dsn(),
@@ -120,6 +152,9 @@ export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Pla
             facts: () => facts(budget),
             budget,
             makeTransport: sentry.makeElectronTransport as never,
+            preAdmitted,
+            healthPayloads,
+            onSent: (eventId, status) => { answers.set(eventId, status); },
           }),
           defaultIntegrations: false,
           integrations: [
@@ -132,6 +167,7 @@ export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Pla
           transportOptions: { headers: { 'Accept-Language': 'en' } },
           skipOpenTelemetrySetup: true,
         } as never);
+        sentryOf = sentry;
       } catch (err) {
         console.warn('[error-reports] could not start:', err instanceof Error ? err.message : err);
       }
@@ -139,6 +175,40 @@ export function startErrorReports(isEnabled: () => boolean, platform: NodeJS.Pla
     })();
     return starting;
   };
+  const refusal = (): string | null => {
+    if (!errorReportsAvailable(platform)) return HEALTH_REFUSALS.windows;
+    if (!isEnabled()) return HEALTH_REFUSALS.off;
+    return null;
+  };
+  const sendHealth = async (kind: HealthKind, payload: Record<string, unknown>): Promise<HealthSendResult> => {
+    const refused = refusal();
+    if (refused) return { sent: false, reason: refused };
+    await sync();
+    const sentry = sentryOf;
+    const budget = budgetOf;
+    if (!sentry || !budget) return { sent: false, reason: HEALTH_REFUSALS.unreachable };
+    const id = randomUUID().replace(/-/g, '');
+    const event = { ...healthEvent(kind, payload), event_id: id };
+    const report = toReport(event, facts(budget));
+    if (!report) return { sent: false, reason: HEALTH_REFUSALS.unreachable };
+    const fingerprint = reportFingerprint(report);
+    const at = budget.admitAt(fingerprint);
+    if (at === null) return { sent: false, reason: HEALTH_REFUSALS.budget };
+    preAdmitted.add(id);
+    healthPayloads.set(id, payload);
+    try {
+      sentry.captureEvent(event as never, { event_id: id } as never);
+      const flushed = await sentry.flush(HEALTH_SEND_MS);
+      const status = answers.get(id) ?? 0;
+      if (flushed && status >= 200 && status < 300) return { sent: true };
+      budget.refund(fingerprint, at);
+      return { sent: false, reason: HEALTH_REFUSALS.unreachable };
+    } finally {
+      preAdmitted.delete(id);
+      healthPayloads.delete(id);
+      answers.delete(id);
+    }
+  };
   void sync();
-  return { sync };
+  return { sync, refusal, sendHealth };
 }

@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { NodeClient, Scope, createTransport, defaultStackParser } from '@sentry/node';
 import { errorReportOptions } from '../../../electron/services/error-reports/options';
 import { ReportBudget } from '../../../electron/services/error-reports/budget';
-import type { ReportFacts } from '../../../electron/services/error-reports/report';
+import { healthEvent, type ReportFacts } from '../../../electron/services/error-reports/report';
 
 /**
  * What reaches the network, byte for byte, from the real Sentry client with
@@ -27,6 +27,15 @@ import type { ReportFacts } from '../../../electron/services/error-reports/repor
  * 6. Over-correction: an error with the setting on does not leave at all.
  * 7. Errors thrown while the setting is off use up the day's budget, so the
  *    same error, once it is turned on, is never sent.
+ * And from 2.0.3's diagnostic (written red, 2026-10-15, after the e2e saw it):
+ * 8. A diagnostic's samples are cut by the client's normalization (depth 3 by
+ *    default: each sample became "[Object]"), so it leaves with none.
+ * 9. An abrupt end's last sample loses its slowest handlers the same way.
+ * 10. The payloads kept by event id become a way in: an event that is not a
+ *    health report, under an id the map holds, leaves with its numbers.
+ * Found while making 8 and 9 pass: a health event typed 'event' is not an
+ * error to the SDK, which then skips beforeSend, so its payload is never put
+ * back and only the transport rebuilds it, from the event already cut.
  */
 
 const HOME = os.homedir();
@@ -54,8 +63,9 @@ function recordingTransport(options: Parameters<typeof createTransport>[0]) {
   });
 }
 
-function client() {
+function client(healthPayloads?: Map<string, Record<string, unknown>>) {
   const options = errorReportOptions({
+    healthPayloads,
     dsn: DSN,
     isEnabled: () => enabled,
     facts: () => facts,
@@ -167,5 +177,41 @@ describe('what reaches the transport', () => {
     expect(options.sendDefaultPii).toBe(false);
     expect(options.enableLogs).toBe(false);
     expect(options.maxBreadcrumbs).toBe(0);
+  });
+
+  // A health report goes the way sendHealth sends it: its payload kept by its event id, at the SDK's default depth.
+  const healthSamples = Array.from({ length: 288 }, (_, i) => ({
+    at: Date.now() - (288 - i) * 300_000, heapUsedMb: 120, heapTotalMb: 180, rssMb: 400, loopP50Ms: 11, loopP95Ms: 30,
+    slowest: [{ channel: 'usage:tasks', ms: 118 }, { channel: 'claude:getData', ms: 12 }], agents: 45, running: 3, page: '/usage',
+  }));
+  async function sendHealthEvent(kind: 'abrupt-end' | 'diagnostic', payload: Record<string, unknown>) {
+    const id = 'b'.repeat(32);
+    const { c, scope } = client(new Map([[id, payload]]));
+    scope.captureEvent({ ...healthEvent(kind, payload), event_id: id } as never);
+    await c.flush(2_000);
+    expect(sent).toHaveLength(1);
+    return JSON.parse(sent[0].trim().split('\n')[2]);
+  }
+
+  it('8. a diagnostic leaves with every sample, whole', async () => {
+    const event = await sendHealthEvent('diagnostic', { samples: healthSamples });
+    expect(event.contexts.tars.samples).toEqual(healthSamples);
+  });
+
+  it('9. an abrupt end leaves with its last sample whole, its slowest handlers included', async () => {
+    const payload = { previousVersion: '2.0.2', uptimeMinutes: 312, crashType: 'EXC_BREAKPOINT', lastSample: healthSamples[287] };
+    const event = await sendHealthEvent('abrupt-end', payload);
+    expect(event.contexts.tars).toEqual(payload);
+  });
+
+  it('10. an id the map holds gives no numbers to an event that is not a health report', async () => {
+    const id = 'c'.repeat(32);
+    const { c, scope } = client(new Map([[id, { samples: healthSamples }]]));
+    scope.captureException(failure(), { event_id: id } as never);
+    await c.flush(2_000);
+    expect(sent).toHaveLength(1);
+    const event = JSON.parse(sent[0].trim().split('\n')[2]);
+    expect(event.exception.values[0].type).toBe('Error');
+    expect(event.contexts.tars).toBeUndefined();
   });
 });

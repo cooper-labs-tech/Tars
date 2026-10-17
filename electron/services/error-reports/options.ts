@@ -30,6 +30,18 @@ export interface ErrorReportDeps {
   budget: ReportBudget;
   /** The network: the Electron SDK's transport in the app, a recorder in a test. */
   makeTransport: (options: never) => Transport;
+  /** Event ids the budget already counted (a health report, index.ts sendHealth): not counted twice. */
+  preAdmitted?: Set<string>;
+  /** Told each event's answer from Sentry: its HTTP status, 0 when none came. */
+  onSent?: (eventId: string, status: number) => void;
+  /**
+   * A health report's numbers, by event id, put back after the SDK's
+   * normalization: it cuts what an event holds below a depth of 3, and a
+   * diagnostic's samples (contexts.tars.samples[i]) or the slowest handlers
+   * of an abrupt end's last sample sit deeper. Raising the depth for every
+   * event would move the cut, not remove it.
+   */
+  healthPayloads?: Map<string, Record<string, unknown>>;
 }
 
 function gated(base: Transport, deps: ErrorReportDeps): Transport {
@@ -39,7 +51,18 @@ function gated(base: Transport, deps: ErrorReportDeps): Transport {
       const sent = new Promise(resolve => setImmediate(resolve)).then(() => {
         if (!deps.isEnabled()) return {};
         const kept = keepErrorsOnly(envelope as never, deps.facts());
-        return kept ? base.send(kept) : {};
+        if (!kept) return {};
+        const id = typeof kept[0].event_id === 'string' ? kept[0].event_id : undefined;
+        return Promise.resolve(base.send(kept)).then(
+          (answer) => {
+            if (id) deps.onSent?.(id, Number((answer as { statusCode?: unknown })?.statusCode) || 0);
+            return answer;
+          },
+          (err) => {
+            if (id) deps.onSent?.(id, 0);
+            throw err;
+          },
+        );
       });
       pending.add(sent);
       void sent.finally(() => pending.delete(sent));
@@ -64,8 +87,15 @@ export function errorReportOptions(deps: ErrorReportDeps) {
     beforeSendTransaction: () => null,
     beforeSend(event: unknown) {
       if (!deps.isEnabled()) return null;
-      const report = toReport(event, deps.facts());
-      if (!report || !deps.budget.admit(reportFingerprint(report))) return null;
+      const id = (event as { event_id?: unknown } | null)?.event_id;
+      const payload = typeof id === 'string' ? deps.healthPayloads?.get(id) : undefined;
+      const whole = payload
+        ? { ...(event as Record<string, unknown>), contexts: { ...((event as { contexts?: object }).contexts ?? {}), tars: payload } }
+        : event;
+      const report = toReport(whole, deps.facts());
+      if (!report) return null;
+      if (report.event_id && deps.preAdmitted?.has(report.event_id)) return report as never;
+      if (!deps.budget.admit(reportFingerprint(report))) return null;
       return report as never;
     },
     transport: (options: never) => gated(deps.makeTransport(options), deps) as never,

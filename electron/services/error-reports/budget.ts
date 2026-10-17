@@ -40,15 +40,32 @@ export class ReportBudget {
 
   /** Whether a report of this error may leave now; counts it when it may. */
   admit(fingerprint: string): boolean {
+    return this.admitAt(fingerprint) !== null;
+  }
+
+  /** As admit(), with the moment it was counted at, which refund() takes; null when it may not leave. */
+  admitAt(fingerprint: string): number | null {
     const now = this.now();
     const since = now - DAY_MS;
     this.state.sent = this.state.sent.filter(t => t > since);
     for (const [fp, t] of Object.entries(this.state.seen)) if (t <= since) delete this.state.seen[fp];
-    if (this.state.sent.length >= REPORTS_PER_DAY || fingerprint in this.state.seen) return false;
+    if (this.state.sent.length >= REPORTS_PER_DAY || fingerprint in this.state.seen) return null;
     this.state.sent.push(now);
     this.state.seen[fingerprint] = now;
     this.write();
-    return true;
+    return now;
+  }
+
+  /**
+   * Gives back what admit() counted, for a report that did not leave after
+   * all (Sentry could not be reached): a diagnostic the user tries again
+   * after a failure must not read "already sent".
+   */
+  refund(fingerprint: string, at: number): void {
+    const index = this.state.sent.lastIndexOf(at);
+    if (index !== -1) this.state.sent.splice(index, 1);
+    if (this.state.seen[fingerprint] === at) delete this.state.seen[fingerprint];
+    this.write();
   }
 
   private read(): BudgetFile {

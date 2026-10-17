@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 162 root frames.
+rather than a companion to it. `design/tars-redesign.pen` holds 164 root frames.
 `design/chat-design.pen` holds 72 of those, the other eighty-four being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -157,7 +157,11 @@ Agent · Claude account (and their light copies).
   for another CLI: Permissions · plan mode · states (and its light copy).
   An edit the main process refuses (a worktree git cannot make) keeps the
   dialog open with the changes made, and says why beside its buttons:
-  Overlay · Edit agent · not saved (and its light copy)
+  Overlay · Edit agent · not saved (and its light copy). A create it refuses
+  does the same in New agent, Not created and git's reason beside the
+  buttons: Overlay · New agent · not created; and New team lists the member
+  it could not make with that reason above the form, Electron's own words
+  taken off: Overlay · New team · a member not made
 - Replace the orchestrator of <project>?: asked before a save would give the
   role to an agent while another agent of the same project holds it (the
   toggle, a new agent, a move to another project, a team with an orchestrator

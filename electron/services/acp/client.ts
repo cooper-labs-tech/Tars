@@ -223,6 +223,8 @@ export class ProcessTree {
   private readonly groups: Set<number>;
   private ownGroup: number | undefined;
   private firstReadAt: number | undefined;
+  /** Taken over by the quit (absorb): the quit's signals end it, and its own send nothing more. */
+  private retired = false;
 
   constructor(roots: number[]) {
     this.known = new Set(roots);
@@ -267,8 +269,46 @@ export class ProcessTree {
   }
 
   signal(sig: NodeJS.Signals): void {
+    if (this.retired) return;
     for (const group of this.targets) {
       try { process.kill(-group, sig); } catch { /* the group is gone */ }
+    }
+  }
+
+  /**
+   * Makes another tree's processes and groups this one's, and retires it: a
+   * stop still on its way when Tars quits is the quit's to end, and once the
+   * quit has, that stop must not signal the tree again, where a new process
+   * may have taken a group's id by then.
+   */
+  absorb(other: ProcessTree): void {
+    for (const pid of other.known) this.known.add(pid);
+    for (const group of other.groups) this.groups.add(group);
+    other.retired = true;
+  }
+
+  /**
+   * Holds the tree still while it is read again (FREEZE_READS): every group
+   * known is stopped (SIGSTOP), then the tree grows from `read`, until a read
+   * adds no group. Whoever calls it continues them (SIGCONT) once its own
+   * signal is sent, so that each stopped process takes it as it goes on.
+   */
+  freeze(read: () => ProcessRow[] | undefined): void {
+    for (let round = 0; round < FREEZE_READS; round++) {
+      const stopped = new Set(this.targets);
+      this.signal('SIGSTOP');
+      this.grow(read());
+      if (this.targets.every(group => stopped.has(group))) return;
+    }
+  }
+
+  /** The same, with a read that gives the event loop back: a delegated run's stop, while Tars goes on. */
+  async freezeAsync(read: () => Promise<ProcessRow[] | undefined>): Promise<void> {
+    for (let round = 0; round < FREEZE_READS; round++) {
+      const stopped = new Set(this.targets);
+      this.signal('SIGSTOP');
+      this.grow(await read());
+      if (this.targets.every(group => stopped.has(group))) return;
     }
   }
 
@@ -288,21 +328,26 @@ export class ProcessTree {
  */
 async function endProcessTree(root: number): Promise<void> {
   const tree = new ProcessTree([root]);
+  stopsUnderway.add(tree);
   tree.grow(await processTable());
-  for (let read = 0; read < FREEZE_READS; read++) {
-    const stopped = new Set(tree.targets);
-    tree.signal('SIGSTOP');
-    tree.grow(await processTable());
-    if (tree.targets.every(group => stopped.has(group))) break;
-  }
+  await tree.freezeAsync(processTable);
   // A stopped process takes its SIGTERM as it continues.
   tree.signal('SIGTERM');
   tree.signal('SIGCONT');
   const last = setTimeout(() => {
-    void processTable().then(table => { tree.grow(table); tree.signal('SIGKILL'); });
+    void processTable().then(table => { tree.grow(table); tree.signal('SIGKILL'); }).finally(() => stopsUnderway.delete(tree));
   }, STOP_GRACE_MS);
   last.unref();
 }
+
+/**
+ * The trees a stop is ending, from its first read until its SIGKILL. Tars's
+ * quit ends them as its own (endProcessTreesNow): it is handed the runs still
+ * running only, and a stop caught between its SIGSTOP and its SIGCONT would
+ * leave its groups stopped for good, an orphaned one included, and lose its
+ * SIGKILL with the app (the Audit's Low 1 on #422).
+ */
+const stopsUnderway = new Set<ProcessTree>();
 
 /**
  * win32's stop: the process Tars spawned and everything under it, by
@@ -370,7 +415,7 @@ const QUIT_POLL_MS = 50;
  * groups already known still get their signals.
  */
 export function endProcessTreesNow(roots: number[]): void {
-  if (roots.length === 0) return;
+  if (roots.length === 0 && stopsUnderway.size === 0) return;
   const graceEnds = Date.now() + QUIT_GRACE_MS;
   const deadline = graceEnds + QUIT_LAST_READ_MS;
   if (process.platform === 'win32') return endProcessTreesOnWindowsNow(roots, deadline);
@@ -379,14 +424,11 @@ export function endProcessTreesNow(roots: number[]): void {
     return left > 20 ? processTableNow(left) : undefined;
   };
   const tree = new ProcessTree(roots);
+  for (const stopping of stopsUnderway) tree.absorb(stopping);
+  stopsUnderway.clear();
   tree.grow(read(graceEnds));
   // Held still while read again, as the stop does (FREEZE_READS).
-  for (let round = 0; round < FREEZE_READS; round++) {
-    const stopped = new Set(tree.targets);
-    tree.signal('SIGSTOP');
-    tree.grow(read(graceEnds));
-    if (tree.targets.every(group => stopped.has(group))) break;
-  }
+  tree.freeze(() => read(graceEnds));
   tree.signal('SIGTERM');
   tree.signal('SIGCONT');
   const pause = new Int32Array(new SharedArrayBuffer(4));

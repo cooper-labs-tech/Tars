@@ -21,6 +21,7 @@ import type { CreationMode } from './types';
 import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
 import { modeForProvider } from '@/lib/plan-mode';
+import { ipcReason } from '@/lib/ipc-error';
 
 const MODE_OPTIONS: SegmentedOption<CreationMode>[] = [
   { value: 'agent', label: 'One agent' },
@@ -101,7 +102,7 @@ export default function NewChatModal({
   const [prompt, setPrompt] = useState('');
   const [useWorktree, setUseWorktree] = useState(false);
   const [branchName, setBranchName] = useState('');
-  // Why the main process refused the last save of an agent's settings; the dialog stays open with the changes.
+  // Why the main process refused the last save of an agent's settings, or its creation; the dialog stays open with what was chosen.
   const [saveRefusal, setSaveRefusal] = useState<string | null>(null);
   const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('normal');
   const [effort, setEffort] = useState<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('medium');
@@ -352,8 +353,13 @@ export default function NewChatModal({
         || (selectedSkills.length > 0 ? `Use the following skills: ${selectedSkills.join(', ')}` : '');
       const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
 
+      setSaveRefusal(null);
       const result = await onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, undefined, permissionMode, provider, undefined, undefined, effort, isOrchestrator ? 'orchestrator' : 'worker', cliPath || undefined);
       if (result === false) return;
+      if (result && typeof result === 'object' && 'error' in result) {
+        setSaveRefusal(result.error);
+        return;
+      }
 
       setProjectPath('');
       setSelectedSkills([]);
@@ -416,7 +422,7 @@ export default function NewChatModal({
     for (const member of selectedMembers) {
       const agentDisplayName = deployedMemberName(member.name, projectPath);
       if (existingNames.has(agentDisplayName)) {
-        issues.push(`${member.name}: already deployed on this project - skipped.`);
+        issues.push(`${member.name}: already deployed on this project, so it was skipped.`);
         continue;
       }
       try {
@@ -435,9 +441,6 @@ export default function NewChatModal({
           role: member.role,
         });
         createdIds.push(agent.id);
-        if (member.worktreeBranch && !agent.branchName) {
-          issues.push(`${member.name}: worktree "${member.worktreeBranch}" could not be created - agent works in the project root.`);
-        }
         const combinedBrief = [teamBrief.trim(), member.savedPrompt?.trim()].filter(Boolean).join('\n\n');
         if (startOnDeploy && combinedBrief) {
           await startAgent(agent.id, combinedBrief, { model: resolvedModel, provider: member.provider, localModel: member.localModel });
@@ -446,7 +449,8 @@ export default function NewChatModal({
         }
       } catch (err) {
         console.error(`Failed to create team member "${member.name}":`, err);
-        issues.push(`${member.name}: ${err instanceof Error ? err.message : 'creation failed'}`);
+        // The reason main gave, git's for a worktree it could not make, without Electron's own words before it.
+        issues.push(`${member.name}: ${ipcReason(err, 'it could not be created')}`);
       }
     }
 
@@ -522,7 +526,15 @@ export default function NewChatModal({
             )
             : mode === 'team'
               ? <span className="text-xs text-muted-foreground">Five worktrees are created under the project. Nothing is pushed.</span>
-              : <span className="text-xs text-muted-foreground">It starts as soon as you create it.</span>
+              // A create main refused, a worktree git could not make say: the dialog stays open with what was chosen.
+              // Frame: `Overlay · New agent · not created`.
+              : saveRefusal
+                ? (
+                  <p role="alert" className="text-xs text-status-error">
+                    Not created: {saveRefusal.trim().replace(/[.\s]+$/, '')}. Your choices are still here.
+                  </p>
+                )
+                : <span className="text-xs text-muted-foreground">It starts as soon as you create it.</span>
         }
         footerRight={
           <>

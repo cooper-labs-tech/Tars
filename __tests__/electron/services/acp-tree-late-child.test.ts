@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { World } from '../process-world';
 
 /**
  * A delegated run's processes all end, the one born while the stop read ps included (the QA's B1 on #358).
@@ -19,68 +20,25 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *    is ended.
  * 7. (added with the code, for the mutant that reads again only once) The tree is read again once only: a process
  *    the late one starts during that read is left, as the late one was.
- * The processes are a table in memory, ps's lines and what each signal does to the processes of a group, so the race
- * is the same at every run and on every host: what is born during a read is born right after its snapshot.
+ * And from the Audit's Lows on #422 (GATE-PR422.md), written before the code (2026-10-15):
+ * 8. Tars quits while a stop is between its SIGSTOP and its SIGCONT: the quit is handed the runs still running only,
+ *    so that run is in neither, and its groups, an orphaned one included, stay stopped for good. Or the stop, going
+ *    on once the quit has ended its tree, signals that tree again, where a new process may have taken a group's id.
+ * 9. A round reads before it stops: a process that starts a child only while it runs starts one between that read
+ *    and its stop, and the round, its read finding no group more, ends the freeze without it.
+ * The processes are a table in memory (process-world.ts), ps's lines and what each signal does to the processes of a
+ * group, so the race is the same at every run and on every host: what is born during a read is born right after its
+ * snapshot.
  */
 
-interface Proc { pid: number; ppid: number; pgid: number; state: 'running' | 'stopped' | 'dead'; term: boolean }
-
-/** A process table and the signals a group gets, as the kernel keeps them. */
-class World {
-  readonly procs = new Map<number, Proc>();
-  readonly signals: Array<{ target: number; sig: string }> = [];
-  reads = 0;
-  private readonly afterRead = new Map<number, () => void>();
-  private everyRead: (() => void) | undefined;
-
-  add(pid: number, ppid: number, pgid: number): void {
-    this.procs.set(pid, { pid, ppid, pgid, state: 'running', term: false });
-  }
-
-  /** What happens right after the `read`-th snapshot, while ps is still running. */
-  after(read: number, then: () => void): void {
-    this.afterRead.set(read, then);
-  }
-
-  afterEach(then: () => void): void {
-    this.everyRead = then;
-  }
-
-  /** ps -A -o pid=,ppid=,pgid=,stat=,etime= */
-  print(): string {
-    const out = [...this.procs.values()].filter(p => p.state !== 'dead')
-      .map(p => `${p.pid} ${p.ppid} ${p.pgid} ${p.state === 'stopped' ? 'T' : 'S'} 00:01`).join('\n');
-    this.reads += 1;
-    this.afterRead.get(this.reads)?.();
-    this.everyRead?.();
-    return out;
-  }
-
-  kill(target: number, sig: string | number): true {
-    this.signals.push({ target, sig: String(sig) });
-    const members = [...this.procs.values()].filter(p => p.state !== 'dead' && (target < 0 ? p.pgid === -target : p.pid === target));
-    if (!members.length) throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
-    for (const p of members) {
-      if (sig === 'SIGKILL') this.end(p);
-      else if (sig === 'SIGSTOP') p.state = 'stopped';
-      else if (sig === 'SIGCONT') { p.state = 'running'; if (p.term) this.end(p); }
-      else if (sig === 'SIGTERM') { if (p.state === 'stopped') p.term = true; else this.end(p); }
-    }
-    return true;
-  }
-
-  private end(p: Proc): void {
-    p.state = 'dead';
-    for (const child of this.procs.values()) if (child.state !== 'dead' && child.ppid === p.pid) child.ppid = 1;
-  }
-
-  alive(pid: number): boolean {
-    const p = this.procs.get(pid);
-    return !!p && p.state !== 'dead';
-  }
-}
-
-const state = vi.hoisted(() => ({ world: undefined as unknown as { print(): string }, taskkills: [] as string[][] }));
+const state = vi.hoisted(() => ({
+  world: undefined as unknown as { print(): string },
+  taskkills: [] as string[][],
+  /** The asynchronous reads of ps from this one on are held, unanswered, until the test lets them go (8.). */
+  holdFrom: Infinity,
+  asyncReads: 0,
+  held: [] as Array<() => void>,
+}));
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   const answer = (file: string, args: unknown): string => {
@@ -92,7 +50,9 @@ vi.mock('child_process', async (importOriginal) => {
     ...actual,
     execFile: ((file: string, args: unknown, ...rest: unknown[]) => {
       const done = rest.find(r => typeof r === 'function') as (err: Error | null, out?: string, errOut?: string) => void;
-      try { done(null, answer(file, args), ''); } catch (err) { done(err as Error, '', ''); }
+      const reply = () => { try { done(null, answer(file, args), ''); } catch (err) { done(err as Error, '', ''); } };
+      if (file === 'ps' && ++state.asyncReads >= state.holdFrom) state.held.push(reply);
+      else reply();
       return {} as never;
     }) as typeof actual.execFile,
     execFileSync: ((file: string, args: unknown) => answer(file, args)) as typeof actual.execFileSync,
@@ -109,6 +69,7 @@ const IN_TARS_GROUP = 70_004;
 const TARS_GROUP = 69_000;
 
 const LATER = 70_005;
+const WHILE_RUNNING = 70_006;
 
 /** The spec's shape: the agent, the command its turn started, and that command's command, born during the first read. */
 function lateChildWorld(): World {
@@ -127,6 +88,8 @@ function use(next: World, platform: NodeJS.Platform): void {
   world = next;
   state.world = next;
   state.taskkills.length = 0;
+  state.asyncReads = 0;
+  state.held.length = 0;
   Object.defineProperty(process, 'platform', { ...real, value: platform });
   vi.spyOn(process, 'kill').mockImplementation(((pid: number, sig?: string | number) => world.kill(pid, sig ?? 'SIGTERM')) as typeof process.kill);
 }
@@ -135,6 +98,7 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   Object.defineProperty(process, 'platform', real);
+  state.holdFrom = Infinity;
 });
 
 /** A session whose agent is the root, as start() leaves it. */
@@ -210,6 +174,43 @@ describe.each(['darwin', 'linux'] as const)('on %s, two generations late', (plat
     use(twice(), platform);
     endProcessTreesNow([ROOT]);
     expect([LATE, LATER].filter(pid => world.alive(pid)), 'after the quit').toEqual([]);
+  });
+});
+
+describe.each(['darwin', 'linux'] as const)('on %s, the Audit\'s Lows on #422', (platform) => {
+  it('8. a quit while a stop is between its SIGSTOP and its SIGCONT ends that tree, and the stop signals it no more', async () => {
+    use(lateChildWorld(), platform);
+    state.holdFrom = 2;
+    sessionOf(ROOT).stop();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(world.procs.get(COMMAND)!.state, 'the stop has frozen the run').toBe('stopped');
+    endProcessTreesNow([]);
+    expect([ROOT, COMMAND, LATE].filter(pid => world.alive(pid)), 'after the quit').toEqual([]);
+    expectNothingLeftStopped();
+    // The stop's read comes back after the quit: the tree is the quit's, and the stop sends it nothing more.
+    const quitEnded = world.signals.length;
+    state.holdFrom = Infinity;
+    for (const reply of state.held.splice(0)) reply();
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(world.signals.slice(quitEnded), 'signals the stop sent after the quit').toEqual([]);
+  });
+
+  it('9. a process that starts a child only while it runs, stopped before it is read again, starts none', async () => {
+    const whileRunning = () => {
+      const w = new World();
+      w.add(process.pid, 1, TARS_GROUP);
+      w.add(ROOT, process.pid, ROOT);
+      w.add(COMMAND, ROOT, COMMAND);
+      w.after(2, () => { if (w.procs.get(COMMAND)!.state === 'running') w.add(WHILE_RUNNING, COMMAND, WHILE_RUNNING); });
+      return w;
+    };
+    use(whileRunning(), platform);
+    await stop(ROOT);
+    expect(world.alive(WHILE_RUNNING), 'after the stop').toBe(false);
+    vi.restoreAllMocks();
+    use(whileRunning(), platform);
+    endProcessTreesNow([ROOT]);
+    expect(world.alive(WHILE_RUNNING), 'after the quit').toBe(false);
   });
 });
 

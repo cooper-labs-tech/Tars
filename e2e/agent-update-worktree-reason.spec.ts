@@ -39,6 +39,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    under LANG=fr_FR, as a translated git does, unless LC_ALL or LC_MESSAGES says otherwise.
  * 9. The secondary path, the refusal that came after the writes until 2.0.2: a save with a rename and a secondary
  *    path that does not exist must be refused, and leave the name.
+ * And from the DB's find on #417 and the Audit's Low there (GATE-PR417.md), written before the fix (2026-10-15,
+ * 2.0.3):
+ * 10. New agent, the dialog: a create the main process refused left it open and said nothing, so the agent was not
+ *     made and nothing said why. It must say "Not created: " and the reason, and keep what was chosen. And New
+ *     team's line for the member it could not make must read the reason right after the member's name: it read
+ *     it behind Electron's own "Error invoking remote method 'agent:create': Error: ".
  * The answers are git's lines without the "fatal: " and without its progress, as gitRefusal (#399) gives them, in
  * the C locale. The artefact: values.json with each answer.
  */
@@ -178,6 +184,26 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     const listed = modal.getByText(/^Builder: /);
     await expect(listed).toBeVisible({ timeout: 30_000 });
     values.teamLine = await listed.innerText();
+    // 10. New agent, on the same branch: the dialog says why, and keeps what was chosen.
+    await modal.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(modal).toHaveCount(0);
+    await page.getByRole('button', { name: '+ Agent', exact: true }).click();
+    const agentModal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'New agent', exact: true }) });
+    await expect(agentModal).toBeVisible({ timeout: 30_000 });
+    await agentModal.getByLabel('Agent name').fill('n-dialog');
+    await agentModal.getByRole('button', { name: 'Project', exact: true }).click();
+    await page.getByRole('option').filter({ hasText: 'projects/repo' }).first().click();
+    await agentModal.getByRole('button', { name: 'Options' }).click();
+    await agentModal.getByText('Its own worktree', { exact: true }).locator('xpath=../..').getByRole('switch').click();
+    await agentModal.getByPlaceholder('feat/frontend').fill('main');
+    const fleetBefore = (await list()).length;
+    await agentModal.getByRole('button', { name: 'Create and start', exact: true }).click();
+    const refusal = agentModal.getByRole('alert');
+    await expect(refusal).toBeVisible({ timeout: 30_000 }).catch(() => { /* recorded below, asserted after */ });
+    values.agentLine = (await refusal.count()) ? await refusal.innerText() : null;
+    values.agentDialogOpen = await agentModal.count();
+    values.agentBranchKept = await agentModal.getByPlaceholder('feat/frontend').inputValue().catch(() => null);
+    values.agentMadeByRefusal = (await list()).length - fleetBefore;
     values.saved = saved().map((a) => ({ id: a.id, worktreePath: a.worktreePath ?? null, branchName: a.branchName ?? null }));
     recordValues(values);
 
@@ -207,10 +233,16 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     expect.soft(values.createNotGit, '7, 8. not a git repository').toEqual({ error: expect.stringMatching(/The worktree could not be made: not a git repository/) });
     for (const made of [values.createCheckedOut, values.createNotGit] as Made[]) expect.soft(made.error ?? '').not.toMatch(notGitsReason);
     expect.soft(values.createdByRefusals, '7. a refused create made an agent').toBe(0);
-    expect.soft(values.teamLine, '7. New team lists git\'s reason').toMatch(/^Builder: .*'main' is already checked out at/);
+    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(/^Builder: The worktree could not be made: 'main' is already checked out at /);
     expect.soft(values.teamLine).not.toMatch(notGitsReason);
     expect(values.createTaken, '7. a branch git takes').toMatchObject({ worktreePath: path.join(repo, '.worktrees', 'feat', 'new') });
     expect(fs.existsSync(path.join(repo, '.worktrees', 'feat', 'new', 'README.md'))).toBe(true);
+    expect(values.agentLine, '10. New agent says why it did not create').toMatch(/^Not created: The worktree could not be made: 'main' is already checked out at .+\. Your choices are still here\.$/);
+    expect(values.agentLine).not.toMatch(notGitsReason);
+    expect(values.agentLine).not.toMatch(/Error invoking remote method/);
+    expect(values.agentDialogOpen, '10. the dialog stays open').toBe(1);
+    expect(values.agentBranchKept, '10. with the branch chosen').toBe('main');
+    expect(values.agentMadeByRefusal, '10. and no agent made').toBe(0);
   } finally {
     await app.close();
     await removeHome(home);

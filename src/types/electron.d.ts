@@ -1,3 +1,8 @@
+/** What "Send a diagnostic" answers: how many samples left and their first and last time (ISO), or why nothing did. */
+export type DiagnosticAnswer =
+  | { sent: true; samples: number; from: string; to: string }
+  | { sent: false; reason: string };
+
 export interface RepoSummary {
   branch: string;
   status: { status: string; file: string }[];
@@ -2332,6 +2337,12 @@ export interface ElectronAPI {
       choices: { id: 'pwsh' | 'powershell' | 'cmd' | 'git-bash'; path: string | null }[];
     } | null>;
     setTitleBarOverlay: (colours: { color: string; symbolColor: string }) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // "Send a diagnostic" (electron/handlers/diagnostic-handlers.ts).
+  diagnostic: {
+    /** Sends the last 24 hours of health samples (numbers, with the names of Tars's own calls and pages) once; refused with the reason, a sentence shown as is. */
+    send: () => Promise<DiagnosticAnswer>;
   };
 
   // Platform info

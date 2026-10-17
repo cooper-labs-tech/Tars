@@ -15,6 +15,7 @@ import { STATUS_COLORS, statusTone, statusWord } from '@/app/agents/constants';
 import { wakingLine } from '@/lib/asleep-line';
 import { lastActiveLabel } from '@/lib/last-active';
 import { openPtyHeard, type PtyBacklog } from '@/lib/pty-backlog';
+import { ipcReason } from '@/lib/ipc-error';
 import type { AgentPermissionMode } from '@/types/agent';
 
 // xterm touches `window` at import time, so the terminal only ever loads in the
@@ -343,8 +344,8 @@ export default function ProjectsPage() {
       setShowAgentDialog(false);
     } catch (err) {
       console.error('Failed to create agent:', err);
-      // Tells the modal not to wipe what the user typed on a failed create.
-      return false;
+      // The dialog keeps what was typed on a failed create, and says why.
+      return { error: ipcReason(err, 'no reason was given') };
     }
   };
 

@@ -17,7 +17,7 @@ import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, sta
 import { startRelayRouting } from './services/hermes-relay-routing';
 import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -26,7 +26,13 @@ import * as path from 'path';
 import type { AppSettings, AgentStatus } from './types';
 
 // Constants
-import { APP_SETTINGS_FILE, API_TOKEN_FILE, DATA_DIR, KANBAN_FILE, PRIVATE_DIR } from './constants';
+import { APP_SETTINGS_FILE, API_TOKEN_FILE, DATA_DIR, KANBAN_FILE, PRIVATE_DIR, dataPath } from './constants';
+import { timeIpcHandlers, startHealthMonitor, pageOf, ipcChannels } from './services/health/monitor';
+import { readSamples, onlyKnown, type Vocabulary } from './services/health/samples';
+import { APP_PAGES } from './services/health/pages';
+import { abruptEndPayload } from './services/health/abrupt-end';
+import { crashTypeSince } from './platform/crash-type';
+import { registerDiagnosticHandlers } from './handlers/diagnostic-handlers';
 
 // Core modules
 import {
@@ -172,7 +178,19 @@ let stopTmpRetention: () => void = () => undefined;
 let previousRun: PreviousRun | null = null;
 let recovery: { flush: () => void } | null = null;
 // Off unless the user turned them on; followed live (services/error-reports).
+// Every IPC handler registered from here on is timed for the health samples
+// (services/health/monitor.ts): before any of them is registered.
+timeIpcHandlers(ipcMain as unknown as Parameters<typeof timeIpcHandlers>[0]);
+
 const errorReports = startErrorReports(() => appSettings.errorReportsEnabled === true);
+
+/** The health samples, ~/.dorothy, on this machine only (services/health/samples.ts). */
+const HEALTH_FILE = dataPath('health-samples.jsonl');
+/** Every 5 minutes; a test run may ask for a shorter period (DOROTHY_HEALTH_EVERY_MS, under DOROTHY_E2E only). */
+function healthEveryMs(): number {
+  const asked = Number(process.env.DOROTHY_HEALTH_EVERY_MS);
+  return process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 200 ? asked : 5 * 60_000;
+}
 
 function loadAppSettings(): AppSettings {
   const defaults: AppSettings = {
@@ -465,7 +483,7 @@ app.whenReady().then(async () => {
   // Narrow the credential files on installs that predate the 0600 write.
   // A `mode` passed to writeFileSync only applies at creation, so an
   // app-settings.json already sitting at 0644 would keep it forever.
-  for (const secret of [APP_SETTINGS_FILE, HERMES_CONNECTION_FILE, API_TOKEN_FILE]) {
+  for (const secret of [APP_SETTINGS_FILE, HERMES_CONNECTION_FILE, API_TOKEN_FILE, HEALTH_FILE]) {
     ensureSecretFileMode(secret);
   }
   // And the directory itself with everything in it: the fleet, the board, the
@@ -482,7 +500,9 @@ app.whenReady().then(async () => {
   migrateWebhookSecretOutOfAgentReach();
   // Windows: the modes above do nothing there; an access list does the same,
   // set in the background (it never rejects, each failure is logged).
-  void closeSecretsToOtherAccounts([APP_SETTINGS_FILE, HERMES_CONNECTION_FILE, API_TOKEN_FILE], PRIVATE_DIR);
+  // The health samples too: the privacy page says they are readable by the
+  // user's account only.
+  void closeSecretsToOtherAccounts([APP_SETTINGS_FILE, HERMES_CONNECTION_FILE, API_TOKEN_FILE, HEALTH_FILE], PRIVATE_DIR);
 
   // Write Tars's CLAUDE.md to ~/.dorothy/ so all spawned agents can load it
   ensureAgentInstructions();
@@ -512,7 +532,21 @@ app.whenReady().then(async () => {
   loadAgents();
   // Whether the last run stopped abruptly, and who was working then, read
   // before this run's record replaces it (services/run-state.ts).
-  previousRun = beginRun();
+  previousRun = beginRun({ appVersion: app.getVersion() });
+  // A run that did not quit is reported once, at this launch, when error
+  // reports are on (services/health/abrupt-end.ts): its samples are read here,
+  // before this run's first, and sent once every handler is registered, below.
+  const lastRunSamples = previousRun ? readSamples(HEALTH_FILE) : [];
+  // What leaves names only the channels this Tars registered and the app's
+  // pages: the samples file is in ~/.dorothy, which agents may write.
+  const healthWords: Vocabulary = { channels: ipcChannels.known(), pages: APP_PAGES };
+  startHealthMonitor({
+    file: HEALTH_FILE,
+    everyMs: healthEveryMs(),
+    agents: () => ({ total: agents.size, running: [...agents.values()].filter((a) => a.status === 'running').length }),
+    page: () => pageOf(getMainWindow()?.webContents.getURL()),
+  });
+  registerDiagnosticHandlers({ reports: errorReports, samplesFile: HEALTH_FILE, known: healthWords });
   // Bound how much a crash can lose: PTY-driven fields reach disk on a timer.
   startAgentAutosave();
 
@@ -626,6 +660,15 @@ app.whenReady().then(async () => {
   // What the last run owed, its waiting room messages, the run record, and,
   // after an abrupt stop, the agents that were working resumed with a note
   // (services/restart-recovery.ts). After the launcher and the API are up.
+  // The abrupt end of the last run: its version, uptime, the OS's crash type,
+  // its last health sample, now that every handler is registered.
+  if (previousRun) {
+    const samples = lastRunSamples.map((s) => onlyKnown(s, healthWords));
+    const payload = abruptEndPayload(previousRun, samples, crashTypeSince(previousRun.startedAt));
+    void errorReports.sendHealth('abrupt-end', payload as unknown as Record<string, unknown>).then((result) => {
+      if (!result.sent) console.log(`[health] the abrupt end of the last run was not reported: ${result.reason}`);
+    });
+  }
   const restarted = startRestartRecovery(previousRun);
   recovery = restarted;
   startAgentWatch();

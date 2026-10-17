@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { lastPathPart } from '@/lib/display-path';
+import { ipcReason } from '@/lib/ipc-error';
 import { isElectron } from '@/hooks/useElectron';
 import { DndContext } from '@dnd-kit/core';
 import { useElectronAgents, useElectronFS, useElectronSkills } from '@/hooks/useElectron';
@@ -561,9 +562,10 @@ export default function TerminalsView() {
       // This used to be an unhandled rejection: the dialog's own submit
       // handler now awaits this promise and wipes every field it just
       // collected the instant it resolves, success or not. Catching here and
-      // reporting failure back keeps a failed create from losing the form.
+      // reporting failure back keeps a failed create from losing the form, and
+      // its reason lets the dialog say why.
       console.error('Failed to create agent:', error);
-      return false;
+      return { error: ipcReason(error, 'no reason was given') };
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- named fields of tabManager, not the object itself; see comment on handleRemoveFromTab above
   }, [createAgent, tabManager.isCustomTabActive, tabManager.activeCustomTab, tabManager.addAgentToTab]);

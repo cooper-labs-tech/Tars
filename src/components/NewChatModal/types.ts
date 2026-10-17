@@ -59,7 +59,7 @@ export interface NewChatModalProps {
     effort?: AgentEffort,
     role?: 'orchestrator' | 'worker',
     cliPath?: string,
-  ) => void | Promise<boolean | void>;
+  ) => void | Promise<boolean | void | { error: string }>;
   onUpdate?: (id: string, updates: {
     projectPath?: string;
     skills?: string[];

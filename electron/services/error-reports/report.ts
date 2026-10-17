@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { redactSecrets } from '../../utils/redact-secrets';
 import { homeUserName, windowsHomeSpellings } from '../../platform/home-spellings';
+import { cleanSample, HEALTH_KEEP_MS, type HealthSample } from '../health/samples';
 
 /**
  * What an error report carries, and nothing else (Sentry, step 1; the
@@ -19,7 +20,9 @@ import { homeUserName, windowsHomeSpellings } from '../../platform/home-spelling
  *     mechanism          { type, handled }
  *     stacktrace.frames  the 50 nearest the throw: filename (home as ~), function, lineno, colno, in_app
  *   tags.process         main or renderer
+ *   tags.kind            abrupt-end or diagnostic, for the two reports of Tars's health only
  *   contexts.os          { name, version }
+ *   contexts.tars        for those two only, numbers rebuilt field by field (healthEvent, below)
  *   contexts.runtime     { name: Electron, version }
  *   user.id              a random id for the installation, made on this machine
  */
@@ -58,8 +61,8 @@ export interface ErrorReport {
   level?: string;
   release: string;
   exception: { values: ReportException[] };
-  tags: { process: 'main' | 'renderer' };
-  contexts: { os: { name: string; version: string }; runtime: { name: 'Electron'; version: string } };
+  tags: { process: 'main' | 'renderer'; kind?: HealthKind };
+  contexts: { os: { name: string; version: string }; runtime: { name: 'Electron'; version: string }; tars?: AbruptEnd | Diagnostic };
   user: { id: string };
 }
 
@@ -204,6 +207,11 @@ export function toReport(raw: unknown, facts: ReportFacts): ErrorReport | null {
     },
     user: { id: facts.installId },
   };
+  const kind = healthKindOf(tags?.kind, exceptions);
+  if (kind) {
+    report.tags.kind = kind;
+    report.contexts.tars = kind === 'abrupt-end' ? cleanAbruptEnd(record(record(event.contexts)?.tars)) : cleanDiagnostic(record(record(event.contexts)?.tars));
+  }
   const id = text(event.event_id);
   if (id && /^[0-9a-f]{32}$/.test(id)) report.event_id = id;
   if (count(event.timestamp) !== undefined) report.timestamp = count(event.timestamp);
@@ -248,4 +256,74 @@ export function keepErrorsOnly(envelope: Envelope, facts: ReportFacts): Envelope
   const sdk = record(header?.sdk);
   if (sdk && typeof sdk.name === 'string' && typeof sdk.version === 'string') outHeader.sdk = { name: sdk.name, version: sdk.version };
   return [outHeader, kept];
+}
+
+
+/* ── The two reports of Tars's health (2.0.3, monitoring options 1 and 2) ── */
+
+export type HealthKind = 'abrupt-end' | 'diagnostic';
+
+/** At the launch after a run that did not quit: services/health/abrupt-end.ts. */
+export interface AbruptEnd {
+  /** The version that ran, `2.0.2`; null when the record did not say. */
+  previousVersion: string | null;
+  uptimeMinutes: number | null;
+  /** What the OS named the crash, without memory (macOS: the .ips report's exception type); null when it gave none. */
+  crashType: string | null;
+  lastSample: HealthSample | null;
+}
+
+/** What the user sends with "Send a diagnostic": the last 24 hours of samples. */
+export interface Diagnostic {
+  samples: HealthSample[];
+}
+
+const HEALTH_TYPES: Record<HealthKind, string> = { 'abrupt-end': 'TarsEndedAbruptly', diagnostic: 'TarsDiagnostic' };
+const HEALTH_VALUES: Record<HealthKind, string> = { 'abrupt-end': 'Tars ended without quitting', diagnostic: 'A diagnostic the user sent' };
+const HEALTH_MECHANISM = 'tars-health';
+const VERSION = /^\d{1,3}\.\d{1,3}\.\d{1,4}(?:-[0-9A-Za-z.]{1,20})?$/;
+const CRASH_TYPE = /^[A-Z][A-Z0-9_]{2,39}$/;
+/** 24 hours at one sample every 5 minutes, and an hour's margin. */
+const MAX_SAMPLES = HEALTH_KEEP_MS / 300_000 + 12;
+
+/**
+ * The SDK event of a health report. Its kind is told by its tag AND its own
+ * exception type and mechanism: a tag alone, set on any other error, gives
+ * it no contexts.tars. Its message is fixed, so the budget counts each kind
+ * as one error: once a day.
+ */
+export function healthEvent(kind: HealthKind, payload: Record<string, unknown>): Record<string, unknown> {
+  // No `type`: the SDK runs beforeSend only for an event without one (an error).
+  return {
+    platform: 'node',
+    level: kind === 'abrupt-end' ? 'error' : 'warning',
+    timestamp: Date.now() / 1000,
+    exception: { values: [{ type: HEALTH_TYPES[kind], value: HEALTH_VALUES[kind], mechanism: { type: HEALTH_MECHANISM, handled: true } }] },
+    tags: { kind },
+    contexts: { tars: payload },
+  };
+}
+
+function healthKindOf(tag: unknown, exceptions: ReportException[]): HealthKind | null {
+  if (tag !== 'abrupt-end' && tag !== 'diagnostic') return null;
+  const [only] = exceptions;
+  return exceptions.length === 1 && only.type === HEALTH_TYPES[tag] && only.mechanism?.type === HEALTH_MECHANISM ? tag : null;
+}
+
+function cleanAbruptEnd(raw: Loose | undefined): AbruptEnd {
+  const version = text(raw?.previousVersion);
+  const crash = text(raw?.crashType);
+  const uptime = count(raw?.uptimeMinutes);
+  return {
+    previousVersion: version && VERSION.test(version) ? version : null,
+    uptimeMinutes: uptime !== undefined && uptime >= 0 ? Math.round(uptime) : null,
+    crashType: crash && CRASH_TYPE.test(crash) ? crash : null,
+    lastSample: cleanSample(raw?.lastSample),
+  };
+}
+
+function cleanDiagnostic(raw: Loose | undefined): Diagnostic {
+  const samples = (Array.isArray(raw?.samples) ? raw.samples : [])
+    .map(cleanSample).filter((s): s is HealthSample => !!s);
+  return { samples: samples.slice(-MAX_SAMPLES) };
 }

@@ -916,6 +916,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('desktop:setTitleBarOverlay', colours),
   },
 
+  // "Send a diagnostic": the last 24 hours of health samples, once (handlers/diagnostic-handlers.ts).
+  diagnostic: {
+    send: () => ipcRenderer.invoke('diagnostic:send'),
+  },
+
   // Platform info
   platform: process.platform,
 });
