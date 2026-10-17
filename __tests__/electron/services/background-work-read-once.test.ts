@@ -6,11 +6,12 @@ import * as path from 'path';
 const reads = vi.hoisted(() => ({ files: [] as string[] }));
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
-  const readFileSync = ((p: unknown, ...rest: unknown[]) => {
+  // Each read of the transcript opens it (agent-truth reads it in Buffers, from where it stopped, since 2.0.3).
+  const openSync = ((p: unknown, ...rest: unknown[]) => {
     reads.files.push(String(p));
-    return (actual.readFileSync as (...a: unknown[]) => unknown)(p, ...rest);
-  }) as typeof actual.readFileSync;
-  return { ...actual, readFileSync, default: { ...actual, readFileSync } };
+    return (actual.openSync as (...a: unknown[]) => unknown)(p, ...rest);
+  }) as typeof actual.openSync;
+  return { ...actual, openSync, default: { ...actual, openSync } };
 });
 
 import { pendingBackgroundWork } from '../../../electron/services/agent-truth';

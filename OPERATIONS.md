@@ -147,6 +147,16 @@ then the sandbox opened the live install's profile, and spawned its agents with 
 `~/.claude/mcp.json`. The main process now takes its home from `os.homedir()` everywhere, and
 `CFFIXED_USER_HOME` moves the profile.
 
+**One Tars per profile, on every platform** (2.0.3; Windows had it before). A second launch on
+the same profile hands over: the first Tars's window comes forward, and the second ends before it
+has written anything (`claimSingleInstance`, `core/desktop-lifecycle.ts`; Chromium's lock, in the
+profile folder). The sandbox has a profile of its own (`CFFIXED_USER_HOME` moves it), and so does
+every e2e run (`--user-data-dir`), so they still run beside the live Tars. A dev run (`npm run
+electron:dev`) on your real home does not: it is named Tars, so it shares the installed app's
+profile, and while the installed Tars runs it brings that one forward and exits. Quit the
+installed Tars first, or run the dev build with `HOME` and `CFFIXED_USER_HOME` pointed at a
+sandbox, as `scripts/sandbox.sh` does.
+
 The sandbox is **persistent** across launches. To reset it:
 
 ```bash

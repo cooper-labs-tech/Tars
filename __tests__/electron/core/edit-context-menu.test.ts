@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 
 /**
- * The right-click menu of a text field on Windows. Electron shows none unless
+ * The right-click menu of a text field, on every platform (on Windows first,
+ * then on macOS and Linux by the maintainer's parity rule of 2026-10-16, the
+ * Audit's G3). Electron shows none unless
  * the app builds one on the webContents' `context-menu` event, and Tars built
  * none: a right click in any field of the app offered no Paste (measured in
  * Settings > Hermes), and a Windows build has no Edit menu either
@@ -20,8 +22,8 @@ import { describe, it, expect, vi } from 'vitest';
  * 6. a selection in page text offers Cut or Paste, which cannot apply there;
  * 7. installed, a right click pops nothing, pops over another window, or pops
  *    when there is nothing to offer;
- * 8. darwin/linux: anything is wired at all. They keep today's app, with no
- *    right-click menu.
+ * 8. darwin/linux get no menu: a right click in a field offers no Paste there
+ *    either (Electron shows none on any platform).
  */
 
 const popups = vi.hoisted(() => [] as { items: { role?: string; enabled: boolean }[]; window: unknown }[]);
@@ -37,6 +39,7 @@ vi.mock('electron', () => ({
 
 import { editMenuTemplate, installEditContextMenu } from '../../../electron/core/edit-context-menu';
 
+const HOST = process.platform;
 const FLAGS = { canUndo: false, canRedo: false, canCut: false, canCopy: false, canPaste: false, canDelete: false, canSelectAll: false, canEditRichly: false };
 const params = (p: { isEditable?: boolean; selectionText?: string; editFlags?: Partial<typeof FLAGS> }) => ({
   isEditable: p.isEditable ?? false,
@@ -90,7 +93,7 @@ describe('installed on a window', () => {
     popups.length = 0;
     const win = { id: 'main' };
     const wc = fakeContents(win);
-    installEditContextMenu(wc as unknown as Electron.WebContents, 'win32');
+    installEditContextMenu(wc as unknown as Electron.WebContents);
 
     wc.rightClick(params({}));
     expect(popups).toHaveLength(0);
@@ -101,13 +104,20 @@ describe('installed on a window', () => {
     expect(popups[0].items.map(i => [i.role, i.enabled])).toEqual([['cut', false], ['copy', false], ['paste', true], ['selectAll', false]]);
   });
 
-  it.each(['darwin', 'linux'] as const)('8. wires nothing on %s, which keep no right-click menu', (platform) => {
+  it.each(['darwin', 'linux', 'win32'] as const)('8. %s: the same menu over its own window', (platform) => {
     popups.length = 0;
-    const wc = fakeContents({ id: 'main' });
-    installEditContextMenu(wc as unknown as Electron.WebContents, platform);
+    const win = { id: 'main' };
+    const wc = fakeContents(win);
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+    try {
+      installEditContextMenu(wc as unknown as Electron.WebContents);
+    } finally {
+      Object.defineProperty(process, 'platform', { value: HOST, configurable: true });
+    }
 
-    expect(wc.events).toEqual([]);
     wc.rightClick(params({ isEditable: true, editFlags: { canPaste: true } }));
-    expect(popups).toHaveLength(0);
+    expect(popups).toHaveLength(1);
+    expect(popups[0].window).toBe(win);
+    expect(popups[0].items.map(i => i.role)).toEqual(['cut', 'copy', 'paste', 'selectAll']);
   });
 });

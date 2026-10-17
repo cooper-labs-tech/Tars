@@ -474,11 +474,15 @@ const ELECTRON_PATHS = ['home', 'appData', 'userData', 'sessionData', 'cache', '
  *
  * DOROTHY_TAILSCALE_BIN names the sandbox's own `tailscale` (writeFakeTailscale),
  * unless the spec's env names another, or none with ''.
+ *
+ * `profile` names the profile folder in the sandbox, `electron-profile` unless
+ * given: Tars is one instance per profile (core/desktop-lifecycle.ts), so a
+ * spec that runs two Tars on one home gives the second a profile of its own.
  */
-export async function launchSandboxed(electron, sandboxHome, { env = {}, ...options } = {}) {
+export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
   const app = await electron.launch({
     ...options,
-    args: ['.', `--user-data-dir=${path.join(sandboxHome, 'electron-profile')}`],
+    args: ['.', `--user-data-dir=${path.join(sandboxHome, profile)}`],
     env: { ...inheritable(process.env), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...env, HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome },
   });
   // What the app inherited, checked the way its folders are below: a run

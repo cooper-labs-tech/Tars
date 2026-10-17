@@ -20,8 +20,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * refused for 24 hours. A clean quit, then a launch: no report. With the switch off: a kill and a launch send nothing,
  * and the diagnostic is refused with the reason. On Windows error reports are not offered: nothing is sent, and the
  * diagnostic says why.
- * A second Tars on the same home while the first runs (macOS and Linux hold no single-instance lock; the Audit's M1 on
- * #418, its probe): no abrupt end is reported, and the record stays the first's, so a kill of the first while the
+ * A second Tars on the same home while the first runs, on a profile of its own (one instance per profile holds on every
+ * platform, #429, so two Tars share a home only with two profiles; the Audit's M1 on #418, its probe): no abrupt end is
+ * reported, and the record stays the first's, so a kill of the first while the
  * second runs is reported once, at the next launch after both. And a crashed Tars whose pid another process of the user
  * took (the Audit's Low on that fix) is still reported, and the next run keeps its own record.
  * The artefact: values.json with every event the stand-in received and every answer.
@@ -84,8 +85,9 @@ function seed(home: string, reportsOn: boolean) {
 type Sample = { at: number; page: string | null; slowest: Array<{ channel: string; ms: number }> } & Record<string, unknown>;
 const samplesIn = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Sample) : []);
 
-async function boot(home: string, dsn: string, port: number): Promise<{ app: ElectronApplication; page: Page }> {
+async function boot(home: string, dsn: string, port: number, profile?: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await launchSandboxed(electron, home, {
+    profile,
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: String(port), DOROTHY_E2E: '1', DOROTHY_ERROR_REPORTS_DSN: dsn, DOROTHY_HEALTH_EVERY_MS: '1000' },
   });
   const page = await app.firstWindow();
@@ -221,7 +223,9 @@ test('a second Tars on the same home reports no abrupt end while the first runs,
   try {
     ({ app: first } = await boot(home, sentry.dsn, port));
     await expect.poll(() => samplesIn(samplesFile).length, { timeout: 30_000, message: 'the first Tars samples' }).toBeGreaterThanOrEqual(1);
-    ({ app: second } = await boot(home, sentry.dsn, port + 1));
+    // A profile of its own: on one profile the second hands over to the first and ends (one-tars-per-profile.spec.ts).
+    // Two profiles on one home share ~/.tars-private, the run record among it: the case this test is about.
+    ({ app: second } = await boot(home, sentry.dsn, port + 1, 'electron-profile-2'));
     await new Promise((r) => setTimeout(r, 10_000));
     values.firstStillAlive = first.process().exitCode === null;
     values.secondAlive = second.process().exitCode === null;

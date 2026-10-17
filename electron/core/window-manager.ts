@@ -83,6 +83,10 @@ export function revealMainWindow(): void {
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
+  // macOS: a window's focus does not bring an app in the background forward (a
+  // second launch hands over from the front); `steal` does there, and the
+  // others focus the app's window, which the line above did already.
+  app.focus({ steal: true });
 }
 
 /**
