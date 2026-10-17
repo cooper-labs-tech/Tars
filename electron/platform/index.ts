@@ -17,9 +17,10 @@ export { cliEnv, stdioServerCommand, nodeServerCommand } from './cli-env';
 export { childEnv } from './child-env';
 export { posixWords, PosixWordsError, type PosixWordsErrorCode } from './posix-words';
 export {
-  buildWindowsCommandLine, quoteWindowsArg, quoteWindowsProgram, WindowsCommandLineError, WINDOWS_COMMAND_LINE_MAX,
+  buildWindowsCommandLine, quoteWindowsArg, quoteWindowsProgram, readWindowsCommandLine, WindowsCommandLineError, WINDOWS_COMMAND_LINE_MAX,
   type WindowsCommandLineErrorCode,
 } from './windows-command-line';
+export { readWindowsProcesses, type WindowsProcess } from './windows-processes';
 export { toLaunch, LaunchError, type Launch, type PosixLaunch, type DirectLaunch, type LaunchErrorCode } from './launch';
 export { killTree, KillTreeError, type KillTreeResult, type KillTreeDeps, type KillTreeErrorCode } from './kill-tree';
 export { samePath, isUnder, isInsideWorktreesDir, isFilesystemRoot, pathKey } from './path-compare';

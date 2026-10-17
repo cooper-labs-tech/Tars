@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import {
-  buildWindowsCommandLine, quoteWindowsArg, WindowsCommandLineError, WINDOWS_COMMAND_LINE_MAX,
+  buildWindowsCommandLine, quoteWindowsArg, readWindowsCommandLine, WindowsCommandLineError, WINDOWS_COMMAND_LINE_MAX,
 } from '../../../electron/platform/windows-command-line';
 
 /**
@@ -30,6 +30,14 @@ import {
  *    returned, to fail later with an opaque error; or a NUL is let through.
  * 11. The round trip through a real Windows parser (the C runtime of a
  *    process started with exactly this line) does not give the argv back.
+ *
+ * And reading a line back (2026-10-17): the sleep and the stall passes find an
+ * agent's CLI on Windows by the command line Windows reports for each process.
+ * 12. A line is not split as the program it started splits it: the program's
+ *    quotes (no escapes there), a quote escaped by a backslash, backslashes
+ *    before a quote or not, two quotes inside quotes, an empty argument, a run
+ *    of spaces and tabs, a quote never closed; or what buildWindowsCommandLine
+ *    wrote does not read back as the argv it was given.
  */
 
 describe('quoting table', () => {
@@ -153,5 +161,27 @@ describe('11. round trip', () => {
     const theirs = argsToCommandLine(process.execPath, [echo, '"fix it"', 'a\nb']);
     const child = spawnSync(process.execPath, [], { argv0: theirs, windowsVerbatimArguments: true, encoding: 'utf8' });
     expect(JSON.parse(child.stdout)).not.toEqual(['"fix it"', 'a\nb']);
+  });
+});
+
+describe('12. reading a command line back', () => {
+  it('gives back the argv buildWindowsCommandLine was given', () => {
+    for (const arg of ROUND_TRIP) {
+      const argv = ['C:\\Program Files (x86)\\n\\node.exe', arg, 'after'];
+      expect(readWindowsCommandLine(buildWindowsCommandLine(argv))).toEqual(argv);
+    }
+  });
+
+  it.each([
+    ['"C:\\Program Files\\x.exe"  a\t"b c"  d""e "f""g"', ['C:\\Program Files\\x.exe', 'a', 'b c', 'de', 'f"g']],
+    ['x.exe h\\\\"i j" k\\"l m\\\\\\"n', ['x.exe', 'h\\i j', 'k"l', 'm\\"n']],
+    ['x.exe a\\\\b\\ ""', ['x.exe', 'a\\\\b\\', '']],
+    ['C:\\a\\b.exe', ['C:\\a\\b.exe']],
+    ['"C:\\a b\\c.exe" "unclosed arg', ['C:\\a b\\c.exe', 'unclosed arg']],
+    ['"C:\\a\\" b', ['C:\\a\\', 'b']],
+    ['', []],
+  ])('%j', (line, argv) => {
+    expect(readWindowsCommandLine(line)).toEqual(argv);
+    if (line) expect(msvcrtParse(line)).toEqual(argv);
   });
 });
