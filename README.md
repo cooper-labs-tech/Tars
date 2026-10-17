@@ -180,9 +180,16 @@ time and tokens, and the sum of its tasks' own costs.
 
 ## Install
 
-Download the latest release for macOS 13 (Ventura) or later:
+Tars is a desktop app for macOS, Windows and Linux. Each release on GitHub carries the build
+of every system that has one:
 
 **[github.com/cooper-labs-tech/Tars/releases/latest](https://github.com/cooper-labs-tech/Tars/releases/latest)**
+
+| System | Runs on | The file |
+|---|---|---|
+| macOS | macOS 13 (Ventura) or later, Apple silicon | the `.dmg` |
+| Windows | Windows 10 or later, x64 | `Tars-Setup-<version>.exe`, from 2.0.3 |
+| Linux | x64 | the `.AppImage`, from 2.0.4: make it executable (`chmod +x`), then run it |
 
 Then point Tars at a folder. It finds the CLIs already installed on your machine:
 you do not configure paths unless something lives somewhere unusual.

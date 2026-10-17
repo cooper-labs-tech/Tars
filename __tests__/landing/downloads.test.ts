@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { countDmgDownloads, downloadCount } from '../../landing/src/lib/downloads';
+import { countInstallerDownloads, downloadCount } from '../../landing/src/lib/downloads';
 
 /**
  * The landing's download counter, and the download log it no longer keeps
@@ -23,6 +23,16 @@ import { countDmgDownloads, downloadCount } from '../../landing/src/lib/download
  *    client, the User-Agent or the time of a download kept;
  * 6. an answer whose pages never end (a full page every time) keeps the
  *    counter reading, and asking GitHub, for ever.
+ *
+ * Changed with the parity program (16/10, the orchestrator's decision, the
+ * maintainer's to reverse), before the code:
+ * 7. a system's downloads left out: only the .dmg counted, while the Windows
+ *    setup and the Linux AppImage are what a visitor of those systems
+ *    downloads; or, counting them, their .blockmap, latest.yml,
+ *    latest-linux*.yml or the Windows zip counted too. On Windows and Linux
+ *    the updater downloads that same setup or AppImage, so their count holds
+ *    updates; a Mac's updates take the zip and are not counted (1 still holds
+ *    there).
  */
 
 const rel = (...assets: Array<[string, number]>) => ({ assets: assets.map(([name, download_count]) => ({ name, download_count })) });
@@ -30,18 +40,30 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 /** The page a request asks for: `per_page=100` holds "page=1" too, so never match the text. */
 const pageOf = (url: string | URL | Request) => new URL(String(url)).searchParams.get('page');
 
-describe('what the counter counts (1, 2)', () => {
-  it('counts the .dmg of every release, and nothing an installed app fetches to update', () => {
+describe('what the counter counts (1, 2, 7)', () => {
+  it('counts the .dmg of every release, and nothing a Mac fetches to update', () => {
     const releases = [
       rel(['latest-mac.yml', 16], ['Tars-1.8.1-arm64-mac.zip', 1], ['Tars-1.8.1-arm64.dmg', 1], ['Tars-1.8.1-arm64.dmg.blockmap', 3]),
       rel(['latest-mac.yml', 6], ['Tars-1.8.0-arm64-mac.zip', 1], ['Tars-1.8.0-arm64.dmg', 4]),
       rel(['Tars-1.2.0.DMG', 2]),
     ];
-    expect(countDmgDownloads(releases)).toBe(7);
+    expect(countInstallerDownloads(releases)).toBe(7);
+  });
+
+  it('counts the Windows setup and the AppImages beside the .dmg, and none of their update files or the Windows zip', () => {
+    const releases = [
+      rel(
+        ['latest-mac.yml', 50], ['Tars-2.0.4-arm64-mac.zip', 9], ['Tars-2.0.4-arm64.dmg', 3],
+        ['latest.yml', 40], ['Tars-Setup-2.0.4.exe', 5], ['Tars-Setup-2.0.4.exe.blockmap', 30], ['Tars-Windows-2.0.4-x64.zip', 2],
+        ['latest-linux.yml', 20], ['latest-linux-arm64.yml', 10], ['Tars-2.0.4.AppImage', 7], ['Tars-2.0.4-arm64.AppImage', 1],
+      ),
+      rel(['Tars-2.0.3-arm64.dmg', 4], ['Tars-Setup-2.0.3.exe', 6]),
+    ];
+    expect(countInstallerDownloads(releases)).toBe(3 + 5 + 7 + 1 + 4 + 6);
   });
 
   it('counts a release without assets, or an asset without a count, as nothing', () => {
-    expect(countDmgDownloads([{}, { assets: [] }, { assets: [{ name: 'Tars.dmg' }] }])).toBe(0);
+    expect(countInstallerDownloads([{}, { assets: [] }, { assets: [{ name: 'Tars.dmg' }] }])).toBe(0);
   });
 });
 
