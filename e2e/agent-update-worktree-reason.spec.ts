@@ -77,6 +77,8 @@ process.stdin.on('data', () => {});
 process.stdin.resume();
 `;
 
+test.skip(process.platform === 'win32', 'every case of this spec, not only the French one: neither of its stand-ins can run on Windows. Tars starts git there as a program the PATH names (git.exe by its full path once #358 is in, else a bare git that libuv completes with .com or .exe only), which no script can be, and the agents\' CLI here is a #! script, which Windows does not start. The refusals, the refused save and the create path wait on a .cmd stand-in. makeAgentWorktree\'s LC_ALL=C is held on every host, Windows included, by __tests__/electron/handlers/agent-worktree-locale.test.ts; whether Git for Windows honours it waits on a run there');
+
 test('a worktree git cannot make is not saved, and the answer is git\'s own reason', async () => {
   test.setTimeout(180_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-update-wt-'));
@@ -116,7 +118,7 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
   const app = await launchSandboxed(electron, home, {
     env: {
       NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31436), DOROTHY_E2E: '1',
-      PATH: `${gitDir}:${process.env.PATH}`, LANG: 'fr_FR.UTF-8', LC_ALL: '', LC_MESSAGES: '',
+      PATH: `${gitDir}${path.delimiter}${process.env.PATH}`, LANG: 'fr_FR.UTF-8', LC_ALL: '', LC_MESSAGES: '',
     },
   });
   const values: Record<string, unknown> = {};

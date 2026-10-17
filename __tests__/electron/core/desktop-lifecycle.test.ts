@@ -1,16 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * The Windows app lifecycle, installed on Windows and nowhere else
- * (desktop-lifecycle.ts): one instance, the close to the tray, no menu.
+ * (desktop-lifecycle.ts): the close to the tray, no menu. And one instance per
+ * profile, on every platform (the maintainer's parity rule of 2026-10-16).
  *
  * How it fails, written before the session-end code (2026-09-26; the rest of
  * the file was already there, and a mutant removing the win32 gate from the
  * menu call survived every test):
  * 1. darwin/linux: the application menu is removed (on macOS that is Cmd+Q,
- *    Cmd+C, Cmd+V and every Edit command), an AppUserModelId is set, the
- *    single-instance lock is taken, or a close, before-quit or session-end
- *    listener is added: any of these changes a Mac or Linux user's app.
+ *    Cmd+C, Cmd+V and every Edit command), an AppUserModelId is set, or a
+ *    close, before-quit or session-end listener is added: any of these changes
+ *    a Mac or Linux user's app.
  * 2. win32: any of those is missing: the default menu's Ctrl+W still kills
  *    every agent, toasts have no owner, a second launch starts a second Tars,
  *    or a close quits.
@@ -27,6 +28,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * 5. The shutdown steps run twice for one session end, or are a second list
  *    beside main.ts's before-quit one, which the next step added there would
  *    miss: by default the session end runs the app's before-quit listeners.
+ * And from the parity rule (the Audit's G1, PARITY-NEX-1610.md):
+ * 6. darwin/linux take no single-instance lock: a second Tars on the same
+ *    profile (Linux: any second launch; macOS: open -n, a second copy, a dev
+ *    run) runs beside the first, starts its own terminals, and on quit saves
+ *    its fleet over agents.json, losing what the first changed.
+ * 7. On any platform, a second launch whose lock is refused goes on (reports
+ *    true), or the first is not brought forward when it happens.
  */
 
 const calls: string[] = [];
@@ -80,23 +88,50 @@ async function load() {
 
 const explained = { explained: () => true, markExplained: () => {} };
 
+const HOST = process.platform;
+/** claimSingleInstance reads no platform: each case says which one it stands for. */
+const onPlatform = (platform: NodeJS.Platform) => Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+
 beforeEach(() => {
   calls.length = 0;
   appListeners.clear();
 });
 
-describe('darwin and linux: nothing of the Windows lifecycle', () => {
+afterEach(() => {
+  Object.defineProperty(process, 'platform', { value: HOST, configurable: true });
+});
+
+describe('darwin and linux: the lock, and nothing else of the Windows lifecycle', () => {
   for (const platform of ['darwin', 'linux'] as const) {
-    it(`${platform}: no menu change, no AUMID, no lock, no listener`, async () => {
+    it(`${platform}: the lock and the hand-over; no menu change, no AUMID, no window listener`, async () => {
       const { installDesktopShell, claimSingleInstance } = await load();
       const win = fakeWindow();
       const shutdown = vi.fn();
-      expect(claimSingleInstance(() => {}, platform)).toBe(true);
+      onPlatform(platform);
+      expect(claimSingleInstance(() => {})).toBe(true);
       installDesktopShell({
         getMainWindow: () => win as never, explanation: explained, onSessionEnd: shutdown, platform,
       });
-      expect(calls).toEqual([]);
+      expect(calls).toEqual(['requestSingleInstanceLock', 'app.on:second-instance']);
       expect(shutdown).not.toHaveBeenCalled();
+    });
+  }
+});
+
+describe('one Tars per profile, on every platform', () => {
+  for (const platform of ['darwin', 'linux', 'win32'] as const) {
+    it(`${platform}: a second launch is refused the lock and says so; the first is brought forward`, async () => {
+      const { claimSingleInstance } = await load();
+      const { app } = await import('electron');
+      const reveal = vi.fn();
+      onPlatform(platform);
+      vi.mocked(app.requestSingleInstanceLock).mockReturnValueOnce(false);
+      expect(claimSingleInstance(reveal), 'the second').toBe(false);
+      expect(calls).not.toContain('app.on:second-instance');
+      calls.length = 0;
+      expect(claimSingleInstance(reveal), 'the first').toBe(true);
+      app.emit('second-instance');
+      expect(reveal).toHaveBeenCalledTimes(1);
     });
   }
 });
@@ -105,7 +140,8 @@ describe('win32', () => {
   it('takes the lock, sets the AUMID, removes the menu, and listens for the end', async () => {
     const { installDesktopShell, claimSingleInstance } = await load();
     const win = fakeWindow();
-    expect(claimSingleInstance(() => {}, 'win32')).toBe(true);
+    onPlatform('win32');
+    expect(claimSingleInstance(() => {})).toBe(true);
     installDesktopShell({ getMainWindow: () => win as never, explanation: explained, onSessionEnd: () => {}, platform: 'win32' });
     for (const c of ['requestSingleInstanceLock', 'app.on:second-instance', 'setAppUserModelId', 'setApplicationMenu',
       'app.on:before-quit', 'win.on:close', 'win.on:session-end']) {

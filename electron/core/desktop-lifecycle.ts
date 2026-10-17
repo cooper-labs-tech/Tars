@@ -3,10 +3,10 @@ import { closeAction, isWindowsShell, WINDOWS_APP_USER_MODEL_ID } from '../platf
 import { registerDesktopShellHandlers } from '../handlers/desktop-shell-handlers';
 
 /**
- * The Windows app lifecycle: one instance, a close that hides to the tray, no
- * application menu, the end of the Windows session. Every function is a no-op on
- * darwin and linux, which keep Electron's defaults: the application menu, one
- * process per launch managed by the OS, and a close that closes.
+ * The Windows app lifecycle: a close that hides to the tray, no application
+ * menu, the end of the Windows session; darwin and linux keep Electron's
+ * defaults there (the application menu, a close that closes). And one
+ * instance per profile, on every platform.
  */
 
 /** Set by before-quit: from then on a close is a close, never a hide. */
@@ -27,9 +27,15 @@ function emitBeforeQuit(): void {
  * app-settings.json and nothing else, written nothing, and anything it went on
  * to do (bind the API port, save an empty fleet over agents.json on quit)
  * would be done by a second writer. False means this process is the second one.
+ *
+ * On every platform (the maintainer's parity rule of 2026-10-16, the Audit's
+ * G1): macOS only brings a running app forward when it is opened from the
+ * Finder, and `open -n`, a second copy or a dev run start a second process;
+ * Linux starts one at every launch. The lock is Chromium's, per user data
+ * directory: a sandbox (scripts/sandbox.sh moves it with CFFIXED_USER_HOME)
+ * or an e2e run (`--user-data-dir`) has its own, and runs beside.
  */
-export function claimSingleInstance(onSecondLaunch: () => void, platform: NodeJS.Platform = process.platform): boolean {
-  if (!isWindowsShell(platform)) return true;
+export function claimSingleInstance(onSecondLaunch: () => void): boolean {
   if (!app.requestSingleInstanceLock()) return false;
   app.on('second-instance', onSecondLaunch);
   return true;

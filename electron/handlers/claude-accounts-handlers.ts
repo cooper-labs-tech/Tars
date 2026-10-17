@@ -22,7 +22,7 @@ import { accountDirProblem, claudeCredentialOverrides, ensureAccountDir, project
 import { claudeAuthLogout, claudeAuthStatus, loginCommand } from '../services/claude-accounts/auth';
 import { countersDir, readAccountUsage, usageForView } from '../services/claude-accounts/counters';
 import { probeUsage, recordProbe, usageProbeEnv } from '../services/claude-accounts/usage-probe';
-import { blockedUntil, deleteAuth, getAuth, hasAuth, setAuth, type AuthState } from '../services/claude-accounts/state';
+import { blockedUntil, deleteAuth, getAuth, setAuth, type AuthState } from '../services/claude-accounts/state';
 import * as fs from 'fs';
 import type { AgentStatus, AppSettings, ClaudeAccount, ClaudeAccountState, ClaudeAccountsSettings, ClaudeAccountsView } from '../types';
 import { refuseWhileQuitting } from '../core/quit-state';
@@ -65,6 +65,8 @@ export interface ClaudeAccountsHandlerDeps {
    * that cuts nothing.
    */
   onAgentAccountChanged?: (agentId: string) => void;
+  /** Epoch ms; Date.now unless a test sets the clock. */
+  now?: () => number;
 }
 
 /**
@@ -91,7 +93,15 @@ function failure(err: unknown): { success: false; error: string } {
  * work it started in the background have finished: what a caller waits on
  * before reading the result, instead of a delay.
  */
-export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps): { idle: () => Promise<void>; refreshAll: () => Promise<void> } {
+/**
+ * How long what Claude Code said about a sign-in is shown without asking it
+ * again. A login outside Tars (a terminal's /login) rewrites the credential
+ * store, and nothing tells Tars: the window asks again when it lists the
+ * accounts or comes back to the front, once the answer is this old.
+ */
+export const ACCOUNT_STATUS_FRESH_MS = 60_000;
+
+export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps): { idle: () => Promise<void>; refreshAll: () => Promise<void>; whenShown: () => void } {
   const { getAppSettings, agents, saveAgents, loginPtys, onAgentAccountChanged } = deps;
 
   const background = new Set<Promise<unknown>>();
@@ -106,6 +116,9 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
   // What Claude Code last said about each account lives in
   // services/claude-accounts/state.ts, in memory only, where the launch reads it.
   const checking = new Map<string, Promise<void>>();
+  /** When Claude Code last answered about each account. */
+  const askedAt = new Map<string, number>();
+  const now = deps.now ?? Date.now;
   /** Login terminal → the account it signs in. */
   const loginFor = new Map<string, string>();
 
@@ -162,9 +175,28 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
       .catch(err => {
         setAuth(account.id, { signedIn: null, email: null, subscriptionType: null, error: err instanceof Error ? err.message : String(err) });
       })
-      .finally(() => checking.delete(account.id));
+      .finally(() => {
+        askedAt.set(account.id, now());
+        checking.delete(account.id);
+      });
     checking.set(account.id, p);
     return p;
+  }
+
+  /**
+   * Asks again about each account Claude Code has not answered about, or not
+   * for a minute, unless a check of it is running already; every window is
+   * told when an answer changed.
+   */
+  async function refreshStale(): Promise<void> {
+    const due = readAccountsSettings().accounts.filter(a => {
+      const at = askedAt.get(a.id);
+      return !checking.has(a.id) && (at === undefined || now() - at >= ACCOUNT_STATUS_FRESH_MS);
+    });
+    if (!due.length) return;
+    const before = due.map(a => JSON.stringify(getAuth(a.id) ?? null));
+    await Promise.all(due.map(check));
+    if (due.some((a, i) => JSON.stringify(getAuth(a.id) ?? null) !== before[i])) announce();
   }
 
   async function checkAll(ids?: string[]): Promise<void> {
@@ -225,8 +257,7 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
   ipcMain.handle('claude-accounts:list', async (): Promise<Result<ClaudeAccountsView>> => {
     try {
       const settings = readAccountsSettings();
-      const unknown = settings.accounts.filter(a => !hasAuth(a.id)).map(a => a.id);
-      if (unknown.length) inBackground(checkAll(unknown).then(() => announce()));
+      inBackground(refreshStale());
       return { success: true, ...view(settings) };
     } catch (err) {
       return failure(err);
@@ -258,6 +289,9 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
         if (overrides.length) {
           throw new Error(`Claude Code is set to sign in with ${overrides.join(', ')}, so every account would run on that one credential. Remove it to use several accounts.`);
         }
+        // The rows appear now: with what Claude Code says now, not at the
+        // window's first list (a login in a terminal since changes it).
+        await checkAll();
       }
       return { success: true, ...save(setEnabled(readAccountsSettings(), enabled)) };
     } catch (err) {
@@ -515,6 +549,13 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
   }, 30_000);
   firstProbe.unref?.();
 
-  return { idle, refreshAll: () => checkAll() };
+  return {
+    idle,
+    refreshAll: () => checkAll(),
+    /** The window came back to the front: an answer a minute old is asked again, while the option is on. */
+    whenShown: () => {
+      if (readAccountsSettings().enabled) inBackground(refreshStale());
+    },
+  };
 
 }

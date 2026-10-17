@@ -1,13 +1,13 @@
 import { BrowserWindow, Menu, type ContextMenuParams, type MenuItemConstructorOptions, type WebContents } from 'electron';
-import { isWindowsShell } from '../platform/desktop-shell';
 
 /**
- * The right-click menu of text on Windows. Electron shows none unless the app
- * builds one on the webContents' `context-menu` event, and Tars built none: a
- * right click in a field (Settings > Hermes, say) offered no Paste, and a
- * Windows build has no Edit menu to fall back on either (desktop-lifecycle.ts).
+ * The right-click menu of text, on every platform. Electron shows none unless
+ * the app builds one on the webContents' `context-menu` event, and Tars built
+ * none: a right click in a field (Settings > Hermes, say) offered no Paste. On
+ * Windows first, which has no Edit menu to fall back on (desktop-lifecycle.ts),
+ * then on macOS and Linux too (the maintainer's parity rule of 2026-10-16).
  * Electron's roles act on the focused field and carry the system's own labels
- * and accelerators. darwin and linux keep what they have today: no menu.
+ * and accelerators.
  *
  * - An editable field: Cut, Copy, Paste, Select All, each enabled as Chromium
  *   says it can act (editFlags).
@@ -32,9 +32,8 @@ export function editMenuTemplate(
   return [];
 }
 
-/** Wires the menu to one window's contents, once, when the window is made. Windows only. */
-export function installEditContextMenu(contents: WebContents, platform: NodeJS.Platform = process.platform): void {
-  if (!isWindowsShell(platform)) return;
+/** Wires the menu to one window's contents, once, when the window is made, on every platform. */
+export function installEditContextMenu(contents: WebContents): void {
   contents.on('context-menu', (_event, params) => {
     const template = editMenuTemplate(params);
     if (template.length === 0) return;

@@ -32,6 +32,23 @@
  * - an account whose folder was deleted by hand that can never be removed: its
  *   keychain item outlives the folder, so it is signed out with the derived
  *   string all the same, and the folder the logout makes again goes to the Trash.
+ *
+ * And from the maintainer's report of 2026-10-15 (Settings named one Google address
+ * while Claude Code was signed in with another): what Claude Code said is kept
+ * in memory, and was asked once, the first time a window listed the accounts.
+ * A sign-in changed outside Tars after that (a login in a terminal, which
+ * rewrites the keychain item, ~/.claude/.credentials.json on Linux or
+ * the Windows store) was never seen again:
+ * - turning the option on shows the answer of the first list, not what Claude
+ *   Code says now;
+ * - the window coming back to the front (from the terminal the login ran in)
+ *   asks nothing, whatever the answer's age;
+ * - a list served on an answer older than a minute asks nothing;
+ * - and over-correction: every list or focus runs `claude auth status` (a burst
+ *   of focus events, a minute of lists): once per account per minute at most,
+ *   and concurrent asks share one run;
+ * - with the option off, the window coming to the front runs `claude auth
+ *   status` all the same, though no row shows an address.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
@@ -89,6 +106,8 @@ let agents: Map<string, Record<string, unknown>>;
 let saves: number;
 let loginPtys: Map<string, unknown>;
 let accountChanged: string[];
+let clock: number;
+let whenShown: () => void;
 
 function call<T = Record<string, unknown>>(channel: string, arg?: unknown): Promise<T> {
   const h = handlers.get(channel);
@@ -135,7 +154,9 @@ beforeEach(() => {
   saves = 0;
   loginPtys = new Map();
   accountChanged = [];
-  ({ idle } = registerClaudeAccountsHandlers({
+  clock = Date.UTC(2026, 9, 15, 15, 27, 0);
+  ({ idle, whenShown } = registerClaudeAccountsHandlers({
+    now: () => clock,
     getAppSettings: () => ({ cliPaths: { claude: fake.bin } }) as never,
     agents: agents as never,
     saveAgents: () => { saves++; },
@@ -564,3 +585,77 @@ describe.skipIf(claudeAccountsNotPorted())('what QA found the tests above let th
     expect(fs.lstatSync(path.join(a.configDir!, 'projects')).isSymbolicLink()).toBe(true);
   });
 });
+
+describe.skipIf(claudeAccountsNotPorted())('an answer Claude Code gave a while ago', () => {
+  const home = () => path.join(os.homedir(), '.claude');
+  const accountOne = (v: ClaudeAccountsView) => v.accounts.find(a => a.id === 'default')!;
+  const statusRuns = () => fake.calls().filter(c => c.endsWith('auth status')).length;
+
+  it('turning the option on shows what Claude Code says now, not what it said at the first list', async () => {
+    signIn(home(), 'personal@example.com');
+    await view();
+    await settle();
+    expect(accountOne(await view()).email).toBe('personal@example.com');
+    // A login in a terminal, three minutes later.
+    clock += 3 * 60_000;
+    signIn(home(), 'work@example.com');
+    const on = await call<{ success: boolean } & ClaudeAccountsView>('claude-accounts:set-enabled', true);
+    expect(on.success).toBe(true);
+    expect(accountOne(on).email).toBe('work@example.com');
+    expect(accountOne(lastChanged()).email).toBe('work@example.com');
+  });
+
+  it('the window back in front asks again once the answer is a minute old, and every window hears the change', async () => {
+    await call('claude-accounts:set-enabled', true);
+    signIn(home(), 'personal@example.com');
+    await call('claude-accounts:refresh');
+    signIn(home(), 'work@example.com');
+    clock += 30_000;
+    whenShown();
+    await settle();
+    expect(accountOne(lastChanged()).email, 'half a minute: not asked again').toBe('personal@example.com');
+    clock += 31_000;
+    whenShown();
+    await settle();
+    expect(accountOne(lastChanged()).email).toBe('work@example.com');
+    expect(accountOne(await view()).email).toBe('work@example.com');
+  });
+
+  it('a list served on an answer a minute old asks again, in the background, and tells the page', async () => {
+    signIn(home(), 'personal@example.com');
+    await view();
+    await settle();
+    signIn(home(), 'work@example.com');
+    clock += 61_000;
+    expect(accountOne(await view()).email, 'the list answers at once').toBe('personal@example.com');
+    await settle();
+    expect(accountOne(lastChanged()).email).toBe('work@example.com');
+  });
+
+  it('asks once per account per minute at most, and a burst of focus events shares one run', async () => {
+    await call('claude-accounts:set-enabled', true);
+    signIn(home(), 'personal@example.com');
+    await call('claude-accounts:refresh');
+    const after = statusRuns();
+    for (let i = 0; i < 5; i++) { whenShown(); await view(); }
+    await settle();
+    expect(statusRuns(), 'within the minute').toBe(after);
+    clock += 61_000;
+    for (let i = 0; i < 10; i++) whenShown();
+    await view();
+    await settle();
+    expect(statusRuns(), 'one run for the burst').toBe(after + 1);
+  });
+
+  it('with the option off, the window in front runs nothing', async () => {
+    signIn(home(), 'personal@example.com');
+    await view();
+    await settle();
+    const after = statusRuns();
+    clock += 10 * 60_000;
+    whenShown();
+    await settle();
+    expect(statusRuns()).toBe(after);
+  });
+});
+
