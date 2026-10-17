@@ -67,6 +67,15 @@ import { FakeHermes } from '../../fixtures/fake-hermes';
  *     (the Backend's gate of #171, W2). An agent deletes a task it filed that nobody
  *     claimed, or one it claimed. Who filed a task is the line Tars writes last in its
  *     body: the gateway records every creation as "dashboard".
+ * 17. a task created whose parking failed (refused, or its answer lost) is reported as
+ *     "nothing was written", and the agent files it again from its notes: two tasks.
+ *     The error must name the task that exists and say not to create it again (the
+ *     Audit's L4 on #448);
+ * 18. a write whose answer was lost after Hermes may have applied it (a timeout, a
+ *     reset) is reported as "nothing was written": only a connection Hermes never
+ *     took proves that. Read the board before writing again;
+ * 19. a release refused half way (parked, its lane not given back) says nothing was
+ *     written, when the task is parked again (the Audit's mutant M4 on #448).
  */
 
 // ── The board: Hermes as measured (__tests__/fixtures/fake-hermes.ts) ──────
@@ -282,6 +291,34 @@ describe('8. Hermes not configured or unreachable', () => {
     expect(r.ok).toBe(false);
     expect(r.ok ? 0 : r.status).toBe(503);
     expect(r.ok ? '' : r.error).toMatch(/not configured/);
+  });
+});
+
+describe('8b. every refusal of Hermes says what to do (2.0.4)', () => {
+  // Written before the code. How it can fail: an agent reads "Hermes refused:
+  // Unauthorized" and retries in a loop, or gives up on the task, or files it
+  // nowhere, because nothing says that only the user can fix it, where, and
+  // that nothing was written.
+  const says = (r: { ok: boolean; error?: string }) => {
+    expect(r.ok).toBe(false);
+    const error = (r as { error: string }).error;
+    expect(error).toMatch(/Settings, Hermes/);
+    expect(error).toMatch(/[Nn]othing was written/);
+    expect(error).toMatch(/notes\//);
+  };
+
+  it('when Hermes refuses (a token it no longer takes)', async () => {
+    const refusing = { board: async () => ({ success: false, error: 'Unauthorized' }) } as unknown as FakeHermes;
+    const r = await listTasks(refusing, dune, {});
+    says(r);
+    expect(r.ok ? '' : r.error).toMatch(/Unauthorized/);
+  });
+
+  it('when Hermes does not answer, is not configured, or its connection cannot be used', async () => {
+    h.down = true;
+    says(await listTasks(h, dune, {}));
+    says(await listTasks(null, dune, {}));
+    says(await listTasks({ unusable: 'its file is not JSON.' }, dune, {}));
   });
 });
 
@@ -562,5 +599,63 @@ describe('16. an agent deletes only a task it filed and nobody claimed, or one i
     expect(h.tasks.has(id)).toBe(true);
     const byDove = await deleteTask(h, dove, id);
     expect(byDove.ok, byDove.ok ? '' : byDove.error).toBe(true);
+  });
+});
+
+describe('17 to 19. what a failure says was written', () => {
+  it('17. a task created whose parking was refused: named, and not to be created again', async () => {
+    h.refuseStatus = true;
+    const r = await createParkedTask(h, dune, { title: 'T', description: 'D' });
+    expect(r.ok).toBe(false);
+    const [id] = [...h.tasks.keys()];
+    const error = r.ok ? '' : r.error;
+    expect(error).toContain(id);
+    expect(error).toMatch(/[Dd]o not create it again/);
+    expect(error).not.toMatch(/[Nn]othing was written/);
+  });
+
+  it('17. a task created whose parking got no answer: named, and not to be created again', async () => {
+    h.update = async () => { throw new Error('socket hang up'); };
+    const r = await createParkedTask(h, dune, { title: 'T', description: 'D' });
+    expect(r.ok).toBe(false);
+    const [id] = [...h.tasks.keys()];
+    expect(id).toBeDefined();
+    const error = r.ok ? '' : r.error;
+    expect(error).toContain(id);
+    expect(error).toMatch(/[Dd]o not create it again/);
+    expect(error).not.toMatch(/[Nn]othing was written/);
+  });
+
+  it('18. a write whose answer was lost may have been applied: read the board first', async () => {
+    const id = await parked();
+    const update = h.update.bind(h);
+    h.update = async (taskId, patch) => { await update(taskId, patch); throw new Error('socket hang up'); };
+    const r = await claimTask(h, dune, id);
+    expect(r.ok).toBe(false);
+    const error = r.ok ? '' : r.error;
+    expect(error).not.toMatch(/[Nn]othing was written/);
+    expect(error).toMatch(/get_task|list_tasks/);
+    expect(error).toMatch(/Settings, Hermes/);
+  });
+
+  it('18. a connection Hermes never took: nothing was written', async () => {
+    h.down = true;
+    const r = await claimTask(h, dune, 't_00000001');
+    expect(r.ok ? '' : r.error).toMatch(/Nothing was written/);
+  });
+
+  it('19. a release refused half way says the task is parked again, still on its lane', async () => {
+    const id = await parked();
+    await claimTask(h, dune, id);
+    const update = h.update.bind(h);
+    h.update = async (taskId, patch) => (patch.assignee !== undefined
+      ? { success: false as const, error: 'the gateway is restarting' }
+      : update(taskId, patch));
+    const r = await moveTask(h, dune, id, 'backlog');
+    expect(r.ok).toBe(false);
+    const error = r.ok ? '' : r.error;
+    expect(error).toContain(`Task ${id} is parked again, still on its lane.`);
+    expect(error).not.toMatch(/[Nn]othing was written/);
+    expect(h.tasks.get(id)!.status).toBe('scheduled');
   });
 });

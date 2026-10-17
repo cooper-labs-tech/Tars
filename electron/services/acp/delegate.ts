@@ -16,6 +16,7 @@ import { hasOrchestratorPowers } from '../../core/agent-role';
 import { accountEnvFor } from '../../core/account-env';
 import { isQuitting } from '../../core/quit-state';
 import { agentTmpEnvOrNone } from '../agent-tmp';
+import { guideForPrompt } from '../agent-guide';
 
 /**
  * Running a delegated task over ACP instead of typing it into a terminal.
@@ -311,7 +312,13 @@ export async function delegateOverAcp(opts: {
     }
     let turn: TurnResult;
     try {
-      turn = await session.prompt(task, opts.timeoutMs);
+      // How Tars works, for its role, and its project's folder (services/agent-guide.ts),
+      // once: a claude run has it from its bootstrap, since the adapter loads the
+      // user's settings and Tars's SessionStart hook runs (measured on the 0.70.0
+      // it pins: the hook fires at session/new); a run of another CLI has no
+      // such hook, and gets it here.
+      const guide = guideForPrompt(agent, provider.configDir);
+      turn = await session.prompt(guide ? `${guide}\n\n${task}` : task, opts.timeoutMs);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (!/session\/prompt timed out/.test(message)) throw err;

@@ -185,16 +185,40 @@ function taskIn(answer: unknown): HermesTask {
   return (wrapped && typeof wrapped === 'object' ? wrapped : answer) as HermesTask;
 }
 
+/**
+ * What an agent does when the board cannot be had, said in every refusal: an
+ * agent that read a bare "Hermes refused: Unauthorized" retried, or dropped the
+ * task, since nothing said that only the user can fix it and where.
+ */
+const USER_FIXES = 'they connect or sign in to Hermes in Tars (Settings, Hermes). ';
+const WHAT_TO_DO = `Only the user can fix this: ${USER_FIXES}`
+  + 'Tell the user or your requester once, keep the task in your project folder\'s notes/ (tars_guide, project-folder), '
+  + 'and go on with your work without calling the kanban again until then.';
+
 function notConfigured(): { ok: false; status: number; error: string } {
-  return fail(503, 'Hermes is not configured in Tars (Settings, Hermes): the kanban lives on the Hermes board, and there is no other.');
+  return fail(503, `Hermes is not configured in Tars: the kanban lives on the Hermes board, and there is no other. Nothing was written. ${WHAT_TO_DO}`);
 }
+
+/**
+ * A connection Hermes never took: what nothing reached cannot have written
+ * anything. Any other failure (a timeout, a reset, a hang up) may have come
+ * after Hermes did the work, and only the board says whether it did.
+ */
+const NEVER_REACHED = /ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH/;
 
 function unreachable(err: unknown): { ok: false; status: number; error: string } {
-  return fail(502, `Hermes did not answer: ${err instanceof Error ? err.message : String(err)}. Nothing was written, here or anywhere else.`);
+  const why = err instanceof Error ? err.message : String(err);
+  const written = NEVER_REACHED.test(why)
+    ? 'Nothing was written, here or anywhere else.'
+    : 'Hermes may have done it before its answer was lost: once it answers, read the task on the board (get_task, list_tasks) before you write it again.';
+  return fail(502, `Hermes did not answer: ${why}. ${written} ${WHAT_TO_DO}`);
 }
 
-function refused(reply: { success: false; error?: string }): { ok: false; status: number; error: string } {
-  return fail(502, `Hermes refused: ${reply.error || 'no reason given'}`);
+/** Hermes said no. `done`: what the call had already written before it did. */
+function refused(reply: { success: false; error?: string }, done?: string): { ok: false; status: number; error: string } {
+  // A refusal may be of the call (a transition Hermes does not allow) and not
+  // of the caller: what to do is said for the one only the user can fix.
+  return fail(502, `Hermes refused: ${reply.error || 'no reason given'}. ${done ?? 'Nothing was written.'} If it refused access (a token, a sign-in): ${WHAT_TO_DO.replace(/^Only/, 'only')}`);
 }
 
 /** Every task of one project, as the board has it now. */
@@ -233,7 +257,7 @@ async function fresh(h: KanbanHermes, id: string): Promise<KanbanResult<{ task: 
 /** Runs `fn` with the connection, turning "none", a broken one and a transport failure into answers. */
 async function withHermes<T>(h: Conn, fn: (h: KanbanHermes) => Promise<KanbanResult<T>>): Promise<KanbanResult<T>> {
   if (!h) return notConfigured();
-  if ('unusable' in h) return fail(503, `The Hermes connection cannot be used: ${h.unusable} Until it can, the kanban has no board, and nothing was written.`);
+  if ('unusable' in h) return fail(503, `The Hermes connection cannot be used: ${h.unusable} Until it can, the kanban has no board. Nothing was written. ${WHAT_TO_DO}`);
   try {
     return await fn(h);
   } catch (err) {
@@ -343,11 +367,18 @@ export async function createParkedTask(
     });
     if (!created.success) return refused(created);
     const task = taskIn(created.task);
-    const parked = await h.update(task.id, { status: PARKED });
-    if (!parked.success) {
-      // Left `ready` on the Tars lane, where Hermes skips it, and said so.
-      return fail(502, `Task ${task.id} was created but not parked: ${parked.error || 'no reason given'}. Hermes will not start it (it is on the Tars lane); park it on the Kanban page.`);
+    // Left `ready` on the Tars lane, where Hermes skips it, and said so: the
+    // task exists, and an agent told "nothing was written" filed it again.
+    const notParked = (why: string) => fail(502, `Task ${task.id} was created but not parked: ${why}. `
+      + 'Do not create it again: it is on the board, on the Tars lane, where Hermes does not start it; '
+      + 'the user parks it on the Kanban page.');
+    let parked: Awaited<ReturnType<KanbanHermes['update']>>;
+    try {
+      parked = await h.update(task.id, { status: PARKED });
+    } catch (err) {
+      return notParked(`Hermes did not answer (${err instanceof Error ? err.message : String(err)})`);
     }
+    if (!parked.success) return notParked(parked.error || 'no reason given');
     return { ok: true, value: toAgentTask(taskIn(parked.task), caller) };
   });
 }
@@ -438,7 +469,7 @@ async function release(h: KanbanHermes, caller: KanbanCaller, t: HermesTask): Pr
   const parked = await h.update(t.id, { status: PARKED });
   if (!parked.success) return refused(parked);
   const lane = await h.update(t.id, { assignee: TARS_LANE });
-  if (!lane.success) return refused(lane);
+  if (!lane.success) return refused(lane, `Task ${t.id} is parked again, still on its lane.`);
   await h.comment(t.id, `Released by ${caller.name || caller.agentId}, back to the parked tasks.`).catch(() => undefined);
   return { ok: true, value: toAgentTask(taskIn(lane.task), caller) };
 }

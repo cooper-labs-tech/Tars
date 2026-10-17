@@ -749,3 +749,52 @@ describe('an agent whose CLI shows a dialog (the Audit\'s census, 2026-09-24)', 
     expect(typed(terminal)).not.toContain('what is everyone doing');
   });
 });
+
+describe('how Tars works, on the launches the bots make (the Audit\'s M1 on #448)', () => {
+  // How this fails, written before the code: the section (services/agent-guide.ts)
+  // went only into the prompt spawnAgentSession builds, so a CLI without Claude's
+  // SessionStart hook that a Telegram or Slack message started never learnt how
+  // Tars works nor where its project folder is; or it gets the section twice; or
+  // a claude agent, whose bootstrap carries it, gets it in its prompt as well.
+  const SECTION = '## How Tars works';
+  // A launch too long for one typed line is written to a script the shell
+  // sources (`. '<file>'`): the command is in the file.
+  const commandOf = (typed: string) => {
+    const script = /\. '([^']+\.sh)'/.exec(typed)?.[1];
+    return script && fs.existsSync(script) ? fs.readFileSync(script, 'utf8') : typed;
+  };
+  const count = (typed: string) => commandOf(typed).split(SECTION).length - 1;
+  const startAgent = () => bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
+  const launch = async (text: string) => commandOf(await typedAfter(async () => {
+    await startAgent().handler({ chat: { id: 42, type: 'private' }, text }, startAgent().pattern.exec(text));
+  }));
+
+  it('an opencode worker started from Telegram gets it once, for a worker, with the task', async () => {
+    agent({ id: 'agent-oc', name: 'Opencode', provider: 'opencode', model: undefined });
+    const typed = await launch('/start_agent opencode Rebase onto main');
+    expect(count(typed), typed).toBe(1);
+    expect(typed).toContain('assign_task');
+    expect(typed).not.toContain('delegate_task');
+    expect(typed).toContain('Rebase onto main');
+  });
+
+  it('an opencode worker started from Slack gets it once', async () => {
+    agent({ id: 'agent-oc', name: 'Opencode', provider: 'opencode', model: undefined });
+    const typed = commandOf(await typedAfter(() => handleSlackCommand('start opencode Rebase onto main', 'C1', async () => undefined, settings)));
+    expect(count(typed), typed).toBe(1);
+  });
+
+  it('an opencode orchestrator a message starts gets the orchestrator\'s, once', async () => {
+    agent({ id: 'agent-s', name: 'Lead', role: 'orchestrator', provider: 'opencode', model: undefined });
+    const typed = commandOf(await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing')));
+    expect(count(typed), typed).toBe(1);
+    expect(typed).toContain('delegate_task');
+  });
+
+  it('a claude agent gets it from its bootstrap, not in its prompt', async () => {
+    agent({});
+    expect(count(await launch('/start_agent worker Rebase onto main'))).toBe(0);
+    agent({ id: 'agent-s', name: 'Lead', role: 'orchestrator' });
+    expect(count(await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing')))).toBe(0);
+  });
+});

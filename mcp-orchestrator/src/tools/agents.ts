@@ -801,17 +801,17 @@ const AGENT_TOOLS: Tool[] = [
   // Composite: start, wait, then the output
   tool({
     name: "delegate_task",
-    description: "Delegate a task to an agent and wait for the result. This is the primary tool for task delegation: it starts the agent, waits for completion using long-polling, and returns the clean text result. Much more efficient than calling start_agent + wait_for_agent + get_agent_output separately.",
+    description: "Delegate a task to an agent and wait for the result. This is the primary tool for task delegation: it starts the agent, waits for completion using long-polling, and returns the clean text result. Much more efficient than calling start_agent + wait_for_agent + get_agent_output separately. A run lasts at most timeoutSeconds: an hour (3600 s) when you give none, which is also the ceiling.",
     schema: {
       id: z.string().describe("The agent ID to delegate to"),
       prompt: z.string().describe("The task/instruction for the agent"),
       model: z.string().optional().describe("Optional model for this task only; the agent's saved model is not changed. Run over ACP (the usual path), the result says when the agent did not take it and which model the run went on instead: the agent's own, or its CLI's default. Typed into its terminal instead (a provider with no ACP mode, or an ACP launch that failed), it is used only when the agent has no session open, for the session started, and ignored without a word otherwise. Aliases: 'sonnet', 'opus', 'haiku', 'opusplan', 'sonnet[1m]' (1M context). Full IDs: 'claude-sonnet-4-6', 'claude-opus-4-6', 'claude-haiku-4-5-20251001'. Omit to use the agent's configured default."),
-      timeoutSeconds: z.number().optional().describe("Maximum time to wait in seconds (default: 300)"),
+      timeoutSeconds: z.number().optional().describe("How long the run may take, in seconds: 3600 (an hour) when omitted, which is also the most Tars gives a run. The run is stopped there, in the middle of its work if it is still working. Typed into a terminal instead, how long this call waits for the agent."),
       allowCrossProject: z.boolean().optional().describe("Explicitly allow delegating to an agent of ANOTHER project (normally rejected)"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is run twice. Omitted: one is made for this call."),
     },
     failure: "delegating task",
-    async run({ id, prompt, model, timeoutSeconds = 300, allowCrossProject, clientRequestId: givenId }, extra) {
+    async run({ id, prompt, model, timeoutSeconds = 3600, allowCrossProject, clientRequestId: givenId }, extra) {
       const clientRequestId = givenId || randomUUID();
       // Claude Code abandons an MCP call silent for 30 minutes; a delegation
       // can last an hour. Progress while it waits keeps the caller listening.

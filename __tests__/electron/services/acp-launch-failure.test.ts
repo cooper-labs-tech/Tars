@@ -47,7 +47,7 @@ vi.mock('../../../electron/services/mcp-orchestrator', () => ({
   getMcpMemoryPath: () => path.join(tmp, 'no-such-bundle.js'),
 }));
 vi.mock('../../../electron/providers', () => ({
-  getProvider: () => ({ getPtyEnvVars: () => ({}) }),
+  getProvider: () => ({ getPtyEnvVars: () => ({}), configDir: '/not-claude' }),
 }));
 vi.mock('../../../electron/services/usage-ledger', () => ({ recordUsage: vi.fn() }));
 // The real tokens, with the run's own kept in sight, so a case can ask whether

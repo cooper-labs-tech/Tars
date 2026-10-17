@@ -27,6 +27,7 @@ import { noteWaker } from '../core/agent-asleep';
 import { noteLaunch, launchSettings } from '../core/agent-restart';
 import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown, takeSlot } from '../core/agent-launch';
 import { handOffFrom, noteHandOff } from './task-ledger';
+import { guideForPrompt } from './agent-guide';
 
 /** What a bot needs from the rest of Tars. */
 export interface BotFleet {
@@ -215,6 +216,16 @@ function mcpConfigPathFor(provider: CLIProvider): string | undefined {
   return fs.existsSync(candidate) ? candidate : undefined;
 }
 
+/**
+ * The prompt a CLI starts on, with how Tars works first when the CLI has no
+ * SessionStart hook to fetch it (services/agent-guide.ts). Only the command
+ * carries it: a task typed in again, should it not start, is the task alone.
+ */
+function withGuide(agent: AgentStatus, provider: CLIProvider, prompt: string): string {
+  const guide = guideForPrompt(agent, provider.configDir);
+  return guide ? `${guide}\n\n${prompt}` : prompt;
+}
+
 /** The agent's terminal, opened when it has none. */
 async function terminalOf(fleet: BotFleet, agent: AgentStatus): Promise<pty.IPty | undefined> {
   if (!agent.ptyId || !fleet.ptyProcesses.has(agent.ptyId)) {
@@ -367,7 +378,7 @@ export async function startWithTask(
     const command = provider.buildInteractiveCommand({
       resumeSessionId: opts.resume || asleep ? consumeResumeSessionId(agent) ?? undefined : undefined,
       binaryPath,
-      prompt: task,
+      prompt: withGuide(agent, provider, task),
       model: agent.model,
       permissionMode: agent.permissionMode ?? (agent.skipPermissions ? 'bypass' : 'normal'),
       effort: agent.effort,
@@ -485,7 +496,7 @@ export async function forwardToOrchestrator(
     const command = provider.buildInteractiveCommand({
       resumeSessionId: opts.resume ? consumeResumeSessionId(orchestrator) ?? undefined : undefined,
       binaryPath,
-      prompt,
+      prompt: withGuide(orchestrator, provider, prompt),
       model: orchestrator.model,
       permissionMode: opts.permissionMode,
       effort: orchestrator.effort,

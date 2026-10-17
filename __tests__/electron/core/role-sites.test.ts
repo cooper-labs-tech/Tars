@@ -120,6 +120,8 @@ const SITES: Site[] = [
   { file: 'electron/services/chat-runners.ts', line: 'return [...agents.values()].find((a) => … && a.kind !== \'chat\' && a.projectPath === projectPath);', is: 'identity', why: 'the project\'s orchestrator a runner is launched like' },
   { file: 'electron/services/chat-runners.ts', line: 'if (!lead || …) return;', is: 'identity', why: 'only the project\'s orchestrator passes its configuration to the runners' },
   { file: 'electron/services/acp/delegate.ts', line: 'denyTools: … ? ORCHESTRATOR_DENY : undefined,', is: 'powers', why: 'the tools an ACP run is denied' },
+  { file: 'electron/services/agent-guide.ts', line: 'const role: GuideRole = … ? \'orchestrator\' : \'worker\';', is: 'powers', why: 'the identity\'s How Tars works section: what an orchestrator uses, a chat\'s runner included' },
+  { file: 'electron/services/agent-guide.ts', line: 'if (…) {', is: 'definition', why: 'identitySection: the role handed in by agentGuideSection, read from hasOrchestratorPowers' },
   { file: 'electron/services/agent-sleep.ts', line: 'orchestrator: …,', is: 'identity', why: 'the sleep rule: the orchestrator never sleeps' },
   { file: 'electron/services/agent-sleep.ts', line: '.filter((a) => atRest(a) && !… && a.ptyId);', is: 'identity', why: 'who may be put to sleep' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const isSuperAgentApi = …;', is: 'powers', why: 'spawnAgentSession: the instructions, the denied tools' },

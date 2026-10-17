@@ -340,6 +340,7 @@ Everything is a file in your home directory. Nothing is uploaded.
 | `hermes-connection.json` | Gateway address and session token. `0600` |
 | `projects.json` | The folders you added by hand |
 | `kanban-tasks.json` | The old local board, kept as a backup: its open tasks moved to the Hermes board |
+| `project-files/` | A folder per project for its agents' tools, notes and reports, outside the repository. Never deleted by Tars |
 | `vault.db` | Vault documents |
 | `observations/` | The per-project session ledger |
 | `model-catalog.json` | Cached model and price catalogue |
@@ -350,7 +351,9 @@ hooks and the bundled MCP servers call back into the app. It listens on
 
 Seven MCP servers ship with Tars (orchestration, memory, kanban, vault,
 Telegram, X and SocialData) and are registered with each provider in that
-provider's own config format.
+provider's own config format. Every agent is told how Tars works for its role
+when it starts, and its `tars_guide` tool gives the details, from the Tars that
+runs it.
 
 ---
 

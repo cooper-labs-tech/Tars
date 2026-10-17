@@ -28,6 +28,9 @@ import { AgentStatus, AgentCharacter, AgentRole } from '../../types';
 import { RouteApp, RouteContext, RouteRequest, SendJson } from './types';
 import { getSuperAgentInstructionsPath } from '../../utils';
 import { assembleDigest, needsPromptInjection, wrapDigestForPrompt } from '../memory-hub';
+import { agentGuideSection, guideForPrompt, guideIndex, guideTopic } from '../agent-guide';
+import { ensureProjectFiles } from '../../utils/project-files';
+import { app } from 'electron';
 import { canDelegateOverAcp, delegateOverAcp } from '../acp/delegate';
 import { usableHermesConnection } from '../hermes-config';
 import { consumeResumeSessionId } from '../../utils/resume-session';
@@ -271,7 +274,11 @@ async function spawnAgentSessionInSlot(
 
   // The task as the CLI receives it, and as it gets typed in if the argument
   // never becomes a turn.
-  const taskPrompt = `${identityHeader}${memoryBlock}\n\n${prompt}`;
+  // And how Tars works (services/agent-guide.ts): a claude terminal gets it
+  // in its bootstrap, a CLI without that hook here.
+  const guide = guideForPrompt(agent, cliProvider.configDir);
+  const guideBlock = guide ? `\n\n${guide}` : '';
+  const taskPrompt = `${identityHeader}${guideBlock}${memoryBlock}\n\n${prompt}`;
 
   // Build the CLI command through the provider so non-claude CLIs (codex,
   // gemini, grok, opencode, pi) get their own syntax instead of claude flags.
@@ -1300,7 +1307,29 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       );
     }
 
+    // How Tars works, for this role, and the project's folder (services/agent-guide.ts).
+    lines.push(``, agentGuideSection(agent));
+
     sendJson({ context: lines.join('\n') });
+  });
+
+  // GET /api/guide[?topic=]: the tars_guide tool. The guide of the Tars that
+  // answers, stamped with its version, with the caller's project folder.
+  app_.get('/api/guide', (req, sendJson) => {
+    const version = app?.getVersion?.() ?? 'unknown';
+    const topic = req.url.searchParams.get('topic');
+    if (!topic) {
+      sendJson({ text: guideIndex(version) });
+      return;
+    }
+    const project = callerProject(req);
+    const folder = project ? ensureProjectFiles(project) : { dir: null, why: 'no agent is named by the token that asked' };
+    const text = guideTopic(topic, version, folder.dir, folder.why);
+    if (!text) {
+      sendJson({ error: `No topic "${topic}" in the guide of Tars ${version}.\n${guideIndex(version)}` }, 404);
+      return;
+    }
+    sendJson({ text });
   });
 
   // GET /api/agents/:id/health: liveness of the agent's PTY and session,

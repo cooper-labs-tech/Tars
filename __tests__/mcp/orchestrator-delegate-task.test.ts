@@ -316,3 +316,44 @@ describe('delegate_task keeps its caller listening while it waits', () => {
     }
   });
 });
+
+describe('the run of a delegation whose caller gave no timeout (the Audit\'s M2 on #448)', () => {
+  // How this fails, written before the code: the default was 300 s, so an
+  // orchestrator that delegated a 40 minute build without timeoutSeconds had
+  // the run cut at five minutes in the middle of its work ("stopped at the
+  // run's limit of 300 s"), while the guide said a run of an hour was fine.
+  // The default is run-task's own ceiling, an hour; a caller's value is kept.
+  async function loadDelegateTask() {
+    const { registerAgentTools } = await import('../../mcp-orchestrator/src/tools/agents.js');
+    const server = makeFakeServer();
+    registerAgentTools(server as never);
+    return server.tools.get('delegate_task')!;
+  }
+  const asked = () => mockApiRequest.mock.calls
+    .filter(c => String(c[0]).includes('/run-task'))
+    .map(c => (c[2] as { timeoutSeconds?: number }).timeoutSeconds);
+
+  it('asks run-task for an hour, the most it gives', async () => {
+    const delegateTask = await loadDelegateTask();
+    mockApiRequest.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/run-task')) return { ok: true, started: true, stopReason: 'end_turn', text: 'built', toolCalls: [] };
+      throw new Error(`unexpected ${endpoint}`);
+    });
+
+    await delegateTask({ id: 'a1', prompt: 'run the 40 minute build' });
+
+    expect(asked()).toEqual([3600]);
+  });
+
+  it('keeps the timeout a caller gave', async () => {
+    const delegateTask = await loadDelegateTask();
+    mockApiRequest.mockImplementation(async (endpoint: string) => {
+      if (endpoint.includes('/run-task')) return { ok: true, started: true, stopReason: 'end_turn', text: 'done', toolCalls: [] };
+      throw new Error(`unexpected ${endpoint}`);
+    });
+
+    await delegateTask({ id: 'a1', prompt: 'a short check', timeoutSeconds: 120 });
+
+    expect(asked()).toEqual([120]);
+  });
+});

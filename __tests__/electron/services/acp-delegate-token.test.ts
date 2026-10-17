@@ -73,7 +73,7 @@ vi.mock('../../../electron/services/mcp-orchestrator', () => ({
   getMcpMemoryPath: () => serverBundle,
 }));
 vi.mock('../../../electron/providers', () => ({
-  getProvider: () => ({ getPtyEnvVars: () => ({}) }),
+  getProvider: () => ({ getPtyEnvVars: () => ({}), configDir: '/not-claude' }),
 }));
 vi.mock('../../../electron/services/usage-ledger', () => ({ recordUsage: vi.fn() }));
 

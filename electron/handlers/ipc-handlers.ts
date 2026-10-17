@@ -50,6 +50,7 @@ import { scheduleTick } from '../utils/agents-tick';
 import { emitAgentStatus } from '../services/agent-events';
 import { loadCatalog, modelsForProvider, priceFor, catalogStatus } from '../services/model-catalog';
 import { assembleDigest, needsPromptInjection, wrapDigestForPrompt, searchMemory, memoryStatus } from '../services/memory-hub';
+import { guideForPrompt } from '../services/agent-guide';
 import { usableHermesConnection } from '../services/hermes-config';
 import { reviewDiff, fileDiff, repoSummary } from '../services/git-review';
 import { searchLogs, agentTail, fleetSummary } from '../services/log-search';
@@ -787,7 +788,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // CLIs without Claude's SessionStart hook get the project's memory in the
     // prompt instead - otherwise those agents start knowing nothing.
-    let promptWithMemory = prompt;
+    let memory = '';
     if (needsPromptInjection(cliProvider.configDir)) {
       try {
         const digest = await assembleDigest({
@@ -795,12 +796,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           settings: appSettingsForCommand as never,
           hermes: usableHermesConnection(),
         });
-        const wrapped = wrapDigestForPrompt(digest);
-        if (wrapped) promptWithMemory = `${wrapped}\n\n${prompt}`;
+        memory = wrapDigestForPrompt(digest);
       } catch {
         // Memory is context, not a precondition.
       }
     }
+    // And how Tars works, which a claude terminal gets in its bootstrap
+    // (services/agent-guide.ts): on every start of such a CLI, a task or none,
+    // as its memory goes.
+    const promptWithMemory = [guideForPrompt(agent, cliProvider.configDir), memory, prompt].filter(Boolean).join('\n\n');
 
     // Which conversation to continue. Without a word from the caller, the usual
     // rule: the last session, once per app run. A restart names the session it

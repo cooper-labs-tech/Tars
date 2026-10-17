@@ -109,7 +109,7 @@ function handle(msg) {
 let launch: { command: string; args: string[] };
 vi.mock('../../../electron/services/acp/registry', () => ({ acpLaunchFor: () => launch, loadAcpRegistry: async () => undefined }));
 vi.mock('../../../electron/services/mcp-orchestrator', () => ({ getMcpOrchestratorPath: () => serverBundle, getMcpMemoryPath: () => serverBundle }));
-vi.mock('../../../electron/providers', () => ({ getProvider: () => ({ getPtyEnvVars: () => ({}) }) }));
+vi.mock('../../../electron/providers', () => ({ getProvider: () => ({ getPtyEnvVars: () => ({}), configDir: '/not-claude' }) }));
 vi.mock('../../../electron/services/usage-ledger', () => ({ recordUsage: vi.fn() }));
 
 const onWindows = process.platform === 'win32';

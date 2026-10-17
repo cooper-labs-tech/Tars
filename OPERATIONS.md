@@ -740,6 +740,7 @@ work.
 | `~/.dorothy/hermes-connection.json` | `electron/services/hermes-config.ts` | gateway mode/url/ssh; its token is in `~/.tars-private/hermes-token` |
 | `~/.dorothy/kanban-tasks.json` | nothing (read at launch by `moveLocalKanbanToHermes`, `electron/main.ts`) | the old local board, gone since 06/10: its open tasks move to the Hermes board once, and it stays as the backup |
 | `~/.dorothy/kanban-moved-to-hermes.json` | `electron/services/kanban-board.ts` | local task id to Hermes task id, for every task moved |
+| `~/.dorothy/project-files/<name>-<hash>/` | `electron/utils/project-files.ts` | each project's folder, for its agents: `tools/`, `notes/`, `reports/`. `<name>` is the project folder's name in lower case letters, digits and dashes (40 at most), `<hash>` ten hex digits of the SHA-256 of its path as the platform compares paths (on Windows, case and separators do not count). Made when an agent of the project gets its identity or reads the guide's project-folder topic; never deleted by Tars, so a project removed from Tars keeps it: delete it by hand. Outside the repository, outside `~/.dorothy/tmp`, and not under `~/Documents`, which iCloud can evict |
 | `~/.dorothy/error-triage.json` | `electron/services/error-triage.ts` | each Sentry issue filed on the board, with its task and when, and when each task of the last 24 hours was filed; mode `0600`. Removed, nothing is filed twice (Hermes's idempotency key); unreadable, the triage stops |
 | `~/.dorothy/bus.json` | `electron/services/bus-store.ts` | the agent bus journal: threads, messages, deliveries, and any membership set by hand. Rooms themselves are derived from the fleet, and the global room is the overseer's own conversation, not a copy of it |
 | `~/.dorothy/chats.json` | `electron/services/chats.ts` | the chats of each project: one record per chat (its number, title, runner and sessions, pinned, snoozed, settled, the inbox), and each project's last number (`numbers`). Not the conversations: those are the runners' transcripts (A chat's record, below) |
@@ -949,6 +950,7 @@ curl -s -H "Authorization: Bearer $TOKEN" $API/api/memory/status | jq
 | GET | `/api/health` |
 | GET | `/api/agents` · `/api/agents/:id` · `/:id/bootstrap` · `/:id/health` · `/:id/output` · `/:id/wait` |
 | POST | `/api/agents` · `/:id/start` · `/:id/dispatch` · `/:id/run-task` · `/:id/stop` · `/:id/message` (for `/dispatch` and `/message`, `:id` may be `requester` or `orchestrator`: whoever asked the caller for its current task, a chat's runner included, else its project's orchestrator; the answer's `deliveredTo` says which) |
+| GET | `/api/guide` · `/api/guide?topic=<id>` (what `tars_guide` reads: the topics of the agents' guide, `electron/services/agent-guide.ts`, stamped with the running Tars's version; a topic with the caller's project folder in it, an unknown one a 404 that lists the topics) |
 | GET | `/api/tasks/:id` · `/api/tasks?clientRequestId=` (a delegated task as the ledger keeps it; `?wait=<s>` holds the request until the task ends, 120 s at most, and answers `timeout: true` if it has not: what `delegate_task` waits on, segment after segment, since run-task answers once the run has started, with `answer: 'started'`) |
 | POST | `/api/tasks/:ref/cancel` (`{ reason? }`: a request still queued at a worker, taken back by its requester, or by the project's orchestrator with a reason; `not_your_task` 403, `reason_required` 400, `already_delivered` 409) |
 | DELETE | `/api/agents/:id` |
@@ -1635,7 +1637,16 @@ result afterwards.
 The agents' kanban tools (`mcp-kanban`: `create_task`, `list_tasks`, `get_task`, `assign_task`,
 `update_task_progress`, `mark_task_done`, `move_task`, `delete_task`) work on the Hermes board,
 the one the Kanban page shows. They go through Tars (`/api/kanban/*`, with the agent's own token)
-and never write a file. `electron/services/kanban-board.ts` decides where a task sits:
+and never write a file. When Hermes is not configured, refuses, or does not answer, each tool's error
+says what happened, what was written, and what to do: the user connects or signs in to Hermes in
+Tars (Settings, Hermes); the agent says so once, keeps the task in its project folder's `notes/`, and
+goes on (2.0.4; a bare `Hermes refused: Unauthorized` before). "Nothing was written" is said only
+when it is known: Hermes refused, or the connection was never taken (`ECONNREFUSED`, `ENOTFOUND`,
+`EAI_AGAIN`, `EHOSTUNREACH`, `ENETUNREACH`). An answer lost after the request went (a timeout, a
+reset) says Hermes may have done it and to read the task on the board first, and a task created
+whose parking failed is named, with "Do not create it again": it is `ready` on the Tars lane, where
+Hermes does not start it, until the user parks it on the Kanban page.
+`electron/services/kanban-board.ts` decides where a task sits:
 
 | State | On the Hermes board | Who takes it |
 |---|---|---|
@@ -2143,7 +2154,10 @@ A model given with the task and refused is followed by the agent's own; the answ
 `model: { asked, taken: false, own, ranOn }` says which one the run is on (`ranOn` absent: neither
 was taken, and the run is on the CLI's default), and so does `delegate_task`'s result
 (`This run is not on <model>: ...`). The turn's usage is filed under `ranOn`, the model the session
-took, and under no model when it took none (the Usage page then names the provider).
+took, and under no model when it took none (the Usage page then names the provider). Such a turn is
+priced only from the cost its adapter reports: Tars prices a turn from its model, and has none to
+price it from, so an adapter that reports no cost leaves it at $0 on the Usage page (its tokens are
+counted). A run whose agent did not take its own model, on a CLI that reports no cost, is the case.
 
 ---
 
