@@ -26,7 +26,9 @@ import { processStartOf, windowsProcessCreatedAt } from '../../../electron/platf
  * a reused one: a false abrupt end, and the first's working agents resumed by the second while the first runs them):
  * 6. Nothing is asked of Windows, so the record's Tars cannot be told from a process that took its pid.
  * 7. PowerShell is the one found on the PATH or under a relative SystemRoot, or a PowerShell 7 parent's PSModulePath
- *    is passed on (child-env.ts), or the pid is written into the script.
+ *    is passed on (child-env.ts), or the pid is written into the script; or the script goes base64-encoded
+ *    (-EncodedCommand), what security software flags in a powershell.exe command line, though it hides nothing
+ *    (the Audit's Low on #437).
  * 8. A process that is gone, a PowerShell that fails, an answer that is empty or not a time throws, or gives a time;
  *    a pid that is not a positive whole number reaches PowerShell; another platform asks Windows.
  */
@@ -78,7 +80,7 @@ describe('when the process under a pid started', () => {
       };
       return { calls, execFileSync };
     };
-    const script = (call: Call) => Buffer.from(String(call.args[call.args.indexOf('-EncodedCommand') + 1]), 'base64').toString('utf16le');
+    const script = (call: Call) => String(call.args[call.args.indexOf('-Command') + 1]);
 
     it('6-7. asks Win32_Process, through the PowerShell under SystemRoot, the pid in the environment', () => {
       const ask = asking('1792185661123\r\n');
@@ -87,7 +89,11 @@ describe('when the process under a pid started', () => {
       expect(ask.calls).toHaveLength(1);
       const [call] = ask.calls;
       expect(call.file).toBe('D:\\Win\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
-      expect(call.args.slice(0, 2)).toEqual(['-NoProfile', '-NonInteractive']);
+      expect(call.args.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-Command']);
+      expect(call.args).toHaveLength(4);
+      expect(call.args).not.toContain('-EncodedCommand');
+      // Nothing in it the command line would have to quote: no double quote, no value of the caller's.
+      expect(script(call)).not.toMatch(/"/);
       expect(script(call)).toMatch(/Get-CimInstance Win32_Process/);
       expect(script(call)).toMatch(/CreationDate/);
       expect(script(call)).not.toMatch(/4242/);

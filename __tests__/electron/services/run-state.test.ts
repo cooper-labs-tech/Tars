@@ -228,6 +228,15 @@ describe('the run record', () => {
         expect(fs.readFileSync(file, 'utf8')).toBe(windowsRecord());
       });
 
+      it('the boundary: created a millisecond before the record was opened still runs, a millisecond after took the pid', () => {
+        // On a fast machine beginRun runs well under a second after the process is created (the Audit's Low on #437).
+        fs.writeFileSync(file, windowsRecord());
+        clock = T0 + 60_000;
+        expect(beginRun(onWindows([FIRST], { [FIRST]: T0 - 1 }))).toBeNull();
+        fs.writeFileSync(file, windowsRecord());
+        expect(beginRun(onWindows([FIRST], { [FIRST]: T0 + 1 }))).toMatchObject({ startedAt: T0 });
+      });
+
       it('a process created after the record was opened took the pid: the run ended', () => {
         fs.writeFileSync(file, windowsRecord());
         clock = T0 + 3_600_000;
