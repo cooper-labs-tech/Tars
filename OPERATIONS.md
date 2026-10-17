@@ -2133,7 +2133,15 @@ thread through the first paint.
 orphaned, and the SQLite WAL is left unclosed. Quit from the menu or the tray.
 
 On macOS, closing the window does **not** quit: `window-all-closed` only quits on
-non-darwin. The tray stays live and agents keep running. To actually stop everything:
+non-darwin. The tray stays live and agents keep running. On Windows, and on Linux
+since 2.0.4 when a tray is shown, closing the window hides Tars to the tray: the
+tray's menu has Show Tars and Quit Tars. Linux asks the session bus at launch
+whether a StatusNotifierWatcher is there (`platform/linux-tray.ts`; KDE, or GNOME
+with the AppIndicator extension, which Ubuntu ships on); with none, a close quits, as
+before, since no icon would be there to bring it back. `gdbus call --session --dest
+org.freedesktop.DBus --object-path /org/freedesktop/DBus --method
+org.freedesktop.DBus.NameHasOwner org.kde.StatusNotifierWatcher` answers what Tars
+read. To actually stop everything:
 
 ```bash
 osascript -e 'quit app "Tars"'     # graceful, runs before-quit

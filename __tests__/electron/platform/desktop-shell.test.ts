@@ -13,6 +13,8 @@ import {
   trayPanelPosition,
   isClickThatClosedPanel,
   closeAction,
+  removesApplicationMenu,
+  hasTrayMenu,
 } from '../../../electron/platform/desktop-shell';
 
 /**
@@ -52,6 +54,17 @@ import {
  *    ends, or the explanation is shown more than once.
  * 12. The AppUserModelId differs from package.json build.appId, so toasts
  *    are attributed to nothing and never shown.
+ * And Linux (2.0.4, parity P2; the Audit's G6 and G4):
+ * 13. linux keeps Electron's default menu bar (Alt shows it, and its Ctrl+W,
+ *    Ctrl+R and Ctrl+Shift+I act over every page, the terminals included), or
+ *    its tray has no menu: under AppIndicator a tray click is never sent, so
+ *    the menu is the only way to show or quit Tars from the tray.
+ * 14. linux closes while a tray is shown, so the agents end with the window,
+ *    unlike on Windows; or hides while none is (a GNOME without the
+ *    AppIndicator extension), so Tars runs with no window and nothing on
+ *    screen to bring it back but a second launch; or a quit is turned into a
+ *    hide.
+ * 15. darwin changes at all: its close, its menu, its tray.
  */
 
 const WIN = 'win32' as const;
@@ -111,11 +124,27 @@ describe('the Windows shell switches', () => {
 });
 
 describe('close', () => {
-  it('darwin and linux close as they always have', () => {
-    for (const p of ['darwin', 'linux'] as const) {
-      expect(closeAction({ platform: p, quitting: false, explained: false })).toBe('close');
-      expect(closeAction({ platform: p, quitting: true, explained: true })).toBe('close');
+  it('15. darwin closes as it always has, tray or not', () => {
+    for (const trayShown of [undefined, false, true]) {
+      expect(closeAction({ platform: 'darwin', quitting: false, explained: false, trayShown })).toBe('close');
+      expect(closeAction({ platform: 'darwin', quitting: false, explained: true, trayShown })).toBe('close');
+      expect(closeAction({ platform: 'darwin', quitting: true, explained: true, trayShown })).toBe('close');
     }
+  });
+
+  it('14. linux hides to a tray that is shown, explains once, lets a quit through, and closes when no tray is shown', () => {
+    expect(closeAction({ platform: 'linux', quitting: false, explained: false, trayShown: true })).toBe('explain');
+    expect(closeAction({ platform: 'linux', quitting: false, explained: true, trayShown: true })).toBe('hide');
+    expect(closeAction({ platform: 'linux', quitting: true, explained: true, trayShown: true })).toBe('close');
+    for (const trayShown of [undefined, false]) {
+      expect(closeAction({ platform: 'linux', quitting: false, explained: true, trayShown })).toBe('close');
+      expect(closeAction({ platform: 'linux', quitting: false, explained: false, trayShown })).toBe('close');
+    }
+  });
+
+  it('13. no application menu, and a tray menu, on win32 and linux; darwin keeps both as they are', () => {
+    expect([removesApplicationMenu('win32'), removesApplicationMenu('linux'), removesApplicationMenu('darwin')]).toEqual([true, true, false]);
+    expect([hasTrayMenu('win32'), hasTrayMenu('linux'), hasTrayMenu('darwin')]).toEqual([true, true, false]);
   });
 
   it('win32 hides while Tars runs, explains once, and lets a quit through', () => {

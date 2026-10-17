@@ -82,7 +82,7 @@ orchestrator agent's CLI
 | 4 | `migrateFromClaudeManager()` | moves `~/.claude-manager` → `~/.dorothy`, then deletes the old dir |
 | 5 | `loadAgents()` + `startAgentAutosave()` | 30 s dirty-flush timer, `unref`'d |
 | 6 | `setupProtocolHandler()` → `createWindow()` | `app://` and `local-file://` |
-| 7 | `initTray()` | menu-bar popover rendering `/tray-panel` |
+| 7 | `initTray()` | menu-bar popover rendering `/tray-panel` on macOS (a click opens it); on Windows a click opens it and a right click the menu (Show Tars, Quit Tars); on Linux the menu alone, since an AppIndicator sends no click. On Windows and Linux there is no application menu, and closing the window hides Tars to the tray, on Linux only while the session bus has a StatusNotifierWatcher (`platform/linux-tray.ts`, asked at launch; until it answers, and without one, a close quits) |
 | 8 | IPC registration | 214 channels across 16 files: the 15 handler modules plus `mcp-orchestrator.ts` |
 | 9 | `initVaultDb()` | better-sqlite3, WAL, foreign keys on |
 | 10 | Telegram + Slack + Discord + `startApiServer()` | |

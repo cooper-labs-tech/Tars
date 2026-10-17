@@ -1,10 +1,11 @@
 /**
- * The Windows desktop shell: the title bar, a close that hides to the tray,
- * one instance, no application menu, and where the tray panel opens.
+ * The desktop shell: the title bar, a close that hides to the tray, no
+ * application menu, the tray's menu, and where the tray panel opens.
  *
- * Every function here is pure and takes the platform: darwin and linux get
- * exactly what they had before this file existed, and the callers carry no
- * `if (win32)` of their own.
+ * Every function here is pure and takes the platform, and the callers carry
+ * no `if (win32)` of their own. darwin gets exactly what it had before this
+ * file existed. linux shares Windows's tray menu, no menu bar and close to the
+ * tray since 2.0.4 (parity P2), the close only where a tray is shown.
  */
 
 export interface Rect { x: number; y: number; width: number; height: number }
@@ -29,9 +30,29 @@ export const TRAY_CLICK_AFTER_BLUR_MS = 300;
 /** The dark theme's --bg-primary and --text-primary: the window opens dark. */
 const LAUNCH_OVERLAY = { color: '#121212', symbolColor: '#F5F4F2' } as const;
 
-/** Whether the Windows desktop shell applies: menu, single instance, close to tray, tray menu. */
+/** Whether the Windows-only parts apply: the title bar overlay, the AppUserModelId, the session end, the tray panel's placement. */
 export function isWindowsShell(platform: NodeJS.Platform): boolean {
   return platform === 'win32';
+}
+
+/**
+ * No application menu: Electron's default one bound Ctrl+W to closing the
+ * window, Ctrl+R and Ctrl+Shift+R to reloading the renderer, Ctrl+Shift+I to
+ * DevTools and Ctrl+minus to zoom, over every page including the terminals,
+ * and showed a File / Edit / View bar on Linux. macOS keeps its menu: it is
+ * Cmd+Q, Cmd+C, Cmd+V and every Edit command there.
+ */
+export function removesApplicationMenu(platform: NodeJS.Platform): boolean {
+  return platform === 'win32' || platform === 'linux';
+}
+
+/**
+ * The tray has a menu (Show Tars, Quit Tars). On Windows it is the only way to
+ * quit once a close hides; on Linux the tray is an AppIndicator, which sends
+ * no click, so the menu is all it does. macOS opens the tray panel on a click.
+ */
+export function hasTrayMenu(platform: NodeJS.Platform): boolean {
+  return platform === 'win32' || platform === 'linux';
 }
 
 export type TitleBarOptions =
@@ -66,17 +87,22 @@ export function parseTitleBarOverlay(input: unknown): { color: string; symbolCol
 }
 
 /**
- * What closing the main window does. darwin/linux: it closes, as always.
- * win32 while Tars runs: it hides to the tray and the agents keep running,
- * after a one-time explanation. A quit (the tray menu, the updater, a test
- * harness) always closes, or it would never end.
+ * What closing the main window does. darwin: it closes, as always. win32
+ * while Tars runs: it hides to the tray and the agents keep running, after a
+ * one-time explanation. linux the same, only while a tray is shown
+ * (platform/linux-tray.ts): with none, hiding would leave nothing on screen
+ * to bring Tars back, so it closes. A quit (the tray menu, the updater, a
+ * test harness) always closes, or it would never end.
  */
 export function closeAction(opts: {
   platform: NodeJS.Platform;
   quitting: boolean;
   explained: boolean;
+  /** linux: whether a tray icon is shown. Unknown is not shown. */
+  trayShown?: boolean;
 }): 'close' | 'hide' | 'explain' {
-  if (!isWindowsShell(opts.platform) || opts.quitting) return 'close';
+  if (opts.quitting) return 'close';
+  if (opts.platform === 'linux' ? opts.trayShown !== true : !isWindowsShell(opts.platform)) return 'close';
   return opts.explained ? 'hide' : 'explain';
 }
 

@@ -35,6 +35,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *    its fleet over agents.json, losing what the first changed.
  * 7. On any platform, a second launch whose lock is refused goes on (reports
  *    true), or the first is not brought forward when it happens.
+ * And Linux (2.0.4, parity P2, the Audit's G6 and G4; 1 narrowed to darwin):
+ * 8. linux keeps the default menu bar, or sets an AppUserModelId or listens
+ *    for session-end, which are Windows's.
+ * 9. linux closes while its tray is shown (the agents end with the window),
+ *    hides while none is, or keeps hiding once before-quit has run.
  */
 
 const calls: string[] = [];
@@ -101,21 +106,42 @@ afterEach(() => {
   Object.defineProperty(process, 'platform', { value: HOST, configurable: true });
 });
 
-describe('darwin and linux: the lock, and nothing else of the Windows lifecycle', () => {
-  for (const platform of ['darwin', 'linux'] as const) {
-    it(`${platform}: the lock and the hand-over; no menu change, no AUMID, no window listener`, async () => {
-      const { installDesktopShell, claimSingleInstance } = await load();
-      const win = fakeWindow();
-      const shutdown = vi.fn();
-      onPlatform(platform);
-      expect(claimSingleInstance(() => {})).toBe(true);
-      installDesktopShell({
-        getMainWindow: () => win as never, explanation: explained, onSessionEnd: shutdown, platform,
-      });
-      expect(calls).toEqual(['requestSingleInstanceLock', 'app.on:second-instance']);
-      expect(shutdown).not.toHaveBeenCalled();
+describe('darwin: the lock, and nothing else of the Windows lifecycle', () => {
+  it('darwin: the lock and the hand-over; no menu change, no AUMID, no window listener', async () => {
+    const { installDesktopShell, claimSingleInstance } = await load();
+    const win = fakeWindow();
+    const shutdown = vi.fn();
+    onPlatform('darwin');
+    expect(claimSingleInstance(() => {})).toBe(true);
+    installDesktopShell({
+      getMainWindow: () => win as never, explanation: explained, onSessionEnd: shutdown, platform: 'darwin', trayShown: () => true,
     });
-  }
+    expect(calls).toEqual(['requestSingleInstanceLock', 'app.on:second-instance']);
+    expect(shutdown).not.toHaveBeenCalled();
+  });
+});
+
+describe('linux: no menu bar, and a close that hides to a tray that is shown', () => {
+  it('8. removes the menu and listens for a quit and a close; no AUMID, no session-end', async () => {
+    const { installDesktopShell } = await load();
+    const win = fakeWindow();
+    installDesktopShell({ getMainWindow: () => win as never, explanation: explained, platform: 'linux', trayShown: () => true });
+    expect(calls).toEqual(['setApplicationMenu', 'app.on:before-quit', 'win.on:close']);
+  });
+
+  it('9. hides while its tray is shown, closes while none is, and closes once before-quit has run', async () => {
+    const { installDesktopShell } = await load();
+    const win = fakeWindow();
+    let shown = false;
+    installDesktopShell({ getMainWindow: () => win as never, explanation: explained, platform: 'linux', trayShown: () => shown });
+    expect(win.emit('close'), 'no tray: a close').toBe(false);
+    shown = true;
+    expect(win.emit('close'), 'a tray: a hide').toBe(true);
+    expect(win.hidden).toBe(1);
+    for (const fn of appListeners.get('before-quit') ?? []) fn();
+    expect(win.emit('close'), 'quitting').toBe(false);
+    expect(win.hidden).toBe(1);
+  });
 });
 
 describe('one Tars per profile, on every platform', () => {
