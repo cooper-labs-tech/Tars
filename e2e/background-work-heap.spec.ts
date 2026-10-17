@@ -33,30 +33,39 @@ test('the rests of agents with long transcripts leave the main heap with their f
     const project = path.join(home, 'projects', n);
     fs.mkdirSync(project, { recursive: true });
     const sessionId = `0941a7e6-7262-4068-ba83-68b7e0de18${String(i).padStart(2, '0')}`;
-    const tdir = path.join(home, '.claude', 'projects', project.replace(/[/.]/g, '-'));
-    fs.mkdirSync(tdir, { recursive: true });
-    const file = path.join(tdir, `${sessionId}.jsonl`);
-    const fd = fs.openSync(file, 'w');
-    const per = Math.floor((40 * MB) / filler.length / 4);
-    for (const k of [1, 2, 3]) {
-      fs.writeSync(fd, filler.repeat(per));
-      fs.writeSync(fd, `${started(`${n}${k}`)}\n`);
-    }
-    fs.writeSync(fd, filler.repeat(per));
-    fs.closeSync(fd);
-    return { id: `bg-${n}`, name: `bg-${n}`, character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: project, skills: [], currentSessionId: sessionId, createdAt: at(T0), lastActivity: at(T0), file };
+    return { id: `bg-${n}`, name: `bg-${n}`, character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: project, skills: [], currentSessionId: sessionId, createdAt: at(T0), lastActivity: at(T0), file: '' };
   });
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify(agents.map(({ file: _f, ...a }) => a), null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify(agents.map((a) => a.projectPath)));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
-  const values: Record<string, unknown> = { transcriptsMB: agents.reduce((n, a) => n + fs.statSync(a.file).size, 0) / MB };
+  const values: Record<string, unknown> = {};
 
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31426), DOROTHY_E2E: '1' },
   });
   try {
     await app.firstWindow();
+    // Each transcript where Tars itself looks for it (resume-session.ts transcriptPath): the sandbox's temp folder
+    // holds characters a path spelled here by hand would encode otherwise.
+    for (const [i, a] of agents.entries()) {
+      a.file = await app.evaluate(({ app: electronApp }, { projectPath, sessionId, home }) => {
+        const main = (process as unknown as { mainModule: NodeJS.Module }).mainModule;
+        const rs = main.require(`${electronApp.getAppPath()}/electron/dist/utils/resume-session`) as { transcriptPath(p: string, s: string, h: string): string };
+        return rs.transcriptPath(projectPath, sessionId, home);
+      }, { projectPath: a.projectPath, sessionId: a.currentSessionId, home });
+      fs.mkdirSync(path.dirname(a.file), { recursive: true });
+      const fd = fs.openSync(a.file, 'w');
+      const per = Math.floor((40 * MB) / filler.length / 4);
+      const n = ['a', 'b', 'c', 'd'][i];
+      for (const k of [1, 2, 3]) {
+        fs.writeSync(fd, filler.repeat(per));
+        fs.writeSync(fd, `${started(`${n}${k}`)}\n`);
+      }
+      fs.writeSync(fd, filler.repeat(per));
+      fs.closeSync(fd);
+    }
+    values.transcriptsMB = agents.reduce((n, a) => n + fs.statSync(a.file).size, 0) / MB;
     /** The main process's heap after two collections, in bytes. */
     const heap = () => app.evaluate(() => {
       const main = (process as unknown as { mainModule: NodeJS.Module }).mainModule;
