@@ -4,8 +4,8 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 164 root frames.
-`design/chat-design.pen` holds 72 of those, the other eighty-four being newer than the
+rather than a companion to it. `design/tars-redesign.pen` holds 171 root frames.
+`design/chat-design.pen` holds 72 of those, the other ninety-nine being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
 room listed on the `/chat` line below: 85 in all. 71 share their ids
@@ -214,6 +214,23 @@ read the transcript instead, is gone since 1.9.2.
 | Left fullscreen · notice | The line a panel shows when its claude left fullscreen and the wheel can no longer scroll it, with restart (and its light copy) |
 | Restart pending · notice | The line a panel shows while a changed setting waits to restart its agent: which settings, and what the restart waits on (and its light copy) |
 | Permission asked of Tars | The question Claude Code would put to its permission dialog, asked of Tars by the state mod instead: the line a panel shows, with allow, deny with a reason and ask in terminal; a call too long for that line, shown whole in the panel before allow; the same question in full in the agent's window, with why Claude Code asks and the rule that asked under the call, and on its card; too late, when the question went back first (and its light copy) |
+
+## A delegated task on the agent's card (drawn only)
+
+A task delegated over ACP (delegate_task) runs in Tars's ACP client, outside the
+agent's terminal, which sits idle meanwhile. Drawn on 2026-10-18 and not built yet:
+the agent's panel, window and card show the run in the terminal's place while it
+runs, and its outcome once it ends. The first column names no route, so
+`npm run e2e:guard` does not read this table.
+
+| Surface | Frames |
+|---|---|
+| The Dashboard's panel on a run: from whom, since when and for how long, the task's first line, the agent's messages and tool calls as they stream, tokens, cost and queue, stop task and terminal; ended done, failed or stopped, with the answer; the terminal view with its show line; the smallest pane, 3x3 in a 1200 by 800 window | `tars-redesign.pen`: Delegated task · on the agent's panel, window and card, Delegated task · Dashboard, a panel on a run |
+| The agent's window on a run, its queue in the rail, and its card in Agents (the same card in More, Agents, with the new interface on) | `tars-redesign.pen`: Delegated task · on the agent's panel, window and card |
+| The new interface's project page: a team row on a run, and one whose run ended | `tars-redesign.pen`: Delegated task · new interface, the project page's team |
+
+Each frame has its `· light` copy beside it. Delegated task · notes, what the
+Backend sends lists the events and calls the window needs from the main process.
 
 ## States every data surface must show
 
