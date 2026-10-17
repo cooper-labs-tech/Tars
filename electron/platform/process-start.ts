@@ -66,7 +66,10 @@ export function processStartOf(pid: number, platform: NodeJS.Platform = process.
  * Asked of the Windows PowerShell under SystemRoot (a plain absolute one, else
  * C:\Windows), never one found on the PATH, without a PowerShell 7 parent's
  * PSModulePath (child-env.ts). The pid goes in the environment, never into the
- * script. Synchronous, and only when a record is left open and its pid lives.
+ * script, which is fixed and goes as it is (`-Command`): a base64 one
+ * (`-EncodedCommand`) is what security software flags in a powershell.exe
+ * command line, and here it would hide nothing (the Audit's Low on #437).
+ * Synchronous, and only when a record is left open and its pid lives.
  *
  * Null when the process is gone, PowerShell fails or answers anything but a
  * whole number of milliseconds; never throws.
@@ -83,7 +86,7 @@ export function windowsProcessCreatedAt(pid: number, deps: ProcessStartDeps & { 
   try {
     const out = (deps.execFileSync ?? runPowerShell)(
       file,
-      ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(CREATED_SCRIPT, 'utf16le').toString('base64')],
+      ['-NoProfile', '-NonInteractive', '-Command', CREATED_SCRIPT],
       { env: childEnv(file, { ...env, TARS_PID: String(pid) }, 'win32') },
     ).trim();
     return /^\d{1,15}$/.test(out) ? Number(out) : null;
