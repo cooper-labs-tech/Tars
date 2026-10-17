@@ -150,7 +150,7 @@ beforeEach(() => {
   } as RouteContext;
   registerAgentRoutes(routes, ctx);
   agents.set('orch', {
-    id: 'orch', name: 'Tars-Orchestrator', status: 'running', projectPath: project,
+    id: 'orch', role: 'orchestrator', name: 'Tars-Orchestrator', status: 'running', projectPath: project,
     skills: [], output: [], lastActivity: new Date().toISOString(),
   } as AgentStatus);
 });

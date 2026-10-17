@@ -149,7 +149,7 @@ describe('a launch', () => {
 
   it('2. /start answers 507 with the reason, and the agent stays as it was', async () => {
     const w1 = agent('w1', { status: 'idle', currentSessionId: undefined });
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     setFreeSpaceReader(() => GB);
 
     const r = await call('POST', '/api/agents/w1/start', { body: { prompt: 'go' }, caller: 'orch' });
@@ -160,7 +160,7 @@ describe('a launch', () => {
   });
 
   it('3. with room, it starts', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const w1 = agent('w1', { status: 'idle', currentSessionId: undefined, ...startableCli() });
     setFreeSpaceReader(() => 50 * GB);
     const r = await call('POST', '/api/agents/w1/start', { body: { prompt: 'go' }, caller: 'orch' });

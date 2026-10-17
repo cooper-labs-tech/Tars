@@ -259,7 +259,7 @@ describe('POST /api/agents/:id/run-task, answer: started', () => {
 describe('POST /api/agents/:id/run-task from another project', () => {
   it('(S8) refused 403 without allowCrossProject: true, run with it', async () => {
     putAgent('target');
-    putAgent('orch', path.join(tmp, 'another-project'));
+    putAgent('orch', path.join(tmp, 'another-project')).role = 'orchestrator';
     const refused = await call('POST', '/api/agents/target/run-task', 'orch', { task: 'do it', answer: 'started' }).answer;
     expect(refused.status).toBe(403);
     expect(String(refused.data.error)).toMatch(/Cross-project access denied/);

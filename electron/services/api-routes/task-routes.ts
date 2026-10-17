@@ -2,6 +2,7 @@ import { agents, saveAgents } from '../../core/agent-manager';
 import { ptyProcesses, withdrawWaiting } from '../../core/pty-manager';
 import { requestDropped } from '../../core/task-requests';
 import { cancelVerdict } from '../../core/task-cancel';
+import { oneTaskQueue } from '../../core/one-task';
 import { envelopeValue } from '../../utils/envelope-value';
 import { liveChatStore } from '../../handlers/chat-handlers';
 import { tellCancelled } from '../agent-watch';
@@ -27,6 +28,22 @@ export function registerTaskRoutes(app_: RouteApp): void {
   app_.post(/^\/api\/tasks\/([^/]+)\/cancel$/, (req, sendJson) => {
     const callerId = req.callerAgentId;
     const { reason } = (req.body ?? {}) as { reason?: unknown };
+    // A task waiting its turn behind the agent's work in hand (core/one-task.ts):
+    // its asker, an orchestrator of its project or Tars takes it out of the
+    // line, and it never starts. Anybody else is answered as if it did not exist.
+    const queued = oneTaskQueue.find(req.params.id);
+    if (queued) {
+      // The shared token names nobody: it cancels nothing.
+      if ((!req.internal && !callerId) || !oneTaskQueue.mayCancel(queued.ref, req.internal ? undefined : callerId, agents)) {
+        sendJson({ error: 'not_found', reason: `No agent holds a task ${queued.ref}: it ended, or was never asked.` }, STATUS.not_found);
+        return;
+      }
+      oneTaskQueue.cancel(queued.ref);
+      const worker = agents.get(queued.agentId);
+      console.log(`[tasks] ${queued.ref} queued for ${worker?.name || queued.agentId} cancelled by ${callerId ?? 'Tars'}`);
+      sendJson({ success: true, cancelled: queued.ref, queuedRun: true, worker: { id: queued.agentId, name: worker?.name } });
+      return;
+    }
     const verdict = cancelVerdict(req.params.id, callerId, reason, agents.values());
     if (!verdict.ok) {
       sendJson({ error: verdict.error, reason: verdict.reason }, STATUS[verdict.error]);

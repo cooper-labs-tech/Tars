@@ -652,7 +652,8 @@ describe('agent-routes', () => {
      */
     function reqFromProject(project: string, overrides: Partial<RouteRequest> = {}): RouteRequest {
       const callerId = `caller-of-${project}`;
-      agents.set(callerId, makeAgent({ id: callerId, projectPath: project }));
+      // The orchestrator of that project: only it, among the agents, hands work (core/one-task.ts).
+      agents.set(callerId, makeAgent({ id: callerId, projectPath: project, role: 'orchestrator' }));
       return makeReq({
         raw: { headers: {}, on: () => {} } as any,
         callerAgentId: callerId,

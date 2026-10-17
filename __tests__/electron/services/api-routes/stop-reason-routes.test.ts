@@ -127,7 +127,7 @@ function agent(id: string, over: Partial<AgentStatus> = {}): AgentStatus {
 
 describe('POST /api/agents/:id/stop', () => {
   it('1. refuses a stop with no reason, and leaves the agent as it was', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const worker = agent('w1');
 
     for (const body of [{}, { reason: '' }, { reason: '   ' }, { reason: 42 }]) {
@@ -140,7 +140,7 @@ describe('POST /api/agents/:id/stop', () => {
   });
 
   it('2. files the stop under the agent whose token asked, or under Tars for its own pass', async () => {
-    agent('orch', { name: 'Tars-Orchestrator', status: 'idle' });
+    agent('orch', { role: 'orchestrator', name: 'Tars-Orchestrator', status: 'idle' });
     const w1 = agent('w1');
     const w2 = agent('w2');
 
@@ -152,7 +152,7 @@ describe('POST /api/agents/:id/stop', () => {
   });
 
   it('3. keeps a reason on one line, without control characters, and at most 200 characters', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const w1 = agent('w1');
 
     await call('POST', '/api/agents/w1/stop', { body: { reason: `  stuck\nin a loop\u202E\u0007 ${'x'.repeat(900)}` }, caller: 'orch' });
@@ -165,7 +165,7 @@ describe('POST /api/agents/:id/stop', () => {
 
 describe('a second stop', () => {
   it('answers that the agent is already stopped, with the first stop kept', async () => {
-    agent('orch', { name: 'Tars-Orchestrator', status: 'idle' });
+    agent('orch', { role: 'orchestrator', name: 'Tars-Orchestrator', status: 'idle' });
     agent('other', { name: 'Other', status: 'idle' });
     const w1 = agent('w1');
     await call('POST', '/api/agents/w1/stop', { body: { reason: 'frozen' }, caller: 'orch' });
@@ -180,7 +180,7 @@ describe('a second stop', () => {
 
 describe('after the stop', () => {
   it('4. /wait comes back at once, saying who stopped it and why', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     agent('w1');
     await call('POST', '/api/agents/w1/stop', { body: { reason: 'frozen' }, caller: 'orch' });
 
@@ -190,7 +190,7 @@ describe('after the stop', () => {
   });
 
   it('5. a start clears the stop: the agent runs, and no longer reads as stopped', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const w1 = agent('w1', startableCli());
     await call('POST', '/api/agents/w1/stop', { body: { reason: 'frozen' }, caller: 'orch' });
 
@@ -227,7 +227,7 @@ describe('a start after a stop (JeanBrasse, 05/10)', () => {
   // 8. Nothing on the agent says it was restarted after a stop, by whom.
   // 9. A start of an agent that was not stopped reads as a restart.
   it('7, 8. tells the restarter who stopped it, when and why, and notes the restart', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const w1 = agent('w1', startableCli());
     await call('POST', '/api/agents/w1/stop', { body: { reason: 'out of budget' }, caller: 'orch' });
     const stoppedAt = w1.stoppedAt;
@@ -241,7 +241,7 @@ describe('a start after a stop (JeanBrasse, 05/10)', () => {
   });
 
   it('7. a /dispatch that starts it again says so too, as a scheduled task\'s does', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const w1 = agent('w1', startableCli());
     await call('POST', '/api/agents/w1/stop', { body: { reason: 'night' }, caller: 'orch' });
 
@@ -253,7 +253,7 @@ describe('a start after a stop (JeanBrasse, 05/10)', () => {
   }, 60_000);
 
   it('9. a start of an agent that was not stopped is no restart', async () => {
-    agent('orch', { status: 'idle' });
+    agent('orch', { role: 'orchestrator', status: 'idle' });
     const w1 = agent('w1', { status: 'idle', currentSessionId: undefined, ...startableCli() });
 
     const r = await call('POST', '/api/agents/w1/start', { body: { prompt: 'go' }, caller: 'orch' });

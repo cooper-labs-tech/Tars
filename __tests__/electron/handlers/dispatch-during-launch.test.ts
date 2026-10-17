@@ -259,7 +259,7 @@ const FORK = '61200c3f-6bbe-44d5-b76e-016196479491';
 function agentMidConversation() {
   lastSessionAnsweredOn('claude-opus-5-5');
   agents.set('orch', {
-    id: 'orch', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
+    id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
     skills: [], output: [], lastActivity: new Date().toISOString(),
   } as AgentStatus);
   return agentWithTerminal({
@@ -348,7 +348,7 @@ describe('a session started through the API, then a second message', () => {
   // with a 200 `mode: message` to the caller.
   function orchestratorAndIdleAgent(): AgentStatus {
     agents.set('orch', {
-      id: 'orch', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
+      id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
       skills: [], output: [], lastActivity: new Date().toISOString(),
     } as AgentStatus);
     const agent = {
@@ -501,7 +501,7 @@ describe('a launch slower than CLI_BOOT_MS, as under load (Database Engineer, re
   // 4. A CLI that never comes up holds every sender forever.
   function agentBeingStarted(): { agent: AgentStatus; terminal: () => FakePty; before: number } {
     agents.set('orch', {
-      id: 'orch', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
+      id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
       skills: [], output: [], lastActivity: new Date().toISOString(),
     } as AgentStatus);
     const agent = {
@@ -585,7 +585,7 @@ describe('QA #158: CLI_UP_MS itself', () => {
   // still held at 170 s, and let go by 186 s, at once.
   it('holds a sender while the CLI runs up to CLI_UP_MS, and not a moment past it', async () => {
     agents.set('orch', {
-      id: 'orch', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
+      id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
       skills: [], output: [], lastActivity: new Date().toISOString(),
     } as AgentStatus);
     const agent = {
@@ -626,8 +626,9 @@ describe('QA #158: every sender answered in time, and the link a refusal leaves'
   //    is the one agent-watch tells when that work is done.
   function plannerBeingStarted(): { agent: AgentStatus; terminal: () => FakePty } {
     for (const id of ['orch', 'qa']) {
+      // The orchestrator and a chat's runner: the two kinds of asker a worker has (core/one-task.ts).
       agents.set(id, {
-        id, name: id === 'orch' ? 'Orchestrator' : 'QA', status: 'running', provider: 'claude', projectPath: project,
+        id, ...(id === 'orch' ? { role: 'orchestrator' } : { kind: 'chat' }), name: id === 'orch' ? 'Orchestrator' : 'QA', status: 'running', provider: 'claude', projectPath: project,
         skills: [], output: [], lastActivity: new Date().toISOString(),
       } as AgentStatus);
     }

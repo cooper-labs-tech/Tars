@@ -48,6 +48,7 @@ import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/age
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
+import { oneTaskQueue, workerOrderRefusal, isReportTo, noteFrom, behindText, type Busy } from '../../core/one-task';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
 
 /**
@@ -770,6 +771,83 @@ function mayActIn(req: RouteRequest, driver: Driver, projectPath: string, what: 
 }
 
 /**
+ * A worker never orders work from another agent (core/one-task.ts): the
+ * routes that hand an agent work ask this after the cross-project guard. Tars's
+ * own pass, an agent with an orchestrator's powers and the agent itself pass;
+ * a worker is refused, and told to ask its orchestrator. The window drives
+ * agents over IPC and never reaches these routes.
+ */
+function mayHandWork(req: RouteRequest, agent: AgentStatus, sendJson: SendJson): boolean {
+  if (req.internal) return true;
+  const callerId = resolveCallerId(req);
+  const caller = callerId ? agents.get(callerId) : undefined;
+  // assertMayDriveAgent, asked first, has refused a caller with no agent behind it.
+  if (!caller) return true;
+  const refusal = workerOrderRefusal({ kind: 'agent', agent: caller }, agent);
+  if (!refusal) return true;
+  sendJson({ error: refusal, code: 'worker_may_not_order' }, 403);
+  return false;
+}
+
+/**
+ * The worker this call comes from when what it sends another agent is a note,
+ * not a report to whoever leads it (core/one-task.ts, isReportTo).
+ */
+function noteSender(req: RouteRequest, agent: AgentStatus): AgentStatus | undefined {
+  if (req.internal) return undefined;
+  const callerId = resolveCallerId(req);
+  const caller = callerId && callerId !== agent.id ? agents.get(callerId) : undefined;
+  if (!caller || hasOrchestratorPowers(caller) || isReportTo(caller, agent)) return undefined;
+  return caller;
+}
+
+/** A note never starts a session: it waits for a turn's end, and an agent with no CLI up has none. */
+function noteNeedsSession(agent: AgentStatus): Record<string, unknown> {
+  return {
+    error: `${envelopeValue(agent.name || agent.id)} has no session open, and a note does not start one: nothing was sent. `
+      + 'A worker does not hand work to another agent; ask your orchestrator if it needs to do something.',
+    code: 'note_needs_session',
+  };
+}
+
+/**
+ * A turn in the agent's terminal: its CLI up, and working or asking (a
+ * permission, a question) (core/one-task.ts). `waiting` on the idle prompt is
+ * Claude Code's word for a CLI at rest at its prompt: no turn.
+ */
+function terminalTurn(agent: AgentStatus): Busy | undefined {
+  if (agent.status !== 'running' && !(agent.status === 'waiting' && agent.waitingReason !== 'idle')) return undefined;
+  if (!cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined)) return undefined;
+  const since = Date.parse(agent.workHandedAt ?? agent.lastActivity ?? '') || Date.now();
+  return { kind: 'turn', ...(agent.requestedBy?.agentId ? { requesterId: agent.requestedBy.agentId } : {}), since };
+}
+
+/** What a task asked now (or the queued task `ref`) waits behind, said for its asker. */
+function busyText(agent: AgentStatus, ref?: string): string {
+  const busy = oneTaskQueue.busyRun(agent.id) ?? terminalTurn(agent);
+  const nameOf = (id: string) => agents.get(id)?.name;
+  const line = oneTaskQueue.queued(agent.id);
+  const at = ref ? line.findIndex((t) => t.ref === ref) : -1;
+  const before = at >= 0 ? at : line.length;
+  const head = busy ? behindText(busy, nameOf) : 'the tasks queued before it';
+  return before && busy ? `${head}, and ${before} task${before === 1 ? '' : 's'} queued before it` : head;
+}
+
+/**
+ * Waits for a queued task's turn: first in its agent's line, and the agent
+ * free (no run, no turn in its terminal). Taken, its run is on record at once
+ * (oneTaskQueue.takeTurn). False when it was cancelled, or its agent deleted.
+ */
+async function waitTurn(agent: AgentStatus, ref: string): Promise<boolean> {
+  for (;;) {
+    if (!agents.has(agent.id)) { oneTaskQueue.cancel(ref); return false; }
+    if (!oneTaskQueue.find(ref)) return false;
+    if (oneTaskQueue.takeTurn(agent.id, ref, terminalTurn(agent))) return true;
+    await new Promise((r) => setTimeout(r, TASK_WAIT_STEP_MS));
+  }
+}
+
+/**
  * Serializes everything that reads-then-mutates one agent's live-session
  * state (ptyId, status) so two callers deciding "message vs spawn" for the
  * same agent at once can't both observe "no live session" and both spawn a
@@ -936,6 +1014,10 @@ export interface DispatchOpts {
   untilRest?: boolean;
   /** Typed after the sender line: its sender runs in a narrower mode (core/permission-ceiling.ts). */
   mark?: string;
+  /** A worker's note (core/one-task.ts): typed into a live session only, never a session started for it. */
+  noteOnly?: boolean;
+  /** Its turn in the agent's queue taken already: a session may start now. */
+  turnTaken?: boolean;
 }
 
 export async function performDispatch(
@@ -1066,6 +1148,36 @@ async function performDispatchLocked(
       ...(waitsForTurn ? { queued: true } : outcome === 'held' ? { held: true, heldReason: heldReasonFor(agent) } : {}),
       ...(taskRef ? { taskRef } : {}),
       agent: { id: agent.id, name: agent.name, status: agent.status },
+    });
+    return;
+  }
+
+  if (opts.noteOnly) {
+    dropped(agent, taskRef);
+    sendJson(noteNeedsSession(agent), 409);
+    return;
+  }
+  // One task at a time (core/one-task.ts): a run over ACP holds the agent, or
+  // tasks wait before this one. A session started now would be a second copy
+  // of the agent at work: the task waits its turn instead, and the caller is
+  // told which task it waits behind.
+  if (!opts.turnTaken && oneTaskQueue.mustQueue(agent.id, undefined)) {
+    const behind = busyText(agent);
+    const queued = oneTaskQueue.enqueue(agent.id, {
+      ...(opts.sender?.kind === 'agent' ? { requesterId: opts.sender.id } : {}), title: opts.message.slice(0, 100),
+    });
+    sendJson({
+      success: true, mode: 'queued', queued: true, queuedBehind: behind, queuedTask: queued.ref, previousStatus,
+      ...(taskRef ? { taskRef } : {}), agent: { id: agent.id, name: agent.name, status: agent.status },
+    });
+    void waitTurn(agent, queued.ref).then(async (taken) => {
+      if (!taken) { dropped(agent, taskRef); return; }
+      try {
+        await performDispatch(agent, { ...opts, onAccepted: () => taskRef, turnTaken: true }, ctx, () => undefined);
+      } finally {
+        // The session it started holds the agent from here: its turn, in its terminal.
+        oneTaskQueue.runEnded(agent.id);
+      }
     });
     return;
   }
@@ -1479,6 +1591,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    if (!mayHandWork(req, agent, sendJson)) return;
 
     const since = new Date().toISOString();
     const { prompt, model, permissionMode: bodyPermissionMode, printMode } = req.body as {
@@ -1498,6 +1611,15 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         sendJson({
           error: `A CLI already runs in the terminal of "${agent.name || agent.id}": starting would end its session. Send the task with /dispatch, which types it in.`,
           cliRunning: true,
+        }, 409);
+        return false;
+      }
+      // A run over ACP holds it, or tasks wait their turn (core/one-task.ts):
+      // a session started now would work beside them. /dispatch queues it.
+      if (oneTaskQueue.mustQueue(agent.id, undefined)) {
+        sendJson({
+          error: `"${agent.name || agent.id}" is working on ${busyText(agent)}: starting it now would open a second session beside that work. Send the task with /dispatch or delegate_task, which wait their turn.`,
+          code: 'agent_busy',
         }, 409);
         return false;
       }
@@ -1521,21 +1643,30 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const { agent, reply: sendJson } = target;
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
 
-    const { message, model, permissionMode, mode: asked, reason } = req.body as {
-      message: string; model?: string; permissionMode?: 'normal' | 'auto' | 'bypass'; mode?: unknown; reason?: unknown;
+    const { message: asSent, model, permissionMode, mode: asked, reason, intent } = req.body as {
+      message: string; model?: string; permissionMode?: 'normal' | 'auto' | 'bypass'; mode?: unknown; reason?: unknown; intent?: unknown;
     };
-    if (!message) {
+    if (!asSent) {
       sendJson({ error: 'message is required' }, 400);
       return;
     }
-    const mode = (asked ?? 'auto') as SendMode;
-    if (!SEND_MODES.includes(mode)) {
+    const askedMode = (asked ?? 'auto') as SendMode;
+    if (!SEND_MODES.includes(askedMode)) {
       sendJson({ error: `mode is one of ${SEND_MODES.join(', ')}.`, code: 'invalid_mode' }, 400);
       return;
     }
+    // A worker never orders work (core/one-task.ts): a task (start_agent,
+    // delegate_task typed in), a steer or a restart from a worker is refused;
+    // anything else it sends another worker is a note, labelled so and typed
+    // in once that agent's turn is over. Its report to whoever leads it is not.
+    if ((intent === 'task' || askedMode === 'steer' || askedMode === 'restart') && !mayHandWork(req, agent, sendJson)) return;
+    const noteBy = noteSender(req, agent);
+    const message = noteBy ? noteFrom(noteBy.name || noteBy.id, asSent) : asSent;
+    const mode: SendMode = noteBy ? 'queue' : askedMode;
     await withReceipt(req, sendJson, {
       route: 'dispatch', agentId: agent.id, payload: { message, model: model ?? null, permissionMode: permissionMode ?? null, mode },
-    }, async (send) => {
+    }, async (sendAny) => {
+      const send: SendJson = noteBy ? (data, status) => sendAny(status && status >= 300 ? data : { ...(data as object), note: true }, status) : sendAny;
       const name = agent.name || agent.id;
       const callerId = resolveCallerId(req);
       const asker = callerId && callerId !== agent.id ? callerId : undefined;
@@ -1574,8 +1705,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       await performDispatch(agent, {
         message, model, permissionMode, from: by, sender: senderOf(agent, req), mark: markFor(agent, req),
         untilRest: mode === 'queue' || interrupted === false,
+        noteOnly: !!noteBy,
         // After the wait: a sender refused 409 typed nothing and takes no link.
-        onAccepted: () => requestFor(agent, req, message),
+        // A note hands nothing over: nobody's request.
+        onAccepted: () => (noteBy ? undefined : requestFor(agent, req, message)),
       }, ctx, interrupted === undefined ? send : (data, status) => send(status && status >= 300 ? data : { ...(data as object), interrupted }, status));
     });
   });
@@ -1596,6 +1729,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    if (!mayHandWork(req, agent, sendJson)) return;
 
     const { task, timeoutSeconds, model, answer } = req.body as { task?: string; timeoutSeconds?: number; model?: unknown; answer?: unknown };
     if (!task?.trim()) {
@@ -1626,96 +1760,131 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const asker = req.internal || !requester ? undefined : (agents.has(requester) ? levelOf(agents.get(requester)!) : null);
       const runMode = ceilingOf(asker, levelOf(agent));
 
-      const wasStatus = agent.status;
-      const handedAt = new Date().toISOString();
-      agent.status = 'running';
-      agent.workHandedAt = handedAt;
-      agent.currentTask = task.slice(0, 100);
-      agent.lastActivity = new Date().toISOString();
-      // Per-agent channel, not a bare 'status': /wait subscribes with
-      // `status:${agentId}` (see the .on below), so an emit on 'status' reached
-      // nobody and a caller waiting on this agent hung until its timeout.
-      emitAgentStatus(agent.id);
-      announceAgent(agent);
-
-      // A task of its own from the moment the run starts (task-ledger.ts): a
-      // quit mid-run leaves it, and its asker is told at the next launch. A
-      // run that never started did no work.
-      let taskId: string | undefined;
+      // One task at a time (core/one-task.ts): an agent with a run in
+      // progress, a turn in its terminal, or tasks queued before this one gets
+      // no second session. The task waits its turn, under a task id of its
+      // own from now, and the caller that asked to be answered at the start
+      // is answered now with what it waits behind (GET /api/tasks/:id?wait=
+      // follows it). Taken, its run is on record before anything else can be.
       let answered = false;
-      const result = await delegateOverAcp({
-        agent,
-        task,
-        appSettings: ctx.getAppSettings(),
-        timeoutMs: Math.min(Math.max((timeoutSeconds ?? 900) * 1000, 30_000), 3_600_000),
-        permissionMode: runMode,
-        ...(typeof model === 'string' ? { model } : {}),
-        onStarted: (run) => {
-          try {
-            taskId = liveTaskLedger()?.acpStarted({ agent, requesterAgentId: requester, text: task, startedAt: Date.parse(handedAt) });
-          } catch (err) {
-            console.warn('[task-ledger] ACP run not recorded:', (err as Error).message);
-          }
-          const startedBody = { ok: true, started: true, outcome: 'running', ...(taskId ? { taskId } : {}), ...(run.model ? { model: run.model } : {}) };
-          receipt.started(startedBody);
-          // Only with a task to wait on: without one the caller could follow nothing.
-          if (answerAtStart && taskId) {
-            answered = true;
-            sendJson({ ...startedBody, permissionMode: runMode }, 200);
-          }
-        },
-      });
-
-      // Only while this run is still the latest work the agent was handed. The
-      // MCP client can stop waiting on this route before a slow ACP start gives
-      // up, and it then types the task into the terminal instead. The turn that
-      // starts there owns the status: writing back the one this run began from
-      // put a working agent to `waiting`, which /wait answers at once, and which
-      // delegate_task reads as a question and answers by typing into the turn.
-      if (agent.workHandedAt === handedAt) {
-        agent.status = result.ok ? 'idle' : wasStatus === 'running' ? 'idle' : wasStatus;
+      let queuedRef: string | undefined;
+      const turn = terminalTurn(agent);
+      if (oneTaskQueue.mustQueue(agent.id, turn)) {
+        const behind = busyText(agent);
+        const queued = oneTaskQueue.enqueue(agent.id, { ...(requester ? { requesterId: requester } : {}), title: task.slice(0, 100) });
+        queuedRef = queued.ref;
+        const queuedBody = {
+          ok: true, started: false, queued: true, outcome: 'queued', taskId: queued.ref, queuedBehind: behind,
+          queuedAt: new Date(queued.queuedAt).toISOString(),
+        };
+        receipt.started(queuedBody);
+        if (answerAtStart) {
+          answered = true;
+          sendJson({ ...queuedBody, permissionMode: runMode }, 200);
+        }
+        if (!(await waitTurn(agent, queued.ref))) {
+          if (!answered) sendJson({ error: `Task ${queued.ref} was cancelled while it waited behind ${behind}: it never started.`, code: 'cancelled', taskId: queued.ref }, 409);
+          return;
+        }
+      } else {
+        oneTaskQueue.runStarted(agent.id, { ...(requester ? { requesterId: requester } : {}), since: Date.now() });
+      }
+      try {
+        const wasStatus = agent.status;
+        const handedAt = new Date().toISOString();
+        agent.status = 'running';
+        agent.workHandedAt = handedAt;
+        agent.currentTask = task.slice(0, 100);
         agent.lastActivity = new Date().toISOString();
-        if (result.text) agent.lastCleanOutput = result.text.slice(-8000);
-        saveAgents();
+        // Per-agent channel, not a bare 'status': /wait subscribes with
+        // `status:${agentId}` (see the .on below), so an emit on 'status' reached
+        // nobody and a caller waiting on this agent hung until its timeout.
         emitAgentStatus(agent.id);
         announceAgent(agent);
-      }
 
-      const outcome = result.ok ? 'completed' : result.stopReason === 'turn_limit' ? 'stopped' : 'error';
-      if (result.started && taskId) {
-        try {
-          liveTaskLedger()?.acpEnded(taskId, {
-            outcome,
-            stopReason: result.stopReason ?? (result.ok ? 'end_turn' : 'error'),
-            result: result.text,
-            usage: result.usage ? {
-              inputTokens: result.usage.inputTokens ?? 0,
-              outputTokens: result.usage.outputTokens ?? 0,
-              cachedReadTokens: result.usage.cachedReadTokens ?? 0,
-              cachedWriteTokens: result.usage.cachedWriteTokens ?? 0,
-            } : null,
-            costUSD: result.costUSD ?? null,
-          });
-        } catch (err) {
-          console.warn('[task-ledger] the end of an ACP run not recorded:', (err as Error).message);
+        // A task of its own from the moment the run starts (task-ledger.ts): a
+        // quit mid-run leaves it, and its asker is told at the next launch. A
+        // run that never started did no work.
+        let taskId: string | undefined;
+        const result = await delegateOverAcp({
+          agent,
+          task,
+          appSettings: ctx.getAppSettings(),
+          timeoutMs: Math.min(Math.max((timeoutSeconds ?? 900) * 1000, 30_000), 3_600_000),
+          permissionMode: runMode,
+          ...(typeof model === 'string' ? { model } : {}),
+          onStarted: (run) => {
+            try {
+              taskId = liveTaskLedger()?.acpStarted({ agent, requesterAgentId: requester, text: task, startedAt: Date.parse(handedAt) });
+            } catch (err) {
+              console.warn('[task-ledger] ACP run not recorded:', (err as Error).message);
+            }
+            if (taskId) oneTaskQueue.runNamed(agent.id, taskId);
+            const startedBody = { ok: true, started: true, outcome: 'running', ...(taskId ? { taskId } : {}), ...(run.model ? { model: run.model } : {}) };
+            receipt.started(startedBody);
+            // Only with a task to wait on: without one the caller could follow nothing.
+            if (answerAtStart && taskId) {
+              answered = true;
+              sendJson({ ...startedBody, permissionMode: runMode }, 200);
+            }
+          },
+        });
+
+        // Only while this run is still the latest work the agent was handed. The
+        // MCP client can stop waiting on this route before a slow ACP start gives
+        // up, and it then types the task into the terminal instead. The turn that
+        // starts there owns the status: writing back the one this run began from
+        // put a working agent to `waiting`, which /wait answers at once, and which
+        // delegate_task reads as a question and answers by typing into the turn.
+        if (agent.workHandedAt === handedAt) {
+          agent.status = result.ok ? 'idle' : wasStatus === 'running' ? 'idle' : wasStatus;
+          agent.lastActivity = new Date().toISOString();
+          if (result.text) agent.lastCleanOutput = result.text.slice(-8000);
+          saveAgents();
+          emitAgentStatus(agent.id);
+          announceAgent(agent);
         }
-        receipt.update({ outcome, ok: result.ok, ...(result.stopReason ? { stopReason: result.stopReason } : {}) });
-        noteRunEnd(taskId, result);
-      }
-      // Answered at its start: the caller reads its end from the ledger.
-      if (answered) return;
 
-      // Held to a mode the agent does not offer: it did not run, and typing
-      // the task into the terminal instead would run it in the agent's own,
-      // broader mode. Refused, so that delegate_task does not fall back.
-      if (result.code === 'permission_escalation_denied') {
-        sendJson({ ...result, permissionMode: runMode, retryWithDispatch: false }, 409);
-        return;
+        const outcome = result.ok ? 'completed' : result.stopReason === 'turn_limit' ? 'stopped' : 'error';
+        if (result.started && taskId) {
+          try {
+            liveTaskLedger()?.acpEnded(taskId, {
+              outcome,
+              stopReason: result.stopReason ?? (result.ok ? 'end_turn' : 'error'),
+              result: result.text,
+              usage: result.usage ? {
+                inputTokens: result.usage.inputTokens ?? 0,
+                outputTokens: result.usage.outputTokens ?? 0,
+                cachedReadTokens: result.usage.cachedReadTokens ?? 0,
+                cachedWriteTokens: result.usage.cachedWriteTokens ?? 0,
+              } : null,
+              costUSD: result.costUSD ?? null,
+            });
+          } catch (err) {
+            console.warn('[task-ledger] the end of an ACP run not recorded:', (err as Error).message);
+          }
+          receipt.update({ outcome, ok: result.ok, ...(result.stopReason ? { stopReason: result.stopReason } : {}) });
+          noteRunEnd(taskId, result);
+        }
+        // Queued and taken, but no run started: its follower reads why (GET /api/tasks/:id).
+        if (queuedRef && !taskId) oneTaskQueue.notStarted(queuedRef, result.error || 'the run did not start');
+        // Answered at its start: the caller reads its end from the ledger.
+        if (answered) return;
+
+        // Held to a mode the agent does not offer: it did not run, and typing
+        // the task into the terminal instead would run it in the agent's own,
+        // broader mode. Refused, so that delegate_task does not fall back.
+        if (result.code === 'permission_escalation_denied') {
+          sendJson({ ...result, permissionMode: runMode, retryWithDispatch: false }, 409);
+          return;
+        }
+        // A run that started is an answer, however it ended: 502 only when none
+        // did, which is when delegate_task may type the task into the terminal
+        // instead without running it twice.
+        sendJson({ ...result, permissionMode: runMode, ...(taskId ? { taskId } : {}) }, result.ok || result.started ? 200 : 502);
+      } finally {
+        oneTaskQueue.runEnded(agent.id);
       }
-      // A run that started is an answer, however it ended: 502 only when none
-      // did, which is when delegate_task may type the task into the terminal
-      // instead without running it twice.
-      sendJson({ ...result, permissionMode: runMode, ...(taskId ? { taskId } : {}) }, result.ok || result.started ? 200 : 502);
     });
   });
 
@@ -1741,17 +1910,39 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const taskId = liveReceipts().find({ caller: callerId ?? 'tars', id: requestId })?.outcome.body.taskId;
       id = typeof taskId === 'string' ? taskId : '';
     }
-    let found = id ? liveTaskLedger()?.task(id) : undefined;
+    // `?wait=<s>`: held until the task ends, for one segment at most (120 s,
+    // well under undici's 300 s), and answered `timeout: true` if it has not.
+    const waitS = Math.min(Math.max(Number(req.url.searchParams.get('wait')) || 0, 0), TASK_WAIT_MAX_S);
+    const until = Date.now() + waitS * 1000;
+    // A task that waited its turn (core/one-task.ts) is followed by the id it
+    // was queued under: while it waits, and as the ledger's task once it ran.
+    let queued = id ? oneTaskQueue.lookup(id) : undefined;
+    if (queued && callerId && callerId !== queued.task.requesterId && callerId !== queued.task.agentId) queued = undefined;
+    while (queued && (queued.state === 'queued' || queued.state === 'starting') && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, TASK_WAIT_STEP_MS));
+      queued = oneTaskQueue.lookup(id) ?? { state: 'failed', task: queued.task, error: 'cancelled before it started' };
+    }
+    if (queued && queued.state !== 'started') {
+      const { task: q } = queued;
+      sendJson({
+        ...(queued.state !== 'failed' && waitS > 0 ? { timeout: true } : {}),
+        task: {
+          id: q.ref, agentId: q.agentId, requesterAgentId: q.requesterId ?? null, source: 'acp', startedAt: null, endedAt: null,
+          queuedAt: new Date(q.queuedAt).toISOString(),
+          ...(queued.state === 'failed'
+            ? { outcome: 'error', error: `It never started: ${queued.error}.` }
+            : { outcome: queued.state, ...(queued.state === 'queued' ? { queuedBehind: busyText(agents.get(q.agentId) ?? ({ id: q.agentId } as AgentStatus), q.ref) } : {}) }),
+        },
+      });
+      return;
+    }
+    let found = id ? liveTaskLedger()?.task(queued?.state === 'started' ? queued.taskId : id) : undefined;
     if (!found || (callerId && callerId !== found.requesterAgentId && callerId !== found.agentId)) {
       sendJson({ error: 'No such task.' }, 404);
       return;
     }
-    // `?wait=<s>`: held until the task ends, for one segment at most (120 s,
-    // well under undici's 300 s), and answered `timeout: true` if it has not.
-    const waitS = Math.min(Math.max(Number(req.url.searchParams.get('wait')) || 0, 0), TASK_WAIT_MAX_S);
     let timedOut = false;
     if (waitS > 0 && found.outcome === 'running') {
-      const until = Date.now() + waitS * 1000;
       while (found && found.outcome === 'running' && Date.now() < until) {
         await new Promise((r) => setTimeout(r, TASK_WAIT_STEP_MS));
         found = liveTaskLedger()?.task(found.id) ?? found;
@@ -1803,11 +1994,14 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const { agent, reply: sendJson } = target;
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
 
-    const { message, mode } = req.body as { message: string; mode?: unknown };
-    if (!message) {
+    const { message: asSent, mode } = req.body as { message: string; mode?: unknown };
+    if (!asSent) {
       sendJson({ error: 'message is required' }, 400);
       return;
     }
+    // As /dispatch: what a worker sends another worker is a note (core/one-task.ts).
+    const noteBy = noteSender(req, agent);
+    const message = noteBy ? noteFrom(noteBy.name || noteBy.id, asSent) : asSent;
     // An alias of /dispatch's `auto` for this version (4.4 item 4).
     if (mode !== undefined && mode !== 'auto') {
       sendJson({ error: "/message sends in mode 'auto' only: send other modes through /dispatch.", code: 'invalid_mode' }, 400);
@@ -1835,10 +2029,23 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         }, 409);
         return;
       }
-      // Queued once nothing can refuse it any more (core/task-requests.ts).
-      const taskRef = requestFor(agent, req, message);
+      const noCli = !cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined);
+      if (noCli && noteBy) {
+        sendJson(noteNeedsSession(agent), 409);
+        return;
+      }
+      // A session started now would work beside a run, or before tasks queued (core/one-task.ts).
+      if (noCli && oneTaskQueue.mustQueue(agent.id, undefined)) {
+        sendJson({
+          error: `"${agent.name || agent.id}" is working on ${busyText(agent)}: nothing was sent. Send it with /dispatch, which waits its turn.`,
+          code: 'agent_busy',
+        }, 409);
+        return;
+      }
+      // Queued once nothing can refuse it any more (core/task-requests.ts). A note hands nothing over.
+      const taskRef = noteBy ? undefined : requestFor(agent, req, message);
 
-      if (!cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined)) {
+      if (noCli) {
         // No session: the claude process exited (e.g. crashed while 'waiting'),
         // or the terminal is a shell with no CLI, where a typed message would be
         // run as a command whatever the status says (see performDispatchLocked).
@@ -1882,11 +2089,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
           onWithdrawn: () => cancelRetell?.(),
           taskRef,
           mark: markFor(agent, req),
+          // A note waits for the turn's end, as /dispatch's `queue`.
+          untilRest: !!noteBy,
         });
         if (outcome === 'refused') dropped(agent, taskRef);
         if (outcome !== 'held' && outcome !== 'refused') handedOver(delivered(agent, taskRef));
-        if (outcome === 'held') cancelRetell = retellWhileHeld(agent, sender, Date.now());
-        sendJson({ success: true, ...(outcome === 'held' ? { held: true, heldReason: heldReasonFor(agent) } : {}), ...(taskRef ? { taskRef } : {}) });
+        const waitsForTurn = outcome === 'held' && !!noteBy && agent.status === 'running';
+        if (outcome === 'held' && !waitsForTurn) cancelRetell = retellWhileHeld(agent, sender, Date.now());
+        sendJson({
+          success: true,
+          ...(waitsForTurn ? { queued: true } : outcome === 'held' ? { held: true, heldReason: heldReasonFor(agent) } : {}),
+          ...(noteBy ? { note: true } : {}), ...(taskRef ? { taskRef } : {}),
+        });
         return;
       }
       sendJson({ error: 'Failed to send message - PTY not available' }, 500);

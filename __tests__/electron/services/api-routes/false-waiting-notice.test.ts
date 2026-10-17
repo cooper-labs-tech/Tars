@@ -142,7 +142,7 @@ beforeEach(() => {
   // The orchestrator, at rest at its prompt: free, so a note reaches it at
   // once and every assertion below reads what it was actually told.
   orchestratorTerminal = liveTerminal('pty-orch');
-  putAgent({ id: 'orch', name: 'Orchestrator', status: 'waiting', waitingReason: 'idle', ptyId: 'pty-orch', currentSessionId: sid('sess-orch') });
+  putAgent({ id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'waiting', waitingReason: 'idle', ptyId: 'pty-orch', currentSessionId: sid('sess-orch') });
   // The agent it delegates to, with a live claude session at its prompt for
   // more than a minute, so `waiting` because idle: /dispatch types into it.
   liveTerminal('pty-be');

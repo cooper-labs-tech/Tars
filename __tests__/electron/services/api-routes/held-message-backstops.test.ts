@@ -132,7 +132,7 @@ beforeEach(() => {
   registerAgentRoutes(routes, ctx);
 
   agents.set('orch', {
-    id: 'orch', name: 'Orchestrator', status: 'idle', projectPath: project,
+    id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'idle', projectPath: project,
     skills: [], output: [], lastActivity: new Date().toISOString(),
   } as AgentStatus);
   agents.set('worker', {
@@ -310,8 +310,9 @@ describe('a held message given up before the note is due', () => {
 
 describe('two agents asking one busy worker', () => {
   it("14. the first's link is kept while its work runs, and each line Tars types names its task", async () => {
+    // A second asker of the worker: a chat's runner, as a worker's other askers are (core/one-task.ts).
     agents.set('second', {
-      id: 'second', name: 'Release-Bot', status: 'idle', projectPath: project,
+      id: 'second', kind: 'chat', name: 'Release-Bot', status: 'idle', projectPath: project,
       skills: [], output: [], lastActivity: new Date().toISOString(),
     } as AgentStatus);
     const worker = agents.get('worker')!;

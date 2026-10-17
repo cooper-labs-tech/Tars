@@ -99,6 +99,9 @@ const SITES: Site[] = [
   { file: 'electron/core/chat-slots.ts', line: '? … && agent.kind !== \'chat\'', is: 'identity', why: 'the Audit\'s Info on #361: Main\'s record runs on the project\'s orchestrator, never on another agent it names' },
   { file: 'electron/core/reply-target.ts', line: 'const lead = [...fleet.values()].find((a) => … && a.kind !== \'chat\' && a.projectPath === caller.projectPath);', is: 'identity', why: 'R5: the project\'s orchestrator a reply to "orchestrator" falls back to' },
   { file: 'electron/core/reply-target.ts', line: 'if (asker && asker.projectPath === caller.projectPath && (toRequester || …)) {', is: 'powers', why: 'R5: an asker with the orchestrator\'s powers takes a reply to "orchestrator", a chat\'s runner included' },
+  { file: 'electron/core/one-task.ts', line: 'return !!caller && !!agent && … && caller.projectPath === agent.projectPath;', is: 'powers', why: 'who may take back a task waiting its turn: an asker with the orchestrator\'s powers in its project' },
+  { file: 'electron/core/one-task.ts', line: "if (caller.kind === 'tars' || caller.agent.id === target.id || …) return null;", is: 'powers', why: 'a worker never orders work from another agent: who hands an agent work' },
+  { file: 'electron/core/one-task.ts', line: 'return caller.requestedBy?.agentId === target.id || (… && target.projectPath === caller.projectPath);', is: 'powers', why: 'a worker writing to whoever leads it reports: not a note' },
   { file: 'electron/core/task-cancel.ts', line: '} else if (caller && … && caller.kind !== \'chat\' && caller.projectPath === worker.projectPath) {', is: 'identity', why: 'R6: the project\'s persistent orchestrator may cancel any chat\'s task, with a reason' },
 
   // handlers/
@@ -124,6 +127,7 @@ const SITES: Site[] = [
   { file: 'electron/services/agent-sleep.ts', line: '.filter((a) => atRest(a) && !… && a.ptyId);', is: 'identity', why: 'who may be put to sleep' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const isSuperAgentApi = …;', is: 'powers', why: 'spawnAgentSession: the instructions, the denied tools' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: '|| (… && agent.projectPath === caller.projectPath))) return undefined;', is: 'powers', why: 'a worker writing to it reports, and asks nothing' },
+  { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (!caller || … || isReportTo(caller, agent)) return undefined;', is: 'powers', why: 'what a worker sends another worker is a note, typed once its turn ends' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const isOrchestrator = …;', is: 'powers', why: 'the bootstrap\'s orchestration rules' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (…) {', is: 'identity', why: 'POST /api/agents never makes an orchestrator' },
   { file: 'electron/services/api-routes/telegram-routes.ts', line: 'if (!caller || !…) {', is: 'powers', why: 'who writes to the user through the relay' },
