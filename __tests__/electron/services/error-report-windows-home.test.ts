@@ -115,8 +115,9 @@ describe('an error report from Windows', () => {
   });
 
   it('9. takes no other folder for the home: a temp elsewhere, or a sibling that is no short form', () => {
-    const temp = ['C:\\Windows\\Temp', 'D:\\Temp', 'C:\\Users\\Public\\Temp'];
-    const text = reported('EBUSY C:\\Windows\\Temp\\a, D:\\Temp\\b, C:\\Users\\Public\\c', 'C:/Users/Public/x.js', HOME, temp);
+    const temp = ['C:\\Windows\\Temp', 'D:\\Temp', 'C:\\Users\\Public\\Temp', 'D:\\PROGRA~1\\Temp'];
+    const text = reported('EBUSY C:\\Windows\\Temp\\a, D:\\Temp\\b, C:\\Users\\Public\\c, D:\\PROGRA~1\\d', 'C:/Users/Public/x.js', HOME, temp);
+    expect(text).toContain('D:\\\\PROGRA~1\\\\d');
     expect(text).toContain('C:\\\\Windows\\\\Temp\\\\a');
     expect(text).toContain('D:\\\\Temp\\\\b');
     expect(text).toContain('C:\\\\Users\\\\Public\\\\c');

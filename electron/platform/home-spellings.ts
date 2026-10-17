@@ -11,11 +11,41 @@
  * was the whole path. Held by error-report-windows-home.test.ts.
  */
 
-/** The other spellings of a Windows home; none for a POSIX one, whose scrub stays as it was. */
-export function windowsHomeSpellings(home: string): string[] {
+/**
+ * A Windows home's 8.3 short form (`C:\\Users\\ANALC~1` for `C:\\Users\\Ana Lucia`),
+ * as the user's own temp folders spell it: TEMP, TMP and os.tmpdir() often
+ * hold it, and every path made under them carries it (the Audit's Medium on
+ * #433). Taken from a temp folder only when it sits beside the home, in the
+ * same parent, and its last part is an 8.3 name; never derived from the name.
+ */
+export function windowsShortHomes(home: string, tempDirs: readonly string[]): string[] {
   if (!home.includes('\\')) return [];
+  const parent = home.slice(0, home.lastIndexOf('\\')).toLowerCase();
+  const found = new Set<string>();
+  for (const dir of tempDirs) {
+    const m = /^([A-Za-z]:\\(?:[^\\]+\\)*?)([^\\]{1,6}~\d+)(?=\\|$)/.exec(dir);
+    if (!m || m[1].slice(0, -1).toLowerCase() !== parent) continue;
+    const short = `${m[1]}${m[2]}`;
+    if (short.toLowerCase() !== home.toLowerCase()) found.add(short);
+  }
+  return [...found];
+}
+
+/** One Windows path's spellings beside itself: forward, doubled, URL-encoded, and as a file URL writes it. */
+function spellingsOf(home: string): string[] {
   const forward = home.replace(/\\/g, '/');
-  return [forward, home.replace(/\\/g, '\\\\'), encodeURIComponent(home), encodeURIComponent(forward)];
+  const uri = encodeURI(forward);
+  return [forward, home.replace(/\\/g, '\\\\'), encodeURIComponent(home), encodeURIComponent(forward), uri, `/${uri}`];
+}
+
+/**
+ * The other spellings of a Windows home, its short form's included (from
+ * `tempDirs`); none for a POSIX one, whose scrub stays as it was.
+ */
+export function windowsHomeSpellings(home: string, tempDirs: readonly string[] = []): string[] {
+  if (!home.includes('\\')) return [];
+  const shorts = windowsShortHomes(home, tempDirs);
+  return [...new Set([...spellingsOf(home), ...shorts.flatMap(short => [short, ...spellingsOf(short)])])].filter(s => s !== home);
 }
 
 /** The user name a home ends with: its last part, after a `/` or, on Windows, a `\`. */
