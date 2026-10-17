@@ -396,7 +396,16 @@ function endProcessTreesOnWindowsNow(roots: number[], deadline: number): void {
   }
 }
 
-/** How long the quit waits for delegated runs to end on SIGTERM before SIGKILL. */
+/**
+ * How long the quit may read the runs' trees before it signals them, the first
+ * read of ps and the freeze's together. Under load a ps takes a few hundred
+ * milliseconds (100 to 620 ms each, measured at load 220 to 230 on
+ * 2026-10-17), and the freeze needs one read after the first.
+ */
+const QUIT_READS_MS = 2_000;
+/** One read of ps at the quit at most. */
+const QUIT_READ_MAX_MS = 1_000;
+/** How long the quit waits for delegated runs to end on SIGTERM before SIGKILL, from the SIGTERM. */
 const QUIT_GRACE_MS = 1_000;
 /** And for the read of ps before the SIGKILL, past that. */
 const QUIT_LAST_READ_MS = 500;
@@ -409,34 +418,48 @@ const QUIT_POLL_MS = 50;
  * SIGKILL. For the quit, where the stop's timer would
  * never fire (measured on #197: a wedged run was whole 14 s after the quit).
  *
- * Every read of ps shares one deadline, a second and a half from the start:
- * each had its own 2 s timeout, and a ps that hangs held the quit 6.5 s (the
- * Audit's gate of #199). A read that finds no time left is not made; the
- * groups already known still get their signals.
+ * The reads before the signals have QUIT_READS_MS between them, and the grace
+ * starts at the SIGTERM. They shared one deadline with the grace, a second and
+ * a half from the start, and a ps slowed by load used it up: the freeze's read
+ * was not made, and a process born during the first read was left (the QA's
+ * Info on #358, 1 quit in 60 at load 180).
+ *
+ * A ps that fails is not run again: each read had its own 2 s timeout once,
+ * and a ps that hangs held the quit 6.5 s (the Audit's gate of #199). Each read
+ * now has QUIT_READ_MAX_MS at most, or what is left of its time, and after one
+ * that failed the groups already known are watched by a signal of 0 and still
+ * get theirs. A quit whose ps hangs returns within QUIT_READ_MAX_MS and the
+ * grace; one whose ps is slow, within QUIT_READS_MS, the grace and the last
+ * read.
  */
 export function endProcessTreesNow(roots: number[]): void {
   if (roots.length === 0 && stopsUnderway.size === 0) return;
-  const graceEnds = Date.now() + QUIT_GRACE_MS;
-  const deadline = graceEnds + QUIT_LAST_READ_MS;
-  if (process.platform === 'win32') return endProcessTreesOnWindowsNow(roots, deadline);
+  const start = Date.now();
+  if (process.platform === 'win32') return endProcessTreesOnWindowsNow(roots, start + QUIT_GRACE_MS + QUIT_LAST_READ_MS);
+  let psFailed = false;
   const read = (until: number) => {
-    const left = Math.min(until, deadline) - Date.now();
-    return left > 20 ? processTableNow(left) : undefined;
+    const left = Math.min(until - Date.now(), QUIT_READ_MAX_MS);
+    if (psFailed || left <= 20) return undefined;
+    const table = processTableNow(left);
+    if (!table) psFailed = true;
+    return table;
   };
+  const readsEnd = start + QUIT_READS_MS;
   const tree = new ProcessTree(roots);
   for (const stopping of stopsUnderway) tree.absorb(stopping);
   stopsUnderway.clear();
-  tree.grow(read(graceEnds));
+  tree.grow(read(readsEnd));
   // Held still while read again, as the stop does (FREEZE_READS).
-  tree.freeze(() => read(graceEnds));
+  tree.freeze(() => read(readsEnd));
   tree.signal('SIGTERM');
   tree.signal('SIGCONT');
+  const graceEnds = Date.now() + QUIT_GRACE_MS;
   const pause = new Int32Array(new SharedArrayBuffer(4));
   while (Date.now() < graceEnds) {
     if (!tree.anyLeft(read(graceEnds))) return;
     Atomics.wait(pause, 0, 0, QUIT_POLL_MS);
   }
-  tree.grow(read(deadline));
+  tree.grow(read(graceEnds + QUIT_LAST_READ_MS));
   tree.signal('SIGKILL');
 }
 
