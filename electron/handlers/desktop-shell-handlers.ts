@@ -3,10 +3,11 @@ import { detectShells } from '../platform/shell-choices';
 import { isWindowsShell, parseTitleBarOverlay, TITLE_BAR_OVERLAY_HEIGHT } from '../platform/desktop-shell';
 
 /**
- * The renderer's two calls into the Windows desktop shell:
+ * The renderer's two calls into the desktop shell:
  *
  * - `desktop:detectShells`: the shells Settings > Terminal offers, and
- *   the one a terminal gets with no setting. Null on darwin and linux.
+ *   the one a terminal gets with no setting, on every platform (on macOS and
+ *   Linux from /etc/shells, since 2.0.4).
  * - `desktop:setTitleBarOverlay`: the caption buttons' colours, pushed by the
  *   shell when the theme changes. Honoured for the main window only, on
  *   Windows only, and only for two `#rrggbb` colours.

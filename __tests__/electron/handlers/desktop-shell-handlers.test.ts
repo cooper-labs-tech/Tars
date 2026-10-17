@@ -6,7 +6,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *
  * How it fails, written before the handlers took the platform as an argument:
  * 1. darwin/linux: `desktop:setTitleBarOverlay` acts on the window, which has
- *    no overlay there, or `desktop:detectShells` offers shells there.
+ *    no overlay there, or `desktop:detectShells` offers shells there. Until
+ *    2.0.4: since the parity program's P3 (2026-10-17) it offers the login
+ *    shells there, each keyed by its absolute path and named by its shell,
+ *    and fails by offering none, or what is not one.
  * 2. win32: a call from another window's contents (the tray panel, any page
  *    loaded in another window) recolours the main window's caption buttons.
  * 3. win32: with no main window, or a destroyed one, the call throws instead
@@ -88,8 +91,15 @@ describe('desktop:setTitleBarOverlay', () => {
 });
 
 describe('desktop:detectShells', () => {
-  it.each(['darwin', 'linux'] as const)('1. offers no shells on %s', (platform) => {
-    expect(register(platform, null).shells()).toBeNull();
+  it.each(['darwin', 'linux'] as const)('1. offers the login shells on %s, each by its path and its name', (platform) => {
+    const r = register(platform, null).shells() as { defaultPath: string; choices: { id: string; path: string | null; name?: string }[] } | null;
+    expect(r).not.toBeNull();
+    expect(typeof r!.defaultPath).toBe('string');
+    for (const c of r!.choices) {
+      expect(c.id).toBe(c.path);
+      expect(c.path!.startsWith('/')).toBe(true);
+      expect(c.name).toBe(c.path!.slice(c.path!.lastIndexOf('/') + 1));
+    }
   });
 
   it('offers the Windows shells on win32, PowerShell 7, Windows PowerShell and cmd always listed', () => {

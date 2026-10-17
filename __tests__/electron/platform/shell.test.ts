@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { resolveShell, shellArgs } from '../../../electron/platform/shell';
+import { resolveShell, shellArgs, agentShell } from '../../../electron/platform/shell';
 import { defaultShell } from '../../../electron/utils/default-shell';
 import type { FsProbe } from '../../../electron/platform/fs-probe';
 
@@ -8,8 +8,12 @@ import type { FsProbe } from '../../../electron/platform/fs-probe';
  * The shell a human terminal runs, and the arguments it gets.
  *
  * How it fails, written before the code (2026-09-25):
- * 1. darwin/linux: resolveShell returns anything but what defaultShell()
- *    returns today, SHELL set or not, or lets the Windows setting change it.
+ * 1. darwin/linux: with no shell set, resolveShell returns anything but what
+ *    defaultShell() returns today, SHELL set or not. Until 2.0.4 the setting
+ *    was read on Windows only; since the parity program's P3 (2026-10-17) it
+ *    is read there too: ignoring a shell the user chose (an absolute path), or
+ *    taking a setting that is not one (a Windows path, a bare name, a relative
+ *    path, blanks), fails.
  * 2. darwin/linux: shellArgs returns anything but ['-l'], for any shell,
  *    pwsh and fish included (both take -l there).
  * 3. win32: returns /bin/bash, or an MSYS SHELL such as /usr/bin/bash that
@@ -24,6 +28,8 @@ import type { FsProbe } from '../../../electron/platform/fs-probe';
  * 9. win32: passes -l to PowerShell or cmd (PowerShell 5.1 rejects it), or
  *    misses -l for Git Bash's bash.exe; or matches names case-sensitively or
  *    with the extension (BASH.EXE, pwsh vs pwsh.exe, a quoted path).
+ * 10. darwin/linux: an agent's waiting shell follows the user's setting; it
+ *    stays /bin/bash -l there, since the launch line typed into it is bash.
  */
 
 /** A read-only Windows disk: case-insensitive, backslash paths. */
@@ -42,14 +48,25 @@ const noFs: FsProbe = {
 const PWSH = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
 const WINPS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 
-describe('darwin/linux: exactly today', () => {
+describe('darwin/linux', () => {
   const envs = [{}, { SHELL: '' }, { SHELL: '/usr/bin/fish' }, { SHELL: '/bin/zsh' }, { SHELL: '/usr/local/bin/pwsh' }];
 
-  it.each(['darwin', 'linux'] as const)('1. resolveShell is defaultShell on %s, setting or not', (platform) => {
+  it.each(['darwin', 'linux'] as const)('1. resolveShell is defaultShell on %s with no shell set, or a setting that is no absolute path', (platform) => {
     for (const env of envs) {
       expect(resolveShell({ env, platform, fs: noFs })).toBe(defaultShell(env, platform));
-      expect(resolveShell({ env, platform, setting: 'C:\\Git\\bin\\bash.exe', fs: noFs })).toBe(defaultShell(env, platform));
+      for (const setting of ['C:\\Git\\bin\\bash.exe', 'fish', 'bin/zsh', '  ']) {
+        expect(resolveShell({ env, platform, setting, fs: noFs })).toBe(defaultShell(env, platform));
+      }
     }
+  });
+
+  it.each(['darwin', 'linux'] as const)('1. the shell the user chose on %s, an absolute path as given', (platform) => {
+    expect(resolveShell({ env: { SHELL: '/bin/zsh' }, platform, setting: '/opt/homebrew/bin/fish', fs: noFs })).toBe('/opt/homebrew/bin/fish');
+    expect(resolveShell({ env: {}, platform, setting: ' /usr/bin/fish ', fs: noFs })).toBe('/usr/bin/fish');
+  });
+
+  it.each(['darwin', 'linux'] as const)('10. an agent waits in /bin/bash -l on %s, whatever shell the user chose', (platform) => {
+    expect(agentShell({ platform, setting: '/opt/homebrew/bin/fish', env: { SHELL: '/bin/zsh' } })).toEqual({ shell: '/bin/bash', args: ['-l'] });
   });
 
   it.each(['darwin', 'linux'] as const)('2. shellArgs is ["-l"] for every shell on %s', (platform) => {

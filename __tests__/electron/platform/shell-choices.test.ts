@@ -5,11 +5,12 @@ import { resolveShell } from '../../../electron/platform/shell';
 import type { FsProbe } from '../../../electron/platform/fs-probe';
 
 /**
- * The shells the Settings > Terminal row offers on Windows.
+ * The shells the Settings > Terminal row offers.
  *
  * How it fails, written before the code (2026-09-26):
  * 1. darwin/linux: returns choices at all (the row is Windows only, and the
- *    shell there stays $SHELL), or touches the disk.
+ *    shell there stays $SHELL), or touches the disk. That held until 2.0.4:
+ *    the parity program's P3 offers the row on macOS and Linux too (8 to 13).
  * 2. A shell that is installed is missing: pwsh.exe only in
  *    %ProgramFiles%\PowerShell\7 (not on the PATH), powershell.exe only in
  *    System32 when the PATH lost it, cmd.exe from %ComSpec%, Git Bash in
@@ -26,6 +27,23 @@ import type { FsProbe } from '../../../electron/platform/fs-probe';
  *    absolute path (`Windows`, `C:Windows`, `cmd.exe`, `Program Files`) is
  *    trusted, so a shell planted in the working directory, an agent's
  *    project, is offered.
+ *
+ * And on macOS and Linux (the parity program's P3, 2026-10-17), whose login
+ * shells are the ones /etc/shells lists:
+ * 8. darwin/linux offer nothing, or something /etc/shells does not list.
+ * 9. A listed shell missing from the disk, a comment, a blank line or a
+ *    relative entry is offered.
+ * 10. A listed program that is no terminal for a person is offered: a
+ *    restricted shell (rbash), a multiplexer (tmux, screen), a refusal
+ *    (nologin, false, git-shell).
+ * 11. One shell is offered twice (/bin/bash and /usr/bin/bash on a merged
+ *    /usr, links to one file), or two shells of one name once (Apple's
+ *    /bin/bash and Homebrew's): each choice is a file, keyed by its path and
+ *    named by its shell.
+ * 12. The default is not what a terminal starts with no setting ($SHELL,
+ *    resolveShell).
+ * 13. No /etc/shells, or one that cannot be read: a throw, where the row has
+ *    nothing to offer but its default.
  */
 
 function fakeWinFs(files: string[]): FsProbe {
@@ -35,10 +53,6 @@ function fakeWinFs(files: string[]): FsProbe {
     readFile: (p) => { throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' }); },
   };
 }
-const noFs: FsProbe = {
-  isFile: () => { throw new Error('darwin/linux must not touch the disk'); },
-  readFile: () => { throw new Error('darwin/linux must not touch the disk'); },
-};
 
 const PS51 = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe';
 const CMD = 'C:\\Windows\\System32\\cmd.exe';
@@ -53,14 +67,75 @@ const STOCK_ENV = {
   LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local',
 };
 
+/** A macOS or Linux disk: /etc/shells (null when there is none), and the files it lists, each with its real path. */
+function posixDisk(shells: string | null, files: Record<string, string>): { fs: FsProbe; realpath: (p: string) => string } {
+  return {
+    fs: {
+      isFile: (p) => p in files,
+      readFile: (p) => {
+        if (p === '/etc/shells' && shells !== null) return shells;
+        throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' });
+      },
+    },
+    realpath: (p) => {
+      if (!(p in files)) throw Object.assign(new Error(`ENOENT ${p}`), { code: 'ENOENT' });
+      return files[p];
+    },
+  };
+}
+
+/** Ubuntu 24.04's, a merged /usr: /bin is /usr/bin. fish and screen are listed, not installed. */
+const UBUNTU_SHELLS = [
+  '# /etc/shells: valid login shells', '/bin/sh', '/usr/bin/sh', '/bin/bash', '/usr/bin/bash', '/bin/rbash', '/usr/bin/rbash',
+  '/usr/bin/dash', '/usr/bin/tmux', '/usr/bin/screen', '/usr/bin/zsh', '/bin/zsh', '/usr/bin/fish', '/usr/sbin/nologin', '',
+].join('\n');
+const UBUNTU_FILES: Record<string, string> = {
+  '/bin/sh': '/usr/bin/dash', '/usr/bin/sh': '/usr/bin/dash', '/bin/bash': '/usr/bin/bash', '/usr/bin/bash': '/usr/bin/bash',
+  '/bin/rbash': '/usr/bin/bash', '/usr/bin/rbash': '/usr/bin/bash', '/usr/bin/dash': '/usr/bin/dash', '/usr/bin/tmux': '/usr/bin/tmux',
+  '/usr/bin/zsh': '/usr/bin/zsh', '/bin/zsh': '/usr/bin/zsh', '/usr/sbin/nologin': '/usr/sbin/nologin',
+};
+
+/** macOS's own, and two Homebrew shells added to it. */
+const MAC_SHELLS = [
+  '# List of acceptable shells for chpass(1).', '# Ftpd will not allow users to connect who are not using', '# one of these shells.', '',
+  '/bin/bash', '/bin/csh', '/bin/dash', '/bin/ksh', '/bin/sh', '/bin/tcsh', '/bin/zsh', '/opt/homebrew/bin/bash', '/opt/homebrew/bin/fish', '',
+].join('\n');
+
 function byId(r: ReturnType<typeof detectShells>) {
   return Object.fromEntries((r?.choices ?? []).map((c) => [c.id, c.path]));
 }
 
 describe('detectShells', () => {
-  it('darwin and linux offer nothing and read nothing', () => {
-    expect(detectShells({ platform: 'darwin', env: STOCK_ENV, fs: noFs })).toBeNull();
-    expect(detectShells({ platform: 'linux', env: STOCK_ENV, fs: noFs })).toBeNull();
+  it('8, 9, 10, 11, 12. Ubuntu: one choice per shell file /etc/shells lists and the disk has, none that is no terminal', () => {
+    const disk = posixDisk(UBUNTU_SHELLS, UBUNTU_FILES);
+    expect(detectShells({ platform: 'linux', env: { SHELL: '/usr/bin/zsh' }, ...disk })).toEqual({
+      defaultPath: '/usr/bin/zsh',
+      choices: [
+        { id: '/bin/sh', path: '/bin/sh', name: 'sh' },
+        { id: '/bin/bash', path: '/bin/bash', name: 'bash' },
+        { id: '/usr/bin/zsh', path: '/usr/bin/zsh', name: 'zsh' },
+      ],
+    });
+  });
+
+  it("11, 12. macOS: Apple's shells and Homebrew's, both bashes, the default $SHELL or zsh", () => {
+    const disk = posixDisk(MAC_SHELLS, Object.fromEntries(MAC_SHELLS.split('\n').filter((l) => l.startsWith('/')).map((l) => [l, l])));
+    const found = detectShells({ platform: 'darwin', env: {}, ...disk })!;
+    expect(found.defaultPath).toBe('/bin/zsh');
+    expect(found.choices.map((c) => c.id)).toEqual([
+      '/bin/bash', '/bin/csh', '/bin/dash', '/bin/ksh', '/bin/sh', '/bin/tcsh', '/bin/zsh', '/opt/homebrew/bin/bash', '/opt/homebrew/bin/fish',
+    ]);
+    expect(found.choices.filter((c) => c.name === 'bash').map((c) => c.path)).toEqual(['/bin/bash', '/opt/homebrew/bin/bash']);
+    expect(detectShells({ platform: 'darwin', env: { SHELL: '/opt/homebrew/bin/fish' }, ...disk })!.defaultPath).toBe('/opt/homebrew/bin/fish');
+  });
+
+  it('9. reads an entry past its blanks and its comment, and never a relative one', () => {
+    const disk = posixDisk('  /bin/zsh   # the default\nbin/fish\n\n#/bin/bash\n', { '/bin/zsh': '/bin/zsh', 'bin/fish': 'bin/fish', '/bin/bash': '/bin/bash' });
+    expect(detectShells({ platform: 'linux', env: {}, ...disk })!.choices).toEqual([{ id: '/bin/zsh', path: '/bin/zsh', name: 'zsh' }]);
+  });
+
+  it('13. no /etc/shells, or one it cannot read: its default alone, and no throw', () => {
+    expect(detectShells({ platform: 'linux', env: { SHELL: '/bin/bash' }, ...posixDisk(null, {}) })).toEqual({ defaultPath: '/bin/bash', choices: [] });
   });
 
   it('a stock Windows 11: PowerShell 5.1 and cmd, no pwsh, no Git Bash', () => {
