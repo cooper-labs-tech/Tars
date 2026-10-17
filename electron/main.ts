@@ -17,7 +17,7 @@ import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, sta
 import { startRelayRouting } from './services/hermes-relay-routing';
 import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, ipcMain } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -465,7 +465,7 @@ function moveLocalKanbanToHermes() {
 // One Tars per profile, on every platform. A second launch shows the first
 // one's window and ends here: it has read app-settings.json and nothing else,
 // and it writes nothing and starts nothing.
-const isPrimaryInstance = claimSingleInstance(revealMainWindow);
+const isPrimaryInstance = claimSingleInstance(showMainWindow);
 if (!isPrimaryInstance) app.exit(0);
 
 // Register protocol schemes before app is ready
@@ -803,12 +803,27 @@ app.on('window-all-closed', () => {
 });
 
 // Re-create window on macOS when dock icon is clicked
-app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-    setUtilsMainWindow(getMainWindow());
-  }
-});
+/**
+ * The main window made again when it was closed: on macOS Tars keeps running
+ * without one. Not before the app is ready, when nothing can be made yet. Asked
+ * of the window manager, not of the window count: the tray panel is a window
+ * too, kept hidden once it exists.
+ */
+function remakeMainWindow(): void {
+  if (!app.isReady()) return;
+  const win = getMainWindow();
+  if (win && !win.isDestroyed()) return;
+  createWindow();
+  setUtilsMainWindow(getMainWindow());
+}
+
+/** A second launch's hand-over (claimSingleInstance): the window brought forward, made again first if it was closed. */
+function showMainWindow(): void {
+  remakeMainWindow();
+  revealMainWindow();
+}
+
+app.on('activate', remakeMainWindow);
 
 // Save agents and end every terminal before quitting. In two passes: the
 // first saves, stops what writes, and holds the quit while the terminals'

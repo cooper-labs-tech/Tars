@@ -84,3 +84,53 @@ test('a second launch on the same profile hands over to the first and exits, wri
     await removeHome(home);
   }
 });
+
+/**
+ * And on macOS with the window closed (the Audit's Low on #429): Tars keeps running there with no window, and makes it
+ * again only on the Dock's 'activate'. A second launch (open -n, another copy) now hands over and exits, so the first
+ * must make its window again too, or the user who launched Tars sees nothing at all.
+ */
+test('macOS, the window closed: a second launch makes the first one\'s window again', async () => {
+  test.skip(process.platform !== 'darwin', 'Tars quits with its last window everywhere else');
+  test.setTimeout(180_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-one-tars-closed-'));
+  const dataDir = path.join(home, '.dorothy');
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(path.join(dataDir, 'agents.json'), '[]');
+  fs.writeFileSync(path.join(dataDir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dataDir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const env = { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_E2E: '1' };
+  const values: Record<string, unknown> = {};
+  const first = await launchSandboxed(electron, home, { env: { ...env, DOROTHY_API_PORT: apiPort(31428) } });
+  let second: ReturnType<typeof spawn> | undefined;
+  const shownWindows = () => first.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().filter((w) => !w.isDestroyed() && w.isVisible()).length);
+  try {
+    await first.firstWindow();
+    await first.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].close());
+    await expect.poll(shownWindows, { timeout: 10_000, message: 'the window is closed' }).toBe(0);
+    expect(first.process().exitCode, 'Tars still runs with no window').toBeNull();
+    values.windowsAfterClose = await shownWindows();
+
+    const inherited = Object.fromEntries(Object.entries(process.env).filter(([name]) => !/^(CLAUDE|DOROTHY|ANTHROPIC)|^CLAUDECODE$/.test(name)));
+    second = spawn(electronBinary(), ['.', `--user-data-dir=${path.join(home, 'electron-profile')}`], {
+      cwd: process.cwd(),
+      env: { ...inherited, ...env, DOROTHY_API_PORT: apiPort(31429), HOME: home, CFFIXED_USER_HOME: home },
+      stdio: 'ignore',
+    });
+    const exit = await new Promise<number | null>((resolve) => {
+      const timer = setTimeout(() => resolve(null), 30_000);
+      second!.once('exit', (code) => { clearTimeout(timer); resolve(code); });
+    });
+    values.secondExit = exit;
+    expect(exit, 'the second launch exits, with 0').toBe(0);
+    second = undefined;
+    await expect.poll(shownWindows, { timeout: 20_000, message: 'the first shows a window again' }).toBe(1);
+    values.windowsAfterSecondLaunch = await shownWindows();
+  } finally {
+    recordValues(values);
+    second?.kill();
+    await first.close();
+    await removeHome(home);
+  }
+});
