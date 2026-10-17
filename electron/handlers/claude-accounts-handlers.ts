@@ -3,7 +3,6 @@ import * as os from 'os';
 import * as pty from 'node-pty';
 import { v4 as uuidv4 } from 'uuid';
 import { broadcastToAllWindows } from '../utils/broadcast';
-import { buildFullPath } from '../utils/path-builder';
 import {
   DEFAULT_ACCOUNT_ID,
   accountsRoot,
@@ -446,7 +445,8 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
         cols: typeof cols === 'number' && cols > 0 ? cols : 100,
         rows: typeof rows === 'number' && rows > 0 ? rows : 30,
         cwd: os.homedir(),
-        env: { ...command.env, PATH: buildFullPath() } as Record<string, string>,
+        // loginCommand wrote the PATH a packaged Tars lacks, once, under Windows's own spelling there.
+        env: command.env as Record<string, string>,
       });
       loginPtys.set(ptyId, term);
       loginFor.set(ptyId, account.id);

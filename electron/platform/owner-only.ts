@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Env } from './fs-probe';
 import { envValue } from './path-env';
+import { childEnv } from './child-env';
 
 /**
  * Close a secret file, or the private directory, to every account but its
@@ -232,3 +233,67 @@ export function ownerOnlyDirSync(dir: string, deps: OwnerOnlyDeps = {}): OwnerOn
   return grantSync(dir, 'directory', { replaceExplicit: true }, deps);
 }
 
+export interface OwnerOnlyReadDeps extends OwnerOnlyDeps {
+  /** Runs the PowerShell that prints a folder's security descriptor; throws as execFileSync does. */
+  readSddl?: (file: string, args: string[], env: Env) => string;
+}
+
+const SDDL_ARGS = ['-NoProfile', '-NonInteractive', '-Command', '(Get-Acl -LiteralPath $env:TARS_ACL_PATH).Sddl'];
+
+const realReadSddl = (file: string, args: string[], env: Env): string =>
+  nodeExecFileSync(file, args, { ...RUN_OPTIONS, env: env as NodeJS.ProcessEnv, stdio: ['ignore', 'pipe', 'pipe'] });
+
+/** SYSTEM, by its alias or its SID, as SDDL may write either. */
+const SYSTEM_NAMES = new Set(['SY', SYSTEM_SID]);
+
+/**
+ * Why a security descriptor (SDDL, `O:<owner>G:<group>D:<flags>(ace)...`)
+ * leaves its object open to an account other than `userSid` and SYSTEM, or
+ * null when it is closed as ownerOnlyDirSync closes one: `userSid` its owner,
+ * its list protected from its parent's (`P`), no entry inherited (`ID`), and
+ * every entry that grants (anything but a Deny) this user's or SYSTEM's.
+ * By SID, so nothing depends on the language of the machine.
+ */
+export function sddlOpenness(sddl: string, userSid: string): string | null {
+  const m = /^O:(.+?)(?:G:.+?)?D:([A-Z]*)((?:\([^()]*\))*)(?:S:.*)?$/.exec(sddl.trim());
+  if (!m) return 'could not be read: its access list is not one Windows writes';
+  const [, owner, flags, aces] = m;
+  if (owner !== userSid) return 'belongs to another user';
+  if (!flags.includes('P')) return 'is open to other users: it takes its parent\'s access list';
+  for (const ace of aces.match(/\([^()]*\)/g) ?? []) {
+    const [type, aceFlags = '', , , , sid] = ace.slice(1, -1).split(';');
+    if (aceFlags.includes('ID')) return 'is open to other users: it holds an entry inherited from its parent';
+    if (type === 'D') continue;
+    if (sid !== userSid && !SYSTEM_NAMES.has(sid)) return 'is open to other users';
+  }
+  return null;
+}
+
+/** Folders read closed in this run, by lowercase path: one PowerShell per folder and run, not one per check. */
+const closedThisRun = new Set<string>();
+
+/**
+ * Why `dir` is not closed to every account but this user's, as
+ * ownerOnlyDirSync leaves one, or null when it is: its security descriptor,
+ * asked of the Windows PowerShell under %SystemRoot% (no profile, no
+ * PowerShell 7 module path), its path handed through the environment and never
+ * written into the command. A folder that cannot be read is refused. A folder
+ * read closed is not read again in this run. darwin/linux: null, nothing runs:
+ * their mode decides.
+ */
+export function ownerOnlyDirProblemSync(dir: string, deps: OwnerOnlyReadDeps = {}): string | null {
+  if (notWindows(deps)) return null;
+  const injected = !!deps.readSddl || !!deps.execFileSync;
+  if (!injected && closedThisRun.has(dir.toLowerCase())) return null;
+  try {
+    const run = deps.execFileSync ?? runSync;
+    const sid = (!deps.execFileSync && cachedSid) || rememberSid(run(system32(deps, 'whoami.exe'), WHOAMI_ARGS), !!deps.execFileSync);
+    const powershell = system32(deps, 'WindowsPowerShell\\v1.0\\powershell.exe');
+    const env = childEnv(powershell, { ...(deps.env ?? process.env), TARS_ACL_PATH: dir }, 'win32');
+    const open = sddlOpenness(String((deps.readSddl ?? realReadSddl)(powershell, SDDL_ARGS, env)), sid);
+    if (!open && !injected) closedThisRun.add(dir.toLowerCase());
+    return open;
+  } catch (err) {
+    return `could not be read: Windows did not give its access list (${why(err)})`;
+  }
+}
