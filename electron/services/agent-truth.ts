@@ -299,12 +299,29 @@ function latestLocalCommand(lines: string): number | undefined {
  *
  * Now a transcript, which only grows, is read from where the last read stopped
  * (the last complete line), in Buffers, a chunk at a time, and only a matching
- * line becomes a string, made from its own bytes. A file replaced (another
- * inode), cut shorter, or written over (the bytes before where the last read
- * stopped are no longer the ones it read) is read again from its start; a
- * line not ended yet waits for its newline.
+ * line is parsed, once, into the few facts the check reads (BackgroundFact):
+ * the words it looks for also fill tool results (a Read of Tars's own code),
+ * and keeping the lines kept those results, 17.7 to 28.3 MB a transcript on
+ * the largest of the live machine, parsed again at every rest (the Audit's
+ * Medium on #435). A file replaced (another inode), cut shorter, written over
+ * (the bytes before where the last read stopped are no longer the ones it
+ * read), or rewritten to the same size (another modification time) is read
+ * again from its start; a line not ended yet waits for its newline.
  */
-type BackgroundLines = { ino: number; size: number; offset: number; tail: Buffer; lines: string[] };
+/** What one transcript line says about background work, by the rules pendingBackgroundWork applies. */
+type BackgroundFact = {
+  /** Epoch ms of the line. */
+  at: number;
+  /** An assistant line: the ids of its Monitor calls, and the tasks its stop calls (TaskStop, KillShell...) end. */
+  monitors?: string[];
+  stops?: string[];
+  /** The tasks a <task-notification> note in it says ended. */
+  ends?: string[];
+  /** A user line: the task its tool result started, or a Monitor's task with the tool_use ids it answers. */
+  started?: string;
+  monitorTask?: { taskId: string; answers: string[] };
+};
+type BackgroundLines = { ino: number; size: number; mtimeMs: number; offset: number; tail: Buffer; facts: BackgroundFact[] };
 const backgroundLines = new Map<string, BackgroundLines>();
 const BACKGROUND_LINES_KEPT = 32;
 /** What is read at once. */
@@ -316,7 +333,76 @@ const BACKGROUND_WORDS = ['backgroundTaskId', 'isAsync', 'taskId', 'task-notific
   .map(word => Buffer.from(word, 'utf-8'));
 const NEWLINE = 0x0a;
 
-function backgroundLinesOf(file: string): string[] | undefined {
+/** One line's facts, or none when it says nothing (a tool result that only names the words). */
+function backgroundFactOf(line: string): BackgroundFact | undefined {
+  let entry: Record<string, unknown>;
+  try {
+    entry = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  const at = Date.parse(String(entry.timestamp ?? ''));
+  if (!Number.isFinite(at)) return undefined;
+  const content = (entry.message as { content?: unknown } | undefined)?.content;
+  const blocks = Array.isArray(content) ? content as Array<Record<string, unknown>> : [];
+  const fact: BackgroundFact = { at };
+
+  if (entry.type === 'assistant') {
+    const monitors: string[] = [];
+    const stops: string[] = [];
+    for (const block of blocks) {
+      if (block.type !== 'tool_use') continue;
+      if (block.name === 'Monitor' && typeof block.id === 'string') monitors.push(block.id);
+      if (STOP_TOOLS.has(String(block.name))) {
+        const input = (block.input ?? {}) as Record<string, unknown>;
+        const id = input.task_id ?? input.shell_id ?? input.bash_id;
+        if (typeof id === 'string') stops.push(id);
+      }
+    }
+    if (monitors.length) fact.monitors = monitors;
+    if (stops.length) fact.stops = stops;
+    return monitors.length || stops.length ? fact : undefined;
+  }
+  // A note that came while a turn ran: claude 2.1.296 queues it
+  // (queue-operation enqueue) and attaches it to the turn (an attachment
+  // queued_command), and writes no user line for it. Read only from user
+  // lines, such a task stayed running for ever, and every rest told its
+  // requester so (the Low after the 2.0.0 chain).
+  // Only a note Claude Code queued itself: a message typed in during the turn
+  // is queued the same way (commandMode 'prompt', "Message from ..."), and
+  // one quoting a note must end nothing (GATE-PR389, L1).
+  const attachment = entry.attachment as { type?: unknown; commandMode?: unknown; prompt?: unknown } | undefined;
+  const queued = entry.type === 'queue-operation' && entry.operation === 'enqueue'
+    ? entry.content
+    : entry.type === 'attachment' && attachment?.type === 'queued_command' && attachment.commandMode === 'task-notification'
+      ? attachment.prompt
+      : undefined;
+  if (entry.type === 'queue-operation' || entry.type === 'attachment') {
+    const ends = typeof queued === 'string' && queued.trimStart().startsWith('<task-notification>') ? noteEnds(queued) : [];
+    if (!ends.length) return undefined;
+    fact.ends = ends;
+    return fact;
+  }
+  if (entry.type !== 'user') return undefined;
+
+  const result = entry.toolUseResult as Record<string, unknown> | undefined;
+  if (result && typeof result === 'object') {
+    if (typeof result.backgroundTaskId === 'string') fact.started = result.backgroundTaskId;
+    else if (result.isAsync === true && typeof result.agentId === 'string') fact.started = result.agentId;
+    else if (typeof result.taskId === 'string') {
+      const answers = blocks.filter(b => b.type === 'tool_result').map(b => String(b.tool_use_id));
+      if (answers.length) fact.monitorTask = { taskId: result.taskId, answers };
+    }
+  }
+  const text = typeof content === 'string'
+    ? content
+    : blocks.map(b => (typeof b.text === 'string' ? b.text : '')).join('\n');
+  const ends = noteEnds(text);
+  if (ends.length) fact.ends = ends;
+  return fact.started || fact.monitorTask || fact.ends ? fact : undefined;
+}
+
+function backgroundFactsOf(file: string): BackgroundFact[] | undefined {
   let st: fs.Stats;
   try {
     st = fs.statSync(file);
@@ -324,9 +410,10 @@ function backgroundLinesOf(file: string): string[] | undefined {
     return undefined;
   }
   let kept = backgroundLines.get(file);
-  if (kept && kept.ino === st.ino && kept.size === st.size) return kept.lines;
-  const fresh = (): BackgroundLines => ({ ino: st.ino, size: 0, offset: 0, tail: Buffer.alloc(0), lines: [] });
-  if (!kept || kept.ino !== st.ino || st.size < kept.offset) kept = fresh();
+  if (kept && kept.ino === st.ino && kept.size === st.size && kept.mtimeMs === st.mtimeMs) return kept.facts;
+  const fresh = (): BackgroundLines => ({ ino: st.ino, size: 0, mtimeMs: 0, offset: 0, tail: Buffer.alloc(0), facts: [] });
+  // Transcripts only grow: the same size with another modification time is a rewrite.
+  if (!kept || kept.ino !== st.ino || st.size < kept.offset || st.size === kept.size) kept = fresh();
   let fd: number;
   try {
     fd = fs.openSync(file, 'r');
@@ -342,16 +429,20 @@ function backgroundLinesOf(file: string): string[] | undefined {
     // The bytes of a line not ended within one chunk, joined to the next.
     let carry: Buffer | undefined;
     let at = kept.offset;
-    const chunk = Buffer.allocUnsafe(CHUNK_BYTES);
+    // As large as what was appended, up to a chunk: a rest after a few lines reads a few lines.
+    const chunk = Buffer.allocUnsafe(Math.max(1, Math.min(CHUNK_BYTES, st.size - at)));
     while (at < st.size) {
-      const read = fs.readSync(fd, chunk, 0, Math.min(CHUNK_BYTES, st.size - at), at);
+      const read = fs.readSync(fd, chunk, 0, Math.min(chunk.length, st.size - at), at);
       if (read <= 0) break;
       at += read;
       const data = carry ? Buffer.concat([carry, chunk.subarray(0, read)]) : chunk.subarray(0, read);
       let start = 0;
       for (let nl = data.indexOf(NEWLINE, start); nl !== -1; nl = data.indexOf(NEWLINE, start)) {
         const line = data.subarray(start, nl);
-        if (BACKGROUND_WORDS.some(word => line.includes(word))) kept.lines.push(line.toString('utf-8'));
+        if (BACKGROUND_WORDS.some(word => line.includes(word))) {
+          const fact = backgroundFactOf(line.toString('utf-8'));
+          if (fact) kept.facts.push(fact);
+        }
         start = nl + 1;
       }
       // Copied: `data` may be the reused chunk, which the next read overwrites.
@@ -365,10 +456,11 @@ function backgroundLinesOf(file: string): string[] | undefined {
     fs.closeSync(fd);
   }
   kept.size = st.size;
+  kept.mtimeMs = st.mtimeMs;
   backgroundLines.delete(file);
   backgroundLines.set(file, kept);
   while (backgroundLines.size > BACKGROUND_LINES_KEPT) backgroundLines.delete(backgroundLines.keys().next().value as string);
-  return kept.lines;
+  return kept.facts;
 }
 
 export function pendingBackgroundWork(
@@ -378,83 +470,37 @@ export function pendingBackgroundWork(
 ): string[] {
   const sessionId = agent.currentSessionId?.trim();
   if (!sessionId) return [];
-  let lines: string[] | undefined;
+  let facts: BackgroundFact[] | undefined;
   for (const root of transcriptRoots(agent.worktreePath, agent.projectPath)) {
-    lines = backgroundLinesOf(transcriptPath(root, sessionId, homeDir));
-    if (lines) break;
+    facts = backgroundFactsOf(transcriptPath(root, sessionId, homeDir));
+    if (facts) break;
   }
-  if (!lines) return [];
+  if (!facts) return [];
 
   const started = new Set<string>();
   const finished = new Set<string>();
   const monitorCalls = new Set<string>();
-  for (const line of lines) {
-    let entry: Record<string, unknown>;
-    try {
-      entry = JSON.parse(line);
-    } catch {
-      continue;
-    }
-    if (!(Date.parse(String(entry.timestamp ?? '')) >= sinceMs)) continue;
-    const content = (entry.message as { content?: unknown } | undefined)?.content;
-    const blocks = Array.isArray(content) ? content as Array<Record<string, unknown>> : [];
-
-    if (entry.type === 'assistant') {
-      for (const block of blocks) {
-        if (block.type !== 'tool_use') continue;
-        if (block.name === 'Monitor' && typeof block.id === 'string') monitorCalls.add(block.id);
-        if (STOP_TOOLS.has(String(block.name))) {
-          const input = (block.input ?? {}) as Record<string, unknown>;
-          const id = input.task_id ?? input.shell_id ?? input.bash_id;
-          if (typeof id === 'string') finished.add(id);
-        }
-      }
-      continue;
-    }
-    // A note that came while a turn ran: claude 2.1.296 queues it
-    // (queue-operation enqueue) and attaches it to the turn (an attachment
-    // queued_command), and writes no user line for it. Read only from user
-    // lines, such a task stayed running for ever, and every rest told its
-    // requester so (the Low after the 2.0.0 chain).
-    // Only a note Claude Code queued itself: a message typed in during the turn
-    // is queued the same way (commandMode 'prompt', "Message from ..."), and
-    // one quoting a note must end nothing (GATE-PR389, L1).
-    const attachment = entry.attachment as { type?: unknown; commandMode?: unknown; prompt?: unknown } | undefined;
-    const queued = entry.type === 'queue-operation' && entry.operation === 'enqueue'
-      ? entry.content
-      : entry.type === 'attachment' && attachment?.type === 'queued_command' && attachment.commandMode === 'task-notification'
-        ? attachment.prompt
-        : undefined;
-    if (entry.type === 'queue-operation' || entry.type === 'attachment') {
-      if (typeof queued === 'string' && queued.trimStart().startsWith('<task-notification>')) noteEnds(queued, finished);
-      continue;
-    }
-    if (entry.type !== 'user') continue;
-
-    const result = entry.toolUseResult as Record<string, unknown> | undefined;
-    if (result && typeof result === 'object') {
-      if (typeof result.backgroundTaskId === 'string') started.add(result.backgroundTaskId);
-      else if (result.isAsync === true && typeof result.agentId === 'string') started.add(result.agentId);
-      else if (typeof result.taskId === 'string'
-        && blocks.some(b => b.type === 'tool_result' && monitorCalls.has(String(b.tool_use_id)))) {
-        started.add(result.taskId);
-      }
-    }
-    const text = typeof content === 'string'
-      ? content
-      : blocks.map(b => (typeof b.text === 'string' ? b.text : '')).join('\n');
-    noteEnds(text, finished);
+  for (const fact of facts) {
+    if (!(fact.at >= sinceMs)) continue;
+    for (const id of fact.monitors ?? []) monitorCalls.add(id);
+    for (const id of fact.stops ?? []) finished.add(id);
+    if (fact.started) started.add(fact.started);
+    else if (fact.monitorTask && fact.monitorTask.answers.some(id => monitorCalls.has(id))) started.add(fact.monitorTask.taskId);
+    for (const id of fact.ends ?? []) finished.add(id);
   }
   return [...started].filter(id => !finished.has(id));
 }
 
 /** The tasks the <task-notification> notes in some text say ended (a status other than running). */
-function noteEnds(text: string, finished: Set<string>): void {
+function noteEnds(text: string): string[] {
+  const ended: string[] = [];
   for (const [, note] of text.matchAll(TASK_NOTE)) {
     const id = note.match(TASK_ID)?.[1];
     const status = note.match(TASK_STATUS)?.[1]?.trim();
-    if (id && status && status !== 'running') finished.add(id);
+    // Copied: a match is a slice of the line, which would stay alive with it.
+    if (id && status && status !== 'running') ended.push(Array.from(id).join(''));
   }
+  return ended;
 }
 
 /**

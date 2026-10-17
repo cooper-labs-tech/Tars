@@ -148,6 +148,10 @@ describe('what the background-work reader keeps', () => {
     const noisy = `${JSON.stringify({ type: 'user', timestamp: at(T0 + 900), message: { content: [{ type: 'tool_result', tool_use_id: 'r', content: 'Monitor taskId task-notification TaskStop '.repeat(500) }] } })}\n`;
     const fd = fs.openSync(file, 'w');
     for (let i = 0; i < 1500; i++) fs.writeSync(fd, noisy);
+    // And lines that do say something, beside a large result: a background command started, its output with it.
+    for (let i = 0; i < 300; i++) {
+      fs.writeSync(fd, `${started(`bg${i}`, T0 + 1000, 'output '.repeat(3000))}\n${done(`bg${i}`)}\n`);
+    }
     fs.writeSync(fd, `${started('n1')}\n`);
     fs.closeSync(fd);
     expect(pendingBackgroundWork(agent, T0, home)).toEqual(['n1']);
