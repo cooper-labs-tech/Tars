@@ -12,7 +12,7 @@ import { RouteApp, RouteContext, RouteRequest } from './api-routes';
 import { registerAllRoutes } from './api-routes';
 import { callerHeaderFrom } from './api-routes/utils';
 import { agentForToken, isInternalToken, isTerminalToken } from '../core/agent-tokens';
-import { isWebhookSecret } from './hermes-webhook-secret';
+import { gatewayOfPath, gatewayOfSecret } from './hermes-gateways';
 import { writeSecretFileEvenIfHeldSync, oneTimeRotationDue, oneTimeRotationDone } from '../utils/secret-file';
 
 /** Enough for a prompt or a webhook payload, far short of a memory attack. */
@@ -142,12 +142,11 @@ export function getApiToken(): string {
  *  the webhook secret on the webhook. */
 export type CallerResolution =
   | { ok: true; agentId?: string; internal?: boolean; hermes?: boolean;
+    /** The Hermes gateway whose secret this is (services/hermes-gateways.ts). */
+    hermesGateway?: string;
     /** The token is the agent's terminal's, as it is now: not a delegated run's. */
     terminal?: boolean }
   | { ok: false; status: number; error: string };
-
-/** The one route published off this machine, and the only one the webhook secret opens. */
-const HERMES_WEBHOOK_PATH = '/api/webhooks/hermes';
 
 /**
  * Who this call is from, decided by what it presents rather than what it says.
@@ -169,13 +168,16 @@ const HERMES_WEBHOOK_PATH = '/api/webhooks/hermes';
  *   the caller is the main process itself, which is no agent either but is not
  *   refused where an agent is required. The super chat holds it; nothing else
  *   can, since it never reaches a file or a child's environment.
- * - The **Hermes webhook secret**, `~/.tars-private/hermes-webhook-secret`:
- *   Hermes, on `/api/webhooks/hermes` and nowhere else. It is the only
- *   credential Tars publishes off the machine. Read here, at the door, because
- *   the door used to know only the other secrets, and Hermes presenting the
- *   one Tars minted for it was refused 401 before the route it was aimed at
- *   could run (measured on b17db0f). On any other path it is nothing, and the
- *   401 below.
+ * - A **Hermes gateway's secret**, `~/.tars-private/hermes-webhook-secret` for
+ *   the default gateway, `hermes-webhook-<id>.secret` for another
+ *   (services/hermes-gateways.ts): that gateway, on a webhook route, and on no
+ *   other path. These are the only credentials Tars publishes off the machine.
+ *   Read here, at the door, because the door used to know only the other
+ *   secrets, and Hermes presenting the one Tars minted for it was refused 401
+ *   before the route it was aimed at could run (measured on b17db0f). Which
+ *   gateway's route it may open is the route's to say (webhook-routes.ts): one
+ *   gateway's secret on another's route is refused there, 403. On any other
+ *   path it is nothing, and the 401 below.
  * - Anything else: unauthorised, with the same flat message as before, which
  *   tells a prober nothing about which of the two it got wrong.
  *
@@ -196,8 +198,9 @@ export function resolveCaller(
     ? auth.slice('Bearer '.length)
     : '';
 
-  if (pathname === HERMES_WEBHOOK_PATH && isWebhookSecret(presented)) {
-    return { ok: true, hermes: true };
+  if (gatewayOfPath(pathname) !== undefined) {
+    const hermesGateway = gatewayOfSecret(presented);
+    if (hermesGateway) return { ok: true, hermes: true, hermesGateway };
   }
 
   const agentId = presented ? agentForToken(presented) : undefined;
@@ -430,6 +433,7 @@ export function startApiServer(
           callerTerminal: caller.ok ? caller.terminal === true : false,
           internal: caller.ok ? caller.internal === true : false,
           hermes: caller.ok ? caller.hermes === true : false,
+          hermesGateway: caller.ok ? caller.hermesGateway : undefined,
         };
         await route.handler(routeReq, sendJson, ctx);
         return;

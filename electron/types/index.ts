@@ -541,6 +541,11 @@ export interface AppSettings {
   memoryHonchoEnabled?: boolean;
   memoryHonchoMcpUrl?: string;
   memoryHonchoApiKey?: string;
+  /** gbrain is a server Hermes registered, saved as Hermes's own URL and reached through Hermes: the SSH tunnel or
+   *  Tailscale, its address resolved each time it is used, never saved (services/memory-through-hermes.ts). */
+  memoryGbrainViaHermes?: boolean;
+  /** The same for Honcho. */
+  memoryHonchoViaHermes?: boolean;
   /**
    * Sent as the X-Honcho-Workspace-ID header on every Honcho call.
    *

@@ -22,7 +22,9 @@ from contextlib import closing, contextmanager
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional
 
 PLUGIN_ID = 'tars-relay'
-VERSION = '1.0.0'
+VERSION = '2.0.0'
+# The store's schema, in SQLite's user_version: 0 is tars-relay 1.0.0's (Telegram only), 2 has the platform in each key.
+SCHEMA_VERSION = 2
 
 # What one send may carry. Telegram refuses a text longer than 4096 UTF-16 units: the relay refuses it first, rather
 # than cutting a question in two.
@@ -46,6 +48,10 @@ _PREFIX = re.compile(r'@(' + _WORD + r'{1,64})(?:[:,]\s*|\s+)(\S[\s\S]*)\Z')
 _PROJECT = re.compile(_WORD + r'{0,64}')
 _NAME = re.compile(_WORD + r'{1,64}')
 _REF = re.compile(r'[\x21-\x7e]{0,200}')
+# A platform as Hermes names it (telegram, discord, slack, signal, whatsapp, matrix...), and a user's id on it: a
+# Discord or Telegram number, a Slack id, a phone number, a Matrix address. Printable, no spaces.
+_PLATFORM = re.compile(r'[a-z][a-z0-9_]{0,31}')
+_USER = re.compile(r'[\x21-\x7e]{1,128}')
 # What is left of the control characters once a text is cut into lines: all but the tab.
 _CONTROL = re.compile(r'[\x00-\x08\x0a-\x1f\x7f-\x9f]')
 
@@ -66,16 +72,82 @@ def settings_from_config(config: Any) -> Mapping[str, Any]:
     return {}
 
 
-def user_of(settings: Any) -> Optional[str]:
-    """The user's Telegram user id, the one sender whose replies count; None when the settings name nobody."""
-    value = settings.get('user_id') if isinstance(settings, Mapping) else None
+def _user_id(platform: str, value: Any) -> Optional[str]:
+    """`value` as the user's id on `platform`, or None when it is not one. On Telegram, a positive number."""
     if isinstance(value, bool):
         return None
-    if isinstance(value, str) and value.strip().isdigit():
-        value = int(value.strip())
-    if isinstance(value, int) and value > 0:
-        return str(value)
+    if platform == 'telegram':
+        if isinstance(value, str) and value.strip().isdigit():
+            value = int(value.strip())
+        return str(value) if isinstance(value, int) and value > 0 else None
+    if isinstance(value, int):
+        return str(value) if value > 0 else None
+    if isinstance(value, str) and _USER.fullmatch(value.strip()):
+        return value.strip()
     return None
+
+
+def users_of(settings: Any) -> Dict[str, str]:
+    """The user's id on each platform, {platform: id}: the one sender whose messages count there. `users` in the
+    settings, and the older `user_id`, which is Telegram's unless `users` names one for Telegram."""
+    if not isinstance(settings, Mapping):
+        return {}
+    users: Dict[str, str] = {}
+    legacy = _user_id('telegram', settings.get('user_id'))
+    if legacy:
+        users['telegram'] = legacy
+    named = settings.get('users')
+    if isinstance(named, Mapping):
+        for platform, value in named.items():
+            if isinstance(platform, str) and _PLATFORM.fullmatch(platform):
+                user = _user_id(platform, value)
+                if user:
+                    users[platform] = user
+    return users
+
+
+def user_of(settings: Any) -> Optional[str]:
+    """The user's Telegram user id; None when the settings name nobody there."""
+    return users_of(settings).get('telegram')
+
+
+def gateway_users(platforms: List[str], settings: Any, environ: Mapping[str, str]) -> List[Dict[str, Any]]:
+    """Who the user is on each of these gateways: the one the settings name; else the one user Hermes allows there
+    (`<PLATFORM>_ALLOWED_USERS`), proposed for the switch to set; else nobody, and why."""
+    users = users_of(settings)
+    seen: List[Dict[str, Any]] = []
+    for platform in platforms:
+        if platform in users:
+            seen.append({'gateway': platform, 'user': users[platform], 'from': 'settings'})
+            continue
+        variable = platform.upper() + '_ALLOWED_USERS'
+        allowed = [part.strip() for part in (environ.get(variable) or '').split(',') if part.strip()]
+        if not allowed:
+            seen.append({'gateway': platform, 'user': None, 'from': None, 'why': 'no user allowed'})
+        elif '*' in allowed:
+            seen.append({'gateway': platform, 'user': None, 'from': variable, 'why': 'everyone allowed'})
+        elif len(allowed) > 1:
+            seen.append({'gateway': platform, 'user': None, 'from': variable, 'why': 'several users allowed'})
+        elif _user_id(platform, allowed[0]):
+            seen.append({'gateway': platform, 'user': _user_id(platform, allowed[0]), 'from': variable})
+        else:
+            seen.append({'gateway': platform, 'user': None, 'from': variable, 'why': 'not an id'})
+    return seen
+
+
+def _sender(message: Mapping[str, Any], settings: Any) -> Optional[Dict[str, str]]:
+    """The platform, user and chat of a message or a turn when it is the user's own private chat on a platform the
+    settings name a user for, or None. On Telegram that chat is the user's own id; elsewhere (a Discord or Slack
+    private channel) it has an id of its own, and the sender alone says it is the user."""
+    users = users_of(settings)
+    platform = message.get('platform') if isinstance(message, Mapping) else None
+    user = users.get(platform) if isinstance(platform, str) else None
+    if not user or message.get('chat_type') != 'dm' or _id(message.get('user_id')) != user:
+        return None
+    chat = _id(message.get('chat_id'))
+    if not chat or (platform == 'telegram' and chat != user):
+        return None
+    return {'platform': platform, 'user_id': user, 'chat_id': chat}
 
 
 def _id(value: Any) -> str:
@@ -114,24 +186,20 @@ def _fingerprint(text: str) -> str:
 def decide(message: Mapping[str, Any], settings: Any, store: 'Store') -> Optional[Dict[str, str]]:
     """What to keep for Tars from one incoming message, or None to let it go on to Hermes.
 
-    Kept: a message from the user, in their private chat on Telegram, that either replies to a message the relay sent
-    there (same chat, same id) or starts with "@project" for a project Tars registered. Everything else is Hermes's,
-    "@hermes what is the weather" included.
+    Kept: a message from the user, in their private chat on a platform the settings name them on, that either replies
+    to a message the relay sent there (same platform, same chat, same id) or starts with "@project" for a project Tars
+    registered. Everything else is Hermes's, "@hermes what is the weather" included.
     """
-    user = user_of(settings)
-    if not user or not isinstance(message, Mapping):
-        return None
-    if message.get('platform') != 'telegram' or message.get('chat_type') != 'dm':
-        return None
-    if _id(message.get('user_id')) != user or _id(message.get('chat_id')) != user:
+    sender = _sender(message, settings)
+    if sender is None:
         return None
     text = message.get('text')
     if not isinstance(text, str) or not text.strip():
         return None
-    kept = {'user_id': user, 'chat_id': user, 'message_id': _id(message.get('message_id')),
+    kept = {**sender, 'message_id': _id(message.get('message_id')),
             'reply_to_message_id': _id(message.get('reply_to_message_id'))}
     if kept['reply_to_message_id']:
-        sent = store.sent(user, kept['reply_to_message_id'])
+        sent = store.sent(sender['chat_id'], kept['reply_to_message_id'], platform=sender['platform'])
         if sent:
             return {'kind': 'reply', 'ref': sent['ref'], 'project': sent['project'], 'text': text, **kept}
     prefixed = _PREFIX.match(text)
@@ -163,7 +231,10 @@ def check_send(body: Any) -> Dict[str, str]:
     project = body.get('project', '')
     if not isinstance(project, str) or not _PROJECT.fullmatch(project):
         raise Refused('project must be one word of at most 64 characters')
-    return {'text': text, 'ref': ref, 'kind': kind, 'project': project}
+    gateway = body.get('gateway', '')
+    if 'gateway' in body and (not isinstance(gateway, str) or not _PLATFORM.fullmatch(gateway)):
+        raise Refused('gateway must be the name of one platform, as Hermes names it')
+    return {'text': text, 'ref': ref, 'kind': kind, 'project': project, 'gateway': gateway}
 
 
 def check_projects(body: Any) -> List[str]:
@@ -208,62 +279,91 @@ def copy_block(entries: List[Mapping[str, Any]]) -> str:
 def copy_for_turn(session: Mapping[str, Any], settings: Any, store: 'Store') -> Optional[str]:
     """The copy to attach to this model turn, given once, or None.
 
-    Only a turn in the user's own private chat on Telegram gets it: never a group, another user, or another platform,
-    where it would show Tars's messages to someone else.
+    Only a turn in the user's own private chat, on the platform and in the chat where the relay wrote, gets it: never a
+    group, another user, another platform or another chat, where it would show Tars's messages to someone else.
     """
-    user = user_of(settings)
-    if not user or not isinstance(session, Mapping):
+    sender = _sender(session, settings)
+    if sender is None:
         return None
-    if session.get('platform') != 'telegram' or session.get('chat_type') != 'dm':
-        return None
-    if _id(session.get('chat_id')) != user or _id(session.get('user_id')) != user:
-        return None
-    entries = store.take_copies(user)
+    entries = store.take_copies(sender['chat_id'], platform=sender['platform'])
     return copy_block(entries) if entries else None
 
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS sent (
-  chat_id TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  at REAL NOT NULL,
-  kind TEXT NOT NULL,
-  ref TEXT NOT NULL,
-  project TEXT NOT NULL,
-  copy_text TEXT,
-  PRIMARY KEY (chat_id, message_id)
-);
-CREATE INDEX IF NOT EXISTS sent_at ON sent (at);
-CREATE TABLE IF NOT EXISTS replies (
-  seq INTEGER PRIMARY KEY AUTOINCREMENT,
-  at REAL NOT NULL,
-  kind TEXT NOT NULL,
-  ref TEXT NOT NULL,
-  project TEXT NOT NULL,
-  chat_id TEXT NOT NULL,
-  user_id TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  reply_to_message_id TEXT NOT NULL,
-  text TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS replies_at ON replies (at);
-CREATE TABLE IF NOT EXISTS kept (
-  chat_id TEXT NOT NULL,
-  message_id TEXT NOT NULL,
-  at REAL NOT NULL,
-  fingerprint TEXT NOT NULL,
-  PRIMARY KEY (chat_id, message_id)
-);
-CREATE INDEX IF NOT EXISTS kept_at ON kept (at);
-CREATE TABLE IF NOT EXISTS meta (
-  key TEXT PRIMARY KEY,
-  value TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS projects (
-  folded TEXT PRIMARY KEY,
-  name TEXT NOT NULL
-);
-"""
+def _tables(version: int) -> Dict[str, str]:
+    """The three tables keyed by a message, as schema `version` makes them: from 2, the platform is in each key, and
+    its default (telegram) lets tars-relay 1.0.0's own writes and reads work on a store of version 2."""
+    platform = ",\n  platform TEXT NOT NULL DEFAULT 'telegram'" if version >= 2 else ''
+    key = 'platform, chat_id, message_id' if version >= 2 else 'chat_id, message_id'
+    return {
+        'sent': ('CREATE TABLE IF NOT EXISTS sent (\n  chat_id TEXT NOT NULL,\n  message_id TEXT NOT NULL,\n'
+                 '  at REAL NOT NULL,\n  kind TEXT NOT NULL,\n  ref TEXT NOT NULL,\n  project TEXT NOT NULL,\n'
+                 '  copy_text TEXT%s,\n  PRIMARY KEY (%s)\n)' % (platform, key)),
+        'replies': ('CREATE TABLE IF NOT EXISTS replies (\n  seq INTEGER PRIMARY KEY AUTOINCREMENT,\n'
+                    '  at REAL NOT NULL,\n  kind TEXT NOT NULL,\n  ref TEXT NOT NULL,\n  project TEXT NOT NULL,\n'
+                    '  chat_id TEXT NOT NULL,\n  user_id TEXT NOT NULL,\n  message_id TEXT NOT NULL,\n'
+                    '  reply_to_message_id TEXT NOT NULL,\n  text TEXT NOT NULL%s\n)' % platform),
+        'kept': ('CREATE TABLE IF NOT EXISTS kept (\n  chat_id TEXT NOT NULL,\n  message_id TEXT NOT NULL,\n'
+                 '  at REAL NOT NULL,\n  fingerprint TEXT NOT NULL%s,\n  PRIMARY KEY (%s)\n)' % (platform, key)),
+    }
+
+
+# The columns version 1 has, in each of those tables: what each migration copies.
+_COLUMNS = {
+    'sent': 'chat_id, message_id, at, kind, ref, project, copy_text',
+    'replies': 'seq, at, kind, ref, project, chat_id, user_id, message_id, reply_to_message_id, text',
+    'kept': 'chat_id, message_id, at, fingerprint',
+}
+_INDEXES = ('CREATE INDEX IF NOT EXISTS sent_at ON sent (at)', 'CREATE INDEX IF NOT EXISTS replies_at ON replies (at)',
+            'CREATE INDEX IF NOT EXISTS kept_at ON kept (at)')
+_OTHER_TABLES = ('CREATE TABLE IF NOT EXISTS meta (\n  key TEXT PRIMARY KEY,\n  value TEXT NOT NULL\n)',
+                 'CREATE TABLE IF NOT EXISTS projects (\n  folded TEXT PRIMARY KEY,\n  name TEXT NOT NULL\n)')
+
+
+def _columns_of(db: sqlite3.Connection, table: str) -> List[str]:
+    return [row[1] for row in db.execute('PRAGMA table_info(%s)' % table)]
+
+
+def _rebuild(db: sqlite3.Connection, table: str, version: int, platform_value: Optional[str]) -> None:
+    """`table` made again as schema `version` has it, with its rows: all of them as `platform_value`'s on the way up,
+    only Telegram's on the way down (platform_value None). In the caller's transaction."""
+    db.execute('ALTER TABLE %s RENAME TO %s_old' % (table, table))
+    db.execute(_tables(version)[table])
+    columns = _COLUMNS[table]
+    if platform_value is not None:
+        db.execute('INSERT INTO %s (%s, platform) SELECT %s, ? FROM %s_old' % (table, columns, columns, table),
+                   (platform_value,))
+    else:
+        db.execute("INSERT INTO %s (%s) SELECT %s FROM %s_old WHERE platform = 'telegram'"
+                   % (table, columns, columns, table))
+    # Its index went with the old table, under the same name: dropped with it, then made again.
+    db.execute('DROP TABLE %s_old' % table)
+
+
+def _migrate_up(db: sqlite3.Connection) -> None:
+    """tars-relay 1.0.0's store to schema 2, in the caller's transaction: each row Telegram's, the store's id and the
+    replies' numbers unchanged (replies only gains a column, so its sequence is never rebuilt)."""
+    for table in ('sent', 'kept'):
+        _rebuild(db, table, SCHEMA_VERSION, 'telegram')
+    db.execute("ALTER TABLE replies ADD COLUMN platform TEXT NOT NULL DEFAULT 'telegram'")
+
+
+def migrate_down(directory: str) -> None:
+    """The store in `directory` put back to tars-relay 1.0.0's schema: Telegram's rows kept as they were, the other
+    platforms' dropped (1.0.0 would take them for Telegram's), and the replies' sequence where it was, so that no
+    number a reader has seen is given again. Nothing to do on a store already at version 1."""
+    with closing(sqlite3.connect(os.path.join(directory, 'relay.db'), timeout=10, isolation_level=None)) as db, \
+            _immediate(db):
+        if db.execute('PRAGMA user_version').fetchone()[0] < SCHEMA_VERSION:
+            return
+        row = db.execute("SELECT seq FROM sqlite_sequence WHERE name = 'replies'").fetchone()
+        for table in ('sent', 'replies', 'kept'):
+            _rebuild(db, table, 1, None)
+        db.execute("DELETE FROM sqlite_sequence WHERE name = 'replies'")
+        if row:
+            db.execute("INSERT INTO sqlite_sequence (name, seq) VALUES ('replies', ?)", (row[0],))
+        for statement in _INDEXES:
+            db.execute(statement)
+        db.execute('PRAGMA user_version = 0')
 
 
 @contextmanager
@@ -298,7 +398,15 @@ class Store:
         self.path = os.path.join(directory, 'relay.db')
         self.now = now
         with closing(self._connect()) as db:
-            db.executescript(_SCHEMA)
+            # Migrated once, whichever of Hermes's two processes opens it first: the version is read again under the
+            # write lock.
+            with _immediate(db):
+                if db.execute('PRAGMA user_version').fetchone()[0] < SCHEMA_VERSION:
+                    if _columns_of(db, 'sent'):
+                        _migrate_up(db)
+                    for statement in (*_tables(SCHEMA_VERSION).values(), *_OTHER_TABLES, *_INDEXES):
+                        db.execute(statement)
+                    db.execute('PRAGMA user_version = %d' % SCHEMA_VERSION)
             db.execute("INSERT OR IGNORE INTO meta (key, value) VALUES ('store_id', ?)", (uuid.uuid4().hex,))
             (self.store_id,) = db.execute("SELECT value FROM meta WHERE key = 'store_id'").fetchone()
         os.chmod(self.path, 0o600)
@@ -309,19 +417,21 @@ class Store:
         db.execute('PRAGMA secure_delete=ON')
         return db
 
-    def reserve(self, chat_id: str) -> Optional[str]:
-        """A place in the hour's sends for a message about to go out, or None when the 60 are taken.
+    def reserve(self, chat_id: str, platform: str = 'telegram') -> Optional[str]:
+        """A place in the hour's sends on `platform` for a message about to go out, or None when its 60 are taken:
+        each gateway has its own 60, as each is an app of its own on the user's phone.
 
         The count and the place are one transaction: sends made at once cannot all pass the count before any of
         them is recorded. A send cut off before Telegram answered keeps its place, since it may have gone out."""
         slot = 'pending:' + uuid.uuid4().hex
         with closing(self._connect()) as db, _immediate(db):
             now = self.now()
-            (count,) = db.execute('SELECT COUNT(*) FROM sent WHERE at > ?', (now - 3600,)).fetchone()
+            (count,) = db.execute('SELECT COUNT(*) FROM sent WHERE platform = ? AND at > ?',
+                                  (platform, now - 3600)).fetchone()
             if count >= SENDS_PER_HOUR:
                 return None
-            db.execute("INSERT INTO sent (chat_id, message_id, at, kind, ref, project, copy_text) "
-                       "VALUES (?, ?, ?, '', '', '', NULL)", (_id(chat_id), slot, now))
+            db.execute("INSERT INTO sent (platform, chat_id, message_id, at, kind, ref, project, copy_text) "
+                       "VALUES (?, ?, ?, ?, '', '', '', NULL)", (platform, _id(chat_id), slot, now))
         return slot
 
     def release(self, slot: str) -> None:
@@ -330,30 +440,35 @@ class Store:
             db.execute('DELETE FROM sent WHERE message_id = ?', (slot,))
 
     def record_sent(self, *, chat_id: str, message_id: str, ref: str, kind: str, project: str, text: str = '',
-                    slot: Optional[str] = None) -> None:
+                    slot: Optional[str] = None, platform: str = 'telegram') -> None:
         """The record of a message Telegram took. With the place reserve() gave it, that place becomes the record,
         so that the message is counted once."""
-        values = (_id(chat_id), _id(message_id), self.now(), kind, ref, project, text or None)
+        values = (platform, _id(chat_id), _id(message_id), self.now(), kind, ref, project, text or None)
         with closing(self._connect()) as db:
-            made = slot and db.execute('UPDATE OR REPLACE sent SET chat_id = ?, message_id = ?, at = ?, kind = ?, '
-                                       'ref = ?, project = ?, copy_text = ? WHERE message_id = ?',
+            made = slot and db.execute('UPDATE OR REPLACE sent SET platform = ?, chat_id = ?, message_id = ?, at = ?, '
+                                       'kind = ?, ref = ?, project = ?, copy_text = ? WHERE message_id = ?',
                                        (*values, slot)).rowcount
             if not made:
-                db.execute('INSERT OR REPLACE INTO sent (chat_id, message_id, at, kind, ref, project, copy_text) '
-                           'VALUES (?, ?, ?, ?, ?, ?, ?)', values)
+                db.execute('INSERT OR REPLACE INTO sent (platform, chat_id, message_id, at, kind, ref, project, '
+                           'copy_text) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', values)
         self.prune()
 
-    def sent(self, chat_id: str, message_id: str) -> Optional[Dict[str, Any]]:
-        """The record of a message the relay sent, within its 30 days, or None."""
+    def sent(self, chat_id: str, message_id: str, platform: str = 'telegram') -> Optional[Dict[str, Any]]:
+        """The record of a message the relay sent on `platform`, within its 30 days, or None."""
         with closing(self._connect()) as db:
-            row = db.execute('SELECT chat_id, message_id, at, kind, ref, project FROM sent '
-                             'WHERE chat_id = ? AND message_id = ? AND at >= ?',
-                             (_id(chat_id), _id(message_id), self.now() - SENT_DAYS * _DAY)).fetchone()
+            row = db.execute('SELECT platform, chat_id, message_id, at, kind, ref, project FROM sent '
+                             'WHERE platform = ? AND chat_id = ? AND message_id = ? AND at >= ?',
+                             (platform, _id(chat_id), _id(message_id), self.now() - SENT_DAYS * _DAY)).fetchone()
         return dict(row) if row else None
 
-    def sends_last_hour(self) -> int:
+    def sends_last_hour(self, platform: Optional[str] = None) -> int:
+        """Sends in the last hour, on `platform` or on all of them."""
         with closing(self._connect()) as db:
-            (count,) = db.execute('SELECT COUNT(*) FROM sent WHERE at > ?', (self.now() - 3600,)).fetchone()
+            if platform is None:
+                (count,) = db.execute('SELECT COUNT(*) FROM sent WHERE at > ?', (self.now() - 3600,)).fetchone()
+            else:
+                (count,) = db.execute('SELECT COUNT(*) FROM sent WHERE platform = ? AND at > ?',
+                                      (platform, self.now() - 3600)).fetchone()
         return count
 
     def keep(self, kept: Mapping[str, str], text: str) -> Optional[int]:
@@ -361,15 +476,17 @@ class Store:
         number, or None when it was kept already. `text` is the message as the user sent it, whose fingerprint lets the
         dispatch hook tell that message alone from an event Hermes merged it into."""
         now = self.now()
+        platform = kept.get('platform') or 'telegram'
         with closing(self._connect()) as db, _immediate(db):
-            new = db.execute('INSERT OR IGNORE INTO kept (chat_id, message_id, at, fingerprint) VALUES (?, ?, ?, ?)',
-                             (_id(kept['chat_id']), _id(kept['message_id']), now, _fingerprint(text or ''))).rowcount
+            new = db.execute('INSERT OR IGNORE INTO kept (platform, chat_id, message_id, at, fingerprint) '
+                             'VALUES (?, ?, ?, ?, ?)', (platform, _id(kept['chat_id']), _id(kept['message_id']), now,
+                                                        _fingerprint(text or ''))).rowcount
             if not new:
                 return None
             seq = db.execute(
-                'INSERT INTO replies (at, kind, ref, project, chat_id, user_id, message_id, reply_to_message_id, text) '
-                'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-                (now, kept['kind'], kept['ref'], kept['project'], kept['chat_id'], kept['user_id'],
+                'INSERT INTO replies (platform, at, kind, ref, project, chat_id, user_id, message_id, '
+                'reply_to_message_id, text) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                (platform, now, kept['kind'], kept['ref'], kept['project'], kept['chat_id'], kept['user_id'],
                  kept['message_id'], kept['reply_to_message_id'], kept['text'])).lastrowid
         self.prune()
         return seq
@@ -377,14 +494,15 @@ class Store:
     def record_reply(self, kept: Mapping[str, str]) -> Optional[int]:
         return self.keep(kept, kept['text'])
 
-    def was_kept(self, chat_id: Any, message_id: Any, text: Any) -> bool:
-        """Whether this very message, its text as written, was kept for Tars: never true of an event Hermes merged
-        it into, whose text is longer."""
+    def was_kept(self, chat_id: Any, message_id: Any, text: Any, platform: str = 'telegram') -> bool:
+        """Whether this very message on `platform`, its text as written, was kept for Tars: never true of an event
+        Hermes merged it into, whose text is longer."""
         if not isinstance(text, str):
             return False
         with closing(self._connect()) as db:
-            row = db.execute('SELECT fingerprint FROM kept WHERE chat_id = ? AND message_id = ? AND at >= ?',
-                             (_id(chat_id), _id(message_id), self.now() - REPLY_DAYS * _DAY)).fetchone()
+            row = db.execute('SELECT fingerprint FROM kept WHERE platform = ? AND chat_id = ? AND message_id = ? '
+                             'AND at >= ?', (platform, _id(chat_id), _id(message_id),
+                                             self.now() - REPLY_DAYS * _DAY)).fetchone()
         return bool(row) and row['fingerprint'] == _fingerprint(text)
 
     def replies(self, after: int = 0) -> List[Dict[str, Any]]:
@@ -405,15 +523,15 @@ class Store:
         with closing(self._connect()) as db:
             return db.execute('DELETE FROM replies WHERE seq <= ?', (int(through),)).rowcount
 
-    def take_copies(self, chat_id: str) -> List[Dict[str, Any]]:
-        """The messages sent to `chat_id` whose copy the model has not had, oldest first; their text is then
-        dropped, so each copy is given once and nothing of it stays stored."""
+    def take_copies(self, chat_id: str, platform: str = 'telegram') -> List[Dict[str, Any]]:
+        """The messages sent to `chat_id` on `platform` whose copy the model has not had, oldest first; their text is
+        then dropped, so each copy is given once and nothing of it stays stored."""
         with closing(self._connect()) as db, _immediate(db):
             rows = db.execute('SELECT message_id, at, kind, project, copy_text AS text FROM sent '
-                              'WHERE chat_id = ? AND copy_text IS NOT NULL AND at >= ? ORDER BY at, rowid',
-                              (_id(chat_id), self.now() - REPLY_DAYS * _DAY)).fetchall()
-            db.execute('UPDATE sent SET copy_text = NULL WHERE chat_id = ? AND copy_text IS NOT NULL',
-                       (_id(chat_id),))
+                              'WHERE platform = ? AND chat_id = ? AND copy_text IS NOT NULL AND at >= ? '
+                              'ORDER BY at, rowid', (platform, _id(chat_id), self.now() - REPLY_DAYS * _DAY)).fetchall()
+            db.execute('UPDATE sent SET copy_text = NULL WHERE platform = ? AND chat_id = ? AND copy_text IS NOT NULL',
+                       (platform, _id(chat_id)))
         return [dict(row) for row in rows]
 
     def set_projects(self, names: List[str]) -> int:

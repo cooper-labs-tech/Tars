@@ -29,6 +29,11 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 11. The plugin's store is made again (reinstalled, moved, cleaned) and numbers its replies from 1 again: Tars skips
  *    every reply at or below the last number it took, acks it, and the plugin deletes it, JeanBrasse told nothing
  *    (GATE-PR285.md); or Tars, starting over, hands over again a reply of the same store whose ack was lost.
+ * 12. On every gateway Hermes has (2.0.4, tars-relay 2.0.0): what went out on each gateway is not in Tars's own
+ *    list, so a reply on Discord to the message Tars sent there is handed to nobody; or a reply on one gateway is
+ *    taken for the message of the same id sent on another; or the user's receipt for a reply that reached nobody goes
+ *    to every gateway rather than to the one they wrote from; or a plugin of version 1.0.0, which answers with
+ *    Telegram's id alone and replies without a platform, is no longer understood.
  * 10. The plugin keeps "@name" for Tars only for the projects Tars registered with it (the Audit's Low on #280): the
  *    fleet's projects are not registered, and every "@project" goes to Hermes's model; a folder name that is not one
  *    word is sent, the plugin refuses the whole list, and no project can be reached; a project added to the fleet or
@@ -75,6 +80,8 @@ beforeEach(async () => {
   fake.acks.length = 0;
   fake.calls.length = 0;
   fake.ignoreAcks = false;
+  fake.version = 2;
+  fake.gateways = ['telegram'];
   on = true;
   await load();
 });
@@ -84,7 +91,7 @@ describe('a send', () => {
     const result = await relay.relaySend({ text: 'Question from Tars-Backend\n> may I?', kind: 'question', ref: 'question:q-1', projectPath: PROJECT }, T0);
 
     expect(result).toEqual({ state: 'sent', messageId: '501' });
-    expect(fake.sends).toEqual([{ text: 'Question from Tars-Backend\n> may I?', kind: 'question', ref: 'question:q-1', project: 'tars', messageId: '501', token: fake.token }]);
+    expect(fake.sends).toEqual([{ text: 'Question from Tars-Backend\n> may I?', kind: 'question', ref: 'question:q-1', project: 'tars', messageId: '501', token: fake.token, gateway: 'telegram' }]);
   });
 
   it('1. a project name the plugin would refuse is made one word, never left out', async () => {
@@ -227,6 +234,51 @@ describe('the user\'s replies', () => {
 
     expect(got).toEqual(['second']);
     expect(fake.acks).toContain(last);
+  });
+});
+
+describe('every gateway Hermes has', () => {
+  it('12. what went out on each gateway is in Tars\'s list, and a reply is taken on the gateway it answers', async () => {
+    fake.gateways = ['discord', 'telegram'];
+    const got: Array<{ refId: string; text: string }> = [];
+    relay.onRelayReply('question', (reply) => { got.push({ refId: reply.refId, text: reply.text }); });
+    await relay.relaySend({ text: 'x', kind: 'question', ref: 'question:q-1', projectPath: PROJECT }, T0);
+    const onDiscord = fake.sends.find((s) => s.gateway === 'discord')!;
+    const onTelegram = fake.sends.find((s) => s.gateway === 'telegram')!;
+
+    const listed = JSON.parse(fs.readFileSync(privateFile('relay-sent.json'), 'utf8')) as Array<{ messageId: string; platform?: string }>;
+    expect(listed.map((e) => [e.platform, e.messageId]).sort()).toEqual([['discord', onDiscord.messageId], ['telegram', onTelegram.messageId]]);
+
+    fake.reply({ messageId: onDiscord.messageId, gateway: 'discord' }, 'Yes, from Discord');
+    await relay.relayTick(T0 + 5_000);
+    expect(got).toEqual([{ refId: 'q-1', text: 'Yes, from Discord' }]);
+  });
+
+  it('12. a reply on one gateway is never taken for the message of the same id sent on another, and its receipt goes back there alone', async () => {
+    fake.gateways = ['discord', 'slack', 'telegram'];
+    const got: string[] = [];
+    relay.onRelayReply('question', (reply) => { got.push(reply.text); });
+    await relay.relaySend({ text: 'x', kind: 'question', ref: 'question:q-1', projectPath: PROJECT }, T0);
+    const onDiscord = fake.sends.find((s) => s.gateway === 'discord')!;
+    fake.sends.length = 0;
+
+    fake.reply({ messageId: onDiscord.messageId, gateway: 'slack' }, 'Yes, from elsewhere');
+    await relay.relayTick(T0 + 5_000);
+
+    expect(got).toEqual([]);
+    expect(fake.sends).toEqual([expect.objectContaining({ gateway: 'slack', text: expect.stringMatching(/Tars did not send/) })]);
+  });
+
+  it('12. a plugin of version 1.0.0 is still understood: Telegram\'s id alone, replies without a platform', async () => {
+    fake.version = 1;
+    const got: string[] = [];
+    relay.onRelayReply('question', (reply) => { got.push(reply.text); });
+    const sent = await relay.relaySend({ text: 'x', kind: 'question', ref: 'question:q-1', projectPath: PROJECT }, T0);
+    fake.reply({ messageId: (sent as { messageId: string }).messageId }, 'Oui');
+
+    await relay.relayTick(T0 + 5_000);
+
+    expect(got).toEqual(['Oui']);
   });
 });
 

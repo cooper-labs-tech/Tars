@@ -17,6 +17,24 @@ import { describeSecretFileError } from '../utils/secret-file';
 // hand out every route. Kept in the private directory: see that module.
 import { provisionWebhookSecret } from '../services/hermes-webhook-secret';
 import {
+  addGateway, gatewaySecret, listGateways, removeGateway, rotateGatewaySecret, setGatewayProjects, webhookPathOf,
+  type HermesGateway,
+} from '../services/hermes-gateways';
+
+/** A gateway as Settings, Hermes shows it: never its secret, which the window asks for apart. */
+function gatewayView(gateway: HermesGateway) {
+  return { id: gateway.id, label: gateway.label, projects: gateway.projects, path: webhookPathOf(gateway.id) };
+}
+
+/** A gateway call that may refuse (an id that is not one, a list that is not paths): its reason, never a throw. */
+function refusing<T extends object>(call: () => T): ({ success: true } & T) | { success: false; error: string } {
+  try {
+    return { success: true, ...call() };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+import {
   fetchHermesCrons,
   hermesCronAction,
   updateHermesCron,
@@ -34,6 +52,7 @@ import {
   fetchHermesMemoryProviders,
   setHermesMemoryProvider,
 } from '../services/hermes-client';
+import { reachOf } from '../services/hermes-mcp-reach';
 import {
   HermesConnection,
   defaultHermesConnection,
@@ -318,6 +337,23 @@ export function registerHermesHandlers(): void {
     };
   });
 
+  // The Hermes gateways Tars takes work from (services/hermes-gateways.ts): each
+  // has its own webhook route and secret, and reaches the projects the user
+  // allows it, none until then (the Audit's NOW-3, R4.2 and R4.3, 2.0.4).
+  // Settings, Hermes lists them; a secret goes to the window when it asks for
+  // it, to be copied into that gateway's Hermes, and nowhere else.
+  ipcMain.handle('hermes:gateways:list', async () => ({ success: true, gateways: listGateways().map(gatewayView) }));
+  ipcMain.handle('hermes:gateways:add', async (_event, params: { label: string }) =>
+    refusing(() => {
+      const gateway = addGateway(params?.label);
+      return { gateway: gatewayView(gateway), secret: gatewaySecret(gateway.id) };
+    }));
+  ipcMain.handle('hermes:gateways:remove', async (_event, params: { id: string }) => ({ success: removeGateway(params?.id) }));
+  ipcMain.handle('hermes:gateways:secret', async (_event, params: { id: string }) => refusing(() => ({ secret: gatewaySecret(params?.id) })));
+  ipcMain.handle('hermes:gateways:rotate', async (_event, params: { id: string }) => refusing(() => ({ secret: rotateGatewaySecret(params?.id) })));
+  ipcMain.handle('hermes:gateways:setProjects', async (_event, params: { id: string; projects: string[] }) =>
+    refusing(() => ({ gateway: gatewayView(setGatewayProjects(params?.id, params?.projects)) })));
+
   // The relay to the user's Telegram through their Hermes, as Settings, Hermes
   // shows it (services/hermes-relay.ts). Its changes are pushed on the same
   // channel name; the switch is hermesRelayEnabled, saved with app:saveSettings.
@@ -454,7 +490,12 @@ export function registerHermesHandlers(): void {
   // Distinct from Tars' own mcp-* fleet: this asks the gateway what it knows,
   // so Settings > Memory Backends can offer a found URL instead of an empty
   // field, and can say plainly when that URL is the gateway's own loopback.
-  ipcMain.handle('hermes:mcp:servers', async () => viaGateway(fetchHermesMcpServers));
+  // Each with how Tars reaches it: a server on Hermes's own loopback, through the SSH tunnel or Tailscale (2.0.4).
+  ipcMain.handle('hermes:mcp:servers', async () => viaGateway(async (conn) => {
+    const listed = await fetchHermesMcpServers(conn);
+    if (!listed.success) return listed;
+    return { success: true as const, servers: await Promise.all(listed.servers.map(async server => ({ ...server, reach: await reachOf(conn, server) }))) };
+  }));
 
   // ── Gateway's own pluggable memory provider (holographic, mem0, …) ──
   ipcMain.handle('hermes:memory:providers', async () => viaGateway(fetchHermesMemoryProviders));

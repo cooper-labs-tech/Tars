@@ -56,6 +56,8 @@ export interface RouteRequest {
    * header.
    */
   hermes?: boolean;
+  /** The Hermes gateway whose secret opened this call (services/hermes-gateways.ts), when `hermes`. */
+  hermesGateway?: string;
 }
 
 export type SendJson = (data: unknown, status?: number) => void;

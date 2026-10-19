@@ -2160,7 +2160,9 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
       const memoryBackendsChanged = Object.keys(newSettings).some(k => k.startsWith('memoryGbrain') || k.startsWith('memoryHoncho'));
       if (memoryBackendsChanged) {
         const { setupMemoryBackends } = await import('../services/mcp-orchestrator');
-        setupMemoryBackends(updatedSettings);
+        // A backend reached through Hermes is written at the address of the moment (2.0.4).
+        const { resolvedMemorySettings } = await import('../services/memory-through-hermes');
+        setupMemoryBackends((await resolvedMemorySettings(updatedSettings)).settings);
       }
 
       // Toggle Claude Code statusline

@@ -47,7 +47,7 @@ alone:
 |---|---|---|
 | An agent's token (`CLAUDE_MGR_API_TOKEN`, minted in memory per terminal and per ACP run) | that agent | its own project's agents, and a new agent in its own project, never an orchestrator (`POST /api/agents` refuses the role to every caller: only the Agents page makes one); another project's only with `allowCrossProject`. Not the webhook |
 | Tars's own pass (minted in memory, written nowhere) | the main process | every agent of every project: it is JeanBrasse's super chat, which drives every project by design. Not the webhook |
-| `~/.tars-private/hermes-webhook-secret` | Hermes | `POST /api/webhooks/hermes` and nothing else, and through it any agent of any project, named by id or by name |
+| A Hermes gateway's secret: `~/.tars-private/hermes-webhook-secret` for the default gateway, `hermes-webhook-<id>.secret` for another (2.0.4) | that gateway | its own webhook route and nothing else, and through it the agents of the projects the user allowed that gateway, none until they do, in their own mode or a narrower one |
 | `~/.dorothy/api-token`, the shared token | nobody | reads, and the exempt routes. It drives no agent, and does not open the webhook |
 
 The new agent an agent makes runs on any provider of the registry and on any CLI binary it names (`cliPath`, refused unless it is an absolute path to an executable file). This is not a boundary Tars gives away: `POST /api/agents` took a `cliPath` and any permission mode from every agent before 2.0.2, and a permission mode does not confine the agent that asks (see the ceiling below). What the API refuses is what could not start, or would not run as asked: an unknown provider, an API-key provider without its key, a `cliPath` that is not an executable file, and plan on a provider that has none, which would run as normal (2.0.2, JeanBrasse: "ça doit supporter n'importe quel provider/cli"; the Audit's gate of #407).
@@ -140,16 +140,35 @@ from `/tmp` (readable by every user, shared by every Tars on the machine) to
 (`removeLegacyHookLogs`): only regular files the user owns, and only when `HOME` is the
 user's own, so a sandbox never deletes the logs of a Tars still on 1.7.9 beside it.
 
-**What the webhook secret is.** The reach of JeanBrasse's own chat, handed to Hermes,
-so it lives where JeanBrasse's conversation lives, in `~/.tars-private`, and not in
+**What the webhook secret is.** The reach of a Hermes gateway into the fleet, so it
+lives where JeanBrasse's conversation lives, in `~/.tars-private`, and not in
 `~/.dorothy`, where it was minted until 1.7.6. It moves at the first start that
 finds it there, value unchanged, so a Hermes job that holds it keeps working.
 That takes it out of the directory every agent is pointed at. It does not take
 it out of an agent's reach: an agent that goes looking reads `~/.tars-private`
-like any other file of JeanBrasse's (§1, §5), and with the secret drives any agent of
-any project through the webhook. And an agent that read it before the move
-still has it. Rotating it is deleting `~/.tars-private/hermes-webhook-secret`,
-opening Settings > Hermes, which mints a new one, and giving Hermes that.
+like any other file of JeanBrasse's (§1, §5), and with a secret drives what that
+gateway reaches. And an agent that read it before the move still has it.
+
+**What a gateway reaches, since 2.0.4** (`services/hermes-gateways.ts`, the Audit's
+NOW-3 and R4.1 to R4.3). Until then one secret opened the webhook for whoever held
+it, a gateway or anyone on the tailnet who read its config, and reached any agent of
+any project in any mode: the body's `permission_mode` won over the agent's own, so it
+started any agent in bypass, and its 404 listed every agent with its project and
+status. Now:
+- each gateway has its own secret (32 random bytes, a `0600` file of the private
+  folder) and its own route, and one gateway's secret on another's route is a 403; a
+  secret is rotated or removed from Settings > Hermes, and the old value opens nothing;
+- it reaches the projects the user allowed it there, none until they do, and the list
+  is in the private folder too (`hermes-gateways.json`): an agent that could widen it
+  would widen the gateway's reach;
+- its message may keep an agent's mode or lower it for the session it starts, never
+  raise it (403, before anything is typed), and the same holds for `/start` and
+  `/dispatch` (`modeRefusal`);
+- no refusal names an agent, a project or a mode: an agent outside its projects is a
+  404 like one that does not exist.
+What it is not: a gateway's message is still typed into an agent that may run in
+bypass by the user's choice, and does there what the agent may do; and an agent that
+reads the private folder holds every gateway's secret, as it holds the conversation.
 
 **What the ceiling for delegated runs was, and is not** (1.9.6, `core/permission-ceiling.ts`).
 Since 2.0.4 a delegated task is no run: `delegate_task` and `/run-task` type it into the

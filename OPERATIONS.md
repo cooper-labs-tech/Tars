@@ -813,7 +813,9 @@ to a CLI, and Tars makes it `0700` whichever write creates it:
 | Path | Written by | Contents |
 |---|---|---|
 | `~/.tars-private/overseer.json` | `electron/services/overseer.ts` | JeanBrasse's conversation with the super chat, plus the standing job id and the Chat's settings. Mode `0600`. Moved out of `~/.dorothy/overseer.json` at the first startup that finds it there: the copy is read back before the old file is deleted, an old file that will not parse is left exactly where it is and still read, and when both exist the private one wins and the old one is moved into the private directory rather than deleted |
-| `~/.tars-private/hermes-webhook-secret` | `electron/services/hermes-webhook-secret.ts` (`provisionWebhookSecret`) | the bearer for `POST /api/webhooks/hermes` and the only credential that opens it: 32 random bytes hex, mode `0600`, minted the first time Settings > Hermes asks for it. Moved out of `~/.dorothy/hermes-webhook-secret` at the first startup that finds it there, value unchanged, so Hermes keeps working; read back before the old file is deleted, and while it cannot be moved the webhook opens to nobody. An old file found beside the private one opens nothing and is deleted |
+| `~/.tars-private/hermes-gateways.json` | `electron/services/hermes-gateways.ts` | the Hermes gateways Tars takes work from (`id`, `label`) and the projects each may reach, none until the user allows some (2.0.4). Mode `0600` |
+| `~/.tars-private/hermes-webhook-<id>.secret` | `electron/services/hermes-gateways.ts` (`rotateGatewaySecret`) | another gateway's bearer for `POST /api/webhooks/hermes/<id>`, 32 random bytes hex, mode `0600`, removed with its gateway (2.0.4) |
+| `~/.tars-private/hermes-webhook-secret` | `electron/services/hermes-webhook-secret.ts` (`provisionWebhookSecret`) | the default gateway's bearer for `POST /api/webhooks/hermes` and the only credential that opens it: 32 random bytes hex, mode `0600`, minted the first time Settings > Hermes asks for it. Moved out of `~/.dorothy/hermes-webhook-secret` at the first startup that finds it there, value unchanged, so Hermes keeps working; read back before the old file is deleted, and while it cannot be moved the webhook opens to nobody. An old file found beside the private one opens nothing and is deleted |
 | `~/.tars-private/overseer-hermes-sessions.json` | `electron/services/overseer-store.ts` (`rememberHermesSessions`) | the ids of the Hermes sessions the super chat's turns ran in, the last 5000, mode `0600`: `memory_search` leaves them out, so no agent is handed the super chat through Hermes |
 | `~/.tars-private/claude-accounts.json` | `electron/handlers/claude-accounts-handlers.ts` | several Claude subscriptions: the option (off by default), each account's id and label, the thresholds. No credential and no folder: each account is the Claude Code folder `~/.claude-accounts/<id>`, derived from its id and signed in by `claude auth login`. `CLAUDE_CONFIG_DIR=<folder> claude auth status` says what Claude Code sees there. A file that does not parse freezes the list (every change refused, Settings says so) until it is fixed or removed; removing it leaves the folders signed in, so sign each out first with `CLAUDE_CONFIG_DIR=<folder> claude auth logout`. With the option on, Tars moves an unpinned agent to the account with most room when a limit cuts its turn (then types "Continue where you left off..." into the new session) or when a turn ends past a threshold, once per agent every ten minutes at most; each move is a `[claude-accounts] <agent>: moving from <id> to <id>` line in the main process log, and the blocks it sets are in memory only, gone at a restart of Tars |
 | `~/.tars-private/run-state.json` | `electron/services/run-state.ts` | this run's record, mode `0600`: `cleanExit: false` while it runs, `true` after a quit. Open at a launch means the last run stopped abruptly, and the agents in `working` are resumed with a note, unless the Tars that wrote it still runs (its pid is a live process of yours that started when the record's `processStart` says, and the machine has not rebooted since; `ps -o lstart= -p <pid>` on macOS shows that start): a second Tars on the same home reads nothing from it and writes nothing to it. Here because it says whom Tars starts: in `~/.dorothy`, any agent could have had any agent started at the next launch |
@@ -1003,7 +1005,7 @@ curl -s -H "Authorization: Bearer $TOKEN" $API/api/memory/status | jq
 | POST/GET | `/api/bus/post` · `/api/bus/read` (what `room_post` and `room_read` call; authenticated, and the caller is the agent its token names; a call on the shared token has no agent behind it and is refused `403`, before any room is looked at) |
 | POST | `/api/telegram/{send,send-photo,send-video,send-document}` (only to the chats authorized in Settings, read live) · `/api/slack/send` · `/api/discord/send` (only to the channel Settings > Discord detected, or one an allowed member wrote from) |
 | GET | `/api/chats/list` (`chat_list`: with `chatsReadEachOther` on, the other chats of the caller's project; `403 chats_read_off` off, `403 not_a_chat` for an agent that runs no chat) |
-| POST | `/api/webhooks/hermes` |
+| POST | `/api/webhooks/hermes` · `/api/webhooks/hermes/<gateway id>` |
 
 The Slack bot answers only the member ids in Settings > Slack (`slackAllowedUserIds`): with
 none, it answers nobody, and tells whoever mentions it or writes to it directly their own id,
@@ -1668,11 +1670,17 @@ searchable body is the FTS index behind `/api/sessions/search`.
 
 ### Inbound webhook
 
-`POST /api/webhooks/hermes` lets the gateway drive a Tars agent.
+`POST /api/webhooks/hermes` (the default gateway) and `POST /api/webhooks/hermes/<gateway id>`
+(another) let a Hermes gateway give a Tars agent work. Since 2.0.4 each gateway reaches only the
+projects you allow it in Settings > Hermes, **none until you do**: a job of a Hermes set up before
+2.0.4 gets a 404 until its projects are allowed there. Each gateway has its own secret.
 
 ```bash
-# the secret is auto-provisioned (32 random bytes, mode 0600) when Settings > Hermes first shows it
+# the default gateway's secret, auto-provisioned (32 random bytes, mode 0600) when Settings > Hermes
+# first shows it; another gateway's is ~/.tars-private/hermes-webhook-<id>.secret
 cat ~/.tars-private/hermes-webhook-secret
+# the gateways, and the projects each may reach
+jq . ~/.tars-private/hermes-gateways.json
 
 # make the localhost-bound API reachable from the VPS
 tailscale serve 31415
@@ -1684,20 +1692,25 @@ curl -s -X POST https://<this-machine>.<tailnet>.ts.net/api/webhooks/hermes \
   -d '{"agent_name":"Backend","project_path":"$PWD","message":"ping","dry_run":true}' | jq
 ```
 
-Body: `agent_id` **or** `agent_name` (case-insensitive exact match, narrowed by
-`project_path` when the same role exists on several projects), plus `message` (required),
-`model`, `permission_mode` (`normal|auto|bypass`), `dry_run`.
+Body: `agent_id` **or** `agent_name` (case-insensitive exact match among the agents the
+gateway reaches, narrowed by `project_path` when the same name is in several projects), plus
+`message` (required), `model`, `permission_mode` (`plan|normal|auto|bypass`: the agent's own
+mode or a narrower one, never a wider one, which is a 403), `dry_run`.
 
-Auth: the webhook secret, and nothing else. The master `~/.dorothy/api-token` used to be
+Refusals name nothing: an agent outside the gateway's projects is a 404 like one that does not
+exist, and a name two agents share is a 409 that lists neither. When a job gets a 404 for an agent
+you can see in Tars, its project is not allowed to that gateway.
+
+Auth: the gateway's own secret, and nothing else. One gateway's secret on another's route is a 403. The master `~/.dorothy/api-token` used to be
 accepted as a fallback; since 1.7.6 it gets a `403`, as do an agent's own token and Tars's pass,
 and with no secret file nothing opens the route at all. Before 1.7.6 a missing secret file
 skipped the route's check entirely. This is the one route published over the tailnet, which is
 why it carries its own credential. A Hermes job set up with the master token needs the secret
 from Settings > Hermes instead.
 
-Rotating the secret: delete `~/.tars-private/hermes-webhook-secret`, open Settings > Hermes, which
-mints a new one, and give Hermes that. Worth doing once after upgrading to 1.7.6: until then the
-secret sat in `~/.dorothy`, which every agent can read.
+Rotating a secret: from Settings > Hermes (`hermes:gateways:rotate`), then give that gateway's
+Hermes the new one; the old one opens nothing from then on. Worth doing once after upgrading to
+1.7.6: until then the secret sat in `~/.dorothy`, which every agent can read.
 
 Response mirrors `/dispatch` (`{success, mode, agent}`); poll `GET /api/agents/:id` for the
 result afterwards.
