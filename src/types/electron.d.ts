@@ -128,6 +128,11 @@ export interface MemorySourceStatus {
   reachable: boolean;
   detail: string;
   tools?: string[];
+  /** Whose it is (2.0.4): on this Mac, Tars's own backend, or Hermes's memory; Brain and Settings group by it. */
+  owner?: 'mac' | 'tars' | 'hermes';
+  /** How it was reached: directly, through the SSH tunnel or over Tailscale, and its address on this Mac. */
+  via?: 'direct' | 'tunnel' | 'tailscale';
+  address?: string;
 }
 
 export interface MemoryHit {
@@ -1725,6 +1730,9 @@ export interface ElectronAPI {
       memoryHonchoEnabled?: boolean;
       memoryHonchoMcpUrl?: string;
       memoryHonchoApiKey?: string;
+      /** gbrain and Honcho saved as a server Hermes registered, reached through Hermes (2.0.4). */
+      memoryGbrainViaHermes?: boolean;
+      memoryHonchoViaHermes?: boolean;
       memoryHonchoWorkspaceId?: string;
       favoriteProjects?: string[];
       hiddenProjects?: string[];
@@ -1806,6 +1814,9 @@ export interface ElectronAPI {
       memoryHonchoEnabled?: boolean;
       memoryHonchoMcpUrl?: string;
       memoryHonchoApiKey?: string;
+      /** gbrain and Honcho saved as a server Hermes registered, reached through Hermes (2.0.4). */
+      memoryGbrainViaHermes?: boolean;
+      memoryHonchoViaHermes?: boolean;
       memoryHonchoWorkspaceId?: string;
       veniceEnabled?: boolean;
       veniceApiKey?: string;
