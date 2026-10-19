@@ -15,6 +15,7 @@ import {
   appendHermesMemory,
 } from './hermes-client';
 import type { HermesConnection } from '../types/hermes';
+import { resolvedMemorySettings } from './memory-through-hermes';
 
 /**
  * One memory for every agent, whatever CLI it runs.
@@ -63,6 +64,12 @@ export interface SourceStatus {
   reachable: boolean;
   detail: string;
   tools?: string[];
+  /** Whose it is, so that Brain and Settings group the same way (2.0.4): on this Mac, Tars's own backend, or
+   *  Hermes's memory. */
+  owner?: 'mac' | 'tars' | 'hermes';
+  /** How it was reached: directly, through the SSH tunnel, or over Tailscale, and the address on this Mac. */
+  via?: 'direct' | 'tunnel' | 'tailscale';
+  address?: string;
 }
 
 /* ── Local sources ─────────────────────────────────────── */
@@ -390,7 +397,9 @@ export async function searchMemory(opts: {
   /** Hermes sessions the caller may not see: for an agent, the super chat's. */
   hideHermesSession?: (sessionId: string | undefined) => boolean;
 }): Promise<{ hits: MemoryHit[]; errors: { source: MemorySourceId; error: string }[] }> {
-  const { query, projectPath, settings, hermes } = opts;
+  const { query, projectPath, hermes } = opts;
+  // A backend reached through Hermes, at the address of the moment (services/memory-through-hermes.ts).
+  const { settings } = await resolvedMemorySettings(opts.settings);
   const wanted = new Set<MemorySourceId>(opts.sources ?? ['project', 'observations', 'obsidian', 'hermes', 'gbrain', 'honcho']);
   const limit = opts.limit ?? 10;
   const hits: MemoryHit[] = [];
@@ -538,7 +547,8 @@ export async function writeMemory(opts: {
   hermes?: HermesConnection | null;
   file?: string;
 }): Promise<MemoryWriteResult[]> {
-  const { content, projectPath, settings, hermes, file } = opts;
+  const { content, projectPath, hermes, file } = opts;
+  const { settings } = await resolvedMemorySettings(opts.settings);
   const targets: MemoryWriteTarget[] = opts.targets.length
     ? [...new Set(opts.targets)]
     : ['project'];
@@ -598,7 +608,8 @@ export async function memoryStatus(opts: {
   hermes?: HermesConnection | null;
   projectPath?: string;
 }): Promise<SourceStatus[]> {
-  const { settings, hermes, projectPath } = opts;
+  const { hermes, projectPath } = opts;
+  const { settings, unreached, reached } = await resolvedMemorySettings(opts.settings);
   const out: SourceStatus[] = [];
 
   const dir = projectPath ? projectMemoryDir(projectPath) : null;
@@ -676,13 +687,19 @@ export async function memoryStatus(opts: {
   ] as const) {
     probes.push((async () => {
       if (!endpoint) {
-        out.push({ id, label, configured: false, reachable: false, detail: 'not enabled' });
+        const why = unreached[id];
+        out.push(why
+          ? { id, label, configured: true, reachable: false, detail: why, owner: 'tars' }
+          : { id, label, configured: false, reachable: false, detail: 'not enabled', owner: 'tars' });
         return;
       }
       const probe = await probeMcpEndpoint(endpoint);
       out.push({
         id,
         label,
+        owner: 'tars',
+        via: reached[id]?.via ?? 'direct',
+        address: endpoint.url,
         configured: true,
         reachable: probe.reachable,
         detail: probe.reachable
@@ -694,6 +711,8 @@ export async function memoryStatus(opts: {
   }
 
   await Promise.all(probes);
+  // Whose each one is, for the three groups Brain and Settings share: this Mac, Tars's direct backends, Hermes.
+  for (const source of out) source.owner ??= source.id === 'hermes' ? 'hermes' : 'mac';
 
   const order: MemorySourceId[] = ['project', 'observations', 'obsidian', 'hermes', 'gbrain', 'honcho'];
   return out.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
