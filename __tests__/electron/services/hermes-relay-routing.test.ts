@@ -25,6 +25,9 @@ import { startFakeRelay, type FakeRelay } from '../../fixtures/fake-tars-relay';
  * 8. The user is not told what became of a message handed on (JeanBrasse's answer 24 of 2026-10-05): no receipt, a long
  *    one, a reaction instead of a line, a receipt that says passed while the message waits without saying for what
  *    (what is typed in the terminal, or a dialog), or "passed" for a message the terminal refused.
+ * 9. A message the user starts through Hermes ("@project text") reaches a project the user has not allowed Hermes to
+ *    reach in Settings, Hermes (#469's rule for a Hermes gateway, none allowed by default; 2.0.4): it must reach
+ *    nobody, and the user be told where to allow it; once allowed, it reaches the orchestrator.
  *
  * The real channel and routing, the real writer every typed message takes (its sender line included), terminals
  * spawned as Tars spawns an agent's, with node-pty's process replaced by a recorder per agent; the plugin is a real
@@ -92,6 +95,9 @@ async function load() {
   const config = await import('../../../electron/services/hermes-config');
   config.writeHermesConnection({ mode: 'local', localPort: fake.port, authMode: 'token', token: fake.token });
   relay = await import('../../../electron/services/hermes-relay');
+  // Hermes may reach both projects, as the user allows it in Settings, Hermes (case 9 takes one away).
+  const gateways = await import('../../../electron/services/hermes-gateways');
+  gateways.setGatewayProjects(gateways.DEFAULT_GATEWAY, [TARS, CAPITAL]);
   const routing = await import('../../../electron/services/hermes-relay-routing');
   relay.startHermesRelay({ enabled: () => true, pollMs: 0 });
   routing.startRelayRouting({
@@ -297,5 +303,23 @@ describe('a reply nothing waits for', () => {
 
     expect(all('orch-tars') + all('orch-capital') + all('worker-tars')).toBe('');
     expect(fake.sends.slice(1)).toEqual([expect.objectContaining({ kind: 'report', text: expect.stringMatching(/nothing waits/i) })]);
+  });
+});
+
+describe('the projects Hermes may reach', () => {
+  it('9. "@project" for a project Hermes may not reach reaches nobody, and the user is told where to allow it; once allowed, it is passed', async () => {
+    const gateways = await import('../../../electron/services/hermes-gateways');
+    gateways.setGatewayProjects(gateways.DEFAULT_GATEWAY, [CAPITAL]);
+    fake.projectMessage('tars', 'deploy the fix');
+
+    await relay.relayTick(Date.now());
+
+    expect(all('orch-tars')).not.toContain('deploy the fix');
+    expect(fake.sends).toEqual([expect.objectContaining({ kind: 'report', text: expect.stringMatching(/Settings, Hermes/) })]);
+
+    gateways.setGatewayProjects(gateways.DEFAULT_GATEWAY, [CAPITAL, TARS]);
+    fake.projectMessage('tars', 'deploy the fix now');
+    await relay.relayTick(Date.now());
+    await vi.waitFor(() => expect(all('orch-tars')).toContain('deploy the fix now'), { timeout: 10_000 });
   });
 });
