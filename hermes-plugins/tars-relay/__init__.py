@@ -1,12 +1,15 @@
 """tars-relay, gateway half.
 
-An observer and two hooks.
-- The observer, a python-telegram-bot handler in the plugin's own group (OBSERVER_GROUP), sees each Telegram update
+Observers and two hooks, on every gateway Hermes has (2.0.0; Telegram only before).
+- The Telegram observer, a python-telegram-bot handler in the plugin's own group (OBSERVER_GROUP), sees each update
   as it comes, before Hermes merges messages (its batching window, its grace window) or turns one into a correction
   of a running turn: both skip pre_gateway_dispatch (the Audit's recheck of #280). It keeps for Tars a message from
   the user in their private chat that replies to a message Tars sent through the relay or starts with "@project". It only
   looks: it never stops an update, never changes one (Hermes's answers of 2026-10-01, the deciding test on 536802c).
-- pre_gateway_dispatch spares Hermes's model a message the observer kept, when Hermes admits that very message alone.
+- The Discord observer, a listener on Hermes's own discord.py bot, sees each message the same way. The other gateways
+  hand a plugin no client to listen on (Hermes 0.21.5: Signal, WhatsApp; Slack's dispatches to the first matching
+  listener only, where one more would take Hermes's place): pre_gateway_dispatch keeps their messages itself.
+- pre_gateway_dispatch spares Hermes's model a message an observer kept, when Hermes admits that very message alone.
   An event Hermes merged it into goes on to the model whole: the user's other words in it are theirs to Hermes. On a Hermes
   without plugin handlers it keeps the message itself, as before the observer.
 - pre_llm_call attaches to the user's next turn there a read-only copy of what Tars sent them.
@@ -42,8 +45,8 @@ _stores = {}
 # stall detector reads) is there, and Hermes puts a plugin's handler ahead of the core's in a group, which would
 # silence it. 100 is a group Hermes does not use.
 OBSERVER_GROUP = 100
-# Whether the observer is wired on this gateway: pre_gateway_dispatch keeps messages itself only when it is not.
-_observer = {'wired': False}
+# The platforms whose observer is wired on this gateway: pre_gateway_dispatch keeps the messages of the others itself.
+_wired = set()
 
 
 def _store():
@@ -96,15 +99,43 @@ def _observer_factory(native, adapter):
             log.exception('tars-relay: could not look at a Telegram update')
 
     native.add_handler(TypeHandler(Update, observe), group=OBSERVER_GROUP)
-    _observer['wired'] = True
+    _wired.add('telegram')
+
+
+def _discord_observer_factory(native, adapter):
+    """Wires the observer on Hermes's discord.py bot (ctx.register_platform_handler): one more on_message listener,
+    which only looks; Hermes's own handling of the message goes on as it would."""
+    async def on_message(message):
+        try:
+            author = getattr(message, 'author', None)
+            if author is None or getattr(author, 'bot', False) is True:
+                return
+            reference = getattr(message, 'reference', None)
+            seen = {
+                'platform': 'discord',
+                # A message outside any server is in a private channel: Hermes names that "dm".
+                'chat_type': 'dm' if getattr(message, 'guild', None) is None else 'group',
+                'chat_id': getattr(getattr(message, 'channel', None), 'id', None),
+                'user_id': getattr(author, 'id', None),
+                'message_id': getattr(message, 'id', None),
+                'reply_to_message_id': getattr(reference, 'message_id', None) if reference is not None else None,
+                'text': getattr(message, 'content', None),
+            }
+            await asyncio.to_thread(_keep, seen)
+        except Exception:
+            log.exception('tars-relay: could not look at a Discord message')
+
+    native.add_listener(on_message, 'on_message')
+    _wired.add('discord')
 
 
 def on_gateway_dispatch(event=None, **_):
     try:
         message = _message_of(event)
-        if _observer['wired']:
+        if message.get('platform') in _wired:
             # The observer kept it already, if it is Tars's: spare the model that message alone, never a merged event.
-            if not _store().was_kept(message.get('chat_id'), message.get('message_id'), message.get('text')):
+            if not _store().was_kept(message.get('chat_id'), message.get('message_id'), message.get('text'),
+                                     platform=message['platform']):
                 return None
         else:
             store = _store()
@@ -140,6 +171,7 @@ def on_llm_call(**_):
 def register(ctx):
     if hasattr(ctx, 'register_platform_handler'):
         ctx.register_platform_handler('telegram', _observer_factory)
+        ctx.register_platform_handler('discord', _discord_observer_factory)
     else:
         log.warning('tars-relay: this Hermes has no plugin handlers; a message Hermes merges or takes as a correction '
                     'does not reach Tars')
