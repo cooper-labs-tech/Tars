@@ -20,6 +20,7 @@
     "e2e:auto": "node scripts/scope-checks.mjs",
     "e2e:update": "playwright test --update-snapshots",
     "e2e:guard": "node e2e/check-coverage.mjs",
+    "e2e:matrix": "node e2e/matrix.mjs",
     "check:dashes": "node scripts/check-dashes.mjs",
     "check:names": "node scripts/check-private-names.mjs",
     "sandbox": "bash scripts/sandbox.sh",

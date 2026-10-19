@@ -162,6 +162,13 @@ for (const newInterface of [false, true]) {
       const panel = await open(page);
       await expect(panel).toBeVisible({ timeout: 90_000 });
       await panel.getByRole('radio', { name: /^By agent/ }).click();
+      // The table pages five rows at a time since 2.0.4 (`Usage · pages`): ten a page holds the six, and the sort is
+      // read over every row. Remembered, so the light copy below opens on ten too.
+      const rowsChoice = panel.getByRole('button', { name: 'Agents rows per page' });
+      if (await rowsChoice.count()) {
+        await rowsChoice.click();
+        await page.getByRole('option', { name: '10 rows' }).click();
+      }
       const rows = panel.locator('[data-agent-row]');
       await expect(rows).toHaveCount(6, { timeout: 60_000 });
 

@@ -8,7 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow, Notification } from 'electron';
 import { AgentStatus, AppSettings } from '../types';
 import { broadcastToAllWindows } from '../utils/broadcast';
-import { AGENTS_FILE, DATA_DIR, dataPath } from '../constants';
+import { AGENTS_FILE, API_TOKEN_FILE, DATA_DIR, dataPath } from '../constants';
+import { dropRejectedTails, keysHandedToClaude, maskKeyFragments } from './key-fragments';
 import { ensureDataDir, isSuperAgent } from '../utils';
 import { isSkillName } from '../utils/skill-name';
 import { quoted } from '../utils/reveal';
@@ -408,8 +409,11 @@ export function handleStatusChangeNotification(
  * deliberately instead of hoping every field happens to still line up.
  * 3: the role is the Orchestrator toggle's, and no longer read from the name
  * (see core/agent-role.ts).
+ * 4: an agent's kept output carries no fragment of a key Tars hands Claude
+ * Code; a file below it is cleaned once, at load (cleanKeyFragments).
  */
-const AGENTS_SCHEMA_VERSION = 3;
+const AGENTS_SCHEMA_VERSION = 4;
+const KEY_FRAGMENTS_GONE_SINCE = 4;
 
 /**
  * Retained terminal chunks per agent, bounded. What reads them now is text:
@@ -723,9 +727,58 @@ export function loadAgents() {
 
     console.log(`Loaded ${agents.size} agents from disk`);
     agentsLoaded = true;
+    if (file.version < KEY_FRAGMENTS_GONE_SINCE) cleanKeyFragments();
   } catch (err) {
     console.error('Failed to load agents:', err);
     agentsLoaded = true;
+  }
+}
+
+/**
+ * Once, at the first load of a file from before 2.0.4 (the Audit's M2 on #458):
+ * what Claude Code's question about a key provider's key left, its last 20
+ * characters, in the agents' kept output, here and in the backup, and in the
+ * rejected list of every .claude.json (core/key-fragments.ts). Saved at once,
+ * at version 4, so the next load does not do it again. Says how many, never
+ * what.
+ */
+function cleanKeyFragments(): void {
+  let token: string | undefined;
+  try { token = fs.readFileSync(API_TOKEN_FILE, 'utf-8').trim() || undefined; } catch { /* none yet */ }
+  const keys = keysHandedToClaude(readAppSettingsFromDisk(), token);
+  let masked = 0;
+  for (const agent of agents.values()) {
+    const result = maskKeyFragments(agent.output, keys);
+    if (result.masked) {
+      agent.output = result.chunks;
+      masked += result.masked;
+    }
+  }
+  saveAgents();
+  // The backup this save has just filled with the generation before it.
+  let inBackup = 0;
+  const file = backupFile();
+  try {
+    const raw = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf-8')) as unknown : undefined;
+    const list = Array.isArray(raw) ? raw : (raw as { agents?: unknown } | undefined)?.agents;
+    for (const a of Array.isArray(list) ? list as Array<{ output?: unknown }> : []) {
+      const result = maskKeyFragments(Array.isArray(a.output) ? a.output as string[] : [], keys);
+      if (result.masked) {
+        a.output = result.chunks;
+        inBackup += result.masked;
+      }
+    }
+    if (inBackup) {
+      const tmp = `${file}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(raw, null, 2));
+      renameReplacingSync(tmp, file);
+    }
+  } catch (err) {
+    console.warn(`[key-fragments] ${file} could not be cleaned: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  const configs = dropRejectedTails(keys);
+  if (masked || inBackup || configs) {
+    console.log(`[key-fragments] masked ${masked} key fragment(s) in the agents' kept output and ${inBackup} in its backup, and took Tars's keys out of the rejected list of ${configs} .claude.json file(s)`);
   }
 }
 

@@ -1,4 +1,4 @@
-import { execFile } from 'child_process';
+import { safeGit } from '../utils/safe-git';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -14,13 +14,12 @@ import * as path from 'path';
  * the repository runs. The commit's parent is the worktree's HEAD.
  */
 
-function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = process.env): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile('git', args, { cwd, env, maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err) reject(new Error(`git ${args[0]} failed: ${String(stderr || err.message).trim().slice(0, 300)}`));
-      else resolve(String(stdout).trim());
-    });
-  });
+/** git, through safe-git (no hook, filter or fsmonitor of the repository's); `env`: what this call adds, a throwaway index. */
+function git(cwd: string, args: string[], env: Record<string, string | undefined> = {}): Promise<string> {
+  return safeGit(cwd, args, { env, maxBuffer: 16 * 1024 * 1024 }).then(
+    ({ stdout }) => stdout.trim(),
+    (err: { stderr?: string; message?: string }) => { throw new Error(`git ${args[0]} failed: ${String(err.stderr || err.message).trim().slice(0, 300)}`); },
+  );
 }
 
 /** wip/<name>, a ref git takes whatever the agent is called. */
@@ -44,7 +43,7 @@ export async function saveUncommittedWork(worktreePath: string, name: string): P
 
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-wip-index-'));
   try {
-    const env = { ...process.env, GIT_INDEX_FILE: path.join(scratch, 'index') };
+    const env = { GIT_INDEX_FILE: path.join(scratch, 'index') };
     await git(worktreePath, ['read-tree', 'HEAD'], env);
     await git(worktreePath, ['add', '-A'], env);
     const tree = await git(worktreePath, ['write-tree'], env);

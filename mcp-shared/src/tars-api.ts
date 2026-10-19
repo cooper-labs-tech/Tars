@@ -33,8 +33,19 @@ export function getCallerIdentity(): { agentId: string; projectPath: string } {
 // handed down through the environment. It says which agent is calling, where
 // the file below is one secret shared by every agent on the machine and says
 // only that the caller is on it. Preferred whenever it is there; the file
-// remains for the sessions that started before Tars minted any.
-export const AGENT_API_TOKEN = process.env.CLAUDE_MGR_API_TOKEN || "";
+// remains for the sessions that started before Tars minted any. A delegated
+// run hands its servers the path of a file that holds it instead
+// (CLAUDE_MGR_API_TOKEN_FILE, services/acp/delegate.ts): the list of servers a
+// run hands its CLI is written into the claude adapter's command line.
+function tokenFromFile(file: string | undefined): string {
+  if (!file) return "";
+  try {
+    return fs.readFileSync(file, "utf-8").trim();
+  } catch {
+    return "";
+  }
+}
+export const AGENT_API_TOKEN = process.env.CLAUDE_MGR_API_TOKEN || tokenFromFile(process.env.CLAUDE_MGR_API_TOKEN_FILE);
 
 /** What the Tars that started this CLI proves it is with (tars-hook.sh): never sent. */
 const INSTANCE_ID = process.env.TARS_INSTANCE_ID || "";

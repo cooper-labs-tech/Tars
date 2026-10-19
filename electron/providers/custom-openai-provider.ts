@@ -10,7 +10,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { readAppSettingsFromDisk, isValidOpenAIBaseUrl, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
+import { readAppSettingsFromDisk, isValidOpenAIBaseUrl, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR, DATA_DIR_SHELL, OPENAI_BRIDGE_PORT } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -123,7 +123,6 @@ export class CustomOpenAIProvider implements CLIProvider {
     // is optional (some self-hosted OpenAI-compatible servers take none), a
     // parseable http(s) base URL is not.
     if (appSettings?.customOpenAIEnabled && isValidOpenAIBaseUrl(appSettings?.customOpenAIBaseUrl)) {
-      vars.ANTHROPIC_BASE_URL = CUSTOM_BRIDGE_BASE_URL;
       // NOT the vendor key, same reasoning as venice-provider.ts: this is
       // Tars's own local API token, which authenticates the request to the
       // bridge; the bridge itself reads the real key from app-settings.json
@@ -134,7 +133,7 @@ export class CustomOpenAIProvider implements CLIProvider {
       // option either.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { getApiToken } = require('../services/api-server') as typeof import('../services/api-server');
-      vars.ANTHROPIC_API_KEY = getApiToken();
+      Object.assign(vars, keyProviderEnv(CUSTOM_BRIDGE_BASE_URL, getApiToken()));
     }
 
     return vars;

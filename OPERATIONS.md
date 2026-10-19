@@ -330,6 +330,47 @@ not be re-baselining thirty.
 The HTML report is written to `e2e/report/` (gitignored); open `e2e/report/index.html`.
 Traces are `retain-on-failure`.
 
+### The CLI matrix: `npm run e2e:matrix`
+
+```bash
+npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
+npm run e2e:matrix                                               # both shells, about 14 minutes each
+E2E_MATRIX_ONLY=claude,amp,grok npm run e2e:matrix               # the pairs of these CLIs only
+E2E_MATRIX_SHELL=classic npm run e2e:matrix                      # one shell (classic or new)
+TARS_CLI_MATRIX_LIVE=1 npm run e2e:matrix -- e2e/cli-matrix.live.spec.ts   # the real CLIs, on purpose only
+```
+
+`e2e/cli-matrix.spec.ts` starts nine agents in one project, one per CLI Tars drives, each on a stand-in faithful to
+its CLI where Tars depends on it (`e2e/fake-clis.mjs`, `e2e/fake-codex.mjs`). It makes each in turn the orchestrator
+and has it delegate to, message and hear back from every other: 72 ordered pairs, five cells each.
+
+**Its own project, `matrix`, out of the default suite since 19/10.** Its two shells take 27 minutes, which nearly
+doubled `npm run e2e`. The project exists only with `E2E_MATRIX=1`, which `npm run e2e:matrix` sets
+(`e2e/matrix.mjs`).
+
+**When it runs:**
+- **at every release gate**, beside `npm run e2e`;
+- **by `npm run e2e:auto`** whenever a diff touches a file that can reach a delegation between two CLIs, in the same
+  direction as the surfaces' rule: a path `CANNOT_REACH_A_DELEGATION` (`scripts/scope-checks.mjs`) does not name runs
+  the matrix.
+  - **It runs for** the whole main process (`electron/`), the MCP servers, the hooks, the state mod, the dependency
+    set and the suite's own code: the matrix launches the app whole and types into its agents through the window's
+    preload bridge. An MCP server or a hook alone skips the surfaces and still runs it.
+  - **It is left out only for** the renderer (`src/`, `public/`), the agent prompt text and the tray's pictures in
+    `electron/resources/`, the unit tests, the other specs and the surfaces' reference pictures, the documents, the
+    Pencil files and the README's pictures, the tooling (`scripts/`, `.github/`), the landing site and the Hermes
+    plugins.
+  - It was a list of what reaches a delegation until the Audit's M1 on #464, and it missed eleven files a task goes
+    through (its routes, the queue of a second task, the terminal, the agent's identity, the hooks' installer).
+
+  e2e:auto names every file that called for it, or every file it left the matrix out for, and why.
+
+**A red cell is expected where `KNOWN_RED` says so.** Each rule says why and what the failure reads like. The spec
+fails on a red cell no rule expects, on a rule whose cell turned green, and on a cell red for another reason than its
+rule's. So the PR that fixes a pair removes its rule.
+
+**The artefact:** `values.json` in the run directory holds every cell, its result and what was read, in both shells.
+
 ### Coverage guard: `npm run e2e:guard`
 
 ```bash
@@ -579,7 +620,7 @@ another's.
 
 Before it, as always: the version bumped in `package.json`, its entry at the top of
 `src/data/changelog.ts`, merged into `main`, and the gate passed (`npm test`, both `tsc`, lint,
-the final e2e).
+the final e2e and the CLI matrix, `npm run e2e:matrix`).
 
 ```bash
 npm run release -- --dry-run   # the checks, the artifacts of this version if built, the notes; nothing else
@@ -1916,8 +1957,9 @@ The environment is `process.env` plus:
   `~/.nvm/versions/node/v22.0.0/bin`, `/usr/local/bin`, `/opt/homebrew/bin`, `~/.local/bin`,
   and every `~/.nvm/versions/node/*/bin` (`~/.grok/bin`, `~/Library/pnpm` and `~/.yarn/bin`
   are only in `detectCLIPaths()`'s probe list, not the PTY PATH);
-- provider env (`getPtyEnvVars`, this is where `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` are
-  injected for the nine providers that drive the `claude` binary against another API);
+- provider env (`getPtyEnvVars`, this is where `ANTHROPIC_BASE_URL` and the key as
+  `ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_API_KEY` blank, are injected for the thirteen providers that
+  drive the `claude` binary against another API: `keyProviderEnv`);
 - `CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD=1`, so `~/.dorothy/CLAUDE.md` is loaded via
   `--add-dir`;
 - Tasmania env, when applicable.

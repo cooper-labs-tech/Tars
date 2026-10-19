@@ -1,10 +1,10 @@
+import { safeGit, safeGitSync } from '../utils/safe-git';
 import { ipcMain, dialog, shell, app } from 'electron';
 import { stopTask, taskBannerOf } from '../services/task-banner';
 import { typeLaunchTask } from '../core/typed-task';
 import { stopAgent } from '../core/agent-stop';
 import { removeAgent } from '../core/agent-remove';
 import { gitRefusal } from '../core/chat-slots';
-import { execFileSync } from 'child_process';
 import { restartRunnersOf } from '../services/chat-runners';
 import { diskSpace, listOrphanFolders, removeOrphanFolders } from '../services/orphan-folders';
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
@@ -179,7 +179,7 @@ async function makeAgentWorktree(projectPath: string, branchName: string): Promi
       // a quote or a space in it ("Bob's Projects") used to break the command,
       // or run its own. In the C locale: gitRefusal reads git's "fatal:",
       // which a translated git would not write.
-      const git = (args: string[]) => execFileSync('git', args, { cwd: projectPath, stdio: 'pipe', env: { ...process.env, LC_ALL: 'C' } });
+      const git = (args: string[]) => safeGitSync(projectPath, args, { env: { LC_ALL: 'C' } });
       // An existing branch is checked out there, a new one is made: only the
       // add that applies runs, so a refusal is git's reason for it. Any failure
       // of the first used to be retried as a new branch, and the user read the
@@ -3080,11 +3080,7 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
   ipcMain.handle('shell:branch', async (_event, { cwd }: { cwd: string }) => {
     if (!cwd || !fs.existsSync(cwd)) return { success: false, error: 'no such directory' };
     try {
-      const { execFile } = await import('child_process');
-      const { promisify } = await import('util');
-      const { stdout } = await promisify(execFile)('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-        cwd, timeout: 8000,
-      });
+      const { stdout } = await safeGit(cwd, ['rev-parse', '--abbrev-ref', 'HEAD'], { timeout: 8000 });
       return { success: true, output: stdout.trim() };
     } catch {
       return { success: false, error: 'not a git repository' };

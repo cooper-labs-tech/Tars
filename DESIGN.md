@@ -353,7 +353,11 @@ in 12, and `MetaChip`, `LoadingState` and `StatusBadge` in the rest. The
 every screen does today.
 
 ### Buttons: `ui/Button`
-Four variants, two sizes, nothing else. `primary` is an accent fill with
+Four variants, three sizes, nothing else: `sm` 26px tall, `md` 32px, and `icon`,
+the small height made square (26 by 26, no padding) for a glyph or a figure
+alone, as a pager's arrows and pages. A `px-0` passed with `sm` loses to the
+size's own padding, which squeezed a 12px chevron into the 4px left between the
+two. `primary` is an accent fill with
 `on-accent` text; `secondary` is `surface` with a `border`; `ghost` is
 `text-secondary` with a transparent border; `danger` is red text on a 40% red
 border, no fill. Every variant carries a border (transparent where it should
@@ -388,6 +392,16 @@ per million, model id). Closes on outside mousedown and on Escape. The panel is
 as wide as its own content, at least as wide as the trigger and at most 24rem:
 sized to the trigger alone it left the model picker in a team's member grid too
 narrow to read a model name in, and uncapped a long label would widen the page.
+
+### Pager: `ui/Pager`
+Under a table that holds more rows than a page: the rows a page (a `Dropdown`,
+26px), which rows show and of how many (`6 to 10 of 23`, `all 7` when one page
+holds them), and the pages, `icon` buttons, the one shown a box (`active`:
+`surface-raised` and `border-strong`), never an underline. Past seven pages, the
+first, the last, the one shown and its neighbours, a gap between. Narrower than
+520px (a container query on the pager itself), previous, `2 / 5` and next. The
+words and the pages come from `src/lib/pager.ts`; the pager only draws them.
+Frames `Usage · pages · five rows a card`, `· states`, `· narrowest window`.
 
 ### Tabs and the segmented control
 Project tabs on the Dashboard: the active tab is a `surface` box against the

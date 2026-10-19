@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useClaude } from '@/hooks/useClaude';
 import { getProviderDef } from '@/lib/providers';
@@ -47,18 +47,39 @@ function StatCard({
   value,
   sub,
   subClassName = 'text-muted-foreground',
+  reading = false,
 }: {
   caption: string;
   value: string;
   sub: string;
   subClassName?: string;
+  /** The transcripts' totals not in yet: the caption, and no number (`Usage · cards while they read`). */
+  reading?: boolean;
 }) {
   return (
     <Panel>
       <PanelCaption>{caption}</PanelCaption>
-      <p className="mt-2 font-serif text-[28px] leading-none text-foreground">{value}</p>
-      <p className={`mt-2 text-[11px] font-mono ${subClassName}`}>{sub}</p>
+      {reading ? (
+        <div data-loading>
+          <p className="mt-2 font-serif text-[28px] leading-none text-muted-foreground">…</p>
+          <p className="mt-2 text-[11px] font-mono text-muted-foreground">reading the transcripts</p>
+        </div>
+      ) : (
+        <>
+          <p className="mt-2 font-serif text-[28px] leading-none text-foreground">{value}</p>
+          <p className={`mt-2 text-[11px] font-mono ${subClassName}`}>{sub}</p>
+        </>
+      )}
     </Panel>
+  );
+}
+
+/** A chart or a list still waiting for the transcripts' totals, on the app's loading ladder. */
+function Reading({ what, detail }: { what: string; detail?: string }) {
+  return (
+    <div data-loading className="flex flex-1 min-h-0 items-center justify-center">
+      <LoadingState loading what={what} detail={detail} />
+    </div>
   );
 }
 
@@ -105,7 +126,7 @@ function byTokens(models: ModelTotals[]) {
 }
 
 export default function UsagePage() {
-  const { data, loading, error, refresh } = useClaude();
+  const { data, error, refresh } = useClaude();
   const [timeframe, setTimeframe] = useState<Timeframe>('daily');
   /** Which bar the pointer is over, so the chart can show its own card. */
   const [hoveredBar, setHoveredBar] = useState<string | null>(null);
@@ -117,16 +138,25 @@ export default function UsagePage() {
   // that covers the CLIs which write no transcript of their own. Read per day,
   // so it can be cut to the window like everything else.
   //
-  // Read again whenever the transcripts' figures change, which is when
-  // useClaude hands over a new `data`, rather than once on mount, when a turn
-  // run after the page opened never reached it, and rather than on every
-  // ten-second poll: at its cap the ledger is over a megabyte.
+  // Read as the page opens, beside the transcripts' own read rather than after
+  // it, and again whenever the transcripts' figures change, which is when
+  // useClaude hands over a new `data`: a turn run after the page opened would
+  // otherwise never reach it. Not on every ten-second poll (at its cap the
+  // ledger is over a megabyte), and not when the first figures arrive after an
+  // opening that had none: the opening's read is that same moment's answer.
+  //
+  // The latest read wins, and nothing is cancelled when `data` moves: the
+  // opening's read, still on its way when the first figures came, is the one
+  // that answers them.
+  const ledgerAsk = useRef<{ data: unknown; asked: number }>({ data: undefined, asked: 0 });
   useEffect(() => {
-    let cancelled = false;
+    const prev = ledgerAsk.current.data;
+    ledgerAsk.current.data = data;
+    if (prev === null && data != null) return;
+    const mine = ++ledgerAsk.current.asked;
     window.electronAPI?.usage?.byProvider()
-      .then(res => { if (!cancelled) setLedger({ daily: res?.daily ?? [], oldest: res?.oldest ?? null, hourly: res?.hourly ?? [] }); })
-      .catch(() => { if (!cancelled) setLedger({ daily: [], oldest: null, hourly: [] }); });
-    return () => { cancelled = true; };
+      .then(res => { if (ledgerAsk.current.asked === mine) setLedger({ daily: res?.daily ?? [], oldest: res?.oldest ?? null, hourly: res?.hourly ?? [] }); })
+      .catch(() => { if (ledgerAsk.current.asked === mine) setLedger({ daily: [], oldest: null, hourly: [] }); });
   }, [data]);
 
   const days = data?.stats?.dailyModelTokens;
@@ -179,13 +209,11 @@ export default function UsagePage() {
     return sum;
   }, [dailyCosts, period]);
 
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center h-[60vh]">
-        <LoadingState loading what="Still adding up what you spent…" detail="parsing session transcripts" />
-      </div>
-    );
-  }
+  // Nothing waits for the slowest answer any more: the header and every card
+  // show at once, each reading on its own until its answer comes (`Usage ·
+  // cards while they read`). The transcripts' totals bring the figures, the
+  // budget and the charts; the tasks come with their own read, below.
+  const reading = !data;
 
   if (error) {
     return (
@@ -265,18 +293,21 @@ export default function UsagePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2">
         <StatCard
           caption="TOTAL COST"
+          reading={reading}
           value={fmtUsd(totals.cost)}
           sub={overQuota > 0 ? `of which ~${fmtUsd(overQuota)} over quota` : spanLabel(period)}
           subClassName={overQuota > 0 ? 'text-danger' : 'text-muted-foreground'}
         />
-        <StatCard caption={text.latest} value={fmtUsd(latest.cost)} sub={latest.label} />
+        <StatCard caption={text.latest} reading={reading} value={fmtUsd(latest.cost)} sub={latest.label} />
         <StatCard
           caption="TOTAL TOKENS"
+          reading={reading}
           value={fmtTokens(totals.tokensIn + totals.tokensOut)}
           sub={`${fmtTokens(totals.tokensIn)} in / ${fmtTokens(totals.tokensOut)} out`}
         />
         <StatCard
           caption="CACHE READS"
+          reading={reading}
           value={fmtTokens(totals.cacheRead)}
           sub={totals.tokensIn > 0
             ? `${((totals.cacheRead / totals.tokensIn) * 100).toFixed(1)}% of tokens in`
@@ -286,7 +317,7 @@ export default function UsagePage() {
 
       {/* Budget & limits: each provider gets the limit it actually has. Month
           to date and live, whatever the timeframe, and the panel says so. */}
-      <BudgetAndLimits rateLimits={data?.rateLimits} accounts={data?.accountRateLimits} providerSpend={providerSpend} />
+      <BudgetAndLimits rateLimits={data?.rateLimits} accounts={data?.accountRateLimits} providerSpend={providerSpend} reading={reading} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {/* Usage by Provider, over the timeframe. Two sources, because no
@@ -295,7 +326,9 @@ export default function UsagePage() {
             tokens as it happens. */}
         <Panel className="flex flex-col">
           <PanelCaption>{`BY PROVIDER · ${text.length}`}</PanelCaption>
-          {totals.providers.length === 0 ? (
+          {reading ? (
+            <div className="mt-3 flex flex-col"><Reading what="Still adding up what you spent…" detail="parsing session transcripts" /></div>
+          ) : totals.providers.length === 0 ? (
             <p className="mt-3 text-xs text-muted-foreground">
               {rows.length > 0 || dayRows.length > 0
                 ? `Nothing recorded in these ${text.control}.`
@@ -340,6 +373,7 @@ export default function UsagePage() {
         <Panel className="h-[260px] flex flex-col">
           <PanelCaption className="shrink-0">{`${text.unit} COST · ${text.length}`}</PanelCaption>
 
+          {reading ? <Reading what="Still adding up what you spent…" /> : (
           <AnimatePresence mode="wait">
             <motion.div
               key={timeframe}
@@ -394,6 +428,7 @@ export default function UsagePage() {
               </div>
             </motion.div>
           </AnimatePresence>
+          )}
         </Panel>
         {/* Tokens over time. The cost chart says what a bar cost; this says
             what it was made of, and its card breaks the bar down per model
@@ -402,6 +437,7 @@ export default function UsagePage() {
         <Panel className="h-[260px] flex flex-col">
           <PanelCaption className="shrink-0">{`${text.unit} TOKENS · ${text.length}`}</PanelCaption>
 
+          {reading ? <Reading what="Reading the tokens of each turn…" /> : (
           <div className="flex flex-col flex-1 min-h-0 mt-3">
             <div className="flex items-stretch gap-1 flex-1 min-h-0">
               {bars.map((bar, i) => {
@@ -462,6 +498,7 @@ export default function UsagePage() {
               <span>{text.now}</span>
             </div>
           </div>
+          )}
         </Panel>
 
         {/* How many replies came back, which tokens cannot answer: one long
@@ -472,13 +509,15 @@ export default function UsagePage() {
         <Panel className="h-[260px] flex flex-col">
           <PanelCaption className="shrink-0">{`${text.unit} MESSAGES · ${text.length}`}</PanelCaption>
 
+          {reading ? <Reading what="Counting the replies…" /> : (
           <div className="flex flex-col flex-1 min-h-0 mt-3">
             <div className="flex items-stretch gap-1 flex-1 min-h-0">
               {bars.map((bar, i) => {
                 const height = maxMessages > 0 ? (bar.messages / maxMessages) * 100 : 0;
                 const isLatest = i === bars.length - 1;
                 const open = hoveredMessageBar === bar.key;
-                const models = bar.models.filter(m => m.messages > 0).sort((a, b) => b.messages - a.messages);
+                // Sorted for the bar the pointer is on only, not for every bar at every render.
+                const models = open ? bar.models.filter(m => m.messages > 0).sort((a, b) => b.messages - a.messages) : [];
                 return (
                   <div
                     key={bar.key}
@@ -521,6 +560,7 @@ export default function UsagePage() {
               <span>{text.now}</span>
             </div>
           </div>
+          )}
         </Panel>
 
       </div>

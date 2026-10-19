@@ -64,8 +64,9 @@ describe('saveAgents', () => {
 
     const raw = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf-8'));
     // 3 since the role is the Orchestrator toggle's: a file below it is
-    // migrated once on load (core/agent-role.ts).
-    expect(raw.version).toBe(3);
+    // migrated once on load (core/agent-role.ts). 4 since the kept output
+    // carries no fragment of a key Tars hands Claude Code (core/key-fragments.ts).
+    expect(raw.version).toBe(4);
     expect(raw.agents).toHaveLength(1);
 
     manager.agents.clear();
@@ -274,7 +275,8 @@ describe('the role on load', () => {
     expect(role('worker')).toEqual({ role: 'worker', orchestratorMode: false });
 
     manager.saveAgents();
-    expect(JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf-8')).version).toBe(3);
+    // Written at the current version, which the role migration is one step of.
+    expect(JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf-8')).version).toBe(4);
   });
 
   it('migrates once: after that the name is never read', () => {

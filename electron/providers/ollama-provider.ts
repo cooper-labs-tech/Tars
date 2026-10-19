@@ -10,7 +10,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
+import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR, DATA_DIR_SHELL } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -129,10 +129,10 @@ export class OllamaProvider implements CLIProvider {
     // you sign up for, it's a local server that either answers or doesn't.
     // Settings > AI Providers checks reachability separately; this always
     // wires the configured (or default) address.
-    vars.ANTHROPIC_BASE_URL = stripV1(appSettings?.ollamaBaseUrl || OLLAMA_DEFAULT_BASE_URL);
-    // Ollama's Anthropic-compat endpoint requires the header be present but
-    // does not validate its value locally, so any non-empty string works.
-    vars.ANTHROPIC_API_KEY = 'ollama-local';
+    // Ollama's Anthropic-compat endpoint requires a credential be present but
+    // does not validate its value locally, so any non-empty string works; its
+    // own instructions for Claude Code hand it as the auth token.
+    Object.assign(vars, keyProviderEnv(stripV1(appSettings?.ollamaBaseUrl || OLLAMA_DEFAULT_BASE_URL), 'ollama-local'));
     // The claude binary preflights every turn with GET/POST
     // /v1/messages/count_tokens?beta=true, which Ollama does not implement
     // (404). Multiple users report that 404 then makes Ollama's own server

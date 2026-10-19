@@ -1,5 +1,5 @@
+import { safeGitSync } from '../utils/safe-git';
 import * as fs from 'fs';
-import { execFileSync } from 'child_process';
 import { agents, saveAgents } from './agent-manager';
 import { ptyProcesses } from './pty-manager';
 import { killPty } from './pty-kill';
@@ -88,7 +88,7 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
       // agent. See the same fix in agent:create.
       console.log(`Removing worktree at ${agent.worktreePath}`);
       // In the C locale: gitRefusal reads git's "fatal:", which a translated git would not write.
-      execFileSync('git', ['worktree', 'remove', agent.worktreePath, '--force'], { cwd: agent.projectPath, stdio: 'pipe', env: { ...process.env, LC_ALL: 'C' } });
+      safeGitSync(agent.projectPath, ['worktree', 'remove', agent.worktreePath, '--force'], { env: { LC_ALL: 'C' } });
       console.log(`Worktree removed successfully`);
     } catch (err) {
       // The agent goes all the same; its folder, when there is one, stays, and the window says why. A worktree

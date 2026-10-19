@@ -20,5 +20,6 @@ export type { SortDirection } from './SortHeader';
 export { Chip, MetaChip } from './Chip';
 export type { ChipProps } from './Chip';
 export { Panel, PanelCaption } from './Panel';
+export { Pager } from './Pager';
 export type { PanelProps } from './Panel';
 export { DialogShell } from './DialogShell';

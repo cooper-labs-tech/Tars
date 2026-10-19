@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { Gauge } from 'lucide-react';
 import { PROVIDER_REGISTRY } from '@/lib/providers';
 import { ProviderIconRenderer } from '@/components/ui/ProviderBadge';
+import { LoadingState } from '@/components/ui';
 
 /**
  * Budget and limits, per provider.
@@ -211,14 +212,22 @@ function BudgetField({
   );
 }
 
-export function BudgetAndLimits({
+/**
+ * Memoised: a hover on the page's charts redraws none of it. Mounted with the page, so its settings and CLI reads go
+ * out beside the transcripts' rather than after them; until their limits come it says so (`Usage · cards while they
+ * read`), rather than that no provider has reported one.
+ */
+export const BudgetAndLimits = memo(function BudgetAndLimits({
   rateLimits,
   accounts,
   providerSpend,
+  reading = false,
 }: {
   rateLimits?: { five_hour?: RateWindow; seven_day?: RateWindow } | null;
   accounts?: AccountWindows[];
   providerSpend: { provider: string; costUSD: number }[];
+  /** The transcripts' read, which brings the limits, still under way. */
+  reading?: boolean;
 }) {
   const [budgets, setBudgets] = useState<Record<string, number>>({});
   const [installed, setInstalled] = useState<Record<string, boolean>>({});
@@ -253,6 +262,14 @@ export function BudgetAndLimits({
     () => buildBudgetRows({ rateLimits, accounts, providerSpend, budgets, installed }),
     [rateLimits, accounts, providerSpend, budgets, installed],
   );
+
+  if (reading) {
+    return (
+      <div data-loading className="border border-border-primary bg-bg-secondary p-4">
+        <LoadingState loading what="Reading each provider's limits…" />
+      </div>
+    );
+  }
 
   if (rows.length === 0) {
     return (
@@ -322,4 +339,4 @@ export function BudgetAndLimits({
       </div>
     </div>
   );
-}
+});

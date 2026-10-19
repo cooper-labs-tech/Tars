@@ -141,6 +141,11 @@ function scheduledParams(homeDir: string) {
 function scriptParams(homeDir: string) {
   const projectPath = path.join(homeDir, 'the project');
   fs.mkdirSync(projectPath, { recursive: true });
+  // A key provider's script starts its CLI only with its key, read as it runs (scheduledKeyExports): one of each.
+  fs.mkdirSync(path.join(homeDir, '.dorothy'), { recursive: true });
+  fs.writeFileSync(path.join(homeDir, '.dorothy', 'app-settings.json'), JSON.stringify(Object.fromEntries(
+    ['deepSeekApiKey', 'moonshotApiKey', 'zhipuApiKey', 'minimaxApiKey', 'openRouterApiKey', 'ollamaCloudApiKey'].map(k => [k, `sk-${k}`]),
+  )));
   const binaryPath = cliUnder(homeDir);
   return {
     binaryPath,

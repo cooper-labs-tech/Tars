@@ -24,6 +24,7 @@ const serverBundle = path.join(tmp, 'bundle.js');
 fs.writeFileSync(serverBundle, '');
 
 const PRELUDE = `
+import * as fs from 'node:fs';
 let buf = '';
 const send = m => process.stdout.write(JSON.stringify(m) + '\\n');
 process.stdin.on('data', chunk => {
@@ -37,10 +38,18 @@ process.stdin.on('data', chunk => {
 });
 `;
 
-/** Reports its tokens in a message chunk, then ends the turn as told. */
+/**
+ * Reports its tokens in a message chunk, then ends the turn as told. A server's token is the one it would present:
+ * since 2.0.4 the list hands it the path of a file that holds the token (acp-delegate-token-file.test.ts).
+ */
 function fakeAgentScript(ending: 'end_turn' | 'error'): string {
   return `${PRELUDE}
 let servers = [];
+const tokenOf = s => {
+  const file = s.env.find(e => e.name === 'CLAUDE_MGR_API_TOKEN_FILE');
+  if (!file) return (s.env.find(e => e.name === 'CLAUDE_MGR_API_TOKEN') || {}).value || null;
+  try { return fs.readFileSync(file.value, 'utf8').trim(); } catch { return null; }
+};
 function handle(msg) {
   if (msg.method === 'initialize') return send({ jsonrpc: '2.0', id: msg.id, result: {} });
   if (msg.method === 'session/new') {
@@ -51,7 +60,7 @@ function handle(msg) {
     const report = {
       process: process.env.CLAUDE_MGR_API_TOKEN || null,
       instance: process.env.TARS_INSTANCE_ID || null,
-      servers: servers.map(s => ({ name: s.name, token: (s.env.find(e => e.name === 'CLAUDE_MGR_API_TOKEN') || {}).value || null, instance: (s.env.find(e => e.name === 'TARS_INSTANCE_ID') || {}).value || null })),
+      servers: servers.map(s => ({ name: s.name, token: tokenOf(s), instance: (s.env.find(e => e.name === 'TARS_INSTANCE_ID') || {}).value || null })),
     };
     send({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: JSON.stringify(report) } } } });
     return send(${ending === 'end_turn'}

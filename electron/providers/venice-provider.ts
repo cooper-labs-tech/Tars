@@ -10,7 +10,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
+import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR, DATA_DIR_SHELL, OPENAI_BRIDGE_PORT } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -125,10 +125,9 @@ export class VeniceProvider implements CLIProvider {
     // DeepSeek/Moonshot/etc. use for their own key, just with no OpenRouter
     // fallback (Venice is not on OpenRouter, see the design note).
     if (appSettings?.veniceApiKey) {
-      vars.ANTHROPIC_BASE_URL = VENICE_BRIDGE_BASE_URL;
-      // NOT the Venice key. The claude binary sends this as `x-api-key` to
-      // whatever ANTHROPIC_BASE_URL points at; here that's Tars's own bridge on
-      // 127.0.0.1, which authenticates the request with Tars's local API
+      // NOT the Venice key. The claude binary sends this as a Bearer
+      // (keyProviderEnv) to whatever ANTHROPIC_BASE_URL points at; here that's
+      // Tars's own bridge on 127.0.0.1, which authenticates the request with Tars's local API
       // token (the same one api-server.ts already guards /api/* with) and
       // only then reads the real Venice key from app-settings.json itself to
       // attach to the outbound call. See services/openai-bridge.ts.
@@ -143,7 +142,7 @@ export class VeniceProvider implements CLIProvider {
       // option either.
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { getApiToken } = require('../services/api-server') as typeof import('../services/api-server');
-      vars.ANTHROPIC_API_KEY = getApiToken();
+      Object.assign(vars, keyProviderEnv(VENICE_BRIDGE_BASE_URL, getApiToken()));
     }
 
     return vars;

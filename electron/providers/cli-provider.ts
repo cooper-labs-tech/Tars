@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { AgentProvider, AppSettings, AgentPermissionMode, AgentEffort } from '../types';
-import { dataPath } from '../constants';
+import { dataPath, DATA_DIR_SHELL } from '../constants';
 
 /**
  * Synchronously read the persisted app settings. Providers use this in
@@ -318,6 +318,59 @@ export function enforcesOrchestratorMode(binaryName: string): boolean {
 export function managedCliEnv(binaryName: string): Record<string, string> {
   if (binaryName !== 'claude') return {};
   return { DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_MOUSE_CLICKS: '1' };
+}
+
+/**
+ * What points the claude binary at a key provider's endpoint: its URL, and the
+ * key as ANTHROPIC_AUTH_TOKEN, which Claude Code sends as `Authorization:
+ * Bearer`. Never as ANTHROPIC_API_KEY: an interactive Claude Code asks before
+ * it uses an API key it finds in its environment ("Detected a custom API key
+ * in your environment. Do you want to use this API key?", No preselected), and
+ * nothing answers that in an agent's terminal, so no key-provider agent ever
+ * started by itself. The first Enter typed there, Tars's own included,
+ * answered No: the key was then refused for good in that folder's
+ * .claude.json, and a session with a subscription signed in went on with its
+ * OAuth token, sent to the vendor's URL. An auth token is never asked about,
+ * whichever Claude account folder the CLI reads, and is written nowhere
+ * (measured on claude 2.1.302). Every key provider's endpoint takes the
+ * Bearer: their own instructions for Claude Code say this variable.
+ *
+ * ANTHROPIC_API_KEY is blanked: a key the user's shell exports, inherited,
+ * would bring the question back, about itself, and go out as `x-api-key` to a
+ * vendor it has nothing to do with. Scheduled runs (`claude -p`) take the key
+ * the same way, from scheduledKeyExports.
+ */
+export function keyProviderEnv(baseUrl: string, key: string): Record<string, string> {
+  return { ANTHROPIC_BASE_URL: baseUrl, ANTHROPIC_AUTH_TOKEN: key, ANTHROPIC_API_KEY: '' };
+}
+
+/**
+ * The lines of a scheduled script that point `claude -p` at a key provider
+ * and hand it the key, as keyProviderEnv does a terminal's (the Audit's M1 on
+ * #458). Measured on claude 2.1.302 against a stand-in of the vendor:
+ * `claude -p` with ANTHROPIC_API_KEY empty or unset, or ANTHROPIC_AUTH_TOKEN
+ * empty, and a subscription signed in, sends the subscription's OAuth token
+ * as a Bearer to the vendor's URL. So the key is read as the task runs, by
+ * Tars's own node (the launcher its MCP servers run on, else `node`), never by
+ * jq, which macOS ships only from 15, and never in an argument; with no key,
+ * or settings it cannot read, the script says why in the task's log and ends
+ * before claude starts.
+ */
+export function scheduledKeyExports(baseUrl: string, setting: string, logPath: string): string {
+  const read = 'try{const v=JSON.parse(require("fs").readFileSync(process.env.TARS_SETTINGS,"utf8"))[process.env.TARS_KEY_NAME];'
+    + 'if(typeof v==="string"&&v.trim())process.stdout.write(v.trim())}catch(e){}';
+  return [
+    `export ANTHROPIC_BASE_URL=${shellQuote(baseUrl)}`,
+    `TARS_NODE="${DATA_DIR_SHELL}/bin/tars-mcp-node"; [ -x "$TARS_NODE" ] || TARS_NODE=node`,
+    `TARS_KEY="$(TARS_SETTINGS="${DATA_DIR_SHELL}/app-settings.json" TARS_KEY_NAME=${shellQuote(setting)} "$TARS_NODE" -e '${read}' 2>/dev/null)"`,
+    'if [ -z "$TARS_KEY" ]; then',
+    `  echo "=== Not run: no ${setting} in Tars's settings, or they could not be read. claude was not started, and nothing was sent to ${baseUrl} ===" >> ${shellQuote(logPath)}`,
+    '  exit 1',
+    'fi',
+    'export ANTHROPIC_AUTH_TOKEN="$TARS_KEY" ANTHROPIC_API_KEY=""',
+    'unset TARS_KEY TARS_NODE',
+    '',
+  ].join('\n');
 }
 
 export function safeEffort(effort: string | undefined): string | undefined {

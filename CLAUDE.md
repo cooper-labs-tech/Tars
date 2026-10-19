@@ -49,7 +49,7 @@
 | `src/components/ClientLayout.tsx` | The shell: sidebar + header, and the theme boot (`tars-theme` in `localStorage`, dark unless explicitly `light`) |
 | `src/components/TerminalsView/` | The xterm grid that is the Dashboard, including the scroll-lock and multi-terminal hooks |
 | `src/lib/providers.ts` | Frontend provider registry: icon, badge, models, default model. One entry per provider; NewChatModal and Settings both read it |
-| `design/tars-redesign.pen` | Pencil source of truth, 238 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
+| `design/tars-redesign.pen` | Pencil source of truth, 247 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
 | `design/chat-design.pen` | 72 of the same frames (71 with the same ids; `Agent error · reason` was drawn into both after the fork, so its ids differ), the two panel history frames `tars-redesign.pen` dropped with the history view, plus the 11 frames of the Chat room, which exist nowhere else: 85 in all. A fork, not a companion. Its room frames describe the Chat before its redesign: draw anything for the Chat in `chat-redesign-a.pen`, and anything else in `tars-redesign.pen` |
 | `design/chat-redesign-a.pen` | The Chat page's redesign, direction A (chosen by JeanBrasse on 2026-09-17), with its composer: the room and Hermes pages in every state a user can meet, and sheets for the team, the thread, Hermes, the composer and the room head, dark and light. What the Chat implements since #165 (merged 2026-09-24) |
 | `design/landing.pen` | The site in `landing/`: its page, its 404, its privacy and terms pages, and the picture link previews show. Forked from `tars-redesign.pen` on 2026-09-23, which no longer carries the landing |
@@ -91,8 +91,10 @@ CLAUDE_PROJECT_PATH   # sent as X-Tars-Caller-Project, which scopes nothing: the
 CLAUDE_SKILLS         # comma-separated skill list for the session
 CLAUDE_MGR_API_URL    # read by mcp-orchestrator; defaults to http://127.0.0.1:31415
 CLAUDE_MGR_API_TOKEN  # minted per terminal by spawnAgentPty and per ACP run by delegateOverAcp, in memory only; mcp-orchestrator, mcp-memory and mcp-vault present it instead of ~/.dorothy/api-token
+CLAUDE_MGR_API_TOKEN_FILE # a delegated run's MCP servers only: a 0600 file holding the run's token, removed with the run; the claude adapter writes their list into its command line, so the token never goes in it
 ANTHROPIC_BASE_URL    # every alt provider runs the claude binary with these two rewritten
-ANTHROPIC_API_KEY     # from app-settings.json, per provider
+ANTHROPIC_AUTH_TOKEN  # the key, from app-settings.json, per provider (Tars's own token for the bridge's two), sent as a Bearer
+ANTHROPIC_API_KEY     # blanked for every alt provider: an interactive Claude Code asks before it uses one, and nothing answers in an agent's terminal; scheduled scripts (claude -p) blank it too, and start claude only with ANTHROPIC_AUTH_TOKEN set
 ANTHROPIC_MODEL
 CLAUDE_CONFIG_DIR     # with several Claude accounts on (Settings), the folder of the account an agent's CLI and its ACP runs start on, and of the account Settings signs in, checks or signs out (`claude auth login`, `auth status`, `auth logout`); removed for account 1 (~/.claude). Never set otherwise
 TARS_CLAUDE_ACCOUNT   # the same account's id ('default' for account 1), read by the status line to file that account's 5 h and weekly counters
@@ -132,7 +134,7 @@ Four roles work this tree. They map to the long-lived branches `feat/frontend`, 
 - **Read-only** everywhere else: report defects, do not patch them
 - **Done when**: both `tsc` passes are clean, `npm test` is green, `npm run lint`, `npm run lint:design` and `npm run check:names` are clean, `npm run e2e:auto` shows no new visual diff and no page error, and a feature's own E2E spec passes and leaves its artefact (Workflow Rule 3)
 - **Refused at the gate**: a unit test written after the code it tests, a test that restates a constant, a test that only checks a mock was called, and a spec nobody has seen turn red on the old build or a mutant
-- `npm run e2e:auto` decides from the diff whether the surfaces can have moved, and runs the full suite whenever they can. It skips only when every changed file is outside the running app (`__tests__/`, `mcp-*/`, `hooks/`, `scripts/`, root markdown), and says so at length when it does. Anything it cannot classify runs. `electron/` always runs: the suite boots the real app against a seeded home, so a main process change can and does move a screenshot
+- `npm run e2e:auto` decides from the diff whether the surfaces can have moved, and runs the full suite whenever they can. It skips only when every changed file is outside the running app (`__tests__/`, `mcp-*/`, `hooks/`, `scripts/`, root markdown), and says so at length when it does. Anything it cannot classify runs. `electron/` always runs: the suite boots the real app against a seeded home, so a main process change can and does move a screenshot. It also runs the CLI matrix, a Playwright project of its own (`npm run e2e:matrix`, OPERATIONS.md), for any change but those that cannot reach a delegation between two CLIs (the renderer, the documents, the unit tests, the other specs, the tooling): the whole main process, the MCP servers, the hooks and the state mod run it; every release gate runs the matrix
 - Reach for `npm run e2e` directly to force the full suite, and `npm run e2e:guard` when a surface was added
 - A visual diff is a finding, not a licence to re-record. `npm run e2e:update` is only run when the design was deliberately changed and the Pencil frame already reflects it
 

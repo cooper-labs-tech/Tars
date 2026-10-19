@@ -10,8 +10,8 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
-import { DATA_DIR, DATA_DIR_SHELL } from '../constants';
+import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv, scheduledKeyExports } from './cli-provider';
+import { DATA_DIR } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
 export const OLLAMA_CLOUD_BASE_URL = 'https://ollama.com'; // claude appends /v1/messages
@@ -134,14 +134,10 @@ export class OllamaCloudProvider implements CLIProvider {
     };
 
     if (appSettings?.ollamaCloudApiKey) {
-      vars.ANTHROPIC_BASE_URL = OLLAMA_CLOUD_BASE_URL;
       // See the file header: ollama.com's Anthropic-compatible endpoint wants
-      // this as a Bearer token, not as x-api-key.
-      vars.ANTHROPIC_AUTH_TOKEN = appSettings.ollamaCloudApiKey;
-      // Blank out any real Anthropic key inherited from the user's shell so
-      // the CLI cannot also send x-api-key alongside the bearer token to an
-      // endpoint that has nothing to do with that key.
-      vars.ANTHROPIC_API_KEY = '';
+      // the key as a Bearer token, not as x-api-key, as every key provider
+      // hands it over now (keyProviderEnv).
+      Object.assign(vars, keyProviderEnv(OLLAMA_CLOUD_BASE_URL, appSettings.ollamaCloudApiKey));
     }
 
     return vars;
@@ -221,10 +217,7 @@ cd ${shellQuote(params.projectPath)}
 echo "=== Task started at $(date) ===" >> ${shellQuote(params.logPath)}
 unset CLAUDECODE
 export CLAUDE_PROVIDER="ollama-cloud"
-export ANTHROPIC_BASE_URL="${OLLAMA_CLOUD_BASE_URL}"
-export ANTHROPIC_AUTH_TOKEN="$(jq -r '.ollamaCloudApiKey // empty' "${DATA_DIR_SHELL}/app-settings.json")"
-export ANTHROPIC_API_KEY=""
-${shellQuote(params.binaryPath)} ${flags} --output-format stream-json --verbose --mcp-config ${shellQuote(params.mcpConfigPath)} --add-dir ${shellQuote(DATA_DIR)} -p ${shellQuote(promptWithSkills)} >> ${shellQuote(params.logPath)} 2>&1
+${scheduledKeyExports(OLLAMA_CLOUD_BASE_URL, 'ollamaCloudApiKey', params.logPath)}${shellQuote(params.binaryPath)} ${flags} --output-format stream-json --verbose --mcp-config ${shellQuote(params.mcpConfigPath)} --add-dir ${shellQuote(DATA_DIR)} -p ${shellQuote(promptWithSkills)} >> ${shellQuote(params.logPath)} 2>&1
 echo "=== Task completed at $(date) ===" >> ${shellQuote(params.logPath)}
 `;
   }

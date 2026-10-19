@@ -75,10 +75,11 @@ function git(args: string[]): string {
 /** The git commands Tars ran since the last call, as argument lines. */
 function ran(): string[] {
   const lines = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').split('\n').filter(Boolean) : [];
-  // Tars runs every git with --no-optional-locks and -c core.quotePath=false first.
-  for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace(/^--no-optional-locks /, '').replace(/^-c core\.quotePath=false /, '');
+  // Tars runs every git through utils/safe-git.ts: --no-optional-locks and its -c overrides first, and
+  // a look at the filters a repository names before a call that reads content, which is no diff.
+  for (let i = 0; i < lines.length; i++) lines[i] = lines[i].replace(/^--no-optional-locks /, '').replace(/^(-c \S+ )+/, '');
   fs.writeFileSync(log, '');
-  return lines;
+  return lines.filter(l => !/^config -z --name-only --get-regexp/.test(l));
 }
 // A diff that is not a list: since #272 the lists are `diff -M --numstat -z` and `diff -M --name-status -z`.
 const patchRuns = (lines: string[]) => lines.filter(l => /^diff\b/.test(l) && !/--(numstat|name-status)\b/.test(l));

@@ -17,6 +17,7 @@ import { accountEnvFor } from '../../core/account-env';
 import { isQuitting } from '../../core/quit-state';
 import { agentTmpEnvOrNone } from '../agent-tmp';
 import { guideForPrompt } from '../agent-guide';
+import { writeRunTokenFile } from './run-token-file';
 
 /**
  * Running a delegated task over ACP instead of typing it into a terminal.
@@ -71,14 +72,18 @@ function apiUrl(): string {
 /** Tools an orchestrator must not use itself, whatever CLI it runs. */
 const ORCHESTRATOR_DENY = ['write', 'edit', 'create file', 'multiedit', 'notebook'];
 
-function mcpServersFor(agent: AgentStatus, apiToken: string): { name: string; command: string; args: string[]; env: { name: string; value: string }[] }[] {
+function mcpServersFor(agent: AgentStatus, tokenFile: string): { name: string; command: string; args: string[]; env: { name: string; value: string }[] }[] {
   // Handed over by name, since a CLI may start these servers with this list
   // and nothing else. The token is what the API takes the caller from; the id
-  // alone would make every call from this run nobody's.
+  // alone would make every call from this run nobody's. By the file that holds
+  // it, never itself: the claude adapter writes this list into the
+  // --mcp-config JSON of the claude it starts, and a token there was in that
+  // process's arguments, which any process on the machine reads (measured on
+  // 17/10 with claude-agent-acp 0.93.0). mcp-shared reads the file.
   const env = [
     { name: 'CLAUDE_AGENT_ID', value: agent.id },
     { name: 'CLAUDE_PROJECT_PATH', value: agent.projectPath },
-    { name: 'CLAUDE_MGR_API_TOKEN', value: apiToken },
+    { name: 'CLAUDE_MGR_API_TOKEN_FILE', value: tokenFile },
     // What the servers prove the port with before they send that token
     // (mcp-shared tokenToPresent). Codex hands a server this list and nothing
     // of its own environment (measured by QA on codex 0.148.0): without it,
@@ -208,6 +213,7 @@ export async function delegateOverAcp(opts: {
   // bus, no delegation onward. Its own rather than the terminal's, so that
   // neither can cut the other off, and revoked when the run is over.
   const { token: apiToken, revoke } = mintRunToken(agent.id);
+  const tokenFile = writeRunTokenFile(apiToken);
   // The Claude account this run bills, the one its agent's terminal would
   // start on. Measured: the adapter's own claude (2.1.232) honours
   // CLAUDE_CONFIG_DIR, keychain naming included (the Audit's N9).
@@ -239,7 +245,7 @@ export async function delegateOverAcp(opts: {
       ...account?.set,
     },
     unsetEnv: account?.unset,
-    mcpServers: mcpServersFor(agent, apiToken),
+    mcpServers: mcpServersFor(agent, tokenFile.file),
     permissionMode: opts.permissionMode ?? (agent.permissionMode === 'bypass' ? 'bypass'
       : agent.permissionMode === 'auto' ? 'auto' : agent.permissionMode === 'plan' ? 'plan' : 'normal'),
     // An orchestrator delegates; it does not edit. Enforced here by the
@@ -390,6 +396,7 @@ export async function delegateOverAcp(opts: {
     settle();
     session.stop();
     revoke();
+    tokenFile.remove();
   }
 }
 

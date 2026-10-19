@@ -1,7 +1,7 @@
+import { safeGit } from '../utils/safe-git';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { execFile } from 'child_process';
 import { v4 as uuidv4 } from 'uuid';
 import type { AgentStatus } from '../types';
 import { agents, saveAgents } from '../core/agent-manager';
@@ -186,12 +186,10 @@ function syncWithLead(runner: AgentStatus, lead: AgentStatus, chat: Chat): void 
 type Git = { code: number; stdout: string; stderr: string };
 /** In the C locale: gitRefusal reads git's "fatal:" and "error:", which a translated git would not write. */
 function git(cwd: string, args: string[]): Promise<Git> {
-  return new Promise((resolve) => {
-    execFile('git', args, { cwd, env: { ...process.env, LC_ALL: 'C' }, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }, (err, stdout, stderr) => {
-      const code = err ? (typeof (err as NodeJS.ErrnoException & { code?: unknown }).code === 'number' ? (err as { code: number }).code : 1) : 0;
-      resolve({ code, stdout: String(stdout ?? ''), stderr: String(stderr ?? '') });
-    });
-  });
+  return safeGit(cwd, args, { env: { LC_ALL: 'C' }, timeout: 60_000, maxBuffer: 4 * 1024 * 1024 }).then(
+    ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
+    (err: { code?: unknown; stdout?: string; stderr?: string }) => ({ code: typeof err.code === 'number' ? err.code : 1, stdout: String(err.stdout ?? ''), stderr: String(err.stderr ?? '') }),
+  );
 }
 
 const failed = (reason: string): SendError => ({ error: 'runner_failed', reason });

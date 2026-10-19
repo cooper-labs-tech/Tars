@@ -4,7 +4,7 @@ import { forwardRef } from 'react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
-type Size = 'sm' | 'md';
+type Size = 'sm' | 'md' | 'icon';
 
 // Every variant carries a border, transparent where it should not show. The
 // filled ones used to have none, so a primary rendered 2px shorter than the
@@ -30,6 +30,10 @@ const ACTIVE = 'border border-border-accent bg-secondary text-foreground';
 const SIZES: Record<Size, string> = {
   sm: 'h-[26px] px-2.5 text-xs gap-1.5',
   md: 'h-8 px-3 text-sm gap-2',
+  // The small height, square: a glyph or a figure alone, as a pager's arrows and
+  // pages. A `px-0` passed with `sm` loses to its `px-2.5`, and an icon was
+  // squeezed into the 4px left between the two.
+  icon: 'h-[26px] w-[26px] text-xs',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

@@ -31,8 +31,9 @@ export default defineConfig({
       name: '',
       // The benches are not tests of the product: they sample the main
       // process's heap for minutes, and the replica clones the runner's own
-      // ~/.claude/projects. Run only on purpose, below.
-      testIgnore: /(known-errors|\.bench)\.spec\.ts$/,
+      // ~/.claude/projects. Run only on purpose, below. Nor is the CLI matrix
+      // here: its own project, below.
+      testIgnore: /(known-errors|\.bench|cli-matrix(\.live)?)\.spec\.ts$/,
       teardown: 'known-errors',
     },
     // The check that no tolerated page error has outlived its defect. As a
@@ -46,6 +47,13 @@ export default defineConfig({
     // The heap benches (e2e/*.bench.spec.ts), there only when asked for:
     // TARS_HEAP_BENCH=1 npx playwright test --project=bench <file>.
     ...(process.env.TARS_HEAP_BENCH === '1' ? [{ name: 'bench', testMatch: /\.bench\.spec\.ts$/ }] : []),
+    // The CLI matrix (e2e/cli-matrix.spec.ts, and its live twin, opt-in on top),
+    // there only when asked for: every CLI delegating to, messaging and hearing
+    // back from every other, 27 minutes for its two shells, which nearly
+    // doubled the default suite. Run at every release gate, by `npm run
+    // e2e:auto` when a diff touches what a delegation goes through
+    // (scripts/scope-checks.mjs), and by hand: `npm run e2e:matrix`.
+    ...(process.env.E2E_MATRIX === '1' ? [{ name: 'matrix', testMatch: /cli-matrix(\.live)?\.spec\.ts$/ }] : []),
   ],
   webServer: {
     // E2E_PORT_OFFSET moves this with every suite's API port: see e2e/ports.mjs.

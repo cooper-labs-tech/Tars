@@ -10,7 +10,9 @@
 // come here too (the nested CLI of #380's gate).
 // Every request is logged as one JSON line to FAKE_LOG, which is how a spec
 // knows a turn reached the model, with the effort Claude Code asked for
-// (`output_config.effort`). Adapted from the Frontend's #132 proof.
+// (`output_config.effort`) and the credential it presented, by its role
+// (`auth`, against FAKE_KEY when a spec sets one). Adapted from the Frontend's
+// #132 proof.
 import http from 'node:http';
 import fs from 'node:fs';
 
@@ -19,6 +21,13 @@ const LOG = process.env.FAKE_LOG;
 if (!PORT || !LOG) throw new Error('FAKE_PORT and FAKE_LOG are required');
 
 const log = entry => fs.appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), ...entry }) + '\n');
+// The credential a request carried, by its role and never its value: the key a spec handed the agent (FAKE_KEY),
+// another one (a subscription's OAuth token, a key from the user's shell), or none.
+const roleOf = given => (given === undefined ? null : process.env.FAKE_KEY && given === process.env.FAKE_KEY ? 'the key' : 'another');
+const authOf = headers => ({
+  bearer: roleOf(/^Bearer /i.test(headers.authorization ?? '') ? headers.authorization.slice(7) : undefined),
+  xApiKey: roleOf(headers['x-api-key']),
+});
 const sse = (res, type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
 
 function textOf(message) {
@@ -113,7 +122,7 @@ http.createServer((req, res) => {
     // own: logging the end of the turn would lose it. And the end as well: the
     // caveat of a local command run just before (`/effort low`, claude 2.1.300)
     // can open the turn, ahead of what was typed after it.
-    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0], tail: last.slice(-200) });
+    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0], tail: last.slice(-200), auth: authOf(req.headers) });
     if (!json.stream) {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({

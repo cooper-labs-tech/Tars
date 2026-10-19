@@ -72,6 +72,55 @@ const CANNOT_REACH_THE_RENDERER = [
 const ALWAYS_RUNS = ['e2e/', 'playwright.config.ts'];
 
 /**
+ * Paths that cannot reach a delegation between two CLIs, which the CLI matrix
+ * (e2e/cli-matrix.spec.ts, the Playwright project `matrix`) drives pair by
+ * pair: 27 minutes for its two shells, out of the default suite since 19/10
+ * (the orchestrator's decision), run at every release gate and here.
+ *
+ * The same direction as the surfaces' rule, and for the same reason: a path
+ * this list has never heard of runs the matrix. It was a list of what reaches a
+ * delegation until the Audit's M1 on #464, and that list missed eleven files a
+ * task goes through: its routes, the queue of a second task, the terminal, the
+ * agent's identity, the hooks' installer. So the whole main process runs it, as
+ * do the MCP servers, the hooks and the state mod: the matrix launches the app
+ * whole and types into its agents through the window's preload bridge. An MCP
+ * server or a hook alone skips the surfaces, and still runs the matrix.
+ */
+const CANNOT_REACH_A_DELEGATION = [
+  { prefix: '__tests__/', why: 'unit tests, not shipped into the app' },
+  // The matrix types into its agents and reads them back through the preload bridge and the API, both in electron/.
+  { prefix: 'src/', why: "the renderer, which only hosts the preload bridge the matrix types through; a page that breaks is the surfaces' to see" },
+  { prefix: 'public/', why: "the renderer's static files" },
+  { prefix: 'design/', why: 'a Pencil document, which no running code reads' },
+  { prefix: 'screenshots/', why: "the README's pictures" },
+  { prefix: 'scripts/', why: 'build and development tooling' },
+  { prefix: '.github/', why: 'CI configuration' },
+  { prefix: 'landing/', why: 'the landing site, a separate app' },
+  { prefix: 'hermes-plugins/', why: 'a Hermes plugin, run by Hermes on its server' },
+  { match: /^electron\/resources\/[^/]+\.md$/, why: "agent prompt text, which the matrix's stand-ins never read" },
+  { match: /^electron\/resources\/tray[^/]*\.(ico|png)$/, why: "the tray's pictures" },
+  { prefix: 'e2e/__screenshots__/', why: "the surfaces' reference pictures" },
+  // playwright.config.ts: the matrix project loads cli-matrix.spec.ts and its live twin, and no other spec.
+  { match: /^e2e\/(?!cli-matrix(\.live)?\.spec\.ts$)[^/]+\.spec\.ts$/, why: 'another spec, which the matrix project does not load' },
+  { match: /^[^/]+\.md$/, why: 'documentation' },
+  { exact: '.gitignore', why: 'git configuration' },
+  { exact: '.gitattributes', why: 'git configuration' },
+  { exact: '.editorconfig', why: 'editor configuration' },
+  { exact: '.nvmrc', why: 'a Node version pin read by the shell' },
+  { exact: '.eslintignore', why: 'lint configuration' },
+  { exact: '.prettierignore', why: 'formatter configuration' },
+];
+
+/** The rule a file matches, if any. */
+function matching(rules, file) {
+  return rules.find(rule => {
+    if (rule.exact) return file === rule.exact;
+    if (rule.prefix) return file.startsWith(rule.prefix);
+    return rule.match.test(file);
+  });
+}
+
+/**
  * Why each changed file does or does not force the suite.
  * @param {string[]} files
  */
@@ -83,6 +132,9 @@ export function decide(files) {
       reason: 'nothing to compare against, so nothing can be ruled out',
       forcing: [],
       skipped: [],
+      runMatrix: true,
+      matrixForcing: [],
+      matrixSkipped: [],
     };
   }
 
@@ -94,13 +146,17 @@ export function decide(files) {
       forcing.push({ file, why: 'the suite itself' });
       continue;
     }
-    const safe = CANNOT_REACH_THE_RENDERER.find(rule => {
-      if (rule.exact) return file === rule.exact;
-      if (rule.prefix) return file.startsWith(rule.prefix);
-      return rule.match.test(file);
-    });
+    const safe = matching(CANNOT_REACH_THE_RENDERER, file);
     if (safe) skipped.push({ file, why: safe.why });
     else forcing.push({ file, why: 'can reach the renderer, or is unclassified' });
+  }
+
+  const matrixForcing = [];
+  const matrixSkipped = [];
+  for (const file of unique) {
+    const safe = matching(CANNOT_REACH_A_DELEGATION, file);
+    if (safe) matrixSkipped.push({ file, why: safe.why });
+    else matrixForcing.push({ file, why: 'can reach a delegation, or is unclassified' });
   }
 
   return {
@@ -110,6 +166,9 @@ export function decide(files) {
       : `all ${skipped.length} changed file(s) are outside the running app`,
     forcing,
     skipped,
+    runMatrix: matrixForcing.length > 0,
+    matrixForcing,
+    matrixSkipped,
   };
 }
 
@@ -220,6 +279,7 @@ async function main() {
 
   console.log(`[scope] ${files.length} changed file(s) against ${base.sha.slice(0, 12)}`);
 
+  let code = 0;
   if (!decision.runE2E) {
     // Said out loud, at length, and naming every file. A run that quietly
     // skipped its slowest check reads afterwards as a run that passed it.
@@ -229,29 +289,60 @@ async function main() {
       console.log(`[scope]   ${file}: ${why}`);
     }
     console.log('[scope] No rendered surface was checked. Run `npm run e2e` to check them anyway.');
-    return 0;
+  } else {
+    console.log(`[scope] Running the end to end suite: ${decision.reason}.`);
+    for (const { file, why } of decision.forcing.slice(0, 12)) {
+      console.log(`[scope]   ${file}: ${why}`);
+    }
+    if (decision.forcing.length > 12) {
+      console.log(`[scope]   and ${decision.forcing.length - 12} more`);
+    }
+    code = await runSuite();
   }
 
-  console.log(`[scope] Running the end to end suite: ${decision.reason}.`);
-  for (const { file, why } of decision.forcing.slice(0, 12)) {
+  if (!decision.runMatrix) {
+    console.log(`[scope] Leaving the CLI matrix out: all ${decision.matrixSkipped.length} changed file(s) cannot reach a delegation. Run \`npm run e2e:matrix\` to run it anyway.`);
+    for (const { file, why } of decision.matrixSkipped.slice(0, 12)) {
+      console.log(`[scope]   ${file}: ${why}`);
+    }
+    if (decision.matrixSkipped.length > 12) {
+      console.log(`[scope]   and ${decision.matrixSkipped.length - 12} more`);
+    }
+    return code;
+  }
+  console.log(`[scope] Running the CLI matrix: ${decision.matrixForcing.length} changed file(s) can reach a delegation.`);
+  for (const { file, why } of decision.matrixForcing.slice(0, 12)) {
     console.log(`[scope]   ${file}: ${why}`);
   }
-  if (decision.forcing.length > 12) {
-    console.log(`[scope]   and ${decision.forcing.length - 12} more`);
+  if (decision.matrixForcing.length > 12) {
+    console.log(`[scope]   and ${decision.matrixForcing.length - 12} more`);
   }
+  return worst(code, await runMatrix());
+}
 
-  return runSuite();
+/** A failure anywhere fails the whole run. */
+function worst(...codes) {
+  return codes.find(code => code !== 0) ?? 0;
 }
 
 /** Nothing to compare against, so nothing is ruled out. The line above it says why. */
-function runEverything() {
-  console.log('[scope] Nothing can be ruled out: running the whole end to end suite.');
-  return runSuite();
+async function runEverything() {
+  console.log('[scope] Nothing can be ruled out: running the whole end to end suite, then the CLI matrix.');
+  return worst(await runSuite(), await runMatrix());
 }
 
 function runSuite() {
-  const npx = npmCommand('npx', ['playwright', 'test']);
-  const child = execFile(npx.command, npx.args, { cwd: process.cwd() });
+  return playwright(['test'], process.env);
+}
+
+/** The CLI matrix, its own project: there only with E2E_MATRIX=1 (playwright.config.ts). */
+function runMatrix() {
+  return playwright(['test', '--project=matrix'], { ...process.env, E2E_MATRIX: '1' });
+}
+
+function playwright(args, env) {
+  const npx = npmCommand('npx', ['playwright', ...args]);
+  const child = execFile(npx.command, npx.args, { cwd: process.cwd(), env });
   child.stdout?.pipe(process.stdout);
   child.stderr?.pipe(process.stderr);
   return new Promise(resolve => child.on('close', code => resolve(code ?? 1)));
@@ -262,6 +353,6 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().then(code => process.exit(code)).catch(async err => {
     // Runs the suite it announces. It used to announce it and exit 1 with nothing run.
     console.error('[scope] could not decide, running everything:', err);
-    process.exit(await runSuite());
+    process.exit(worst(await runSuite(), await runMatrix()));
   });
 }

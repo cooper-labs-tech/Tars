@@ -42,15 +42,18 @@ import type { AppSettings } from '../types';
  * <token>`, except exactly four paths (see its own comment and CLAUDE.md's
  * Backend Agent rules - that count is a hard invariant, not a suggestion).
  * The claude binary does not send an Authorization header to whatever
- * ANTHROPIC_BASE_URL points at by default; it sends `x-api-key`. Putting this
- * behind /api/* would mean either breaking that invariant with a fifth
- * exemption, or the bridge would 401 every request before its own handler
- * ever ran. So this runs as a second, separate, loopback-only http.Server,
- * and authenticates the same way in spirit, for every upstream alike: it
- * requires `x-api-key` to equal Tars's own local API token (the same secret
- * api-server.ts already generates and guards at 0600), which each provider
- * that routes through here (venice-provider.ts, custom-openai-provider.ts)
- * hands to the PTY as ANTHROPIC_API_KEY. The real vendor key never leaves
+ * ANTHROPIC_BASE_URL points at by default; it sends `x-api-key`, as the
+ * scheduled runs' scripts still have it. Putting this behind /api/* would mean
+ * either breaking that invariant with a fifth exemption, or the bridge would
+ * 401 those requests before its own handler ever ran. So this runs as a
+ * second, separate, loopback-only http.Server, and authenticates the same way
+ * in spirit, for every upstream alike: it requires Tars's own local API token
+ * (the same secret api-server.ts already generates and guards at 0600), as a
+ * Bearer or as `x-api-key`. Each provider that routes through here
+ * (venice-provider.ts, custom-openai-provider.ts) hands it to the PTY as
+ * ANTHROPIC_AUTH_TOKEN, the Bearer, since an API key in its environment is
+ * asked about at launch (keyProviderEnv); a scheduled script exports it as
+ * ANTHROPIC_API_KEY, which `claude -p` uses unasked. The real vendor key never leaves
  * this process: it is read from app-settings.json per request and attached
  * only to the outbound call to that vendor, never handed to the claude
  * binary.
@@ -511,9 +514,9 @@ export function startOpenAIBridgeServer(): void {
 
   bridgeServer = http.createServer(async (req, res) => {
     const expected = getApiToken();
-    const provided = req.headers['x-api-key'];
-    if (provided !== expected) {
-      sendError(res, 401, 'authentication_error', 'Invalid x-api-key');
+    const bearer = /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1];
+    if (req.headers['x-api-key'] !== expected && bearer !== expected) {
+      sendError(res, 401, 'authentication_error', "Not Tars's token, as a Bearer or as x-api-key");
       return;
     }
 

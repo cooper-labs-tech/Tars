@@ -1,3 +1,4 @@
+import { safeGit } from '../utils/safe-git';
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -58,6 +59,14 @@ export type RemovalReport = {
 export type RemovalProgress = { done: number; total: number; freedBytes: number; current: string };
 type ProcessCwd = { pid: number; command: string; cwd: string };
 
+/** git, through safe-git: no program of the repository's runs (the Audit's Hole 3 on 2.0.4). */
+function gitIn(cwd: string, args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  return safeGit(cwd, args, { maxBuffer: 32 * 1024 * 1024 }).then(
+    ({ stdout, stderr }) => ({ code: 0, stdout, stderr }),
+    (err: { code?: unknown; stdout?: string; stderr?: string; message?: string }) => ({ code: typeof err.code === 'number' ? err.code : 1, stdout: String(err.stdout ?? ''), stderr: String(err.stderr || err.message || '') }),
+  );
+}
+
 function run(file: string, args: string[], cwd?: string): Promise<{ code: number; stdout: string; stderr: string }> {
   return new Promise(resolve => {
     execFile(file, args, { cwd, maxBuffer: 32 * 1024 * 1024 }, (err, stdout, stderr) => {
@@ -80,7 +89,7 @@ function inside(child: string, parent: string): boolean {
 
 /** The worktrees git knows for a project, as real paths; null when git cannot say. */
 async function knownWorktrees(project: string): Promise<string[] | null> {
-  const r = await run('git', ['worktree', 'list', '--porcelain'], project);
+  const r = await gitIn(project, ['worktree', 'list', '--porcelain']);
   if (r.code !== 0) {
     console.warn(`[orphan-folders] git cannot list the worktrees of ${project} (${r.code}): ${r.stderr.trim().slice(0, 300)}; none of its folders is offered`);
     return null;

@@ -120,6 +120,24 @@ describe('bridge authentication', () => {
     expect(received.length).toBe(before);
   });
 
+  // Claude Code sends ANTHROPIC_AUTH_TOKEN as `Authorization: Bearer`, which is how every key provider hands its
+  // key over since 2.0.4: an API key in its environment is asked about at launch, and nothing answers that in an
+  // agent's terminal (key-provider-auth.test.ts).
+  it("takes Tars's own token as a Bearer, as Claude Code sends ANTHROPIC_AUTH_TOKEN", async () => {
+    received.length = 0;
+    const r = await callBridge('/custom/v1/messages', { model: 'm', max_tokens: 10, messages: [{ role: 'user', content: 'hi' }] },
+      { authorization: `Bearer ${TOKEN}` });
+    expect(r.status, r.text).toBe(200);
+    expect(received[0].auth, 'the vendor got something else than its own key').toBe(`Bearer ${VENDOR_KEY}`);
+  });
+
+  it('refuses a wrong Bearer rather than passing it upstream', async () => {
+    const before = received.length;
+    const r = await callBridge('/custom/v1/messages', { model: 'm', messages: [] }, { authorization: 'Bearer wrong' });
+    expect(r.status).toBe(401);
+    expect(received.length).toBe(before);
+  });
+
   it('404s an upstream it does not know', async () => {
     const r = await callBridge('/nope/v1/messages', { model: 'm', messages: [] });
     expect(r.status).toBe(404);

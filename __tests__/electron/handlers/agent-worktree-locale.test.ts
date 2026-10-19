@@ -18,8 +18,10 @@ import * as path from 'node:path';
  * pins came first (#417), so each case is shown to bite by a mutant of it:
  * 1. A git call that makes the worktree runs without LC_ALL=C.
  * 2. One call has it and another does not: the branch probe, or the add.
- * 3. Setting it drops the rest of the environment, so git runs without the
- *    PATH or the HOME it needs.
+ * 3. Setting it drops the PATH or the HOME git needs. Since 2.0.4 the rest of
+ *    Tars's environment is not handed on (utils/safe-git.ts, the Audit's Hole 3:
+ *    a GIT_DIR or a GIT_CONFIG_PARAMETERS of the environment pointed git
+ *    elsewhere or ran a program); what git needs is.
  * 4. What the window is told is not git's own refusal, read in that locale.
  */
 
@@ -106,19 +108,30 @@ async function create(platform: NodeJS.Platform): Promise<string> {
   }
 }
 
+/** A call's own words, past the overrides safe-git puts before them (--no-optional-locks, -c k=v). */
+const own = (args: string[]) => {
+  const out = [...args];
+  while (out[0] === '--no-optional-locks' || out[0] === '-c') out.splice(0, out[0] === '-c' ? 2 : 1);
+  return out;
+};
+/** The calls that make the worktree, not safe-git's look at the filters a repository names. */
+const making = () => gitCalls.filter(c => own(c.args)[0] !== 'config');
+
 describe.each(['darwin', 'linux', 'win32'] as const)('the worktree git, as %s', (platform) => {
   it('1, 2. every call carries LC_ALL=C: the branch probe and the add', async () => {
     await create(platform);
 
-    expect(gitCalls.map(c => c.args.slice(0, 2))).toEqual([['rev-parse', '--verify'], ['worktree', 'add']]);
+    expect(making().map(c => own(c.args).slice(0, 2))).toEqual([['rev-parse', '--verify'], ['worktree', 'add']]);
     for (const call of gitCalls) expect(call.env?.LC_ALL, call.args.join(' ')).toBe('C');
   });
 
-  it('3. keeps the rest of the environment as it is', async () => {
+  it('3. keeps the PATH and the HOME git needs', async () => {
     await create(platform);
 
-    const withoutLocale = (env: NodeJS.ProcessEnv | undefined) => Object.fromEntries(Object.entries(env ?? {}).filter(([key]) => key !== 'LC_ALL'));
-    for (const call of gitCalls) expect(withoutLocale(call.env), call.args.join(' ')).toEqual(withoutLocale(process.env));
+    for (const call of gitCalls) {
+      expect(call.env?.PATH ?? call.env?.Path, call.args.join(' ')).toBe(process.env.PATH ?? process.env.Path);
+      expect(call.env?.HOME, call.args.join(' ')).toBe(process.env.HOME);
+    }
   });
 
   it('4. tells the window git\'s own refusal, without its progress or "fatal: "', async () => {

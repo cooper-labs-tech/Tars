@@ -1,9 +1,6 @@
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
-
-const run = promisify(execFile);
+import { safeGit } from '../utils/safe-git';
 
 /**
  * What an agent actually changed.
@@ -12,7 +9,9 @@ const run = promisify(execFile);
  * twenty lines of summary - no patch, no per-file view, and a shell command
  * built by string concatenation. Everything here goes through execFile with an
  * argv array: no shell, so a branch or path containing a quote or a semicolon
- * is data, not syntax.
+ * is data, not syntax. And through safe-git: no program the repository's own
+ * configuration names runs here (fsmonitor, external diff, textconv, filters,
+ * hooks), and submodules are not entered (the Audit's Hole 3 on 2.0.4).
  */
 
 const MAX_PATCH_BYTES = 2_000_000;
@@ -48,9 +47,9 @@ export interface ReviewDiff {
  * `status`, never writes; only a diff that has to be computed again can.
  */
 async function git(cwd: string, args: string[], maxBuffer = 8 * 1024 * 1024): Promise<string> {
-  // core.quotePath=false: a name with accents comes back as it is, where git
+  // core.quotePath=false (safe-git): a name with accents comes back as it is, where git
   // quoted and escaped it ("caf\303\251.txt") and that text became the path.
-  const { stdout } = await run('git', ['--no-optional-locks', '-c', 'core.quotePath=false', ...args], { cwd, maxBuffer, timeout: 30_000 });
+  const { stdout } = await safeGit(cwd, args, { maxBuffer, timeout: 30_000 });
   return stdout;
 }
 
