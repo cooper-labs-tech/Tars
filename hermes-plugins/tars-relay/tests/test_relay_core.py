@@ -197,7 +197,7 @@ class WhatIsKeptForTars(Base):
     def test_1_the_users_reply_to_a_relay_message_is_kept_for_tars(self):
         kept = relay_core.decide(message(reply_to_message_id='501', text='Oui, vas-y'), SETTINGS, self.store)
 
-        self.assertEqual(kept, {'kind': 'reply', 'ref': 'question:q-1', 'project': 'tars', 'text': 'Oui, vas-y',
+        self.assertEqual(kept, {'platform': 'telegram', 'kind': 'reply', 'ref': 'question:q-1', 'project': 'tars', 'text': 'Oui, vas-y',
                                 'user_id': OWNER_ID, 'chat_id': OWNER_ID, 'message_id': '7001', 'reply_to_message_id': '501'})
 
     def test_1_ids_as_numbers_are_the_same_ids(self):
