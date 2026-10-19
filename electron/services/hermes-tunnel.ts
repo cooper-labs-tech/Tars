@@ -138,6 +138,16 @@ export function sweepIdleTunnels(now: number = Date.now()): void {
   }
 }
 
+/** Closes the tunnel to `remote`, if one is open: a server refused through it must not stay reachable here. */
+export function closeTunnelTo(conn: HermesConnection, remote: { host: string; port: number }): void {
+  if (conn.mode !== 'ssh' || !conn.ssh) return;
+  const key = `${conn.ssh.user}@${conn.ssh.host}:${conn.ssh.port || 22}>${remote.host}:${remote.port}`;
+  const tunnel = open.get(key);
+  if (!tunnel) return;
+  open.delete(key);
+  tunnel.child.kill();
+}
+
 /** Closes every tunnel: when Tars quits, and when the SSH connection changes. */
 export function closeTunnels(): void {
   for (const tunnel of open.values()) tunnel.child.kill();
