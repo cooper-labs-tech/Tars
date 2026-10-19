@@ -183,6 +183,8 @@ describe('"@project text"', () => {
     const term = spawnAgentPtyOf()({ binaryName: 'claude', ...CLI_TERMINAL, cwd: os.tmpdir(), cols: 80, rows: 24, env: { CLAUDE_AGENT_ID: 'orch-spaced' } });
     ptyProcesses.set('pty-orch-spaced', term as unknown);
     agents.set('orch-spaced', { id: 'orch-spaced', name: 'Spaced-Orchestrator', status: 'running', provider: 'claude', projectPath: SPACED, role: 'orchestrator', ptyId: 'pty-orch-spaced', ptyCwd: SPACED, skills: [], output: [], lastActivity: '' } as unknown as AgentStatus);
+    const gateways = await import('../../../electron/services/hermes-gateways');
+    gateways.setGatewayProjects(gateways.DEFAULT_GATEWAY, [TARS, CAPITAL, SPACED]);
 
     await relay.relayTick(T0);
     expect(fake.projects).toEqual(['1212-Capital', 'My-Project', 'tars']);
