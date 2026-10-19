@@ -52,6 +52,7 @@ import {
   fetchHermesMemoryProviders,
   setHermesMemoryProvider,
 } from '../services/hermes-client';
+import { reachOf } from '../services/hermes-mcp-reach';
 import {
   HermesConnection,
   defaultHermesConnection,
@@ -489,7 +490,12 @@ export function registerHermesHandlers(): void {
   // Distinct from Tars' own mcp-* fleet: this asks the gateway what it knows,
   // so Settings > Memory Backends can offer a found URL instead of an empty
   // field, and can say plainly when that URL is the gateway's own loopback.
-  ipcMain.handle('hermes:mcp:servers', async () => viaGateway(fetchHermesMcpServers));
+  // Each with how Tars reaches it: a server on Hermes's own loopback, through the SSH tunnel or Tailscale (2.0.4).
+  ipcMain.handle('hermes:mcp:servers', async () => viaGateway(async (conn) => {
+    const listed = await fetchHermesMcpServers(conn);
+    if (!listed.success) return listed;
+    return { success: true as const, servers: await Promise.all(listed.servers.map(async server => ({ ...server, reach: await reachOf(conn, server) }))) };
+  }));
 
   // ── Gateway's own pluggable memory provider (holographic, mem0, …) ──
   ipcMain.handle('hermes:memory:providers', async () => viaGateway(fetchHermesMemoryProviders));

@@ -622,6 +622,10 @@ export interface HermesMcpServer {
   enabled: boolean;
   /** True when the URL only resolves on the gateway's own machine. */
   gatewayLocal: boolean;
+  /** How Tars reaches it (2.0.4): the path that worked and its address on this Mac, or each path's answer. */
+  reach?:
+    | { via: 'direct' | 'tunnel' | 'tailscale'; address: string }
+    | { via: 'none'; why: string; answers: { tunnel?: string; tailscale?: string } };
 }
 
 /** One of the gateway's pluggable long-term memory backends. */

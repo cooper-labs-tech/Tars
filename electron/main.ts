@@ -14,6 +14,7 @@ import './core/compile-cache';
 
 import { startGithubWatch } from './services/github-watch';
 import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, startHermesRelay, tellUser } from './services/hermes-relay';
+import { closeTunnels } from './services/hermes-tunnel';
 import { startRelayRouting } from './services/hermes-relay-routing';
 import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
@@ -902,6 +903,8 @@ app.on('before-quit', (event) => {
       // A CLI's --version asked for by Settings just before the quit: amp's
       // kept writing into the home after Tars was gone (gate of #298).
       ['endVersionProbes', endVersionProbes],
+      // The SSH tunnels to the MCP servers on Hermes's loopback (2.0.4): none outlives Tars.
+      ['closeTunnels', closeTunnels],
       // A `claude auth status` the accounts list started just before the
       // quit: it wrote .claude.json into the home after Tars was gone.
       ['endAuthCommands', endAuthCommands],
