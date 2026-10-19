@@ -306,9 +306,9 @@ class WhatIsKeptForTars(Base):
 class WhatMayBeSent(Base):
     def test_6_a_send_is_checked(self):
         body = {'text': 'Question from Tars-Backend', 'ref': 'question:q-2', 'kind': 'question', 'project': 'tars'}
-        self.assertEqual(relay_core.check_send(body), body)
+        self.assertEqual(relay_core.check_send(body), {**body, 'gateway': ''})
         self.assertEqual(relay_core.check_send({'text': 'A report', 'kind': 'report'}),
-                         {'text': 'A report', 'ref': '', 'kind': 'report', 'project': ''})
+                         {'text': 'A report', 'ref': '', 'kind': 'report', 'project': '', 'gateway': ''})
         self.assertEqual(relay_core.check_send({'text': '😀' * 2048, 'kind': 'report'})['text'], '😀' * 2048)
 
         refused = [
