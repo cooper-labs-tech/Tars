@@ -41,6 +41,8 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-drive-'));
 const privateTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-drive-private-'));
 const HERMES_SECRET = path.join(privateTmp, 'hermes-webhook-secret');
 const HERMES_SECRET_LEGACY = path.join(tmp, 'hermes-webhook-secret');
+/** What each Hermes gateway may reach (services/hermes-gateways.ts): nothing until the user allows a project. */
+const HERMES_GATEWAYS = path.join(privateTmp, 'hermes-gateways.json');
 let port = 0;
 
 function freePort(): Promise<number> {
@@ -71,6 +73,7 @@ vi.mock('../../../electron/constants', async (importOriginal) => {
     BUS_FILE: path.join(tmp, 'bus.json'),
     HERMES_WEBHOOK_SECRET_FILE: HERMES_SECRET,
     HERMES_WEBHOOK_SECRET_LEGACY_FILE: HERMES_SECRET_LEGACY,
+    HERMES_GATEWAYS_FILE: HERMES_GATEWAYS,
   };
 });
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -206,6 +209,7 @@ beforeEach(() => {
   betaToken = tokens.mintAgentToken(BETA.id);
   fs.rmSync(HERMES_SECRET, { force: true });
   fs.rmSync(HERMES_SECRET_LEGACY, { force: true });
+  fs.rmSync(HERMES_GATEWAYS, { force: true });
 });
 
 describe('the hook routes, which only an agent\'s own CLI posts to', () => {
@@ -447,11 +451,41 @@ describe('the super chat, to an agent whose launch is slow (the Database Enginee
 
 describe('Hermes, the one caller published off this machine', () => {
   const SECRET = 'f'.repeat(64);
-  /** The file `provisionWebhookSecret()` leaves in the private directory, and Settings hands to Hermes. */
+  /**
+   * The file `provisionWebhookSecret()` leaves in the private directory, and Settings hands to Hermes; and BETA's
+   * project allowed to the gateway that secret is (the default one), as the user allows it in Settings since 2.0.4.
+   */
   function provisionWebhookSecret(): string {
     fs.writeFileSync(HERMES_SECRET, SECRET, { mode: 0o600 });
+    fs.writeFileSync(HERMES_GATEWAYS, JSON.stringify({ gateways: [{ id: 'default', label: 'Hermes', projects: [BETA.projectPath] }] }), { mode: 0o600 });
     return SECRET;
   }
+
+  it("never raises an agent's mode: bypass for an agent in normal is refused, and nothing is typed (the Audit's NOW-3)", async () => {
+    // Measured on ce9c0084: 200, and the message went in, the mode the webhook asked winning over the agent's own.
+    const secret = provisionWebhookSecret();
+    const beta = agents.get(BETA.id)!;
+    beta.permissionMode = 'normal';
+    const terminal = liveTerminal(beta);
+
+    const { status, body } = await call('POST', '/api/webhooks/hermes', bearer(secret), {
+      agent_id: BETA.id, message: 'run anything', permission_mode: 'bypass',
+    });
+
+    expect(status, JSON.stringify(body)).toBe(403);
+    expect(terminal.written.join('')).not.toContain('run anything');
+  });
+
+  it('names no agent when it finds none: the 404 listed every agent, its project and status', async () => {
+    // Measured on ce9c0084: the 404 carried `agents`, every agent of every project.
+    const secret = provisionWebhookSecret();
+
+    const { status, body } = await call('POST', '/api/webhooks/hermes', bearer(secret), { agent_id: 'nobody', message: 'x' });
+
+    expect(status).toBe(404);
+    expect(body.agents).toBeUndefined();
+    for (const named of [ALPHA.id, BETA.id, ALPHA.projectPath, BETA.projectPath]) expect(JSON.stringify(body)).not.toContain(named);
+  });
 
   it('dispatches with the secret Settings hands it, which the door used to refuse', async () => {
     const secret = provisionWebhookSecret();
@@ -541,6 +575,8 @@ describe('Hermes, the one caller published off this machine', () => {
     // is handed, one `cat` away. A Hermes job holds that value, so it moves
     // as it is.
     fs.writeFileSync(HERMES_SECRET_LEGACY, SECRET, { mode: 0o600 });
+    // And BETA's project allowed to the default gateway, as the user allows it in Settings since 2.0.4.
+    fs.writeFileSync(HERMES_GATEWAYS, JSON.stringify({ gateways: [{ id: 'default', label: 'Hermes', projects: [BETA.projectPath] }] }), { mode: 0o600 });
     const beta = agents.get(BETA.id)!;
     const terminal = liveTerminal(beta);
 

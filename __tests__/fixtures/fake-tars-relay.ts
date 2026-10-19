@@ -12,6 +12,9 @@ import type { AddressInfo } from 'node:net';
  *
  * `mode` makes it misbehave as a real gateway can: 'down' drops every connection, 'missing' answers 404 (no plugin
  * installed), 'unauthorized' 401, 'unconfigured' says so on /status and refuses /send with 503.
+ * Version 2 of the plugin (the default) sends on every gateway in `gateways`, or on the one a send names, and answers
+ * {message_id, sent: {gateway: id}, failed}; its replies say their platform. `version = 1` answers as 1.0.0 did:
+ * {message_id} alone, replies without a platform.
  */
 export interface FakeRelayReply {
   seq: number;
@@ -24,6 +27,8 @@ export interface FakeRelayReply {
   message_id: string;
   reply_to_message_id: string;
   text: string;
+  /** Version 2: the gateway it came from. */
+  platform?: string;
 }
 
 export interface FakeRelay {
@@ -32,7 +37,11 @@ export interface FakeRelay {
   mode: 'ok' | 'down' | 'missing' | 'unauthorized' | 'unconfigured';
   /** Answers an ack and keeps the replies: an ack lost on the way. */
   ignoreAcks: boolean;
-  sends: Array<{ text: string; kind: string; ref: string; project: string; messageId: string; token?: string }>;
+  sends: Array<{ text: string; kind: string; ref: string; project: string; messageId: string; token?: string; gateway?: string }>;
+  /** The plugin's version: 2 sends on each gateway, 1 on Telegram alone. */
+  version: 1 | 2;
+  /** Version 2: the gateways the user is set up on, each sent to. */
+  gateways: string[];
   replies: FakeRelayReply[];
   acks: number[];
   /** The project names Tars registered last; what /status lists. */
@@ -44,7 +53,7 @@ export interface FakeRelay {
   /** Every request, in order: method and path. */
   calls: string[];
   /** JeanBrasse's reply to a message the relay sent, as the plugin keeps it. */
-  reply(to: { messageId: string; ref?: string; project?: string }, text: string): number;
+  reply(to: { messageId: string; ref?: string; project?: string; gateway?: string }, text: string): number;
   /** JeanBrasse's "@project text", as the plugin keeps it. */
   projectMessage(project: string, text: string): number;
   close(): Promise<void>;
@@ -69,6 +78,8 @@ export async function startFakeRelay(token = 'fake-dashboard-token', opts: { ext
     acks: [],
     projects: [],
     storeId: 'store-1',
+    version: 2,
+    gateways: ['telegram'],
     recreate() {
       fake.storeId = `store-${Number(fake.storeId.split('-')[1]) + 1}`;
       fake.replies = [];
@@ -76,11 +87,13 @@ export async function startFakeRelay(token = 'fake-dashboard-token', opts: { ext
     },
     calls: [],
     reply(to, text) {
-      const sent = fake.sends.find((s) => s.messageId === to.messageId);
+      const gateway = to.gateway ?? 'telegram';
+      const sent = fake.sends.find((s) => s.messageId === to.messageId && (s.gateway ?? 'telegram') === gateway);
       const seq = nextSeq++;
       fake.replies.push({
         seq, at: Date.now() / 1000, kind: 'reply', ref: to.ref ?? sent?.ref ?? '', project: to.project ?? sent?.project ?? '',
         chat_id: OWNER_ID, user_id: OWNER_ID, message_id: String(nextIncoming++), reply_to_message_id: to.messageId, text,
+        ...(fake.version === 2 ? { platform: gateway } : {}),
       });
       return seq;
     },
@@ -124,9 +137,17 @@ export async function startFakeRelay(token = 'fake-dashboard-token', opts: { ext
       }
       if (route === 'send' && req.method === 'POST') {
         if (fake.mode === 'unconfigured') return json(res, 503, { detail: 'tars-relay has no user_id in its settings' });
-        const messageId = String(nextMessage++);
-        fake.sends.push({ text: String(body.text), kind: String(body.kind), ref: String(body.ref ?? ''), project: String(body.project ?? ''), messageId, token: String(req.headers['x-hermes-session-token'] ?? '') });
-        return json(res, 200, { message_id: messageId });
+        const sendAs = (gateway?: string) => {
+          const messageId = String(nextMessage++);
+          fake.sends.push({ text: String(body.text), kind: String(body.kind), ref: String(body.ref ?? ''), project: String(body.project ?? ''), messageId, token: String(req.headers['x-hermes-session-token'] ?? ''), ...(gateway ? { gateway } : {}) });
+          return messageId;
+        };
+        if (fake.version === 1) return json(res, 200, { message_id: sendAs() });
+        const named = typeof body.gateway === 'string' && body.gateway ? body.gateway : '';
+        if (named && !fake.gateways.includes(named)) return json(res, 400, { detail: `tars-relay names no user on ${named}` });
+        const sent: Record<string, string> = {};
+        for (const gateway of named ? [named] : fake.gateways) sent[gateway] = sendAs(gateway);
+        return json(res, 200, { message_id: sent.telegram ?? sent[Object.keys(sent).sort()[0]], sent, failed: {} });
       }
       if (route === 'projects' && req.method === 'POST') {
         const names = body.projects;

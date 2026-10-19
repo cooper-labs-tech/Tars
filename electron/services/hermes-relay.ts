@@ -43,6 +43,9 @@ export interface RelayMessage {
   expiresAt?: number;
   /** The chat it comes from or is about (PR F): a reply to it goes to that chat. */
   chatId?: string;
+  /** The one gateway it goes to (tars-relay 2.0.0): the receipt for something the user wrote there. Every gateway the
+   * plugin names the user on when not said. */
+  gateway?: string;
 }
 
 export type RelaySendResult =
@@ -88,11 +91,15 @@ export interface RelayProjectMessage {
   at: number;
 }
 
-interface SentEntry { messageId: string; ref: string; kind: RelayKind; projectPath: string; at: number; chatId?: string }
+/** What went out, one entry per gateway: a reply counts only on the gateway of the message it answers. `platform` is
+ * absent from entries written before tars-relay 2.0.0, all of them Telegram's. */
+interface SentEntry { messageId: string; ref: string; kind: RelayKind; projectPath: string; at: number; chatId?: string; platform?: string }
 interface Waiting { id: string; message: RelayMessage; queuedAt: number; expiresAt: number }
 interface PluginReply {
   seq: number; at: number; kind: 'reply' | 'project'; ref: string; project: string;
   message_id: string; reply_to_message_id: string; text: string;
+  /** The gateway it came from; absent from tars-relay 1.0.0, which served Telegram alone. */
+  platform?: string;
 }
 
 const ROUTES = '/api/plugins/tars-relay';
@@ -213,7 +220,10 @@ function stateOf(answer: Answer | null, err?: unknown): RelayState {
 async function trySend(message: RelayMessage, now: number): Promise<{ messageId?: string; state: RelayState; refused?: string }> {
   let answer: Answer | null = null;
   try {
-    answer = await call('POST', 'send', { text: message.text, kind: message.kind, ref: message.ref, project: projectWord(message.projectPath) });
+    answer = await call('POST', 'send', {
+      text: message.text, kind: message.kind, ref: message.ref, project: projectWord(message.projectPath),
+      ...(message.gateway ? { gateway: message.gateway } : {}),
+    });
   } catch (err) {
     return { state: stateOf(null, err) };
   }
@@ -225,11 +235,20 @@ async function trySend(message: RelayMessage, now: number): Promise<{ messageId?
   if (answer.status >= 300 || (typeof messageId !== 'string' && typeof messageId !== 'number')) {
     return { state: answer.status === 429 ? 'ready' : stateOf(answer) };
   }
+  // Version 2 says what went out on each gateway; version 1 sent on Telegram alone.
+  const each = (answer.body as { sent?: unknown } | null)?.sent;
+  const out: Array<[string, string]> = each && typeof each === 'object' && !Array.isArray(each)
+    ? Object.entries(each as Record<string, unknown>)
+      .filter((pair): pair is [string, string | number] => typeof pair[1] === 'string' || typeof pair[1] === 'number')
+      .map(([platform, id]) => [platform, String(id)])
+    : [['telegram', String(messageId)]];
   const sent = read<SentEntry[]>(FILES.sent(), []).filter(entry => entry.at > now - SENT_KEPT_MS);
-  sent.push({
-    messageId: String(messageId), ref: message.ref, kind: message.kind, projectPath: message.projectPath ?? '', at: now,
-    ...(message.chatId ? { chatId: message.chatId } : {}),
-  });
+  for (const [platform, id] of out) {
+    sent.push({
+      messageId: id, platform, ref: message.ref, kind: message.kind, projectPath: message.projectPath ?? '', at: now,
+      ...(message.chatId ? { chatId: message.chatId } : {}),
+    });
+  }
   write(FILES.sent(), sent);
   return { messageId: String(messageId), state: 'ready' };
 }
@@ -257,12 +276,14 @@ export async function relaySend(message: RelayMessage, now: number = Date.now())
   return { state: 'queued', reason: `${STATE_WORDS[attempt.state]} The message waits, and goes when Hermes takes it.` };
 }
 
-/** A word from Tars to the user, about something they wrote. A reply to it reaches nobody. */
-export function tellUser(text: string, projectPath?: string, now: number = Date.now(), chat?: { id: string; tag: string }): Promise<RelaySendResult> {
+/** A word from Tars to the user, about something they wrote. A reply to it reaches nobody. `gateway`: the one they
+ * wrote from, where alone it goes. */
+export function tellUser(text: string, projectPath?: string, now: number = Date.now(), chat?: { id: string; tag: string }, gateway?: string): Promise<RelaySendResult> {
+  const on = gateway ? { gateway } : {};
   // About a chat: headed by it, and a reply to it goes to that chat (PR F).
   return chat
-    ? relaySend({ text: `${chat.tag} ${text}`, kind: 'report', ref: `message:${randomUUID()}`, projectPath, chatId: chat.id }, now)
-    : relaySend({ text, kind: 'report', ref: `notice:${randomUUID()}`, projectPath }, now);
+    ? relaySend({ text: `${chat.tag} ${text}`, kind: 'report', ref: `message:${randomUUID()}`, projectPath, chatId: chat.id, ...on }, now)
+    : relaySend({ text, kind: 'report', ref: `notice:${randomUUID()}`, projectPath, ...on }, now);
 }
 
 /** The event reports' channel while the relay is on: each report a message of its project. */
@@ -321,25 +342,29 @@ async function flushWaiting(now: number): Promise<void> {
 
 async function handle(reply: PluginReply, now: number): Promise<void> {
   const at = Math.round(Number(reply.at) * 1000) || now;
+  // The gateway it came from: where it is matched, and where alone a word back about it goes.
+  const platform = typeof reply.platform === 'string' && reply.platform ? reply.platform : 'telegram';
+  const back = reply.platform ? platform : undefined;
   if (reply.kind === 'project') {
     if (!projectHandler) {
-      await tellUser('Tars takes no "@project" messages right now, so yours reached nobody.', undefined, now);
+      await tellUser('Tars takes no "@project" messages right now, so yours reached nobody.', undefined, now, undefined, back);
       return;
     }
     await projectHandler({ seq: reply.seq, project: reply.project, text: reply.text, at }, now);
     return;
   }
   // Tars's own list decides, never the ref the plugin hands back.
-  const sent = read<SentEntry[]>(FILES.sent(), []).find(entry => entry.messageId === String(reply.reply_to_message_id) && entry.at > now - SENT_KEPT_MS);
+  const sent = read<SentEntry[]>(FILES.sent(), []).find(entry => entry.messageId === String(reply.reply_to_message_id)
+    && (entry.platform ?? 'telegram') === platform && entry.at > now - SENT_KEPT_MS);
   if (!sent) {
-    await tellUser('Tars did not send the message you replied to, so your reply reached nobody.', undefined, now);
+    await tellUser('Tars did not send the message you replied to, so your reply reached nobody.', undefined, now, undefined, back);
     return;
   }
   const split = sent.ref.indexOf(':');
   const refType = split < 0 ? sent.ref : sent.ref.slice(0, split);
   const handler = replyHandlers.get(refType);
   if (!handler) {
-    await tellUser('Nothing waits for a reply to that message any more, so yours reached nobody.', sent.projectPath, now);
+    await tellUser('Nothing waits for a reply to that message any more, so yours reached nobody.', sent.projectPath, now, undefined, back);
     return;
   }
   await handler({

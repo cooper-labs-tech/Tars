@@ -1,6 +1,6 @@
 name: tars-relay
-version: 1.0.0
-description: "Tars writes to its user through this Hermes's Telegram bot; his replies to those messages, and his @project messages, go back to Tars and never to the model, which only gets a read-only copy of what Tars sent."
+version: 2.0.0
+description: "Tars writes to its user through this Hermes, on each gateway it has (Telegram, Discord, Slack, Signal, WhatsApp); the user's replies to those messages, and their @project messages, go back to Tars and never to the model, which only gets a read-only copy of what Tars sent."
 author: Tars (github.com/cooper-labs-tech/Tars)
 license: MIT
 homepage: https://github.com/cooper-labs-tech/Tars/tree/main/hermes-plugins/tars-relay
@@ -11,7 +11,11 @@ provides_hooks:
   - pre_gateway_dispatch
   - pre_llm_call
 config_schema:
+  users:
+    type: object
+    required: false
+    description: "The user's id on each gateway, by platform (telegram, discord, slack, signal, whatsapp): the one person whose messages there go to Tars. Tars sets it when the relay is turned on. Nothing is relayed on a gateway without it."
   user_id:
     type: integer
-    required: true
-    description: "The Telegram user id of the one person whose replies go to Tars. Nothing is relayed without it."
+    required: false
+    description: "Version 1's setting: the Telegram user id, when users names none for Telegram."

@@ -43,7 +43,7 @@ import { accountDir } from '../claude-accounts/registry';
 import { announceTask, firstLineOf } from '../task-banner';
 import { taskOfPrompt, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
 import { clientRequestIdOf, liveReceipts, payloadHash, type ReceiptOutcome } from '../request-receipts';
-import { levelOf, modeGapMark } from '../../core/permission-ceiling';
+import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel } from '../../core/permission-ceiling';
 import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
@@ -72,7 +72,8 @@ function orchestratorInstructionsFile(isOrchestrator: boolean | undefined): stri
 
 type SpawnOpts = {
   model?: string;
-  permissionMode?: 'normal' | 'auto' | 'bypass';
+  /** The session's mode: the agent's own, or narrower (modeRefusal). */
+  permissionMode?: PermissionLevel;
   printMode?: boolean;
   /** Who starts it: noted when the start undoes a stop (core/agent-stop.ts). */
   by?: string;
@@ -133,6 +134,24 @@ function announceAgent(agent: AgentStatus): void {
   scheduleTick();
 }
 
+/**
+ * A mode asked for an agent's session that it may not have: none of Tars's (400), or wider than the agent's own
+ * (403). A session runs at its agent's mode or narrower: whoever starts it, a /start, a /dispatch or a Hermes
+ * gateway's message, may lower it for that session, never raise it (core/permission-ceiling.ts, the Audit's NOW-3
+ * and R4.1, 2.0.4: the webhook started any agent of any project in bypass). Undefined when none was asked, or the
+ * one asked is fine.
+ */
+export function modeRefusal(agent: AgentStatus, asked: unknown): { status: number; error: string } | undefined {
+  if (asked === undefined || asked === null) return undefined;
+  if (!isPermissionLevel(asked)) return { status: 400, error: 'permissionMode is one of plan, normal, auto, bypass.' };
+  const own = levelOf(agent);
+  if (!raises(asked, own)) return undefined;
+  return {
+    status: 403,
+    error: `${agent.name || agent.id} runs in ${own} mode: a session started for it may run narrower, never wider, and ${asked} is wider. Change its mode in Tars to widen it.`,
+  };
+}
+
 async function spawnAgentSession(
   agent: AgentStatus,
   prompt: string,
@@ -140,6 +159,13 @@ async function spawnAgentSession(
   ctx: RouteContext,
   sendJson: SendJson
 ): Promise<boolean> {
+  // Never wider than the agent's own mode, whoever asked (modeRefusal): the one
+  // place a session starts says it last, before anything is ended or spawned.
+  const wider = modeRefusal(agent, opts.permissionMode);
+  if (wider) {
+    sendJson({ error: wider.error }, wider.status);
+    return false;
+  }
   // A session started while the quit ends the others would be in no map the
   // quit ends: refused before anything here ends the old terminal (the Audit's
   // gate of #235: a /start 200 ms into the quit answered 200 and its CLI
@@ -257,7 +283,7 @@ async function spawnAgentSessionInSlot(
   // the Agents page back on the old one. A `/model` typed into a terminal
   // lasts for that session; the Agents page is where a model is kept.
   const resolvedModel = opts.model || agent.model;
-  const effectiveMode = opts.permissionMode ?? agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal');
+  const effectiveMode = opts.permissionMode ?? levelOf(agent);
 
 
   // CLIs without Claude's SessionStart hook get the project's memory in the
@@ -1321,7 +1347,8 @@ async function withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<
 export interface DispatchOpts {
   message: string;
   model?: string;
-  permissionMode?: 'normal' | 'auto' | 'bypass';
+  /** For a session it starts: the agent's own mode, or narrower (modeRefusal). */
+  permissionMode?: PermissionLevel;
   from?: string;
   sender?: MessageSender;
   /**
@@ -2015,10 +2042,16 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     const since = new Date().toISOString();
     const { prompt, model, permissionMode: bodyPermissionMode, printMode } = req.body as {
-      prompt: string; model?: string; permissionMode?: 'normal' | 'auto' | 'bypass'; printMode?: boolean;
+      prompt: string; model?: string; permissionMode?: PermissionLevel; printMode?: boolean;
     };
     if (!prompt) {
       sendJson({ error: 'prompt is required' }, 400);
+      return;
+    }
+    // Never wider than the agent's own, refused before anything is recorded.
+    const wider = modeRefusal(agent, bodyPermissionMode);
+    if (wider) {
+      sendJson({ error: wider.error }, wider.status);
       return;
     }
     const taskRef = requestFor(agent, req);
@@ -2064,7 +2097,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
 
     const { message: asSent, model, permissionMode, mode: asked, reason, intent } = req.body as {
-      message: string; model?: string; permissionMode?: 'normal' | 'auto' | 'bypass'; mode?: unknown; reason?: unknown; intent?: unknown;
+      message: string; model?: string; permissionMode?: PermissionLevel; mode?: unknown; reason?: unknown; intent?: unknown;
     };
     if (!asSent) {
       sendJson({ error: 'message is required' }, 400);
@@ -2073,6 +2106,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const askedMode = (asked ?? 'auto') as SendMode;
     if (!SEND_MODES.includes(askedMode)) {
       sendJson({ error: `mode is one of ${SEND_MODES.join(', ')}.`, code: 'invalid_mode' }, 400);
+      return;
+    }
+    // Never wider than the agent's own, refused before a receipt, a stop or anything typed.
+    const wider = modeRefusal(agent, permissionMode);
+    if (wider) {
+      sendJson({ error: wider.error }, wider.status);
       return;
     }
     // A worker never orders work (core/one-task.ts): a task (start_agent,

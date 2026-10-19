@@ -37,6 +37,7 @@ vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 import { registerMemoryRoutes } from '../../../../electron/services/api-routes/memory-routes';
 import { registerWebhookRoutes } from '../../../../electron/services/api-routes/webhook-routes';
 import { agents } from '../../../../electron/core/agent-manager';
+import { DEFAULT_GATEWAY, setGatewayProjects } from '../../../../electron/services/hermes-gateways';
 import { RouteApp, RouteContext, RouteRequest, RouteHandler, SendJson } from '../../../../electron/services/api-routes/types';
 import { AgentStatus } from '../../../../electron/types';
 
@@ -64,9 +65,10 @@ async function call(handler: RouteHandler, req: Partial<RouteRequest>): Promise<
   let result: { data: unknown; status: number } = { data: undefined, status: 0 };
   const sendJson: SendJson = (data, status = 200) => { result = { data, status }; };
   // The webhook opens to Hermes alone, which the server's door decides from
-  // the secret: a call here stands for one the door has already let through.
-  // api-who-may-drive-an-agent.test.ts holds the door and the refusals.
-  const withRaw = { raw: { headers: {} }, hermes: true, ...req } as RouteRequest;
+  // the secret: a call here stands for one the door has already let through,
+  // with the default gateway's secret. api-who-may-drive-an-agent.test.ts and
+  // hermes-gateway-webhook.test.ts hold the door and the refusals.
+  const withRaw = { raw: { headers: {} }, hermes: true, hermesGateway: DEFAULT_GATEWAY, ...req } as RouteRequest;
   await handler(withRaw, sendJson, {} as RouteContext);
   return result;
 }
@@ -190,6 +192,9 @@ describe('POST /api/memory/remember', () => {
 // ── Hermes webhook ───────────────────────────────────────────────────────────
 
 describe('POST /api/webhooks/hermes', () => {
+  // What the default gateway reaches, as the user allows it in Settings since 2.0.4: nothing until then.
+  beforeEach(() => { setGatewayProjects(DEFAULT_GATEWAY, ['/test/project', '/p/one', '/p/two']); });
+
   it('resolves by exact id and by case-insensitive name, dry_run dispatches nothing', async () => {
     (agents as Map<string, AgentStatus>).set('a1', makeAgent({ id: 'a1', name: 'QA — myapp' }));
     const handler = findHandler(app, 'POST', '/api/webhooks/hermes');
@@ -201,25 +206,28 @@ describe('POST /api/webhooks/hermes', () => {
     expect(byName.data).toMatchObject({ success: true, agent: { id: 'a1' } });
   });
 
-  it('404s with the roster when the agent is unknown, 400s without message', async () => {
+  it('404s naming no agent when the agent is unknown, 400s without message', async () => {
+    // Until 2.0.4 the 404 carried the roster: every agent, its project and status (the Audit's NOW-3).
     (agents as Map<string, AgentStatus>).set('a1', makeAgent({ id: 'a1', name: 'QA' }));
     const handler = findHandler(app, 'POST', '/api/webhooks/hermes');
 
     const notFound = await call(handler, { body: { agent_name: 'ghost', message: 'go' } });
     expect(notFound.status).toBe(404);
-    expect((notFound.data as { agents: unknown[] }).agents).toHaveLength(1);
+    expect((notFound.data as { agents?: unknown[] }).agents).toBeUndefined();
+    for (const named of ['a1', 'QA', '/test/project']) expect(JSON.stringify(notFound.data)).not.toContain(named);
 
     expect((await call(handler, { body: { agent_id: 'a1' } })).status).toBe(400);
   });
 
-  it('409s on ambiguous names and disambiguates via project_path', async () => {
+  it('409s on ambiguous names, listing neither, and disambiguates via project_path', async () => {
     (agents as Map<string, AgentStatus>).set('a1', makeAgent({ id: 'a1', name: 'QA', projectPath: '/p/one' }));
     (agents as Map<string, AgentStatus>).set('a2', makeAgent({ id: 'a2', name: 'QA', projectPath: '/p/two' }));
     const handler = findHandler(app, 'POST', '/api/webhooks/hermes');
 
     const ambiguous = await call(handler, { body: { agent_name: 'QA', message: 'go', dry_run: true } });
     expect(ambiguous.status).toBe(409);
-    expect((ambiguous.data as { matches: unknown[] }).matches).toHaveLength(2);
+    expect((ambiguous.data as { matches?: unknown[] }).matches).toBeUndefined();
+    for (const named of ['a1', 'a2', '/p/one', '/p/two']) expect(JSON.stringify(ambiguous.data)).not.toContain(named);
 
     const scoped = await call(handler, { body: { agent_name: 'QA', project_path: '/p/two', message: 'go', dry_run: true } });
     expect(scoped.data).toMatchObject({ success: true, agent: { id: 'a2' } });

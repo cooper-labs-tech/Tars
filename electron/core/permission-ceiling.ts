@@ -31,6 +31,20 @@ export function ceilingOf(asker: PermissionLevel | null | undefined, target: Per
   return ORDER[Math.min(ORDER.indexOf(asker), ORDER.indexOf(target))];
 }
 
+/** One of Tars's four modes. */
+export function isPermissionLevel(mode: unknown): mode is PermissionLevel {
+  return typeof mode === 'string' && (ORDER as readonly string[]).includes(mode);
+}
+
+/**
+ * Whether a mode asked for a session is wider than the agent's own. A session's mode is the agent's, or narrower:
+ * a gateway's message, a /dispatch or a /start may lower it for the session they start, never raise it (the Audit's
+ * NOW-3 and R4.1, 2.0.4: the webhook started any agent in bypass).
+ */
+export function raises(asked: PermissionLevel, own: PermissionLevel): boolean {
+  return ORDER.indexOf(asked) > ORDER.indexOf(own);
+}
+
 /** Typed after the sender line when the sender runs narrower than the worker, '' otherwise. */
 export function modeGapMark(sender: PermissionLevel | undefined, receiver: PermissionLevel): string {
   if (!sender || ORDER.indexOf(sender) >= ORDER.indexOf(receiver)) return '';

@@ -5,6 +5,7 @@ import { orchestratorForProject, orchestratorOf, projectName, projectNames, wher
 import { getSuperAgentInstructionsPath } from '../utils';
 import { chatTag } from './chat-addressing';
 import { deliverFromChannel } from './chat-senders';
+import { DEFAULT_GATEWAY, gatewayById, gatewayReaches } from './hermes-gateways';
 import type { AgentStatus } from '../types';
 
 /**
@@ -21,6 +22,9 @@ import type { AgentStatus } from '../types';
  * - A reply to a word from Tars reaches nobody: the user is told how to reach an orchestrator.
  * - A reply to a question goes to the agent that asked (user-questions.ts registers it); to a Sentry request, to
  *   Tars itself: the error triage takes the user's go-ahead (error-triage.ts registers it).
+ * - "@project" is a message the user starts through Hermes, as a Hermes job's webhook is: it reaches only a project
+ *   the user allowed Hermes to reach in Settings, Hermes (#469, none by default). A reply answers a message Tars sent,
+ *   and goes where that message came from.
  *
  * Each goes after the line "Message from the user via Telegram:", which only Tars writes, and holds the user's own
  * words: never the report or the message they answer, written from agents' output and page titles. A worker is
@@ -82,6 +86,11 @@ export function startRelayRouting(fleet: BotFleet): void {
     const target = orchestratorForProject(fleet.agents, message.project, message.text);
     if (target.kind !== 'found') {
       await tellUser(whereToWrite(target), target.kind === 'no-orchestrator' ? target.projectPath : undefined, now);
+      return;
+    }
+    const hermes = gatewayById(DEFAULT_GATEWAY);
+    if (!hermes || !gatewayReaches(hermes, target.projectPath)) {
+      await tellUser(`Hermes may not reach project ${projectName(target.projectPath)}, so your message reached nobody. Allow it in Tars, Settings, Hermes.`, undefined, now);
       return;
     }
     await toProject(fleet, target.projectPath, target.text, now);

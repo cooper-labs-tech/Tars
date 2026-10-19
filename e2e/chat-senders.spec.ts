@@ -125,6 +125,10 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
     telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
     telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID), hermesRelayEnabled: false,
   }));
+  // Hermes may reach the project, as the user allows it in Settings, Hermes: "@demo" through the relay reaches it.
+  const privateDir = path.join(home, '.tars-private');
+  fs.mkdirSync(privateDir, { recursive: true, mode: 0o700 });
+  fs.writeFileSync(path.join(privateDir, 'hermes-gateways.json'), JSON.stringify({ gateways: [{ id: 'default', label: 'Hermes', projects: [project] }] }), { mode: 0o600 });
 
   const telegram = await startFakeTelegram();
   // Hermes: the relay plugin's routes, and the kanban's create and park of a parked task.

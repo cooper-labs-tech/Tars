@@ -1240,6 +1240,16 @@ export interface CliKeyState {
   withoutKey: string;
 }
 
+/** A Hermes gateway as Settings, Hermes shows it (hermes:gateways:*): never its secret. */
+export interface HermesGatewayView {
+  id: string;
+  label: string;
+  /** The projects its messages may reach, by their paths. */
+  projects: string[];
+  /** Its webhook route on the local API, /api/webhooks/hermes or /api/webhooks/hermes/<id>. */
+  path: string;
+}
+
 export interface ElectronAPI {
   // PTY terminal management
   pty: {
@@ -2204,6 +2214,21 @@ export interface ElectronAPI {
       serveCommand: string;
     }>;
     testWebhook: (params: { agentName?: string; agentId?: string; projectPath?: string }) => Promise<{ success: boolean; status?: number; response?: unknown; error?: string }>;
+    /**
+     * The Hermes gateways Tars takes work from (services/hermes-gateways.ts):
+     * each posts to its own route (`path`) with its own secret, and reaches the
+     * projects listed, none until the user allows some. `default` is the one
+     * Hermes had before 2.0.4, on /api/webhooks/hermes. A secret is only ever
+     * handed out by `add`, `secret` and `rotate`.
+     */
+    gateways: {
+      list: () => Promise<{ success: true; gateways: HermesGatewayView[] }>;
+      add: (params: { label: string }) => Promise<{ success: true; gateway: HermesGatewayView; secret: string } | { success: false; error: string }>;
+      remove: (params: { id: string }) => Promise<{ success: boolean }>;
+      secret: (params: { id: string }) => Promise<{ success: true; secret: string } | { success: false; error: string }>;
+      rotate: (params: { id: string }) => Promise<{ success: true; secret: string } | { success: false; error: string }>;
+      setProjects: (params: { id: string; projects: string[] }) => Promise<{ success: true; gateway: HermesGatewayView } | { success: false; error: string }>;
+    };
     /**
      * Three states, not two: unreachable, reachable but not signed in, and
      * signed in. `success` keeps its old meaning of "nothing more to do",

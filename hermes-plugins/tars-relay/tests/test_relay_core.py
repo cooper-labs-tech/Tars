@@ -197,7 +197,7 @@ class WhatIsKeptForTars(Base):
     def test_1_the_users_reply_to_a_relay_message_is_kept_for_tars(self):
         kept = relay_core.decide(message(reply_to_message_id='501', text='Oui, vas-y'), SETTINGS, self.store)
 
-        self.assertEqual(kept, {'kind': 'reply', 'ref': 'question:q-1', 'project': 'tars', 'text': 'Oui, vas-y',
+        self.assertEqual(kept, {'platform': 'telegram', 'kind': 'reply', 'ref': 'question:q-1', 'project': 'tars', 'text': 'Oui, vas-y',
                                 'user_id': OWNER_ID, 'chat_id': OWNER_ID, 'message_id': '7001', 'reply_to_message_id': '501'})
 
     def test_1_ids_as_numbers_are_the_same_ids(self):
@@ -306,9 +306,9 @@ class WhatIsKeptForTars(Base):
 class WhatMayBeSent(Base):
     def test_6_a_send_is_checked(self):
         body = {'text': 'Question from Tars-Backend', 'ref': 'question:q-2', 'kind': 'question', 'project': 'tars'}
-        self.assertEqual(relay_core.check_send(body), body)
+        self.assertEqual(relay_core.check_send(body), {**body, 'gateway': ''})
         self.assertEqual(relay_core.check_send({'text': 'A report', 'kind': 'report'}),
-                         {'text': 'A report', 'ref': '', 'kind': 'report', 'project': ''})
+                         {'text': 'A report', 'ref': '', 'kind': 'report', 'project': '', 'gateway': ''})
         self.assertEqual(relay_core.check_send({'text': '😀' * 2048, 'kind': 'report'})['text'], '😀' * 2048)
 
         refused = [

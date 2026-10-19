@@ -83,11 +83,15 @@ export const BUS_FILE = path.join(DATA_DIR, 'bus.json');
  *  read and migrated away from at startup. */
 export const OVERSEER_FILE = path.join(PRIVATE_DIR, 'overseer.json');
 export const OVERSEER_LEGACY_FILE = path.join(DATA_DIR, 'overseer.json');
-/** The secret Settings hands Hermes, the one credential that opens the
- *  webhook: private, since through it Hermes drives any agent of any project.
- *  The legacy path is where it was minted until 1.7.6, moved away at startup. */
+/** The secret Settings hands Hermes for the default gateway, the credential
+ *  that opens its webhook: private, since through it Hermes drives the agents
+ *  of the projects the user allows it. The legacy path is where it was minted
+ *  until 1.7.6, moved away at startup. Another gateway's is beside it,
+ *  `hermes-webhook-<id>.secret` (services/hermes-gateways.ts). */
 export const HERMES_WEBHOOK_SECRET_FILE = path.join(PRIVATE_DIR, 'hermes-webhook-secret');
 export const HERMES_WEBHOOK_SECRET_LEGACY_FILE = path.join(DATA_DIR, 'hermes-webhook-secret');
+/** The Hermes gateways Tars takes work from, and the projects each may reach. */
+export const HERMES_GATEWAYS_FILE = path.join(PRIVATE_DIR, 'hermes-gateways.json');
 
 // Updates come from the fork. Pointing this at the upstream repo offered an
 // upstream build as an update to a fork install, which would overwrite it.
