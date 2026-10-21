@@ -44,14 +44,19 @@ vi.mock('../../../electron/services/git-review', () => ({ repoSummary: async () 
 vi.mock('../../../electron/services/hermes-config', () => ({
   usableHermesConnection: () => ({ url: 'http://gateway.test', token: 't' }),
 }));
-// No websocket transport, so every turn takes the cron path without first
-// spending three seconds finding out there is no socket to open. That is a
-// real configuration, not a shortcut: it is what an install behind a gateway
-// with no live endpoint does on every turn.
+// The live conversation, a fake: every turn is answered with nextReply and its
+// prompt recorded. It used to be the cron path, with no socket at all; an
+// automatic check-in never runs the cron job now, since each of its runs is a
+// Hermes session of its own (hermes-one-session.test.ts), so it needs one.
 vi.mock('../../../electron/services/hermes-session', () => ({
-  liveTransportAvailable: () => false,
-  createLiveSession: async () => { throw new Error('no live transport in tests'); },
-  askLiveSession: async () => ({ ok: false, error: 'unavailable' }),
+  liveTransportAvailable: () => true,
+  conversationRefused: () => false,
+  openConversation: async () => ({
+    session: { sessionId: 'live-1', storedSessionId: 'stored-1' },
+    closed: false,
+    ask: async (prompt: string) => { promptsSent.push(prompt); return { ok: true, text: nextReply }; },
+    close: () => {},
+  }),
 }));
 
 const TEMPLATE = '<what you tell JeanBrasse, plain text or light markdown>';

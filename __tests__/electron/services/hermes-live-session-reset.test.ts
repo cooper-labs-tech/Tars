@@ -50,12 +50,18 @@ const live = vi.hoisted(() => ({
 }));
 vi.mock('../../../electron/services/hermes-session', () => ({
   liveTransportAvailable: () => true,
-  createLiveSession: async () => {
+  conversationRefused: (err: unknown) => (err as { refused?: unknown })?.refused === true,
+  openConversation: async () => {
     live.attempts++;
-    if (live.refuse) throw new Error('the gateway refused the socket');
-    return { session: { id: `s${live.attempts}` }, control: { close: () => { live.closed++; } } };
+    if (live.refuse) throw Object.assign(new Error('the gateway refused the socket'), { refused: true });
+    const id = `s${live.attempts}`;
+    return {
+      session: { sessionId: id, storedSessionId: id },
+      closed: false,
+      ask: async () => ({ ok: true, text: '{"say":"Answered live.","action":null}' }),
+      close: () => { live.closed++; },
+    };
   },
-  askLiveSession: async () => ({ ok: true, envelope: '{"say":"Answered live.","action":null}' }),
 }));
 vi.mock('../../../electron/services/hermes-client', async importOriginal => ({
   ...(await importOriginal<typeof import('../../../electron/services/hermes-client')>()),

@@ -64,7 +64,7 @@ beforeAll(async () => {
       if (url.startsWith('/api/cron/jobs')) return json(200, { jobs: [] });
       if (url.startsWith('/api/plugins/kanban/board')) return json(200, { columns: [] });
       if (url === '/api/config') return json(200, { agent: { reasoning_effort: 'medium' } });
-      // Refused, so createLiveSession stops after the one request this reads.
+      // Refused, so openConversation stops after the one request this reads.
       if (url === '/api/auth/ws-ticket') return json(403, { detail: 'no ticket here' });
       return json(404, { detail: 'Not Found' });
     });
@@ -95,7 +95,7 @@ async function everyCall(authMode: 'token' | 'oauth') {
   await c.fetchHermesCrons(target);
   await c.probeHermes(target);
   await s.getReasoningEffort(target);
-  await s.createLiveSession(target).catch(() => { /* refused on purpose */ });
+  await s.openConversation(target).catch(() => { /* refused on purpose */ });
 }
 
 describe('the token of the other auth mode', () => {

@@ -31,10 +31,19 @@ vi.mock('../../../../electron/services/git-review', () => ({
 vi.mock('../../../../electron/services/hermes-config', () => ({
   usableHermesConnection: () => ({ url: 'http://gateway.test', token: 't' }),
 }));
+// No live conversation but for the automatic check-ins, which never run the
+// cron job (each of its runs is a Hermes session of its own): the user's turns
+// keep the cron path recorded before the refactor.
+const liveCheckIns = vi.hoisted(() => ({ on: false }));
 vi.mock('../../../../electron/services/hermes-session', () => ({
-  liveTransportAvailable: () => false,
-  createLiveSession: async () => { throw new Error('no live transport in tests'); },
-  askLiveSession: async () => ({ ok: false, error: 'unavailable' }),
+  liveTransportAvailable: () => liveCheckIns.on,
+  conversationRefused: () => false,
+  openConversation: async () => ({
+    session: { sessionId: 'live-1', storedSessionId: 'stored-1' },
+    closed: false,
+    ask: async (prompt: string) => { hermesCalls.push({ call: 'ask', prompt }); return { ok: true, text: nextReply }; },
+    close: () => {},
+  }),
   getReasoningEffort: () => 'medium',
 }));
 
@@ -210,6 +219,7 @@ describe('the overseer, as recorded before the D2 refactor', () => {
   });
 
   it('watches the same way: a first look, a change, a pause, and a rule that sends on its own', async () => {
+    liveCheckIns.on = true;
     const ticks: unknown[] = [];
     // The first look has nothing to compare with.
     ticks.push(await overseer.watchTick());
@@ -223,6 +233,7 @@ describe('the overseer, as recorded before the D2 refactor', () => {
     overseer.resumeOverseerWatch();
     expect({ ticks, paused, failure: overseer.getLastWatchFailure() }).toMatchSnapshot('ticks');
     expect(stable(hermesCalls)).toMatchSnapshot('what reached Hermes on the watch');
+    liveCheckIns.on = false;
 
     hermesCalls.length = 0;
     expect(stable(overseer.setOverseerSettings({ autoActions: ['nudge-waiting', 'no-such-rule'] }))).toMatchSnapshot('auto settings');

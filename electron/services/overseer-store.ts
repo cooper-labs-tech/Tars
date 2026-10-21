@@ -243,7 +243,59 @@ export function clearOverseerHistory(): { cleared: number } {
   if (cleared === 0) return { cleared: 0 };
   state.messages = [];
   saveState(state);
+  // The Hermes session holds the same conversation as the model's context: the
+  // next turn starts a new one, or what got stuck would still be there.
+  forgetKeptHermesSessions();
   return { cleared };
+}
+
+/* ── The super chat's Hermes session ─────────────────────────────────────── */
+
+/**
+ * The one Hermes session the super chat talks in, per gateway: made by its
+ * first turn, resumed by every turn after it, across restarts, sleeps and
+ * gateway restarts (hermes-session.ts), and replaced only when the gateway no
+ * longer has it or the conversation is cleared. A file of its own for the
+ * reason the list below is, and held in memory as well, so a write that fails
+ * costs a session at the next start rather than one per turn.
+ */
+const KEPT_SESSION_FILE = privatePath('overseer-hermes-session.json');
+let keptInMemory: Record<string, string> | null = null;
+
+function keptSessions(): Record<string, string> {
+  if (keptInMemory) return keptInMemory;
+  try {
+    const parsed = JSON.parse(fs.readFileSync(KEPT_SESSION_FILE, 'utf-8'));
+    keptInMemory = parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? Object.fromEntries(Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string' && !!e[1]))
+      : {};
+  } catch {
+    keptInMemory = {};
+  }
+  return keptInMemory;
+}
+
+/** The session the super chat talks in on this gateway, or null before its first turn. */
+export function keptHermesSession(gateway: string): string | null {
+  return keptSessions()[gateway] ?? null;
+}
+
+export function keepHermesSession(gateway: string, sessionId: string): void {
+  keptInMemory = { ...keptSessions(), [gateway]: sessionId };
+  try {
+    writeSecretFileSync(KEPT_SESSION_FILE, JSON.stringify(keptInMemory, null, 2));
+  } catch (err) {
+    console.error(`[overseer] could not keep its Hermes session (${describeSecretFileError(err)}): the next start opens another`);
+  }
+}
+
+function forgetKeptHermesSessions(): void {
+  keptInMemory = {};
+  try {
+    fs.rmSync(KEPT_SESSION_FILE, { force: true });
+  } catch (err) {
+    console.error(`[overseer] could not forget its Hermes session (${describeSecretFileError(err)})`);
+  }
 }
 
 /* ── The super chat's own Hermes sessions ────────────────────────────────── */
