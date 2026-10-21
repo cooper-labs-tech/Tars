@@ -114,9 +114,9 @@ for (const newInterface of [false, true]) {
       const reply = await page.evaluate(async (asked) => {
         const deadline = Date.now() + 90_000;
         while (Date.now() < deadline) {
-          const history = await (window as unknown as { electronAPI: { overseer: { history(): Promise<Array<{ role: string; text: string }>> } } }).electronAPI.overseer.history();
-          const at = history.map(m => m.text).lastIndexOf(asked);
-          const after = at >= 0 ? history.slice(at + 1).find(m => m.role === 'overseer') : undefined;
+          const { messages } = await (window as unknown as { electronAPI: { overseer: { history(): Promise<{ messages: Array<{ role: string; text: string }> }> } } }).electronAPI.overseer.history();
+          const at = messages.map(m => m.text).lastIndexOf(asked);
+          const after = at >= 0 ? messages.slice(at + 1).find(m => m.role === 'overseer') : undefined;
           if (after) return after.text;
           await new Promise(r => setTimeout(r, 250));
         }
