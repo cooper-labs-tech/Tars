@@ -13,6 +13,7 @@ export const isElectron = (): boolean => {
 const askKey = (ask: AgentStatus['permissionAsk'] | null | undefined) => (ask ? `${ask.askedAt}\u0000${ask.subject}` : '');
 /** A wake on its way as one comparable value: who, how and since when. */
 const wakingKey = (waking: AgentStatus['waking']) => (waking ? `${waking.by}\u0000${waking.via}\u0000${waking.since}` : '');
+const programKey = (p: AgentStatus['programStatus']) => (p ? `${p.state}\u0000${p.kind}\u0000${p.msg}` : '');
 
 // Hook for agent management via Electron IPC
 export function useElectronAgents() {
@@ -291,7 +292,9 @@ export function useElectronAgents() {
           // A permission question Tars holds, which the tick carries (#318).
           askKey(a.permissionAsk) !== askKey(t.permissionAsk) ||
           // Asleep since when, and who is waking it (#322): the tick carries both.
-          a.asleepSince !== t.asleepSince || wakingKey(a.waking) !== wakingKey(t.waking);
+          a.asleepSince !== t.asleepSince || wakingKey(a.waking) !== wakingKey(t.waking) ||
+          // What its CLI last said of itself over OSC 7501 (#510), which the tick carries.
+          programKey(a.programStatus) !== programKey(t.programStatus);
         const hasChange = tickAgents.some(t => {
           const existing = prev.find(a => a.id === t.id);
           return existing && changed(existing, t);
@@ -300,7 +303,7 @@ export function useElectronAgents() {
         return prev.map(a => {
           const tick = tickAgents.find(t => t.id === a.id);
           if (tick && changed(a, tick)) {
-            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity, cliRunning: tick.cliRunning, leftFullscreen: tick.leftFullscreen, launching: tick.launching, permissionAsk: tick.permissionAsk ?? undefined, asleepSince: tick.asleepSince, waking: tick.waking };
+            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity, cliRunning: tick.cliRunning, leftFullscreen: tick.leftFullscreen, launching: tick.launching, permissionAsk: tick.permissionAsk ?? undefined, asleepSince: tick.asleepSince, waking: tick.waking, programStatus: tick.programStatus };
           }
           return a;
         });

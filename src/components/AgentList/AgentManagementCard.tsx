@@ -5,6 +5,7 @@ import { AgentMark, Button } from '@/components/ui';
 import { errorReason } from '@/app/agents/constants';
 import { stopLine } from '@/lib/stop-line';
 import { permissionAskLine } from '@/lib/permission-ask';
+import { blockedReason } from '@/lib/blocked-reason';
 import { asleepLine, wakingLine } from '@/lib/asleep-line';
 import { providerWord } from '@/lib/providers';
 import AgentStatusWord from '@/components/AgentStatusWord';
@@ -43,6 +44,8 @@ export function AgentManagementCard({ agent, onClick, onEdit, onStart, onStop, o
   // A permission question Tars holds for it: what the call would do, which
   // its window answers. Frame: `Permission asked of Tars`.
   const ask = permissionAskLine(agent);
+  // Blocked on its CLI's word (OSC 7501): why, in place of the task. Frame: `Blocked (2.0.5)`.
+  const blocked = blockedReason(agent);
   // Asleep since when, or who is waking it. Frame: `Agent asleep · and how it wakes`.
   const waking = wakingLine(agent);
   const sleep = waking ?? asleepLine(agent);
@@ -89,6 +92,10 @@ export function AgentManagementCard({ agent, onClick, onEdit, onStart, onStop, o
         ) : ask ? (
           <p className="text-[11px] text-status-waiting truncate" title={ask.title}>
             {ask.title}
+          </p>
+        ) : blocked ? (
+          <p data-blocked-line className={`text-[11px] truncate ${blocked.tone === 'error' ? 'text-status-error' : 'text-status-waiting'}`} title={blocked.line}>
+            {blocked.line}
           </p>
         ) : sleep ? (
           <p className="text-[11px] text-text-secondary truncate" title={sleep}>
