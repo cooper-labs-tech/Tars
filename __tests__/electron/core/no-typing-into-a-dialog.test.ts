@@ -178,8 +178,9 @@ describe('a dialog open in the CLI', { timeout: 30_000 }, () => {
     const alpha = terminalFor('alpha');
     putAgent({ id: 'alpha', status: 'running' });
     const ptyProcess = pty.ptyProcesses.get('pty-alpha')!;
-    // Somebody was typing: the message waits for the pause.
+    // Somebody was typing, and erased it: the field is empty, the message waits for the pause.
     pty.writeHumanInput(ptyProcess, 'x');
+    pty.writeHumanInput(ptyProcess, '\x7f');
     const outcome = pty.writeProgrammaticInput(ptyProcess, 'queued before the dialog', true, { agentId: 'alpha', from: 'QA' });
     expect(outcome).toBe('held');
 

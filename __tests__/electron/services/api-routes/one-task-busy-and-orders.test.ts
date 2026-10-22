@@ -662,8 +662,10 @@ describe('the halves of the fix the QA pinned (gate of 05e31fa4)', () => {
     const t = call('POST', '/api/agents/cl/dispatch', { message: 'TASK-T fix it', intent: 'task' }, 'orch');
     const u = call('POST', '/api/agents/cl/dispatch', { message: 'TASK-U fix that', intent: 'task' }, 'orch');
     await Promise.all([t.done, u.done]);
-    // Somebody types in the field as the run ends: T's turn comes, and T waits for the pause.
+    // Somebody types in the field as the run ends, and erases it: T's turn comes, and T waits for the pause.
+    // (A key left in the field would hold T until it is sent: a draft is never set aside since 22/10.)
     writeHumanInput(terminal as never, 'h');
+    writeHumanInput(terminal as never, '\x7f');
     runs[0].end();
     await later(3000);
     expect(typedInto(terminal)).not.toContain('TASK-T');

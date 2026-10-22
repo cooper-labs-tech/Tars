@@ -1581,11 +1581,14 @@ unfinished text went out with the message. Never mix and never block, so:
 
 - **While you are typing**, the message waits. Five seconds of quiet ends the wait, re-armed by
   every key, so it lasts as long as the typing does (`TYPING_PAUSE_MS`, `pty-manager.ts`).
-- **At the first pause**, Tars empties the field, writes the message, submits it, and types your
-  draft back exactly as it was, caret included, without sending it. Keys you type during that
-  window are held and replayed in order.
-- **If it cannot promise to give your draft back**, it writes nothing at all. Your field is
-  never touched by something it does not understand.
+- **While anything is in your field**, the message waits too: Tars never clears, edits or
+  submits what you typed (2.0.5). It goes in at the first pause once the field is empty, after
+  you send what you typed or clear it, and the panel says a message is waiting meanwhile. Until
+  2.0.5 it emptied the field, sent the message and typed your draft back; on Claude Code 2.1.306
+  a click in the prompt moves the caret where the keys cannot see it, and the emptying took the
+  beginning of JeanBrasse's draft and sent the rest behind Tars's message (22/10).
+- **If it cannot read what the field holds**, it writes nothing either, until the
+  `UserPromptSubmit` hook proves the field emptied. A click inside a draft is such a case.
 
 What it understands is rebuilt from the keys the interface relays (`input-draft.ts`): of the 166
 key encodings xterm sends from a Mac keyboard it follows 112 and gives up on 54, among them the

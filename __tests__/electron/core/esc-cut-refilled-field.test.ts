@@ -34,7 +34,8 @@ import type { IPty } from 'node-pty';
  * Added after the Audit's re-check at 1368d779 (2026-10-19):
  *  F7. (L5) The guard "the field was empty before the Esc" is pinned by no test:
  *      the user's draft, set aside for a task and typed back, then a lone Esc,
- *      and Tars would backspace into the draft.
+ *      and Tars would backspace into the draft. (Since 22/10 no draft is set
+ *      aside: the task waits behind it, and the Esc must not change that.)
  *  F8. (L6) A line and Enter the user typed while Tars wrote the task, held then
  *      replayed into the turn, not counted among the keys typed since: qwen
  *      moves it back on the Esc, and Tars would backspace into it.
@@ -205,7 +206,7 @@ describe('the next task after an Esc that cut a turn', () => {
     expect(cli.submitted).toEqual([T1, T2]);
   });
 
-  it.each<Flavour>(['qwen', 'claude'])('F7. (the Audit\'s L5) %s: the user\'s draft, set aside for the task and typed back, then a lone Esc: the next task waits, and the draft is not touched', (flavour) => {
+  it.each<Flavour>(['qwen', 'claude'])('F7. (the Audit\'s L5) %s: the user\'s draft in the field when a task comes, then a lone Esc: no task goes in, and the draft is not touched', (flavour) => {
     made = fakeCli(flavour);
     rememberTerminalOwner(made.pty, 'qw');
     setTurnProbe(() => made.cli.turn);
@@ -214,13 +215,15 @@ describe('the next task after an Esc that cut a turn', () => {
     for (const ch of 'my draft') writeHumanInput(pty, ch);
     writeProgrammaticInput(pty, T1, true, origin);
     settle();
-    expect(cli.submitted).toEqual([T1]);
-    expect(cli.field, 'the draft typed back').toBe('my draft');
+    expect(cli.submitted, 'the task waits behind the draft').toEqual([]);
+    expect(cli.field, 'the draft untouched').toBe('my draft');
+    // A turn of the agent's own runs, and the person's Esc cuts it.
+    cli.turn = true;
     writeHumanInput(pty, '\x1b');
     writeProgrammaticInput(pty, T2, true, origin);
     noteTurnCut(pty);
     settle();
-    expect(cli.submitted).toEqual([T1]);
+    expect(cli.submitted).toEqual([]);
     expect(cli.field).toBe('my draft');
   });
 

@@ -187,7 +187,8 @@ async function settled<T>(launch: Promise<T>, ms = 600): Promise<T> {
 }
 
 /** Everything typed into a terminal, as one string. */
-const typedInto = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+// What the field shows: every piece goes in bracket paste markers since 22/10.
+const typedInto = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('').replace(/\x1b\[20[01]~/g, '');
 
 /** A launch too long for one typed line is written to a script the shell sources (`. '<file>'`). */
 const commandOf = (typed: string) => {
