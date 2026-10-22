@@ -79,7 +79,7 @@ async function waitFor<T>(fn: () => Promise<T> | T, ms: number, what: string): P
   throw new Error(`timed out after ${ms} ms: ${what}`);
 }
 
-type Request = { url?: string; side?: boolean; stream?: boolean; last?: string; tail?: string };
+type Request = { url?: string; side?: boolean; stream?: boolean; last?: string; tail?: string; full?: string };
 
 interface Draft {
   name: string;
@@ -185,7 +185,9 @@ for (const newInterface of [false, true]) {
     process.once('exit', () => stub.kill());
     const requests = (): Request[] => (fs.existsSync(FAKE_LOG) ? fs.readFileSync(FAKE_LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [])
       .filter((l: Request) => l.url && !l.side && l.stream);
-    const textOf = (r: Request) => `${r.last ?? ''}\n${r.tail ?? ''}`;
+    // The whole turn: a message typed while lead works is queued by Claude Code and joined with the next one into a
+    // single turn, whose first 200 characters and last 200 (`last`, `tail`) can miss either.
+    const textOf = (r: Request) => r.full ?? `${r.last ?? ''}\n${r.tail ?? ''}`;
     let app: ElectronApplication | undefined;
     try {
       await waitFor(async () => { try { await fetch(`http://127.0.0.1:${stubPort}/`); return true; } catch { return false; } }, 10_000, 'fake API up');
@@ -273,12 +275,14 @@ for (const newInterface of [false, true]) {
         entry.handed = { status: handed.status, task: handed.body.taskId ?? handed.body.error };
         entry.sent = { status: sent.status, body: sent.body };
         // wk's task reaches its model and its turn ends: the notice is due in lead's terminal.
-        await waitFor(() => requests().some((r) => textOf(r).includes(`tk${n}`)), 120_000, `wk took task tk${n}`);
+        // wk's own turn: the task, which the notice quotes too, so not the notice.
+        const wksTurn = (r: Request) => textOf(r).includes(`tk${n}`) && !textOf(r).includes(NOTICE);
+        await waitFor(() => requests().some(wksTurn), 120_000, `wk took task tk${n}`);
         await atRest('wk');
         await sleep(12_000);
 
         // 1. Nothing reached lead's model, the draft is on screen, the panel says a message waits.
-        const meanwhile = requests().slice(before).filter((r) => !textOf(r).includes(`tk${n}`));
+        const meanwhile = requests().slice(before).filter((r) => !wksTurn(r));
         const screen = await leadScreen();
         entry.whileInField = {
           requests: meanwhile.map(textOf),
