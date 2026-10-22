@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 321 root frames, 90 of them drawn and not built yet: the 79 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+rather than a companion to it. `design/tars-redesign.pen` holds 323 root frames, 92 of them drawn and not built yet: the 81 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
 `design/chat-design.pen` holds 72 of those, the other two hundred and twenty-seven being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -295,8 +295,11 @@ For 2.0.5:
 - Keep this computer awake, a row of Settings, General, Preferences under Start agents when Tars opens (an Orca quick
   win, 22/10): Keep awake (2.0.5) · Settings, General, Preferences (its light copy, the narrowest window), · states
   (and its light copy).
-- The checkpoint line an agent writes about itself, on its card: Checkpoint (2.0.5) · the agent card's line (and its
-  light copy).
+- The checkpoint line an agent writes about itself, in its terminal header on the Dashboard only, never on its card
+  (JeanBrasse, 22/10): Checkpoint (2.0.5) · the line in the Dashboard terminal header (and its light copy).
+- The Dashboard terminal header without its start, wake and stop button, which moves into the panel's menu
+  (JeanBrasse, 22/10; the Agents page cards keep theirs): Dashboard header (2.0.5) · start, wake and stop in the ···
+  menu (and its light copy).
 - An agent blocked, with its reason (permission, question or sign-in) and its message, from OSC 7501 where no hook
   says it: Blocked (2.0.5) · an agent blocked, its reason (and its light copy).
 - Design Mode and the project's profiles in the browser beside an agent's terminal: Browser (2.0.5) · Design Mode, an
