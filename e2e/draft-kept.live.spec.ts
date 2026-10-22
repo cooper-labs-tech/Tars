@@ -176,9 +176,13 @@ for (const newInterface of [false, true]) {
     const port = apiPort(newInterface ? 31309 : 31308);
     const stubPort = (newInterface ? 31971 : 31970) + PORT_OFFSET;
     const values: Record<string, unknown> = { claude: CLAUDE, shell, drafts: [] as unknown[] };
+    // A fake left by a run cut at its timeout would answer for this one, into its own log.
+    const taken = await fetch(`http://127.0.0.1:${stubPort}/`).then(() => true, () => false);
+    if (taken) throw new Error(`something already answers on ${stubPort}: a fake Messages API left by an earlier run?`);
     const stub = spawn(process.execPath, [path.join(WT, 'e2e', 'live', 'fake-messages-api.mjs')], {
       env: { PATH: process.env.PATH, FAKE_PORT: String(stubPort), FAKE_LOG }, stdio: 'ignore',
     });
+    process.once('exit', () => stub.kill());
     const requests = (): Request[] => (fs.existsSync(FAKE_LOG) ? fs.readFileSync(FAKE_LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [])
       .filter((l: Request) => l.url && !l.side && l.stream);
     const textOf = (r: Request) => `${r.last ?? ''}\n${r.tail ?? ''}`;
