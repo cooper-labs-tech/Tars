@@ -19,6 +19,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    reached it, and goes silent without an answer).
  * 2. The agent follows the reports: running, then waiting on a question with its message kept for the window,
  *    then idle once the CLI says done.
+ * 3. The window gets the record on agents:tick, where its cards read the fleet: the blocked state with its kind and
+ *    message, then done.
  * Red on main (acb8d2f4): no answer, so the stand-in reports nothing, and the agent never leaves idle.
  * The artefact: values.json (what the stand-in received, every status and record seen).
  */
@@ -76,6 +78,11 @@ for (const newInterface of [false, true]) {
       await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
       await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI, undefined, { timeout: 60_000 });
+      await page.evaluate(() => {
+        const g = window as unknown as { __ticks: unknown[]; electronAPI: { agent: { onTick(cb: (list: Array<{ id: string; programStatus?: unknown }>) => void): void } } };
+        g.__ticks = [];
+        g.electronAPI.agent.onTick((list) => { const a = list.find((x) => x.id === 'x-grok'); if (a?.programStatus) g.__ticks.push(a.programStatus); });
+      });
       type Seen = { status: string; waitingReason?: string; programStatus?: { state: string; kind?: string; msg?: string } } | null;
       const read = () => page.evaluate(() => (window as unknown as { electronAPI: { agent: { get(id: string): Promise<unknown> } } }).electronAPI.agent.get('x-grok')) as Promise<Seen>;
       await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } }).electronAPI.agent.start({ id: 'x-grok', prompt: 'go' }));
@@ -95,12 +102,16 @@ for (const newInterface of [false, true]) {
       values.blocked = blocked;
       values.standIn = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : null;
       values.final = await read();
+      await expect.poll(() => page.evaluate(() => ((window as unknown as { __ticks: Array<{ state: string }> }).__ticks.at(-1))?.state), { timeout: 10_000 }).toBe('done');
+      const ticked = await page.evaluate(() => (window as unknown as { __ticks: Array<{ state: string; kind?: string; msg?: string }> }).__ticks);
+      values.ticked = ticked;
       recordValues(values);
 
       expect(values.standIn, 'what reached the stand-in').toEqual([{ answered: true, reply: '\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth' }]);
       expect(seen).toContain('running//working');
       expect(blocked).toMatchObject({ status: 'waiting', waitingReason: 'permission', programStatus: { state: 'blocked', kind: 'question', msg: 'Which branch?' } });
       expect(values.final).toMatchObject({ status: 'idle', programStatus: { state: 'done' } });
+      expect(ticked).toContainEqual(expect.objectContaining({ state: 'blocked', kind: 'question', msg: 'Which branch?' }));
       expect(errors).toEqual([]);
     } finally {
       recordValues(values);
