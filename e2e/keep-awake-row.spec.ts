@@ -11,13 +11,15 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * In the shell as it was and in the new interface: the row offers while working, always and never, while working
  * chosen when nothing was saved; always, picked, is saved in app-settings.json, main keeps the computer awake at once
- * (keepAwake.state() says active) and the row says so; never, picked, is saved, main lets it sleep and the row says so.
+ * (keepAwake.state() says active) and the row says so; with two agents running, while working keeps it awake and the
+ * row counts them; never, picked, is saved, main lets it sleep and the row says so; and when the system refuses the
+ * blocker (Electron's powerSaveBlocker made to throw, as #511's spec does), the row says so.
  * Red on #511's head (a890415e): the row is not there.
  *
  * The artefact: what the row said and main answered after each pick, in values.json, and a screenshot of each.
  */
 
-type Api = { electronAPI: { keepAwake: { state(): Promise<{ mode: string; active: boolean; since?: string }> } } };
+type Api = { electronAPI: { keepAwake: { state(): Promise<{ mode: string; active: boolean; since?: string; working: number; refused?: true }> } } };
 
 for (const newInterface of [false, true]) {
   test(`the keep awake row saves while working, always or never and says what main does now${newInterface ? ' (new interface)' : ''}`, async () => {
@@ -57,6 +59,22 @@ for (const newInterface of [false, true]) {
       seen.always = { line: await line.innerText(), state: await state(), saved: saved() };
       await stepShot(page, `${tag}-02-always`);
 
+      // Two agents running, while working: awake, and the row counts them.
+      const dist = path.resolve('electron', 'dist');
+      const running = await app.evaluate((_e, { dist }) => {
+        const { agents } = process.mainModule!.require(`${dist}/core/agent-manager.js`);
+        const ids = [...agents.keys()].slice(0, 2);
+        for (const id of ids) agents.get(id).status = 'running';
+        return ids;
+      }, { dist });
+      seen.running = running;
+      await radio('while working').click();
+      await expect.poll(saved).toBe('while-working');
+      await expect.poll(async () => (await state()).active).toBe(true);
+      await expect(line).toHaveText('awake now · 2 agents working', { timeout: 15_000 });
+      seen.working = { line: await line.innerText(), state: await state() };
+      await stepShot(page, `${tag}-02b-working`);
+
       // Never: saved, and main lets it sleep.
       await radio('never').click();
       await expect.poll(saved).toBe('never');
@@ -64,6 +82,16 @@ for (const newInterface of [false, true]) {
       await expect(line).toHaveText('sleeps as usual, even during a turn', { timeout: 15_000 });
       seen.never = { line: await line.innerText(), state: await state(), saved: saved() };
       await stepShot(page, `${tag}-03-never`);
+
+      // Refused by the system: always is kept, and the row says the computer may sleep.
+      await app.evaluate(({ powerSaveBlocker }) => {
+        powerSaveBlocker.start = (() => { throw new Error('refused by the e2e'); }) as typeof powerSaveBlocker.start;
+      });
+      await radio('always').click();
+      await expect.poll(async () => (await state()).refused).toBe(true);
+      await expect(line).toHaveText('cannot keep this computer awake here: the system refused', { timeout: 15_000 });
+      seen.refused = { line: await line.innerText(), state: await state(), saved: saved() };
+      await stepShot(page, `${tag}-04-refused`);
       recordValues(seen);
     } finally {
       recordValues(seen);
