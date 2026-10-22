@@ -344,7 +344,8 @@ for (const newInterface of [false, true]) {
       // 4. A second task, into the same session, and a report back through Tars's MCP server.
       const two = await lead.call('delegate_task', { id: 'qw', prompt: 'TASK-SENDBACK report to me when done', timeoutSeconds: 120 });
       await expect.poll(() => (fs.existsSync(leadReceived) ? fs.readFileSync(leadReceived, 'utf8') : ''), { timeout: 30_000 }).toContain('REPORT-FROM-QWEN');
-      const leadLine = fs.readFileSync(leadReceived, 'utf8').split(/\r|\n|\x1b\[20[01]~/).find((l) => l.includes('REPORT-FROM-QWEN')) ?? '';
+      // Since #507 the sender line and the body are two pastes into one field: the markers go before the lines are cut.
+      const leadLine = fs.readFileSync(leadReceived, 'utf8').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).find((l) => l.includes('REPORT-FROM-QWEN')) ?? '';
       keep({ two, leadLine, sent: records().find((r) => r.sent)?.sent });
       expect.soft(two.isError, two.text).toBe(false);
       expect.soft(launches(), 'one session for both tasks').toHaveLength(1);

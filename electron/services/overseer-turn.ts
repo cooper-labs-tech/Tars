@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { usableHermesConnection } from './hermes-config';
 import {
-  LiveSession,
-  askLiveSession,
-  createLiveSession,
+  type Conversation,
+  conversationRefused,
   liveTransportAvailable,
+  openConversation,
 } from './hermes-session';
 import {
   probeHermes,
@@ -14,8 +14,8 @@ import {
   fetchHermesCronRuns,
   fetchHermesSessionMessages,
 } from './hermes-client';
-import { HermesConnection } from '../types/hermes';
-import { loadState, rememberHermesSessions, saveState, type OverseerAttachment, type OverseerMessage, type OverseerState } from './overseer-store';
+import { HermesConnection, resolveHermesBaseUrl } from '../types/hermes';
+import { keepHermesSession, keptHermesSession, loadState, rememberHermesSessions, saveState, type OverseerAttachment, type OverseerMessage, type OverseerState } from './overseer-store';
 import { buildFleetSnapshot } from './overseer-fleet';
 import { composeTurn } from './overseer-prompt';
 import { finishTurn } from './overseer-gate';
@@ -157,16 +157,27 @@ export async function askOverseer(
       opts,
     );
 
-    // The live conversation first. It is what the gateway's own dashboard
-    // uses, it answers in about nine seconds rather than thirty, and it does
-    // not need a cron job to exist at all. Everything below it is the fallback
-    // for a gateway that will not open a socket.
+    // The live conversation first: one Hermes session, kept, answering in
+    // seconds, with no cron job at all. Everything below it is the fallback for
+    // a gateway that will not take the conversation's socket.
     const liveReply = await askViaLiveSession(conn, prompt);
-    if (liveReply.aborted) {
+    if ('aborted' in liveReply) {
       return { ok: false, reason: 'error', error: 'Stopped: you paused the overseer while it was answering.' };
     }
-    if (liveReply.text !== null) {
+    if ('text' in liveReply) {
       return finishTurn(state, liveReply.text, opts);
+    }
+    // A turn asked live that failed is not asked again through the cron job:
+    // it may still be running on the gateway, and the cron job would ask the
+    // same question a second time, in a session of its own.
+    if ('failed' in liveReply) {
+      return { ok: false, reason: 'error', error: liveReply.failed };
+    }
+    // Every run of the cron job is a Hermes session of its own. A question
+    // JeanBrasse asked is worth one; a check-in nobody asked for is not, or
+    // each one makes a session (his report of 21/10).
+    if (opts.isBriefing) {
+      return { ok: false, reason: 'error', error: `No live conversation with Hermes (${liveReply.unavailable}), and an automatic check-in never runs the cron job: each run would be a Hermes session of its own.` };
     }
 
     // Only now is a cron job worth creating: an install that never falls back
@@ -265,65 +276,72 @@ export async function askOverseer(
 
 /* ── The live conversation ───────────────────────────────────────────────── */
 
-/** Held between turns, so the conversation is one session rather than a new
- *  one per message. Dropped whenever a turn fails against it, so the next turn
- *  reconnects instead of retrying a socket the gateway has forgotten. */
-let liveSession: LiveSession | null = null;
-let liveControl: WebSocket | null = null;
+/** The conversation's socket, held between turns. The session itself is kept
+ *  on disk (keptHermesSession), so a restart, a sleep or a dropped socket
+ *  resumes it on a new socket instead of making another. */
+let live: { gateway: string; conversation: Conversation } | null = null;
 
-/** Set once the gateway has refused to open a socket, so an install that
- *  genuinely has no live transport does not pay for the attempt on every
+/** Set once the gateway has refused the conversation's socket, so an install
+ *  that genuinely has no live transport does not pay for the attempt on every
  *  single turn. Cleared whenever the connection settings change. */
 let liveUnavailable = false;
 
 export function resetLiveSession(): void {
-  try { liveControl?.close(); } catch { /* already gone */ }
-  liveSession = null;
-  liveControl = null;
+  try { live?.conversation.close(); } catch { /* already gone */ }
+  live = null;
   liveUnavailable = false;
 }
 
 /**
- * Ask over the live conversation, or report that it could not be used.
+ * Ask over the live conversation.
  *
- * `text: null` is not a failure, it is "fall back to the cron": the caller
- * carries on down the old path. Only an abort is distinguished, because a
- * paused overseer must not then be asked the same question again by the
- * fallback.
+ * `unavailable` says why the conversation could not be opened, before anything
+ * was asked: the one case a question may go to the cron job instead. `failed`
+ * is a turn asked live that did not answer, and an abort is told apart from it
+ * because a paused overseer must not then be asked the same question again.
  */
 async function askViaLiveSession(
   conn: HermesConnection,
   prompt: string,
-): Promise<{ text: string | null; aborted: boolean }> {
-  if (liveUnavailable || !liveTransportAvailable()) return { text: null, aborted: false };
+): Promise<{ text: string } | { aborted: true } | { failed: string } | { unavailable: string }> {
+  if (liveUnavailable) return { unavailable: 'the gateway refused the conversation socket' };
+  if (!liveTransportAvailable()) return { unavailable: 'this process has no WebSocket' };
 
-  try {
-    if (!liveSession) {
-      const opened = await createLiveSession(conn);
-      liveSession = opened.session;
-      liveControl = opened.control;
+  const gateway = resolveHermesBaseUrl(conn);
+  const kept = keptHermesSession(gateway);
+  // The socket is reused while it lives and holds the session kept; a cleared
+  // conversation has none kept, and the next turn starts a new session.
+  if (!live || live.conversation.closed || live.gateway !== gateway || live.conversation.session.storedSessionId !== kept) {
+    try { live?.conversation.close(); } catch { /* already gone */ }
+    live = null;
+    try {
+      const conversation = await openConversation(conn, { storedSessionId: kept ?? undefined });
+      live = { gateway, conversation };
+      const stored = conversation.session.storedSessionId;
+      if (stored !== kept) keepHermesSession(gateway, stored);
       // Its turns are JeanBrasse's conversation: memory_search leaves them out.
-      rememberHermesSessions(opened.session.sessionId, opened.session.storedSessionId);
+      rememberHermesSessions(conversation.session.sessionId, stored);
+    } catch (err) {
+      const why = err instanceof Error ? err.message : String(err);
+      console.error('[overseer] no live conversation:', why);
+      // Only a refused socket is remembered: anything else is tried again next turn.
+      if (conversationRefused(err)) liveUnavailable = true;
+      return { unavailable: why };
     }
-  } catch (err) {
-    console.error('[overseer] no live session, falling back to the cron transport:', err);
-    liveUnavailable = true;
-    return { text: null, aborted: false };
   }
 
-  const result = await askLiveSession(conn, liveSession, prompt, {
+  const result = await live.conversation.ask(prompt, {
     signal: { get aborted() { return abortTurn; } },
   });
+  if (result.ok) return { text: result.text };
 
-  if (result.ok) return { text: result.envelope, aborted: false };
-  if (result.error === 'aborted') return { text: null, aborted: true };
-
-  // The session is suspect now: drop it so the next turn opens a fresh one.
-  console.error('[overseer] live turn failed, falling back to the cron transport:', result.error);
-  try { liveControl?.close(); } catch { /* already gone */ }
-  liveSession = null;
-  liveControl = null;
-  return { text: null, aborted: false };
+  // The socket is suspect now, the session is not: the next turn resumes it on
+  // a new socket.
+  try { live.conversation.close(); } catch { /* already gone */ }
+  live = null;
+  if (result.error === 'aborted') return { aborted: true };
+  console.error('[overseer] live turn failed:', result.error);
+  return { failed: result.error };
 }
 
 /**

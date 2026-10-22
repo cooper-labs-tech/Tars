@@ -623,18 +623,8 @@ exports[`the overseer, as recorded before the D2 refactor > watches the same way
     "call": "probeHermes",
   },
   {
-    "call": "createHermesCron",
-    "job": {
-      "name": "tars-overseer",
-      "prompt": "(idle - Tars overwrites this prompt before every trigger)",
-      "schedule": "0 3 1 1 *",
-    },
-  },
-  {
-    "call": "updateHermesCron",
-    "id": "job-1",
-    "patch": {
-      "prompt": "You are the Overseer: a Hermes agent embedded in Tars, watching every coding agent in every project for the user.
+    "call": "ask",
+    "prompt": "You are the Overseer: a Hermes agent embedded in Tars, watching every coding agent in every project for the user.
 Your job is to report what the fleet is doing, the decisions in flight, challenge choices that look wrong, and propose next steps. You talk to orchestrator agents as a peer would, through the user.
 
 Rules:
@@ -676,16 +666,6 @@ AGENTS:
 === AUTOMATIC CHECK-IN (Tars' watch timer, not a message from the user) ===
 Fleet change since the last check: "Frontend" (a1) errored in /tars.
 This is an unprompted check-in triggered by a fleet change, not a question. If something is worth flagging, say it concisely; otherwise say something minimal like "Nothing worth flagging."",
-    },
-  },
-  {
-    "action": "trigger",
-    "call": "hermesCronAction",
-    "id": "job-1",
-  },
-  {
-    "call": "fetchHermesSessionMessages",
-    "id": "cron_job-1_20260923_120001",
   },
 ]
 `;

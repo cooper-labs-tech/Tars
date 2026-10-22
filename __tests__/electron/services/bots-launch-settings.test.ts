@@ -303,7 +303,8 @@ describe('an agent whose CLI is already up', () => {
     return terminal;
   };
   const settle = () => new Promise(resolve => setTimeout(resolve, 450));
-  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+  // What the field shows: every piece goes in bracket paste markers since 22/10.
+  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('').replace(/\x1b\[20[01]~/g, '');
 
   it('gets a Telegram /start_agent task typed in as a message, not a launch command', async () => {
     const terminal = live();

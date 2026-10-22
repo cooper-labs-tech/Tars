@@ -212,7 +212,7 @@ _Get the token from Tars Settings → Telegram_",
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Telegram: [FROM TELEGRAM chat_id=77 - Use send_telegram MCP tool with chat_id="77" to respond!] what is everyone doing?
+      "text": "[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=77 - Use send_telegram MCP tool with chat_id="77" to respond!] what is everyone doing?[201~
 ",
     },
   ],
@@ -601,11 +601,11 @@ exports[`Files, launches and replies that fail, recorded before D1 > Telegram: f
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Telegram: [200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - image saved to: <HOME>/.tars/telegram-downloads/<TIME>-photo_20.jpg] what is this?  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-photo_20.jpg  You can read/analyze these files using your tools.[201~
-Message from Telegram: [200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - PDF document "report.pdf" saved to: <HOME>/.tars/telegram-downloads/<TIME>-report.pdf] Please analyze or use this file as needed.  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-report.pdf  You can read/analyze these files using your tools.[201~
-Message from Telegram: [200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - video "video_22.mp4" saved to: <HOME>/.tars/telegram-downloads/<TIME>-video_22.mp4] the demo  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-video_22.mp4  You can read/analyze these files using your tools.[201~
-Message from Telegram: [200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - audio "memo.m4a" saved to: <HOME>/.tars/telegram-downloads/<TIME>-memo.m4a] An audio file has been downloaded for reference.  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-memo.m4a  You can read/analyze these files using your tools.[201~
-Message from Telegram: [200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - voice message saved to: <HOME>/.tars/telegram-downloads/<TIME>-voice_24.ogg] A voice message has been downloaded. Note: You may need to transcribe this audio file to understand its content.  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-voice_24.ogg  You can read/analyze these files using your tools.[201~
+      "text": "[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - image saved to: <HOME>/.tars/telegram-downloads/<TIME>-photo_20.jpg] what is this?  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-photo_20.jpg  You can read/analyze these files using your tools.[201~
+[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - PDF document "report.pdf" saved to: <HOME>/.tars/telegram-downloads/<TIME>-report.pdf] Please analyze or use this file as needed.  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-report.pdf  You can read/analyze these files using your tools.[201~
+[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - video "video_22.mp4" saved to: <HOME>/.tars/telegram-downloads/<TIME>-video_22.mp4] the demo  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-video_22.mp4  You can read/analyze these files using your tools.[201~
+[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - audio "memo.m4a" saved to: <HOME>/.tars/telegram-downloads/<TIME>-memo.m4a] An audio file has been downloaded for reference.  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-memo.m4a  You can read/analyze these files using your tools.[201~
+[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] [FILE ATTACHED - voice message saved to: <HOME>/.tars/telegram-downloads/<TIME>-voice_24.ogg] A voice message has been downloaded. Note: You may need to transcribe this audio file to understand its content.  Downloaded files available at:   - <HOME>/.tars/telegram-downloads/<TIME>-voice_24.ogg  You can read/analyze these files using your tools.[201~
 ",
     },
   ],
@@ -669,8 +669,8 @@ exports[`Slack, as recorded before D1 > a mention and a direct message go to the
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Slack: [FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?
-Message from Slack: [FROM SLACK - Use send_slack MCP tool to respond!] plan tomorrow please
+      "text": "[200~Message from Slack: [201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?[201~
+[200~Message from Slack: [201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] plan tomorrow please[201~
 ",
     },
   ],
@@ -968,7 +968,7 @@ Task: Measure the Usage page",
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Slack: Measure the Usage page
+      "text": "[200~Message from Slack: [201~[200~Measure the Usage page[201~
 ",
     },
   ],
@@ -1603,7 +1603,7 @@ Task: Measure the Usage page",
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Telegram: Measure the Usage page
+      "text": "[200~Message from Telegram: [201~[200~Measure the Usage page[201~
 ",
     },
   ],
@@ -2002,8 +2002,8 @@ exports[`Telegram, as recorded before D1 > a message and /ask go to the orchestr
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Telegram: [FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] what is everyone doing?
-Message from Telegram: [FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] plan tomorrow
+      "text": "[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] what is everyone doing?[201~
+[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] plan tomorrow[201~
 ",
     },
   ],
@@ -2234,7 +2234,7 @@ exports[`Telegram, as recorded before D1 > in a group: without a mention nothing
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Telegram: [FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] status of the release?
+      "text": "[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] status of the release?[201~
 ",
     },
   ],
@@ -2310,7 +2310,7 @@ Dove waits on a question from you.",
   "typed": [
     {
       "terminal": 0,
-      "text": "Message from Telegram: [FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] what is everyone doing?
+      "text": "[200~Message from Telegram: [201~[200~[FROM TELEGRAM chat_id=42 - Use send_telegram MCP tool with chat_id="42" to respond!] what is everyone doing?[201~
 ",
     },
   ],

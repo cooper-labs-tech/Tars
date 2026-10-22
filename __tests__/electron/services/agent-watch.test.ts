@@ -440,10 +440,15 @@ describe('an orchestrator whose human is in the middle of a sentence', () => {
     // Nothing at all while he is still typing: the note is held, not written
     // across a half-written word, and not dropped either.
     expect(terminal.written).toEqual([]);
+    vi.advanceTimersByTime(ptyManager.TYPING_PAUSE_MS * 4);
+    // Nor at the pause: his draft stays in the field as he left it (22/10).
+    expect(terminal.written).toEqual([]);
+    expect(ptyManager.draftOf(pty).text).toBe('je pense quil faut');
+    // He sends it: the note goes in after it, on its own.
+    ptyManager.writeHumanInput(pty, '\r');
     vi.advanceTimersByTime(ptyManager.TYPING_PAUSE_MS);
     expect(received(terminal)).toContain('QA-Tars');
-    // And what he had typed is back in the field, unsent.
-    expect(ptyManager.draftOf(pty).text).toBe('je pense quil faut');
+    expect(received(terminal).indexOf('QA-Tars')).toBeGreaterThan(received(terminal).indexOf('\r'));
     ptyManager.resetTerminalInput(pty);
   });
 
