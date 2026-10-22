@@ -65,11 +65,13 @@ vi.mock('../../../electron/services/git-review', () => ({ repoSummary: async () 
 const live = vi.hoisted(() => ({ available: true }));
 vi.mock('../../../electron/services/hermes-session', () => ({
   liveTransportAvailable: () => live.available,
-  createLiveSession: async () => ({
+  conversationRefused: () => false,
+  openConversation: async () => ({
     session: { sessionId: 'live-overseer-1', storedSessionId: 'stored-overseer-1' },
-    control: { close: () => {} },
+    closed: false,
+    ask: async () => ({ ok: true, text: '{"say":"Answered live.","action":null}' }),
+    close: () => {},
   }),
-  askLiveSession: async () => ({ ok: true, envelope: '{"say":"Answered live.","action":null}' }),
 }));
 const gateway = vi.hoisted(() => ({
   hits: [] as Array<Record<string, unknown>>,
