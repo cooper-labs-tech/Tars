@@ -97,6 +97,8 @@ export interface AppSettings {
   errorReportsEnabled: boolean;
   /** Resume idle agents once at launch (not on navigation). */
   autoStartAgentsOnLaunch?: boolean;
+  /** When Tars keeps the computer awake (2.0.5, main's services/keep-awake.ts): missing reads as 'while-working'. */
+  keepAwake?: 'while-working' | 'always' | 'never';
   /** Settings, Preferences, "New interface": the new shell and chats per project, a preview (plan 2.0.0). Main answers it always, false unless chosen (the contract of PR 360). */
   newInterface: boolean;
   cliPaths: CLIPaths;

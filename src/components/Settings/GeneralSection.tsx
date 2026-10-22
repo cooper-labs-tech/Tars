@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Select, Dropdown } from '@/components/ui';
+import { Select, Dropdown, SegmentedControl } from '@/components/ui';
 import { Toggle } from './Toggle';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
@@ -29,6 +29,20 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
       .catch(() => { /* an older main without the channel: no line */ });
     return () => { live = false; };
   }, []);
+
+  // Whether Tars keeps the computer awake right now (#511's keepAwake:state), read as the page opens, after each
+  // change, and every five seconds while it is open, since a turn starting or ending changes it.
+  const keepAwakeMode = appSettings.keepAwake ?? 'while-working';
+  const [awake, setAwake] = useState<{ active: boolean } | null>(null);
+  useEffect(() => {
+    let live = true;
+    const read = () => window.electronAPI?.keepAwake?.state()
+      .then((s) => { if (live) setAwake({ active: s.active }); })
+      .catch(() => { /* an older main without the channel: no line */ });
+    read();
+    const every = setInterval(read, 5_000);
+    return () => { live = false; clearInterval(every); };
+  }, [keepAwakeMode]);
 
   useEffect(() => {
     Promise.all([
@@ -102,6 +116,34 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
         }
       />
 
+      {/* Frame: `Keep awake (2.0.5) · Settings, General, Preferences` and its states. */}
+      <SettingsRow
+        label="Keep this computer awake"
+        wrap
+        description={
+          <>
+            While an agent works, Tars keeps this computer from going to sleep, so a long task is not cut when you step away. The screen may still turn off.
+            {awake && (
+              <span data-keep-awake-line className={`block mt-0.5 font-mono text-[10.5px] ${awake.active ? 'text-status-running' : 'text-text-muted'}`}>
+                {keepAwakeLine(keepAwakeMode, awake.active)}
+              </span>
+            )}
+          </>
+        }
+        control={
+          <SegmentedControl
+            ariaLabel="Keep this computer awake"
+            value={keepAwakeMode}
+            onChange={(keepAwake) => onSaveAppSettings({ keepAwake })}
+            options={[
+              { value: 'while-working', label: 'while working' },
+              { value: 'always', label: 'always' },
+              { value: 'never', label: 'never' },
+            ]}
+          />
+        }
+      />
+
       <SettingsRow
         label="Default provider"
         description="Used for Telegram-spawned agents and webhook dispatches."
@@ -163,3 +205,9 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
     </SettingsCard>
   );
 };
+
+/** What the keep awake row says it does now, under its hint (frame `Keep awake (2.0.5) · states`). */
+function keepAwakeLine(mode: 'while-working' | 'always' | 'never', active: boolean): string {
+  if (active) return mode === 'always' ? 'awake while Tars is open' : 'awake now · an agent is working';
+  return mode === 'never' ? 'sleeps as usual, even during a turn' : 'sleeps as usual · no agent is working';
+}
