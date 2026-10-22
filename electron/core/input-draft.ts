@@ -29,6 +29,17 @@
  * - The UserPromptSubmit hook runs 33 to 57 ms after the Enter that submits
  *   (five submissions, median 41), which is what makes it usable as proof
  *   that a field emptied.
+ *
+ * Measured again on Claude Code 2.1.306 (2026-10-22, the bench of PR "draft
+ * kept"): its fullscreen prompt turns mouse tracking on, and a click in the
+ * text moves the caret there. Mouse reports used to be ignored like focus
+ * reports, so the model kept the caret where the keys had left it, and Tars,
+ * which then cleared the field from the model, took what was before the click
+ * and sent the message with the rest of JeanBrasse's draft behind it (his
+ * report of 22/10). A click that can move the caret makes a draft unknown; a
+ * wheel, a motion, a release, or a click on an empty field change nothing.
+ * And nothing clears or types back a draft any more: Tars writes only into a
+ * field this says is empty (pty-manager.ts, pump).
  */
 
 /** Pastes longer than this are folded into a placeholder. 800 stayed inline, 900 folded. */
@@ -76,6 +87,7 @@ type Token =
   | { k: 'clear' }
   | { k: 'ignore' }
   | { k: 'esc' }
+  | { k: 'click' }
   | { k: 'other' };
 
 const PASTE_START = '\x1b[200~';
@@ -126,6 +138,23 @@ function stringEnd(data: string, i: number): number {
   return -1;
 }
 
+/**
+ * Whether a mouse report is a button pressed, which a prompt that takes the
+ * mouse reads as "put the caret here": not a release, a motion (bit 32) or a
+ * wheel (bit 64). SGR `ESC [ < b ; x ; y M` (release `m`), or X10 `ESC [ M`
+ * and three bytes, the first being 32 plus the button.
+ */
+function movesCaret(seq: string): boolean {
+  let button: number;
+  if (seq.startsWith('\x1b[<')) {
+    if (seq.endsWith('m')) return false;
+    button = Number(seq.slice(3).split(';')[0]);
+  } else {
+    button = seq.charCodeAt(3) - 32;
+  }
+  return Number.isFinite(button) && (button & 3) !== 3 && (button & 96) === 0;
+}
+
 /** An escape sequence's length at `i`, or 0 when it is a lone ESC. */
 function sequenceLength(data: string, i: number): number {
   const next = data[i + 1];
@@ -171,7 +200,8 @@ function tokenize(data: string): Token[] {
       flush();
       const len = sequenceLength(data, i);
       const seq = data.slice(i, i + len);
-      if (/^\x1b\[<[\d;]*[Mm]$/.test(seq) || /^\x1b\[M/.test(seq) || CSI_REPLY.test(seq)) tokens.push({ k: 'ignore' });
+      if (/^\x1b\[<[\d;]*[Mm]$/.test(seq) || /^\x1b\[M/.test(seq)) tokens.push({ k: movesCaret(seq) ? 'click' : 'ignore' });
+      else if (CSI_REPLY.test(seq)) tokens.push({ k: 'ignore' });
       else tokens.push({ k: SEQUENCES[seq] ?? (seq === '\x1b' ? 'esc' : 'other') } as Token);
       i += len;
       continue;
@@ -223,6 +253,9 @@ function pastedText(s: string): string | undefined {
 
 function apply(d: Draft, t: Token): Draft {
   if (t.k === 'ignore') return d;
+  // A click may have moved the caret anywhere in the text: on an empty field
+  // there is nowhere for it to go.
+  if (t.k === 'click') return d.text ? { ...d, state: 'unknown' } : d;
   // Ctrl+C empties the field whatever was in it.
   if (t.k === 'clear') return emptyDraft();
   // Enter is the other key that says something about a field this has lost
@@ -302,36 +335,4 @@ export function feedDraft(d: Draft, data: string): Draft {
 export function confirmSubmitted(d: Draft): Draft {
   if (d.state === 'pending') return { ...d, state: 'known' };
   return d.state === 'unknown' ? emptyDraft() : d;
-}
-
-/**
- * Keys that empty the field, from the draft as it is.
- *
- * The caret goes to the end first, then Backspace takes every character: both
- * cross newlines. Deliberately neither Ctrl+U nor Ctrl+C. Ctrl+U stops at the
- * current line and fills the kill ring JeanBrasse may be using, and Ctrl+C on a
- * field that turned out to be empty arms "press again to exit".
- */
-export function clearKeys(d: Draft): string {
-  return '\x1b[C'.repeat(d.text.length - d.cursor) + '\x7f'.repeat(d.text.length);
-}
-
-/**
- * Keys that type the draft back, in writes small enough to be taken as typing.
- *
- * Not one paste: a paste of more than 800 characters would be folded into
- * `[Pasted text #N]`, and a single write of 1000 characters is folded as well,
- * markers or not. Written in pieces of 100, 1000 characters stayed inline.
- * Newlines go in as Option+Enter, the only form that always inserts one. The
- * caret is then walked back to where JeanBrasse left it.
- */
-export function restoreKeys(d: Draft, piece = 100): string[] {
-  const writes: string[] = [];
-  d.text.split('\n').forEach((line, i) => {
-    if (i > 0) writes.push('\x1b\r');
-    for (let at = 0; at < line.length; at += piece) writes.push(line.slice(at, at + piece));
-  });
-  const back = d.text.length - d.cursor;
-  if (back > 0) writes.push('\x1b[D'.repeat(back));
-  return writes;
 }

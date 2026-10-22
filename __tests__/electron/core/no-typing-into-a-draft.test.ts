@@ -366,6 +366,8 @@ describe('a message whose caller said nothing about itself', () => {
       vi.advanceTimersByTime(1000);
       expect(lines.filter(l => l.includes('is waiting for a terminal'))).toHaveLength(1);
 
+      // The person sends the draft: the message goes in at the pause after.
+      writeHumanInput(terminal.pty, '\r');
       vi.advanceTimersByTime(TYPING_PAUSE_MS);
       settle();
       expect(lines.filter(l => l.includes('is going out now'))).toHaveLength(1);
@@ -391,9 +393,7 @@ describe('a message whose caller said nothing about itself', () => {
 
 describe('the write window belongs to Tars alone', () => {
   it('holds the keys typed inside it and replays them after, in order', () => {
-    types(terminal.pty, 'je pense');
     writeProgrammaticInput(terminal.pty, NOTE, true);
-    vi.advanceTimersByTime(TYPING_PAUSE_MS);
     terminal.written.length = 0;
 
     // Three keys landing inside the 300 ms the carriage return trails by:
@@ -401,38 +401,30 @@ describe('the write window belongs to Tars alone', () => {
     vi.advanceTimersByTime(120);
     types(terminal.pty, 'oui');
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS);
-    expect(terminal.typed).toBe('\r');
-
-    settle();
-    expect(terminal.typed).toBe('\rje penseoui');
-    expect(draftOf(terminal.pty).text).toBe('je penseoui');
+    expect(terminal.typed).toBe('\roui');
+    expect(draftOf(terminal.pty).text).toBe('oui');
   });
 
-  it('replays an Enter typed inside it, so a draft finished mid-window is still sent by hand', () => {
-    types(terminal.pty, 'je pense');
+  it('replays an Enter typed inside it, so a line finished mid-window is still sent by hand', () => {
     writeProgrammaticInput(terminal.pty, NOTE, true);
-    vi.advanceTimersByTime(TYPING_PAUSE_MS);
 
     vi.advanceTimersByTime(100);
     writeHumanInput(terminal.pty, '!');
     writeHumanInput(terminal.pty, '\r');
     settle();
 
-    expect(terminal.typed.endsWith('je pense!\r')).toBe(true);
+    expect(terminal.typed).toBe(NOTE + '\r!\r');
     expect(draftOf(terminal.pty)).toEqual({ text: '', cursor: 0, state: 'known' });
   });
 
   it('writes a second message on its own line, never inside the first', () => {
-    types(terminal.pty, 'je pense');
     writeProgrammaticInput(terminal.pty, 'premier', true);
     writeProgrammaticInput(terminal.pty, 'second', true);
-    vi.advanceTimersByTime(TYPING_PAUSE_MS);
     settle();
     settle();
 
     expect(submissions(terminal.written)).toEqual(['premier', 'second']);
-    // And between the two, and after them, the draft is back where it was.
-    expect(draftOf(terminal.pty)).toEqual({ text: 'je pense', cursor: 8, state: 'known' });
+    expect(draftOf(terminal.pty)).toEqual(emptyDraft());
   });
 });
 

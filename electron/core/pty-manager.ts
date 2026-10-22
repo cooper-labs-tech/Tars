@@ -10,7 +10,7 @@ import { killTree } from '../platform/kill-tree';
 import { v4 as uuidv4 } from 'uuid';
 import * as os from 'os';
 import { app, BrowserWindow } from 'electron';
-import { Draft, clearKeys, confirmSubmitted, emptyDraft, feedDraft, isKeystroke, restoreKeys } from './input-draft';
+import { Draft, confirmSubmitted, emptyDraft, feedDraft, isKeystroke } from './input-draft';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { envelopeValue } from '../utils/envelope-value';
 import { AgentMessageWaiting } from '../types';
@@ -300,17 +300,6 @@ export const TYPING_PAUSE_MS = 5000;
 const REFILL_SLACK = 8;
 
 /**
- * How long after the submit keystroke the draft is typed back.
- *
- * The carriage return has to have been taken as a submit before anything else
- * arrives, or the draft joins the message it was supposed to be kept out of.
- */
-const RESTORE_DELAY_MS = 250;
-
-/** The gap between the pieces a draft is typed back in. */
-const RESTORE_PIECE_GAP_MS = 30;
-
-/**
  * How often a terminal holding a message looks again at a field it cannot
  * vouch for, when nothing else will make it look.
  *
@@ -573,11 +562,9 @@ interface TerminalInput {
    * Since the last message Tars typed that opened a turn: how many characters
    * it typed, everything typed into the terminal after it, and whether another
    * message of Tars's went into that turn. What an Esc that cut the turn may
-   * have made the CLI put back depends on it (noteTurnCut). `fieldAfter`: what
-   * Tars left in the field once its message went in, the user's draft it typed
-   * back, or nothing.
+   * have made the CLI put back depends on it (noteTurnCut).
    */
-  sinceTurnOpened?: { chars: number; keys: string; alone: boolean; fieldAfter: string };
+  sinceTurnOpened?: { chars: number; keys: string; alone: boolean };
 }
 
 const inputs = new WeakMap<pty.IPty, TerminalInput>();
@@ -750,7 +737,7 @@ export function noteSubmitted(ptyProcess: pty.IPty): void {
 export function noteTurnCut(ptyProcess: pty.IPty): void {
   const state = inputOf(ptyProcess);
   const since = state.sinceTurnOpened;
-  if (!since || !since.alone || since.keys !== '\x1b' || since.fieldAfter !== '') return;
+  if (!since || !since.alone || since.keys !== '\x1b') return;
   state.draft = { ...emptyDraft(), refilled: since.chars };
   state.sinceTurnOpened = undefined;
   if (state.queue.length > 0) pump(ptyProcess);
@@ -872,11 +859,17 @@ function pauseLeft(state: TerminalInput): number {
  * Write what is queued for a terminal, as soon as its field is free.
  *
  * Three answers, and only the first writes anything:
- * - the field is free: take it, message goes out on its own line.
+ * - the field is empty: take it, message goes out on its own line.
  * - a key was typed a moment ago: wait for the pause. Re-armed by every key,
  *   so the wait lasts as long as the typing does and not a moment longer.
- * - the field holds something Tars cannot put back as it was: write nothing,
- *   touch nothing, and say so. Only the person at the keyboard can end that.
+ * - the field holds a draft, or what it holds cannot be known: write nothing,
+ *   touch nothing, and say so. JeanBrasse's draft is sacred (his report of
+ *   22/10): until then a draft was cleared, the message sent and the draft
+ *   typed back, and on Claude Code 2.1.306 a click had moved the caret where
+ *   the keys could not see it, so the clear took the beginning of his message
+ *   and the rest went out behind Tars's. The person ends the wait by sending
+ *   the draft or emptying the field, and the submit hook proves a field the
+ *   keys could not follow emptied.
  */
 function pump(ptyProcess: pty.IPty): void {
   const state = inputs.get(ptyProcess);
@@ -917,8 +910,8 @@ function pump(ptyProcess: pty.IPty): void {
     state.timer = setTimeout(() => { state.timer = undefined; pump(ptyProcess); }, left);
     return;
   }
-  if (state.draft.state !== 'known' && !fieldProvenEmpty(ptyProcess, state)) {
-    noteHeld(state, 'it holds a draft Tars cannot put back as it was');
+  if ((state.draft.state !== 'known' || state.draft.text) && !fieldProvenEmpty(ptyProcess, state)) {
+    noteHeld(state, state.draft.state === 'known' ? 'it holds a draft the person has not sent' : 'it holds a draft Tars cannot read');
     tellHeld(state);
     announce(ptyProcess, state);
     // Look again later: a command's record comes a moment after its panel
@@ -950,16 +943,14 @@ function pump(ptyProcess: pty.IPty): void {
 /**
  * The window in which the field belongs to Tars and to nobody else.
  *
- * Set the draft aside, write the message, submit it, type the draft back
- * exactly as it was and leave it unsent. Keys typed while this runs are held
- * by `writeHumanInput` and replayed at the end, in order: the window is short
- * but it is not instantaneous, and a key landing inside it would otherwise be
- * submitted with the message, or lost.
+ * The field is empty (pump): write the message and submit it. Keys typed while
+ * this runs are held by `writeHumanInput` and replayed at the end, in order:
+ * the window is short but it is not instantaneous, and a key landing inside it
+ * would otherwise be submitted with the message, or lost.
  */
 function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): void {
   const refilled = state.draft.refilled;
   if (refilled !== undefined) state.draft = emptyDraft();
-  const draft = state.draft;
   state.held = [];
   // Whether this message opens a turn, or goes into one that runs (the CLI queues it).
   const owner = item.origin?.agentId ?? state.agentId ?? terminalOwner.get(ptyProcess);
@@ -985,7 +976,6 @@ function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): v
 
   // What the CLI may have put back after a cut turn: Tars's own message, no longer.
   if (refilled !== undefined) write(ptyProcess, state, '\x7f'.repeat(refilled + REFILL_SLACK));
-  if (draft.text) write(ptyProcess, state, clearKeys(draft));
   // Only a request an agent made carries an id (core/task-requests.ts): Tars's
   // own lines and the channels' stay as their contracts recorded them.
   const taskRef = item.origin?.sender ? item.origin.taskRef : undefined;
@@ -993,7 +983,7 @@ function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): v
   const owed = owedToFirstMessage.get(ptyProcess);
   owedToFirstMessage.delete(ptyProcess);
   const chars = writeBody(ptyProcess, state, item.data, item.origin?.sender, taskRef, item.origin?.mark, owed);
-  if (opensTurn) state.sinceTurnOpened = { chars, keys: '', alone: true, fieldAfter: draft.text };
+  if (opensTurn) state.sinceTurnOpened = { chars, keys: '', alone: true };
   else if (state.sinceTurnOpened) state.sinceTurnOpened.alone = false;
   // Only for a message that went in: a terminal that died under the write took
   // it with it, and a bus note or a redelivered task must not read delivered.
@@ -1016,13 +1006,7 @@ function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): v
       return;
     }
     write(ptyProcess, state, '\r');
-    if (!draft.text) { done(); return; }
-    let at = RESTORE_DELAY_MS;
-    for (const piece of restoreKeys(draft)) {
-      setTimeout(() => write(ptyProcess, state, piece), at);
-      at += RESTORE_PIECE_GAP_MS;
-    }
-    setTimeout(done, at);
+    done();
   };
   setTimeout(enter, PROGRAMMATIC_SUBMIT_DELAY_MS);
 }
