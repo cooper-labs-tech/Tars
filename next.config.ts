@@ -15,6 +15,10 @@ const nextConfig: NextConfig = {
   trailingSlash: true,
 
   // No assetPrefix needed - we use custom app:// protocol that handles absolute paths
+
+  // next dev writes no AGENTS.md: under an agent it would leave an untracked file in
+  // every worktree, and scripts/worktree.mjs never removes a worktree with one
+  agentRules: false,
 };
 
 export default nextConfig;

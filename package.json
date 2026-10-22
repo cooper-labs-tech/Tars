@@ -217,15 +217,15 @@
     "@types/react-dom": "^19",
     "@types/uuid": "^9.0.8",
     "concurrently": "^9.1.0",
-    "electron": "^44.4.4",
+    "electron": "^44.9.3",
     "electron-builder": "^26.15.3",
     "eslint": "^9",
     "eslint-config-next": "^16.3.2",
     "sharp": "^0.35.3",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "undici": "6.28.0",
-    "vitest": "^4.0.18",
+    "undici": "6.29.1",
+    "vitest": "^4.1.12",
     "wait-on": "^8.0.1"
   },
   "engines": {
