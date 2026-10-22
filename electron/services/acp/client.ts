@@ -166,8 +166,14 @@ const STOP_GRACE_MS = 2_000;
  */
 const FREEZE_READS = 5;
 
-type ProcessRow = { pid: number; ppid: number; pgid: number; zombie: boolean; age?: number };
-const PS_ARGS = ['-A', '-o', 'pid=,ppid=,pgid=,stat=,etime='];
+type ProcessRow = { pid: number; ppid: number; pgid: number; zombie: boolean; age?: number; sid?: number };
+/**
+ * Linux's ps also gives the session (`sid`), which a process keeps when it
+ * starts a group of its own and when its parent ends; macOS's gives 0 for
+ * every process (`sess`), so it is not asked there (ProcessTree, sessions).
+ */
+const withSession = () => process.platform === 'linux';
+const psArgs = () => ['-A', '-o', withSession() ? 'pid=,ppid=,pgid=,sid=,stat=,etime=' : 'pid=,ppid=,pgid=,stat=,etime='];
 
 /** ps's elapsed time, `[[dd-]hh:]mm:ss`, in seconds; undefined when it gives none. */
 function ageOf(etime: string | undefined): number | undefined {
@@ -179,25 +185,32 @@ function ageOf(etime: string | undefined): number | undefined {
   return Number(days ?? 0) * 86_400 + Number(hours ?? 0) * 3_600 + Number(minutes ?? 0) * 60 + Number(seconds);
 }
 
-export function parseProcessTable(out: string): ProcessRow[] {
+/** ps's rows: `pid ppid pgid stat etime`, or `pid ppid pgid sid stat etime` when `session` (Linux). */
+export function parseProcessTable(out: string, session = false): ProcessRow[] {
+  const ids = session ? 4 : 3;
   return out.split('\n').map(line => line.trim().split(/\s+/))
-    .filter(cols => cols.length >= 4 && cols.slice(0, 3).every(c => /^\d+$/.test(c)))
-    .map(([pid, ppid, pgid, stat, etime]) => ({
-      pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), zombie: stat.startsWith('Z'), age: ageOf(etime),
-    }));
+    .filter(cols => cols.length >= ids + 1 && cols.slice(0, ids).every(c => /^\d+$/.test(c)))
+    .map(cols => {
+      const [pid, ppid, pgid] = cols;
+      const [stat, etime] = cols.slice(ids);
+      return {
+        pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), zombie: stat.startsWith('Z'), age: ageOf(etime),
+        ...(session ? { sid: Number(cols[3]) } : {}),
+      };
+    });
 }
 
 /** Every process, from ps, the same on macOS and Linux. Undefined when ps cannot be run. */
 export function processTable(): Promise<ProcessRow[] | undefined> {
   return new Promise(resolve => {
-    execFile('ps', PS_ARGS, { timeout: 5_000 }, (err, out) => resolve(err ? undefined : parseProcessTable(String(out))));
+    execFile('ps', psArgs(), { timeout: 5_000 }, (err, out) => resolve(err ? undefined : parseProcessTable(String(out), withSession())));
   });
 }
 
 /** The same, read while the caller waits, for at most `timeoutMs`: for the quit, which nothing outlives. */
 export function processTableNow(timeoutMs: number): ProcessRow[] | undefined {
   try {
-    return parseProcessTable(String(execFileSync('ps', PS_ARGS, { timeout: timeoutMs })));
+    return parseProcessTable(String(execFileSync('ps', psArgs(), { timeout: timeoutMs })), withSession());
   } catch {
     return undefined;
   }
@@ -217,16 +230,30 @@ export function processTableNow(timeoutMs: number): ProcessRow[] | undefined {
  * last, from every process already known, for what was started in between.
  * Tars's own group, and init's, are never signalled. With no ps, the roots'
  * own groups still are.
+ *
+ * Parentage is lost when a parent ends: a process a CLI started in a group of
+ * its own, the CLI then exiting before the next read, is init's, and nothing
+ * above ties it to the tree (case 8 of quit-ends-terminals.test.ts, red on
+ * Linux). It keeps its session, though, and an agent's terminal leads one
+ * (node-pty's shell calls setsid). So where ps gives the session (Linux), a
+ * root that leads its own at the first read makes every process of that
+ * session the tree's, never Tars's own session, and a session whose id a new
+ * leader took since (every process of the old one gone) is dropped. macOS's ps
+ * gives none: there the tree is read by parentage alone.
  */
 export class ProcessTree {
+  private readonly roots: Set<number>;
   private readonly known: Set<number>;
   private readonly groups: Set<number>;
+  /** The sessions the roots lead, where ps gives them (Linux). */
+  private readonly sessions = new Set<number>();
   private ownGroup: number | undefined;
   private firstReadAt: number | undefined;
   /** Taken over by the quit (absorb): the quit's signals end it, and its own send nothing more. */
   private retired = false;
 
   constructor(roots: number[]) {
+    this.roots = new Set(roots);
     this.known = new Set(roots);
     this.groups = new Set(roots);
   }
@@ -242,17 +269,26 @@ export class ProcessTree {
    */
   grow(table: ProcessRow[] | undefined, now: number = Date.now()): void {
     if (!table) return;
-    this.ownGroup = table.find(row => row.pid === process.pid)?.pgid;
+    const own = table.find(row => row.pid === process.pid);
+    this.ownGroup = own?.pgid;
     if (this.firstReadAt === undefined) {
       this.firstReadAt = now;
+      for (const row of table) {
+        if (this.roots.has(row.pid) && row.sid === row.pid && row.sid !== own?.sid) this.sessions.add(row.sid);
+      }
     } else {
       const elapsed = (now - this.firstReadAt) / 1000;
       for (const row of table) {
-        if (!this.known.has(row.pid) || row.age === undefined || this.known.has(row.ppid)) continue;
-        if (row.age >= elapsed - 1) continue;
+        if (row.age === undefined || row.age >= elapsed - 1) continue;
+        // A new leader of a session the roots led: the old session is gone, whole.
+        if (this.sessions.has(row.pid) && row.sid === row.pid) this.sessions.delete(row.pid);
+        if (!this.known.has(row.pid) || this.known.has(row.ppid)) continue;
         this.known.delete(row.pid);
         if (row.pgid === row.pid) this.groups.delete(row.pgid);
       }
+    }
+    for (const row of table) {
+      if (row.sid !== undefined && this.sessions.has(row.sid) && row.sid !== own?.sid) this.known.add(row.pid);
     }
     for (let grew = true; grew;) {
       grew = false;

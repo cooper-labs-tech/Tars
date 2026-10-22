@@ -33,7 +33,7 @@ vi.mock('electron', () => ({ app: { once: vi.fn(), exit: vi.fn() }, BrowserWindo
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   const answer = (file: string): string => {
-    if (file === 'ps') return state.world.print();
+    if (file === 'ps') return state.world.print(args);
     throw new Error(`not in this test: ${file}`);
   };
   return {

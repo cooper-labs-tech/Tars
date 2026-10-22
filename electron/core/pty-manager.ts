@@ -158,17 +158,24 @@ async function endTerminals(trees: pty.IPty[], shells: pty.IPty[], graceMs: numb
   let exitsIn = false;
   const allExited = Promise.all(exited).then(() => { exitsIn = true; });
   const pause = (ms = QUIT_POLL_MS) => new Promise(resolve => setTimeout(resolve, ms));
+  // Grown at every read, before it is judged empty: what a process of the
+  // tree started since is caught while its parent lives, and, where ps gives
+  // the session (Linux), what a CLI left to init on the hangup, its parent
+  // gone, is still the terminal's (ProcessTree, sessions). Judged on the
+  // groups known before, the tree looked empty and the quit returned with it
+  // running (case 13 of quit-ends-terminals.test.ts).
+  const anyLeftOfTree = async () => {
+    const table = ours.length ? await processTable() : undefined;
+    tree.grow(table);
+    return tree.anyLeft(table);
+  };
   while (Date.now() < deadline) {
     await pause(Math.min(QUIT_POLL_MS, Math.max(1, deadline - Date.now())));
-    if ((exitsIn || !opts.waitForExits) && !tree.anyLeft(ours.length ? await processTable() : undefined)) break;
+    if ((exitsIn || !opts.waitForExits) && !(await anyLeftOfTree())) break;
   }
 
-  const table = ours.length ? await processTable() : undefined;
-  const treesLeft = tree.anyLeft(table);
-  if (treesLeft) {
-    tree.grow(table);
-    tree.signal('SIGKILL');
-  }
+  const treesLeft = await anyLeftOfTree();
+  if (treesLeft) tree.signal('SIGKILL');
   const stubbornShells = shells.filter(t => !ended.has(t));
   for (const t of stubbornShells) {
     try { process.kill(t.pid, 'SIGKILL'); } catch { /* gone */ }
