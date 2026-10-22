@@ -122,10 +122,13 @@ describe('what the renderer types on agent:input', () => {
 
     written.length = 0;
     writeProgrammaticInput(terminal as never, '[Tars] Tars-QA has completed', true);
-    // Held while he types, and when it does go out the draft is set aside
-    // first and typed back after: never submitted with it.
+    // Held while he types, and while his draft is in the field (it is never
+    // set aside since 22/10): it goes once he has sent it, never with it.
     expect(written).toEqual([]);
+    vi.advanceTimersByTime(TYPING_PAUSE_MS * 4);
+    expect(written).toEqual([]);
+    await typeIntoTheAgent('\r');
     vi.advanceTimersByTime(TYPING_PAUSE_MS);
-    expect(written[0]).toBe('\x7f'.repeat(18));
+    expect(written).toEqual(['\r', '[Tars] Tars-QA has completed']);
   });
 });

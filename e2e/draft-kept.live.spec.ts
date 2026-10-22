@@ -8,7 +8,7 @@
 //
 // A sandbox Tars with two real Claude Codes against the fake Messages API: the orchestrator `lead`, whose panel on
 // the Dashboard is typed into as a person types (Playwright's keyboard and mouse, through xterm), and the worker `wk`.
-// For each draft (one line; several lines, Shift+Enter between them; a 900-character paste, folded by Claude Code;
+// For each draft (one line; several lines, Option+Enter between them; a 900-character paste, folded by Claude Code;
 // the caret moved left; a click inside the text, which moves Claude Code's caret), while it sits in lead's field:
 // - lead hands wk a task (run-task, lead's own token): wk starts on it, answers, and its turn's end is a notice
 //   Tars writes into lead's terminal ("has finished its turn");
@@ -102,10 +102,15 @@ const DRAFTS: Draft[] = [
   {
     name: 'several lines',
     type: async (page) => {
+      // The newlines as Option+Enter sends them (ESC CR), the one form that always inserts one, through the channel
+      // the panel's keys take. Not Shift+Enter: the panel sends it as a paste of a newline, which Claude Code 2.1.306
+      // submits, so the person's own key sends the first line (measured by this spec on 22/10, reported apart).
+      const newline = () => page.evaluate(() => (window as unknown as { electronAPI: { agent: { sendInput(p: { id: string; input: string }): Promise<unknown> } } })
+        .electronAPI.agent.sendInput({ id: 'lead', input: '\x1b\r' }));
       await page.keyboard.type('DRAFTB premiere ligne', { delay: 15 });
-      await page.keyboard.press('Shift+Enter');
+      await newline();
       await page.keyboard.type('deuxieme ligne', { delay: 15 });
-      await page.keyboard.press('Shift+Enter');
+      await newline();
       await page.keyboard.type('troisieme ligne', { delay: 15 });
     },
     onScreen: 'troisieme ligne',

@@ -222,7 +222,8 @@ function tokenize(data: string): Token[] {
 
 /** Does this chunk hold anything a person typed, as opposed to a mouse or focus report, or a terminal's reply? */
 export function isKeystroke(data: string): boolean {
-  return tokenize(data).some(t => t.k !== 'ignore');
+  // A click is still not typing: it unsettles a draft (apply) and does nothing else.
+  return tokenize(data).some(t => t.k !== 'ignore' && t.k !== 'click');
 }
 
 function lineStart(text: string, cursor: number): number {
