@@ -23,7 +23,8 @@ type Api = { electronAPI: { keepAwake: { state(): Promise<{ mode: string; active
 
 for (const newInterface of [false, true]) {
   test(`the keep awake row saves while working, always or never and says what main does now${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(150_000);
+    // The quit takes up to a minute under load (54 s measured on 22/10): the close is not what is tested here.
+    test.setTimeout(300_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-keep-awake-row-'));
     seedSandbox(home);
     const settingsFile = path.join(home, '.tars', 'app-settings.json');
