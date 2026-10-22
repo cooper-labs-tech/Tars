@@ -13,11 +13,12 @@ import type { IPty } from 'node-pty';
  *   three keys typed inside the 300 ms the carriage return trails by:
  *                                          the note + "oui" went out as one.
  *
- * The rule JeanBrasse gave: never mix, and never block. So while he is typing the
- * message waits; at the first pause Tars sets the draft aside, sends the
- * message on its own, and types the draft back exactly as it was without
- * sending it; and if it cannot promise to give it back, it writes nothing and
- * says so.
+ * The rule JeanBrasse gave: never mix, and never block. Until 22/10, at the
+ * first pause Tars set the draft aside, sent the message on its own and typed
+ * the draft back; on Claude Code 2.1.306 a click had moved the caret where the
+ * keys could not see it, and that cost him a long message (draft-is-sacred.test.ts).
+ * His rule since: his draft is sacred. Tars never clears, edits or submits it;
+ * a message waits until the field is empty, and says so.
  *
  * These drive the real writer against a pseudo-terminal that records what it
  * was given, which is where the bug was: the bytes, in order, with the delays
@@ -149,42 +150,35 @@ describe('while JeanBrasse is typing', () => {
     expect(terminal.typed).not.toContain(NOTE);
   });
 
-  it('holds the message rather than dropping it, and hands it over at the pause', () => {
+  it('holds the message rather than dropping it, and hands it over once the draft is sent', () => {
     types(terminal.pty, 'je pense quil faut');
     writeProgrammaticInput(terminal.pty, NOTE, true);
+    vi.advanceTimersByTime(TYPING_PAUSE_MS);
+    expect(terminal.typed).not.toContain(NOTE);
+    writeHumanInput(terminal.pty, '\r');
     vi.advanceTimersByTime(TYPING_PAUSE_MS);
     expect(terminal.typed).toContain(NOTE);
   });
 });
 
 describe('at the pause, with a draft in the field', () => {
-  it('sets the draft aside, sends the message alone, and puts the draft back unsent', () => {
+  it('writes nothing, deletes nothing, and sends the message alone once the person has sent the draft', () => {
     const draft = 'je pense quil faut';
     types(terminal.pty, draft);
     terminal.written.length = 0;
 
     writeProgrammaticInput(terminal.pty, NOTE, true);
+    vi.advanceTimersByTime(TYPING_PAUSE_MS * 4);
+    expect(terminal.written).toEqual([]);
+
+    writeHumanInput(terminal.pty, '\r');
     vi.advanceTimersByTime(TYPING_PAUSE_MS);
-
-    // Emptied first: the caret walked to the end, then one delete per character.
-    expect(terminal.written[0]).toBe('\x7f'.repeat(draft.length));
-    // Then the note, and only the note, and only then the submit.
-    expect(terminal.written[1]).toBe(NOTE);
-    expect(terminal.written).toHaveLength(2);
-    vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS);
-    expect(terminal.written[2]).toBe('\r');
-
-    // What the CLI submitted is the note and nothing else.
-    expect(terminal.written.slice(0, 3).join('').replace(/\x7f/g, '')).toBe(NOTE + '\r');
-
-    // And the draft comes back, without a carriage return behind it.
     settle();
-    const afterSubmit = terminal.written.slice(3);
-    expect(afterSubmit.join('')).toBe(draft);
-    expect(afterSubmit.join('')).not.toContain('\r');
+    expect(terminal.written.join('')).not.toContain('\x7f');
+    expect(terminal.written).toEqual(['\r', NOTE, '\r']);
   });
 
-  it('puts a two-line draft back with its newlines and its caret where they were', () => {
+  it('leaves a two-line draft, its newlines and its caret, exactly as they were', () => {
     types(terminal.pty, 'ligne une');
     writeHumanInput(terminal.pty, '\x1b\r');
     types(terminal.pty, 'et ligne deux');
@@ -193,11 +187,10 @@ describe('at the pause, with a draft in the field', () => {
     terminal.written.length = 0;
 
     writeProgrammaticInput(terminal.pty, NOTE, true);
-    vi.advanceTimersByTime(TYPING_PAUSE_MS);
+    vi.advanceTimersByTime(TYPING_PAUSE_MS * 4);
     settle();
 
-    const back = terminal.written.slice(terminal.written.indexOf('\r') + 1).join('');
-    expect(back).toBe('ligne une\x1b\ret ligne deux' + '\x1b[D'.repeat(5));
+    expect(terminal.written).toEqual([]);
     expect(draftOf(terminal.pty)).toEqual(before);
   });
 
@@ -206,11 +199,13 @@ describe('at the pause, with a draft in the field', () => {
     writeProgrammaticInput(terminal.pty, NOTE, true);
     vi.advanceTimersByTime(TYPING_PAUSE_MS);
     settle();
+    writeHumanInput(terminal.pty, '\r');
+    vi.advanceTimersByTime(TYPING_PAUSE_MS);
+    settle();
 
-    // The whole stream, the human's keys included, as the CLI read it. One
-    // prompt, and the draft is not in it: on the bench, before this existed,
-    // that one prompt was "je pense quil faut" + the note.
-    expect(submissions(terminal.written)).toEqual([NOTE]);
+    // The whole stream, the human's keys included, as the CLI read it: the
+    // draft as the person sent it, then the note on its own.
+    expect(submissions(terminal.written)).toEqual(['je pense quil faut', NOTE]);
   });
 });
 
