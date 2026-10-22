@@ -8,8 +8,8 @@
 
 ## Stack
 
-- **Shell**: Electron 44 (Node 24.21, Chromium 152, macOS 13 or later, Windows 10 or later), main process in `electron/` (~73k lines TypeScript, compiled to `electron/dist/` by `tsc -p electron/tsconfig.json`, CommonJS, ES2022)
-- **Renderer**: Next.js 16.3 App Router, React 19, TypeScript, Tailwind CSS 4, `~52k` lines in `src/`. Packaged as a static export (`output: 'export'` when `ELECTRON_BUILD=1`) and served over a custom `app://` protocol
+- **Shell**: Electron 44.9 (Node 24.22, Chromium 152, macOS 13 or later, Windows 10 or later), main process in `electron/` (~73k lines TypeScript, compiled to `electron/dist/` by `tsc -p electron/tsconfig.json`, CommonJS, ES2022)
+- **Renderer**: Next.js 16.4 App Router, React 19, TypeScript, Tailwind CSS 4, `~52k` lines in `src/`. Packaged as a static export (`output: 'export'` when `ELECTRON_BUILD=1`) and served over a custom `app://` protocol
 - **Terminals**: `node-pty` + `xterm` 5 / `xterm-addon-fit`
 - **State**: React hooks over IPC (`src/hooks/`), plus a small `zustand` store (`src/store/`) for sidebar/vault UI state
 - **Local API**: a plain `node:http` server on **31415**, bearer-token authenticated, so the CLIs' hooks and the bundled MCP servers can call back into the app
