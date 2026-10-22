@@ -56,6 +56,8 @@ import {
 import { sid } from '../../fixtures/session-id';
 
 const NOTE = '[Tars] Tars-QA (worker) has completed: the suite is green.';
+/** A message as it goes in: every piece in bracket paste markers since 22/10. */
+const PASTED = `\x1b[200~${NOTE}\x1b[201~`;
 
 function makeTerminal() {
   const written: string[] = [];
@@ -114,9 +116,9 @@ afterEach(() => {
 describe('a terminal nobody is typing in', () => {
   it('takes the message at once, exactly as it always did', () => {
     expect(writeProgrammaticInput(terminal.pty, NOTE, true)).toBe('written');
-    expect(terminal.written).toEqual([NOTE]);
+    expect(terminal.written).toEqual([PASTED]);
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS);
-    expect(terminal.written).toEqual([NOTE, '\r']);
+    expect(terminal.written).toEqual([PASTED, '\r']);
   });
 
   it('takes it at once when the last thing typed there was sent long ago', () => {
@@ -126,7 +128,7 @@ describe('a terminal nobody is typing in', () => {
     terminal.written.length = 0;
 
     writeProgrammaticInput(terminal.pty, NOTE, true);
-    expect(terminal.written).toEqual([NOTE]);
+    expect(terminal.written).toEqual([PASTED]);
   });
 });
 
@@ -175,7 +177,7 @@ describe('at the pause, with a draft in the field', () => {
     vi.advanceTimersByTime(TYPING_PAUSE_MS);
     settle();
     expect(terminal.written.join('')).not.toContain('\x7f');
-    expect(terminal.written).toEqual(['\r', NOTE, '\r']);
+    expect(terminal.written).toEqual(['\r', PASTED, '\r']);
   });
 
   it('leaves a two-line draft, its newlines and its caret, exactly as they were', () => {
@@ -413,7 +415,7 @@ describe('the write window belongs to Tars alone', () => {
     writeHumanInput(terminal.pty, '\r');
     settle();
 
-    expect(terminal.typed).toBe(NOTE + '\r!\r');
+    expect(terminal.typed).toBe(PASTED + '\r!\r');
     expect(draftOf(terminal.pty)).toEqual({ text: '', cursor: 0, state: 'known' });
   });
 

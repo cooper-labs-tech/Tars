@@ -129,6 +129,6 @@ describe('what the renderer types on agent:input', () => {
     expect(written).toEqual([]);
     await typeIntoTheAgent('\r');
     vi.advanceTimersByTime(TYPING_PAUSE_MS);
-    expect(written).toEqual(['\r', '[Tars] Tars-QA has completed']);
+    expect(written).toEqual(['\r', '\x1b[200~[Tars] Tars-QA has completed\x1b[201~']);
   });
 });

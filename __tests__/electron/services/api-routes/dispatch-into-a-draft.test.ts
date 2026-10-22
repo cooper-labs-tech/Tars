@@ -206,13 +206,13 @@ describe('who a dispatch is from', () => {
   // the call, by id, and never takes a name for an identity.
   const BRIEF = 'Gate PR #126.\nRead the report first.\nThen run the suite.\nThen answer.';
 
-  it('is typed before the paste, as the agent whose token made the call', async () => {
+  it('goes before the message, in a paste of its own, as the agent whose token made the call', async () => {
     const answer = await call('POST', '/api/agents/worker/dispatch', { message: BRIEF }, 'orch');
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
     expect(answer?.data.mode).toBe('message');
     // With the id of the request it hands over (PR A, core/task-requests.ts).
-    expect(written[0]).toMatch(/^Message from agent "Orchestrator" \("orch"\), task t-[0-9a-f]{8}: $/);
+    expect(written[0]).toMatch(/^\x1b\[200~Message from agent "Orchestrator" \("orch"\), task t-[0-9a-f]{8}: \x1b\[201~$/);
     expect(written[1]).toBe(`\x1b[200~${BRIEF}\x1b[201~`);
   });
 
@@ -222,13 +222,13 @@ describe('who a dispatch is from', () => {
     await call('POST', '/api/agents/worker/message', { message: BRIEF }, 'orch');
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(written[0]).toMatch(/^Message from agent "JeanBrasse" \("orch"\), task t-[0-9a-f]{8}: $/);
+    expect(written[0]).toMatch(/^\x1b\[200~Message from agent "JeanBrasse" \("orch"\), task t-[0-9a-f]{8}: \x1b\[201~$/);
   });
 
   it('is Tars when Tars makes the call itself (the super chat)', async () => {
     await call('POST', '/api/agents/worker/dispatch', { message: BRIEF }, undefined, true);
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(written[0]).toBe('Message from Tars: ');
+    expect(written[0]).toBe('\x1b[200~Message from Tars: \x1b[201~');
   });
 });
