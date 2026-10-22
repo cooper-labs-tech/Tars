@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { Layout, LayoutItem, GridLayoutProps } from 'react-grid-layout';
 import type { LayoutPreset, TerminalPanelState } from '../types';
-import { LAYOUT_PRESETS } from '../constants';
+import { LAYOUT_PRESETS, SCROLLING_PRESET, boardRows } from '../constants';
 import { generateLayout, layoutsEqual, mergeLayoutWithPanels } from '../utils/gridLayout';
 import { getLayout, saveLayout } from './useGridLayoutStorage';
 
@@ -44,8 +44,9 @@ export function useTerminalGrid({ agentIds, preset, isEditable, tabId }: UseTerm
     });
   }, [agentIds]);
 
-  // Visible panels: capped at maxPanels for the current preset
-  const maxPanels = gridDefinition.maxPanels;
+  // Visible panels: capped at maxPanels for the current preset, but for the
+  // largest, whose board scrolls past its nine panels instead of hiding them.
+  const maxPanels = !fullscreenPanelId && preset === SCROLLING_PRESET ? Infinity : gridDefinition.maxPanels;
   const visiblePanels = useMemo(() => {
     if (fullscreenPanelId) {
       return panels.filter(p => p.agentId === fullscreenPanelId);
@@ -68,7 +69,7 @@ export function useTerminalGrid({ agentIds, preset, isEditable, tabId }: UseTerm
     }
 
     const cols = gridDefinition.cols;
-    const rows = gridDefinition.rows;
+    const rows = boardRows(preset, visibleIds.length);
     const currentKey = `${tabId}::${preset}`;
     const needsFreshLoad =
       processedKeyRef.current !== currentKey ||
