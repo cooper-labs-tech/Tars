@@ -330,7 +330,8 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
     // 8. A message from plan mode to a worker in bypass carries the mark.
     const marked = await post('/api/agents/wb/dispatch', 'p1', { message: 'MARK-ME build it' });
     await expect.poll(() => s.read('wb').includes('MARK-ME'), { timeout: 20_000 }).toBe(true);
-    const line = s.read('wb').split(/\r|\n|\x1b\[20[01]~/).find(l => l.includes('MARK-ME')) ?? '';
+    // The sender line and the body are two pastes into one field since #507: the markers go before the lines are cut.
+    const line = s.read('wb').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).find(l => l.includes('MARK-ME')) ?? '';
     values.marked = { answer: marked, line };
     expect(line).toMatch(/^Message from agent "Planner" \("p1"\), task t-[0-9a-f]{8}: \(sender in plan mode, you in bypass mode\) MARK-ME build it$/);
   } finally {
