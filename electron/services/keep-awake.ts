@@ -12,6 +12,10 @@ import type { AgentStatus, AppSettings, KeepAwakeMode } from '../types';
  * One blocker for the whole fleet, started and stopped by sync(), which main.ts calls on every status change of
  * the fleet, on a change of the settings, and every 30 s (a status changed by a path that tells nobody is caught
  * there). A blocker the system ended on its own is started again while it is still wanted.
+ *
+ * The system can refuse one: `start` throws, or the blocker it returns is not started (on Linux with no inhibitor
+ * service, say). Then nothing is held, the state says `refused`, and it is asked again at the next sync; `refused`
+ * goes once the blocker is granted or no longer wanted.
  */
 
 export type { KeepAwakeMode };
@@ -22,6 +26,10 @@ export interface KeepAwakeState {
   active: boolean;
   /** ISO: since when, while active. */
   since?: string;
+  /** How many agents are working (`running`) now, whatever the mode. */
+  working: number;
+  /** Wanted, but the system refused the blocker: the computer may sleep. */
+  refused?: true;
 }
 
 interface Blocker {
@@ -42,16 +50,35 @@ export function createKeepAwake(deps: {
 }) {
   let id: number | undefined;
   let since: string | undefined;
+  let refused = false;
 
-  const wanted = (mode: KeepAwakeMode): boolean => {
-    if (mode !== 'while-working') return mode === 'always';
-    for (const agent of deps.agents()) if (agent.status === 'running') return true;
-    return false;
+  const working = (): number => {
+    let n = 0;
+    for (const agent of deps.agents()) if (agent.status === 'running') n++;
+    return n;
   };
+
+  const wanted = (mode: KeepAwakeMode): boolean => (mode === 'while-working' ? working() > 0 : mode === 'always');
 
   const state = (): KeepAwakeState => {
     const mode = keepAwakeMode(deps.settings());
-    return id !== undefined ? { mode, active: true, since } : { mode, active: false };
+    if (id !== undefined) return { mode, active: true, since, working: working() };
+    return { mode, active: false, working: working(), ...(refused ? { refused: true as const } : {}) };
+  };
+
+  /** Asks the system for the blocker: true when it holds. */
+  const take = (): boolean => {
+    let got: number;
+    try {
+      got = deps.blocker.start('prevent-app-suspension');
+    } catch (err) {
+      console.warn('[keep-awake] the system refused to keep the computer awake:', err instanceof Error ? err.message : err);
+      return false;
+    }
+    if (!deps.blocker.isStarted(got)) return false;
+    id = got;
+    since = new Date().toISOString();
+    return true;
   };
 
   const sync = (): KeepAwakeState => {
@@ -60,9 +87,9 @@ export function createKeepAwake(deps: {
       id = undefined;
       since = undefined;
     }
+    if (!want) refused = false;
     if (want && id === undefined) {
-      id = deps.blocker.start('prevent-app-suspension');
-      since = new Date().toISOString();
+      refused = !take();
     } else if (!want && id !== undefined) {
       deps.blocker.stop(id);
       id = undefined;

@@ -15,18 +15,32 @@ import type { AgentStatus, AppSettings } from '../../../electron/types';
  * 6. The blocker is the display one ('prevent-display-sleep'), which keeps the screen on for nothing.
  * 7. A blocker the system ended on its own (isStarted false) is taken as still running, and never started again.
  * 8. The state the window reads does not say the mode, whether the Mac is kept awake, and since when.
+ * 9. (the Frontend's frame, 22/10) The state does not say how many agents are working, or counts the waiting, idle or
+ *    asleep ones, or says it only in one mode.
+ * 10. (same) The system refuses the blocker (start throws, or the blocker is not started right after start) and the
+ *    state says the Mac is kept awake, or says nothing; or a refused blocker's id is kept as if held; or it is never
+ *    asked again; or "refused" stays once it is granted or no longer wanted.
  */
 
 function blocker() {
   let next = 1;
   const live = new Set<number>();
   const calls: string[] = [];
-  return {
+  const b = {
     calls, live,
-    start(type: string) { calls.push(`start:${type}`); const id = next++; live.add(id); return id; },
+    /** 'throw': start throws; 'ignore': start returns an id the system never started. */
+    refuse: undefined as undefined | 'throw' | 'ignore',
+    start(type: string) {
+      calls.push(`start:${type}`);
+      if (b.refuse === 'throw') throw new Error('no power management service');
+      const id = next++;
+      if (!b.refuse) live.add(id);
+      return id;
+    },
     stop(id: number) { calls.push(`stop:${id}`); live.delete(id); },
     isStarted(id: number) { return live.has(id); },
   };
+  return b;
 }
 
 const agent = (status: AgentStatus['status']) => ({ status }) as AgentStatus;
@@ -92,11 +106,46 @@ describe('keepAwake', () => {
 
   it('8. the state says the mode, whether the Mac is kept awake, and since when', () => {
     const { k, setFleet } = setup('while-working', ['idle']);
-    expect(k.state()).toEqual({ mode: 'while-working', active: false });
+    expect(k.state()).toEqual({ mode: 'while-working', active: false, working: 0 });
     setFleet(['running']);
     const on = k.sync();
-    expect(on).toMatchObject({ mode: 'while-working', active: true });
+    expect(on).toMatchObject({ mode: 'while-working', active: true, working: 1 });
     expect(Date.parse(on.since!)).not.toBeNaN();
     expect(k.state()).toEqual(on);
   });
+
+  it('9. the state says how many agents are working, in every mode', () => {
+    for (const mode of ['while-working', 'always', 'never']) {
+      const { k, setFleet } = setup(mode, ['running', 'waiting', 'idle', 'asleep', 'running']);
+      expect(k.sync().working, mode).toBe(2);
+      setFleet(['idle']);
+      expect(k.sync().working, mode).toBe(0);
+      expect(k.state().working, mode).toBe(0);
+    }
+  });
+
+  for (const how of ['throw', 'ignore'] as const) {
+    it(`10. a blocker the system refuses (${how}) is said refused, not held, asked again, and cleared after`, () => {
+      const { b, k, s, setFleet } = setup('while-working', ['running']);
+      b.refuse = how;
+      expect(k.sync()).toEqual({ mode: 'while-working', active: false, working: 1, refused: true });
+      expect(k.state()).toEqual({ mode: 'while-working', active: false, working: 1, refused: true });
+      expect(b.live.size).toBe(0);
+      k.sync();
+      expect(b.calls.filter((c) => c.startsWith('start:'))).toHaveLength(2);
+      // Granted at last: active, no longer refused.
+      b.refuse = undefined;
+      const on = k.sync();
+      expect(on).toMatchObject({ active: true, working: 1 });
+      expect(on.refused).toBeUndefined();
+      // Refused again, then no longer wanted: nothing said refused.
+      b.live.clear();
+      b.refuse = how;
+      expect(k.sync().refused).toBe(true);
+      setFleet(['idle']);
+      expect(k.sync()).toEqual({ mode: 'while-working', active: false, working: 0 });
+      (s as unknown as { keepAwake: string }).keepAwake = 'never';
+      expect(k.sync().refused).toBeUndefined();
+    });
+  }
 });

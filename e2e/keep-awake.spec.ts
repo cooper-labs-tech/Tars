@@ -18,6 +18,9 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    starts, and stops when the turn ends; keepAwake.state() says it while it holds (on macOS, `pmset -g
  *    assertions` shows the app holding PreventUserIdleSystemSleep during the turn, when the poll catches it).
  * 2. keepAwake 'never', saved from the window: a second turn starts no blocker.
+ * 3. The state says how many agents are working: 1 while the turn holds the blocker, 0 after.
+ * 4. A blocker the system refuses (powerSaveBlocker.start made to throw in the main process), with keepAwake 'always'
+ *    saved from the window: the state says refused, not active.
  * Red on main (acb8d2f4): no blocker is ever started.
  * The artefact: values.json (the calls with their times, the states and the statuses read).
  */
@@ -53,7 +56,7 @@ for (const newInterface of [false, true]) {
     const errors: string[] = [];
     type Api = { electronAPI: {
       agent: { start(p: { id: string; prompt: string }): Promise<unknown>; get(id: string): Promise<{ status: string; output?: string[] } | null>; sendInput(p: { id: string; input: string }): Promise<unknown> };
-      keepAwake: { state(): Promise<{ mode: string; active: boolean; since?: string }> };
+      keepAwake: { state(): Promise<{ mode: string; active: boolean; since?: string; working: number; refused?: true }> };
       appSettings: { save(s: Record<string, unknown>): Promise<unknown> };
     } };
     try {
@@ -67,7 +70,7 @@ for (const newInterface of [false, true]) {
 
       // 1. The default: while working.
       await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'x-claude', prompt: 'ECHO AWAKE1' }));
-      const statesSeen: Array<{ status?: string; active: boolean; pmset?: boolean; at: number }> = [];
+      const statesSeen: Array<{ status?: string; active: boolean; working: number; pmset?: boolean; at: number }> = [];
       const deadline = Date.now() + 60_000;
       let answered = false;
       while (Date.now() < deadline && !answered) {
@@ -80,7 +83,7 @@ for (const newInterface of [false, true]) {
           try { pmset = execFileSync('pmset', ['-g', 'assertions'], { encoding: 'utf8' }).split('\n').some((l) => l.includes(`pid ${appPid}(`) && l.includes('PreventUserIdleSystemSleep')); } catch { pmset = undefined; }
         }
         const last = statesSeen.at(-1);
-        if (!last || last.status !== a?.status || last.active !== st.active) statesSeen.push({ status: a?.status, active: st.active, ...(pmset !== undefined ? { pmset } : {}), at: Date.now() });
+        if (!last || last.status !== a?.status || last.active !== st.active || last.working !== st.working) statesSeen.push({ status: a?.status, active: st.active, working: st.working, ...(pmset !== undefined ? { pmset } : {}), at: Date.now() });
         answered = (a?.output ?? []).join('').includes('echo AWAKE1') && a?.status !== 'running';
         await page.waitForTimeout(100);
       }
@@ -91,7 +94,9 @@ for (const newInterface of [false, true]) {
       expect(first.map((c) => `${c.call}:${c.call === 'start' ? c.arg : ''}`)).toEqual(['start:prevent-app-suspension', 'stop:']);
       expect(first[1].arg).toBe(first[0].result);
       const after = await page.evaluate(() => (window as unknown as Api).electronAPI.keepAwake.state());
-      expect(after).toEqual({ mode: 'while-working', active: false });
+      expect(after).toEqual({ mode: 'while-working', active: false, working: 0 });
+      // 3. While it held the blocker, the state counted the one agent at work.
+      expect(statesSeen.filter((s) => s.active).map((s) => s.working)).toContain(1);
 
       // 2. Never.
       await page.evaluate(() => (window as unknown as Api).electronAPI.appSettings.save({ keepAwake: 'never' }));
@@ -102,6 +107,14 @@ for (const newInterface of [false, true]) {
       const second = (await calls(app)).slice(first.length);
       values.secondTurn = { calls: second };
       expect(second).toEqual([]);
+
+      // 4. Refused by the system.
+      await app.evaluate(({ powerSaveBlocker }) => {
+        powerSaveBlocker.start = (() => { throw new Error('refused by the e2e'); }) as typeof powerSaveBlocker.start;
+      });
+      await page.evaluate(() => (window as unknown as Api).electronAPI.appSettings.save({ keepAwake: 'always' }));
+      await expect.poll(() => page.evaluate(() => (window as unknown as Api).electronAPI.keepAwake.state()), { timeout: 10_000 }).toEqual({ mode: 'always', active: false, working: 0, refused: true });
+      values.refused = await page.evaluate(() => (window as unknown as Api).electronAPI.keepAwake.state());
       expect(errors).toEqual([]);
     } finally {
       recordValues(values);
