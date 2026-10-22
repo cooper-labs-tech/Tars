@@ -299,7 +299,8 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
   ]);
   const port = apiPort(31454);
   const values: Record<string, unknown> = { newInterface: process.env.E2E_NEW_INTERFACE === '1' };
-  const ocLines = () => (fs.existsSync(ocReceived) ? fs.readFileSync(ocReceived, 'utf8') : '').split(/\r|\n|\x1b\[20[01]~/).filter(Boolean);
+  // Since #507 the sender line and the body are two pastes into one field: the markers go before the lines are cut.
+  const ocLines = () => (fs.existsSync(ocReceived) ? fs.readFileSync(ocReceived, 'utf8') : '').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).filter(Boolean);
 
   // Builder is not started: a chat's runner takes its orchestrator's mode at its launch (services/chat-runners.ts),
   // and this needs an asker in bypass beside one in plan. It asks through the API with its own token, as before.

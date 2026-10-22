@@ -129,7 +129,8 @@ test('the real qwen code: created by an orchestrator, it answers a delegated tas
       prompt: 'Call the tool send_message of the MCP server claude-mgr-orchestrator once, with id "requester" and message "QWEN-LIVE-REPORT". Then reply with the single word DONE.',
     });
     await expect.poll(() => (fs.existsSync(leadReceived) ? fs.readFileSync(leadReceived, 'utf8') : ''), { timeout: 60_000 }).toContain('QWEN-LIVE-REPORT');
-    const leadLine = fs.readFileSync(leadReceived, 'utf8').split(/\r|\n|\x1b\[20[01]~/).find((l) => l.includes('QWEN-LIVE-REPORT')) ?? '';
+    // Since #507 the sender line and the body are two pastes into one field: the markers go before the lines are cut.
+    const leadLine = fs.readFileSync(leadReceived, 'utf8').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).find((l) => l.includes('QWEN-LIVE-REPORT')) ?? '';
     keep({ two, leadLine });
     expect.soft(two.isError, two.text).toBe(false);
     expect.soft(leadLine).toContain(`Message from agent "Qwen Live" ("${qw!.id}")`);
