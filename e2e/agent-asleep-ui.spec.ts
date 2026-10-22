@@ -203,13 +203,18 @@ test('an asleep agent reads asleep since when on its card, its panel, its window
     await expect(panel).toContainText(since, { timeout: 30_000 });
     await expect(panel).toContainText(`SCREEN-OF-worker session ${firstSid}`);
     await expect(panel).toContainText(/Asleep since \d\d:\d\d\. A key typed here wakes it on its conversation\./);
+    // Wake is in the panel's menu since 2.0.5, not its header.
+    await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
     await expect(panel.getByRole('button', { name: 'wake', exact: true })).toBeEnabled();
+    await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
     seen.panel = await text(page, '[data-agent-panel="worker"]');
     await stepShot(page, '03-dashboard-panel-asleep');
     await panel.locator('.xterm-screen').click();
     await page.keyboard.type('x');
     await expect(panel).toContainText('Waking: a key typed by you', { timeout: 15_000 });
-    await expect(panel.getByRole('button', { name: 'wake', exact: true })).toBeDisabled();
+    await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
+    await expect(panel.getByRole('button', { name: 'wake · coming back', exact: true })).toBeDisabled();
+    await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
     seen.panelWaking = await text(page, '[data-agent-panel="worker"]');
     await stepShot(page, '04-dashboard-panel-waking');
     await upAgain(2);

@@ -193,42 +193,6 @@ export default function TerminalPanelHeader({
           session, so the boxed `session` that followed here named nothing to
           choose (JeanBrasse, 13/10). Frame: `Panel header · fullscreen`. */}
 
-      {/* Start / stop. The panel's primary action, so it is a button you can
-          see and hit - not a row inside the overflow menu. A grid of terminals
-          with no visible way to launch the CLI is a grid of empty shells. */}
-      {agent.status === 'asleep' || waking ? (
-        // Asleep, the panel's action wakes it on its conversation; off while
-        // it comes back. Frame: `Agent asleep · and how it wakes`.
-        <button
-          type="button"
-          onMouseDown={e => e.stopPropagation()}
-          onClick={onWake}
-          disabled={!!waking}
-          className="h-[26px] px-2 text-[11px] font-mono lowercase border border-border-accent text-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:border-border-accent disabled:hover:text-foreground"
-          title={waking ? 'Coming back on its conversation' : 'Wake it on its own conversation'}
-        >
-          wake
-        </button>
-      ) : (
-        <button
-          type="button"
-          onMouseDown={e => e.stopPropagation()}
-          onClick={isLive ? onStop : onStart}
-          // A bordered 26px row action, like every other action in the app. The
-          // first version was accent-filled, which put a solid orange block in
-          // every pane header at once - the accent is for one primary action on
-          // a screen, not for six of them in a row.
-          className={`h-[26px] px-2 text-[11px] font-mono lowercase border transition-colors cursor-pointer ${
-            isLive
-              ? 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
-              : 'border-border-accent text-foreground hover:border-primary hover:text-primary'
-          }`}
-          title={isLive ? 'Stop this agent' : `Start ${agent.provider ?? 'the CLI'} in this terminal`}
-        >
-          {isLive ? 'stop' : 'start'}
-        </button>
-      )}
-
       {/* Fullscreen in one press, out of the menu: the arrows point out at
           rest and turn inward while the panel fills the window. */}
       <button
@@ -242,7 +206,7 @@ export default function TerminalPanelHeader({
         {isFullscreen ? <Minimize2 className="w-3 h-3" aria-hidden /> : <Maximize2 className="w-3 h-3" aria-hidden />}
       </button>
 
-      {/* Overflow menu: clear and remove */}
+      {/* Overflow menu: start, wake or stop, then clear and remove */}
       <div
         ref={menuRef}
         className="relative [&_button]:cursor-pointer"
@@ -268,7 +232,32 @@ export default function TerminalPanelHeader({
 
         {menuOpen && (
           <div className="absolute right-0 top-full mt-1 z-[90] min-w-[190px] bg-card border border-border">
-            <button type="button" onClick={run(onClear)} className={menuItemClass}>clear</button>
+            {/* Start, wake and stop, first in the menu and no longer a button of
+                the header: rarely used, and a stop one slip away from fullscreen
+                in every panel at once (JeanBrasse, 22/10). Asleep, it wakes the
+                agent on its conversation, off while it comes back. Frame:
+                `Dashboard header (2.0.5) · start, wake and stop in the ··· menu`. */}
+            {agent.status === 'asleep' || waking ? (
+              <button
+                type="button"
+                onClick={run(onWake)}
+                disabled={!!waking}
+                className={`${menuItemClass} disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-secondary`}
+                title={waking ? 'Coming back on its conversation' : 'Wake it on its own conversation'}
+              >
+                {waking ? 'wake · coming back' : 'wake'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={run(isLive ? onStop : onStart)}
+                className={menuItemClass}
+                title={isLive ? 'Stop this agent' : `Start ${agent.provider ?? 'the CLI'} in this terminal`}
+              >
+                {isLive ? 'stop' : `start ${agent.provider ?? 'claude'}`}
+              </button>
+            )}
+            <button type="button" onClick={run(onClear)} className={`${menuItemClass} border-t border-border`}>clear</button>
 
             {/* Taking a panel off a board and destroying an agent are two
                 different intentions, so they are two different items. */}
