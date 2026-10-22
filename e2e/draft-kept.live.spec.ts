@@ -193,6 +193,10 @@ for (const newInterface of [false, true]) {
         },
       });
       await app.context().tracing.start({ screenshots: true, snapshots: true }).catch(() => undefined);
+      // The main process's own log, which says why a message waits and when it goes in.
+      const mainLog = path.join(OUT, 'main.log');
+      app.process().stdout?.on('data', (d: Buffer) => fs.appendFileSync(mainLog, d));
+      app.process().stderr?.on('data', (d: Buffer) => fs.appendFileSync(mainLog, d));
       const page = await app.firstWindow();
       await page.setViewportSize({ width: 1600, height: 1000 }).catch(() => {});
       await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
@@ -239,9 +243,12 @@ for (const newInterface of [false, true]) {
       await waitFor(async () => (await panel.count()) > 0 && (await panel.isVisible()), 60_000, "lead's panel on the Dashboard");
       await sleep(3000);
 
+      // E2E_DRAFTS=1,3 runs only those drafts (numbered from 1), for a look at one of them.
+      const only = (process.env.E2E_DRAFTS ?? '').split(',').filter(Boolean).map(Number);
       let n = 0;
       for (const draft of DRAFTS) {
         n += 1;
+        if (only.length && !only.includes(n)) continue;
         const entry: Record<string, unknown> = { draft: draft.name };
         (values.drafts as unknown[]).push(entry);
         await atRest('lead');
@@ -281,13 +288,16 @@ for (const newInterface of [false, true]) {
 
         // 2. The person sends: the draft, whole, and nothing of Tars's.
         await page.keyboard.press('Enter');
-        const own = await waitFor(() => requests().slice(before).find((r) => draft.carried.every((piece) => textOf(r).includes(piece))), 60_000, `${draft.name} submitted`);
+        const at = await waitFor(() => {
+          const i = requests().findIndex((r, k) => k >= before && draft.carried.every((piece) => textOf(r).includes(piece)));
+          return i >= 0 ? i + 1 : 0;
+        }, 60_000, `${draft.name} submitted`) - 1;
+        const own = requests()[at];
         entry.submitted = textOf(own);
         expect(textOf(own), `${draft.name}: the submission carries nothing of Tars's`).not.toContain(NOTICE);
         expect(textOf(own)).not.toContain(`SENDMSG${n}`);
 
         // 3. Then the notice and the message, each after the draft.
-        const at = requests().indexOf(own);
         await waitFor(() => requests().slice(at + 1).some((r) => textOf(r).includes(`SENDMSG${n}`)), 120_000, `SENDMSG${n} delivered after the draft`);
         await waitFor(() => requests().slice(at + 1).some((r) => textOf(r).includes(NOTICE) && textOf(r).includes('Wren')), 120_000, `the notice of tk${n} delivered after the draft`);
         entry.deliveredAfter = requests().slice(at + 1).map(textOf);
