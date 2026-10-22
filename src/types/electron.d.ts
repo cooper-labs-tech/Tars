@@ -1859,6 +1859,7 @@ export interface ElectronAPI {
       discordAllowedUserIds?: string[];
       discordRequireMention?: boolean;
       errorReportsEnabled?: boolean;
+      keepAwake?: 'while-working' | 'always' | 'never';
       sentryAuthToken?: string;
       sentryTriageProject?: string;
       jiraEnabled?: boolean;
@@ -2550,6 +2551,11 @@ export interface ElectronAPI {
   diagnostic: {
     /** Sends the last 24 hours of health samples (numbers, with the names of Tars's own calls and pages) once; refused with the reason, a sentence shown as is. */
     send: () => Promise<DiagnosticAnswer>;
+  };
+
+  keepAwake: {
+    /** The setting keepAwake as Tars reads it, whether it keeps the computer awake now, and since when (2.0.5). */
+    state: () => Promise<{ mode: 'while-working' | 'always' | 'never'; active: boolean; since?: string }>;
   };
 
   errorReports: {

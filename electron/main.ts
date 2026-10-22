@@ -22,7 +22,7 @@ import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, sta
 import { startRelayRouting } from './services/hermes-relay-routing';
 import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
-import { app, dialog, ipcMain, Notification } from 'electron';
+import { app, dialog, ipcMain, Notification, powerSaveBlocker } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -163,6 +163,7 @@ import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
 import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
+import { createKeepAwake } from './services/keep-awake';
 import { endAcpRunsOnQuit, agentsRunningOverAcp } from './services/acp/delegate';
 import { retentionLog, startTmpRetention } from './services/agent-tmp';
 import { sweepRunTokenFolders } from './services/acp/run-token-file';
@@ -203,6 +204,17 @@ for (const stream of [process.stdout, process.stderr]) {
 Object.assign(process.env, currentFolderLookupsOff());
 
 let appSettings: AppSettings = loadAppSettings();
+
+/** The computer kept awake while an agent works, per keepAwake (services/keep-awake.ts). */
+const keepAwake = createKeepAwake({ blocker: powerSaveBlocker, settings: () => appSettings, agents: () => agents.values() });
+
+function startKeepAwake(): void {
+  // Every status change the fleet announces, and every 30 s for a path that announces none.
+  agentStatusEmitter.on('fleet-change', () => keepAwake.sync());
+  setInterval(() => keepAwake.sync(), 30_000).unref?.();
+  ipcMain.handle('keepAwake:state', () => keepAwake.state());
+  keepAwake.sync();
+}
 let stopTmpRetention: () => void = () => undefined;
 let previousRun: PreviousRun | null = null;
 let recovery: { flush: () => void } | null = null;
@@ -385,7 +397,7 @@ function createIpcDependencies(): IpcHandlerDependencies {
     // Functions
     getMainWindow,
     getAppSettings: () => appSettings,
-    setAppSettings: (settings: AppSettings) => { appSettings = settings; void errorReports.sync(); },
+    setAppSettings: (settings: AppSettings) => { appSettings = settings; void errorReports.sync(); keepAwake.sync(); },
     saveAppSettings: saveAppSettingsToFile,
     saveAgents,
     initAgentPty: (agent: AgentStatus) => initAgentPty(
@@ -663,7 +675,7 @@ app.whenReady().then(async () => {
   registerMcpOrchestratorHandlers();
   registerCLIPathsHandlers({
     getAppSettings: () => appSettings,
-    setAppSettings: (settings) => { appSettings = settings; void errorReports.sync(); },
+    setAppSettings: (settings) => { appSettings = settings; void errorReports.sync(); keepAwake.sync(); },
     saveAppSettings: saveAppSettingsToFile,
   });
 
@@ -787,6 +799,7 @@ app.whenReady().then(async () => {
   startStallWatch();
   // Agents with no turn for 30 minutes sleep, orchestrators never (services/agent-sleep.ts).
   startSleepWatch();
+  startKeepAwake();
   // codex's turns, read from its session log and posted as its terminal's hooks
   // would post them, with that terminal's own token (services/codex-sessions.ts).
   // What a CLI without Tars's hooks would have posted, posted as its terminal,
