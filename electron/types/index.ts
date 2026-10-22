@@ -379,7 +379,12 @@ export interface CliKeyState {
   withoutKey: string;
 }
 
+/** When Tars keeps the computer awake (services/keep-awake.ts): while an agent is running (the default), always, never. */
+export type KeepAwakeMode = 'while-working' | 'always' | 'never';
+
 export interface AppSettings {
+  /** Missing or unknown reads as 'while-working'. */
+  keepAwake?: KeepAwakeMode;
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;

@@ -1009,6 +1009,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     last: () => ipcRenderer.invoke('errorReports:last'),
   },
 
+  // Whether Tars keeps the computer awake now, and per which setting (2.0.5, services/keep-awake.ts).
+  keepAwake: {
+    state: () => ipcRenderer.invoke('keepAwake:state'),
+  },
+
   // Platform info
   platform: process.platform,
 });
