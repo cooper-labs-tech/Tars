@@ -37,7 +37,8 @@ function standIn(home: string): string {
 
 for (const newInterface of [false, true]) {
   test(`a board of twelve agents keeps three columns, scrolls to the tenth to twelfth, and each takes input${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
+    // Twelve CLIs make the quit slow under load (154 s measured on 22/10): the close is not what is tested here.
+    test.setTimeout(480_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-board-scroll-'));
     seedSandbox(home);
     const project = path.join(home, 'projects', 'tars');
