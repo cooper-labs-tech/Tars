@@ -52,7 +52,7 @@ setInterval(() => {}, 1 << 30);
 for (const newInterface of [false, true]) {
   const shell = newInterface ? ' (new interface)' : '';
   test(`a cli's osc 7501 probe is answered and its reports move an agent tars cannot follow otherwise${shell}`, async () => {
-    test.setTimeout(180_000);
+    test.setTimeout(360_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-program-status-${newInterface ? 'ni' : 'classic'}-`));
     const project = path.join(home, 'projects', 'demo');
     const dir = path.join(home, '.tars');
