@@ -2554,8 +2554,12 @@ export interface ElectronAPI {
   };
 
   keepAwake: {
-    /** The setting keepAwake as Tars reads it, whether it keeps the computer awake now, and since when (2.0.5). */
-    state: () => Promise<{ mode: 'while-working' | 'always' | 'never'; active: boolean; since?: string }>;
+    /**
+     * The setting keepAwake as Tars reads it, whether it keeps the computer awake now, and since when (2.0.5);
+     * how many agents are working (`running`) now, whatever the mode; and `refused` while the blocker is wanted but
+     * the system refused it, so the computer may sleep (asked again at each change of the fleet, and every 30 s).
+     */
+    state: () => Promise<{ mode: 'while-working' | 'always' | 'never'; active: boolean; since?: string; working: number; refused?: true }>;
   };
 
   errorReports: {
