@@ -9,7 +9,8 @@
 // own terminal, `<FAKE_NESTED_CLI> -p "LINES 1 inner<tag>"`, whose own requests
 // come here too (the nested CLI of #380's gate).
 // Every request is logged as one JSON line to FAKE_LOG, which is how a spec
-// knows a turn reached the model, with the effort Claude Code asked for
+// knows a turn reached the model (`full`: the whole last user turn, 8000
+// characters at most, for messages Claude Code joins into one turn), with the effort Claude Code asked for
 // (`output_config.effort`) and the credential it presented, by its role
 // (`auth`, against FAKE_KEY when a spec sets one). Adapted from the Frontend's
 // #132 proof.
@@ -122,7 +123,7 @@ http.createServer((req, res) => {
     // own: logging the end of the turn would lose it. And the end as well: the
     // caveat of a local command run just before (`/effort low`, claude 2.1.300)
     // can open the turn, ahead of what was typed after it.
-    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0], tail: last.slice(-200), auth: authOf(req.headers) });
+    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0], tail: last.slice(-200), full: last.slice(0, 8000), auth: authOf(req.headers) });
     if (!json.stream) {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({

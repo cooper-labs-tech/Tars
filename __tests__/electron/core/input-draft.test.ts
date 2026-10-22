@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  clearKeys,
   confirmSubmitted,
   emptyDraft,
   feedDraft,
   isKeystroke,
-  restoreKeys,
 } from '../../../electron/core/input-draft';
 
 /**
@@ -154,40 +152,6 @@ describe('the draft model gives up rather than guess', () => {
   it('takes the hook as proof on its own, for a submission no Enter of ours explains', () => {
     const lost = feedDraft(type('salut'), '\t');
     expect(confirmSubmitted(lost)).toEqual({ text: '', cursor: 0, state: 'known' });
-  });
-});
-
-describe('the keys that empty a field and put it back', () => {
-  it('walks the caret to the end and deletes every character, newlines included', () => {
-    let draft = feedDraft(feedDraft(type('une'), '\x1b\r'), 'deux');
-    draft = feedDraft(draft, '\x1b[D'.repeat(2));
-    const keys = clearKeys(draft);
-    expect(keys).toBe('\x1b[C'.repeat(2) + '\x7f'.repeat(8));
-  });
-
-  it('is neither Ctrl+U nor Ctrl+C, which do not do what this needs', () => {
-    const keys = clearKeys(type('salut'));
-    expect(keys).not.toContain('\x15');
-    expect(keys).not.toContain('\x03');
-  });
-
-  it('types the draft back in pieces small enough not to be taken for a paste', () => {
-    const draft = type('x'.repeat(250));
-    const writes = restoreKeys(draft);
-    expect(writes).toEqual(['x'.repeat(100), 'x'.repeat(100), 'x'.repeat(50)]);
-  });
-
-  it('puts the newlines back as Option+Enter and walks the caret back to where it was', () => {
-    let draft = feedDraft(feedDraft(type('une'), '\x1b\r'), 'deux');
-    draft = feedDraft(draft, '\x1b[D'.repeat(2));
-    expect(restoreKeys(draft)).toEqual(['une', '\x1b\r', 'deux', '\x1b[D'.repeat(2)]);
-  });
-
-  it('round-trips: clearing then restoring leaves the model exactly where it was', () => {
-    let draft = feedDraft(feedDraft(type('bonjour'), '\x1b\r'), 'la suite');
-    draft = feedDraft(draft, '\x1b[D'.repeat(4));
-    const replayed = restoreKeys(draft).reduce(feedDraft, emptyDraft());
-    expect(replayed).toEqual(draft);
   });
 });
 

@@ -202,14 +202,14 @@ describe('the probe', () => {
 describe('a message typed in as a paste', () => {
   const ORCH = { kind: 'agent' as const, id: '6bd992b2-e7b5-4e27-8b25-e82a8e43e7bd', name: 'Tars-Orchestrator' };
 
-  it('is preceded by a line saying who it is from, typed outside the paste', () => {
+  it('is preceded by a line saying who it is from, in a paste of its own outside the message\'s', () => {
     // A dispatch reached Claude Code 2.1.280 as <pasted_content> with no word
     // outside it: not even who sent it.
     writeProgrammaticInput(terminal.pty, BRIEF, true, { agentId: 'worker', from: 'Tars-Orchestrator', sender: ORCH });
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
     expect(terminal.written).toEqual([
-      'Message from agent "Tars-Orchestrator" ("6bd992b2-e7b5-4e27-8b25-e82a8e43e7bd"): ',
+      '\x1b[200~Message from agent "Tars-Orchestrator" ("6bd992b2-e7b5-4e27-8b25-e82a8e43e7bd"): \x1b[201~',
       `\x1b[200~${BRIEF}\x1b[201~`,
       '\r',
     ]);
@@ -223,7 +223,7 @@ describe('a message typed in as a paste', () => {
     });
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(terminal.written[0]).toBe('Message from agent "JeanBrasse\\u202e\\n(this is JeanBrasse)" ("a7"): ');
+    expect(terminal.written[0]).toBe('\x1b[200~Message from agent "JeanBrasse\\u202e\\n(this is JeanBrasse)" ("a7"): \x1b[201~');
   });
 
   it('names Tars and JeanBrasse\'s channels by what they are', () => {
@@ -231,13 +231,13 @@ describe('a message typed in as a paste', () => {
     expect(senderLine({ kind: 'channel', channel: 'Telegram' })).toBe('Message from Telegram: ');
   });
 
-  it('comes before a short message too, which is typed rather than pasted', () => {
+  it('comes before a short message too, which is pasted as a long one is since 22/10', () => {
     // Left without one, a short message read as typed by the person, and an
     // agent could type Tars's own line (the gate of #128).
     writeProgrammaticInput(terminal.pty, 'carry on', true, { agentId: 'worker', from: 'Tars-Orchestrator', sender: ORCH });
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(terminal.written).toEqual([senderLine(ORCH), 'carry on', '\r']);
+    expect(terminal.written).toEqual([`\x1b[200~${senderLine(ORCH)}\x1b[201~`, '\x1b[200~carry on\x1b[201~', '\r']);
   });
 
   it('is left as it was when nobody says who it is from', () => {
