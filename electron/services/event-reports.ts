@@ -33,7 +33,7 @@ export const GROUP_MS = 2 * 60_000;
 export const REPORTS_PER_DAY = 40;
 
 export type ReportEvent =
-  | { kind: 'agent-error'; agentId: string; agentName: string; projectPath: string; reason?: string }
+  | { kind: 'agent-error'; agentId: string; agentName: string; projectPath: string; reason?: string; checkpoint?: string }
   | { kind: 'pr-merged'; repo: string; number: number; title: string; url: string; projectPath: string }
   | { kind: 'changes-requested'; repo: string; number: number; title: string; url: string; projectPath: string };
 
@@ -118,7 +118,9 @@ function line(e: ReportEvent): string {
     // Masked, then cut: cut first, a key that starts near the end kept its
     // first characters in clear (the Audit's gate of #234).
     const reason = e.reason ? oneLine(e.reason).slice(0, 300) : '';
-    return `- ${oneLine(e.agentName)} stopped on an error${reason ? `: ${reason}` : ''}`;
+    // Where it stood: the last line it wrote about itself (core/agent-checkpoint.ts), its own words, masked too.
+    const stood = e.checkpoint ? ` (its last checkpoint: ${oneLine(e.checkpoint).slice(0, 120)})` : '';
+    return `- ${oneLine(e.agentName)} stopped on an error${reason ? `: ${reason}` : ''}${stood}`;
   }
   if (e.kind === 'pr-merged') return `- PR #${e.number} merged in ${oneLine(e.repo)}: ${oneLine(e.title)} ${oneLine(e.url)}`;
   return `- Changes requested on PR #${e.number} in ${oneLine(e.repo)}: ${oneLine(e.title)} ${oneLine(e.url)}`;

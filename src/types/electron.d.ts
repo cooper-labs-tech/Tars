@@ -189,6 +189,8 @@ export interface AgentTickItem {
   waitingOn?: AgentWaitingOn;
   /** A permission question Tars holds for the window. See AgentStatus.permissionAsk. */
   permissionAsk?: AgentStatus['permissionAsk'];
+  /** The line the agent last wrote about itself, with when (2.0.5). See AgentStatus.checkpoint. */
+  checkpoint?: AgentStatus['checkpoint'];
   /** A launch is on its way. See AgentStatus.launching. Always set on agents:tick. */
   launching?: boolean;
   provider: string;
@@ -509,6 +511,9 @@ export interface AgentStatus {
    *  from the hook that reports it; gone as soon as `status` changes. Not set
    *  for the idle prompt. */
   waitingOn?: AgentWaitingOn;
+  /** The line the agent last wrote about itself with the MCP tool `checkpoint`, 120 characters at most, with when
+   *  (2.0.5, core/agent-checkpoint.ts). For the agent card's line. */
+  checkpoint?: { line: string; at: string };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;
