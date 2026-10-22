@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 62,
+    version: '2.0.5',
+    date: '2026-10-22',
+    updates: [
+      'The Chat keeps one Hermes session: it no longer opens a new one at each automatic check-in, each start of Tars or each failed turn, and an automatic check-in never runs the cron job. Clearing the Chat starts a new session.',
+    ],
+  },
+  {
     id: 61,
     version: '2.0.4',
     date: '2026-10-18',
