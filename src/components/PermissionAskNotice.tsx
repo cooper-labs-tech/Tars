@@ -171,45 +171,54 @@ export default function PermissionAskNotice({ agent, layout }: {
     );
   }
 
-  // The window, and a panel that opened the call whole: the same block.
+  // The window, and a panel that opened the call whole: the same block. Where
+  // its column is too short for it (a panel in the board's smallest cell, a
+  // low window), it shrinks to what the column holds: its head and its
+  // answers keep their place, and the call, why and the rule scroll between
+  // them, inside the block only (JeanBrasse's report of 2026-10-22:
+  // the block overflowed the panel, which clips, and allow and deny were out
+  // of reach outside full screen). Frame: `Permission asked of Tars`, its
+  // `smallest cell` row.
   return (
-    <div role="status" data-permission-ask={agent.id} className="shrink-0 flex flex-col gap-2 px-3 py-2.5 bg-secondary border-b border-border">
-      <div className="flex items-center justify-between gap-3">
+    <div role="status" data-permission-ask={agent.id} className="min-h-0 flex flex-col gap-2 px-3 py-2.5 bg-secondary border-b border-border">
+      <div className="shrink-0 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2">
           <StatusSquare tone="waiting" />
           <span className="text-xs text-foreground truncate" title={line.title}>{line.who.replace(/:$/, '')}</span>
         </div>
         {line.at && <span className="shrink-0 font-mono text-[11px] text-text-muted">{line.at}</span>}
       </div>
-      {line.subject && (
-        <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
-          {line.subject}
-        </p>
-      )}
-      {(line.reason || line.rule) && (
-        <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
-          {line.reason && (
-            <>
-              <dt className="font-mono text-text-muted">why</dt>
-              <dd className="text-muted-foreground break-words">{line.reason}</dd>
-            </>
-          )}
-          {line.rule && (
-            <>
-              <dt className="font-mono text-text-muted">rule</dt>
-              <dd className="font-mono text-muted-foreground break-all">{line.rule}</dd>
-            </>
-          )}
-        </dl>
-      )}
+      <div data-ask-details className="min-h-0 flex flex-col gap-2 overflow-y-auto">
+        {line.subject && (
+          <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
+            {line.subject}
+          </p>
+        )}
+        {(line.reason || line.rule) && (
+          <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
+            {line.reason && (
+              <>
+                <dt className="font-mono text-text-muted">why</dt>
+                <dd className="text-muted-foreground break-words">{line.reason}</dd>
+              </>
+            )}
+            {line.rule && (
+              <>
+                <dt className="font-mono text-text-muted">rule</dt>
+                <dd className="font-mono text-muted-foreground break-all">{line.rule}</dd>
+              </>
+            )}
+          </dl>
+        )}
+      </div>
       {state.phase === 'reason' ? (
-        <div className="flex items-center gap-1.5">
+        <div className="shrink-0 flex items-center gap-1.5">
           {reasonField}
           <Button size="sm" className={`shrink-0 ${ACTION}`} onClick={deny}>deny</Button>
           <Button size="sm" className={`shrink-0 ${ACTION}`} onClick={back}>back</Button>
         </div>
       ) : late ? lateLine : (
-        <div className="flex items-center gap-1.5">
+        <div className="shrink-0 flex items-center gap-1.5">
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Put it to the terminal's dialog, as before">ask in terminal</Button>
