@@ -291,7 +291,9 @@ export function useElectronAgents() {
           // A permission question Tars holds, which the tick carries (#318).
           askKey(a.permissionAsk) !== askKey(t.permissionAsk) ||
           // Asleep since when, and who is waking it (#322): the tick carries both.
-          a.asleepSince !== t.asleepSince || wakingKey(a.waking) !== wakingKey(t.waking);
+          a.asleepSince !== t.asleepSince || wakingKey(a.waking) !== wakingKey(t.waking) ||
+          // The line the agent last wrote about itself (#513), which the tick carries.
+          a.checkpoint?.at !== t.checkpoint?.at || a.checkpoint?.line !== t.checkpoint?.line;
         const hasChange = tickAgents.some(t => {
           const existing = prev.find(a => a.id === t.id);
           return existing && changed(existing, t);
@@ -300,7 +302,7 @@ export function useElectronAgents() {
         return prev.map(a => {
           const tick = tickAgents.find(t => t.id === a.id);
           if (tick && changed(a, tick)) {
-            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity, cliRunning: tick.cliRunning, leftFullscreen: tick.leftFullscreen, launching: tick.launching, permissionAsk: tick.permissionAsk ?? undefined, asleepSince: tick.asleepSince, waking: tick.waking };
+            return { ...a, status: tick.status as AgentStatus['status'], currentTask: tick.currentTask, lastActivity: tick.lastActivity, cliRunning: tick.cliRunning, leftFullscreen: tick.leftFullscreen, launching: tick.launching, permissionAsk: tick.permissionAsk ?? undefined, asleepSince: tick.asleepSince, waking: tick.waking, checkpoint: tick.checkpoint };
           }
           return a;
         });
