@@ -26,6 +26,12 @@ import type { IPty } from 'node-pty';
  *  D7. Over-correction: a wheel scroll, a mouse motion, a button release, a focus report, or a click on an empty
  *      field make the model unsure, and messages wait behind a field that is empty.
  *  D8. A field the person emptied (Backspace to nothing, Ctrl+C) still holds the message back.
+ *
+ * Added on 22/10 after the live spec's first green shell, written before the fix:
+ *  D9. Once the person has sent a draft holding a folded paste, the held messages go in typed bare: Claude Code
+ *      2.1.306 takes them as more of that paste, their Enter as a newline, and Tars's words stay unsent in the
+ *      person's field (the bench: 3 of 9 times bare, 0 of 9 with each piece in bracket paste markers). Every piece
+ *      Tars types is a paste of its own: the sender line apart, so a long body that folds leaves it outside.
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -200,5 +206,24 @@ describe('a field the person emptied', () => {
     writeProgrammaticInput(pty, NOTE, true, { agentId: 'orch', from: 'Tars' });
     later();
     expect(written.join('')).toContain(NOTE);
+  });
+});
+
+describe('after the person sent a draft holding a folded paste', () => {
+  it('D9. every piece of a held message goes in as a paste of its own, the sender line apart from the body', () => {
+    writeHumanInput(pty, `\x1b[200~${'P'.repeat(900)}\x1b[201~`);
+    writeProgrammaticInput(pty, 'SENDMSG3 the review notes are in the folder', true, {
+      agentId: 'orch', from: 'Wren', sender: { kind: 'agent', id: 'wk', name: 'Wren' },
+    });
+    writeHumanInput(pty, '\r');
+    noteSubmitted(pty);
+    const before = written.length;
+    later();
+    const tars = written.slice(before).filter(w => w !== '\r');
+    expect(tars.length).toBeGreaterThanOrEqual(2);
+    for (const piece of tars) expect(piece, JSON.stringify(piece)).toMatch(/^\x1b\[200~[\s\S]*\x1b\[201~$/);
+    expect(tars[0]).toContain('Message from agent "Wren"');
+    expect(tars[0]).not.toContain('SENDMSG3');
+    expect(tars.at(-1)).toContain('SENDMSG3');
   });
 });
