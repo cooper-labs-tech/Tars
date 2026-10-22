@@ -28,6 +28,8 @@ export interface AgentTickItem {
   waitingOn?: AgentWaitingOn;
   /** A permission question Tars holds for the window. See AgentStatus.permissionAsk. */
   permissionAsk?: AgentStatus['permissionAsk'];
+  /** What the CLI last said of itself over OSC 7501, with a blocked state's kind and message. See AgentStatus.programStatus. */
+  programStatus?: AgentStatus['programStatus'];
   provider: string;
   /** A CLI runs in the agent's PTY, whatever its status says. See cliRunningIn. */
   cliRunning: boolean;
@@ -104,6 +106,7 @@ export function buildTickPayload(): AgentTickItem[] {
         statusSince: a.statusSince,
         waitingOn: publishedWaitingOn(a),
         permissionAsk: a.permissionAsk,
+        programStatus: a.programStatus,
         provider: a.provider || 'claude',
         cliRunning: agentCliRunning(a),
         launching,
