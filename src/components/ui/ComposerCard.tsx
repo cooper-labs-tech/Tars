@@ -278,7 +278,6 @@ export function ImageTile({
     <div className="group relative w-14 h-14 shrink-0 rounded border border-border hover:border-border-accent bg-term-bg overflow-hidden" title={title ?? name}>
       {/* A blob URL of bytes still in this window: nothing to optimise, and
           next/image has nothing to fetch. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} alt={name} className="w-full h-full object-cover" />
       {onRemove && (
         <button
