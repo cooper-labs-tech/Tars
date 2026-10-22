@@ -33,11 +33,11 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
   // Whether Tars keeps the computer awake right now (#511's keepAwake:state), read as the page opens, after each
   // change, and every five seconds while it is open, since a turn starting or ending changes it.
   const keepAwakeMode = appSettings.keepAwake ?? 'while-working';
-  const [awake, setAwake] = useState<{ active: boolean } | null>(null);
+  const [awake, setAwake] = useState<{ active: boolean; working: number; refused?: true } | null>(null);
   useEffect(() => {
     let live = true;
     const read = () => window.electronAPI?.keepAwake?.state()
-      .then((s) => { if (live) setAwake({ active: s.active }); })
+      .then((s) => { if (live) setAwake({ active: s.active, working: s.working, refused: s.refused }); })
       .catch(() => { /* an older main without the channel: no line */ });
     read();
     const every = setInterval(read, 5_000);
@@ -124,8 +124,8 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
           <>
             While an agent works, Tars keeps this computer from going to sleep, so a long task is not cut when you step away. The screen may still turn off.
             {awake && (
-              <span data-keep-awake-line className={`block mt-0.5 font-mono text-[10.5px] ${awake.active ? 'text-status-running' : 'text-text-muted'}`}>
-                {keepAwakeLine(keepAwakeMode, awake.active)}
+              <span data-keep-awake-line className={`block mt-0.5 font-mono text-[10.5px] ${awake.refused ? 'text-status-waiting' : awake.active ? 'text-status-running' : 'text-text-muted'}`}>
+                {keepAwakeLine(keepAwakeMode, awake)}
               </span>
             )}
           </>
@@ -207,7 +207,12 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
 };
 
 /** What the keep awake row says it does now, under its hint (frame `Keep awake (2.0.5) · states`). */
-function keepAwakeLine(mode: 'while-working' | 'always' | 'never', active: boolean): string {
-  if (active) return mode === 'always' ? 'awake while Tars is open' : 'awake now · an agent is working';
+function keepAwakeLine(mode: 'while-working' | 'always' | 'never', state: { active: boolean; working: number; refused?: true }): string {
+  // Wanted, but the system would not hold its sleep off (#511's `refused`): the setting stays as chosen.
+  if (state.refused) return 'cannot keep this computer awake here: the system refused';
+  if (state.active) {
+    if (mode === 'always') return 'awake while Tars is open';
+    return `awake now · ${state.working} ${state.working === 1 ? 'agent' : 'agents'} working`;
+  }
   return mode === 'never' ? 'sleeps as usual, even during a turn' : 'sleeps as usual · no agent is working';
 }
