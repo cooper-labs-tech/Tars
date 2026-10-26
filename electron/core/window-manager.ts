@@ -6,6 +6,7 @@ import { MIME_TYPES } from '../constants';
 import { localFileServes } from '../utils/window-file-access';
 import { titleBarOptions } from '../platform/desktop-shell';
 import { installEditContextMenu } from './edit-context-menu';
+import { externalUrlToOpen } from '../utils/external-url';
 
 // Global reference to the main window
 let mainWindow: BrowserWindow | null = null;
@@ -235,11 +236,13 @@ export function hardenWindow(window: BrowserWindow): void {
   window.webContents.on('will-navigate', (event, url) => {
     if (isOurs(url)) return;
     event.preventDefault();
-    void shell.openExternal(url);
+    const safe = externalUrlToOpen(url);
+    if (safe) void shell.openExternal(safe);
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
+    const safe = externalUrlToOpen(url);
+    if (safe) void shell.openExternal(safe);
     return { action: 'deny' };
   });
 

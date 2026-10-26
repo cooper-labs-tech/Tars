@@ -7,6 +7,7 @@ import 'xterm/css/xterm.css';
 import { createXtermOptions, useTerminalTheme, TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 import { disposeTerminalSafely, stopWheelTyping, stripTerminalReplies } from '@/lib/terminal';
 import type { PtyBacklog } from '@/lib/pty-backlog';
+import { addWebLinks } from '@/lib/terminal-links';
 
 interface TerminalProps {
   ptyId?: string;
@@ -43,6 +44,7 @@ export default function Terminal({ ptyId, backlog, onData, className = '' }: Ter
 
     const fitAddon = new FitAddon();
     term.loadAddon(fitAddon);
+    void addWebLinks(term);
 
     term.open(terminalRef.current);
     stopWheelTyping(term);

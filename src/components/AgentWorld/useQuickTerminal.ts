@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { isElectron } from '@/hooks/useElectron';
 import { attachShiftEnterHandler, disposeTerminalSafely, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermTheme, getTerminalFontFamily, useTerminalTheme } from '@/lib/terminal-theme';
+import { addWebLinks, terminalLinkHandler } from '@/lib/terminal-links';
 // The main process's own trim logic for agent.output, imported rather than
 // copied: it has no dependency outside itself.
 import { carriedByTrim } from '../../../electron/utils/terminal-modes';
@@ -65,6 +66,7 @@ export function useQuickTerminal({
       const term = new Terminal({
         // Read at creation time so a theme switch mid-session cannot go stale
         theme: createXtermTheme(),
+        linkHandler: terminalLinkHandler,
         fontSize: 12,
         fontFamily: getTerminalFontFamily(),
         cursorBlink: true,
@@ -81,6 +83,7 @@ export function useQuickTerminal({
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
 
       try {
         term.open(quickTerminalRef.current);
