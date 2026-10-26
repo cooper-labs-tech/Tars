@@ -8,6 +8,7 @@ import { BrandSpinner, Button } from '@/components/ui';
 import { createXtermOptions, useTerminalTheme, TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 import { disposeTerminalSafely, stopWheelTyping, stripTerminalReplies } from '@/lib/terminal';
 import 'xterm/css/xterm.css';
+import { addWebLinks } from '@/lib/terminal-links';
 
 interface TerminalDialogProps {
   open: boolean;
@@ -64,6 +65,7 @@ export default function TerminalDialog({ open, repo, title, onClose, availablePr
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
       term.open(terminalRef.current!);
       stopWheelTyping(term);
       fitAddon.fit();

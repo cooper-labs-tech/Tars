@@ -6,6 +6,7 @@ import type { FitAddon } from 'xterm-addon-fit';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
 import { onAgentMoveLine } from '@/hooks/useClaudeAccounts';
+import { addWebLinks, terminalLinkHandler } from '@/lib/terminal-links';
 import { TERMINAL_CONFIG } from '../constants';
 import { getTerminalTheme } from '@/components/AgentWorld/constants';
 import { attachShiftEnterHandler, disposeTerminalSafely, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
@@ -169,6 +170,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
 
       const term = new modules.Terminal({
         theme: getTerminalTheme(theme),
+        linkHandler: terminalLinkHandler,
         fontSize,
         fontFamily: TERMINAL_CONFIG.fontFamily,
         cursorBlink: TERMINAL_CONFIG.cursorBlink,
@@ -185,6 +187,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
 
       const fitAddon = new modules.FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
       term.open(container);
       // The panel under the pointer only, even in broadcast mode.
       passWheelToProgram(term, input => {

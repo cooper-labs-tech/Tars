@@ -3,6 +3,7 @@ import { isElectron } from '@/hooks/useElectron';
 import { createXtermOptions, useTerminalTheme } from '@/lib/terminal-theme';
 import { disposeTerminalSafely, stopWheelTyping, stripTerminalReplies } from '@/lib/terminal';
 import type { Skill } from '@/lib/skills-database';
+import { addWebLinks } from '@/lib/terminal-links';
 
 export interface SkillInstallState {
   showInstallTerminal: boolean;
@@ -43,6 +44,7 @@ export function useSkillInstall(onRefreshSkills?: () => void): SkillInstallState
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
       term.open(terminalRef.current!);
       stopWheelTyping(term);
       fitAddon.fit();

@@ -6,6 +6,7 @@ import { isElectron } from '@/hooks/useElectron';
 import { onAgentMoveLine } from '@/hooks/useClaudeAccounts';
 import { attachShiftEnterHandler, connectionLine, disposeTerminalSafely, keySender, passWheelToProgram, stripCursorSequences, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermOptions, useTerminalTheme } from '@/lib/terminal-theme';
+import { addWebLinks } from '@/lib/terminal-links';
 
 interface UseAgentDialogTerminalOptions {
   open: boolean;
@@ -85,6 +86,7 @@ export function useAgentDialogTerminal({
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
 
       try {
         term.open(terminalRef.current);

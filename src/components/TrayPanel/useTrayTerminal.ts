@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { attachShiftEnterHandler, disposeTerminalSafely, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermOptions, useTerminalTheme } from '@/lib/terminal-theme';
+import { addWebLinks } from '@/lib/terminal-links';
 
 interface UseTrayTerminalProps {
   agentId: string;
@@ -67,6 +68,7 @@ export function useTrayTerminal({ agentId, container }: UseTrayTerminalProps) {
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
       term.open(container);
       passWheelToProgram(term, input => {
         window.electronAPI?.agent?.sendInput({ id: agentIdRef.current, input });

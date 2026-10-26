@@ -13,6 +13,7 @@ import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } 
 import { publishedWaitingOn } from '../utils/waiting-on';
 import { defaultShell } from '../utils/default-shell';
 import { openTerminal } from '../utils/open-terminal';
+import { externalUrlToOpen } from '../utils/external-url';
 import { checkForUpdates, downloadUpdate, quitAndInstall } from '../services/update-checker';
 import { registerMemoryHandlers } from './memory-handlers';
 import { registerObsidianHandlers } from './obsidian-handlers';
@@ -2351,8 +2352,12 @@ function registerUpdateHandlers(): void {
 
   ipcMain.handle('app:quitAndInstall', async () => quitAndInstall());
 
+  // Terminal links and the update banner. http(s) only: the renderer is not
+  // trusted to have vetted a URL an agent printed.
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
-    shell.openExternal(url);
+    const safe = externalUrlToOpen(url);
+    if (!safe) return { success: false };
+    await shell.openExternal(safe);
     return { success: true };
   });
 }
