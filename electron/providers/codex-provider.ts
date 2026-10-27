@@ -95,17 +95,17 @@ export class CodexProvider implements CLIProvider {
       command += ` ${shellQuote(arg)}`;
     }
 
-    // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
-    // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
-    const role = codexRoleArgs(params.orchestratorMode === true);
-    for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
-
     command += this.modelAndEffort(params.model, params.effort);
 
     // The mode in flags the installed codex has: 0.163 refuses --full-auto, and
     // every agent in auto or bypass died at launch on it (codex-cli.ts).
     const permission = codexPermissionArgs(params.permissionMode, codexAccepts(params.binaryPath));
     if (permission.length) command += ` ${permission.join(' ')}`;
+
+    // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
+    // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
+    const role = codexRoleArgs(params.orchestratorMode === true);
+    for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
