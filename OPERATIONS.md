@@ -234,8 +234,10 @@ moves `next dev` (3100) and every suite's API port together. Unset, nothing move
 Stand-ins a spec may point the app at, read only under `DOROTHY_E2E=1`: `TARS_CHAT_RAM_GB` (the RAM the
 chats' limit is computed from) and `DOROTHY_TELEGRAM_API_URL` (`http://127.0.0.1:<port>` and nothing
 else: a stand-in of Telegram's Bot API, which the bot's token travels to in every request's path;
-`e2e/chat-senders.spec.ts`), and `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
-200 ms at least; `e2e/health-reports.spec.ts` takes one a second). And one read by any development run,
+`e2e/chat-senders.spec.ts`), `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
+200 ms at least; `e2e/health-reports.spec.ts` takes one a second), `DOROTHY_STATUS_EVERY_MS` (how often a status is
+set against its CLI's record, 200 ms at least) and `DOROTHY_SLEEP_AFTER_MS` (the sleep's delay, 2 s at least;
+both in `e2e/status-from-events.spec.ts`). And one read by any development run,
 never by a packaged Tars (`app.isPackaged`): `DOROTHY_ERROR_REPORTS_DSN`, where error reports go, a
 stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 `e2e/error-reports-coverage.spec.ts`).
@@ -2230,6 +2232,8 @@ up. An orchestrator is never put to sleep. SPECS.md, "An agent asleep", has the 
 |---|---|
 | An agent at rest for hours never sleeps | something keeps it: a timer of its own (a `/loop` ScheduleWakeup, a CronCreate) or a background agent its CLI runs, as its last Stop hook counted them (`STOP hook` lines in `/tmp/dorothy-hooks.log`), a process under its CLI (a dev server, a background task: `ps -A -o pid,ppid,command \| grep -A8 claude`), a draft in its field, a message, note or question waiting for it, an agent still holding work it handed out, or a conversation Tars cannot resume (a provider other than claude, or no transcript) |
 | Woken, it started a new conversation | its transcript was not on disk any more at the wake (`~/.claude/projects/<encoded path>/<session>.jsonl`; a codex agent's rollout, `$CODEX_HOME/sessions/<y>/<m>/<d>/rollout-*-<session>.jsonl`), so there was nothing to resume |
+| Why does this agent not sleep? | `sleepHeld` on `agent:get` (or in `~/.tars/agents.json`) names the reason the last pass read, and when |
+| It reads `running` at its prompt, or `running` with no CLI | the status pass puts it right within two minutes (`[status] <name>: running -> idle (not-taken)`, `statusReconciled` on the agent): a message typed at a Stop that the CLI never took, a Stop that never reached Tars, or a CLI that exited and left its shell. Longer than that, its transcript's tail still shows a turn (SPECS.md, "A status its CLI's own record contradicts") |
 | Its pane is blank while it sleeps | Tars restarted since it fell asleep: the last screen is kept in memory only, by choice (SPECS.md, "An agent asleep") |
 
 ### Agent stuck in the wrong directory
