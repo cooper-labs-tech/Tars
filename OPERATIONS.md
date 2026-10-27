@@ -243,7 +243,10 @@ stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 **Tars's health, on this machine.** Every 5 minutes Tars appends a sample to
 `~/.tars/health-samples.jsonl` (`0600`): the main process's heap and RSS, its event loop delay
 (p50, p95), the three slowest IPC handlers of the 5 minutes, the agents and how many run, the page
-open. 24 hours rolling, 256 KB at most: numbers, with the names of Tars's own calls and pages, no
+open, and since 2.0.5 the machine (`machine`: free memory, compressor, swap and its growth per minute,
+disk free, load) and each agent's tree (`agentTrees`, MB and processes; `null` on Windows). To see
+the swap climb during a run: `jq -c '[.at, .machine.swapUsedMb, .machine.swapGrowthMbPerMin]'
+~/.tars/health-samples.jsonl`. 24 hours rolling, 256 KB at most: numbers, with the names of Tars's own calls and pages, no
 content, no file path, no name (`services/health/`). To see how a session
 went before a crash, read that file; nothing in it leaves unless error reports are on (SPECS.md,
 Error reports).
