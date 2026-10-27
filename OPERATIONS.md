@@ -1397,7 +1397,7 @@ Each provider writes to its own config, CLI-first with a file fallback:
 
 | provider(s) | config dir | mechanism |
 |---|---|---|
-| `claude` (+ `openrouter`, `deepseek`, `mimo`, `moonshot`, `qwen`, `zhipu`, `minimax`, `nvidia`, `nous-portal`, all share the `claude` binary and `~/.claude`) | `~/.claude` | `claude mcp add -s user …`, fallback `~/.claude/mcp.json`; presence checked in both `~/.claude/mcp.json` and `~/.claude.json` |
+| `claude` (+ `openrouter`, `deepseek`, `mimo`, `moonshot`, `qwen`, `zhipu`, `minimax`, `nvidia`, `nous-portal`, all share the `claude` binary and `~/.claude`) | `~/.claude` | `~/.claude/mcp.json` itself since 2.0.5, a Tars server still in Claude Code's user scope (`~/.claude.json`) taken out with `claude mcp remove -s user` (every session loads that scope); an agent gets `mcp.json` (orchestrator) or `mcp-worker.json` (worker, no Telegram nor X) through `--mcp-config`, `services/mcp-roles.ts` |
 | `codex` | `$CODEX_HOME`, else `~/.codex` | Tars's seven servers: the `[mcp_servers.<name>]` section written by Tars, with `env_vars` naming what they read (`codex mcp add` cannot say it); another server: `codex mcp add`, fallback writes the section into `config.toml` |
 | `gemini` | `~/.gemini` | fallback writes `settings.json` |
 | `grok` | `~/.grok` | fallback writes `[mcp_servers.<name>]` into `config.toml` with `enabled = true` |
