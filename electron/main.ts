@@ -152,6 +152,7 @@ import { scheduleTick } from './utils/agents-tick';
 import { terminalTokenOf } from './core/agent-tokens';
 import { codexDialogOnScreen } from './core/terminal-mirror';
 import { startSleepWatch, stopSleepWatch } from './services/agent-sleep';
+import { startStatusWatch, stopStatusWatch } from './services/status-truth';
 import { endUsageProbes } from './services/claude-accounts/usage-probe';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './services/update-checker';
@@ -804,6 +805,16 @@ app.whenReady().then(async () => {
       console.warn(`[${watch}] ${route} for ${agentId} not posted:`, err instanceof Error ? err.message : err);
     }
   };
+  // A status its CLI's own record and its terminal contradict, an event having
+  // never reached Tars, posted as that terminal's hook would have (services/status-truth.ts).
+  startStatusWatch({
+    post: postAsTerminal('status'),
+    announce: (agent) => {
+      emitAgentStatus(agent.id);
+      broadcastToAllWindows('agent:status', { type: 'status', agentId: agent.id, status: agent.status, timestamp: new Date().toISOString() });
+      scheduleTick();
+    },
+  });
   // pi's turns, read from its session file (services/pi-sessions.ts).
   startPiSessionWatch({
     dirOf: (agentId) => piSessionDir(DATA_DIR, agentId),
@@ -1036,6 +1047,7 @@ app.on('before-quit', (event) => {
       ['stopStatusNotifications', () => stopStatusNotifications()],
       ['stopErrorTriage', stopErrorTriage],
       ['stopSleepWatch', stopSleepWatch],
+      ['stopStatusWatch', stopStatusWatch],
       ['stopTmpRetention', () => stopTmpRetention()],
       // A claude asked for an account's usage (get_usage) just before the quit.
       ['endUsageProbes', endUsageProbes],

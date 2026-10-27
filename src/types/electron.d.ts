@@ -185,6 +185,8 @@ export interface AgentTickItem {
   lastActivity: string;
   /** When the current status began (ISO). See AgentStatus.statusSince. */
   statusSince?: string;
+  /** Why the sleep pass last left it awake. See AgentStatus.sleepHeld. */
+  sleepHeld?: AgentStatus['sleepHeld'];
   /** What a waiting agent waits on. See AgentStatus.waitingOn. */
   waitingOn?: AgentWaitingOn;
   /** A permission question Tars holds for the window. See AgentStatus.permissionAsk. */
@@ -485,6 +487,12 @@ export interface AgentStatus {
    *  at least) and no tool at work: it looks frozen. Cleared by a write or by any
    *  other status. */
   stalledSince?: string;
+  /** Why the sleep pass last left it awake, and when: orchestrator, not-at-rest, no-cli, starting, recent,
+   *  not-resumable, owed, owes, pending, field, no-process-table or busy. Gone once asleep. */
+  sleepHeld?: { why: string; at: string };
+  /** The last time its status was put right from its CLI's own record (an event that never reached Tars):
+   *  from, to, why (no-cli, not-taken, turn-ended, turn-on-record) and when. */
+  statusReconciled?: { from: string; to: string; why: string; at: string };
   projectPath: string;
   secondaryProjectPath?: string; // Secondary project added via --add-dir
   worktreePath?: string;

@@ -9,8 +9,8 @@ import { writeSecretFileSync } from '../utils/secret-file';
  * Whether the last run of Tars ended abruptly, and who was working when it did
  * (RD-REDEMARRAGE.md, 2.2; approved by JeanBrasse on 2026-10-05).
  *
- * agents.json cannot say: it saves a working agent as idle, and a crash leaves
- * it as the last save had it. So a run marks its start here, keeps the state of
+ * agents.json cannot say: a launch reads every agent in it at rest, and a crash
+ * leaves it as the last save had it. So a run marks its start here, keeps the state of
  * the agents that work as it changes, and marks a clean end at the quit. A
  * record still open at the next launch is a run that ended abruptly: a crash,
  * a kill, a power cut or a reboot that did not quit Tars.
