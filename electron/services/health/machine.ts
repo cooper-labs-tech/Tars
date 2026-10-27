@@ -160,7 +160,7 @@ export async function readMachine(opts: { platform?: NodeJS.Platform; home?: str
     }
   } else {
     memFreeMb = tenth(os.freemem() / MB);
-    memFreePct = os.totalmem() > 0 ? Math.round((os.freemem() / os.totalmem()) * 100) : null;
+    memFreePct = os.totalmem() > 0 ? tenth((os.freemem() / os.totalmem()) * 100) : null;
   }
   return {
     memFreePct,

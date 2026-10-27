@@ -114,7 +114,10 @@ describe('Windows', () => {
   it('5. the free memory the system gives; swap, compression, load and trees unknown', async () => {
     const m = await readMachine({ platform: 'win32' });
     expect(m.memFreeMb).toBeGreaterThan(0);
-    expect(m.memFreePct).toBeGreaterThan(0);
+    // A share, known: on a test host that is not Windows, os.freemem counts free pages only, and may be under 1 %.
+    expect(m.memFreePct).not.toBeNull();
+    expect(m.memFreePct!).toBeGreaterThanOrEqual(0);
+    expect(m.memFreePct!).toBeLessThanOrEqual(100);
     expect([m.compressedMb, m.swapUsedMb, m.swapGrowthMbPerMin, m.load1]).toEqual([null, null, null, null]);
     expect(await readAgentTrees([{ id: 'a', pid: process.pid }], 'win32')).toBeNull();
   });
