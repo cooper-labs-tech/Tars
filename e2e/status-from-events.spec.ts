@@ -152,12 +152,17 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
   const port = apiPort(31506);
-  // The status pass every 500 ms (its waits four passes: 2 s), the sleep after 6 s of rest.
-  const SLEEP_AFTER_MS = 6_000;
+  // The status pass every 500 ms (its grace is four passes: 2 s), the sleep after 45 s of rest: every scenario below
+  // starts within the first seconds, so none of their agents can fall asleep before its own check.
+  const SLEEP_AFTER_MS = 45_000;
 
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', DOROTHY_STATUS_EVERY_MS: '500', DOROTHY_SLEEP_AFTER_MS: String(SLEEP_AFTER_MS) },
   });
+  // The main process's log, the `[status]`, `[sleep]` and `[hooks]` lines among it, kept with the run.
+  const mainLog = fs.createWriteStream(test.info().outputPath('main.log'));
+  app.process().stdout?.on('data', (d) => mainLog.write(d));
+  app.process().stderr?.on('data', (d) => mainLog.write(d));
   const seen: Record<string, unknown> = {};
   try {
     const page = await app.firstWindow();
@@ -167,6 +172,10 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
     const type = (id: string, input: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.sendInput(p), { id, input });
     const saved = () => Object.fromEntries((JSON.parse(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')).agents as Agent[]).map((a) => [a.id, a.status]));
+    const facts = async (id: string) => {
+      const a = await get(id) as Agent & Record<string, unknown>;
+      return Object.fromEntries(['status', 'statusSince', 'lastTurnStartedAt', 'workHandedAt', 'currentSessionId', 'cliRunning', 'statusReconciled', 'sleepHeld', 'asleepSince'].map((k) => [k, a[k]]));
+    };
 
     for (const id of ids) await page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
     await expect.poll(async () => (await list()).filter((a) => a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(ids.length);
@@ -175,59 +184,66 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     const soft = expect.soft;
     const prompted = (id: string, word: string) => expect.poll(() => lines(path.join(home, 'prompts.jsonl')).some((p) => p.id === id && p.prompt.includes(word)), { timeout: 30_000 }).toBe(true);
 
+    // Every scenario starts now, side by side.
+    await type('worker', 'WORK>>150000\r');
+    await type('crashed', 'CRASH>> now\r');
+    await type('noted', 'run it in the background NOTE>>12000\r');
+    for (const id of ['resting', 'lost']) await type(id, 'hello\r');
+
     // ── F7: a plain turn reads running, then idle ──
     for (const id of ['resting', 'lost']) {
-      await type(id, 'hello\r');
       await prompted(id, 'hello');
+      await expect.poll(async () => (await get(id)).status, { timeout: 20_000 }).toBe('idle');
     }
-    for (const id of ['resting', 'lost']) await expect.poll(async () => (await get(id)).status, { timeout: 20_000 }).toBe('idle');
-
-    // ── F1: a turn a task notification started, its start post lost ──
-    await type('noted', 'run it in the background NOTE>>12000\r');
-    await expect.poll(() => lines(path.join(home, 'notified.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await soft.poll(async () => (await get('noted')).status, { timeout: 8_000, message: 'F1: the notification\'s turn reads running' }).toBe('running');
-    seen.notedDuringItsTurn = (await get('noted')).status;
-    await expect.poll(() => lines(path.join(home, 'notified-done.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await expect.poll(async () => (await get('noted')).status, { timeout: 10_000, message: 'idle once its Stop came' }).toBe('idle');
 
     // ── F2: a message Tars typed that the CLI never took ──
     await type('lead', 'TELL>> lost\r');
     await expect.poll(() => lines(path.join(home, 'calls.jsonl')).length, { timeout: 30_000 }).toBe(1);
     await prompted('lost', 'LOST>>');
-    seen.lostRightAfter = (await get('lost')).status;
+    seen.lostRightAfter = await facts('lost');
     await soft.poll(async () => (await get('lost')).status, { timeout: 15_000, message: 'F2: back at its prompt, it reads idle' }).toBe('idle');
-    seen.lost = { status: (await get('lost')).status, statusReconciled: (await get('lost') as Agent & { statusReconciled?: unknown }).statusReconciled };
+    seen.lost = await facts('lost');
 
     // ── F3: a CLI that died mid-turn and left its shell ──
-    await type('crashed', 'CRASH>> now\r');
+    await prompted('crashed', 'CRASH>>');
     await expect.poll(async () => (await get('crashed')).cliRunning, { timeout: 20_000 }).toBe(false);
     await soft.poll(async () => (await get('crashed')).status, { timeout: 15_000, message: 'F3: no running without a CLI' }).not.toBe('running');
-    seen.crashed = (await get('crashed')).status;
+    seen.crashed = await facts('crashed');
 
-    // ── F4 and F5: a working agent reads running, on disk too, and is never put to sleep ──
-    await type('worker', 'WORK>>90000\r');
-    await expect.poll(async () => (await get('worker')).status, { timeout: 20_000 }).toBe('running');
-    // agents.json is written within 30 s of a change (startAgentAutosave).
+    // ── F1: a turn a task notification started, its start post lost ──
+    await expect.poll(() => lines(path.join(home, 'notified.jsonl')).length, { timeout: 30_000 }).toBe(1);
+    await soft.poll(async () => (await get('noted')).status, { timeout: 8_000, message: 'F1: the notification\'s turn reads running' }).toBe('running');
+    seen.notedDuringItsTurn = await facts('noted');
+    await expect.poll(() => lines(path.join(home, 'notified-done.jsonl')).length, { timeout: 30_000 }).toBe(1);
+    await expect.poll(async () => (await get('noted')).status, { timeout: 10_000, message: 'idle once its Stop came' }).toBe('idle');
+
+    // ── F4: a working agent reads running, on disk too (agents.json is written within 30 s of a change) ──
+    expect((await get('worker')).status).toBe('running');
     await soft.poll(() => saved().worker, { timeout: 45_000, message: 'F4: agents.json says running' }).toBe('running');
-    // The resting worker, at rest since F7, falls asleep; the working one does not, and says why.
-    await soft.poll(async () => (await get('resting')).status, { timeout: SLEEP_AFTER_MS * 4, message: 'F5: at rest past the delay, it sleeps' }).toBe('asleep');
+
+    // ── F5 and F6: the resting agent sleeps past the delay; the working one never does, and says why ──
+    await soft.poll(async () => (await get('resting')).status, { timeout: SLEEP_AFTER_MS * 2, message: 'F5: at rest past the delay, it sleeps' }).toBe('asleep');
+    seen.resting = await facts('resting');
     const working = await get('worker');
-    seen.workerWhileWorking = { status: working.status, sleepHeld: working.sleepHeld };
+    seen.worker = await facts('worker');
     expect(working.status, 'F5: a working agent is never put to sleep').toBe('running');
     soft(working.sleepHeld?.why, 'F6: why it stays awake can be read').toBe('not-at-rest');
     // F2's agent is at its prompt, but the message it did not take may still be in its field: put to sleep, its CLI
     // would take it along. It stays awake for that, and says so.
-    await soft.poll(async () => (await get('lost')).sleepHeld?.why, { timeout: SLEEP_AFTER_MS * 4, message: 'F6: the message in its field holds it awake' }).toBe('field');
+    await soft.poll(async () => (await get('lost')).sleepHeld?.why, { timeout: SLEEP_AFTER_MS, message: 'F6: the message in its field holds it awake' }).toBe('field');
     soft((await get('lost')).status, 'F2: still idle').toBe('idle');
-    // The orchestrator never sleeps, and says so.
+    seen.lostLater = await facts('lost');
+    // The orchestrator never sleeps, and says so; the CLI that died is no CLI.
     const lead = await get('lead');
-    seen.lead = { status: lead.status, sleepHeld: lead.sleepHeld };
+    seen.lead = await facts('lead');
     expect(lead.status).not.toBe('asleep');
     soft(lead.sleepHeld?.why, 'F6: an orchestrator says why').toBe('orchestrator');
+    soft((await get('crashed')).sleepHeld?.why, 'F6: no CLI to put to sleep').toBe('no-cli');
     seen.final = Object.fromEntries((await list()).map((a) => [a.id, { status: a.status, sleepHeld: a.sleepHeld }]));
     seen.saved = saved();
   } finally {
     recordValues(seen);
     await app.close().catch(() => { /* gone */ });
+    mainLog.end();
   }
 });
