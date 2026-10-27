@@ -12,9 +12,9 @@ import { statusFix, turnOnRecord, type StatusFacts, type TurnRecord } from '../.
  *
  * The record, read from the tail of a Claude Code transcript (turnOnRecord):
  * R1 a turn in progress (a prompt, then the model's entries, no end yet) read as ended, or the reverse;
- * R2 an end Claude Code writes not taken as one: `system` `turn_duration`, `system` `stop_hook_summary`, and the
- *    interrupt marker ("[Request interrupted by user]", with or without "for tool use"), which ends a turn with no
- *    Stop at all;
+ * R2 an end Claude Code writes not taken as one: `system` `turn_duration`, and the interrupt marker ("[Request
+ *    interrupted by user]", with or without "for tool use"), which ends a turn with no Stop at all; or a
+ *    `stop_hook_summary` alone taken as one: a Stop hook that blocks writes it and the turn goes on;
  * R3 a prompt just submitted, with nothing after it yet, read as no turn;
  * R4 what is no turn read as one: a meta entry, a compact summary, a local command (`/compact`, `/model`: no
  *    model call, no Stop), a subagent's sidechain entry, a queue operation, an attachment, a title, a mode;
@@ -59,8 +59,10 @@ describe('turnOnRecord: what the transcript says of the last turn', () => {
     expect(turnOnRecord(tail(ended(), prompt('again'), said()))?.inTurn).toBe(true);
   });
 
-  it('R2: turn_duration, stop_hook_summary and the interrupt marker each end a turn', () => {
-    expect(turnOnRecord(tail(prompt('go'), said(), ended(undefined, 'stop_hook_summary')))?.inTurn).toBe(false);
+  it('R2: turn_duration and the interrupt marker each end a turn; a stop_hook_summary alone does not', () => {
+    expect(turnOnRecord(tail(prompt('go'), said(), ended(undefined, 'stop_hook_summary'), ended()))?.inTurn).toBe(false);
+    // A Stop hook that blocked: its summary is written, and the turn goes on.
+    expect(turnOnRecord(tail(prompt('go'), said(), ended(undefined, 'stop_hook_summary')))?.inTurn).toBe(true);
     for (const marker of ['[Request interrupted by user]', '[Request interrupted by user for tool use]']) {
       expect(turnOnRecord(tail(prompt('go'), said(), prompt(marker)))?.inTurn, marker).toBe(false);
       expect(turnOnRecord(tail(prompt('go'), said(), entry({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: marker }] } })))?.inTurn, marker).toBe(false);
