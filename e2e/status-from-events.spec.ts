@@ -188,7 +188,7 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     // Every scenario starts now, side by side.
     await type('worker', 'WORK>>150000\r');
     await type('crashed', 'CRASH>> now\r');
-    await type('noted', 'run it in the background NOTE>>12000\r');
+    await type('noted', 'run it in the background NOTE>>20000\r');
     for (const id of ['resting', 'lost']) await type(id, 'hello\r');
 
     // ── F7: a plain turn reads running, then idle ──
@@ -196,6 +196,13 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
       await prompted(id, 'hello');
       await expect.poll(async () => (await get(id)).status, { timeout: 20_000 }).toBe('idle');
     }
+
+    // ── F1: a turn a task notification started, its start post lost ──
+    await expect.poll(() => lines(path.join(home, 'notified.jsonl')).length, { timeout: 30_000 }).toBe(1);
+    await soft.poll(async () => (await get('noted')).status, { timeout: 8_000, message: 'F1: the notification\'s turn reads running' }).toBe('running');
+    seen.notedDuringItsTurn = await facts('noted');
+    await expect.poll(() => lines(path.join(home, 'notified-done.jsonl')).length, { timeout: 30_000 }).toBe(1);
+    await expect.poll(async () => (await get('noted')).status, { timeout: 10_000, message: 'idle once its Stop came' }).toBe('idle');
 
     // ── F2: a message Tars typed that the CLI never took ──
     await type('lead', 'TELL>> lost\r');
@@ -224,13 +231,6 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     await expect.poll(async () => (await get('crashed')).cliRunning, { timeout: 20_000 }).toBe(false);
     await soft.poll(async () => (await get('crashed')).status, { timeout: 15_000, message: 'F3: no running without a CLI' }).not.toBe('running');
     seen.crashed = await facts('crashed');
-
-    // ── F1: a turn a task notification started, its start post lost ──
-    await expect.poll(() => lines(path.join(home, 'notified.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await soft.poll(async () => (await get('noted')).status, { timeout: 8_000, message: 'F1: the notification\'s turn reads running' }).toBe('running');
-    seen.notedDuringItsTurn = await facts('noted');
-    await expect.poll(() => lines(path.join(home, 'notified-done.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await expect.poll(async () => (await get('noted')).status, { timeout: 10_000, message: 'idle once its Stop came' }).toBe('idle');
 
     // ── F4: a working agent reads running, on disk too (agents.json is written within 30 s of a change) ──
     expect((await get('worker')).status).toBe('running');
