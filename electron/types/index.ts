@@ -308,6 +308,9 @@ export interface AgentStatus {
     since: string;
     reportedAt?: string;
   };
+  /** What its last stop ended and kept outside its terminal (core/agent-stop.ts, 2.0.5): `pid <n>: <command>` each,
+   *  the kept ones with why (the owner's limits, a shared daemon), and the containers stopped. Cleared by a start. */
+  stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line
   lastCleanOutput?: string;  // Clean text output captured from transcript by hooks

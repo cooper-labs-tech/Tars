@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { API_PORT } from '../constants';
 import { buildFullPath } from '../utils/path-builder';
+import { redactSecrets } from '../utils/redact-secrets';
 
 /**
  * What an agent started, wherever it went: found by its birth tag, ended by its PID (2.0.5, the owner's lot 2 of
@@ -24,9 +25,13 @@ import { buildFullPath } from '../utils/path-builder';
  * a moment before are taken, and a process whose arguments changed in between is left out. Windows gives it to
  * native code only (the process's PEB): unknown, and nothing is claimed there.
  *
+ * macOS shows no environment of a platform binary (/bin/sleep, /bin/sh, /bin/zsh): such a process carries no
+ * readable tag and is not found. What agents leave running (node, python, a Homebrew program) is readable.
+ *
  * Never Tars itself nor a parent of it (a Tars started from an agent's terminal), and never, by the owner's limits,
- * an ansible run or a `fly ssh` session: those are kept and said. Stopped by PID: SIGTERM, then after the grace
- * SIGKILL to what is still there and still tagged, read again just before.
+ * an ansible run or a `fly ssh` session, nor a shared daemon (SHARED_DAEMONS), with everything each started: those
+ * are kept and said. Never the agent's own terminal either, when it got one again while the stop ran. Stopped by
+ * PID: SIGTERM, then after the grace SIGKILL to what is still there and still tagged, read again just before.
  */
 
 export const AGENT_TAG = 'CLAUDE_AGENT_ID';
@@ -66,6 +71,17 @@ export function bornTagOf(entries: string[], address: string): string | undefine
   return ours && agentId ? agentId : undefined;
 }
 
+/**
+ * macOS: the words of ps -E are split on spaces, so a value can hold a word that looks like a tag (a name set to
+ * `x CLAUDE_AGENT_ID=<other>`). Either tag seen twice: the process is nobody's, never another agent's (the
+ * Audit's L1 on #523).
+ */
+export function macTagOf(words: string[], address: string): string | undefined {
+  const count = (tag: string) => words.filter(word => word.startsWith(`${tag}=`)).length;
+  if (count(AGENT_TAG) !== 1 || count(TARS_TAG) > 1) return undefined;
+  return bornTagOf(words, address);
+}
+
 /** Tars and every parent of it, from a table of (pid, ppid): never ended, whatever their environment. */
 export function tarsAndItsParents(table: Array<{ pid: number; ppid: number }>, self: number = process.pid): Set<number> {
   const parentOf = new Map(table.map(row => [row.pid, row.ppid]));
@@ -74,14 +90,93 @@ export function tarsAndItsParents(table: Array<{ pid: number; ppid: number }>, s
   return chain;
 }
 
-/** Why a process is kept whatever it was born of (the owner's limits of 28/10), or undefined. */
-export function spareReason(command: string): string | undefined {
+/**
+ * Programs that serve every project, whoever started them, kept by a stop (the owner, 28/10): colima, the Docker VM
+ * kotsna's Supabase and parallel's tests run in, its limactl and the Virtualization process; docker; VS Code
+ * opened with `code .`. Named by their exact executable paths, resolved where they are links (Homebrew's bin/
+ * into its Cellar): never by a name or a word of the command, which any script can take. This list only keeps:
+ * what a stop ends is decided by the birth tag alone.
+ */
+export const SHARED_DAEMONS: ReadonlyArray<{ name: string; paths: string[] }> = [
+  { name: 'colima', paths: ['/opt/homebrew/bin/colima', '/usr/local/bin/colima', '/home/linuxbrew/.linuxbrew/bin/colima'] },
+  { name: 'limactl', paths: ['/opt/homebrew/bin/limactl', '/usr/local/bin/limactl', '/home/linuxbrew/.linuxbrew/bin/limactl'] },
+  { name: 'the Virtualization framework', paths: ['/System/Library/Frameworks/Virtualization.framework/Versions/A/XPCServices/com.apple.Virtualization.VirtualMachine.xpc/Contents/MacOS/com.apple.Virtualization.VirtualMachine'] },
+  { name: 'docker', paths: [
+    '/opt/homebrew/bin/docker', '/usr/local/bin/docker', '/usr/bin/docker', '/usr/bin/dockerd', '/usr/bin/containerd',
+    '/Applications/Docker.app/Contents/Resources/bin/docker', '/Applications/Docker.app/Contents/MacOS/com.docker.backend',
+  ] },
+  { name: 'VS Code', paths: [
+    '/Applications/Visual Studio Code.app/Contents/MacOS/Electron', '/Applications/Visual Studio Code.app/Contents/MacOS/Code',
+    '/usr/share/code/code',
+  ] },
+];
+
+/** Each listed path that exists, resolved, to the daemon's name. */
+export function sharedDaemonPaths(list: ReadonlyArray<{ name: string; paths: string[] }> = SHARED_DAEMONS): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const daemon of list) {
+    for (const p of daemon.paths) {
+      try { out.set(fs.realpathSync(p), daemon.name); } catch { /* not on this machine */ }
+    }
+  }
+  return out;
+}
+
+/** An ssh ControlMaster's title (`ssh: <ControlPath> [mux]`): reparented to init or launchd when its parent ends. */
+const MUX = /^ssh: (\S+) \[mux\]$/;
+
+/**
+ * Why a process is kept whatever it was born of (the owner's limits of 28/10), or undefined: an ansible run, a
+ * `fly ssh` session, ansible's or colima's ssh master (by its title), or a shared daemon by its executable.
+ */
+export function spareReason(command: string, executable?: string, shared?: Map<string, string>): string | undefined {
   const words = command.trim().split(/\s+/);
   const names = words.slice(0, 3).map(word => path.basename(word));
   if (names.some(name => /^ansible(-[a-z]+)?$/.test(name))) return 'an ansible run';
   const fly = names.findIndex(name => name === 'fly' || name === 'flyctl');
   if (fly >= 0 && words[fly + 1] === 'ssh') return 'a fly ssh session';
+  const mux = MUX.exec(command.trim());
+  if (mux && mux[1].includes('/.ansible/cp/')) return 'an ansible run';
+  if (mux && /\/\.(colima|lima)\//.test(mux[1])) return 'a shared daemon (colima)';
+  const daemon = executable ? shared?.get(executable) : undefined;
+  return daemon ? `a shared daemon (${daemon})` : undefined;
+}
+
+/**
+ * The executable each process runs, as the system resolves it: macOS, the first `txt` file lsof gives (one call
+ * for all of them); Linux, /proc/<pid>/exe. Read for the agent's processes only, when a stop ends them.
+ */
+export async function executablesOf(pids: number[], platform: NodeJS.Platform = process.platform): Promise<Map<number, string>> {
+  const out = new Map<number, string>();
+  if (pids.length === 0) return out;
+  if (platform === 'linux') {
+    for (const pid of pids) {
+      try { out.set(pid, fs.readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '')); } catch { /* gone, or not ours */ }
+    }
+  } else if (platform === 'darwin') {
+    const listed = await run('lsof', ['-a', '-p', pids.join(','), '-d', 'txt', '-Fpn']);
+    let pid = 0;
+    for (const line of listed.out.split('\n')) {
+      if (line.startsWith('p')) pid = Number(line.slice(1));
+      else if (line.startsWith('n') && pid && !out.has(pid)) out.set(pid, line.slice(1));
+    }
+  }
+  return out;
+}
+
+/** The first of `roots` met walking up from `pid` (itself included), through the parents the table knows. */
+function rootAbove(pid: number, roots: Set<number>, parentOf: Map<number, number>): number | undefined {
+  const seen = new Set<number>();
+  for (let at: number | undefined = pid; at !== undefined && at > 1 && !seen.has(at); at = parentOf.get(at)) {
+    if (roots.has(at)) return at;
+    seen.add(at);
+  }
   return undefined;
+}
+
+/** A process as a stop and the watch say it: `pid <n>: <command>`, secrets masked, cut. */
+export function describeBorn(p: { pid: number; command: string }, why?: string): string {
+  return `pid ${p.pid}: ${redactSecrets(p.command).replace(/\s+/g, ' ').slice(0, 120)}${why ? ` (${why})` : ''}`;
 }
 
 function run(file: string, args: string[], opts: { env?: NodeJS.ProcessEnv } = {}): Promise<{ ok: boolean; out: string; missing?: boolean }> {
@@ -114,7 +209,7 @@ async function readMac(address: string): Promise<BornProcess[] | undefined> {
     const before = args.get(pid);
     if (!before || tars.has(pid)) continue;
     const tokens = envTokensOfPs(m[3].trim(), before.command);
-    const agentId = tokens && bornTagOf(tokens, address);
+    const agentId = tokens && macTagOf(tokens, address);
     if (agentId) born.push({ pid, ppid: before.ppid, agentId, command: before.command });
   }
   return born;
@@ -163,39 +258,75 @@ const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catc
 export interface BornEnd {
   /** Sent SIGTERM, and SIGKILL after the grace if still there and still the agent's. */
   ended: number[];
-  /** Kept by the owner's limits, with why. */
+  /** The same, with their commands, to say what was ended. */
+  endedProcesses: BornProcess[];
+  /** Kept by the owner's limits or as a shared daemon, with everything each started, with why. */
   spared: Array<BornProcess & { why: string }>;
   /** The system gives no environment to read (Windows), or the read failed: nothing was done. */
   unknown: boolean;
 }
 
-/** Ends what the agent started that is still alive, by PID: SIGTERM, then SIGKILL after `graceMs`. */
-export async function endBornProcesses(
-  agentId: string,
-  opts: { address?: string; platform?: NodeJS.Platform; graceMs?: number; read?: () => Promise<BornProcess[] | undefined> } = {},
-): Promise<BornEnd> {
+export interface BornEndOptions {
+  address?: string;
+  platform?: NodeJS.Platform;
+  graceMs?: number;
+  read?: () => Promise<BornProcess[] | undefined>;
+  /** The pid of the agent's terminal now, asked after each read: one it got again while the stop ran is left alone. */
+  terminal?: () => number | undefined;
+  /** Shared daemons by resolved executable (sharedDaemonPaths()). */
+  shared?: Map<string, string>;
+}
+
+/** The agent's processes under its current terminal: its own, not what the stop is for (the Audit's M2 on #523). */
+function underTerminal(all: BornProcess[], terminal: number | undefined): Set<number> {
+  if (terminal === undefined) return new Set();
+  const parentOf = new Map(all.map(p => [p.pid, p.ppid]));
+  const roots = new Set([terminal]);
+  return new Set(all.filter(p => rootAbove(p.pid, roots, parentOf) !== undefined).map(p => p.pid));
+}
+
+/**
+ * Ends what the agent started that is still alive, by PID: SIGTERM, then SIGKILL after `graceMs`. A kept process
+ * is kept with everything under it (the Audit's M1 on #523: an ansible run works through its ssh children).
+ */
+export async function endBornProcesses(agentId: string, opts: BornEndOptions = {}): Promise<BornEnd> {
   const read = opts.read ?? (() => readBornProcesses({ address: opts.address, platform: opts.platform }));
   const all = await read();
-  if (!all) return { ended: [], spared: [], unknown: true };
+  if (!all) return { ended: [], endedProcesses: [], spared: [], unknown: true };
   const mine = all.filter(p => p.agentId === agentId);
-  const spared = mine.flatMap(p => { const why = spareReason(p.command); return why ? [{ ...p, why }] : []; });
-  const ending = mine.filter(p => !spareReason(p.command)).map(p => p.pid);
-  if (ending.length === 0) return { ended: [], spared, unknown: false };
-  for (const pid of ending) { try { process.kill(pid, 'SIGTERM'); } catch { /* gone */ } }
-  const deadline = Date.now() + (opts.graceMs ?? DEFAULT_GRACE_MS);
-  while (Date.now() < deadline && ending.some(alive)) await new Promise(r => setTimeout(r, 100));
-  const left = ending.filter(alive);
-  if (left.length) {
-    // Read again: a pid that is no longer the agent's (ended, its id given to another process) is left alone.
-    const still = new Set(((await read()) ?? []).filter(p => p.agentId === agentId).map(p => p.pid));
-    for (const pid of left) {
-      if (!still.has(pid)) continue;
-      try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
-    }
-    const confirmed = ending.filter(pid => !left.includes(pid) || still.has(pid));
-    return { ended: confirmed, spared, unknown: false };
+  const executables = await executablesOf(mine.map(p => p.pid), opts.platform);
+  const shared = opts.shared ?? sharedDaemonPaths();
+  const whyOf = new Map<number, string>();
+  for (const p of mine) { const why = spareReason(p.command, executables.get(p.pid), shared); if (why) whyOf.set(p.pid, why); }
+  const parentOf = new Map(all.map(p => [p.pid, p.ppid]));
+  const roots = new Set(whyOf.keys());
+  const spared: BornEnd['spared'] = [];
+  for (const p of mine) {
+    const root = rootAbove(p.pid, roots, parentOf);
+    if (root === undefined) continue;
+    spared.push({ ...p, why: root === p.pid ? whyOf.get(root)! : `started by ${root}, ${whyOf.get(root)}` });
   }
-  return { ended: ending, spared, unknown: false };
+  const kept = new Set(spared.map(p => p.pid));
+  const own = underTerminal(all, opts.terminal?.());
+  const ending = mine.filter(p => !kept.has(p.pid) && !own.has(p.pid));
+  const result = (pids: number[]): BornEnd => ({ ended: pids, endedProcesses: ending.filter(p => pids.includes(p.pid)), spared, unknown: false });
+  if (ending.length === 0) return result([]);
+  const pids = ending.map(p => p.pid);
+  for (const pid of pids) { try { process.kill(pid, 'SIGTERM'); } catch { /* gone */ } }
+  const deadline = Date.now() + (opts.graceMs ?? DEFAULT_GRACE_MS);
+  while (Date.now() < deadline && pids.some(alive)) await new Promise(r => setTimeout(r, 100));
+  const left = pids.filter(alive);
+  if (left.length === 0) return result(pids);
+  // Read again: a pid that is no longer the agent's (ended, its id given to another process), or is now under the
+  // terminal the agent got meanwhile, is left alone.
+  const again = ((await read()) ?? []);
+  const ownNow = underTerminal(again, opts.terminal?.());
+  const still = new Set(again.filter(p => p.agentId === agentId && !ownNow.has(p.pid)).map(p => p.pid));
+  for (const pid of left) {
+    if (!still.has(pid)) continue;
+    try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
+  }
+  return result(pids.filter(pid => !left.includes(pid) || still.has(pid)));
 }
 
 /**

@@ -5,7 +5,7 @@ import { emitAgentStatus } from '../services/agent-events';
 import { oneLine } from '../utils/waiting-on';
 import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
-import { endBornProcesses, stopLabelledContainers } from './born-processes';
+import { describeBorn, endBornProcesses, stopLabelledContainers } from './born-processes';
 
 /**
  * Stopping an agent: it is ended, and it says who stopped it, when and why
@@ -29,8 +29,11 @@ import { endBornProcesses, stopLabelledContainers } from './born-processes';
  * reparented to launchd or init, found by its birth tag and ended by its PID,
  * and its Docker containers by their label (core/born-processes.ts). After
  * 28/10's evidence: 1212-Capital's Playwright run and Next servers outlived
- * stop_agent. An ansible run or a `fly ssh` session is kept (the owner's
- * limits), and the watch says it (services/born-watch.ts).
+ * stop_agent. An ansible run, a `fly ssh` session and a shared daemon (colima,
+ * docker, VS Code...) are kept with all they started (the owner's limits), and
+ * the watch says it (services/born-watch.ts). A terminal the agent got again
+ * while the stop ran is its own, and left alone. What was ended and kept is on
+ * the record (`stopProcesses`), which the stop route answers with.
  */
 
 export interface StopRequest {
@@ -83,13 +86,32 @@ export async function stopAgent(
   notify.announce(agent);
 
   if (terminal) await endTerminalTree(terminal);
-  const born = await endBornProcesses(agent.id);
-  const boxes = await stopLabelledContainers(agent.id);
-  if (born.ended.length || born.spared.length || boxes.stopped.length) {
-    console.log(`[agent-stop] ${agent.name || agent.id}: ended ${born.ended.length} process(es) it started outside its terminal, stopped ${boxes.stopped.length} container(s)`
-      + (born.spared.length ? `, kept ${born.spared.map(p => `${p.pid} (${p.why})`).join(', ')}` : ''));
+  const ended = await endBornOf(agent, { terminal: () => (agent.ptyId ? ptyProcesses.get(agent.ptyId)?.pid : undefined) });
+  // On the record and in what whoever asked is told (stopOf), unless a start came first (the Audit's L2 on #523).
+  if (ended && agent.status === 'stopped') {
+    agent.stopProcesses = ended;
+    notify.save();
   }
   return true;
+}
+
+/**
+ * What the agent started outside its terminal, ended (core/born-processes.ts), and its containers stopped by their
+ * label: said in one line each, `pid <n>: <command>`, the kept ones with why. Undefined when there was nothing.
+ * A stop and a removal (agent-remove.ts) run it.
+ */
+export async function endBornOf(agent: AgentStatus, opts: { terminal?: () => number | undefined } = {}): Promise<AgentStatus['stopProcesses']> {
+  const born = await endBornProcesses(agent.id, { terminal: opts.terminal });
+  const boxes = await stopLabelledContainers(agent.id);
+  if (!born.ended.length && !born.spared.length && !boxes.stopped.length) return undefined;
+  const said = {
+    ended: born.endedProcesses.map(p => describeBorn(p)),
+    kept: born.spared.map(p => describeBorn(p, p.why)),
+    containers: boxes.stopped,
+  };
+  console.log(`[agent-stop] ${agent.name || agent.id}: ended ${said.ended.length} process(es) it started outside its terminal, stopped ${said.containers.length} container(s)`
+    + (said.kept.length ? `, kept ${said.kept.join('; ')}` : ''));
+  return said;
 }
 
 /**
@@ -120,4 +142,5 @@ export function clearStop(agent: AgentStatus): void {
   agent.stoppedBy = undefined;
   agent.stoppedAt = undefined;
   agent.stopReason = undefined;
+  agent.stopProcesses = undefined;
 }

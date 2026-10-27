@@ -521,6 +521,9 @@ export interface AgentStatus {
     since: string;
     reportedAt?: string;
   };
+  /** What its last stop ended and kept outside its terminal: `pid <n>: <command>` each, the kept ones with why,
+   *  and the containers stopped. Cleared by a start. */
+  stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;
@@ -1378,8 +1381,8 @@ export interface ElectronAPI {
     list: () => Promise<AgentStatus[]>;
     /** Ends the agent's terminal and everything its CLI started; the agent reads `stopped`, by "you". */
     stop: (id: string, reason?: string) => Promise<{ success: boolean }>;
-    /** savedTo: the wip/ branch its uncommitted work was saved on. worktreeKept: why its worktree was not removed (the save failed, or it holds what no commit keeps). */
-    remove: (id: string) => Promise<{ success: boolean; savedTo?: string; worktreeKept?: string }>;
+    /** savedTo: the wip/ branch its uncommitted work was saved on. worktreeKept: why its worktree was not removed (the save failed, or it holds what no commit keeps). processes: what it started outside its terminal, ended and kept, as a stop says it. */
+    remove: (id: string) => Promise<{ success: boolean; savedTo?: string; worktreeKept?: string; processes?: { ended: string[]; kept: string[]; containers: string[] } }>;
     /** Answers the permission question the state mod asked Tars for this agent (AgentStatus.permissionAsk): allow or deny decide the call, ask shows it in the terminal's dialog. False when there was none. */
     answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string) => Promise<{ success: boolean }>;
     /** Into the agent's terminal. Asleep, a key wakes it (`woke: true`); a lone Esc or Ctrl+C, a mouse or focus report does nothing. */

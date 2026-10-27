@@ -9,6 +9,8 @@ import { stopAcpRuns } from '../services/acp/delegate';
 import { dropPermissionAsks } from '../services/permission-asks';
 import { ignoredNotCaches, saveUncommittedWork, submodulesWithWork } from '../services/save-worktree-work';
 import { gitRefusal } from './chat-slots';
+import { endBornOf } from './agent-stop';
+import type { AgentStatus } from '../types';
 
 export interface RemovedAgent {
   success: true;
@@ -16,6 +18,8 @@ export interface RemovedAgent {
   savedTo?: string;
   /** Why its worktree was kept, when it was. */
   worktreeKept?: string;
+  /** What it started outside its terminal, ended and kept, as a stop says it (agent-stop.ts, endBornOf). */
+  processes?: AgentStatus['stopProcesses'];
 }
 
 /**
@@ -46,6 +50,9 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
     // Nullify so pending onExit callbacks won't mutate state
     agent.ptyId = undefined;
   }
+  // What it started outside its terminal, as a stop ends it: once it has left the fleet, nothing would ever
+  // name it again (the Audit's Info 2 on #523; Tars's own e2e left 20 `my-cli` orphans that way).
+  const processes = agent ? await endBornOf(agent) : undefined;
 
   let savedTo: string | undefined;
   let worktreeKept: string | undefined;
@@ -107,5 +114,5 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
   // Save agents to disk
   saveAgents();
 
-  return { success: true, ...(savedTo ? { savedTo } : {}), ...(worktreeKept ? { worktreeKept } : {}) };
+  return { success: true, ...(savedTo ? { savedTo } : {}), ...(worktreeKept ? { worktreeKept } : {}), ...(processes ? { processes } : {}) };
 }
