@@ -131,7 +131,7 @@ const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'ut
 test.skip(process.platform === 'win32', 'the stand-ins are typed into a POSIX shell and the sleep pass reads ps, which Windows has none of (agent-sleep.ts); on Windows the terminal is the CLI, so a CLI that dies ends its terminal (F3 is the PTY exit there). The status rules themselves read the transcript and are platform-free: __tests__/electron/services/status-truth.test.ts runs them everywhere');
 
 test('the status follows the CLI\'s own record, and the sleep acts on it', async () => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-status-'));
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
@@ -171,51 +171,59 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     for (const id of ids) await page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
     await expect.poll(async () => (await list()).filter((a) => a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(ids.length);
 
+    // Each failure is checked softly, so a run on the old build says which of them it shows, not only the first.
+    const soft = expect.soft;
+    const prompted = (id: string, word: string) => expect.poll(() => lines(path.join(home, 'prompts.jsonl')).some((p) => p.id === id && p.prompt.includes(word)), { timeout: 30_000 }).toBe(true);
+
     // ── F7: a plain turn reads running, then idle ──
-    await type('resting', 'hello\r');
-    await expect.poll(async () => lines(path.join(home, 'prompts.jsonl')).some((p) => p.id === 'resting'), { timeout: 20_000 }).toBe(true);
-    await expect.poll(async () => (await get('resting')).status, { timeout: 20_000 }).toBe('idle');
+    for (const id of ['resting', 'lost']) {
+      await type(id, 'hello\r');
+      await prompted(id, 'hello');
+    }
+    for (const id of ['resting', 'lost']) await expect.poll(async () => (await get(id)).status, { timeout: 20_000 }).toBe('idle');
 
     // ── F1: a turn a task notification started, its start post lost ──
     await type('noted', 'run it in the background NOTE>>12000\r');
     await expect.poll(() => lines(path.join(home, 'notified.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await expect.poll(async () => (await get('noted')).status, { timeout: 8_000, message: 'F1: the notification\'s turn reads running' }).toBe('running');
+    await soft.poll(async () => (await get('noted')).status, { timeout: 8_000, message: 'F1: the notification\'s turn reads running' }).toBe('running');
     seen.notedDuringItsTurn = (await get('noted')).status;
     await expect.poll(() => lines(path.join(home, 'notified-done.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await expect.poll(async () => (await get('noted')).status, { timeout: 10_000, message: 'F1: idle once its Stop came' }).toBe('idle');
+    await expect.poll(async () => (await get('noted')).status, { timeout: 10_000, message: 'idle once its Stop came' }).toBe('idle');
 
     // ── F2: a message Tars typed that the CLI never took ──
     await type('lead', 'TELL>> lost\r');
     await expect.poll(() => lines(path.join(home, 'calls.jsonl')).length, { timeout: 30_000 }).toBe(1);
-    await expect.poll(() => lines(path.join(home, 'prompts.jsonl')).some((p) => p.id === 'lost' && p.prompt.includes('LOST>>')), { timeout: 30_000 }).toBe(true);
+    await prompted('lost', 'LOST>>');
     seen.lostRightAfter = (await get('lost')).status;
-    await expect.poll(async () => (await get('lost')).status, { timeout: 15_000, message: 'F2: back at its prompt, it reads idle' }).toBe('idle');
+    await soft.poll(async () => (await get('lost')).status, { timeout: 15_000, message: 'F2: back at its prompt, it reads idle' }).toBe('idle');
+    seen.lost = { status: (await get('lost')).status, statusReconciled: (await get('lost') as Agent & { statusReconciled?: unknown }).statusReconciled };
 
     // ── F3: a CLI that died mid-turn and left its shell ──
     await type('crashed', 'CRASH>> now\r');
     await expect.poll(async () => (await get('crashed')).cliRunning, { timeout: 20_000 }).toBe(false);
-    await expect.poll(async () => (await get('crashed')).status, { timeout: 15_000, message: 'F3: no running without a CLI' }).not.toBe('running');
+    await soft.poll(async () => (await get('crashed')).status, { timeout: 15_000, message: 'F3: no running without a CLI' }).not.toBe('running');
     seen.crashed = (await get('crashed')).status;
 
     // ── F4 and F5: a working agent reads running, on disk too, and is never put to sleep ──
-    await type('worker', `WORK>>${SLEEP_AFTER_MS * 3}\r`);
+    await type('worker', 'WORK>>90000\r');
     await expect.poll(async () => (await get('worker')).status, { timeout: 20_000 }).toBe('running');
-    await expect.poll(() => saved().worker, { timeout: 10_000, message: 'F4: agents.json says running' }).toBe('running');
+    // agents.json is written within 30 s of a change (startAgentAutosave).
+    await soft.poll(() => saved().worker, { timeout: 45_000, message: 'F4: agents.json says running' }).toBe('running');
     // The resting worker, at rest since F7, falls asleep; the working one does not, and says why.
-    await expect.poll(async () => (await get('resting')).status, { timeout: SLEEP_AFTER_MS * 3, message: 'F5: at rest past the delay, it sleeps' }).toBe('asleep');
+    await soft.poll(async () => (await get('resting')).status, { timeout: SLEEP_AFTER_MS * 4, message: 'F5: at rest past the delay, it sleeps' }).toBe('asleep');
     const working = await get('worker');
     seen.workerWhileWorking = { status: working.status, sleepHeld: working.sleepHeld };
     expect(working.status, 'F5: a working agent is never put to sleep').toBe('running');
-    expect(working.sleepHeld?.why, 'F6: why it stays awake can be read').toBe('not-at-rest');
+    soft(working.sleepHeld?.why, 'F6: why it stays awake can be read').toBe('not-at-rest');
     // F2's agent is at its prompt, but the message it did not take may still be in its field: put to sleep, its CLI
     // would take it along. It stays awake for that, and says so.
-    await expect.poll(async () => (await get('lost')).sleepHeld?.why, { timeout: SLEEP_AFTER_MS * 3, message: 'F6: the message in its field holds it awake' }).toBe('field');
-    expect((await get('lost')).status).toBe('idle');
+    await soft.poll(async () => (await get('lost')).sleepHeld?.why, { timeout: SLEEP_AFTER_MS * 4, message: 'F6: the message in its field holds it awake' }).toBe('field');
+    soft((await get('lost')).status, 'F2: still idle').toBe('idle');
     // The orchestrator never sleeps, and says so.
     const lead = await get('lead');
     seen.lead = { status: lead.status, sleepHeld: lead.sleepHeld };
     expect(lead.status).not.toBe('asleep');
-    expect(lead.sleepHeld?.why).toBe('orchestrator');
+    soft(lead.sleepHeld?.why, 'F6: an orchestrator says why').toBe('orchestrator');
     seen.final = Object.fromEntries((await list()).map((a) => [a.id, { status: a.status, sleepHeld: a.sleepHeld }]));
     seen.saved = saved();
   } finally {
