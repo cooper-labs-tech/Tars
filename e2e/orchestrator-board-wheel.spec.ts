@@ -108,6 +108,8 @@ for (const newInterface of [false, true]) {
       const sub2 = await viewportOf(page, sub);
       await page.mouse.wheel(0, -400);
       await expect.poll(() => viewportOf(page, sub), { timeout: 5_000 }).toBeLessThan(sub2);
+      // xterm snaps its viewport to a whole row once the wheel stops (5 px seen on 28/10): read it settled.
+      await page.waitForTimeout(500);
       const sub2after = await viewportOf(page, sub);
       expect(await columnTop(), 'the column stays').toBe(column2);
       seen.step2 = { columnBefore: column2, terminalBefore: sub2, terminalAfter: sub2after };
