@@ -51,6 +51,8 @@ projects, along with what you meant:
 
 - Never use `pkill`, `killall` or `pgrep ... | xargs kill`, and never signal a process group you did
   not create.
+- On Windows, `taskkill /IM` and `Stop-Process -Name` pick by name the same way: use
+  `taskkill /PID <pid>` or `Stop-Process -Id <pid>`.
 - Stop only what you started, by its PID: note it when you start it (`$!`, or `ps -o pid,command`),
   check `ps -o command= -p <pid>` right before, then `kill <pid>`, or `kill -9 <pid>` if it ignores
   TERM.
