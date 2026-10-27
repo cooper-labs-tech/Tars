@@ -5,6 +5,9 @@ import { execCliSync, cliFailureText, CliNotRunnableError } from './cli-exec';
 import type { AppSettings } from '../types';
 import { codexKeyConfig, keyEnvFor } from '../services/cli-keys';
 import { handedSecondaryFolder } from '../utils/handed-folder';
+import { updateSharedTextSync } from '../utils/shared-file';
+import { removeTomlTable } from '../utils/toml-tables';
+import { parse as parseToml } from 'smol-toml';
 import type {
   CLIProvider,
   InteractiveCommandParams,
@@ -219,20 +222,6 @@ export class CodexProvider implements CLIProvider {
 
   private writeSection(name: string, command: string, args: string[], envVars?: readonly string[]): void {
     const configPath = path.join(this.configDir, 'config.toml');
-
-    if (!fs.existsSync(this.configDir)) {
-      fs.mkdirSync(this.configDir, { recursive: true });
-    }
-
-    let content = '';
-    if (fs.existsSync(configPath)) {
-      content = fs.readFileSync(configPath, 'utf-8');
-    }
-
-    // Remove existing section if present
-    content = this.removeTomlSection(content, name);
-
-    // Append new section
     // TOML basic strings, escaped: a Windows path written raw (C:\Users...)
     // holds `\U` and `\P`, which are no valid escape, and the whole file then
     // fails to parse. Byte for byte the old output when there is no backslash,
@@ -241,9 +230,12 @@ export class CodexProvider implements CLIProvider {
     const argsToml = args.map(a => this.tomlString(a)).join(', ');
     const envToml = envVars && envVars.length > 0 ? `env_vars = [${envVars.map(v => this.tomlString(v)).join(', ')}]\n` : '';
     const section = `\n[mcp_servers.${sectionKey}]\ncommand = ${this.tomlString(command)}\nargs = [${argsToml}]\n${envToml}`;
-
-    content = content.trimEnd() + '\n' + section;
-    fs.writeFileSync(configPath, content);
+    // The section it had taken out first, then added at the end; written whole, parsed, never left broken
+    // (utils/shared-file.ts, utils/toml-tables.ts).
+    const outcome = updateSharedTextSync(configPath, current =>
+      removeTomlTable(current ?? '', `mcp_servers.${sectionKey}`).trimEnd() + '\n' + section, { parse: parseToml });
+    if (outcome === 'refused') throw new Error(`${configPath} would not parse with ${name} in it (or did not already): left as it was`);
+    if (outcome === 'busy') throw new Error(`${configPath} kept changing: ${name} not registered`);
   }
 
   async removeMcpServer(name: string): Promise<void> {
@@ -266,12 +258,10 @@ export class CodexProvider implements CLIProvider {
     const configPath = path.join(this.configDir, 'config.toml');
     if (!fs.existsSync(configPath)) return;
 
-    const content = fs.readFileSync(configPath, 'utf-8');
-    const updated = this.removeTomlSection(content, name);
-    if (updated !== content) {
-      fs.writeFileSync(configPath, updated);
-      console.log(`[codex] Removed MCP server ${name} from config.toml`);
-    }
+    const outcome = updateSharedTextSync(configPath, current =>
+      (current === undefined ? undefined : removeTomlTable(current, `mcp_servers.${this.escapeTomlKey(name)}`)), { parse: parseToml });
+    if (outcome === 'written') console.log(`[codex] Removed MCP server ${name} from config.toml`);
+    else if (outcome !== 'unchanged') console.warn(`[codex] ${name} left in ${configPath}: ${outcome === 'refused' ? 'the file would not parse without it, or did not already' : 'the file kept changing'}`);
   }
 
   isMcpServerRegistered(name: string, expectedServerPath: string, envVars?: readonly string[]): boolean {
@@ -292,14 +282,6 @@ export class CodexProvider implements CLIProvider {
     } catch {
       return false;
     }
-  }
-
-  private removeTomlSection(content: string, name: string): string {
-    const sectionKey = this.escapeTomlKey(name);
-    const escapedKey = sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Match section header + all lines until next section header (line starting with [) or EOF
-    const regex = new RegExp(`\\n?\\[mcp_servers\\.${escapedKey}\\]\\n(?:(?!\\[)[^\\n]*\\n?)*`, 'g');
-    return content.replace(regex, '');
   }
 
   private escapeTomlKey(key: string): string {
