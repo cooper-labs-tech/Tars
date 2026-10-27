@@ -23,11 +23,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * The ways this can fail, each driven below:
  * F1 a turn the CLI started on its own (a background task's notification), whose start post never reached Tars,
  *    reads `idle` while the transcript records it working;
- * F2 a message Tars typed that the CLI never took leaves the agent `running` at its prompt, for good;
+ * F2 a message Tars typed that the CLI never took leaves the agent `running` at its prompt, for good, and whoever
+ *    sent it is never told it did not run (or is told it finished);
  * F3 a CLI that died mid-turn and left its shell reads `running` with no CLI, for good;
  * F4 a working agent reads `idle` in agents.json;
- * F5 an agent at rest past the (shortened) delay is not put to sleep, or a working one is (or one whose field
- *    may hold the message it did not take: put to sleep, its CLI would take that along);
+ * F5 an agent at rest past the (shortened) delay is not put to sleep, or a working one is;
  * F6 why the sleep pass left an agent awake is computed and thrown away: nothing the window or the Audit can read;
  * F7 (regression net) a plain turn, whose hooks all land, no longer reads running then idle.
  *
@@ -203,6 +203,11 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     seen.lostRightAfter = await facts('lost');
     await soft.poll(async () => (await get('lost')).status, { timeout: 15_000, message: 'F2: back at its prompt, it reads idle' }).toBe('idle');
     seen.lost = await facts('lost');
+    // Its sender, the lead, is told it never ran, and never that it finished.
+    const toLead = () => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'lead').map((p) => String(p.prompt));
+    await soft.poll(() => toLead().some((p) => /Lost Message Worker.*never ran what you asked of it/.test(p)), { timeout: 15_000, message: 'F2: the sender is told it never ran' }).toBe(true);
+    seen.toLead = toLead();
+    soft(toLead().some((p) => /Lost Message Worker.*has finished its turn/.test(p)), 'F2: never told it finished').toBe(false);
 
     // ── F3: a CLI that died mid-turn and left its shell ──
     await prompted('crashed', 'CRASH>>');
@@ -228,10 +233,8 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     seen.worker = await facts('worker');
     expect(working.status, 'F5: a working agent is never put to sleep').toBe('running');
     soft(working.sleepHeld?.why, 'F6: why it stays awake can be read').toBe('not-at-rest');
-    // F2's agent is at its prompt, but the message it did not take may still be in its field: put to sleep, its CLI
-    // would take it along. It stays awake for that, and says so.
-    await soft.poll(async () => (await get('lost')).sleepHeld?.why, { timeout: SLEEP_AFTER_MS, message: 'F6: the message in its field holds it awake' }).toBe('field');
-    soft((await get('lost')).status, 'F2: still idle').toBe('idle');
+    // F2's agent was never working: at rest past the delay, it sleeps too (its sender was told to ask again).
+    await soft.poll(async () => (await get('lost')).status, { timeout: SLEEP_AFTER_MS, message: 'F5: the agent F2 left at its prompt sleeps' }).toBe('asleep');
     seen.lostLater = await facts('lost');
     // The orchestrator never sleeps, and says so; the CLI that died is no CLI.
     const lead = await get('lead');
