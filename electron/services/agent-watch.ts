@@ -338,6 +338,22 @@ export function tellCancelled(requesterId: string, workerId: string, by: string,
   });
 }
 
+/**
+ * A message typed into a worker's field that its CLI never took: no turn began
+ * on it, and the worker is back at its prompt (services/status-truth.ts,
+ * `not-taken`). Whoever handed it is told it never ran, since no turn means no
+ * end of turn and no other note: Kotsna-QA's six queued tasks of 28/10 waited
+ * 42 minutes for one.
+ */
+export function tellNotTaken(worker: AgentStatus): void {
+  const requesterId = worker.requestedBy?.agentId;
+  if (!requesterId || requesterId === worker.id) return;
+  handToRequester(requesterId, worker, {
+    kind: 'not_delivered', status: worker.status, reason: 'not-taken', handedAt: worker.workHandedAt,
+    ...(worker.requestedBy?.taskRef ? { taskRef: worker.requestedBy.taskRef } : {}),
+  });
+}
+
 /** Each request a worker will never run, told to whoever asked (the Audit's R2, R3). */
 function tellRequestsEnded(worker: RequestWorker, requests: TaskRequest[], why: RequestsEndedWhy): void {
   const child = agents.get(worker.id);
@@ -884,6 +900,7 @@ function describeNews(news: News): string {
     if (news.reason === 'deleted') return 'was deleted before it finished what you asked of it. Nothing was retried; ask again if it is still needed';
     if (news.reason === 'interrupted') return 'was running a task you delegated to it when Tars stopped: the run was cut, and nothing was retried; ask again if it is still needed';
     if (news.reason === 'cut') return 'was stopped while working on what you asked of it, and did not finish. Nothing was retried; ask again if it is still needed';
+    if (news.reason === 'not-taken') return 'never ran what you asked of it: its CLI never took the message Tars typed in, no turn began on it, and it is back at its prompt. Nothing was retried; ask again if it is still needed';
     const why = news.reason === 'stopped' ? 'it was stopped before it ran it'
       : news.reason === 'restart' ? 'Tars stopped before it ran it'
       : 'it was waiting behind text typed in its field, and its terminal ended before it could go in';

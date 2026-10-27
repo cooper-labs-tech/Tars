@@ -8,6 +8,7 @@ import { hasClaudeHooks } from '../core/end-of-turn';
 import { getProvider } from '../providers';
 import { spellingsOf, transcriptPath } from '../utils/resume-session';
 import type { HookPost } from './codex-sessions';
+import { tellNotTaken } from './agent-watch';
 
 /**
  * An agent's status put right from its CLI's own record when an event never
@@ -252,6 +253,8 @@ export async function checkStatuses(post: (agentId: string, p: HookPost) => Prom
       agent.waitingReason = undefined;
       announceFix(agent);
     }
+    // No turn began on what it was handed: no end of turn will tell its sender.
+    if (fix.why === 'not-taken' && agent.status === 'idle') tellNotTaken(agent);
   }
   return fixed;
 }
