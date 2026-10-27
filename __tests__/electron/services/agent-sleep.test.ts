@@ -51,6 +51,10 @@ import type { Proc } from '../../../electron/services/stall-watch';
  * 20. (2.0.4, before its code, seen in the e2e of the resume) A codex agent's CLI never found under its terminal:
  *     only a claude process was looked for, so every pass said `no-process-table`. Or a claude agent's terminal
  *     taken to run a claude because a codex runs there.
+ * 21. (2.0.5, before its code) An agent is put to sleep while something it started runs outside its terminal's
+ *     tree, found by its birth tag (core/born-processes.ts): a dev server started with nohup, its parent gone. The
+ *     sleep ends the tree only, and that one would outlive it with no session to answer for it. Or one inside
+ *     the tree (its MCP servers, which carry the tag too) counts as outside.
  */
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z');
@@ -236,3 +240,23 @@ describe('a codex agent (2.0.4)', () => {
   });
 });
 
+describe('what it started outside its terminal (2.0.5)', () => {
+  it('21. leaves alone an agent with a tagged process outside its terminal\'s tree, and counts none inside it', () => {
+    expect(sleepRefusal(facts({ bornOutside: [7001] }))).toBe('detached');
+    expect(sleepRefusal(facts({ bornOutside: [] }))).toBeNull();
+    // Unknown (Windows): the other rules decide, as before.
+    expect(sleepRefusal(facts({ bornOutside: undefined }))).toBeNull();
+  });
+
+  it('21. outside means not under its terminal: its CLI and MCP servers are inside, an orphan is not', async () => {
+    const { bornOutsideOf } = await import('../../../electron/services/agent-sleep');
+    const born = [
+      { pid: CLI, ppid: 1, agentId: 'a', command: 'claude' },
+      { pid: 4101, ppid: CLI, agentId: 'a', command: 'node bundle.js' },
+      { pid: 7001, ppid: 1, agentId: 'a', command: 'node next dev' },
+      { pid: 7002, ppid: 1, agentId: 'b', command: 'node next dev' },
+    ];
+    expect(bornOutsideOf('a', CLI, procs(), born)).toEqual([7001]);
+    expect(bornOutsideOf('a', CLI, procs(), undefined)).toBeUndefined();
+  });
+});
