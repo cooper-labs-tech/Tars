@@ -265,6 +265,16 @@ interface VaultProjectFolder {
   notesMoved?: string;
 }
 interface VaultProjectFileEntry { name: string; size: number; mtimeMs: number; kind: 'markdown' | 'text' | 'code' | 'other'; runnable: boolean }
+/** A folder's place in a project's folder: its folder names, [] for the project's folder; or `sub`, the form of 2.0.4. */
+type VaultPlace = { sub: VaultSubfolder } | { place: string[] };
+/** A folder: its count of entries (not a walk), or the code that kept it from being read; a heavy one is only named, never opened. */
+interface VaultPlaceFolder { name: string; type: 'folder'; entries?: number; heavy?: true; error?: string }
+/** A file; `hardlink` when it has a second name elsewhere: never read. */
+interface VaultPlaceFile extends VaultProjectFileEntry { type: 'file'; hardlink?: true }
+/** A symbolic link: where it points as written, never followed nor read. */
+interface VaultPlaceLink { name: string; type: 'link'; target: string | null; mtimeMs: number }
+/** One level: folders by name, then files and links newest first; `more` is how many come after this page. */
+interface VaultPlaceList { entries: Array<VaultPlaceFolder | VaultPlaceFile | VaultPlaceLink>; total: number; offset: number; more?: number }
 interface VaultProjectFileRead {
   name: string;
   /** Where it is, as the system writes it. */
@@ -2154,20 +2164,25 @@ export interface ElectronAPI {
   vault?: {
     /**
      * Each project's folder, ~/.tars/project-files/<key>: what its agents
-     * produce, in reports/ and tools/ (electron/services/vault-project-files.ts).
-     * A file is named by its folder's key, a subfolder and a name, never a
-     * path; every failure is `{ error, code }`.
+     * produce, every folder of it (electron/services/vault-project-files.ts).
+     * A file is named by its folder's key, a place and a name, never a path;
+     * every failure is `{ error, code }`, with `errno` when the system said
+     * why. Codes of a place: invalid_place, heavy, link, not_folder,
+     * no_folder, unreadable.
      */
     projectFolders: () => Promise<{ folders: VaultProjectFolder[] }>;
     projectFiles: (params: { key: string; sub: VaultSubfolder }) => Promise<{ files: VaultProjectFileEntry[]; more?: number } | VaultFailure>;
+    /** One level of a folder, 200 entries from `offset` unless `limit` says (1,000 at most). */
+    projectPlace: (params: { key: string; place: string[]; offset?: number; limit?: number }) => Promise<VaultPlaceList | VaultFailure>;
     /** The text whole up to 1 MB (editable), its first 200 KB past that (truncated, read only), none for a file that is not text. */
-    readProjectFile: (params: { key: string; sub: VaultSubfolder; name: string }) => Promise<VaultProjectFileRead | VaultFailure>;
+    readProjectFile: (params: VaultPlace & { key: string; name: string }) => Promise<VaultProjectFileRead | VaultFailure>;
     /** Written unless it changed on disk since `mtimeSeen` (null for a new file): then `changed`, with its time, and nothing written. */
-    writeProjectFile: (params: { key: string; sub: VaultSubfolder; name: string; text: string; mtimeSeen: number | null }) =>
+    writeProjectFile: (params: VaultPlace & { key: string; name: string; text: string; mtimeSeen: number | null }) =>
       Promise<{ ok: true; mtimeMs: number } | { changed: true; mtimeMs: number | null } | VaultFailure>;
-    /** With a name, shows the file in its folder; without, opens the subfolder. */
-    showProjectFile: (params: { key: string; sub: VaultSubfolder; name?: string }) => Promise<{ success: true } | VaultFailure>;
-    onProjectFilesChanged: (callback: (event: { key: string; sub: VaultSubfolder }) => void) => () => void;
+    /** With a name, shows the file in its folder; without, opens the folder. */
+    showProjectFile: (params: VaultPlace & { key: string; name?: string }) => Promise<{ success: true } | VaultFailure>;
+    /** The folder something changed in (its parent's counts may have moved too); `sub` when it is in reports/ or tools/. */
+    onProjectFilesChanged: (callback: (event: { key: string; place: string[]; sub?: VaultSubfolder }) => void) => () => void;
     listDocuments: (params?: { folder_id?: string; tags?: string[] }) => Promise<{ documents: VaultDocumentElectron[]; error?: string }>;
     getDocument: (id: string) => Promise<{ document?: VaultDocumentElectron; attachments?: VaultAttachmentElectron[]; error?: string }>;
     createDocument: (params: {

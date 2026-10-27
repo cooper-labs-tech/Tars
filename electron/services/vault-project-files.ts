@@ -7,12 +7,16 @@ import { PROJECT_FILES_DIR_NAME, moveNotesOut, projectFilesKey } from '../utils/
 /**
  * The Vault's side of each project's folder, ~/.tars/project-files/<key>
  * (2.0.4, the frames "Vault · project folders" of #457): what the project's
- * agents produce, in reports/ and tools/, listed, read and edited from the
- * window. The window is the renderer, which a page with an XSS holds whole
- * (the Audit's requirements for 2.0.4, section 1), so:
+ * agents produce, listed, read and edited from the window. Since 2.0.5 (the
+ * frames of #526, "Vault (2.0.5) · project folders as a tree") every folder
+ * of it, nested ones included, one level at a time. The window is the
+ * renderer, which a page with an XSS holds whole (the Audit's requirements
+ * for 2.0.4, section 1), so:
  *
- * - it names a file by its folder's key, a subfolder and a name, never by a
- *   path, and each is one segment of its own (R1.1);
+ * - it names a file by its folder's key, a place and a name, never by a
+ *   path: the place is a list of folder names (or today's `sub`, reports or
+ *   tools), and each name is one segment of its own (R1.1);
+ * - a heavy folder (node_modules, .git...) is named, never opened;
  * - every folder and file is checked where it really lies: a link, symbolic
  *   or hard, is never read, written or gone through (R1.2);
  * - text only: 1 MB at most to edit, a longer file read up to its first
@@ -35,7 +39,19 @@ export const WRITE_MAX_BYTES = 1024 * 1024;
 export const READ_SHOWN_BYTES = 200 * 1024;
 /** The entries a list gives; `more` says how many it left out. */
 export const LIST_MAX = 1000;
+/** The entries a place's list gives when the window does not say. */
+export const PAGE_DEFAULT = 200;
+/** The deepest a place goes under the project's folder. */
+export const PLACE_DEPTH_MAX = 16;
 const NAME_MAX = 200;
+
+/**
+ * Folders shown by name and never opened, nor counted: listing one is never
+ * what the Vault is opened for, and one worktree's node_modules alone holds
+ * 100,000 entries (parallel's reports keep 166 worktrees).
+ */
+export const HEAVY_FOLDERS = ['node_modules', '.git', '.venv', 'venv', '.next', '__pycache__', '.turbo', 'dist-electron', 'target'] as const;
+export const isHeavy = (name: unknown) => (HEAVY_FOLDERS as readonly unknown[]).includes(name);
 
 /** What the window may write: text and the scripts of tools/, never a program or a page. */
 const WRITABLE = new Set(['.md', '.txt', '.json', '.yaml', '.yml', '.sh', '.py', '.ts', '.js', '.mjs']);
@@ -49,8 +65,10 @@ const KINDS: Record<string, FileKind> = {
 };
 const kindOf = (name: string): FileKind => KINDS[path.extname(name).toLowerCase()] ?? 'other';
 
-export type Failure = { error: string; code: string };
-const fail = (code: string, error: string): Failure => ({ code, error });
+/** `errno` when the system said why (EACCES, ENOENT...). */
+export type Failure = { error: string; code: string; errno?: string };
+const fail = (code: string, error: string, errno?: string): Failure => (errno ? { code, error, errno } : { code, error });
+const errnoOf = (err: unknown) => (err as NodeJS.ErrnoException).code ?? (err as Error).message;
 
 const root = () => path.join(DATA_DIR, PROJECT_FILES_DIR_NAME);
 
@@ -70,29 +88,64 @@ function realDir(dir: string, expected: string): boolean {
   }
 }
 
-/** The real path of a project folder's subfolder, or why there is none. */
-function subfolderOf(key: unknown, sub: unknown): { dir: string } | Failure {
+/**
+ * The folder names of a place: today's `sub` (reports or tools), or a list of
+ * names, [] for the project's folder itself. A heavy folder's name answers
+ * `heavy` wherever it stands.
+ */
+function segmentsOf(place: unknown): string[] | Failure {
+  if (typeof place === 'string') {
+    return (SUBFOLDERS as readonly string[]).includes(place) ? [place] : fail('invalid_place', 'Not a folder of the Vault.');
+  }
+  if (!Array.isArray(place) || place.length > PLACE_DEPTH_MAX) return fail('invalid_place', 'Not a folder of the Vault.');
+  for (const s of place) {
+    if (isHeavy(s)) return fail('heavy', `${s as string} is not opened: it holds what tools rebuild, not what agents write.`);
+    if (!segmentOk(s, NAME_MAX)) return fail('invalid_place', 'Not a folder of the Vault.');
+  }
+  return place as string[];
+}
+
+/**
+ * The real path of a folder of a project's folder, or why there is none:
+ * every level looked at where it lies, a link at any of them refused, and
+ * the whole path real at the end (a level swapped for a link meanwhile).
+ */
+function placeOf(key: unknown, place: unknown): { dir: string; segments: string[] } | Failure {
   if (!segmentOk(key, 120)) return fail('invalid_key', 'Not a project folder of the Vault.');
-  if (!(SUBFOLDERS as readonly unknown[]).includes(sub)) return fail('invalid_sub', 'Only reports and tools are shown.');
+  const segments = segmentsOf(place);
+  if ('error' in segments) return segments;
   let rootReal: string;
   try {
     rootReal = fs.realpathSync.native(root());
   } catch {
     return fail('no_folder', 'No project folder yet.');
   }
-  const folder = path.join(rootReal, key);
-  if (!realDir(path.join(root(), key), folder)) return fail('no_folder', `No project folder ${key}.`);
-  const dir = path.join(folder, sub as string);
-  if (!realDir(dir, dir)) return fail('no_folder', `${key} has no ${String(sub)} folder, or it is a link.`);
-  return { dir };
+  let dir = path.join(rootReal, key);
+  if (!realDir(path.join(root(), key), dir)) return fail('no_folder', `No project folder ${key}.`);
+  for (const s of segments) {
+    dir = path.join(dir, s);
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(dir);
+    } catch (err) {
+      const errno = errnoOf(err);
+      return errno === 'ENOENT'
+        ? fail('no_folder', `${[key, ...segments].join('/')} is no longer there.`, errno)
+        : fail('unreadable', `${s} could not be read: ${errno}`, errno);
+    }
+    if (stat.isSymbolicLink()) return fail('link', `${s} is a link: the Vault does not follow it.`);
+    if (!stat.isDirectory()) return fail('not_folder', `${s} is not a folder.`);
+  }
+  if (!realDir(dir, dir)) return fail('link', `${[key, ...segments].join('/')} goes through a link: the Vault does not follow it.`);
+  return { dir, segments };
 }
 
-/** A file of a subfolder by its name: where it is, and its state, or why it cannot be. */
-function fileOf(key: unknown, sub: unknown, name: unknown): { dir: string; file: string; spelled: string } | Failure {
+/** A file of a place by its name: where it is, and its state, or why it cannot be. */
+function fileOf(key: unknown, place: unknown, name: unknown): { dir: string; file: string; spelled: string } | Failure {
   if (!segmentOk(name, NAME_MAX)) return fail('invalid_name', 'Not a file name of the Vault.');
-  const folder = subfolderOf(key, sub);
+  const folder = placeOf(key, place);
   if ('error' in folder) return folder;
-  return { dir: folder.dir, file: path.join(folder.dir, name), spelled: path.join(root(), key as string, sub as string, name) };
+  return { dir: folder.dir, file: path.join(folder.dir, name), spelled: path.join(root(), key as string, ...folder.segments, name) };
 }
 
 /** A regular file with one name, never a link: what may be read or written over. */
@@ -155,13 +208,14 @@ export interface ProjectFileEntry { name: string; size: number; mtimeMs: number;
 
 /** A subfolder's files, newest first, 1,000 at most: no link, no hidden file. */
 export function listProjectFiles(key: unknown, sub: unknown): { files: ProjectFileEntry[]; more?: number } | Failure {
-  const folder = subfolderOf(key, sub);
+  if (!(SUBFOLDERS as readonly unknown[]).includes(sub)) return fail('invalid_sub', 'Only reports and tools are shown.');
+  const folder = placeOf(key, sub);
   if ('error' in folder) return folder;
   let names: string[];
   try {
     names = fs.readdirSync(folder.dir);
   } catch (err) {
-    return fail('unreadable', `${String(sub)} could not be read: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}`);
+    return fail('unreadable', `${String(sub)} could not be read: ${errnoOf(err)}`, errnoOf(err));
   }
   const files: ProjectFileEntry[] = [];
   for (const name of names) {
@@ -177,6 +231,84 @@ export function listProjectFiles(key: unknown, sub: unknown): { files: ProjectFi
   }
   files.sort((a, b) => b.mtimeMs - a.mtimeMs || a.name.localeCompare(b.name));
   return files.length > LIST_MAX ? { files: files.slice(0, LIST_MAX), more: files.length - LIST_MAX } : { files };
+}
+
+/**
+ * A folder of a place: how many entries it shows (counted, not walked), or the
+ * code that kept it from being read; a heavy one is only named.
+ */
+export interface PlaceFolderEntry { name: string; type: 'folder'; entries?: number; heavy?: true; error?: string }
+/** A file; `hardlink` when it has a second name elsewhere, and is then never read. */
+export interface PlaceFileEntry extends ProjectFileEntry { type: 'file'; hardlink?: true }
+/** A symbolic link: where it points as written, never followed. */
+export interface PlaceLinkEntry { name: string; type: 'link'; target: string | null; mtimeMs: number }
+export type PlaceEntry = PlaceFolderEntry | PlaceFileEntry | PlaceLinkEntry;
+export interface PlaceList { entries: PlaceEntry[]; total: number; offset: number; more?: number }
+
+/** What a list shows of a folder: no hidden entry, but a heavy folder by its name. */
+const shown = (name: string, isDir: boolean) => segmentOk(name, NAME_MAX) || (isDir && isHeavy(name));
+
+/** The entries a folder shows, from its directory entries alone: no stat, no walk. */
+function countOf(dir: string): { entries: number } | { error: string } {
+  try {
+    return { entries: fs.readdirSync(dir, { withFileTypes: true }).filter((d) => shown(d.name, d.isDirectory())).length };
+  } catch (err) {
+    return { error: errnoOf(err) };
+  }
+}
+
+const byName = (a: { name: string }, b: { name: string }) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+
+/**
+ * One level of a project's folder, never deeper: its folders by name, then
+ * its files and links newest first, `PAGE_DEFAULT` at a time from `offset`
+ * (`LIST_MAX` at most), with the `total` and how many are `more`. A link is
+ * said with its target, a heavy folder named, and a folder that cannot be
+ * read said with its code, never shown as empty.
+ */
+export function listProjectPlace(key: unknown, place: unknown, opts: { offset?: unknown; limit?: unknown } = {}): PlaceList | Failure {
+  const at = placeOf(key, place);
+  if ('error' in at) return at;
+  const offset = Number.isSafeInteger(opts.offset) && (opts.offset as number) > 0 ? opts.offset as number : 0;
+  const limit = Number.isSafeInteger(opts.limit) && (opts.limit as number) > 0 ? Math.min(opts.limit as number, LIST_MAX) : PAGE_DEFAULT;
+  let names: string[];
+  try {
+    names = fs.readdirSync(at.dir);
+  } catch (err) {
+    return fail('unreadable', `${at.segments.at(-1) ?? String(key)} could not be read: ${errnoOf(err)}`, errnoOf(err));
+  }
+  const folders: PlaceFolderEntry[] = [];
+  const rest: Array<PlaceFileEntry | PlaceLinkEntry> = [];
+  for (const name of names) {
+    if (!shown(name, isHeavy(name))) continue;
+    let stat: fs.Stats;
+    try {
+      stat = fs.lstatSync(path.join(at.dir, name));
+    } catch {
+      continue;
+    }
+    if (stat.isSymbolicLink()) {
+      if (!segmentOk(name, NAME_MAX)) continue;
+      let target: string | null = null;
+      try { target = fs.readlinkSync(path.join(at.dir, name)); } catch { /* said without it */ }
+      rest.push({ name, type: 'link', target, mtimeMs: stat.mtimeMs });
+    } else if (stat.isDirectory()) {
+      folders.push(isHeavy(name) ? { name, type: 'folder', heavy: true } : { name, type: 'folder' });
+    } else if (stat.isFile() && segmentOk(name, NAME_MAX)) {
+      rest.push({
+        name, type: 'file', size: stat.size, mtimeMs: stat.mtimeMs, kind: kindOf(name), runnable: runnable(stat),
+        ...(stat.nlink > 1 ? { hardlink: true as const } : {}),
+      });
+    }
+  }
+  folders.sort(byName);
+  rest.sort((a, b) => b.mtimeMs - a.mtimeMs || byName(a, b));
+  const all: PlaceEntry[] = [...folders, ...rest];
+  const entries = all.slice(offset, offset + limit);
+  // Counted on the page only: a folder of 1,000 folders costs 200 reads, not 1,000.
+  for (const e of entries) if (e.type === 'folder' && !e.heavy) Object.assign(e, countOf(path.join(at.dir, e.name)));
+  const more = all.length - offset - entries.length;
+  return { entries, total: all.length, offset, ...(more > 0 ? { more } : {}) };
 }
 
 export interface ProjectFileRead {
@@ -202,8 +334,8 @@ function cutUtf8(buf: Buffer, max: number): Buffer {
 }
 
 /** A file's text, or its name and size only when it is not text; never through a link. */
-export function readProjectFile(key: unknown, sub: unknown, name: unknown): ProjectFileRead | Failure {
-  const at = fileOf(key, sub, name);
+export function readProjectFile(key: unknown, place: unknown, name: unknown): ProjectFileRead | Failure {
+  const at = fileOf(key, place, name);
   if ('error' in at) return at;
   let fd: number;
   try {
@@ -246,8 +378,8 @@ export type WriteResult = { ok: true; mtimeMs: number } | { changed: true; mtime
  * with its time and is left as it is. Written to a new file of its own beside
  * it, then renamed over it: never through a link, never half written.
  */
-export function writeProjectFile(key: unknown, sub: unknown, name: unknown, text: unknown, mtimeSeen: unknown): WriteResult {
-  const at = fileOf(key, sub, name);
+export function writeProjectFile(key: unknown, place: unknown, name: unknown, text: unknown, mtimeSeen: unknown): WriteResult {
+  const at = fileOf(key, place, name);
   if ('error' in at) return at;
   if (!WRITABLE.has(path.extname(name as string).toLowerCase())) {
     return fail('extension', `The Vault writes text and scripts only: ${[...WRITABLE].join(', ')}.`);
@@ -297,12 +429,12 @@ export function writeProjectFile(key: unknown, sub: unknown, name: unknown, text
 
 export { moveNotesOut } from '../utils/project-files';
 
-/** Where a subfolder, or a file of it, is, as the system writes it: for "show folder" and "show in folder". */
-export function locateProjectFile(key: unknown, sub: unknown, name?: unknown): { path: string; isFile: boolean } | Failure {
+/** Where a place, or a file of it, is, as the system writes it: for "show folder" and "show in folder". */
+export function locateProjectFile(key: unknown, place: unknown, name?: unknown): { path: string; isFile: boolean } | Failure {
   if (name === undefined || name === null) {
-    const folder = subfolderOf(key, sub);
-    return 'error' in folder ? folder : { path: path.join(root(), key as string, sub as string), isFile: false };
+    const folder = placeOf(key, place);
+    return 'error' in folder ? folder : { path: path.join(root(), key as string, ...folder.segments), isFile: false };
   }
-  const read = readProjectFile(key, sub, name);
+  const read = readProjectFile(key, place, name);
   return 'error' in read ? read : { path: read.path, isFile: true };
 }
