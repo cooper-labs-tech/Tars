@@ -13,6 +13,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { readAppSettingsFromDisk, shellQuote } from './cli-provider';
+import { codexRoleArgs } from '../services/mcp-roles';
 import { CODEX_SESSION_ID, codexAccepts, codexEffortArgs, codexHome, codexPermissionArgs, readCodexFlags, readCodexModels } from './codex-cli';
 
 /**
@@ -93,6 +94,11 @@ export class CodexProvider implements CLIProvider {
     for (const arg of codexKeyConfig(params.appSettings ?? (readAppSettingsFromDisk() as AppSettings))) {
       command += ` ${shellQuote(arg)}`;
     }
+
+    // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
+    // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
+    const role = codexRoleArgs(params.orchestratorMode === true);
+    for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
 
     command += this.modelAndEffort(params.model, params.effort);
 
