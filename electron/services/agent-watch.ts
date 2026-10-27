@@ -346,11 +346,18 @@ export function tellCancelled(requesterId: string, workerId: string, by: string,
  * 42 minutes for one.
  */
 export function tellNotTaken(worker: AgentStatus): void {
-  const requesterId = worker.requestedBy?.agentId;
-  if (!requesterId || requesterId === worker.id) return;
-  handToRequester(requesterId, worker, {
+  const link = worker.requestedBy;
+  if (!link?.agentId) return;
+  // The request is over: its link spent, and the next request already typed in
+  // takes it (core/task-requests.ts). Kept, the session's next turn of its own
+  // (a note, the owner typing, a notification) was reported to this requester
+  // as the end of the task it had just been told never ran (the Audit's M1 on #524).
+  linkSpent(worker);
+  saveAgents();
+  if (link.agentId === worker.id) return;
+  handToRequester(link.agentId, worker, {
     kind: 'not_delivered', status: worker.status, reason: 'not-taken', handedAt: worker.workHandedAt,
-    ...(worker.requestedBy?.taskRef ? { taskRef: worker.requestedBy.taskRef } : {}),
+    ...(link.taskRef ? { taskRef: link.taskRef } : {}),
   });
 }
 

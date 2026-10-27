@@ -44,8 +44,11 @@ const asked = Number(process.env.DOROTHY_STATUS_EVERY_MS);
 /** Every 30 s; a test run may ask for a shorter period (DOROTHY_STATUS_EVERY_MS, under DOROTHY_E2E only, 200 ms at least). */
 export const STATUS_EVERY_MS = process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 200 ? asked : 30_000;
 
-/** A turn as the transcript's tail records it. `lastAt`: its last entry; `endedAt`: the last end written. */
-export interface TurnRecord { inTurn: boolean; lastAt?: number; endedAt?: number }
+/**
+ * A turn as the transcript's tail records it. `lastAt`: its last entry; `endedAt`: the last end written;
+ * `queued`: a message Claude Code queued itself and has not run yet (it runs it at its next rest).
+ */
+export interface TurnRecord { inTurn: boolean; lastAt?: number; endedAt?: number; queued?: boolean }
 
 /** How much of a transcript is read: its last entries, never the whole file (93 MB measured for one session). */
 const TAIL_BYTES = 256 * 1024;
@@ -74,11 +77,19 @@ export function turnOnRecord(tail: string): TurnRecord | undefined {
   let inTurn: boolean | undefined;
   let lastAt: number | undefined;
   let endedAt: number | undefined;
+  // Messages Claude Code holds in its own queue: an `enqueue` with no `dequeue`
+  // or `remove` after it (a copy typed in during a turn, 27/10, ran an hour later).
+  let held = 0;
   for (const line of tail.split('\n')) {
     if (!line.startsWith('{')) continue;
-    let e: { type?: unknown; subtype?: unknown; isMeta?: unknown; isCompactSummary?: unknown; isSidechain?: unknown; timestamp?: unknown; message?: { content?: unknown } };
+    let e: { type?: unknown; subtype?: unknown; operation?: unknown; isMeta?: unknown; isCompactSummary?: unknown; isSidechain?: unknown; timestamp?: unknown; message?: { content?: unknown } };
     try { e = JSON.parse(line); } catch { continue; }
     if (!e || typeof e !== 'object' || e.isSidechain === true) continue;
+    if (e.type === 'queue-operation') {
+      if (e.operation === 'enqueue') held++;
+      else if ((e.operation === 'dequeue' || e.operation === 'remove') && held > 0) held--;
+      continue;
+    }
     const t = typeof e.timestamp === 'string' ? Date.parse(e.timestamp) : NaN;
     const stamp = Number.isFinite(t) ? t : undefined;
     // Not `stop_hook_summary` alone: a Stop hook that blocks writes it, and the turn goes on.
@@ -104,7 +115,7 @@ export function turnOnRecord(tail: string): TurnRecord | undefined {
     lastAt = stamp ?? lastAt;
   }
   if (inTurn === undefined) return undefined;
-  return { inTurn, ...(lastAt !== undefined ? { lastAt } : {}), ...(endedAt !== undefined ? { endedAt } : {}) };
+  return { inTurn, ...(lastAt !== undefined ? { lastAt } : {}), ...(endedAt !== undefined ? { endedAt } : {}), ...(held > 0 ? { queued: true } : {}) };
 }
 
 export interface StatusFacts {
@@ -135,8 +146,12 @@ const time = (iso: string | undefined) => {
 /**
  * What the status should be, or null to leave it. `every` is the pass's
  * period: four passes are the grace a launch, a hand-over or a turn start has
- * before anything is read into its absence, and a sixth of one the margin
- * between a rest and a write that ends it.
+ * before anything is read into its absence, twenty (ten minutes) before a
+ * message handed is said never taken (the prompt's entry is written only once
+ * its UserPromptSubmit hooks end, which took 36 s under load on 27/10; the
+ * Audit's L1 on #524), and a sixth of one the margin between a rest and a
+ * write that ends it. Nothing is said not taken, or ended, while Claude Code
+ * holds a message in its own queue: it runs it at its next rest.
  * - `running`, or a dialog's `waiting`, with no CLI in the terminal: the CLI is
  *   gone, `completed`, as its SessionEnd would have posted;
  * - `running` while the record says the last turn ended: `idle`, `not-taken`
@@ -154,8 +169,9 @@ export function statusFix(f: StatusFacts, every: number = STATUS_EVERY_MS): Stat
   if (working && !f.cliRunning) return f.starting || lately ? null : { status: 'completed', why: 'no-cli' };
   if (!f.cliRunning || !f.record) return null;
   if (f.status === 'running') {
-    if (f.record.inTurn || f.starting || lately) return null;
+    if (f.record.inTurn || f.record.queued || f.starting || lately) return null;
     const notTaken = handed !== undefined && (started === undefined || handed > started);
+    if (notTaken && f.now - handed < 5 * grace) return null;
     return { status: 'idle', why: notTaken ? 'not-taken' : 'turn-ended' };
   }
   const resting = f.status === 'idle' || (f.status === 'waiting' && f.waitingReason === 'idle');
@@ -229,12 +245,20 @@ export function statusFactsOf(agent: AgentStatus, now: number): StatusFacts {
 }
 
 /**
+ * Posts a hook's post as the agent's terminal: false when there was nothing to
+ * post as (no terminal's token), and the post was not made.
+ */
+export type PostAsTerminal = (agentId: string, p: HookPost) => Promise<boolean>;
+
+/**
  * One look at the fleet: each status put right is posted on the hooks' route
  * as the agent's terminal (`post`, main.ts's postAsTerminal), naming the
- * session it holds. An agent with no session to name, or no terminal to post
- * as, is put right here, the window told.
+ * session it holds, and the route's word is final: a post it refused (stale,
+ * another CLI's) leaves the status as it is (the Audit's Info 1 on #524). Only
+ * an agent with no session to name, or no terminal to post as, is put right
+ * here, the window told.
  */
-export async function checkStatuses(post: (agentId: string, p: HookPost) => Promise<void>, now: number = Date.now(), every: number = STATUS_EVERY_MS): Promise<Array<{ agentId: string } & StatusFix>> {
+export async function checkStatuses(post: PostAsTerminal, now: number = Date.now(), every: number = STATUS_EVERY_MS): Promise<Array<{ agentId: string } & StatusFix>> {
   const fixed: Array<{ agentId: string } & StatusFix> = [];
   for (const agent of agents.values()) {
     if (agent.status !== 'running' && agent.status !== 'waiting' && agent.status !== 'idle') continue;
@@ -244,11 +268,10 @@ export async function checkStatuses(post: (agentId: string, p: HookPost) => Prom
     const from = agent.status;
     agent.statusReconciled = { from, to: fix.status, why: fix.why, at: new Date(now).toISOString() };
     fixed.push({ agentId: agent.id, ...fix });
-    if (agent.currentSessionId) {
-      await post(agent.id, { path: '/api/hooks/status', body: { agent_id: agent.id, session_id: agent.currentSessionId, status: fix.status, event: 'Reconciled', reason: fix.why } });
-    }
-    // Not taken by the route (no session, no terminal's token): put right here.
-    if (agents.get(agent.id) === agent && agent.status === from) {
+    const posted = !!agent.currentSessionId
+      && await post(agent.id, { path: '/api/hooks/status', body: { agent_id: agent.id, session_id: agent.currentSessionId, status: fix.status, event: 'Reconciled', reason: fix.why } });
+    // Nothing to post as (no session, no terminal's token): put right here.
+    if (!posted && agents.get(agent.id) === agent && agent.status === from) {
       agent.status = fix.status;
       agent.waitingReason = undefined;
       announceFix(agent);
@@ -266,7 +289,7 @@ function announceFix(agent: AgentStatus): void {
 
 let timer: ReturnType<typeof setInterval> | undefined;
 
-export function startStatusWatch(opts: { post: (agentId: string, p: HookPost) => Promise<void>; announce: (agent: AgentStatus) => void }): void {
+export function startStatusWatch(opts: { post: PostAsTerminal; announce: (agent: AgentStatus) => void }): void {
   if (timer) return;
   announce = opts.announce;
   let running = false;

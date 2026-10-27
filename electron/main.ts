@@ -807,8 +807,13 @@ app.whenReady().then(async () => {
   };
   // A status its CLI's own record and its terminal contradict, an event having
   // never reached Tars, posted as that terminal's hook would have (services/status-truth.ts).
+  const postStatus = postAsTerminal('status');
   startStatusWatch({
-    post: postAsTerminal('status'),
+    post: async (agentId, post) => {
+      if (!terminalTokenOf(agentId)) return false;
+      await postStatus(agentId, post);
+      return true;
+    },
     announce: (agent) => {
       emitAgentStatus(agent.id);
       broadcastToAllWindows('agent:status', { type: 'status', agentId: agent.id, status: agent.status, timestamp: new Date().toISOString() });
