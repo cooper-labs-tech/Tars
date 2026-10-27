@@ -43,6 +43,22 @@ finished, whatever you started is still running. So finish inside your turn:
   the limit the run is stopped where it stands. When the work is longer, do it in steps and report
   each step before the limit.
 
+## Stopping a process
+
+Every agent Tars runs, in every project, runs as the same user, and the command line of each holds
+ids and often its task. A command that picks processes by a pattern can stop other agents, in other
+projects, along with what you meant:
+
+- Never use `pkill`, `killall` or `pgrep ... | xargs kill`, and never signal a process group you did
+  not create.
+- Stop only what you started, by its PID: note it when you start it (`$!`, or `ps -o pid,command`),
+  check `ps -o command= -p <pid>` right before, then `kill <pid>`, or `kill -9 <pid>` if it ignores
+  TERM.
+- On macOS, `pkill` reads its options only before its first pattern, and a pattern is a regular
+  expression: in `pkill -f "<pattern>" -9` the `-9` is one more pattern and the signal stays TERM.
+  Such a command once stopped five agents of three projects at once, every process whose command
+  line held "-9".
+
 ## Autonomy
 
 When you are delegated a task by Tars or an orchestrator agent, **always act autonomously**:
