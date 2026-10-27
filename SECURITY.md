@@ -690,16 +690,22 @@ followed, by a process that could open the file itself (§1).
 
 The Vault's channels for each project's folder (2.0.4, `vault:project-folders`,
 `vault:project-files`, `vault:project-file:read`, `vault:project-file:write`,
-`vault:project-file:show`, `electron/services/vault-project-files.ts`) take a
-folder's key, `reports` or `tools`, and a file name, never a path, each one
-segment (no separator, no colon, no NUL, not hidden). Every folder and file is
-checked where it really lies: a symbolic link, a second name (a hard link) or a
-subfolder that is a link is never read, written or gone through. The window
+`vault:project-file:show`, and since 2.0.5 `vault:project-place`,
+`electron/services/vault-project-files.ts`) take a folder's key, a place (a
+list of at most 16 folder names, or `reports` or `tools` as in 2.0.4), and a
+file name, never a path, each one segment (no separator, no colon, no NUL, not
+hidden). A heavy folder (`node_modules`, `.git`, `.venv` and the like) is
+named, never opened. Every folder and file is checked where it really lies, at
+every level of the place and the whole path again at the end: a symbolic link,
+a second name (a hard link) or a folder that is a link is never read, written
+or gone through; a link is listed with its target as written, never followed.
+The window
 writes text and scripts only (`.md .txt .json .yaml .yml .sh .py .ts .js .mjs`),
 1 MB at most, no NUL, to a new file of its own renamed over the old one, 0600
 and never executable, and never over a file that changed since it was opened.
-What a compromised window can still do there: write text into `reports/` and
-`tools/` of the project folders Tars keeps, which that project's agents read
+What a compromised window can still do there: write text into any folder of
+the project folders Tars keeps (`reports/` and `tools/` until 2.0.5), which
+that project's agents read
 and may run (`bash tools/x.sh`), and nothing else under `~/.tars` or in a
 repository. An agent of the project reads and writes the same folder (it is in
 its `--add-dir`): the folder is shared with every agent of the project, and is
