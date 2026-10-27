@@ -30,7 +30,8 @@ import type { HookPost } from './codex-sessions';
  * already reads: whether a CLI runs in its terminal (cliRunningIn), and the
  * last turn as its transcript records it (turnOnRecord): Claude Code writes the
  * prompt, the model's entries, and an end of its own (`turn_duration`, or the
- * interrupt marker for a turn cut with no Stop at all). Never on silence: a
+ * interrupt marker for a turn cut with no Stop at all; 8 of 8 Stops of one
+ * session on 2.1.306 were followed by a `turn_duration`). Never on silence: a
  * transcript that has not moved for an hour, in a turn on record, is a turn
  * (a long Bash, a long MCP wait). What is put right is posted on the hooks'
  * own route, as the terminal, as codex-sessions.ts posts codex's turns: the
@@ -63,8 +64,8 @@ function textOf(content: unknown): string {
  * undefined when the tail holds nothing of a turn. The first line, cut by the
  * read, and any line that is not JSON are skipped. A turn's entries are the
  * prompt, the model's answers and the tool results; its end is `system`
- * `turn_duration` or `stop_hook_summary`, written after the Stop hook, or the
- * interrupt marker. A meta entry, a compact summary, a local command, a
+ * `turn_duration`, written once the Stop hooks let it end, or the interrupt
+ * marker. A meta entry, a compact summary, a local command, a
  * subagent's sidechain and the bookkeeping entries (a queue operation, an
  * attachment, a title, a mode) are none of these.
  */
@@ -79,7 +80,8 @@ export function turnOnRecord(tail: string): TurnRecord | undefined {
     if (!e || typeof e !== 'object' || e.isSidechain === true) continue;
     const t = typeof e.timestamp === 'string' ? Date.parse(e.timestamp) : NaN;
     const stamp = Number.isFinite(t) ? t : undefined;
-    if (e.type === 'system' && (e.subtype === 'turn_duration' || e.subtype === 'stop_hook_summary')) {
+    // Not `stop_hook_summary` alone: a Stop hook that blocks writes it, and the turn goes on.
+    if (e.type === 'system' && e.subtype === 'turn_duration') {
       inTurn = false;
       endedAt = stamp ?? endedAt;
       continue;
