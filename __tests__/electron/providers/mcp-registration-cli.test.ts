@@ -32,8 +32,10 @@ import { CMD_SHIM_NODE, SH_SHIM } from './win-fake-disk';
  *
  * Since 2.0.5 (services/mcp-roles.ts) claude registers into ~/.claude/mcp.json
  * itself, which an agent gets through --mcp-config by its role, and the CLI it
- * runs is `claude mcp remove -s user <name>`, only for a server still in Claude
- * Code's user scope, which every session loads: the claude cases seed one there.
+ * runs is `claude mcp remove -s user <name>`, only for Tars's own entry still in
+ * Claude Code's user scope (one of the seven, running its Tars bundle), which every
+ * session loads: the claude cases seed one there, under Tars's telegram name, as an
+ * old build left it (the Audit's M1 on #525: no other entry is ever taken out).
  */
 
 let root: string;
@@ -124,7 +126,7 @@ afterEach(() => {
 });
 
 const ADD_ARGV: Record<Cli, string[]> = {
-  claude: ['mcp', 'remove', '-s', 'user', NAME],
+  claude: ['mcp', 'remove', '-s', 'user', 'claude-mgr-telegram'],
   codex: ['mcp', 'add', NAME, '--', 'node', '<server>'],
   gemini: ['mcp', 'add', '-s', 'user', NAME, 'node', '<server>'],
   grok: ['mcp', 'add', NAME, 'node', '--', '<server>'],
@@ -142,20 +144,24 @@ const FALLBACK_FILE: Record<Cli, string[]> = {
   grok: ['.grok', 'config.toml'],
 };
 
-/** claude: the server still in Claude Code's user scope, which registering takes out (2.0.5). */
+/** The name registered: claude moves only one of Tars's seven out of its user scope, so its cases use one. */
+const nameFor = (cli: Cli) => (cli === 'claude' ? 'claude-mgr-telegram' : NAME);
+
+/** claude: Tars's own entry still in Claude Code's user scope, as an old build left it, which registering takes out (2.0.5). */
 const seedUserScope = (cli: Cli) => {
-  if (cli === 'claude') fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { [NAME]: { command: 'node', args: ['/old.js'] } } }));
+  const old = path.join(root, 'Old Tars (x86)', 'resources', 'mcp-telegram', 'dist', 'bundle.js');
+  if (cli === 'claude') fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { [nameFor(cli)]: { command: 'node', args: [old] } } }));
 };
 
 describe.each(CLIS)('%s mcp add / remove through the installed CLI', (cli) => {
   it('add reaches the CLI with the argv intact, and writes no fallback', async () => {
     installFakeCli(cli);
     seedUserScope(cli);
-    await (await provider(cli)).registerMcpServer(NAME, 'node', [SERVER]);
+    await (await provider(cli)).registerMcpServer(nameFor(cli), 'node', [SERVER]);
 
     expect(recorded()).toEqual([{ cli, argv: ADD_ARGV[cli].map((a) => (a === '<server>' ? SERVER : a)) }]);
     // claude's file is no fallback since 2.0.5: it is where the server goes.
-    if (cli === 'claude') expect(fs.readFileSync(path.join(home, ...FALLBACK_FILE[cli]), 'utf-8')).toContain('tars srv');
+    if (cli === 'claude') expect(fs.readFileSync(path.join(home, ...FALLBACK_FILE[cli]), 'utf-8')).toContain('claude-mgr-telegram');
     else expect(fs.existsSync(path.join(home, ...FALLBACK_FILE[cli]))).toBe(false);
   });
 
@@ -172,12 +178,12 @@ describe.each(CLIS)('%s mcp add / remove through the installed CLI', (cli) => {
     seedUserScope(cli);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'log').mockImplementation(() => {});
-    await (await provider(cli)).registerMcpServer(NAME, 'node', [SERVER]);
+    await (await provider(cli)).registerMcpServer(nameFor(cli), 'node', [SERVER]);
 
     const said = warn.mock.calls.map((c) => c.map(String).join(' ')).join('\n');
     expect(said).toContain(cli);
     expect(said).toMatch(process.platform === 'win32' ? /not-found/ : /ENOENT/);
-    expect(fs.readFileSync(path.join(home, ...FALLBACK_FILE[cli]), 'utf-8')).toContain('tars srv');
+    expect(fs.readFileSync(path.join(home, ...FALLBACK_FILE[cli]), 'utf-8')).toContain(cli === 'claude' ? 'claude-mgr-telegram' : 'tars srv');
   });
 });
 

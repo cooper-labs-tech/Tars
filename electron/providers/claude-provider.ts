@@ -15,6 +15,7 @@ import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
+import { isTarsBundleEntry } from '../services/mcp-roles';
 import { usesNodeHooks, mergeNodeHooks, legacyShCommand } from '../utils/hook-command';
 
 export class ClaudeProvider implements CLIProvider {
@@ -243,11 +244,17 @@ export class ClaudeProvider implements CLIProvider {
    * Into Tars's own file only, `~/.claude/mcp.json`, which an agent gets through --mcp-config by its role
    * (services/mcp-roles.ts, 2.0.5): Claude Code loads its user scope (`~/.claude.json`) for every session
    * whatever --mcp-config says, so a server registered there (`claude mcp add -s user`, until 2.0.5) reached
-   * every worker. One left there is taken out, through the CLI, which owns that file and rewrites it all the
-   * time; the user's own servers there are not touched.
+   * every worker. One Tars left there (isTarsBundleEntry: one of the seven, running its Tars bundle) is taken
+   * out, through the CLI, which owns that file and rewrites it all the time. Nothing else in it is touched: a
+   * server of the owner's under a name Tars registers stays, and that is said once.
    */
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
-    if (this.inUserScope(name)) {
+    const theirs = this.userScopeEntry(name);
+    if (theirs !== undefined && !isTarsBundleEntry(name, theirs) && !this.ownersSaid.has(name)) {
+      this.ownersSaid.add(name);
+      console.log(`[claude] ${name} in Claude Code's user scope is not Tars's own (it runs something else): left there, and Tars's copy goes in ${path.join(this.configDir, 'mcp.json')}`);
+    }
+    if (this.tarsInUserScope(name)) {
       try {
         // argv, never a shell (execCliSync): a name never reaches one.
         execCliSync('claude', ['mcp', 'remove', '-s', 'user', name], { encoding: 'utf-8', stdio: 'pipe' });
@@ -262,13 +269,22 @@ export class ClaudeProvider implements CLIProvider {
     console.log(`[claude] Registered MCP server ${name} in ${path.join(this.configDir, 'mcp.json')}`);
   }
 
-  /** Whether Claude Code's user scope (`~/.claude.json`) holds this server. */
-  private inUserScope(name: string): boolean {
+  /** The servers of the owner's under a name Tars registers, said once each. */
+  private readonly ownersSaid = new Set<string>();
+
+  /** This server's entry in Claude Code's user scope (`~/.claude.json`), or undefined. */
+  private userScopeEntry(name: string): unknown {
     try {
-      return !!JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf-8'))?.mcpServers?.[name];
+      const servers = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf-8'))?.mcpServers;
+      return servers && typeof servers === 'object' && Object.prototype.hasOwnProperty.call(servers, name) ? servers[name] : undefined;
     } catch {
-      return false;
+      return undefined;
     }
+  }
+
+  /** Whether Claude Code's user scope holds Tars's own entry for this server (isTarsBundleEntry). */
+  private tarsInUserScope(name: string): boolean {
+    return isTarsBundleEntry(name, this.userScopeEntry(name));
   }
 
   async removeMcpServer(name: string): Promise<void> {
@@ -297,11 +313,12 @@ export class ClaudeProvider implements CLIProvider {
   }
 
   /**
-   * In Tars's own file with this path, and no longer in Claude Code's user scope: one still there reaches every
-   * session, and registering again takes it out (registerMcpServer).
+   * In Tars's own file with this path, and Tars's own entry no longer in Claude Code's user scope: one still there
+   * reaches every session, and registering again takes it out (registerMcpServer). A server of the owner's there
+   * under the same name does not count: it is never taken out, so it must not keep Tars registering.
    */
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
-    if (this.inUserScope(name)) return false;
+    if (this.tarsInUserScope(name)) return false;
     try {
       const existing = JSON.parse(fs.readFileSync(path.join(this.configDir, 'mcp.json'), 'utf-8'))?.mcpServers?.[name];
       return !!existing?.args?.length && existing.args[existing.args.length - 1] === expectedServerPath;

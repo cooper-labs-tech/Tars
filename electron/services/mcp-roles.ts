@@ -25,6 +25,31 @@ import { writeAtomicSync } from '../utils/secret-file';
 
 export const ORCHESTRATOR_ONLY_MCP: readonly string[] = ['claude-mgr-telegram', 'dorothy-x'];
 
+/** Each of Tars's seven servers, and the directory its bundle ships in (`<resources>/mcp-<dir>/dist/bundle.js`). */
+const TARS_BUNDLE_DIRS: Readonly<Record<string, string>> = {
+  'claude-mgr-orchestrator': 'mcp-orchestrator',
+  'tars-memory': 'mcp-memory',
+  'claude-mgr-telegram': 'mcp-telegram',
+  'claude-mgr-kanban': 'mcp-kanban',
+  'claude-mgr-vault': 'mcp-vault',
+  'dorothy-socialdata': 'mcp-socialdata',
+  'dorothy-x': 'mcp-x',
+};
+
+/**
+ * Whether an entry of Claude Code's user scope is Tars's own: one of the seven, whose command runs that server's
+ * Tars bundle, as an install of Tars (or of Dorothy before it) registered it there until 2.0.5. Only such an entry is
+ * taken out of `~/.claude.json`: a server of the owner's that shares a name Tars registers (`google-workspace`,
+ * `tasmania`, or one of the seven running something else) is the owner's, and stays (the Audit's M1 on #525).
+ */
+export function isTarsBundleEntry(name: string, entry: unknown): boolean {
+  const dir = Object.prototype.hasOwnProperty.call(TARS_BUNDLE_DIRS, name) ? TARS_BUNDLE_DIRS[name] : undefined;
+  if (!dir || !entry || typeof entry !== 'object') return false;
+  const { command, args } = entry as { command?: unknown; args?: unknown };
+  const words = [command, ...(Array.isArray(args) ? args : [])].filter((w): w is string => typeof w === 'string');
+  return words.some(word => word.split(/[\\/]/).slice(-3).join('/') === `${dir}/dist/bundle.js`);
+}
+
 const ORCHESTRATOR_FILE = 'mcp.json';
 const WORKER_FILE = 'mcp-worker.json';
 
