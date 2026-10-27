@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
 import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
@@ -12,8 +12,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 28/10, after 1212-Capital's Playwright run and Next servers outlived stop_agent.
  *
  * In the real app, in a sandbox, with a stand-in CLI that starts two children detached the way a dev server or a
- * test runner is left behind: each in a session of its own (setsid), so that once the CLI ends, neither its tree
- * nor its session reaches them; one of them ignores SIGTERM. A third process, started by this spec, carries the
+ * test runner is left behind (`nohup npm run dev &` from a tool's own shell): each through a launcher that exits
+ * at once, so the child is launchd's or init's long before any stop, and in a session of its own (setsid), so that
+ * neither the terminal's tree nor its session reaches it; one of them ignores SIGTERM. (A child still under the
+ * CLI at the stop is the tree's already: the first version of this spec was green on main for that reason.) A third process, started by this spec, carries the
  * same agent id with another Tars's address, as the sandbox's copy of agents.json or another e2e run would.
  *
  * Asserted, with the classic shell and with the new interface:
@@ -41,8 +43,10 @@ for (const newInterface of [false, true]) {
     const pidsFile = path.join(home, 'detached.pids');
     // In Node, not bash: a bash stand-in is named like the shell, and the app would never see a CLI running.
     const cli = writeNodeCli(path.join(home, 'stand-in-cli.cjs'), [
-      "const { spawn } = require('child_process');",
-      "const keep = (deaf) => { const c = spawn(process.execPath, ['-e', (deaf ? \"process.on('SIGTERM', () => {});\" : '') + 'setInterval(() => {}, 1 << 30)'], { detached: true, stdio: 'ignore' }); c.unref(); return c.pid; };",
+      "const { execFileSync } = require('child_process');",
+      // The launcher starts the child detached, prints its pid and exits: the child is reparented at once.
+      "const launcher = (deaf) => `const c = require('child_process').spawn(process.execPath, ['-e', ${JSON.stringify((deaf ? \"process.on('SIGTERM', () => {});\" : '') + 'setInterval(() => {}, 1 << 30)')}], { detached: true, stdio: 'ignore' }); c.unref(); process.stdout.write(String(c.pid));`;",
+      "const keep = (deaf) => Number(execFileSync(process.execPath, ['-e', launcher(deaf)]).toString());",
       `require('fs').writeFileSync(${JSON.stringify(pidsFile)}, JSON.stringify([keep(false), keep(true)]));`,
       "process.stdout.write('stand-in ready\\n');",
       'process.stdin.resume();',
@@ -81,6 +85,8 @@ for (const newInterface of [false, true]) {
       values.children = children;
       values.aliveBefore = children.map(alive);
       expect(values.aliveBefore).toEqual([true, true]);
+      // Reparented already: nothing of the terminal's tree leads to them (macOS: launchd, Linux: init or a subreaper).
+      values.parents = children.map(pid => { try { return Number(execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)]).toString().trim()); } catch { return null; } });
 
       // 2.
       const stoppedAt = Date.now();
