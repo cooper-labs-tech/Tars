@@ -29,6 +29,11 @@ import { CMD_SHIM_NODE, SH_SHIM } from './win-fake-disk';
  *
  * The argv each CLI gets is today's, on every platform: only how the CLI is
  * found and started changes on win32.
+ *
+ * Since 2.0.5 (services/mcp-roles.ts) claude registers into ~/.claude/mcp.json
+ * itself, which an agent gets through --mcp-config by its role, and the CLI it
+ * runs is `claude mcp remove -s user <name>`, only for a server still in Claude
+ * Code's user scope, which every session loads: the claude cases seed one there.
  */
 
 let root: string;
@@ -119,7 +124,7 @@ afterEach(() => {
 });
 
 const ADD_ARGV: Record<Cli, string[]> = {
-  claude: ['mcp', 'add', '-s', 'user', NAME, 'node', '<server>'],
+  claude: ['mcp', 'remove', '-s', 'user', NAME],
   codex: ['mcp', 'add', NAME, '--', 'node', '<server>'],
   gemini: ['mcp', 'add', '-s', 'user', NAME, 'node', '<server>'],
   grok: ['mcp', 'add', NAME, 'node', '--', '<server>'],
@@ -137,13 +142,21 @@ const FALLBACK_FILE: Record<Cli, string[]> = {
   grok: ['.grok', 'config.toml'],
 };
 
+/** claude: the server still in Claude Code's user scope, which registering takes out (2.0.5). */
+const seedUserScope = (cli: Cli) => {
+  if (cli === 'claude') fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ mcpServers: { [NAME]: { command: 'node', args: ['/old.js'] } } }));
+};
+
 describe.each(CLIS)('%s mcp add / remove through the installed CLI', (cli) => {
   it('add reaches the CLI with the argv intact, and writes no fallback', async () => {
     installFakeCli(cli);
+    seedUserScope(cli);
     await (await provider(cli)).registerMcpServer(NAME, 'node', [SERVER]);
 
     expect(recorded()).toEqual([{ cli, argv: ADD_ARGV[cli].map((a) => (a === '<server>' ? SERVER : a)) }]);
-    expect(fs.existsSync(path.join(home, ...FALLBACK_FILE[cli]))).toBe(false);
+    // claude's file is no fallback since 2.0.5: it is where the server goes.
+    if (cli === 'claude') expect(fs.readFileSync(path.join(home, ...FALLBACK_FILE[cli]), 'utf-8')).toContain('tars srv');
+    else expect(fs.existsSync(path.join(home, ...FALLBACK_FILE[cli]))).toBe(false);
   });
 
   it('remove reaches the CLI with the argv intact', async () => {
@@ -156,6 +169,7 @@ describe.each(CLIS)('%s mcp add / remove through the installed CLI', (cli) => {
   it('with no CLI anywhere, says why in the log and still writes the fallback', async () => {
     // The fake bin alone: node's own folder can hold the machine's real CLIs.
     process.env.PATH = binDir;
+    seedUserScope(cli);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     vi.spyOn(console, 'log').mockImplementation(() => {});
     await (await provider(cli)).registerMcpServer(NAME, 'node', [SERVER]);

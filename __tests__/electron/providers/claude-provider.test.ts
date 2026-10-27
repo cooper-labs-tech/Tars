@@ -98,20 +98,16 @@ describe('ClaudeProvider', () => {
   });
 
   describe('registerMcpServer', () => {
-    it('uses claude mcp add when CLI succeeds', async () => {
+    it('writes mcp.json, never Claude Code\'s user scope (2.0.5, services/mcp-roles.ts)', async () => {
       const provider = await getProvider();
       mockExecFileSync.mockReturnValue('');
 
       await provider.registerMcpServer('test-server', 'node', ['/path/to/bundle.js']);
 
-      // argv, not a shell string: the previous form wrapped each arg in
-      // double quotes and handed the line to execSync, where $() still
-      // expands.
-      expect(mockExecFileSync).toHaveBeenCalledWith(
-        'claude',
-        ['mcp', 'add', '-s', 'user', 'test-server', 'node', '/path/to/bundle.js'],
-        expect.objectContaining({ encoding: 'utf-8', stdio: 'pipe' }),
-      );
+      const config = JSON.parse(fs.readFileSync(path.join(tmpDir, '.claude', 'mcp.json'), 'utf-8'));
+      expect(config.mcpServers['test-server']).toEqual({ command: 'node', args: ['/path/to/bundle.js'] });
+      // The user scope holds no such server: nothing to take out, so the CLI is not run.
+      expect(mockExecFileSync.mock.calls.some((c) => (c[1] as string[])?.[1] === 'add')).toBe(false);
     });
 
     it('falls back to mcp.json when CLI fails', async () => {
