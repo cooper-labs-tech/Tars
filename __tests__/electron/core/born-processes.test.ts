@@ -45,14 +45,26 @@ afterEach(() => {
 });
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
-/** A detached node process (its own session, as setsid makes it) with this environment, ignoring SIGTERM if told. */
+/**
+ * A detached node process (its own session, as setsid makes it) with this environment, ignoring SIGTERM if told.
+ * A deaf one says when its handler is in: on Linux /proc finds a process within milliseconds of its start, and a
+ * SIGTERM sent before node installs the handler ends it.
+ */
+const ready = new Map<ChildProcess, string>();
 function detached(env: Record<string, string>, opts: { deafToTerm?: boolean } = {}): ChildProcess {
-  const script = `${opts.deafToTerm ? "process.on('SIGTERM', () => {});" : ''} setInterval(() => {}, 1 << 30);`;
-  const child = spawn(process.execPath, ['-e', script], { detached: true, stdio: 'ignore', env: { PATH: process.env.PATH ?? '', ...env } });
+  const flag = path.join(process.env.TMPDIR || os.tmpdir(), `tars-born-ready-${process.pid}-${Math.random().toString(36).slice(2)}`);
+  const deaf = opts.deafToTerm ? `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(flag)}, '1');` : '';
+  const child = spawn(process.execPath, ['-e', `${deaf} setInterval(() => {}, 1 << 30);`], { detached: true, stdio: 'ignore', env: { PATH: process.env.PATH ?? '', ...env } });
   child.unref();
   started.push(child);
+  if (opts.deafToTerm) ready.set(child, flag);
   return child;
 }
+const deafReady = async (child: ChildProcess) => {
+  const flag = ready.get(child)!;
+  expect(await until(() => fs.existsSync(flag))).toBe(true);
+  fs.rmSync(flag, { force: true });
+};
 async function until(check: () => boolean | Promise<boolean>, ms = 5_000) {
   const end = Date.now() + ms;
   while (Date.now() < end) { if (await check()) return true; await new Promise(r => setTimeout(r, 50)); }
@@ -120,6 +132,7 @@ posix('the birth tag, on this machine', () => {
     const deaf = detached({ CLAUDE_AGENT_ID: 'agent-born-2', CLAUDE_MGR_API_URL: ADDRESS }, { deafToTerm: true });
     const other = detached({ CLAUDE_AGENT_ID: 'agent-born-3', CLAUDE_MGR_API_URL: ADDRESS });
     await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === 'agent-born-2').length === 2);
+    await deafReady(deaf);
     const began = Date.now();
     const result = await endBornProcesses('agent-born-2', { address: ADDRESS, graceMs: 600 });
     expect(result.unknown).toBe(false);
@@ -132,6 +145,7 @@ posix('the birth tag, on this machine', () => {
   it('5. does not kill a pid that is no longer the agent\'s by the time of the SIGKILL', async () => {
     const deaf = detached({ CLAUDE_AGENT_ID: 'agent-born-4', CLAUDE_MGR_API_URL: ADDRESS }, { deafToTerm: true });
     await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === deaf.pid));
+    await deafReady(deaf);
     let reads = 0;
     // The second read (before the SIGKILL) says the pid is another process's now.
     const read = async () => (++reads === 1 ? readBornProcesses({ address: ADDRESS }) : []);
