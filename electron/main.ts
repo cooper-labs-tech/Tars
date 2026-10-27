@@ -152,6 +152,7 @@ import { scheduleTick } from './utils/agents-tick';
 import { terminalTokenOf } from './core/agent-tokens';
 import { codexDialogOnScreen } from './core/terminal-mirror';
 import { startSleepWatch, stopSleepWatch } from './services/agent-sleep';
+import { startBornWatch, stopBornWatch } from './services/born-watch';
 import { endUsageProbes } from './services/claude-accounts/usage-probe';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './services/update-checker';
@@ -787,6 +788,17 @@ app.whenReady().then(async () => {
   startStallWatch();
   // Agents with no turn for 30 minutes sleep, orchestrators never (services/agent-sleep.ts).
   startSleepWatch();
+  // What an agent started that outlives its session: recorded, and said to its orchestrator an hour on, never
+  // ended by Tars (services/born-watch.ts, 2.0.5).
+  startBornWatch({
+    fleet: () => agents.values(),
+    hasSession: (agent) => {
+      const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+      return !!terminal && cliRunningIn(terminal);
+    },
+    tell: tellOrchestratorAsTars,
+    save: saveAgents,
+  });
   // codex's turns, read from its session log and posted as its terminal's hooks
   // would post them, with that terminal's own token (services/codex-sessions.ts).
   // What a CLI without Tars's hooks would have posted, posted as its terminal,
@@ -1036,6 +1048,7 @@ app.on('before-quit', (event) => {
       ['stopStatusNotifications', () => stopStatusNotifications()],
       ['stopErrorTriage', stopErrorTriage],
       ['stopSleepWatch', stopSleepWatch],
+      ['stopBornWatch', stopBornWatch],
       ['stopTmpRetention', () => stopTmpRetention()],
       // A claude asked for an account's usage (get_usage) just before the quit.
       ['endUsageProbes', endUsageProbes],

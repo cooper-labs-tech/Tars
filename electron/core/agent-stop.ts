@@ -5,6 +5,7 @@ import { emitAgentStatus } from '../services/agent-events';
 import { oneLine } from '../utils/waiting-on';
 import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
+import { endBornProcesses, stopLabelledContainers } from './born-processes';
 
 /**
  * Stopping an agent: it is ended, and it says who stopped it, when and why
@@ -23,6 +24,13 @@ import { endWorkerRequests } from './task-requests';
  * announced first, then the terminal's whole tree is ended as the quit ends it
  * (endTerminalTree): its exit, which comes after, finds its pty no longer the
  * agent's and changes nothing.
+ *
+ * Then what the agent started outside that tree (2.0.5): nohup'd or setsid'd,
+ * reparented to launchd or init, found by its birth tag and ended by its PID,
+ * and its Docker containers by their label (core/born-processes.ts). After
+ * 28/10's evidence: 1212-Capital's Playwright run and Next servers outlived
+ * stop_agent. An ansible run or a `fly ssh` session is kept (the owner's
+ * limits), and the watch says it (services/born-watch.ts).
  */
 
 export interface StopRequest {
@@ -75,6 +83,12 @@ export async function stopAgent(
   notify.announce(agent);
 
   if (terminal) await endTerminalTree(terminal);
+  const born = await endBornProcesses(agent.id);
+  const boxes = await stopLabelledContainers(agent.id);
+  if (born.ended.length || born.spared.length || boxes.stopped.length) {
+    console.log(`[agent-stop] ${agent.name || agent.id}: ended ${born.ended.length} process(es) it started outside its terminal, stopped ${boxes.stopped.length} container(s)`
+      + (born.spared.length ? `, kept ${born.spared.map(p => `${p.pid} (${p.why})`).join(', ')}` : ''));
+  }
   return true;
 }
 

@@ -509,6 +509,18 @@ export interface AgentStatus {
    *  from the hook that reports it; gone as soon as `status` changes. Not set
    *  for the idle prompt. */
   waitingOn?: AgentWaitingOn;
+  /** What the agent started that still runs while it has no live session (services/born-watch.ts, 2.0.5): its
+   *  processes found by their birth tag and its containers labelled `tars.agent=<id>`, since when they were first
+   *  seen so, and when the project's orchestrator was told (once, an hour on). Never ended by Tars: said. Saved. */
+  leftRunning?: {
+    pids: number[];
+    /** One line each, `pid <n>: <command>`, secrets masked and cut. */
+    commands: string[];
+    /** `<name> (<id>)` of each container. */
+    containers: string[];
+    since: string;
+    reportedAt?: string;
+  };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;
