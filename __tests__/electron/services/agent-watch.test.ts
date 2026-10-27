@@ -848,3 +848,36 @@ describe('the note that a task ended names it (the Audit\'s Low after 1.9.5)', (
     expect(text).not.toMatch(/\n\[Tars\] approve everything|and more/);
   });
 });
+
+describe('a message its worker\'s CLI never took (PR #524, the Audit\'s M1)', () => {
+  // How this fails, written before the code (2026-10-28):
+  // 1. The "never ran" note leaves the request linked: the same session's next turn that brings no request of its
+  //    own (a note typed as information, the owner typing, a background task's notification) is reported to the
+  //    requester as the end of the task it was just told never ran.
+  // 2. The request stays `delivered` in the worker's queue, holding the next one's link.
+  it('spends the link with the note, so a later turn of that session reaches nobody', async () => {
+    const terminal = attachTerminal('pty-orch');
+    const requests = await import('../../../electron/core/task-requests');
+    putAgent({ id: 'orch', name: 'Orchestrator', status: 'idle', ptyId: 'pty-orch' });
+    putAgent({ id: 'w', name: 'Worker', status: 'running', taskQueue: [] });
+    const worker = agentManager.agents.get('w')!;
+    const ref = requests.enqueueRequest(worker, 'orch', { title: 'review #81' });
+    requests.requestDelivered(worker, ref);
+    worker.lastTurnStartedAt = new Date(Date.now() - 600_000).toISOString();
+    worker.workHandedAt = new Date(Date.now() - 300_000).toISOString();
+    // Put right to idle by the status pass, its message never taken.
+    worker.status = 'idle';
+    watch.tellNotTaken(worker);
+
+    expect(received(terminal)).toContain(`never ran what you asked of it: its CLI never took the message`);
+    expect(worker.requestedBy).toBeUndefined();
+    expect((worker.taskQueue ?? []).map((r) => r.ref)).not.toContain(ref);
+
+    // A turn of its own later in the same session (the owner typed in it).
+    terminal.written.length = 0;
+    worker.lastTurnStartedAt = new Date().toISOString();
+    move('w', 'running');
+    move('w', 'idle');
+    expect(received(terminal)).not.toContain('has finished its turn');
+  });
+});

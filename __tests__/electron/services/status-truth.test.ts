@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { statusFix, turnOnRecord, type StatusFacts, type TurnRecord } from '../../../electron/services/status-truth';
+import { checkStatuses, statusFix, turnOnRecord, type StatusFacts, type TurnRecord } from '../../../electron/services/status-truth';
+import { agents } from '../../../electron/core/agent-manager';
+import type { AgentStatus } from '../../../electron/types';
 
 /**
  * An agent's status reconciled with its CLI's own record when an event never reached Tars (the DB brief of 28/10,
@@ -20,6 +22,11 @@ import { statusFix, turnOnRecord, type StatusFacts, type TurnRecord } from '../.
  *    model call, no Stop), a subagent's sidechain entry, a queue operation, an attachment, a title, a mode;
  * R5 the tail's first line, cut by the read, or a line that is not JSON, breaks the read;
  * R6 a tail with nothing of a turn in it is read as an ended turn (it says nothing: undefined).
+ * R7 (the Audit's L1 on #524) a message Claude Code queued itself (`queue-operation` `enqueue`, no `dequeue` or
+ *    `remove` after it) is not seen: the CLI holds it and runs it at its next rest (27/10: a copy queued at
+ *    20:41:16 ran at 21:46:37);
+ * R8 (the Audit's L2) the model's entries alone (a tail cut after the prompt, a long turn, a compaction) are not
+ *    a turn, or do not date it.
  *
  * The rule (statusFix), every time measured from the pass's period E (30 s; four passes is the grace):
  * S1 `running` or a dialog's `waiting` with no CLI in the terminal is kept (Parallel-Frontend): it is `completed`,
@@ -38,6 +45,11 @@ import { statusFix, turnOnRecord, type StatusFacts, type TurnRecord } from '../.
  * S8 a status the record rules do not own is changed: a permission dialog with its CLI, an error, stopped,
  *    asleep, completed;
  * S9 an agent at rest whose CLI is gone is called `completed` or `running` (the sleep pass reads `no-cli` for it).
+ * S10 (the Audit's L1) a message handed and not yet on record is called never taken within ten minutes (twenty
+ *     passes): a UserPromptSubmit hook ran 36 s under load on 27/10, and the prompt's entry is written only once
+ *     the hooks end; or a message the CLI queued itself is called never taken at all;
+ * S11 (the Audit's Info 1) the pass puts a status right itself after the route had its say: a post the route
+ *     refused (stale, another CLI's) is overridden. Only an agent there was nothing to post as is put right in place.
  */
 
 const E = 30_000;
@@ -100,6 +112,19 @@ describe('turnOnRecord: what the transcript says of the last turn', () => {
     expect(turnOnRecord(tail(JSON.stringify({ type: 'ai-title' }), entry({ type: 'queue-operation', operation: 'enqueue' })))).toBeUndefined();
   });
 
+  it('R7: a message the CLI queued itself, not yet dequeued or removed, is seen as queued', () => {
+    const q = (operation: string) => entry({ type: 'queue-operation', operation });
+    expect(turnOnRecord(tail(prompt('go'), said(), ended(), q('enqueue')))).toMatchObject({ inTurn: false, queued: true });
+    expect(turnOnRecord(tail(prompt('go'), q('enqueue'), said(), ended(), q('dequeue')))?.queued).toBeFalsy();
+    expect(turnOnRecord(tail(prompt('go'), q('enqueue'), q('remove'), said(), ended()))?.queued).toBeFalsy();
+    expect(turnOnRecord(tail(prompt('go'), said(), ended()))?.queued).toBeFalsy();
+  });
+
+  it('R8: the model\'s entries alone are a turn in progress, and date it', () => {
+    const r = turnOnRecord(tail(said('2026-10-28T11:58:00.000Z'), said('2026-10-28T11:59:30.000Z')));
+    expect(r).toEqual({ inTurn: true, lastAt: Date.parse('2026-10-28T11:59:30.000Z') });
+  });
+
   it('says when the record was last written by a turn and when it last ended', () => {
     const r = turnOnRecord(tail(prompt('go', '2026-10-28T11:00:00.000Z'), said('2026-10-28T11:01:00.000Z'), ended('2026-10-28T11:01:01.000Z'), prompt('next', '2026-10-28T11:30:00.000Z')));
     expect(r).toEqual({ inTurn: true, lastAt: Date.parse('2026-10-28T11:30:00.000Z'), endedAt: Date.parse('2026-10-28T11:01:01.000Z') });
@@ -126,9 +151,17 @@ describe('statusFix: the status put right from the record and the process', () =
     expect(statusFix(facts({ cliRunning: false, lastTurnStartedAt: ago(E) }), E)).toBeNull();
   });
 
-  it('S3: a message handed after the last turn began, not taken within the grace, is idle: not-taken', () => {
-    expect(statusFix(facts({ lastTurnStartedAt: ago(20 * 60_000), workHandedAt: ago(5 * E), record: record(false, 5 * E) }), E))
+  it('S3: a message handed after the last turn began, not taken within ten minutes, is idle: not-taken', () => {
+    expect(statusFix(facts({ lastTurnStartedAt: ago(20 * 60_000), workHandedAt: ago(21 * E), record: record(false, 21 * E) }), E))
       .toEqual({ status: 'idle', why: 'not-taken' });
+  });
+
+  it('S10: not within ten minutes of the hand-over, nor while the CLI holds it queued', () => {
+    expect(statusFix(facts({ lastTurnStartedAt: ago(20 * 60_000), workHandedAt: ago(5 * E), record: record(false, 5 * E) }), E)).toBeNull();
+    expect(statusFix(facts({ lastTurnStartedAt: ago(20 * 60_000), workHandedAt: ago(19 * E), record: record(false, 19 * E) }), E)).toBeNull();
+    expect(statusFix(facts({ lastTurnStartedAt: ago(20 * 60_000), workHandedAt: ago(30 * E), record: { ...record(false, 30 * E), queued: true } }), E)).toBeNull();
+    // A turn that ended, nothing handed since: the ordinary grace.
+    expect(statusFix(facts({ lastTurnStartedAt: ago(5 * E), workHandedAt: ago(20 * E), record: { ...record(false, 5 * E), queued: true } }), E)).toBeNull();
   });
 
   it('S4: a turn the record ended, begun past the grace, nothing handed since, is idle: turn-ended', () => {
@@ -170,5 +203,29 @@ describe('statusFix: the status put right from the record and the process', () =
   it('S9: at rest with no CLI stays as it is', () => {
     expect(statusFix(facts({ status: 'idle', cliRunning: false }), E)).toBeNull();
     expect(statusFix(facts({ status: 'idle', cliRunning: false, record: { inTurn: true, lastAt: at(2_000) } }), E)).toBeNull();
+  });
+});
+
+describe('checkStatuses: the route\'s word is final (the Audit\'s Info 1 on #524)', () => {
+  const running = (): AgentStatus => ({
+    id: 'gone', name: 'Gone', character: 'robot', provider: 'claude', projectPath: '/p', skills: [], output: [], lastActivity: '',
+    status: 'running', currentSessionId: '11111111-1111-4111-8111-111111111111', ptyId: 'p-gone',
+    lastTurnStartedAt: new Date(Date.now() - 60 * 60_000).toISOString(), workHandedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
+  } as unknown as AgentStatus);
+
+  it('S11: a post the route took leaves the status to the route; only one never posted is put right in place', async () => {
+    const posts: string[] = [];
+    agents.set('gone', running());
+    try {
+      // Posted, and the route refused it (the status did not move): it stays as the route left it.
+      await checkStatuses(async (id) => { posts.push(id); return true; });
+      expect(agents.get('gone')!.status).toBe('running');
+      // Nothing to post as (no terminal's token): put right here.
+      await checkStatuses(async (id) => { posts.push(id); return false; });
+      expect(agents.get('gone')!.status).toBe('completed');
+      expect(posts).toEqual(['gone', 'gone']);
+    } finally {
+      agents.delete('gone');
+    }
   });
 });
