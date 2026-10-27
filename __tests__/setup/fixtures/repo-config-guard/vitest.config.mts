@@ -14,6 +14,9 @@ export default defineConfig({
   test: {
     dir: here,
     environment: 'node',
+    // One fixture at a time: several write the same throwaway .git/config, and git does not wait for its lock
+    // ("could not lock config file .git/config: File exists", the Audit's M1 on #529: 3 red of 8 with files in parallel).
+    fileParallelism: false,
     setupFiles: [path.join(here, '..', '..', 'repo-config-guard.ts')],
     include: ['*.fixture.ts'],
   },

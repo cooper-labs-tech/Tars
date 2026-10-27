@@ -75,9 +75,15 @@ describe('the repository\'s own git configuration', () => {
     expect(fs.realpathSync(sharedGitConfig(repo)!)).toBe(shared);
     expect(fs.realpathSync(sharedGitConfig(worktree)!)).toBe(shared);
     expect(fs.realpathSync(sharedGitConfig(path.join(worktree, 'deep', 'er'))!)).toBe(shared);
-    // git's own answer for the checkout this suite runs in.
-    const common = git(process.cwd(), ['rev-parse', '--path-format=absolute', '--git-common-dir']);
-    expect(fs.realpathSync(sharedGitConfig(process.cwd())!)).toBe(fs.realpathSync(path.join(common, 'config')));
+    // git's own answer for the checkout this suite runs in, when it runs in one: from a source archive there is none
+    // (6), and the guard finds none either (the Audit's L1 on #529).
+    const inside = spawnSync('git', ['rev-parse', '--is-inside-work-tree'], { cwd: process.cwd(), encoding: 'utf8' }).stdout?.trim() === 'true';
+    if (inside) {
+      const common = git(process.cwd(), ['rev-parse', '--path-format=absolute', '--git-common-dir']);
+      expect(fs.realpathSync(sharedGitConfig(process.cwd())!)).toBe(fs.realpathSync(path.join(common, 'config')));
+    } else {
+      expect(sharedGitConfig(process.cwd())).toBeNull();
+    }
     git(repo, ['worktree', 'remove', '--force', worktree]);
   });
 
@@ -96,6 +102,7 @@ describe('the repository\'s own git configuration', () => {
       .toEqual({ added: ['remote.a.url=testx::foo', 'protocol.testx.allow=always'], removed: [] });
   });
 
+  // A child vitest each, its fixtures one at a time: 90 s, as tmpdir-isolation.test.ts gives its own.
   it('1, 3, 7. a file that writes into it fails, by name, with the configuration and what changed', () => {
     const repo = throwawayRepo();
     const run = runFixtures(repo, ['writes-remote', 'unsets-key']);
@@ -105,12 +112,12 @@ describe('the repository\'s own git configuration', () => {
     expect(run.output).toContain('remote.a.url=testx::foo');
     expect(run.output).toContain('protocol.testx.allow=always');
     expect(run.output).toMatch(/unsets-key\.fixture\.ts[\s\S]*removed: core\.guardprobe=kept/);
-  });
+  }, 90_000);
 
   it('4, 5. a file that writes its own repository, or adds a tracking branch, passes', () => {
     const repo = throwawayRepo();
     const run = runFixtures(repo, ['own-repo', 'adds-branch']);
     expect(run.status, run.output).toBe(0);
     expect(run.output).toMatch(/Test Files {2}2 passed/);
-  });
+  }, 90_000);
 });
