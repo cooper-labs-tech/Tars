@@ -114,6 +114,14 @@ describe('redactSecrets', () => {
     expect(redactSecrets('API_KEY=xxxxxxxxxxxxxxxx')).toBe('API_KEY=xxxxxxxxxxxxxxxx');
   });
 
+  it('takes the password out of a URL, as a database command line carries it (the Audit\'s L2 on #537)', () => {
+    const out = redactSecrets('psql postgres://app:hunter2secret@db.local:5432/x && git clone https://me:tok@github.com/o/r');
+    expect(out).not.toContain('hunter2secret');
+    expect(out).not.toContain(':tok@');
+    expect(out).toContain('postgres://app:');
+    expect(out).toContain('@db.local:5432/x');
+  });
+
   it('leaves ordinary output alone', () => {
     const prose = [
       'Reading src/app/usage/page.tsx',

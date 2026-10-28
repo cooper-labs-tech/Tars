@@ -29,6 +29,19 @@ import { HeavySlot, type SlotWorld, type SlotMachine } from '../../../electron/s
  *      automatic): the world gives the slot no way to end a process, and an alert changes nothing of the lease.
  * H11. A ticket is given back, or read, by another agent than the one that asked.
  * H12. The slot count is a setting: two slots grant two asks; a setting that is not a number in range is 1.
+ * And from the Audit's gate of #537 (AUDIT-PR537.md), written before their code:
+ * H13. (L1) Where the pid cannot be checked, a lease sits on anything: an agent with no terminal is taken at its
+ *      word, and a lease on Tars's own process or one of its parents never ends. Refused, with or without a table.
+ * H14. (L1) An ask rides another agent's lease: given that holder's pid (where no table can be read), it is granted
+ *      at once inside it, ahead of the queue. Only a lease of the same agent nests.
+ * H15. (M2) A lease taken with heavy_slot_take is held by the agent's CLI, which lives for hours: an agent that
+ *      forgets to give it back holds the machine's only slot until it sleeps, an orchestrator for good, and every
+ *      `tars-slot run` of every project waits. It is given back when that agent's turn ends (its Stop, or idle on
+ *      record), granted or still waiting; a `tars-slot run` lease, held by its own process, is not.
+ * H16. (M2) The owner cannot give a lease back from the window: any ticket is given back by the window's call, which
+ *      names whose it was.
+ * H17. (L2) A run's label is its command line, read by every agent and the window: a secret in it (a token, a URL's
+ *      password) is shown there. Masked before it is recorded.
  */
 
 type World = SlotWorld & { set: (m: Partial<SlotMachine>) => void; dead: Set<number>; t: number; alerts: Array<{ ticket: string; text: string }>; table: Array<{ pid: number; ppid: number }> | undefined };
@@ -44,6 +57,8 @@ function world(over: Partial<{ slots: number; diskGb: number; memFreePct: number
     table: [
       { pid: 101, ppid: 100 }, { pid: 102, ppid: 101 }, { pid: 103, ppid: 102 }, { pid: 104, ppid: 101 },
       { pid: 201, ppid: 200 }, { pid: 202, ppid: 201 }, { pid: 301, ppid: 300 }, { pid: 302, ppid: 301 },
+      // Tars (900), its parent (899) and the parent's parent (898); a's terminal is Tars's child.
+      { pid: 900, ppid: 899 }, { pid: 899, ppid: 898 }, { pid: 898, ppid: 1 }, { pid: 100, ppid: 900 },
     ],
     set: (m) => { machine = { ...machine, ...m }; },
     slots: () => over.slots ?? 1,
@@ -54,11 +69,13 @@ function world(over: Partial<{ slots: number; diskGb: number; memFreePct: number
     now: () => w.t,
     changed: () => {},
     alert: (ticket, text) => { w.alerts.push({ ticket: ticket.id, text }); },
+    tars: () => [900, 899],
   };
   return w;
 }
 
-const ask = (pid: number, agentId: string, priority: 'gate' | 'normal' | 'background' = 'normal', extra: { orchestrator?: boolean; terminalPid?: number } = {}) => ({
+const ask = (pid: number, agentId: string, priority: 'gate' | 'normal' | 'background' = 'normal', extra: { orchestrator?: boolean; terminalPid?: number; untilTurnEnds?: boolean } = {}) => ({
+  ...(extra.untilTurnEnds ? { untilTurnEnds: true } : {}),
   agentId, agentName: agentId.toUpperCase(), projectPath: `/p/${agentId}`, pid, priority, label: `${agentId}'s run`,
   orchestrator: extra.orchestrator ?? false, terminalPid: extra.terminalPid ?? (pid >= 300 ? 300 : pid >= 200 ? 200 : 100),
 });
@@ -233,5 +250,70 @@ describe('the machine, before a grant and during a run', () => {
     expect(slot.get(a.id)?.grantedAt).toBeDefined();
     expect(slot.get(a.id)?.alerts).toHaveLength(5);
     expect(Object.keys(w)).not.toContain('kill');
+  });
+});
+
+describe('the Audit\'s gate of #537', () => {
+  it('H13. no terminal to check against, or Tars\'s own process or a parent of it: refused, with or without a table', async () => {
+    for (const table of [true, false]) {
+      const w = world();
+      if (!table) w.table = undefined;
+      const slot = new HeavySlot(w);
+      await expect(slot.ask({ ...ask(102, 'a'), terminalPid: undefined }), String(table)).rejects.toThrow(/no terminal/);
+      for (const pid of [900, 899]) await expect(slot.ask({ ...ask(pid, 'a'), terminalPid: 100 })).rejects.toThrow(/Tars/);
+    }
+    // The parent's parent, found through the table.
+    await expect(new HeavySlot(world()).ask({ ...ask(898, 'a'), terminalPid: 898 })).rejects.toThrow(/Tars/);
+  });
+
+  it('H14. only a lease of the same agent nests: another agent giving the holder\'s pid waits its turn', async () => {
+    const w = world();
+    w.table = undefined;
+    const slot = new HeavySlot(w);
+    const run = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const rider = await slot.ask({ ...ask(102, 'b'), terminalPid: 200 });
+    expect(rider.nestedIn).toBeUndefined();
+    expect(rider.grantedAt).toBeUndefined();
+    const own = await slot.ask(ask(102, 'a'));
+    expect(own.nestedIn).toBe(run.id);
+  });
+
+  it('H15. a lease the tool took is given back at its agent\'s turn end, granted or waiting; a run\'s lease is not', async () => {
+    const w = world({ slots: 2 });
+    const slot = new HeavySlot(w);
+    const tool = await slot.ask(ask(101, 'a', 'normal', { untilTurnEnds: true }));
+    const run = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const waiting = await slot.ask(ask(101, 'a', 'normal', { untilTurnEnds: true }));
+    const other = await slot.ask(ask(201, 'b', 'normal', { untilTurnEnds: true }));
+    await slot.pump();
+    expect(slot.get(other.id)?.grantedAt).toBeUndefined();
+    const ended = slot.endTurn('a');
+    expect(ended.map(t => t.id).sort()).toEqual([tool.id, waiting.id].sort());
+    expect(slot.get(tool.id)).toBeUndefined();
+    expect(slot.get(waiting.id)).toBeUndefined();
+    expect(slot.get(run.id)?.grantedAt).toBeDefined();
+    await slot.pump();
+    expect(slot.get(other.id)?.grantedAt).toBeDefined();
+    expect(slot.endTurn('a')).toEqual([]);
+  });
+
+  it('H16. the window gives back any lease, and is told whose it was', async () => {
+    const slot = new HeavySlot(world());
+    const a = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    expect(slot.giveBackForOwner(a.id)?.agentId).toBe('a');
+    expect(slot.get(a.id)).toBeUndefined();
+    expect(slot.giveBackForOwner(a.id)).toBeUndefined();
+  });
+
+  it('H17. a secret in the label is masked before it is recorded', async () => {
+    const slot = new HeavySlot(world());
+    const token = ['ghp_', 'B'.repeat(8), 'C'.repeat(8), 'D'.repeat(8)].join('');
+    const t = await slot.ask({ ...ask(102, 'a'), label: `curl -H "Authorization: Bearer ${token}" && psql postgres://app:hunter2secret@db/x` });
+    expect(t.label).not.toContain(token);
+    expect(t.label).not.toContain('hunter2secret');
+    expect(t.label).toMatch(/^curl -H "Authorization: Bearer /);
   });
 });
