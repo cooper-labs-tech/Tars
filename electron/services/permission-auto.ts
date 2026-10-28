@@ -25,6 +25,11 @@ import type { AgentStatus } from '../types';
  *   ~/.tars-private, another agent's worktree or another agent's temporary folders.
  * Anything it cannot read whole (a substitution, a backtick, eval, a subshell, a group, `&`, a brace, an unknown
  * variable, a program not on the list or named by its path, `..`) is not answered here: it waits for the owner.
+ * The grammar is kept small so that it reads each command as bash runs it (the Audit's gate of #538, which found six
+ * ways it did not): heredoc delimiters as WORD, 'WORD' or "WORD" only; no assignment before a program, none to a name
+ * the environment has, no export; a tilde only at a word's start; short options of letters and digits, each rest
+ * judged as a path; a cd only to an absolute folder; the guarded names without case. A reader that differs from the
+ * shell is the risk here, and what it cannot read waits for the owner.
  *
  * Not a boundary: an agent in bypass runs anything Claude Code does not ask about, and Claude Code is the one that
  * asks. This only decides which of its questions Tars may answer for the owner. SECURITY.md says so.
@@ -110,7 +115,9 @@ function judgePath(word: string, cwd: string, places: Places, rootOk: boolean): 
   if (!root) return `${word} is outside its own folders`;
   if (places.never.map(realOf).some(n => within(real, n))) return `${word} is in a folder Tars keeps from it`;
   if (real === root && !rootOk) return `${word} is its folder itself`;
-  const parts = path.relative(root, real).split(path.sep);
+  // Without case: `.CLAUDE` is `.claude` on macOS and Windows (the Audit's L2 on #538), and a refusal more on Linux
+  // costs only the owner's answer.
+  const parts = path.relative(root, real).split(path.sep).map(p => p.toLowerCase());
   if (parts.some(p => GUARDED.has(p)) || parts.at(-1) === '.mcp.json') return `${word} is its own .git, .claude or .mcp.json, which Claude Code asks about on purpose`;
   return undefined;
 }
@@ -261,10 +268,14 @@ function parse(command: string): Simple[] {
       }
       if (op === '<<' || op === '<<-') {
         while (command[i] === ' ' || command[i] === '\t') i++;
-        const d = /^(['"]?)([A-Za-z0-9_.-]+)\1/.exec(command.slice(i));
-        if (!d) throw new Unread('a heredoc delimiter it cannot read');
-        heredocs.push({ delimiter: d[2], quoted: !!d[1], strip: op === '<<-' });
-        i += d[0].length;
+        // The delimiter is the whole word, its quotes removed as bash removes them: `<<"E"OF` ends at EOF, and a
+        // reader that stopped at the quote took the lines after EOF, which bash runs, for data (the Audit's H1 on
+        // #538). Only the three plain forms are read: WORD, 'WORD' and "WORD".
+        const raw = /^[^\s;&|<>()]+/.exec(command.slice(i))?.[0] ?? '';
+        const d = /^(?:([A-Za-z0-9_.-]+)|'([A-Za-z0-9_.-]+)'|"([A-Za-z0-9_.-]+)")$/.exec(raw);
+        if (!d) throw new Unread(`a heredoc delimiter it cannot read (${raw || 'none'})`);
+        heredocs.push({ delimiter: d[1] ?? d[2] ?? d[3], quoted: d[1] === undefined, strip: op === '<<-' });
+        i += raw.length;
         continue;
       }
       if (op === '<<<') {
@@ -281,6 +292,9 @@ function parse(command: string): Simple[] {
       i++;
       continue;
     }
+    // A tilde anywhere but at a word's start is not read: after `=` or `:` bash makes it HOME (an assignment's
+    // value, and bash's assignment-like arguments), and `D=~/x` is not a folder named ~ (the Audit's M1 on #538).
+    if (ch === '~' && word) throw new Unread('a ~ inside a word, which the shell may expand');
     if (ch === '~' && !word) {
       const next = command[i + 1];
       if (next !== undefined && next !== '/' && next !== ' ' && next !== '\n' && next !== '\t') throw new Unread("another user's ~");
@@ -308,6 +322,16 @@ function expand(word: Word, vars: Record<string, string>): string {
 
 const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=/;
 
+/**
+ * Names a command may not set: those the environment already has (exported, a new value steers every program after
+ * it: `TMPDIR=<outside>; mktemp`), and those that steer the shell itself (the Audit's M1 on #538).
+ */
+const SHELL_NAMES = new Set(['PATH', 'CDPATH', 'OLDPWD', 'PWD', 'HOME', 'IFS', 'ENV', 'BASH_ENV', 'SHELLOPTS', 'BASHOPTS', 'GLOBIGNORE', 'PS4', 'TMPDIR']);
+function settable(name: string, places: Places): boolean {
+  return !SHELL_NAMES.has(name) && !(name in places.vars) && process.env[name] === undefined
+    && !/^(LD_|DYLD_|BASH_FUNC)/.test(name);
+}
+
 /** A word that sets a variable: its name, written unquoted before the `=`. */
 function assigns(word: Word): boolean {
   const first = word.segments[0];
@@ -328,22 +352,19 @@ function judgeBash(command: string, places: Places): Judgement {
   try {
     for (const c of commands) {
       const words = [...c.words];
-      // Assignments: alone they set a variable for what follows; before a program, for it (kept: simpler, and safe).
-      while (words.length && assigns(words[0])) {
-        const all = expand(words.shift()!, vars);
+      // Assignments alone set a variable for what follows. Before a program, bash expands the program's words with
+      // the old values and hands the new ones to the program's environment only, which nothing here reads: not
+      // read (the Audit's M1 on #538). Nor a name the environment has, nor `export`.
+      const assignments: Word[] = [];
+      while (words.length && assigns(words[0])) assignments.push(words.shift()!);
+      if (assignments.length && words.length) throw new Unread('an assignment before a program, which the program alone gets');
+      for (const w of assignments) {
+        const all = expand(w, vars);
         const m = ASSIGNMENT.exec(all)!;
+        if (!settable(m[1], places)) throw new Unread(`a new value for ${m[1]}, which steers what runs after it`);
         vars[m[1]] = all.slice(m[0].length);
       }
-      if (words.length && expand(words[0], vars) === 'export') {
-        words.shift();
-        for (const w of words) {
-          const all = expand(w, vars);
-          const m = ASSIGNMENT.exec(all);
-          if (!m) throw new Unread(`export of ${all}`);
-          vars[m[1]] = all.slice(m[0].length);
-        }
-        words.length = 0;
-      }
+      if (words.length && expand(words[0], vars) === 'export') throw new Unread('export');
       for (const r of c.redirects) {
         if (r.op === '<<<') { if (r.target) expand(r.target, vars); continue; }
         const target = r.target ? expand(r.target, vars) : '';
@@ -362,11 +383,21 @@ function judgeBash(command: string, places: Places): Judgement {
       for (const w of words.slice(1)) {
         const text = expand(w, vars);
         if (flags && text === '--') { flags = false; continue; }
-        if (flags && text.startsWith('-') && text.length > 1) {
+        if (flags && text.startsWith('--') && text.length > 2) {
           const eq = text.indexOf('=');
           if (eq > 0) {
             const why = judgePath(text.slice(eq + 1), cwd, places, rootOk);
             if (why) return { allow: false, why };
+          }
+          continue;
+        }
+        if (flags && text.startsWith('-') && text.length > 1) {
+          // Short options, where any letter may take the rest of the word as its value (`sort -o/x`, `cp -t/x`,
+          // `mktemp -p/x`, the Audit's M2 on #538): letters and digits only, and every rest judged as a path.
+          if (!/^-[A-Za-z0-9]+$/.test(text)) throw new Unread(`the option ${text}, whose attached value it cannot read`);
+          for (let k = 2; k < text.length; k++) {
+            const why = judgePath(text.slice(k), cwd, places, rootOk);
+            if (why) return { allow: false, why: `${text}: ${why}` };
           }
           continue;
         }
@@ -375,8 +406,10 @@ function judgeBash(command: string, places: Places): Judgement {
         args.push(text);
       }
       if (program === 'cd') {
-        if (args.length !== 1) return { allow: false, why: 'cd with no folder, or more than one' };
-        cwd = path.resolve(cwd, args[0]);
+        // Only to an absolute folder: `cd -` goes where the shell last was, and a name may follow CDPATH (the
+        // Audit's L1 on #538).
+        if (args.length !== 1 || !path.isAbsolute(args[0])) return { allow: false, why: 'a cd to anything but one absolute folder' };
+        cwd = args[0];
       }
     }
   } catch (err) {

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { agents } from '../core/agent-manager';
 import { DATA_DIR } from '../constants';
 import { retentionLog } from './agent-tmp';
+import { redactSecrets } from '../utils/redact-secrets';
 
 /**
  * Permissions decided by Tars (mods step 2, ETUDE-MODS-CLAUDE-CODE.md §2).
@@ -48,9 +49,10 @@ export function permissionHoldMs(settings: Pick<AppSettings, 'permissionAskMinut
 /** Where every decision is written, with who or what decided: ~/.tars/logs/permissions.log, moved to .1 past 256 KB. */
 export const PERMISSION_LOG = path.join(DATA_DIR, 'logs', 'permissions.log');
 
-/** One line per decision: the agent, the tool, the decision, who decided, and what was asked (one line, cut at 300). */
+/** One line per decision: the agent, the tool, the decision, who decided, and what was asked (masked, one line, cut at 300). */
 export function logPermission(agent: { id: string; name?: string } | undefined, agentId: string, tool: string, decision: string, by: string, subject: string): void {
-  const what = subject.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').slice(0, 300);
+  // Masked: every agent can read the log (the Audit's L3 on #538).
+  const what = redactSecrets(subject).replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').slice(0, 300);
   retentionLog(`[permission] ${agent?.name || agentId} (${agentId}) ${tool} ${decision} by ${by}: ${what}`, PERMISSION_LOG);
 }
 /**
@@ -104,6 +106,18 @@ type Held = {
   /** Tells the window and the watchers, at the question and at its end. */
   changed: (agent: AgentStatus) => void;
 };
+
+/**
+ * The question as another agent reads it (list_agents, get_agent): a token or a URL's password in the command masked
+ * (the Audit's L3 on #538). The window, where the owner decides, keeps it whole.
+ */
+export function maskedAsk(ask: NonNullable<AgentStatus['permissionAsk']>): NonNullable<AgentStatus['permissionAsk']> {
+  return {
+    ...ask,
+    subject: redactSecrets(ask.subject),
+    fields: Object.fromEntries(Object.entries(ask.fields).map(([k, v]) => [k, redactSecrets(v)])),
+  };
+}
 
 /** One question per agent: a turn makes one tool call at a time ask. */
 const held = new Map<string, Held>();

@@ -1552,9 +1552,10 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   where nobody answered until morning. The state mod asks for up to 63 minutes, past the longest delay.
 - **Every decision is logged** in `~/.tars/logs/permissions.log` (moved to `.1` past 256 KB): the
   agent, the tool, the decision, who decided (Tars, the window's person, the delay, the end of the
-  session or turn, the quit) and what was asked.
+  session or turn, the quit) and what was asked, a token or a URL's password masked (`redactSecrets`).
 - **An orchestrator sees it**: `list_agents` gives a teammate's `waitingReason` and `permissionAsk`
-  (the tool, what it runs, why Claude Code asked, since and until when); `get_agent` gives it whole.
+  (the tool, what it runs, why Claude Code asked, since and until when); `get_agent` gives it all. Both
+  mask a token or a URL's password in the command; the window, where the owner decides, shows it whole.
 When the turn, the session or the agent ends, or the window answers `ask`, it goes back to Claude
 Code, which then shows its own dialog, and the `PermissionRequest` hook reports it as before. An agent
 waiting with no `permissionAsk` is at its terminal's dialog: the mod did not load, or the question

@@ -220,7 +220,8 @@ describe('a command Tars answers itself', () => {
     refused('D=~/x; cp payload.txt $D');
     refused('D=a:~/x; cp payload.txt $D');
     refused('touch a~b');
-    allowed('touch notes.txt~');
+    refused('touch notes.txt~');
+    allowed('touch notes.txt');
   });
 
   it('18. (M1) no assignment to a variable the environment has, and no export', () => {

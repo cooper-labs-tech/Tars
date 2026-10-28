@@ -1,7 +1,8 @@
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { stopAcpRuns } from '../acp/delegate';
-import { dropPermissionAsks } from '../permission-asks';
+import { dropPermissionAsks, maskedAsk } from '../permission-asks';
+import { redactSecrets } from '../../utils/redact-secrets';
 import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -2046,7 +2047,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // A permission question Tars holds for the owner (services/permission-asks.ts): what it runs, and why.
       ...(a.waitingReason ? { waitingReason: a.waitingReason } : {}),
       ...(a.permissionAsk ? { permissionAsk: {
-        tool: a.permissionAsk.tool, subject: a.permissionAsk.subject,
+        tool: a.permissionAsk.tool, subject: maskedAsk(a.permissionAsk).subject,
         ...(a.permissionAsk.reason ? { reason: a.permissionAsk.reason } : {}),
         askedAt: a.permissionAsk.askedAt, until: a.permissionAsk.until,
       } } : {}),
@@ -2062,7 +2063,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     const full = req.url.searchParams.get('full') === 'true';
-    sendJson({ agent: full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent) });
+    const view = full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent);
+    // The question masked for an agent (the Audit's L3 on #538): the window keeps it whole.
+    sendJson({ agent: agent.permissionAsk ? {
+      ...view, permissionAsk: maskedAsk(agent.permissionAsk),
+      ...(view.waitingOn ? { waitingOn: { ...view.waitingOn, text: redactSecrets(view.waitingOn.text) } } : {}),
+    } : view });
   });
 
   // GET /api/agents/:id/bootstrap: identity + team roster context, injected

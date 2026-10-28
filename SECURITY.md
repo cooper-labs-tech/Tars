@@ -225,7 +225,13 @@ nowhere under `~/.tars-private`, another agent's worktree or temporary folders, 
 purpose). It reads a command only when it can read it whole: a short list of file programs (`cp`, `mv`,
 `rm`, `mkdir`, `cat`, `tee`...) and data ones (`echo`, `printf`), heredocs, quotes, redirections and
 variables it set itself; a substitution, a backtick, `eval`, a subshell, a program not on the list or
-named by its path is the owner's. This is the owner's bypass applied to Claude Code's questions, not a
+named by its path is the owner's. Tars reads the command with a reader of its own, kept to a small grammar it
+reads as bash runs it: heredoc delimiters as `WORD`, `'WORD'` or `"WORD"` only, no assignment before a program or
+to a name the environment has, no `export`, a `~` only at a word's start, short options of letters and digits
+whose every rest is judged as a path, a `cd` only to an absolute folder, `.git`, `.claude` and `.mcp.json` without
+case. A reader that differs from the shell is the risk: the Audit's gate of #538 found six ways the first one did
+(a half-quoted heredoc delimiter ran what it took for data), each now refused. What it cannot read waits for the
+owner, and is refused at the delay. This is the owner's bypass applied to Claude Code's questions, not a
 boundary: an agent in bypass already runs whatever Claude Code does not ask about, and nothing here
 confines it. A question nobody answers within the owner's delay is refused, never allowed. Every
 decision goes to `~/.tars/logs/permissions.log`, which any agent can write, being the same user: a
