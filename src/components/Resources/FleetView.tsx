@@ -16,12 +16,19 @@ const tmpBytes = (a: AgentResources) => (a.tmp ? a.tmp.bytes : 0);
 const memBytes = (a: AgentResources) => (a.memMb === null ? null : a.memMb * 1e6);
 
 /** A project's figures, summed over its agents: unread if any agent's is. */
+/** What was read, added: null only when nothing could be read. An agent with no terminal holds nothing to read. */
+function partial(values: (number | null)[]): number | null {
+  const read = values.filter((v): v is number => v !== null);
+  return read.length ? read.reduce((a, b) => a + b, 0) : null;
+}
+
+/** A project's figures: memory and CPU as main sums them (PR 546's totals), the disk by folder kind, added. */
 function totals(p: ProjectResources) {
   return {
-    mem: sum(p.agents.map(memBytes)),
-    cpu: sum(p.agents.map((a) => a.cpuPct)),
-    wt: sum(p.agents.map(wtBytes)),
-    tmp: sum(p.agents.map(tmpBytes)),
+    mem: p.totals.memMb === null ? null : p.totals.memMb * 1e6,
+    cpu: p.totals.cpuPct,
+    wt: partial(p.agents.map(wtBytes)),
+    tmp: partial(p.agents.map(tmpBytes)),
     working: p.agents.filter((a) => a.status === 'working').length,
   };
 }
@@ -123,14 +130,15 @@ export function FleetView({ chosen, onChoose }: { chosen: string | null; onChoos
   const pick = agents.find((a) => a.id === chosen) ?? null;
   const pickProject = projects.find((p) => p.agents.some((a) => a.id === chosen))?.name ?? '';
   const measuring = Boolean(state?.measuring);
-  const all = (f: (a: AgentResources) => number | null) => sum(agents.map(f));
+  const all = (f: (a: AgentResources) => number | null) => partial(agents.map(f));
+  const unread = agents.filter((a) => a.memMb === null).length;
 
   const measure = async () => { setMeasureError(await measureDisk()); };
 
   return (
     <section role="region" aria-label="Agents and projects" className="flex flex-col gap-3 min-h-0">
       <Figures>
-        <Figure volatile caption="AGENTS HOLD" value={state ? bytes(all(memBytes)) : NOT_READ} sub={state ? `${agents.length} agents, ${agents.filter((a) => a.status === 'asleep').length} asleep` : 'with the fleet\'s figures'} />
+        <Figure volatile caption="AGENTS HOLD" value={state ? bytes(all(memBytes)) : NOT_READ} sub={state ? `${agents.length} agents, ${agents.filter((a) => a.status === 'asleep').length} asleep${unread ? `, ${unread} not read` : ''}` : 'with the fleet\'s figures'} />
         <Figure volatile caption="CPU" value={state ? pct(all((a) => a.cpuPct)) : NOT_READ} sub={state ? 'every agent\'s tree' : 'with the fleet\'s figures'} />
         <Figure volatile caption="WORKTREES" value={state ? cell(all(wtBytes), measuring) : NOT_READ} sub={state?.diskMeasuredAt ? `${agents.reduce((n, a) => n + a.worktrees.length, 0)} worktrees · measured ${clock(state.diskMeasuredAt)}` : 'not measured yet'} />
         <Figure volatile caption="TEMPORARY FOLDERS" value={state ? cell(all(tmpBytes), measuring) : NOT_READ} sub={state ? `${agents.filter((a) => a.tmp).length} folders under ~/.tars/tmp` : 'not measured yet'} />
