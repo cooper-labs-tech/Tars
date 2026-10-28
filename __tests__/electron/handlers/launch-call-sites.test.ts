@@ -295,6 +295,8 @@ const completesOf = (ptyId: string) => vi.mocked(broadcastToAllWindows).mock.cal
   .filter(([channel, payload]) => channel === 'agent:complete' && (payload as { ptyId?: string }).ptyId === ptyId);
 const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+/** An agent's terminal gets ~/.tars/bin first on its PATH, for the heavy-run slot's tars-slot (services/heavy-slot-cli.ts). */
+const withSlotBin = (value: string) => [path.join(DATA_DIR, 'bin'), value].join(process.platform === 'win32' ? ';' : ':');
 /** The value of PATH the child gets, under any spelling, and how many spellings it has. */
 function pathOf(env: Record<string, string | undefined>): { value: string | undefined; keys: number } {
   const keys = Object.keys(env).filter(k => k.toUpperCase() === 'PATH');
@@ -343,7 +345,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     await createAgent();
     expect(spawned).toHaveLength(1);
     expect([spawned[0].file, spawned[0].args, spawned[0].opts.cwd]).toEqual(['/bin/bash', ['-l'], project]);
-    expect(spawned[0].opts.env.PATH).toBe(POSIX_PATH);
+    expect(spawned[0].opts.env.PATH).toBe(withSlotBin(POSIX_PATH));
   });
 
   it('agent:start types `cd \'<dir>\' && <cmd>` into that shell', async () => {
@@ -361,7 +363,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     await pause(650);
     expect(spawned).toHaveLength(2);
     expect([spawned[1].file, spawned[1].args]).toEqual(['/bin/bash', ['-l']]);
-    expect(spawned[1].opts.env.PATH).toBe(POSIX_PATH);
+    expect(spawned[1].opts.env.PATH).toBe(withSlotBin(POSIX_PATH));
     expect(typed(spawned[1])).toBe(`cd ${q(project)} && 'claude' --permission-mode default --add-dir ${q(DATA_DIR)} -- ${q(TASK)}\r`);
   });
 
@@ -387,7 +389,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     const agent = { id: 'restored', name: 'R', status: 'idle', provider: 'claude', projectPath: project, skills: [], output: [], lastActivity: '' } as unknown as AgentStatus;
     await initAgentPty(agent, null, vi.fn(), vi.fn());
     expect([spawned[0].file, spawned[0].args, spawned[0].opts.cwd]).toEqual(['/bin/bash', ['-l'], project]);
-    expect(spawned[0].opts.env.PATH).toBe(POSIX_PATH);
+    expect(spawned[0].opts.env.PATH).toBe(withSlotBin(POSIX_PATH));
   });
 
   it('a bot start types the same line into a fresh terminal', async () => {
@@ -403,7 +405,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     const { args, file, env } = await apiStart();
     expect(file).toBe('/bin/bash');
     expect(args).toEqual(['-l', '-c', `cd ${q(project)} && exec ${apiCommand()}`]);
-    expect(env.PATH).toBe(POSIX_PATH);
+    expect(env.PATH).toBe(withSlotBin(POSIX_PATH));
   });
 
   it('pty:create, shell:startPty and createQuickPty open the login shell with -l', async () => {
@@ -478,7 +480,7 @@ describe('2-6. on win32', () => {
   it('2, 6. agent:create waits in the resolved shell with its own arguments, PATH under one key', async () => {
     await createAgent();
     expect([spawned[0].file, spawned[0].args, spawned[0].opts.cwd]).toEqual([WIN_POWERSHELL, ['-NoLogo'], project]);
-    expect(pathOf(spawned[0].opts.env)).toEqual({ value: WIN_PATH, keys: 1 });
+    expect(pathOf(spawned[0].opts.env)).toEqual({ value: withSlotBin(WIN_PATH), keys: 1 });
   });
 
   it('2. agent:start starts the CLI as the terminal\'s process, in the folder, and types nothing', async () => {
@@ -493,7 +495,7 @@ describe('2-6. on win32', () => {
     expect([spawned[1].file, spawned[1].args, spawned[1].opts.cwd])
       .toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', '--add-dir', DATA_DIR, '--', TASK), project]);
     expect(ptyProcesses.get(agent.ptyId!)).toBe(spawned[1]);
-    expect(pathOf(spawned[1].opts.env)).toEqual({ value: WIN_PATH, keys: 1 });
+    expect(pathOf(spawned[1].opts.env)).toEqual({ value: withSlotBin(WIN_PATH), keys: 1 });
   });
 
   it('7. the CLI started from a window carries the agent\'s identity', async () => {
@@ -648,7 +650,7 @@ describe('2-6. on win32', () => {
     expect(typeof args).toBe('string');
     expect(args).not.toMatch(/\bcd\b|\bexec\b/);
     expect(cwd).toBe(project);
-    expect(pathOf(env)).toEqual({ value: WIN_PATH, keys: 1 });
+    expect(pathOf(env)).toEqual({ value: withSlotBin(WIN_PATH), keys: 1 });
   });
 
   it('3. pty:create and shell:startPty open the resolved shell, the setting first, and createQuickPty the default', async () => {

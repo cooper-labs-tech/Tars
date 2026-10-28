@@ -1,6 +1,6 @@
 import { agents } from '../../core/agent-manager';
 import { ptyProcesses } from '../../core/pty-manager';
-import { isSuperAgent } from '../../utils';
+import { hasOrchestratorPowers } from '../../core/agent-role';
 import { oneLine } from '../../utils/waiting-on';
 import { SLOT_PRIORITIES, type SlotPriority } from '../heavy-slot';
 import { askSlot, giveSlotBack, slotStatus, slotTicketOf } from '../heavy-slot-runtime';
@@ -48,7 +48,8 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
         agentId: agent.id, agentName: agent.name || agent.id, projectPath: agent.projectPath,
         pid: pid as number, priority: (priority as SlotPriority | undefined) ?? 'normal',
         label: (typeof label === 'string' ? oneLine(label) : '').slice(0, LABEL_MAX) || 'a heavy run',
-        orchestrator: isSuperAgent(agent), terminalPid: terminal?.pid,
+        // A release gate is a power: the orchestrator's, and a chat's runner's (core/agent-role.ts).
+        orchestrator: hasOrchestratorPowers(agent), terminalPid: terminal?.pid,
       });
       sendJson({ success: true, ticket });
     } catch (err) {

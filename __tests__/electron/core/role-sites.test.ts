@@ -86,6 +86,7 @@ const SITES: Site[] = [
   { file: 'electron/core/agent-manager.ts', line: 'const isSuper = …;', is: 'identity', why: 'the reply sent back to Telegram: the bots\' target' },
   { file: 'electron/core/agent-manager.ts', line: 'if (superAgentTelegramTask && …) {', is: 'identity', why: 'the output kept for the Telegram reply' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
+  { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
   { file: 'electron/core/agent-update.ts', line: 'const demoted = assignRole(agent, role ?? (… ? \'orchestrator\' : \'worker\'), agents.values());', is: 'identity', why: 'agent:update and update_agent keep the role, and one orchestrator per project' },
   { file: 'electron/core/agent-role.ts', line: 'if (… || params.role === \'worker\') return params.role;', is: 'identity', why: 'requestedRole: the role a create or an update names' },
   { file: 'electron/core/agent-role.ts', line: 'agent.orchestratorMode = …;', is: 'identity', why: 'the toggle\'s old field follows the role' },

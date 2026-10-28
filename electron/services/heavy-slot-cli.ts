@@ -76,10 +76,16 @@ export function installSlotShims(bin: string = slotBin()): void {
 export function slotEnv(env: Record<string, string | undefined>, bin: string = slotBin()): Record<string, string> {
   const key = Object.keys(env).find(k => k.toUpperCase() === 'PATH') ?? 'PATH';
   const current = env[key] ?? '';
-  const parts = current.split(path.delimiter).filter(Boolean);
+  // The platform's separator, read from process.platform as the rest of electron/platform/ reads it.
+  const delimiter = process.platform === 'win32' ? ';' : ':';
+  const parts = current.split(delimiter).filter(Boolean);
+  // The script is found through the running app; outside one (a unit test's stand-in of Electron) there is none to
+  // name, the shim then says it needs an agent's terminal, and the terminal is started all the same.
+  let script: string | undefined;
+  try { script = getSlotScriptPath(); } catch { script = undefined; }
   return {
-    TARS_SLOT_SCRIPT: getSlotScriptPath(),
+    ...(script ? { TARS_SLOT_SCRIPT: script } : {}),
     TARS_NODE: process.env.APPIMAGE || process.execPath,
-    [key]: parts.includes(bin) ? current : [bin, ...parts].join(path.delimiter),
+    [key]: parts.includes(bin) ? current : [bin, ...parts].join(delimiter),
   };
 }
