@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 320 root frames, 89 of them drawn and not built yet: the 78 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+rather than a companion to it. `design/tars-redesign.pen` holds 320 root frames, 84 of them drawn and not built yet: the 73 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
 `design/chat-design.pen` holds 72 of those, the other two hundred and forty-eight being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -244,6 +244,7 @@ The first column names no route, so `npm run e2e:guard` does not read this table
 |---|---|
 | The banner on the Dashboard's panel, in both shells: a task in hand with nothing waiting; two waiting, and the list the count opens; 660, 582 and 420 wide; the smallest pane, 3x3 in a 1200 by 800 window | `tars-redesign.pen`: Task banner · above the agent's terminal, Task banner · Dashboard, a panel on a given task |
 | The agent's window: the banner over its terminal column | `tars-redesign.pen`: Task banner · above the agent's terminal |
+| The agent's queue in the list the count opens, since 2.0.5: pause and resume, move to the head, cancel (asks once), drag before another; with nothing in hand and the queue kept paused (after a stop, after a restart), a strip in the banner's place. Without the queue's channel the list has no control | `tars-redesign.pen`: Agent queue (2.0.5) · in its panel (its light copy, the narrowest window), · in its panel · states (and its light copy) |
 | The new interface's project page, which shows no terminal: the agent's row in the team carries the banner, with the senders of what waits on a third line (not built yet) | `tars-redesign.pen`: Task banner · new interface, the project page's team |
 
 Each frame has its `· light` copy beside it. Task banner · notes, what the Backend
@@ -296,5 +297,3 @@ For 2.0.5:
   (2.0.5) · heavy runs, · agents and projects, · disk (each with its light copy and at the narrowest window), · heavy
   runs · states, · agents and projects · states, · disk · states (each with its light copy), · notes. Its route,
   /resources, joins the pages above and `e2e/surfaces.mjs` when it is built.
-- An agent's queue in its panel, inside the task banner's list of what waits: Agent queue (2.0.5) · in its panel (its
-  light copy, the narrowest window), · in its panel · states (and its light copy).
