@@ -84,6 +84,12 @@
  *    object) is withheld.
  * 18. A withheld question takes Tars's allow: the window never saw it whole,
  *    so only a deny is taken, anything else keeps the dialog.
+ * And from the Audit's fifth gate of #538 (its Low): item 3 left a bypass
+ * worker at its terminal on an AskUserQuestion all night.
+ * 19. An AskUserQuestion is not put to Tars, which alone knows the agent's role
+ *    and mode: it must go withheld, its questions never sent, and Tars's
+ *    refusal (ask your orchestrator) taken; anything else keeps it with the
+ *    person.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -377,10 +383,15 @@ describe("the mod's tool.check", () => {
     ]);
   });
 
-  it('3. leaves an AskUserQuestion to the person', async () => {
+  it('3, 19. puts an AskUserQuestion to Tars withheld, takes its refusal, and otherwise leaves it to the person', async () => {
     await start();
-    expect(await check({ tool: 'AskUserQuestion', input: { questions: [] }, tool_use_id: 'toolu_3' }, ASK)).toEqual(ASK);
-    expect(permissionPosts()).toEqual([]);
+    const q = { tool: 'AskUserQuestion', input: { questions: [{ question: 'Merge into main now?' }] }, tool_use_id: 'toolu_3' };
+    answer = async () => ({ text: JSON.stringify({ decision: 'ask' }) });
+    expect(await check(q, ASK)).toEqual(ASK);
+    expect(permissionPosts()[0].body).toMatchObject({ tool: 'AskUserQuestion', input: {}, withheld: true, withheld_why: 'questions: a field the window does not show' });
+    expect(JSON.stringify(permissionPosts()[0].body)).not.toContain('Merge into main');
+    answer = async () => ({ text: JSON.stringify({ decision: 'deny', reason: 'ask your orchestrator with send_message' }) });
+    expect(await check(q, ASK)).toEqual({ decision: 'deny', reason: 'ask your orchestrator with send_message' });
   });
 
   it('4. asks no Tars before the session is known', async () => {

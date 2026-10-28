@@ -96,6 +96,12 @@
  *     the window could not show it, and answered `ask` at once for any other mode.
  * 31. Bash's timeout, background and sandbox fields, which the mod shows as words, are not in the line the window
  *     shows (`subject`), so the owner allows a call without seeing them: they follow the command.
+ * And from the Audit's fifth gate of #538 (at 62fcbf72):
+ * 32. (M1) The window's line shows one field of a question with several, while an allow covers them all: Grep
+ *     `{ pattern: 'BEGIN OPENSSH', path: '~/.ssh' }` reads "BEGIN OPENSSH". Every field shown goes in the line: the
+ *     main one, then each other as words (a search's path as "in <path>", any other as "<field> <value>").
+ * 33. (Low) A bypass worker's AskUserQuestion waits at its terminal all night: Tars refuses it at once, telling it to
+ *     ask its orchestrator with send_message. An orchestrator's, or an agent's not in bypass, stays with the person.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -629,6 +635,45 @@ describe('Tars allows nothing by itself', () => {
     void askUntilAnswered(question({ tool_use_id: 'toolu_f', input: { command: 'ls', run_in_background: 'false', dangerouslyDisableSandbox: 'false' } }));
     await vi.advanceTimersByTimeAsync(0);
     expect(a.permissionAsk?.subject).toBe('ls');
+  });
+
+  it('32. the window\'s line shows every field an allow covers', async () => {
+    const a = bypass();
+    for (const [input, line] of [
+      [{ pattern: 'BEGIN OPENSSH', path: '/Users/x/.ssh' }, 'BEGIN OPENSSH in /Users/x/.ssh'],
+      [{ query: 'password', path: '/Users/x/Documents' }, 'password in /Users/x/Documents'],
+      [{ command: 'ls', path: '/Users/x/.aws' }, 'ls (path /Users/x/.aws)'],
+      [{ command: 'ls', path: '/Users/x/.aws', url: 'https://x.example' }, 'ls (path /Users/x/.aws, url https://x.example)'],
+      [{ url: 'https://x.example', query: 'q' }, 'https://x.example (query q)'],
+    ] as const) {
+      void askUntilAnswered(question({ tool: 'mcp__any__run', tool_use_id: `toolu_${line}`, input }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk?.subject, line).toBe(line);
+    }
+    for (const [tool, input, line] of [
+      ['Grep', { pattern: 'BEGIN OPENSSH', path: '/Users/x/.ssh' }, 'BEGIN OPENSSH in /Users/x/.ssh'],
+      ['Glob', { pattern: '**/*.pem', path: '/Users/x' }, '**/*.pem in /Users/x'],
+      // A Bash's description is the model's words, not what runs: not in the line.
+      ['Bash', { command: 'make deploy', description: 'deploy', timeout: '600000' }, 'make deploy (timeout 600000 ms)'],
+    ] as const) {
+      void askUntilAnswered(question({ tool, tool_use_id: `toolu_${line}`, input }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk?.subject, line).toBe(line);
+    }
+  });
+
+  it('33. a bypass worker\'s AskUserQuestion is refused at once, to ask its orchestrator; another\'s stays with the person', async () => {
+    const { questionFingerprint } = await import('../../../../electron/services/permission-asks');
+    const a = bypass();
+    const asked = question({ tool: 'AskUserQuestion', tool_use_id: 'toolu_q', input: {}, withheld: true, withheld_why: 'questions: a field the window does not show' });
+    expect(await ask(asked)).toEqual({
+      decision: 'deny', reason: expect.stringMatching(/ask your orchestrator with send_message/), fingerprint: questionFingerprint('AskUserQuestion', {}),
+    });
+    expect(a.permissionAsk).toBeUndefined();
+    Object.assign(a, { role: 'orchestrator' });
+    expect(await ask(asked)).toEqual({ decision: 'ask' });
+    Object.assign(a, { role: 'worker', permissionMode: 'normal' });
+    expect(await ask(asked)).toEqual({ decision: 'ask' });
   });
 
   it('23. every decision is written down with who or what decided', async () => {
