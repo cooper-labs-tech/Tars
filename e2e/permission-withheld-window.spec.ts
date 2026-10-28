@@ -20,7 +20,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. deny or ask in terminal is missing;
  * 4. deny does not refuse it: the agent does not read deny;
  * 5. in the agent window, allow is offered, or ask in terminal does not hand it to Claude Code's own dialog, or its
- *    title does not say that dialog has no delay;
+ *    title does not say that dialog has no delay; a command too long to show whole is not said withheld, or its why
+ *    (PR 538's withheldWhy) is not shown beside it;
  * 6. an uncaught error in the page.
  * Once with the classic shell and once with the new interface: on the Dashboard's panel (1 to 4), and in the agent
  * window from the Agents page (5).
@@ -30,7 +31,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 const FILE = 'src/app/settings/page.tsx';
 
-function worker(home: string, project: string): string {
+/** The window's test asks about a Bash too long to show whole, withheld with its why; the panel's, a Write by its path. */
+const WHY = 'command: 3,014 characters, past the 2,000 the window shows';
+function worker(home: string, project: string, long: boolean): string {
   return writeNodeCli(path.join(home, 'cli-w.cjs'), [
     "const fs = require('fs'); const path = require('path'); const crypto = require('crypto');",
     "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
@@ -44,7 +47,9 @@ function worker(home: string, project: string): string {
     "  await post('/api/hooks/status', { status: 'idle', source: 'startup' });",
     "  await post('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'give the settings page its new title' });",
     "  let answer;",
-    `  do answer = await post('/api/hooks/permission', { tool: 'Write', tool_use_id: 'toolu_write', input: { file_path: path.join(${JSON.stringify(project)}, ${JSON.stringify(FILE)}) },`,
+    long
+      ? `  do answer = await post('/api/hooks/permission', { tool: 'Bash', tool_use_id: 'toolu_bash', input: { command: 'npm run e2e -- --project=classic' }, withheld_why: ${JSON.stringify(WHY)},`
+      : `  do answer = await post('/api/hooks/permission', { tool: 'Write', tool_use_id: 'toolu_write', input: { file_path: path.join(${JSON.stringify(project)}, ${JSON.stringify(FILE)}) },`,
     "    reason: 'This call requires approval', via: 'mod', withheld: true });",
     "  while (answer.decision === 'pending');",
     "  fs.writeFileSync(path.join(dir, 'answer.json'), JSON.stringify(answer));",
@@ -64,7 +69,7 @@ for (const newInterface of [false, true]) for (const where of ['panel', 'window'
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
       id: 'w', name: 'Harbor Writer', character: 'robot', provider: 'claude', status: 'idle', role: 'worker', permissionMode: 'bypass',
-      projectPath: project, skills: [], cliPath: worker(home, project), createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
+      projectPath: project, skills: [], cliPath: worker(home, project, where === 'window'), createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
     }], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
@@ -92,9 +97,14 @@ for (const newInterface of [false, true]) for (const where of ['panel', 'window'
       }
       const ask = (where === 'window' ? page.getByRole('dialog') : page).locator('[data-permission-ask="w"]').first();
       await expect(ask).toBeVisible({ timeout: 60_000 });
-      const subject = ask.locator('[data-subject]');
-      await expect(subject).toContainText('page.tsx');
-      await expect(ask).toContainText('content withheld');
+      if (where === 'panel') {
+        await expect(ask.locator('[data-subject]')).toContainText('page.tsx');
+        await expect(ask).toContainText('content withheld');
+      } else {
+        await expect(ask).toContainText('npm run e2e');
+        await expect(ask).toContainText('withheld');
+        await expect(ask.locator('[data-withheld-why]')).toHaveText(WHY);
+      }
       const buttons = (await ask.getByRole('button').allInnerTexts()).map((b) => b.trim().toLowerCase());
       seen.line = (await ask.innerText()).replace(/\s+/g, ' ');
       seen.buttons = buttons;
