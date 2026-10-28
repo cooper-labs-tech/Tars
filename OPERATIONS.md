@@ -1160,6 +1160,8 @@ curl -s -H "Authorization: Bearer $TOKEN" $API/api/memory/status | jq
 | GET | `/api/tasks/:id` · `/api/tasks?clientRequestId=` (a delegated task as the ledger keeps it; `?wait=<s>` holds the request until the task ends, 120 s at most, and answers `timeout: true` if it has not: what `delegate_task` waits on, segment after segment, since run-task answers once the run has started, with `answer: 'started'`) |
 | POST | `/api/tasks/:ref/cancel` (`{ reason? }`: a request still queued at a worker, taken back by its requester, or by the project's orchestrator with a reason; `not_your_task` 403, `reason_required` 400, `already_delivered` 409) |
 | DELETE | `/api/agents/:id` |
+| POST | `/api/heavy-slot/ask` (`{ pid, priority?, label?, untilTurnEnds? }`: the heavy-run slot, `electron/services/heavy-slot.ts`; an agent's own token; `pid` under the agent's terminal) · `/api/heavy-slot/tickets/:id/give-back` |
+| GET | `/api/heavy-slot` (who holds the slot, who waits and why) · `/api/heavy-slot/tickets/:id` (the asking agent's own ticket) |
 | POST | `/api/hooks/{output,status,task-completed,agent-stopped,notification}` |
 | GET | `/api/memory/{context,search,status}` · POST `/api/memory/{write,remember}` |
 | GET/POST/PUT/DELETE | `/api/vault/documents[/:id]` · `/api/vault/folders[/:id]` · `/api/vault/search` · `/:id/attach` |
@@ -1233,6 +1235,59 @@ stat -f '%Sp %N' ~/.tars-private/api-token      # expect -rw-------
 | every call `ECONNREFUSED` | port taken at boot, API never started | `lsof -nP -iTCP:31415`, kill the squatter, restart Tars |
 | `413 Request body too large` | >4 MiB payload | it is a hard cap; chunk the prompt |
 | An agent stuck in its last status, and its Logs say `[Tars] Refused a session (...): its CLI (pid N) is not this terminal's` | Tars takes a session only from the CLI it launched in the agent's terminal: the terminal's own process, or, when the terminal runs a shell the CLI was typed into, that shell's child (`core/terminal-cli.ts`). A `claude -p` run from inside the agent is refused, as meant. So is a CLI further down: a `cliPath` wrapper script that does not `exec` the CLI, or a shell rc that starts tmux (its shells are children of the tmux server) | `exec` the CLI in the wrapper; no tmux in the agent's shell rc. On Linux the parent is read from `/proc/<pid>/stat`, so `ps` is not needed |
+
+---
+
+## The heavy-run slot
+
+One slot for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and
+simulators of every project's agents take it in turn. A dev server started on its own does not (it would hold the
+only slot for hours); one a test run starts is inside that run. The plan's item A; the three projects'
+orchestrators each had a lock of their own, which coordinated nothing between projects and stayed taken when its
+agent died.
+
+- **How an agent asks.**
+  - `tars-slot run --label "<what>" -- <command>` in its terminal waits, runs the command as its child, gives the
+    slot back when it ends and exits with its code (128 + the signal when a signal ended it; 75 when
+    `--wait-seconds` ran out). Git hooks and scripts use it: they cannot call an MCP tool. `"$TARS_SLOT" run ...` is
+    the same command without the PATH, which a login shell may set anew (Debian's and Ubuntu's `/etc/profile`).
+  - `tars-slot take`, from a script that runs the steps itself, holds it for that script (its parent process) and
+    prints the ticket; `tars-slot give-back <ticket>`; `tars-slot status`.
+  - The MCP tools `heavy_slot_take`, `heavy_slot_give_back`, `heavy_slot_status`: the lease is then the agent's CLI's,
+    for the turn. Tars gives it back when the agent's turn ends (its Stop, or `idle` on record), granted or still
+    waiting, and tells the holder and its orchestrator. A `tars-slot run` lease is its own process's and stays.
+- **Where `tars-slot` comes from.** `~/.tars/bin/tars-slot` (and `tars-slot.cmd` on Windows), a shim that names no app
+  path: it runs `$TARS_NODE $TARS_SLOT_SCRIPT`, which every agent terminal is given, with `TARS_SLOT` naming the shim
+  and `~/.tars/bin` **last** on its PATH (`services/heavy-slot-cli.ts`): first, a file any agent put there would run
+  instead of the command it is named after. The script is `electron/resources/tars-slot.cjs`.
+- **The queue.** `gate` (a release gate: orchestrators only; anyone else asking gets `normal`, and is told), then
+  `normal`, then `background`, then arrival. An ask from under a holder's process (a pre-push hook inside its own
+  run) is granted at once, inside that lease: a lease of the same agent only.
+- **A lease is a live process.** A pass every second while anything is held or waited for drops the leases and asks
+  whose process ended, killed or crashed, and grants the free slots. The lease's process must be under the asking
+  agent's terminal, where `ps` can be read. An agent with no terminal is refused, and so is a lease on Tars's own
+  process or one of its parents, on every system.
+- **The label** is masked (`utils/redact-secrets.ts`) before it is recorded: a token or a URL's password in a command
+  line does not reach the queue every agent reads.
+- **The machine.** Before a grant, as the health samples read it (`services/health/machine.ts`): under the floor of
+  free disk (`heavySlotMinDiskGb`, 15) or free memory (`heavySlotMinFreeMemPct`, 20 %), the grant waits and the waiter
+  reads why. A figure the system cannot give does not block. During a run, every 30 s: alerts at 10, 6 and 3 GB of
+  free disk and when the swap grows by 1,000 MB a minute or more, to the holder (`tars-slot run` prints them), its
+  project's orchestrator (typed as Tars) and the window (`heavySlot:alert`). **Tars never stops a run itself.**
+- **Settings.** `heavySlots` (1 to 8; default 1), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
+  `~/.tars/app-settings.json`.
+- **The window.** `window.electronAPI.heavySlot.status()`, `giveBack(ticketId)` (the owner gives any lease or ask
+  back; its holder and its orchestrator are told, and it is among the day's alerts), and the events `onChanged` (the
+  same status) and `onAlert`.
+  One read gives the settings and floors, the machine's last reading, each holder with its pid and its tree's memory
+  and CPU (one `ps` at most every 2 s; none on Windows), the waiters in order with why, and the day's alerts with whom
+  each was sent to.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `tars-slot: run it from an agent's terminal started by Tars` | no `TARS_SLOT_SCRIPT` or no token: not an agent's terminal, or one started before 2.0.5 | restart the agent |
+| `process N is not under your terminal` | the lease was asked for a process that is not the agent's | ask from the agent's own terminal; `take` holds it for its caller |
+| waits with `waiting for free disk` / `free memory` | under the floor | free disk or memory, or lower the floor in the settings |
 
 ---
 

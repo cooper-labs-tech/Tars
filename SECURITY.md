@@ -216,6 +216,30 @@ names. A hash is not secret from a guess: an agent that can read the file can co
 text it already suspects. It is out of the directory every agent is handed, and no
 further out of reach than the rest of `~/.tars-private` (§5).
 
+**The heavy-run slot (2.0.5, `/api/heavy-slot`, `services/heavy-slot.ts`).**
+- **The routes.** An ask, a ticket and a give-back take an agent's own token: the lease is that agent's, and another
+  agent can neither read its ticket nor give it back. The status lists who holds the slot and who waits (agent
+  names, project folder names, labels) to any authenticated caller: every agent of every project reads the queue,
+  which is the point of one queue for the machine.
+- **What a lease is held by.** A pid, which must be under the asking agent's terminal where `ps` can be read (macOS,
+  Linux). So an agent cannot hold the slot forever on pid 1, nor end its lease with another agent's process. On
+  Windows the pid is taken as given, and the lease still ends with that process. On every system, an agent with no
+  terminal is refused, and so is Tars's own process or one of its parents (found through the table where it can be
+  read; Tars's own pid and its parent's on Windows). A lease nests only in a lease of the same agent. A lease the MCP
+  tool takes is the CLI's and goes back at the turn's end; the owner gives any lease back from the window. The label
+  is masked before every agent reads it.
+- **Who may jump the queue.** `gate` is an orchestrator's; anyone else asking for it gets `normal`.
+- **Nothing is ever ended.** The slot never ends a process: an alert is only said.
+- **The shim is not a boundary.** `~/.tars/bin/tars-slot` is in every agent's reach, like `tars-mcp-node`: an agent
+  can rewrite it, being the same user (section 3). It names no path of the app, and runs the script the terminal's
+  environment names.
+- **What a file in `~/.tars/bin` can shadow.** Every agent writes in `~/.tars` without a prompt (`--add-dir`), and
+  Tars leaves any other file in that folder alone. So `~/.tars/bin` comes **last** on an agent terminal's PATH (the
+  Audit's M1 on #537; it came first until then): a file there runs only for a name no folder before it has, never
+  instead of `node`, `git`, `npm`, `claude` or any CLI that is installed. It can still answer for a command that is
+  missing from the machine, for every agent: a `gemini` placed there runs where gemini is not installed. A login
+  shell that sets PATH anew drops the folder; `"$TARS_SLOT"` names the shim without it.
+
 ---
 
 ## 3. An agent's token is not secret from the other agents

@@ -750,6 +750,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('teamTemplate:delete', id),
   },
 
+  // The heavy-run slot for the whole machine (services/heavy-slot.ts): who holds it, who waits and why, and the
+  // alerts during a run (the disk filling, the swap growing fast).
+  heavySlot: {
+    status: () => ipcRenderer.invoke('heavySlot:status'),
+    // The owner gives a lease (or an ask) back; its holder and its orchestrator are told.
+    giveBack: (ticketId: string) => ipcRenderer.invoke('heavySlot:giveBack', ticketId),
+    onChanged: (callback: (status: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
+      ipcRenderer.on('heavySlot:changed', listener);
+      return () => ipcRenderer.removeListener('heavySlot:changed', listener);
+    },
+    onAlert: (callback: (alert: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, alert: unknown) => callback(alert);
+      ipcRenderer.on('heavySlot:alert', listener);
+      return () => ipcRenderer.removeListener('heavySlot:alert', listener);
+    },
+  },
+
   // Vault
   vault: {
     // Each project's folder, every folder of it (services/vault-project-files.ts): by key, place and name, never a path.

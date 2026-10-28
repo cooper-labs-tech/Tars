@@ -16,6 +16,7 @@ import { cliLaunchExit, reportHandledError } from '../services/error-reports/han
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
+import { slotEnv } from '../services/heavy-slot-cli';
 
 export { setAccountEnvResolver } from './account-env';
 /** Moved to electron/platform/shell.ts; re-exported for the callers that import it from here. */
@@ -172,6 +173,9 @@ export function spawnAgentPty(opts: {
       // parent's value, and the app that spawns a CLI is the app that CLI must
       // report to.
       CLAUDE_MGR_API_URL: `http://127.0.0.1:${API_PORT}`,
+      // The heavy-run slot's command line, `tars-slot`, for its git hooks and scripts (services/heavy-slot-cli.ts):
+      // ~/.tars/bin first on its PATH, and what the shim there runs.
+      ...slotEnv(env),
       // On Windows, the CLI looks git and rg up by name in the project it runs
       // in: nothing out of that folder (platform/git-command.ts). After the
       // caller's env, which cannot take it back.

@@ -221,7 +221,13 @@ function tellOrchestrator(creator: KanbanCaller & { agent: AgentStatus }, task: 
 export function tellOrchestratorAsTars(projectPath: string, message: string): Promise<NoteDelivery> {
   // The project's inbox chat: Main, the orchestrator, unless another chat is the inbox (PR F).
   const orchestrator = inboxAgentOf(projectPath, agents.values());
-  if (!orchestrator || !routeCtx) return Promise.resolve('no-orchestrator');
+  if (!orchestrator) return Promise.resolve('no-orchestrator');
+  return tellAgentAsTars(orchestrator, message);
+}
+
+/** The same note, to one agent: the heavy-run slot tells a holder its lease went back (services/heavy-slot-runtime.ts). */
+export function tellAgentAsTars(orchestrator: AgentStatus, message: string): Promise<NoteDelivery> {
+  if (!routeCtx) return Promise.resolve('no-orchestrator');
   const when = whenToType(stateOf(orchestrator), 'note');
   if (when === 'skip') return Promise.resolve('not-running');
   if (when !== 'now') return Promise.resolve('not-now');

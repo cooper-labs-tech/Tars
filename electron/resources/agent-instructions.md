@@ -26,6 +26,22 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what is necessary.
 
+## Heavy runs
+
+Every project's agents share this machine. Before a test suite, a build, Docker or a simulator,
+take the heavy-run slot, which Tars gives to one run at a time across all projects. A dev server
+you start on its own does not take it: it would hold the machine's only slot for hours. One a
+test run starts is inside that run.
+
+- One command: `tars-slot run --label "<what it is>" -- <command>` waits for the slot, runs the
+  command, gives the slot back when it ends and exits with its code. Use it in git hooks and
+  scripts too, as `"$TARS_SLOT" run ...`, which needs no PATH. `tars-slot status` shows who
+  holds it and who waits.
+- From a tool: `heavy_slot_take`, then `heavy_slot_give_back` when the run is over. Tars gives it
+  back when your turn ends.
+- Tars tells you when the disk fills or the swap grows fast during your run, and never stops it:
+  you decide. `tars_guide` with the topic `heavy-runs` says more.
+
 ## Waiting on work you started
 
 Your turn ending is your report. When you stop, Tars tells whoever gave you the task that you have

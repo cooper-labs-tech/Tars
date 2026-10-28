@@ -259,6 +259,48 @@ export interface AgentEvent {
   exitCode?: number;
 }
 
+interface HeavySlotTicket {
+  id: string;
+  state: 'granted' | 'waiting';
+  /** 1 for the next to be granted. */
+  position?: number;
+  /** Why it waits: who holds the slot, or the floor and the figure (free disk, free memory). */
+  why?: string;
+  priority: 'gate' | 'normal' | 'background';
+  /** Asked for gate without being an orchestrator: given normal. */
+  clamped?: true;
+  /** What the run is: the command `tars-slot run` runs, or the label its asker gave. */
+  label: string;
+  agentId: string;
+  agentName: string;
+  project: string;
+  /** The process that holds the lease. */
+  pid: number;
+  askedAt: string;
+  grantedAt?: string;
+  /** Granted inside this holder's lease (a git hook inside its run). */
+  nestedIn?: string;
+  /** Taken with heavy_slot_take, held by the agent's CLI: given back when its turn ends. */
+  untilTurnEnds?: true;
+  alerts: string[];
+}
+interface HeavySlotStatus {
+  /** The setting: how many runs at once. */
+  slots: number;
+  /** Under these a grant waits: free disk in GB, free memory in %. */
+  floors: { diskGb: number; memFreePct: number };
+  /** The machine's last reading (null before the first); a figure the system cannot give is null. */
+  machine: {
+    at: string; diskFreeGb: number | null; memFreePct: number | null; memFreeMb: number | null;
+    swapUsedMb: number | null; swapGrowthMbPerMin: number | null; load1: number | null;
+  } | null;
+  /** With each holder's tree: its process and everything under it (none on Windows). */
+  holders: Array<HeavySlotTicket & { tree?: { processes: number; memoryMb: number; cpuPct: number } }>;
+  /** In the order they will be granted. */
+  waiting: HeavySlotTicket[];
+  /** Since midnight, oldest first, each with whom it was sent to. */
+  alerts: Array<{ at: string; ticket: string; agentName: string; project: string; label: string; text: string; sentTo: string[] }>;
+}
 type VaultSubfolder = 'reports' | 'tools';
 type VaultFailure = { error: string; code: string };
 interface VaultProjectFolder {
@@ -2205,6 +2247,23 @@ export interface ElectronAPI {
     }) => Promise<{ success: boolean; error?: string }>;
   };
 
+  /**
+   * The heavy-run slot for the whole machine (electron/services/heavy-slot.ts): test suites, builds, dev servers,
+   * Docker and simulators of every project's agents take it in turn. A lease is held by a live process and goes when
+   * it ends; the queue is a release gate, then ordinary work, then background work, then arrival.
+   */
+  heavySlot?: {
+    status: () => Promise<HeavySlotStatus>;
+    /**
+     * The owner gives a lease or an ask back, by its ticket's id: false when there is none. Its holder and its
+     * project's orchestrator are told, and the give-back is among the day's alerts. A lease taken with heavy_slot_take
+     * goes back by itself when its agent's turn ends.
+     */
+    giveBack: (ticketId: string) => Promise<boolean>;
+    onChanged: (callback: (status: HeavySlotStatus) => void) => () => void;
+    /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth; and a lease given back without its holder. Tars never stops the run. */
+    onAlert: (callback: (alert: HeavySlotStatus['alerts'][number]) => void) => () => void;
+  };
   // Vault
   vault?: {
     /**

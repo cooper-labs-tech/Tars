@@ -160,7 +160,10 @@ import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './service
 import { checksForUpdates } from './core/sandbox-build';
 import { startCliUpdates } from './services/cli-updater';
 import { migrateLocalTasks, setKanbanAgentDirectory } from './services/kanban-board';
-import { hermesKanban, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { hermesKanban, tellAgentAsTars, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { giveSlotBackForOwner, startHeavySlot, stopHeavySlot, slotStatus } from './services/heavy-slot-runtime';
+import { inboxAgentOf } from './core/chat-inbox';
+import { installSlotShims } from './services/heavy-slot-cli';
 import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
@@ -818,6 +821,23 @@ app.whenReady().then(async () => {
     save: saveAgents,
   });
   startKeepAwake();
+  // The heavy-run slot for the whole machine (services/heavy-slot.ts): its shims in ~/.tars/bin for `tars-slot`, its
+  // passes, and the window's read of who holds it and who waits.
+  installSlotShims();
+  startHeavySlot({
+    getAppSettings: () => appSettings,
+    // Told once when the holder is its project's orchestrator: as the holder.
+    tellOrchestrator: (projectPath, text, unless) => (unless && inboxAgentOf(projectPath, agents.values())?.id === unless
+      ? Promise.resolve('self') : tellOrchestratorAsTars(projectPath, text)),
+    tellAgent: (agentId, text) => {
+      const agent = agents.get(agentId);
+      return agent ? tellAgentAsTars(agent, text) : Promise.resolve('gone');
+    },
+    broadcast: (channel, payload) => broadcastToAllWindows(channel, payload),
+  });
+  ipcMain.handle('heavySlot:status', () => slotStatus());
+  // The owner gives a lease back from the window (the Audit's M2 on #537); its holder and orchestrator are told.
+  ipcMain.handle('heavySlot:giveBack', (_e, id: unknown) => typeof id === 'string' && giveSlotBackForOwner(id));
   // codex's turns, read from its session log and posted as its terminal's hooks
   // would post them, with that terminal's own token (services/codex-sessions.ts).
   // What a CLI without Tars's hooks would have posted, posted as its terminal,
@@ -1084,6 +1104,7 @@ app.on('before-quit', (event) => {
       ['stopSleepWatch', stopSleepWatch],
       ['stopStatusWatch', stopStatusWatch],
       ['stopBornWatch', stopBornWatch],
+      ['stopHeavySlot', stopHeavySlot],
       ['stopTmpRetention', () => stopTmpRetention()],
       // A claude asked for an account's usage (get_usage) just before the quit.
       ['endUsageProbes', endUsageProbes],
