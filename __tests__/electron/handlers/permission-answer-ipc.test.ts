@@ -137,7 +137,10 @@ describe('a question still held', () => {
   it('3, 4. ends with the API\'s DELETE, and the quit has a step for every question', () => {
     const routes = fs.readFileSync(path.join(ROOT, 'electron/services/api-routes/agent-routes.ts'), 'utf8');
     const deleteRoute = routes.slice(routes.indexOf('// DELETE /api/agents/:id'));
-    expect(deleteRoute).toMatch(/dropPermissionAsks\(agent\.id\)/);
+    // Through the window's removal since 28/10 (the Audit's L4 on #523), which drops the agent's questions.
+    expect(deleteRoute).toMatch(/removeAgent\(agent\.id\)/);
+    const removal = fs.readFileSync(path.join(ROOT, 'electron/core/agent-remove.ts'), 'utf8');
+    expect(removal).toMatch(/dropPermissionAsks\(id\)/);
     const main = fs.readFileSync(path.join(ROOT, 'electron/main.ts'), 'utf8');
     expect(main).toMatch(/\['endPermissionAsks', endPermissionAsks\]/);
   });
