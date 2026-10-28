@@ -50,8 +50,13 @@ type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: str
 /** The fields of a tool's input a person decides on: never a file's content. */
 const ASKED_ABOUT = ['command', 'description', 'file_path', 'notebook_path', 'path', 'url', 'query', 'pattern'];
 const INPUT_CAP = 2000;
-/** Asks for one call at most: 40 of Tars's 20 s holds outlast its 10 min bound. */
-const MAX_ASKS = 40;
+/**
+ * Asks for one call at most: 190 of Tars's 20 s holds (63 minutes) outlast the
+ * longest delay the owner can set (permissionAskMinutes, 60), after which Tars
+ * refuses the call itself. Fewer, and the dialog showed before Tars's refusal,
+ * where nobody answers at night (fix-permission-dialogs-2810.md).
+ */
+const MAX_ASKS = 190;
 /** Requests that fail in a row before the call goes back to the engine. */
 const MAX_FAILURES = 3;
 /** A classic hook's input, as the shell hooks read it on stdin. */

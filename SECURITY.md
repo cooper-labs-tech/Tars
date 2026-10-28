@@ -216,6 +216,21 @@ names. A hash is not secret from a guess: an agent that can read the file can co
 text it already suspects. It is out of the directory every agent is handed, and no
 further out of reach than the rest of `~/.tars-private` (§5).
 
+**What Tars answers for an agent in bypass, and what that is not** (2.0.5,
+`services/permission-auto.ts`). For an agent the owner set to bypass, Tars answers yes itself to a
+permission question Claude Code still asks, when every path the call touches resolves (links followed,
+`..` refused) strictly inside the agent's working folder, its `t` or its `c` temporary folder, and
+nowhere under `~/.tars-private`, another agent's worktree or temporary folders, or its own `.git`,
+`.claude` and `.mcp.json` (its hooks, its settings and its servers, which Claude Code asks about on
+purpose). It reads a command only when it can read it whole: a short list of file programs (`cp`, `mv`,
+`rm`, `mkdir`, `cat`, `tee`...) and data ones (`echo`, `printf`), heredocs, quotes, redirections and
+variables it set itself; a substitution, a backtick, `eval`, a subshell, a program not on the list or
+named by its path is the owner's. This is the owner's bypass applied to Claude Code's questions, not a
+boundary: an agent in bypass already runs whatever Claude Code does not ask about, and nothing here
+confines it. A question nobody answers within the owner's delay is refused, never allowed. Every
+decision goes to `~/.tars/logs/permissions.log`, which any agent can write, being the same user: a
+record for the owner, not evidence against a hostile agent.
+
 ---
 
 ## 3. An agent's token is not secret from the other agents

@@ -12,7 +12,8 @@ import { emitAgentStatus, agentStatusEmitter } from '../agent-events';
 import { onTurnEnded, onUsageLimit } from '../claude-accounts/switching';
 import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
-import { dropPermissionAsks, holdPermissionAsk } from '../permission-asks';
+import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, questionFingerprint, subjectOf } from '../permission-asks';
+import { judgeCall, placesOf } from '../permission-auto';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
 
@@ -665,11 +666,14 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
   });
 
   // POST /api/hooks/permission: the state mod's tool.check, when Claude Code
-  // would show its permission dialog (services/permission-asks.ts). Held until
+  // would show its permission dialog (services/permission-asks.ts). For an
+  // agent in bypass, a call that touches only its own folders is allowed at
+  // once by Tars (services/permission-auto.ts). Anything else is held until
   // the window answers: allow or deny is then the decision, with no dialog.
-  // `pending` after 20 s, and the mod asks again for the same call. `ask`
-  // hands it back to the dialog: for a session that is not the agent's
-  // current one, nothing to name, a question nobody answers, or one dropped.
+  // `pending` after 20 s, and the mod asks again for the same call. Nobody
+  // answers within the owner's delay: refused, with a reason the agent reads.
+  // `ask` hands it back to the dialog: for a session that is not the agent's
+  // current one, nothing to name, or a question dropped.
   app.post('/api/hooks/permission', async (req, sendJson) => {
     const { agent_id, tool, input, tool_use_id, reason, rule } = req.body as {
       agent_id?: string; tool?: unknown; input?: unknown; tool_use_id?: unknown; reason?: unknown; rule?: unknown;
@@ -692,6 +696,20 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     };
     const afterError = (req.body as { after_error?: unknown }).after_error;
     if (typeof afterError === 'string') console.log(`[permission] ${agent.name || agent.id}'s mod asks again after a failed request: ${oneLine(afterError)}`);
+    // The owner's bypass, applied to what Claude Code still asks: yes, when
+    // everything the call touches is inside the agent's own folders.
+    const places = placesOf(agent, agents.values());
+    const judged = places ? judgeCall(question.tool, fields, places) : undefined;
+    if (judged?.allow) {
+      logPermission(agent, agent.id, question.tool, 'allow', 'Tars (bypass, its own folders)', subjectOf(question.tool, fields));
+      sendJson({
+        decision: 'allow',
+        reason: `Tars allowed it: ${agent.name || agent.id} is in bypass, and ${judged.why}`,
+        fingerprint: questionFingerprint(question.tool, fields),
+      });
+      return;
+    }
+    if (places && judged) console.log(`[permission] ${agent.name || agent.id} is in bypass, and the call waits for the owner: ${judged.why}`);
     const answer = await holdPermissionAsk(agent, question, changed => {
       saveAgents();
       ctx.handleStatusChangeNotificationCallback(changed, changed.status);
@@ -700,7 +718,7 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
         agentId: changed.id, status: changed.status, waitingReason: changed.waitingReason, permissionAsk: changed.permissionAsk ?? null,
       });
       scheduleTick();
-    });
+    }, permissionHoldMs(ctx.getAppSettings()));
     sendJson(answer);
   });
 

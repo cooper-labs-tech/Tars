@@ -1,6 +1,9 @@
-import type { AgentStatus, AgentWaitingOn } from '../types';
+import type { AgentStatus, AgentWaitingOn, AppSettings } from '../types';
 import { createHash } from 'crypto';
+import * as path from 'path';
 import { agents } from '../core/agent-manager';
+import { DATA_DIR } from '../constants';
+import { retentionLog } from './agent-tmp';
 
 /**
  * Permissions decided by Tars (mods step 2, ETUDE-MODS-CLAUDE-CODE.md §2).
@@ -9,9 +12,16 @@ import { agents } from '../core/agent-manager';
  * mod's `tool.check` hook asks Tars instead (POST /api/hooks/permission), and
  * the request is held here until the window answers (agent:answerPermission):
  * allow or deny is then Claude Code's decision, with no dialog and nothing
- * typed into the terminal. A question handed back (`ask`), one nobody answers
- * within the bound, and one whose session ends go back to the engine, whose
- * own decision then stands: the dialog, as before the mod. Measured on 2.1.289:
+ * typed into the terminal. A question handed back (`ask`) and one whose
+ * session ends go back to the engine, whose own decision then stands: the
+ * dialog, as before the mod. One nobody answers within the owner's delay
+ * (`permissionAskMinutes`, 10 by default) is refused with a reason the model
+ * reads, so the agent takes another way instead of freezing at a dialog all
+ * night (2.0.5, fix-permission-dialogs-2810.md; until then it went back to
+ * the dialog, and three projects' agents waited there until morning). For an
+ * agent in bypass, Tars answers yes itself to a call that touches only its own
+ * folders (permission-auto.ts, in the route). Every decision is written to
+ * ~/.tars/logs/permissions.log with who or what decided. Measured on 2.1.289:
  * a hook may await Tars past its 10 s budget, since a `$` call in flight is not
  * counted, and the model reads a deny's reason.
  *
@@ -24,8 +34,25 @@ export type PermissionAnswer = { decision: PermissionDecision; reason?: string; 
 /** Not decided yet: the mod asks again for the same call. */
 export type PermissionPending = { decision: 'pending' };
 
-/** How long a question is held for the window before it goes back to the dialog, from its first ask. */
+/** How long a question is held for the window before Tars refuses it, from its first ask, by default. */
 export const PERMISSION_HOLD_MS = 10 * 60_000;
+/** The owner's setting's range, in minutes: past 60 the state mod stops asking first (its MAX_ASKS) and the dialog shows. */
+const HOLD_MINUTES_MAX = 60;
+
+/** The hold the owner set (`permissionAskMinutes`), or the default when it is not a whole number of minutes in range. */
+export function permissionHoldMs(settings: Pick<AppSettings, 'permissionAskMinutes'> | undefined): number {
+  const m = settings?.permissionAskMinutes;
+  return typeof m === 'number' && Number.isInteger(m) && m >= 1 && m <= HOLD_MINUTES_MAX ? m * 60_000 : PERMISSION_HOLD_MS;
+}
+
+/** Where every decision is written, with who or what decided: ~/.tars/logs/permissions.log, moved to .1 past 256 KB. */
+export const PERMISSION_LOG = path.join(DATA_DIR, 'logs', 'permissions.log');
+
+/** One line per decision: the agent, the tool, the decision, who decided, and what was asked (one line, cut at 300). */
+export function logPermission(agent: { id: string; name?: string } | undefined, agentId: string, tool: string, decision: string, by: string, subject: string): void {
+  const what = subject.replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').slice(0, 300);
+  retentionLog(`[permission] ${agent?.name || agentId} (${agentId}) ${tool} ${decision} by ${by}: ${what}`, PERMISSION_LOG);
+}
 /**
  * How long one ask is held before Tars answers `pending`. Measured on 2.1.289
  * (e2e/mod-permissions.live.spec.ts): a request held about 30 s ended under
@@ -59,7 +86,7 @@ export function questionFingerprint(tool: string, fields: Record<string, string>
 }
 
 /** What the window names as asked: the command, the path or the address, whole; the tool when there is none. */
-function subjectOf(tool: string, fields: Record<string, string>): string {
+export function subjectOf(tool: string, fields: Record<string, string>): string {
   const path = fields.file_path || fields.notebook_path;
   return fields.command || (path ? `${tool} ${path}` : '') || fields.url || fields.query || fields.pattern || fields.path || tool;
 }
@@ -68,6 +95,9 @@ type Held = {
   agentId: string;
   toolUseId: string;
   fingerprint: string;
+  /** For the log: the tool and what it asked. */
+  tool: string;
+  subject: string;
   /** The asks waiting on it now: one, or none between two asks. */
   waiters: Set<(answer: PermissionAnswer) => void>;
   timer: ReturnType<typeof setTimeout>;
@@ -80,9 +110,9 @@ const held = new Map<string, Held>();
 /** A decision no ask was waiting for, kept for the next ask of that very call. */
 const kept = new Map<string, { toolUseId: string; fingerprint: string; answer: PermissionAnswer; timer: ReturnType<typeof setTimeout> }>();
 
-function close(agent: AgentStatus | undefined, entry: Held, answer: PermissionAnswer): void {
+function close(agent: AgentStatus | undefined, entry: Held, answer: PermissionAnswer, by: string): void {
   clearTimeout(entry.timer);
-  console.log(`[permission] ${agent?.name || entry.agentId}: ${answer.decision}${answer.reason ? ` (${answer.reason})` : ', back to its dialog'}`);
+  logPermission(agent, entry.agentId, entry.tool, answer.decision === 'ask' ? 'back to its dialog' : answer.decision, by, entry.subject);
   if (held.get(entry.agentId) === entry) held.delete(entry.agentId);
   const decided: PermissionAnswer = answer.decision === 'ask' ? answer : { ...answer, fingerprint: entry.fingerprint };
   if (entry.waiters.size === 0) {
@@ -135,15 +165,22 @@ export function holdPermissionAsk(
   // A question still held is about another call, or about this call's id
   // with other fields: one its engine gave up on, or a post that was not the
   // mod's. It goes back to its dialog, and this one is shown afresh.
-  if (current) close(agent, current, { decision: 'ask' });
+  if (current) close(agent, current, { decision: 'ask' }, 'its engine, which asked about another call');
 
+  const minutes = Math.round(holdMs / 60_000);
   const entry: Held = {
     agentId: agent.id,
     toolUseId: question.toolUseId,
     fingerprint,
+    tool: question.tool,
+    subject: subjectOf(question.tool, question.fields),
     waiters: new Set(),
-    // Unanswered: the dialog shows, and the agent stays waiting on it.
-    timer: setTimeout(() => close(agent, entry, { decision: 'ask' }), holdMs),
+    // Unanswered: refused, with what the agent can do instead, and it runs on.
+    // Never back to the dialog, where nobody may answer until morning.
+    timer: setTimeout(() => {
+      running(agent);
+      close(agent, entry, { decision: 'deny', reason: expiredReason(minutes) }, `the delay (${minutes} minute${minutes === 1 ? '' : 's'})`);
+    }, holdMs),
     changed,
   };
   held.set(agent.id, entry);
@@ -168,6 +205,23 @@ export function holdPermissionAsk(
   return wait;
 }
 
+/** What the model reads when nobody answered in time: why, and what to do instead of waiting. */
+function expiredReason(minutes: number): string {
+  return `Nobody answered this permission question in Tars within ${minutes} minute${minutes === 1 ? '' : 's'}, so Tars refused it. Do not wait `
+    + 'for it and do not ask again for the same call: take another way (work inside your own worktree or temporary '
+    + 'folders, or split the command into simpler ones), or go on with the rest and say in your report what you '
+    + 'needed and why.';
+}
+
+/** The agent runs again: its question was decided. */
+function running(agent: AgentStatus): void {
+  agent.status = 'running';
+  agent.waitingReason = undefined;
+  agent.waitingOn = undefined;
+  agent.dialogSince = undefined;
+  agent.lastActivity = new Date().toISOString();
+}
+
 function reasonFor(decision: PermissionDecision, by: string, reason?: string): string | undefined {
   const why = typeof reason === 'string' ? reason.replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ').trim().slice(0, 200) : '';
   if (decision === 'allow') return `${by} allowed it in Tars`;
@@ -187,15 +241,9 @@ export function answerPermission(agentId: string, decision: PermissionDecision, 
   const entry = held.get(agentId);
   if (!entry) return false;
   const agent = agents.get(agentId);
-  if (agent && decision !== 'ask') {
-    agent.status = 'running';
-    agent.waitingReason = undefined;
-    agent.waitingOn = undefined;
-    agent.dialogSince = undefined;
-    agent.lastActivity = new Date().toISOString();
-  }
+  if (agent && decision !== 'ask') running(agent);
   const text = reasonFor(decision, by, reason);
-  close(agent, entry, text ? { decision, reason: text } : { decision });
+  close(agent, entry, text ? { decision, reason: text } : { decision }, by);
   return true;
 }
 
@@ -204,12 +252,12 @@ export function dropPermissionAsks(agentId: string): void {
   const decided = kept.get(agentId);
   if (decided) { clearTimeout(decided.timer); kept.delete(agentId); }
   const entry = held.get(agentId);
-  if (entry) close(agents.get(agentId), entry, { decision: 'ask' });
+  if (entry) close(agents.get(agentId), entry, { decision: 'ask' }, 'the end of its session or turn, its own dialog, a stop or a removal');
 }
 
 /** The quit: every question goes back to its engine. */
 export function endPermissionAsks(): void {
-  for (const entry of [...held.values()]) close(agents.get(entry.agentId), entry, { decision: 'ask' });
+  for (const entry of [...held.values()]) close(agents.get(entry.agentId), entry, { decision: 'ask' }, 'the quit');
 }
 
 /** Test seam. */

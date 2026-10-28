@@ -1288,11 +1288,12 @@ both behave identically. It:
 1. calls `killStalePty(agent)`: if the PTY's recorded `ptyCwd` no longer matches
    `worktreePath || projectPath`, the PTY is killed so the spawn path restarts it in the right
    directory;
-2. **refuses with `409`** if the agent is `waiting` on a permission dialog: a typed message
-   cannot answer arrow-key UI, and the trailing `\r` could *accept* the pending permission:
-   `Agent "X" is blocked on a permission dialog; a typed message cannot answer it.`
-   Every other writer (the bus, delegation notes, "send held", Telegram, Slack) is held by the
-   writer itself while a dialog is up, and its message goes in after the answer (SPECS §5).
+2. while the agent is `waiting` on a permission dialog, hands the message to the terminal's
+   writer, which holds it while the dialog is up (a typed `\r` would *answer* the dialog) and types
+   it once the dialog closes, as for every other writer (the bus, delegation notes, "send held",
+   Telegram, Slack; SPECS §5). The reply says `held: true` with the dialog's reason. Until 2.0.5 it
+   was refused with `409`, and a worker's report to an orchestrator at a dialog was lost (1212
+   counted 17 on the night of 27/10).
 3. types the message into the session (`mode: "message"`) when a CLI runs in the terminal,
    whatever the status says (a turn ends on `idle`, a failed one on `error`, both with the CLI
    at its prompt). A session the API started counts from its spawn: its terminal was handed
@@ -1537,11 +1538,27 @@ process log says `[permission] <agent> asks Tars: Bash <command>`, then the answ
 `allow (the user allowed it in Tars)`, `deny (the user refused it in Tars: <reason>)`, or
 `ask, back to its dialog`; `<agent>'s mod asks again after a failed request: <error>` when one of
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
-meanwhile (the `409` above). The window answers
-with `agent:answerPermission`; nothing else can. Unanswered for 10 minutes, or when the turn, the
-session or the agent ends, it goes back to Claude Code, which then shows its own dialog, and the
-`PermissionRequest` hook reports it as before. An agent waiting with no `permissionAsk` is at its
-terminal's dialog: the mod did not load, or the question went back.
+meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
+answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
+- **Tars answers for a bypass agent's own folders.** For an agent in bypass, a call whose every path
+  is inside its working folder (its worktree, or its project), its `t` or its `c` temporary folder
+  (`services/permission-auto.ts`) is allowed at once, with no question: `allow by Tars (bypass, its
+  own folders)`. Never under `~/.tars-private`, another agent's worktree or temporary folders, the
+  agent's own `.git`, `.claude` or `.mcp.json`, or for a command it cannot read whole (a
+  substitution, a subshell, a program not on its list). Anything else waits for the owner.
+- **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
+  `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads
+  (how long, and to take another way), and the agent runs on. It no longer goes back to the dialog,
+  where nobody answered until morning. The state mod asks for up to 63 minutes, past the longest delay.
+- **Every decision is logged** in `~/.tars/logs/permissions.log` (moved to `.1` past 256 KB): the
+  agent, the tool, the decision, who decided (Tars, the window's person, the delay, the end of the
+  session or turn, the quit) and what was asked.
+- **An orchestrator sees it**: `list_agents` gives a teammate's `waitingReason` and `permissionAsk`
+  (the tool, what it runs, why Claude Code asked, since and until when); `get_agent` gives it whole.
+When the turn, the session or the agent ends, or the window answers `ask`, it goes back to Claude
+Code, which then shows its own dialog, and the `PermissionRequest` hook reports it as before. An agent
+waiting with no `permissionAsk` is at its terminal's dialog: the mod did not load, or the question
+went back.
 
 ### The idle prompt, and what an orchestrator is told (1.7.8)
 

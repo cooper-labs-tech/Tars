@@ -102,7 +102,7 @@ export interface AgentStatus {
   permissionAsk?: {
     tool: string;
     askedAt: string;
-    /** When Tars hands the question back to the terminal's dialog if nobody answers. */
+    /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
     /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
     subject: string;
@@ -380,6 +380,12 @@ export interface CliKeyState {
 }
 
 export interface AppSettings {
+  /**
+   * How long Tars holds a permission question for the window before it refuses it with a reason the agent reads
+   * (services/permission-asks.ts): 1 to 60 minutes, 10 when unset or out of range. Past 60 the state mod stops
+   * asking first and Claude Code's dialog shows.
+   */
+  permissionAskMinutes?: number;
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;

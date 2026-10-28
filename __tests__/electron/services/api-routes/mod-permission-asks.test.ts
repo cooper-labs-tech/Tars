@@ -534,6 +534,8 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
     const a = agent();
     Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
     await ask(question({ input: { command: heredoc('/p') }, tool_use_id: 'toolu_auto' }));
+    // Inside its own folder `rm -rf build` would be Tars's to allow too: the next two are a normal agent's.
+    a.permissionMode = 'normal';
     void askUntilAnswered(question({ tool_use_id: 'toolu_window' }));
     await vi.advanceTimersByTimeAsync(0);
     answerPermission('a1', 'deny', 'the user', 'not now');
