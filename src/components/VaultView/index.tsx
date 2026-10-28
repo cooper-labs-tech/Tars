@@ -14,10 +14,11 @@ import DocumentViewer from './components/DocumentViewer';
 import DocumentEditor from './components/DocumentEditor';
 import { VaultEmptyState } from './shared';
 import { useDesktopApi } from '@/hooks/useDesktopApi';
-import { useProjectFolders, type ProjectPlace } from './project/useProjectFolders';
+import { useProjectFolders, type PlaceEntry, type ProjectPlace } from './project/useProjectFolders';
 import { ProjectFolders } from './project/ProjectFolders';
 import { ProjectFileList } from './project/ProjectFileList';
 import { ProjectFilePanel } from './project/ProjectFilePanel';
+import { ProjectLinkNote } from './project/ProjectLinkNote';
 
 function isElectron(): boolean {
   return typeof window !== 'undefined' && !!window.electronAPI?.vault;
@@ -66,21 +67,24 @@ export default function VaultView({ embedded, subtitle }: { embedded?: boolean; 
   const [loading, setLoading] = useState(true);
   const setVaultUnreadCount = useStore(s => s.setVaultUnreadCount);
 
-  // Each project's reports and tools (2.0.4, #471), beside the documents made here.
+  // Each project's folder, every folder of it (2.0.5, the places of PR 530), beside the documents made here.
   const projects = useProjectFolders(hasVaultApi);
-  const [projectFile, setProjectFile] = useState<string | null>(null);
+  const [projectEntry, setProjectEntry] = useState<PlaceEntry | null>(null);
   const openProjectPlace = (place: ProjectPlace) => {
-    projects.setPlace(place);
-    setProjectFile(null);
+    projects.choose(place);
+    setProjectEntry(null);
     setSelectedDoc(null);
     setViewMode('list');
   };
   const leaveProjects = () => {
-    projects.setPlace(null);
-    setProjectFile(null);
+    projects.leave();
+    setProjectEntry(null);
   };
   const projectFolder = projects.place ? projects.folders.find((f) => f.key === projects.place?.key) ?? null : null;
-  const projectNames = projects.list && 'files' in projects.list ? projects.list.files.map((f) => f.name) : [];
+  const projectEntries = projects.list && 'entries' in projects.list ? projects.list.entries : [];
+  const projectNames = projectEntries.filter((e) => e.type === 'file').map((e) => e.name);
+  const openProjectFile = (name: string) => setProjectEntry(projectEntries.find((e) => e.type === 'file' && e.name === name) ?? null);
+  const projectFile = projectEntry?.type === 'file' && !projectEntry.hardlink ? projectEntry.name : null;
 
   // Sync unread count to global store for sidebar badge
   const unreadCount = useMemo(
@@ -401,7 +405,7 @@ export default function VaultView({ embedded, subtitle }: { embedded?: boolean; 
           "+ Document" floating under the title instead of beside it. */}
       <PageHeader
         title="Vault"
-        subtitle={subtitle ?? 'What your agents produce: each project\'s reports and tools, and the documents made here.'}
+        subtitle={subtitle ?? 'What your agents produce: every folder of each project\'s folder, and the documents made here.'}
         actions={headerActions}
       />
 
@@ -410,9 +414,17 @@ export default function VaultView({ embedded, subtitle }: { embedded?: boolean; 
           document is open - it used to unmount and the reader lost their place. */}
       <div className="flex-1 flex gap-2 overflow-hidden min-h-0">
         {/* Folders */}
-        <Panel fill padded={false} className="w-[236px] shrink-0 max-lg:hidden">
+        <Panel fill padded={false} className="w-[280px] max-xl:w-[228px] shrink-0 max-lg:hidden">
           <div className="flex-1 overflow-y-auto pb-2">
-            <ProjectFolders folders={projects.folders} place={projects.place} onPick={openProjectPlace} />
+            <ProjectFolders
+              folders={projects.folders}
+              place={projects.place}
+              levels={projects.levels}
+              open={projects.open}
+              onToggle={projects.toggle}
+              onChoose={openProjectPlace}
+              onMore={(at) => { void projects.moreOfLevel(at); }}
+            />
             <div className="mx-3 border-t border-border" />
             <PanelCaption className="px-3 pt-3 pb-2">{`Documents · ${folders.length}`}</PanelCaption>
             <FolderTree
@@ -446,17 +458,20 @@ export default function VaultView({ embedded, subtitle }: { embedded?: boolean; 
         <Panel
           fill
           padded={false}
-          className={`${projects.place ? 'w-[400px]' : 'w-[300px]'} shrink-0 min-w-0 max-lg:w-auto max-lg:flex-1 ${showBody ? 'max-lg:hidden' : ''}`}
+          className={`${projects.place ? 'w-[380px] max-xl:w-[344px]' : 'w-[300px]'} shrink-0 min-w-0 max-lg:w-auto max-lg:flex-1 ${showBody ? 'max-lg:hidden' : ''}`}
         >
           {projects.place && projectFolder ? (
             <ProjectFileList
               folder={projectFolder}
-              sub={projects.place.sub}
+              place={projects.place.place}
               list={projects.list}
-              selected={projectFile}
+              selected={projectEntry?.name ?? null}
               notesMoved={projects.notes[projectFolder.key]}
-              onOpen={setProjectFile}
-              onShowFolder={() => { void window.electronAPI?.vault?.showProjectFile({ key: projectFolder.key, sub: projects.place!.sub }); }}
+              onOpenFolder={(place) => openProjectPlace({ key: projectFolder.key, place })}
+              onOpen={setProjectEntry}
+              onMore={() => { void projects.moreOfList(); }}
+              onRetry={() => { void projects.refresh(); }}
+              onShowFolder={() => { void window.electronAPI?.vault?.showProjectFile({ key: projectFolder.key, place: projects.place!.place }); }}
             />
           ) : loading ? (
             <div className="flex items-center justify-center h-full">
@@ -480,9 +495,13 @@ export default function VaultView({ embedded, subtitle }: { embedded?: boolean; 
         {/* Document body */}
         <Panel fill padded={false} className={`flex-1 min-w-0 ${showBody ? '' : 'max-lg:hidden'}`}>
           <AnimatePresence mode="wait">
-            {projects.place && projectFile ? (
+            {projects.place && projectEntry && !projectFile ? (
+              <motion.div key={`link-${projectEntry.name}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full overflow-y-auto">
+                <ProjectLinkNote entry={projectEntry} />
+              </motion.div>
+            ) : projects.place && projectFile ? (
               <motion.div
-                key={`file-${projects.place.key}-${projects.place.sub}-${projectFile}`}
+                key={`file-${projects.place.key}-${projects.place.place.join('/')}-${projectFile}`}
                 initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ duration: 0.15 }}
@@ -490,11 +509,11 @@ export default function VaultView({ embedded, subtitle }: { embedded?: boolean; 
               >
                 <ProjectFilePanel
                   projectKey={projects.place.key}
-                  sub={projects.place.sub}
+                  place={projects.place.place}
                   name={projectFile}
                   names={projectNames}
                   changes={projects.changes}
-                  onOpenFile={setProjectFile}
+                  onOpenFile={openProjectFile}
                 />
               </motion.div>
             ) : viewMode === 'edit' ? (
