@@ -18,6 +18,11 @@ import * as path from 'node:path';
  * K5 someone acts on a queue who may not: a worker pauses another agent's queue, reads what others sent it, or moves
  *    or cancels an item it did not send; another project's agent acts at all; or the owner, the project's
  *    orchestrator or Tars are refused.
+ * K6 (the Audit's L1 on #536) a worker moves its own item ahead of what someone else queued (the orchestrator's, the
+ *    owner's, another worker's): to the head, or before an item that is not its own, or past one on the way; or it
+ *    cannot reorder its own items among themselves.
+ * K7 (the Audit's Info 1 on #536) a run-task handed over again after a restart goes in under another sender line
+ *    than the one it was queued with: its sender, its name and its mode's mark are not kept.
  */
 
 let home: string;
@@ -135,5 +140,33 @@ describe('who may act on it', () => {
     expect(store.queueRight({ kind: 'agent', agent: fleet.runner }, target, 'cancel', item('runner')).ok).toBe(true);
     // Another project: nothing, its own orchestrator included.
     for (const op of ['list', 'pause', 'resume', 'move', 'cancel'] as const) expect(store.queueRight({ kind: 'agent', agent: fleet.stranger }, target, op, item('stranger')).ok, op).toBe(false);
+  });
+});
+
+describe('a worker moves only among its own items (the Audit\'s L1 on #536)', () => {
+  const line = (...who: string[]) => who.map((requesterId, i) => ({ ref: `t-0000000${i}`, agentId: 'w', title: String(i), queuedAt: i, requesterId }));
+  it('K6: never ahead of what it did not send', () => {
+    const q = line('lead', 'me', 'lead', 'me');
+    // To the head: as far as the last item it does not own, no further.
+    expect(store.moveWithin(q, 't-00000003', undefined, 'me')).toEqual({ ok: true, before: undefined, stays: true });
+    expect(store.moveWithin(line('lead', 'me', 'me'), 't-00000002', undefined, 'me')).toEqual({ ok: true, before: 't-00000001' });
+    // Before one of its own, with nothing of another's between: yes; past another's item: no.
+    expect(store.moveWithin(line('me', 'me', 'lead'), 't-00000001', 't-00000000', 'me')).toEqual({ ok: true, before: 't-00000000' });
+    expect(store.moveWithin(q, 't-00000003', 't-00000001', 'me').ok).toBe(false);
+    // Before another's item: no.
+    expect(store.moveWithin(q, 't-00000003', 't-00000002', 'me').ok).toBe(false);
+    expect(store.moveWithin(q, 't-00000001', 't-00000000', 'me').ok).toBe(false);
+  });
+});
+
+describe('a run-task kept across a restart keeps its sender line (the Audit\'s Info 1 on #536)', () => {
+  it('K7: its sender, name and mark go back in as they were queued', async () => {
+    const { replayJobOf } = await import('../../../electron/services/api-routes/agent-routes');
+    const sender = { kind: 'agent' as const, id: 'lead', name: 'Project Lead' };
+    const job = replayJobOf({ ref: 't-0000000a', agentId: 'w', title: 'x', queuedAt: 0, replay: { kind: 'run-task', task: 'do it', requesterId: 'lead', from: 'Project Lead', sender, mark: '[mark]' } });
+    expect(job).toEqual({ task: 'do it', ref: 't-0000000a', asSent: { from: 'Project Lead', sender, mark: '[mark]' } });
+    // Queued by the owner or a channel, with no requester: as it was, not Tars's.
+    const owner = replayJobOf({ ref: 't-0000000b', agentId: 'w', title: 'x', queuedAt: 0, replay: { kind: 'run-task', task: 'go', from: 'Telegram', sender: { kind: 'channel', channel: 'Telegram' } } });
+    expect(owner?.asSent).toEqual({ from: 'Telegram', sender: { kind: 'channel', channel: 'Telegram' } });
   });
 });
