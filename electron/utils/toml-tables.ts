@@ -10,14 +10,17 @@
  * refused its whole config.
  *
  * `key` is the header as the file writes it, without its brackets (`mcp_servers.claude-mgr-vault`,
- * `mcp_servers."tasmania.local"`). A header line is a line that is only `[...]` (or `[[...]]`), spaces and a
- * comment aside: a line of a multi-line array (`  [1, 2],`) is not one. What is left ends with a newline.
+ * `mcp_servers."tasmania.local"`). A header line is a table's or an array of tables' header, a comment after it
+ * aside: its key is bare (`a-z0-9_-`), a basic string or a literal string, dotted, so a quoted key may hold `[`, `]`,
+ * `=` or `#` (a trust table `[projects."/Users/me/Work [old]/app"]`, the Audit's M1 on #531). A line of a value
+ * (`  [1, 2],`, `["a", "b"]`) is not one. What is left ends with a newline.
  */
-const HEADER = /^\s*\[\[?[^[\]=]+\]\]?\s*(#.*)?$/;
+const KEY = String.raw`(?:[A-Za-z0-9_-]+|"(?:[^"\\]|\\.)*"|'[^']*')`;
+const HEADER = new RegExp(String.raw`^\s*(\[\[?\s*${KEY}(?:\s*\.\s*${KEY})*\s*\]\]?)\s*(?:#.*)?\r?$`);
 
 export function removeTomlTable(content: string, key: string): string {
   const lines = content.split('\n');
-  const isTable = (line: string) => HEADER.test(line) && line.replace(/#.*$/, '').trim() === `[${key}]`;
+  const isTable = (line: string) => HEADER.exec(line)?.[1] === `[${key}]`;
   const out: string[] = [];
   let removing = false;
   let removedAtEnd = false;
