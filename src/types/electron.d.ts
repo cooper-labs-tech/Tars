@@ -1208,6 +1208,29 @@ export type ChatEvent = { seq: number; chatId: string } & (
   | { type: 'state'; runner: { id: string; status: AgentStatus['status']; live: boolean } | null }
 );
 
+/** agentQueue (2.0.5, lot 2): an item waiting in an agent's queue, in its order. */
+export interface AgentQueueItem {
+  ref: string;
+  /** 1 for the next to go in. */
+  position: number;
+  requesterId?: string;
+  /** Who sent it, as the panel names them. */
+  from?: string;
+  how?: 'task' | 'message' | 'note';
+  /** Its first line. */
+  title: string;
+  queuedAt: string;
+}
+
+/** agentQueue: an agent's queue, and whether nothing goes in (paused, since when, why). */
+export interface AgentQueue {
+  agentId: string;
+  paused?: { since: string; why: string };
+  items: AgentQueueItem[];
+}
+
+type AgentQueueAnswer = { success: true; view: AgentQueue } | { success: false; error: string };
+
 /** agent:queue: a worker's work in hand and the requests waiting behind it. */
 export interface AgentQueueEntry {
   ref: string | null;
@@ -1414,6 +1437,14 @@ export interface ElectronAPI {
   };
 
   // Skills management
+  /** An agent's queue (2.0.5, lot 2): read in order, paused, resumed, an item moved (to the head, or before another) or cancelled. */
+  agentQueue: {
+    get: (agentId: string) => Promise<AgentQueue | { error: 'not_found' }>;
+    pause: (agentId: string, reason?: string) => Promise<AgentQueueAnswer>;
+    resume: (agentId: string) => Promise<AgentQueueAnswer>;
+    move: (ref: string, before?: string) => Promise<AgentQueueAnswer>;
+    cancel: (ref: string) => Promise<AgentQueueAnswer>;
+  };
   skill: {
     install: (repo: string) => Promise<{ success: boolean; output?: string; message?: string }>;
     installStart: (params: { repo: string; cols?: number; rows?: number }) => Promise<{ id: string; repo: string }>;

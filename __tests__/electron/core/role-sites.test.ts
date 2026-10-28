@@ -102,6 +102,7 @@ const SITES: Site[] = [
   { file: 'electron/core/reply-target.ts', line: 'if (asker && asker.projectPath === caller.projectPath && (toRequester || …)) {', is: 'powers', why: 'R5: an asker with the orchestrator\'s powers takes a reply to "orchestrator", a chat\'s runner included' },
   { file: 'electron/core/one-task.ts', line: "return caller.kind === 'tars' || caller.agent.id === target.id || …;", is: 'powers', why: 'a worker never orders work from another agent, nor stops one: who hands an agent work and stops it' },
   { file: 'electron/core/one-task.ts', line: 'return caller.requestedBy?.agentId === target.id || (… && target.projectPath === caller.projectPath);', is: 'powers', why: 'a worker writing to whoever leads it reports: not a note' },
+  { file: 'electron/services/agent-queues.ts', line: "if (… && agent.kind !== 'chat') return { ok: true, all: true };", is: 'identity', why: "2.0.5, lot 2: the project's persistent orchestrator acts on its agents' queues, as it cancels any chat's task (task-cancel.ts); a chat's runner only on what it sent" },
   { file: 'electron/core/task-cancel.ts', line: 'if (caller && … && caller.kind !== \'chat\' && caller.projectPath === workerProject) {', is: 'identity', why: 'R6: the project\'s persistent orchestrator may cancel any chat\'s task, with a reason: a request and a task waiting its turn alike (the Audit\'s L2 on #449)' },
 
   // handlers/

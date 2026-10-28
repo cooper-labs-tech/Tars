@@ -37,6 +37,10 @@ type DispatchResult = {
   /** mode `queued`: the agent works on another task, and this one waits its turn (one task at a time). */
   queuedBehind?: string;
   queuedTask?: string;
+  /** The request's id, the one its sender line names. */
+  taskRef?: string;
+  /** Queued while the agent's queue is paused (2.0.5): it goes in once the queue is resumed. */
+  paused?: { since: string; why: string };
   /** A worker's message to another worker: typed in as a note for information, once that agent's turn ends. */
   note?: boolean;
   /** Answered from the receipt of an earlier call with the same clientRequestId: nothing was sent again. */
@@ -717,16 +721,21 @@ const AGENT_TOOLS: Tool[] = [
     schema: {
       id: z.string().describe("The agent ID"),
       reason: z.string().min(1).describe("Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"),
+      dropQueue: z.boolean().optional().describe("Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."),
       allowCrossProject: z.boolean().optional().describe("Explicitly allow acting on an agent of ANOTHER project (normally rejected)"),
     },
     failure: "stopping agent",
-    async run({ id, reason, allowCrossProject }) {
-      const answer = (await apiRequest(`/api/agents/${id}/stop`, "POST", allowCrossProject ? { reason, allowCrossProject } : { reason })) as
-        { alreadyStopped?: boolean; stoppedBy?: string; stopReason?: string } | undefined;
+    async run({ id, reason, dropQueue, allowCrossProject }) {
+      const answer = (await apiRequest(`/api/agents/${id}/stop`, "POST", { reason, ...(dropQueue ? { dropQueue } : {}), ...(allowCrossProject ? { allowCrossProject } : {}) })) as
+        { alreadyStopped?: boolean; stoppedBy?: string; stopReason?: string; queueKept?: number; queueDropped?: number } | undefined;
       if (answer?.alreadyStopped) {
         return text(`Agent ${id} was already stopped by ${answer.stoppedBy || "someone"}${answer.stopReason ? `: ${answer.stopReason}` : ""}. Nothing changed.`);
       }
-      return text(`Stopped agent ${id}: ${reason}`);
+      const kept = answer?.queueKept ?? 0;
+      const dropped = answer?.queueDropped ?? 0;
+      const queue = kept ? ` Its queue is kept, paused: ${kept} item${kept === 1 ? "" : "s"} wait${kept === 1 ? "s" : ""}, and go${kept === 1 ? "es" : ""} in once you resume it (agent_queue({ id: "${id}", action: "resume" })).`
+        : dropped ? ` ${dropped} item${dropped === 1 ? "" : "s"} of its queue dropped, each sender told.` : "";
+      return text(`Stopped agent ${id}: ${reason}.${queue}`);
     },
   }),
 
@@ -762,8 +771,11 @@ const AGENT_TOOLS: Tool[] = [
         return text(`Sent to agent "${agentName}" as a note for information, not a task: ${data.queued ? "it goes in once its current turn ends" : "it is in its terminal"}. A worker does not hand work to another agent: if this needs doing, ask your orchestrator.${again}`);
       }
 
+      if (data.queued && data.paused) {
+        return text(`Queued for agent "${agentName}" as ${data.queuedTask ?? data.taskRef}: its queue is paused (${data.paused.why}), so it goes in once the queue is resumed. agent_queue({ id: "${id}" }) shows what waits there.${again}`);
+      }
       if (data.queued) {
-        return text(`Queued for agent "${agentName}": it goes in once its current turn ends.${data.interrupted === false ? " Its turn could not be interrupted in time, so it waits for the end of it." : ""}${again}`);
+        return text(`Queued for agent "${agentName}"${data.queuedTask ?? data.taskRef ? ` as ${data.queuedTask ?? data.taskRef}` : ""}: it goes in once its current turn ends.${data.interrupted === false ? " Its turn could not be interrupted in time, so it waits for the end of it." : ""} task_status and task_cancel know it by that id.${again}`);
       }
 
       if (data.mode === "start") {
@@ -779,6 +791,41 @@ const AGENT_TOOLS: Tool[] = [
       }
 
       return text(`Sent message to agent "${agentName}" (${previousStatus}): "${resolvedMessage}"${again}`);
+    },
+  }),
+
+  tool({
+    name: "agent_queue",
+    description: "What waits in an agent's queue, in the order it goes in (each item's task id, who sent it, since when, whether it is a task, a message or a note, and its first line), and whether the queue is paused. With action 'pause', nothing goes in until it is resumed; the turn in progress is never touched. With 'resume', the items go in again, one at a time, in order. A stop keeps the queue, paused, and a restart of Tars too. The project's orchestrator acts on its agents' queues; a worker sees in another agent's queue only what it sent itself, and pauses nothing. Move an item with task_move, take one back with task_cancel.",
+    schema: {
+      id: z.string().describe("The agent ID"),
+      action: z.enum(["list", "pause", "resume"]).optional().describe("'list' (default), 'pause' or 'resume'"),
+      reason: z.string().optional().describe("With 'pause': why, in one line, shown with the queue"),
+    },
+    failure: "reading the agent's queue",
+    async run({ id, action, reason }) {
+      const view = (action && action !== "list"
+        ? await apiRequest(`/api/agents/${encodeURIComponent(id)}/queue/${action}`, "POST", reason ? { reason } : {})
+        : await apiRequest(`/api/agents/${encodeURIComponent(id)}/queue`)) as
+        { paused?: { since: string; why: string }; items?: Array<{ ref: string; position: number; from?: string; how?: string; title: string; queuedAt: string }> };
+      const items = view.items ?? [];
+      const head = action === "pause" ? `Paused ${id}'s queue.` : action === "resume" ? `Resumed ${id}'s queue.` : `${id}'s queue${view.paused ? `, paused since ${view.paused.since} (${view.paused.why})` : ""}:`;
+      if (!items.length) return text(`${head} Nothing waits in it.`);
+      return text([head, ...items.map((i) => `${i.position}. ${i.ref}, ${i.how ?? "task"} from ${i.from ?? "Tars"}, since ${i.queuedAt}: ${JSON.stringify(i.title)}`)].join("\n"));
+    },
+  }),
+
+  tool({
+    name: "task_move",
+    description: "Move an item of an agent's queue: to the head, so it goes in next, or just before another item of the same queue. The project's orchestrator moves any item of its agents' queues; a worker only what it sent itself.",
+    schema: {
+      taskId: z.string().describe("The item's task id: t- and 8 hex characters"),
+      before: z.string().optional().describe("The task id it goes just before; omitted, it goes to the head"),
+    },
+    failure: "moving the task",
+    async run({ taskId, before }) {
+      const view = (await apiRequest(`/api/tasks/${encodeURIComponent(taskId)}/move`, "POST", before ? { before } : {})) as { items?: Array<{ ref: string }> };
+      return text(`Moved ${taskId}${before ? ` before ${before}` : " to the head"}. The queue now reads: ${(view.items ?? []).map((i) => i.ref).join(", ")}.`);
     },
   }),
 

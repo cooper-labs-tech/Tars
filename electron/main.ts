@@ -129,14 +129,18 @@ import { flushBus } from './services/bus-store';
 import { registerVaultHandlers } from './handlers/vault-handlers';
 import { registerVaultProjectFilesHandlers } from './handlers/vault-project-files-handlers';
 import { registerReviewHandlers } from './handlers/review-handlers';
+import { registerAgentQueueHandlers } from './handlers/agent-queue-handlers';
 import { registerTemplateHandlers } from './handlers/template-handlers';
 import { registerTeamTemplateHandlers } from './handlers/team-template-handlers';
 import { registerHermesHandlers } from './handlers/hermes-handlers';
 import { registerOverseerHandlers } from './handlers/overseer-handlers';
 import { startOverseerWatch, stopOverseerWatch, migrateOverseerOutOfAgentReach } from './services/overseer';
 import { migrateWebhookSecretOutOfAgentReach } from './services/hermes-webhook-secret';
-import { startAgentWatch, watchInterruptedTurns } from './services/agent-watch';
+import { startAgentWatch, watchInterruptedTurns, tellQueuesKept } from './services/agent-watch';
 import { endRequestsAtLaunch, endUnresumed } from './core/task-requests';
+import { keepQueue, keptQueueRefs, restoreQueues } from './services/agent-queues';
+import { oneTaskQueue } from './core/one-task';
+import { replayQueuedItem } from './services/api-routes/agent-routes';
 import { startTaskWatch, turnInterrupted } from './services/task-watch';
 import { cliRunningIn } from './core/agent-pty';
 import { beginRun, type PreviousRun } from './services/run-state';
@@ -721,6 +725,7 @@ app.whenReady().then(async () => {
   registerVaultProjectFilesHandlers();
   // Review: every repository of every project, scanned and searched (services/review-repositories.ts).
   registerReviewHandlers();
+  registerAgentQueueHandlers();
 
 
   // The relay to the user's Telegram through their Hermes, following its switch
@@ -768,9 +773,15 @@ app.whenReady().then(async () => {
   // terminal that is gone never ran, and each requester is told (the Audit's
   // R3). The one in hand stays only for a worker the resume restarts (after an
   // abrupt stop); after a clean quit it is ended too (the Audit's M1).
+  // What the agents' queues kept from the run before is not ended: it waits, paused (2.0.5, services/agent-queues.ts).
   endRequestsAtLaunch(agents.values(), new Set(previousRun && !previousRun.resumedAndCrashedAgain
-    ? previousRun.working.map((w) => w.agentId) : []));
+    ? previousRun.working.map((w) => w.agentId) : []), keptQueueRefs());
   saveAgents();
+  // The agents' queues back, paused, each item waiting to be handed over again, and each project's orchestrator
+  // told what waits; kept from now on at each change.
+  const restoredQueues = restoreQueues(oneTaskQueue, replayQueuedItem);
+  keepQueue(oneTaskQueue);
+  tellQueuesKept(restoredQueues);
   // And once the resume has run, the work in hand of each worker it did not
   // relaunch (deleted, stopped or whose folder is gone since, a launch that
   // failed) is ended and told: kept until then, it waited on an end that

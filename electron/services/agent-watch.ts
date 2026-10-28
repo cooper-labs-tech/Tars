@@ -64,7 +64,7 @@ type News = {
    *  while (stall-watch.ts); `reason` holds the minutes of silence.
    *  `not_delivered`: a request never ran, its message given up or its worker
    *  stopped, deleted or cut by a restart (core/task-requests.ts); `reason` says which. */
-  kind: 'outcome' | 'wait' | 'ended' | 'stopped' | 'stalled' | 'not_delivered';
+  kind: 'outcome' | 'wait' | 'ended' | 'stopped' | 'stalled' | 'not_delivered' | 'kept';
   status: AgentStatus['status'];
   reason?: string;
   /** For a `not_delivered` request `cancelled` by another agent: who, and why, already quoted as data. */
@@ -336,6 +336,28 @@ export function tellCancelled(requesterId: string, workerId: string, by: string,
     detail: `from ${by}: ${envelopeValue(reason.replace(/\s+/g, ' ').trim().slice(0, 300))}`,
     handedAt: worker.workHandedAt,
   });
+}
+
+/**
+ * What the agents' queues kept across a restart of Tars (2.0.5, services/agent-queues.ts): each project's
+ * orchestrator is told, per agent, what waits there, paused, and how to resume it. Its own queue tells nobody: the
+ * owner sees it in the window.
+ */
+export function tellQueuesKept(items: Array<{ ref: string; agentId: string; requesterId?: string; from?: string; how?: string; title: string }>): void {
+  const byAgent = new Map<string, typeof items>();
+  for (const item of items) byAgent.set(item.agentId, [...(byAgent.get(item.agentId) ?? []), item]);
+  for (const [agentId, kept] of byAgent) {
+    const worker = agents.get(agentId);
+    if (!worker) continue;
+    const lead = inboxAgentOf(worker.projectPath, agents.values());
+    if (!lead || lead.id === worker.id) continue;
+    const listed = kept.map((i) => `${i.ref} (${i.how ?? 'task'} from ${envelopeValue(i.from || i.requesterId || 'Tars')}: ${envelopeValue(i.title)})`).join(', ');
+    handToRequester(lead.id, worker, {
+      kind: 'kept', status: worker.status,
+      detail: `has ${kept.length} item${kept.length === 1 ? '' : 's'} kept in its queue across the restart of Tars, paused: ${listed}. `
+        + `Nothing goes in until it is resumed: agent_queue({ id: "${agentId}", action: "resume" }), or take back what is no longer needed with task_cancel`,
+    });
+  }
 }
 
 /** Each request a worker will never run, told to whoever asked (the Audit's R2, R3). */
@@ -889,6 +911,7 @@ function describeNews(news: News): string {
       : 'it was waiting behind text typed in its field, and its terminal ended before it could go in';
     return `never ran what you asked of it: ${why}. Nothing was retried; ask again if it is still needed`;
   }
+  if (news.kind === 'kept') return news.detail ?? 'has items waiting in its queue';
   if (news.kind === 'ended') return 'has finished its turn';
   if (news.kind === 'wait' && news.reason === 'permission') return 'is now waiting for a permission answer';
   return `is now ${news.status}`;
@@ -917,6 +940,10 @@ function composeNote(finished: Map<string, News>): string {
     return `- ${envelopeValue(name)} (${envelopeValue(id)}) ${describeOwed(news)}`;
   });
 
+  // What a restart of Tars kept in a queue is no result to read (2.0.5): its own line says what to do.
+  if ([...finished.values()].every((news) => news.kind === 'kept')) {
+    return lines.length === 1 ? `[Tars] ${lines[0].slice(2)}` : ['[Tars] What waits in your agents\' queues since Tars restarted:', ...lines].join('\n');
+  }
   if (lines.length === 1) {
     return `[Tars] ${lines[0].slice(2)}. Read what it produced with get_agent_output, then carry on.`;
   }

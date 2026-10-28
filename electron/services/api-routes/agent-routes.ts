@@ -44,7 +44,8 @@ import { readFinalAnswer } from '../terminal-answer';
 import { typeLaunchTask } from '../../core/typed-task';
 import { accountDir } from '../claude-accounts/registry';
 import { announceTask, firstLineOf } from '../task-banner';
-import { taskOfPrompt, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
+import { queueRight, queueView } from '../agent-queues';
+import { taskOfPrompt, requestTitle, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
 import { clientRequestIdOf, liveReceipts, payloadHash, type ReceiptOutcome } from '../request-receipts';
 import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel } from '../../core/permission-ceiling';
 import { canInterrupt } from '../bus-store';
@@ -60,7 +61,7 @@ import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/age
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
-import { oneTaskQueue, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy } from '../../core/one-task';
+import { oneTaskQueue, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
 
 /**
@@ -761,6 +762,9 @@ function requestFor(agent: AgentStatus, req: RouteRequest, title?: string, ref?:
  */
 function delivered(agent: AgentStatus, ref: string | undefined): boolean {
   if (!ref) return true;
+  const request = agent.taskQueue?.find((r) => r.ref === ref);
+  // Known to task_status from now, by the id its sender line named (2.0.5: "No such task" for t-9aa78b94, 27/10).
+  if (request) oneTaskQueue.noteDelivered({ ref, agentId: agent.id, requesterId: request.requesterAgentId, title: requestTitle(ref) ?? '', queuedAt: Date.parse(request.queuedAt) || Date.now() }, 'typed');
   requestDelivered(agent, ref);
   saveAgents();
   return agent.requestedBy?.taskRef === ref;
@@ -1529,6 +1533,16 @@ async function performDispatchLocked(
     queueDispatch(agent, opts, ctx, sendJson, taskRef, previousStatus);
     return;
   }
+  // The agent's queue (2.0.5, lot 2): a message sent to wait for the agent's rest (mode 'queue') waits in its queue
+  // with the tasks, where it is seen, paused, moved, cancelled and kept across a stop and a restart of Tars, no longer
+  // in the terminal's writer, which a stop emptied. And while the queue is paused, whatever is sent waits there. A
+  // worker's note and Tars's own word are information, never a place in the line (the Audit's H-A and M1 on #449):
+  // they keep waiting for the rest in the writer, as before.
+  const queueable = !opts.turnTaken && !opts.information && !opts.noteOnly;
+  if (queueable && (oneTaskQueue.pausedOf(agent.id) || (livePty && cliRunningIn(livePty) && !!opts.untilRest && holdsMessages(agent)))) {
+    queueDispatch(agent, opts, ctx, sendJson, taskRef, previousStatus);
+    return;
+  }
   // Information waits for a run in hand; a task whose turn came waits for nothing.
   const untilRest = !opts.turnTaken && (!!opts.untilRest || (!!opts.information && !!oneTaskQueue.busyRun(agent.id)));
   if (livePty && cliRunningIn(livePty)) {
@@ -1629,14 +1643,83 @@ async function performDispatchLocked(
  */
 function queueDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: RouteContext, sendJson: SendJson, taskRef: string | undefined, previousStatus: AgentStatus['status']): void {
   const behind = busyText(agent);
+  // Under the request's own id, the one its sender line names: task_status and task_cancel find it by that id.
   const queued = oneTaskQueue.enqueue(agent.id, {
-    ...(opts.sender?.kind === 'agent' ? { requesterId: opts.sender.id } : {}), title: opts.message.slice(0, 100),
-  });
+    ...(opts.sender?.kind === 'agent' ? { requesterId: opts.sender.id } : {}), title: firstLineOf(opts.message).slice(0, 100),
+    how: opts.task ? 'task' : opts.noteOnly ? 'note' : 'message', from: opts.from ?? 'Tars',
+    replay: { kind: 'dispatch', ...(taskRef ? { taskRef } : {}), opts: replayableOpts(opts) } satisfies DispatchReplay,
+  }, undefined, taskRef && !oneTaskQueue.find(taskRef) ? taskRef : undefined);
+  const paused = oneTaskQueue.pausedOf(agent.id);
   sendJson({
-    success: true, mode: 'queued', queued: true, queuedBehind: behind, queuedTask: queued.ref, previousStatus,
+    success: true, mode: 'queued', queued: true, queuedBehind: paused ? `its queue, paused: ${paused.why}` : behind, queuedTask: queued.ref, previousStatus,
+    ...(paused ? { paused: { since: new Date(paused.since).toISOString(), why: paused.why } } : {}),
     ...(taskRef ? { taskRef } : {}), agent: { id: agent.id, name: agent.name, status: agent.status },
   });
+  announceTask(agent.id);
+  awaitTurnAndDispatch(agent, opts, ctx, queued.ref, taskRef);
+}
+
+/** What a queued dispatch keeps, to be handed over again after a restart of Tars (services/agent-queues.ts). */
+interface DispatchReplay {
+  kind: 'dispatch';
+  taskRef?: string;
+  opts: Pick<DispatchOpts, 'message' | 'model' | 'permissionMode' | 'from' | 'sender' | 'mark' | 'noteOnly' | 'information' | 'task' | 'untilRest' | 'taskId'>;
+}
+
+/** What a run-task waiting its turn keeps, for the same. */
+interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string }
+
+function replayableOpts(opts: DispatchOpts): DispatchReplay['opts'] {
+  const { message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId } = opts;
+  return JSON.parse(JSON.stringify({ message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId })) as DispatchReplay['opts'];
+}
+
+/** A request made by Tars for an item it hands over again: its requester's identity, and nothing else. */
+function replayRequest(requesterId: string | undefined): RouteRequest {
+  return { method: 'POST', pathname: '/replay', url: new URL('http://127.0.0.1/replay'), body: {}, params: {}, callerAgentId: requesterId, internal: !requesterId } as unknown as RouteRequest;
+}
+
+let replayContext: RouteContext | undefined;
+
+/**
+ * An item of a queue kept across a restart of Tars (services/agent-queues.ts), handed over again as the route that
+ * queued it would have: it waits for its turn (its queue is paused until someone resumes it), then goes in.
+ */
+export function replayQueuedItem(item: QueuedTask): void {
+  const ctx = replayContext;
+  const agent = agents.get(item.agentId);
+  if (!ctx || !agent) {
+    oneTaskQueue.cancel(item.ref, agent ? 'Tars could not hand it over again' : 'its agent was removed');
+    return;
+  }
+  const replay = item.replay as DispatchReplay | RunTaskReplay | undefined;
+  if (replay?.kind === 'dispatch') {
+    awaitTurnAndDispatch(agent, { ...replay.opts }, ctx, item.ref, replay.taskRef);
+    return;
+  }
+  if (replay?.kind === 'run-task') {
+    void (async () => {
+      if (!(await waitTurn(agent, item.ref))) { announceTask(agent.id); return; }
+      announceTask(agent.id);
+      try {
+        await runInTerminal(agent, replayRequest(replay.requesterId), ctx, { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}) }, () => undefined);
+      } catch (err) {
+        console.warn(`[queue] ${item.ref} for ${agent.name || agent.id} did not go in:`, err);
+      } finally {
+        oneTaskQueue.runEnded(agent.id);
+        announceTask(agent.id);
+      }
+    })();
+    return;
+  }
+  oneTaskQueue.cancel(item.ref, 'Tars could not hand it over again');
+}
+
+/** Waits for a queued dispatch's turn, then hands it over, its turn kept until it is in the terminal or given up. */
+function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: RouteContext, ref: string, taskRef: string | undefined): void {
+  const queued = { ref };
   void waitTurn(agent, queued.ref).then(async (taken) => {
+    announceTask(agent.id);
     if (!taken) { dropped(agent, taskRef); return; }
     // The turn stays taken until the task is in its terminal (or given up):
     // ended when performDispatch returned, a task held behind another message
@@ -1934,6 +2017,7 @@ function whenItApplies(
 }
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
+  replayContext = ctx;
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
     const agent = agents.get(req.params.id);
@@ -2061,7 +2145,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     const full = req.url.searchParams.get('full') === 'true';
-    sendJson({ agent: full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent) });
+    // Its queue (2.0.5, lot 2): what the caller may see of it, as GET /api/agents/:id/queue answers.
+    const caller = req.internal ? { kind: 'tars' as const } : req.callerAgentId && agents.get(req.callerAgentId) ? { kind: 'agent' as const, agent: agents.get(req.callerAgentId)! } : undefined;
+    const right = caller ? queueRight(caller, agent, 'list') : undefined;
+    const view = right?.ok ? queueView(oneTaskQueue, agent.id, right.all || caller?.kind !== 'agent' ? undefined : caller.agent.id) : undefined;
+    // Only when something waits or the queue is paused: an agent with nothing queued reads as it did.
+    const queue = view && (view.items.length || view.paused) ? view : undefined;
+    sendJson({ agent: { ...(full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent)), ...(queue ? { queue } : {}) } });
   });
 
   // GET /api/agents/:id/bootstrap: identity + team roster context, injected
@@ -2551,7 +2641,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // id from now, and takes its turn below.
       const waits = oneTaskQueue.mustQueue(agent.id, terminalTurn(agent));
       const behind = waits ? busyText(agent) : undefined;
-      const queued = oneTaskQueue.enqueue(agent.id, { ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task) });
+      const queued = oneTaskQueue.enqueue(agent.id, {
+        ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task), how: 'task', from: senderName(agent, req),
+        replay: { kind: 'run-task', task, ...(typeof model === 'string' ? { model } : {}), ...(requester ? { requesterId: requester } : {}) } satisfies RunTaskReplay,
+      });
       const startBody = {
         ok: true, started: false, queued: waits, outcome: waits ? 'queued' : 'starting', taskId: queued.ref,
         ...(waits ? { queuedBehind: behind, queuedAt: new Date(queued.queuedAt).toISOString() } : {}),
@@ -2698,8 +2791,15 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
 
     const by = driver.kind === 'tars' ? 'Tars' : (driver.agent.name || driver.agent.id);
-    const stoppedNow = await stopAgent(agent, { by, reason }, { save: saveAgents, announce: announceAgent });
-    sendJson({ success: true, ...(stoppedNow ? {} : { alreadyStopped: true }), ...stopOf(agent) });
+    const dropQueue = (req.body as { dropQueue?: unknown } | undefined)?.dropQueue === true;
+    const queue = { kept: 0, dropped: 0 };
+    const stoppedNow = await stopAgent(agent, { by, reason }, { save: saveAgents, announce: announceAgent }, { dropQueue, outcome: queue });
+    announceTask(agent.id);
+    sendJson({
+      success: true, ...(stoppedNow ? {} : { alreadyStopped: true }), ...stopOf(agent),
+      // Its queue (2.0.5): kept, paused, or dropped when asked.
+      ...(stoppedNow ? { queueKept: queue.kept, queueDropped: queue.dropped } : {}),
+    });
   });
 
   // POST /api/agents/:id/message
