@@ -38,7 +38,10 @@ export type JanitorItem = {
   project?: string;
   label: string;
   sizeBytes: number;
+  /** The rule that matched, the same sentence for every item of a kind. */
   rule: string;
+  /** Why this item matched: its last change, its merged branch, its image. */
+  why: string;
 };
 
 export interface JanitorWorld {
@@ -67,6 +70,8 @@ export interface JanitorOps {
   dockerRm(id: string): Promise<void>;
   trim(): Promise<void>;
   log(line: string): void;
+  /** What the approval did to each item it was asked for, as it goes: for the window. */
+  done?(id: string, outcome: { kind: 'deleted' | 'kept' | 'failed'; bytes?: number | null; why?: string | null }): void;
 }
 
 const DAY = 86_400_000;
@@ -83,6 +88,7 @@ function inside(p: string, dir: string): boolean {
 }
 const idOf = (kind: string, what: string) => createHash('sha256').update(`${kind}\0${what}`).digest('hex').slice(0, 16);
 const isDir = (p: string) => { try { return fs.lstatSync(p).isDirectory(); } catch { return false; } };
+const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /** The newest change in a folder, links not followed; `now` past WALK_MAX entries (as if just touched). */
 function newestChange(dir: string, now: number): number {
@@ -137,19 +143,23 @@ async function scanWorktrees(world: JanitorWorld, out: JanitorItem[]): Promise<v
       for (const [kind, dirName] of [['next-cache', '.next'], ['test-artefacts', 'test-results'], ['test-artefacts', 'playwright-report']] as const) {
         const p = path.join(wt, dirName);
         if (!isDir(p)) continue;
-        if (newestChange(p, world.now) > world.now - CACHE_IDLE_DAYS * DAY) continue;
+        const changed = newestChange(p, world.now);
+        if (changed > world.now - CACHE_IDLE_DAYS * DAY) continue;
         if (kind === 'test-artefacts' && world.named(p)) continue;
         out.push({
           id: idOf(kind, p), kind, path: p, project: wt, label: `${name}/${dirName}`, sizeBytes: await world.sizeOf(p),
+          why: `last changed ${day(changed)}`,
           rule: kind === 'next-cache'
             ? `the .next of a worktree nothing runs in, untouched for ${CACHE_IDLE_DAYS} days`
             : `test artefacts of a worktree nothing runs in, untouched for ${CACHE_IDLE_DAYS} days, named by no report`,
         });
       }
       if (w.locked || !w.branch || (await world.merged(project, w.branch)) !== true) continue;
-      if (newestChange(wt, world.now) > world.now - WORKTREE_IDLE_DAYS * DAY) continue;
+      const changed = newestChange(wt, world.now);
+      if (changed > world.now - WORKTREE_IDLE_DAYS * DAY) continue;
       out.push({
         id: idOf('closed-worktree', wt), kind: 'closed-worktree', path: wt, project, label: name, sizeBytes: await world.sizeOf(wt),
+        why: `its branch ${w.branch} is merged, last changed ${day(changed)}`,
         rule: `a worktree whose branch ${w.branch} is merged, clean, unlocked, idle a day, no agent's, nothing running in it`,
       });
     }
@@ -163,8 +173,9 @@ async function scanFolders(world: JanitorWorld, out: JanitorItem[]): Promise<voi
   for (const n of names) {
     const p = path.join(npx, n);
     if (!isDir(p) || kept(world, p)) continue;
-    if (newestChange(p, world.now) > world.now - NPX_IDLE_DAYS * DAY) continue;
-    out.push({ id: idOf('npx-cache', p), kind: 'npx-cache', path: p, label: `~/.npm/_npx/${n}`, sizeBytes: await world.sizeOf(p), rule: `an npx cache entry untouched for ${NPX_IDLE_DAYS} days` });
+    const changed = newestChange(p, world.now);
+    if (changed > world.now - NPX_IDLE_DAYS * DAY) continue;
+    out.push({ id: idOf('npx-cache', p), kind: 'npx-cache', path: p, label: `~/.npm/_npx/${n}`, sizeBytes: await world.sizeOf(p), rule: `an npx cache entry untouched for ${NPX_IDLE_DAYS} days`, why: `last used ${day(changed)}` });
   }
   const tmp = path.join(world.dataDir, 'tmp');
   const live = new Set(world.fleet.map(a => shortIdOf(a.id)));
@@ -172,7 +183,7 @@ async function scanFolders(world: JanitorWorld, out: JanitorItem[]): Promise<voi
   for (const n of names) {
     const p = path.join(tmp, n);
     if (!/^[0-9a-f]{10}$/.test(n) || live.has(n) || !isDir(p) || kept(world, p)) continue;
-    out.push({ id: idOf('agent-tmp', p), kind: 'agent-tmp', path: p, label: `~/.tars/tmp/${n}`, sizeBytes: await world.sizeOf(p), rule: 'the temporary folders of an agent no longer in the fleet' });
+    out.push({ id: idOf('agent-tmp', p), kind: 'agent-tmp', path: p, label: `~/.tars/tmp/${n}`, sizeBytes: await world.sizeOf(p), rule: 'the temporary folders of an agent no longer in the fleet', why: `no agent of the fleet has the folder ${n}` });
   }
 }
 
@@ -180,10 +191,10 @@ async function scanDocker(world: JanitorWorld, out: JanitorItem[]): Promise<void
   const images = await world.docker.images();
   for (const i of images ?? []) {
     if (i.used) continue;
-    out.push({ id: idOf('docker-image', i.id), kind: 'docker-image', ref: i.id, label: i.repo, sizeBytes: i.sizeBytes, rule: 'a Docker image no container uses, a stopped one included' });
+    out.push({ id: idOf('docker-image', i.id), kind: 'docker-image', ref: i.id, label: i.repo, sizeBytes: i.sizeBytes, rule: 'a Docker image no container uses, a stopped one included', why: `${i.repo}: no container uses it` });
   }
   if (world.docker.vm) {
-    out.push({ id: idOf('docker-vm-trim', 'colima'), kind: 'docker-vm-trim', ref: 'colima', label: 'the Docker VM (colima)', sizeBytes: 0, rule: 'a trim of the Docker VM, which gives the disk back what the VM freed' });
+    out.push({ id: idOf('docker-vm-trim', 'colima'), kind: 'docker-vm-trim', ref: 'colima', label: 'the Docker VM (colima)', sizeBytes: 0, rule: 'a trim of the Docker VM, which gives the disk back what the VM freed', why: 'colima runs; what its VM freed stays taken on the disk until a trim' });
   }
 }
 
@@ -210,7 +221,11 @@ export async function approveJanitor(ids: string[], worldNow: () => JanitorWorld
   const report: JanitorReport = { removed: 0, freedBytes: 0, kept: [] };
   for (const id of [...new Set(ids)]) {
     const asked = last.get(id);
-    const keep = (label: string, why: string) => { report.kept.push({ id, label, why }); ops.log(`kept ${label}: ${why}`); };
+    const keep = (label: string, why: string, kind: 'kept' | 'failed' = 'kept') => {
+      report.kept.push({ id, label, why });
+      ops.log(`${kind} ${label}: ${why}`);
+      ops.done?.(id, { kind, why });
+    };
     if (!asked) { keep(id, 'it is not in the scan the window showed'); continue; }
     const saved = last;
     const now = await scanJanitor(await worldNow());
@@ -226,8 +241,9 @@ export async function approveJanitor(ids: string[], worldNow: () => JanitorWorld
       report.removed++;
       report.freedBytes += asked.sizeBytes;
       ops.log(`${item.kind} ${item.path ?? item.ref}: freed ${asked.sizeBytes} bytes`);
+      ops.done?.(id, { kind: 'deleted', bytes: asked.sizeBytes });
     } catch (err) {
-      keep(`${item.kind} ${item.label}`, `the deletion failed: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}`);
+      keep(`${item.kind} ${item.label}`, `the deletion failed: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}`, 'failed');
     }
   }
   return report;
