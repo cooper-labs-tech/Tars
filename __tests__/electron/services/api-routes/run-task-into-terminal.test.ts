@@ -90,6 +90,16 @@ import { EventEmitter } from 'node:events';
  *  K3. (the Audit's Low at d50fd606) The same, for a kept dispatch (a message
  *      queued behind a busy agent): typed after "the user", or under another
  *      line than the one it was queued with.
+ *
+ * Added with the Audit's gate of #550 (M1, L1) and the orchestrator's decision on
+ * who reads an agent's answers, before the code:
+ *  R1. A caller who is neither the task's asker, the agent itself, its
+ *      project's orchestrator (or a chat's runner, which has its powers), nor
+ *      Tars reads the agent's last answer (lastAnswer), or the hooks' copy of
+ *      it (lastCleanOutput), on GET /api/agents/:id or its /wait; or one of
+ *      those readers is refused it; or the refused caller is not told why.
+ *  R2. The project's orchestrator that did not ask a task cannot read it by
+ *      its id (GET /api/tasks/:id).
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-run-task-terminal-'));
@@ -193,7 +203,7 @@ afterEach(async () => {
 });
 
 type Answer = { data: Record<string, unknown>; status: number };
-function call(method: 'GET' | 'POST', url: string, callerAgentId: string, body?: Record<string, unknown>) {
+function call(method: 'GET' | 'POST', url: string, callerAgentId: string | undefined, body?: Record<string, unknown>, opts: { internal?: boolean } = {}) {
   const u = new URL(`http://localhost${url}`);
   const route = routes.routes.find(r => r.method === method && typeof r.pattern !== 'string' && r.pattern.test(u.pathname))!;
   const match = (route.pattern as RegExp).exec(u.pathname)!;
@@ -202,7 +212,7 @@ function call(method: 'GET' | 'POST', url: string, callerAgentId: string, body?:
   const answer = new Promise<Answer>((resolve) => { settle = resolve; });
   const req = {
     method, pathname: u.pathname, url: u, body: body ?? {},
-    raw: { headers: {}, on: () => {} }, res: {}, params: { id: match[1] }, callerAgentId,
+    raw: { headers: {}, on: () => {} }, res: {}, params: { id: match[1] }, callerAgentId, ...(opts.internal ? { internal: true } : {}),
   } as unknown as RouteRequest;
   void route.handler(req, (data, status = 200) => {
     if (got) return;
@@ -693,5 +703,43 @@ describe('a run-task kept across a restart of Tars (the re-check of #536 at 8dab
     expect(user.sender).toEqual({ kind: 'tars' });
     turnBegins(dev, `Message from Tars: ${user.data}`);
     rests(dev);
+  });
+});
+
+describe('who reads an agent\'s answers (the Audit\'s M1 and L1 on #550, the orchestrator\'s decision)', () => {
+  it('(R1, R2) its asker, the agent, its project\'s orchestrator powers and Tars read them; another of the project, or the shared token, neither', async () => {
+    orchestrator();
+    const dev = liveAgent('dev');
+    agents.set('oc', { id: 'oc', name: 'Other Worker', status: 'idle', role: 'worker', provider: 'claude', projectPath: dev.projectPath, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus);
+    agents.set('runner', { id: 'runner', name: 'Lead · Release', status: 'idle', role: 'worker', kind: 'chat', provider: 'claude', projectPath: dev.projectPath, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus);
+    const { data } = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'write the report', answer: 'started' }).answer;
+    await until(() => typed.length === 1);
+    turnBegins(dev, promptOf(typed[0]));
+    await new Promise((r) => setTimeout(r, 30));
+    reply(dev, 'THE REPORT, whole.');
+    dev.lastCleanOutput = 'THE REPORT, whole.';
+    rests(dev);
+    const ended = (await call('GET', `/api/tasks/${String(data.taskId)}?wait=10`, 'lead').answer).data.task as Record<string, unknown>;
+    expect(ended).toMatchObject({ outcome: 'completed', result: 'THE REPORT, whole.' });
+
+    const view = async (who: string | undefined, internal = false) => (await call('GET', '/api/agents/dev', who, undefined, { internal }).answer).data.agent as Record<string, unknown>;
+    for (const [who, internal] of [['lead', false], ['dev', false], ['runner', false], [undefined, true]] as const) {
+      const agent = await view(who, internal);
+      expect((agent.lastAnswer as { result?: string } | undefined)?.result, String(who ?? 'tars')).toBe('THE REPORT, whole.');
+      expect(agent.lastCleanOutput, String(who ?? 'tars')).toBe('THE REPORT, whole.');
+    }
+    for (const who of ['oc', undefined]) {
+      const agent = await view(who);
+      expect(agent.lastAnswer, String(who ?? 'shared token')).toBeUndefined();
+      expect(agent.lastCleanOutput, String(who ?? 'shared token')).toBeUndefined();
+      expect(agent.answersWithheld, String(who ?? 'shared token')).toMatchObject({ reason: expect.stringContaining('asker') });
+      const waited = (await call('GET', '/api/agents/dev/wait?timeout=1', who).answer).data;
+      expect(waited.lastCleanOutput, `wait, ${String(who ?? 'shared token')}`).toBeUndefined();
+    }
+    expect((await call('GET', '/api/agents/dev/wait?timeout=1', 'runner').answer).data.lastCleanOutput).toBe('THE REPORT, whole.');
+
+    // By its id: the project's orchestrator powers read it too, though they did not ask it; another of the project does not.
+    expect(((await call('GET', `/api/tasks/${String(data.taskId)}`, 'runner').answer).data.task as Record<string, unknown> | undefined)?.result).toBe('THE REPORT, whole.');
+    expect((await call('GET', `/api/tasks/${String(data.taskId)}`, 'oc').answer).status).toBe(404);
   });
 });

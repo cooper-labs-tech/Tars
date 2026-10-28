@@ -8,6 +8,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * O2 without one, it says "No clean output captured yet" once the agent started its next item, while its last task's
  *    answer is kept; or the hooks' 4000 byte copy is given when the whole answer is kept;
  * O3 its answer disagrees with task_status for the same task.
+ * Added with the Audit's gate of #550, before the code:
+ * O4 (L1) a caller Tars withholds the answers from (not the asker, the agent, its project's orchestrator or Tars)
+ *    is given the hooks' copy instead, or "No clean output captured yet", rather than told they are not its to read;
+ * O5 (Info 1) a task id of another agent's task is answered as this agent's.
  * The real tool, its calls to Tars answered by a stand-in.
  */
 
@@ -56,5 +60,21 @@ describe('get_agent_output', () => {
     expect(out.content[0].text).toContain('The second answer.');
     expect(out.content[0].text).toContain('t-0000bbbb');
     expect(out.content[0].text).not.toMatch(/No clean output/);
+  });
+});
+
+describe('get_agent_output, the answers withheld (the Audit\'s gate of #550)', () => {
+  it('O4: says they are not the caller\'s, and falls back to nothing', async () => {
+    mockApiRequest = vi.fn(async () => ({ agent: { id: 'w', name: 'Worker', status: 'idle', answersWithheld: { taskId: 't-0000bbbb', reason: 'its answers are read by the task\'s asker, the agent itself, its project\'s orchestrator and Tars' } } }));
+    const out = await (await tool('get_agent_output'))({ id: 'w' }) as Result;
+    expect(out.content[0].text).toMatch(/not yours to read/);
+    expect(out.content[0].text).toContain('asker');
+    expect(out.content[0].text).not.toMatch(/No clean output/);
+  });
+
+  it('O5: a task of another agent is said so', async () => {
+    const out = await (await tool('get_agent_output'))({ id: 'other', taskId: 't-0000aaaa' }) as Result;
+    expect(out.content[0].text).toMatch(/is not "other"'s/);
+    expect(out.content[0].text).not.toContain(REPORT);
   });
 });
