@@ -100,6 +100,8 @@ import { EventEmitter } from 'node:events';
  *      those readers is refused it; or the refused caller is not told why.
  *  R2. The project's orchestrator that did not ask a task cannot read it by
  *      its id (GET /api/tasks/:id).
+ *  R3. (the Audit's L3 on the train) Another project's orchestrator reads it
+ *      by its id: the orchestrator's powers are its own project's only.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-run-task-terminal-'));
@@ -741,5 +743,23 @@ describe('who reads an agent\'s answers (the Audit\'s M1 and L1 on #550, the orc
     // By its id: the project's orchestrator powers read it too, though they did not ask it; another of the project does not.
     expect(((await call('GET', `/api/tasks/${String(data.taskId)}`, 'runner').answer).data.task as Record<string, unknown> | undefined)?.result).toBe('THE REPORT, whole.');
     expect((await call('GET', `/api/tasks/${String(data.taskId)}`, 'oc').answer).status).toBe(404);
+  });
+
+  it('(R3) another project\'s orchestrator does not read a task by its id', async () => {
+    orchestrator();
+    const dev = liveAgent('dev');
+    const elsewhere = path.join(tmp, 'elsewhere');
+    fs.mkdirSync(elsewhere, { recursive: true });
+    agents.set('far', { id: 'far', name: 'Far Lead', status: 'idle', role: 'orchestrator', provider: 'claude', projectPath: elsewhere, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus);
+    const { data } = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'write the report', answer: 'started' }).answer;
+    await until(() => typed.length === 1);
+    turnBegins(dev, promptOf(typed[0]));
+    await new Promise((r) => setTimeout(r, 30));
+    reply(dev, 'THE REPORT, whole.');
+    rests(dev);
+    expect(((await call('GET', `/api/tasks/${String(data.taskId)}?wait=10`, 'lead').answer).data.task as Record<string, unknown>).result).toBe('THE REPORT, whole.');
+    const far = await call('GET', `/api/tasks/${String(data.taskId)}`, 'far').answer;
+    expect(far.status).toBe(404);
+    expect(JSON.stringify(far.data)).not.toContain('THE REPORT');
   });
 });
