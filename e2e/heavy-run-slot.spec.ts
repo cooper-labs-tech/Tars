@@ -24,7 +24,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  */
 
 type SlotTicket = { id: string; state: string; position?: number; why?: string; agentId: string; label: string; priority: string };
-type SlotStatus = { slots: number; holders: SlotTicket[]; waiting: SlotTicket[] };
+type SlotStatus = {
+  slots: number; floors: { diskGb: number; memFreePct: number };
+  machine: { at: string; memFreePct: number | null; swapUsedMb: number | null; diskFreeGb: number | null; load1: number | null } | null;
+  holders: Array<SlotTicket & { pid: number; tree?: { processes: number; memoryMb: number; cpuPct: number } }>;
+  waiting: SlotTicket[];
+  alerts: Array<{ at: string; text: string; sentTo: string[] }>;
+};
 type Agent = { id: string; cliRunning?: boolean };
 type Api = { electronAPI: {
   agent: { start(p: { id: string; prompt: string }): Promise<unknown>; list(): Promise<Agent[]> };
@@ -116,6 +122,14 @@ for (const newInterface of [false, true]) {
       keep({ one });
       expect.soft(one.holders.map(t => [t.agentId, t.label])).toEqual([['a', 'harbor e2e suite']]);
       expect.soft(one.waiting[0].why).toMatch(/^held by Harbor Worker \(harbor e2e suite\)/);
+      // What the window's Resources page reads in one call (the Frontend's notes of #535): the settings, the machine,
+      // each holder's pid and its tree, the day's alerts.
+      expect.soft([one.slots, one.floors]).toEqual([1, { diskGb: 15, memFreePct: 20 }]);
+      expect.soft(one.machine?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect.soft(one.holders[0].pid).toBe(pidOf('slot-a.pid'));
+      expect.soft(one.holders[0].tree?.processes ?? 0).toBeGreaterThanOrEqual(2);
+      expect.soft(one.holders[0].tree?.memoryMb ?? 0).toBeGreaterThan(0);
+      expect.soft(one.alerts).toEqual([]);
 
       // 2. o asks for a release gate after b: o first.
       await start('o');
