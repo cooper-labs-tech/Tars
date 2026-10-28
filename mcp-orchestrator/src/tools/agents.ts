@@ -609,24 +609,41 @@ const AGENT_TOOLS: Tool[] = [
     },
   }),
 
-  // Clean text from the transcript, no ANSI
+  // A task's answer, by its id or the agent's last one (2.0.5: the DB brief fix-answer-per-task-2810.md).
   tool({
     name: "get_agent_output",
-    description: "Get the agent's last response as clean text (no terminal formatting). This is captured from the agent's transcript by hooks. Falls back to noting output is available in terminal view if no clean output is captured yet.",
+    description: "Get an agent's answer as clean text: with taskId, that task's answer, as task_status has it; without, "
+      + "the answer of the agent's last task that ended, whatever it does next. A task's answer is its report and what "
+      + "the agent wrote after it (a memory note, a closing line), whole. Falls back to the hooks' last copy when no task "
+      + "of the agent has an answer yet.",
     schema: {
       id: z.string().describe("The agent ID"),
+      taskId: z.string().optional().describe("A task's id (t-xxxxxxxx, or the id task_status gives): that task's answer"),
     },
     failure: "getting output",
-    async run({ id }) {
+    async run({ id, taskId }) {
+      if (taskId) {
+        const found = (await apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`)) as {
+          task?: { id: string; outcome: string; result?: string };
+        };
+        const task = found.task;
+        if (!task) return text(`No task ${taskId} is known to you.`);
+        if (task.result) return text(`Task ${task.id} (${task.outcome}):\n\n${task.result}`);
+        return text(`Task ${task.id} (${task.outcome}) has no answer${task.outcome === "running" || task.outcome === "queued" || task.outcome === "starting" ? " yet" : ""}.`);
+      }
       const data = (await apiRequest(`/api/agents/${id}`)) as {
         agent: {
           status: string;
           name?: string;
           lastCleanOutput?: string;
+          lastAnswer?: { taskId: string; result: string };
         };
       };
       const agentName = data.agent.name || id;
 
+      if (data.agent.lastAnswer) {
+        return text(`Agent "${agentName}" (${data.agent.status}), its last task ${data.agent.lastAnswer.taskId}:\n\n${data.agent.lastAnswer.result}`);
+      }
       if (data.agent.lastCleanOutput) {
         return text(`Agent "${agentName}" (${data.agent.status}):\n\n${data.agent.lastCleanOutput}`);
       }

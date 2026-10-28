@@ -7,7 +7,7 @@ import { QWEN_PROVIDER_ID, qwenTranscriptPath } from './qwen-code';
 
 /**
  * The answer delegate_task returns for a task typed into an agent's permanent
- * terminal (2.0.4): the agent's final message for that task, read from the
+ * terminal (2.0.4): the agent's report for that task (reportOf), read from the
  * transcript Claude Code keeps (~/.claude/projects/<project>/<session>.jsonl),
  * in full. The hooks' copy of it (lastCleanOutput) is cut at 4000 bytes.
  *
@@ -25,10 +25,28 @@ export const ANSWER_MAX = 1_000_000;
 
 type Window = { since: number; until: number };
 
-/** Reads lines one by one, keeping only the final message seen so far. */
+/**
+ * A task's answer from the messages the agent wrote in it, in order: its report, the longest of them (the later of
+ * two as long), and every message after it, a blank line between (the DB brief fix-answer-per-task-2810.md). The last
+ * message alone was the answer until 2.0.5, and a memory note or a closing line written after the report replaced it:
+ * the asker read "Saving the durable lessons to memory" where the report was (1212's orchestrator, 28/10). What comes
+ * before the report (narration) stays out. Past ANSWER_MAX characters, cut, and the cut said. One rule for every CLI
+ * Tars reads an answer from: Claude Code's and Qwen Code's transcripts here, codex's and pi's session logs.
+ */
+export function reportOf(messages: readonly string[]): string | null {
+  const said = messages.filter((m) => m.trim());
+  if (!said.length) return null;
+  let at = 0;
+  for (let i = 1; i < said.length; i++) if (Array.from(said[i]).length >= Array.from(said[at]).length) at = i;
+  const whole = Array.from(said.slice(at).join('\n\n'));
+  return whole.length <= ANSWER_MAX ? whole.join('') : `${whole.slice(0, ANSWER_MAX).join('')}\n[cut at ${ANSWER_MAX} of ${whole.length} characters]`;
+}
+
+/** Reads lines one by one, keeping the task's messages in order, each message's text blocks joined. */
 function answerReader(window: Window) {
   let id: string | null = null;
   let parts: string[] = [];
+  const messages: string[] = [];
   return {
     line(line: string): void {
       if (!line.includes('"assistant"')) return;
@@ -51,14 +69,14 @@ function answerReader(window: Window) {
       if (!texts.length) return;
       const messageId = typeof rec.message?.id === 'string' ? rec.message.id : typeof rec.uuid === 'string' ? rec.uuid : null;
       if (messageId === null || messageId !== id) {
+        if (parts.length) messages.push(parts.join('\n\n'));
         id = messageId;
         parts = [];
       }
       parts.push(...texts);
     },
     answer(): string | null {
-      if (!parts.length) return null;
-      return Array.from(parts.join('\n\n')).slice(0, ANSWER_MAX).join('');
+      return reportOf(parts.length ? [...messages, parts.join('\n\n')] : messages);
     },
   };
 }

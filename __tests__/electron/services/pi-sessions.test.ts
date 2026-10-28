@@ -38,6 +38,8 @@ import * as path from 'node:path';
  *      `startup`, or `resume` for a file written before this launch); a file
  *      in another agent's folder is taken for this one's.
  *  P7. A line still being written is read half; a byte is read twice.
+ *  P10. (the DB brief fix-answer-per-task-2810.md, before the code) A turn's answer is its last message alone: a
+ *      closing line after the report replaces it. It is the turn's report, its longest message, and what followed.
  *  P8. A new session in the folder (pi's /new) is not followed: the newest
  *      file written since the launch is the agent's session.
  *  P9. The agent's folder is shared with another agent's, or lies outside
@@ -118,6 +120,19 @@ describe('a pi agent\'s session, followed', () => {
     expect(posts.every((p) => p.agentId === 'a' && p.body.agent_id === 'a' && p.body.session_id === SID)).toBe(true);
     expect(posts[1].body.current_task).toBe('review the notes');
     expect(posts[2].body.output).toBe('The notes are fine.');
+  });
+
+  it('P10. ended with its report and what followed it, not its last line alone', async () => {
+    watch.noteLaunch('a');
+    await watch.tick();
+    now += 1000;
+    const report = `Report: the migration is reversible. ${'Detail. '.repeat(30)}`;
+    write('a', header() + user('ship the migration'));
+    await watch.tick();
+    write('a', assistant('toolUse', 'Let me look.') + assistant('toolUse', report) + assistant('stop', 'Done.'));
+    await watch.tick();
+    await watch.tick();
+    expect(posts.filter((p) => p.path === '/api/hooks/output').map((p) => p.body.output)).toEqual([`${report}\n\nDone.`]);
   });
 
   it('P3. pending and deferred end nothing; length ends the turn', async () => {

@@ -418,6 +418,11 @@ export interface TaskLedger {
   delegatedOpen(agentId: string): boolean;
   /** One task by its id, with its run's answer when it has one. */
   task(id: string): TaskWithResult | undefined;
+  /**
+   * The answer of the agent's latest ended task that has one (by its end), kept across a restart: what get_agent_output
+   * gives without a task id, whatever the agent does next (the DB brief fix-answer-per-task-2810.md).
+   */
+  lastAnswerOf(agentId: string): { taskId: string; result: string; endedAt: number | null } | undefined;
   /** The delegations a quit cut, found open at this start: given once, for their askers to be told. */
   interruptedAtStart(): TaskRecord[];
   /**
@@ -828,6 +833,15 @@ export function createTaskLedger(opts: {
       if (!task) return undefined;
       const result = results.get(id);
       return { ...task, sessionIds: [...task.sessionIds], ...(result !== undefined ? { result } : {}) };
+    },
+
+    lastAnswerOf(agentId) {
+      let found: TaskRecord | undefined;
+      for (const task of byId.values()) {
+        if (task.agentId !== agentId || task.outcome === 'running' || !results.has(task.id)) continue;
+        if (!found || (task.endedAt ?? task.startedAt) >= (found.endedAt ?? found.startedAt)) found = task;
+      }
+      return found ? { taskId: found.id, result: results.get(found.id)!, endedAt: found.endedAt } : undefined;
     },
 
     interruptedAtStart() {

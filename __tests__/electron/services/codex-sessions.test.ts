@@ -64,6 +64,9 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
  *    screen and writes no session: the agent read as starting, then running. Why is asked at its launch
  *    (codexSignInGap, codex-sign-in.test.ts) and said in its status, once; never once its session came (it was
  *    signed in after all), nor for a launch a later one replaced, nor when nothing keeps it from signing in.
+ * 17. (the DB brief fix-answer-per-task-2810.md, before the code) A turn's answer is codex's last message alone
+ *    (`last_agent_message`): a closing line after the report replaces it, as 1212's orchestrator read on 28/10. The
+ *    answer is the turn's report, its longest message, and what codex wrote after it.
  */
 
 import { CodexSessionWatch, codexEventOf, type HookPost } from '../../../electron/services/codex-sessions';
@@ -184,7 +187,19 @@ beforeEach(() => {
   });
 });
 
+const agentSays = (text: string) => line('event_msg', { type: 'item_completed', item: { type: 'AgentMessage', id: `m-${text.length}`, phase: 'final', content: [{ type: 'text', text }] } });
+
 describe("a codex agent's turn", () => {
+  it('17. ends with its report and what followed it, not its last line alone', async () => {
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-codex-project-'));
+    watch.noteLaunch(AGENT, project);
+    now += 1500;
+    const report = `Report: both PRs are open, #658 and #660, their checks green. ${'Detail. '.repeat(30)}`;
+    own(rollout(SESSION, [meta(SESSION, project), started('t1'), user('ship it'), agentSays('Looking at the PRs.'), agentSays(report), agentSays('Done.'), done('t1', 'Done.')]));
+    await watch.tick();
+    expect(outputsOf(AGENT)).toEqual([`${report}\n\nDone.`]);
+  });
+
   it('registered, begun with its task, ended with its answer, in that order', async () => {
     const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-codex-project-'));
     watch.noteLaunch(AGENT, project);
