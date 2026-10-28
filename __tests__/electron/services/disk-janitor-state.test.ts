@@ -20,6 +20,8 @@ import type { JanitorWorld, JanitorOps } from '../../../electron/services/janito
  *     reach the items, or the log of what was freed is not read back (janitor.log and its .1, oldest first, each
  *     line's time, words and bytes).
  * S4. The never list is not said, in words.
+ * S5. (L1 of the Audit's re-check of #542) The five-minute answer is kept by the agent's name: two agents of the same
+ *     name in two projects get each other's items. It is kept by the agent's id.
  */
 
 let dir: string;
@@ -85,13 +87,13 @@ describe('the janitor as the window reads it', () => {
 
   it('S2. an agent\'s scan: its project\'s items only, the window told who and when, and once in five minutes', async () => {
     const j = make();
-    const mine = await j.scan({ name: 'Harbor Worker', project: path.join(dir, 'proj') });
+    const mine = await j.scan({ id: 'a', name: 'Harbor Worker', project: path.join(dir, 'proj') });
     expect(mine.map(i => i.path)).toEqual([path.join(dir, 'proj', '.worktrees', 'w', '.next')]);
     expect(j.state().scan!.askedBy).toBe('Harbor Worker');
     expect(j.state().requests).toEqual([{ at: expect.any(Number), by: 'Harbor Worker', project: path.join(dir, 'proj'), items: 1 }]);
     expect(j.state().scan!.items).toHaveLength(3);
     const before = worlds;
-    expect(await j.scan({ name: 'Harbor Worker', project: path.join(dir, 'proj') })).toEqual(mine);
+    expect(await j.scan({ id: 'a', name: 'Harbor Worker', project: path.join(dir, 'proj') })).toEqual(mine);
     expect(worlds, 'scanned again within five minutes').toBe(before);
   });
 
@@ -112,4 +114,13 @@ describe('the janitor as the window reads it', () => {
     expect(s.log.at(-1)).toMatchObject({ what: expect.stringMatching(/^kept /), bytes: null });
     expect(s.log.filter(l => l.bytes !== null)).toHaveLength(2);
   });
+
+  it('S5. two agents of the same name in two projects each get their own project\'s items', async () => {
+    const j = make();
+    const mine = await j.scan({ id: 'a', name: 'QA Engineer', project: path.join(dir, 'proj') });
+    const theirs = await j.scan({ id: 'b', name: 'QA Engineer', project: path.join(dir, 'other') });
+    expect(mine.map(i => i.path)).toEqual([path.join(dir, 'proj', '.worktrees', 'w', '.next')]);
+    expect(theirs.map(i => i.path)).toEqual([path.join(dir, 'other', '.worktrees', 'w', '.next')]);
+  });
 });
+
