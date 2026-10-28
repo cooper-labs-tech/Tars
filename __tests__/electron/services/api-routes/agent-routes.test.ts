@@ -218,7 +218,8 @@ describe('agent-routes', () => {
 
       const sendJson = vi.fn();
       await handler(makeReq({ params: { id: 'a1' }, url: new URL('http://localhost/api/agents/a1?full=true') }), sendJson, ctx);
-      expect(sendJson).toHaveBeenCalledWith({ agent });
+      // With its tree's resources since lot 3 item D: none for an agent with no terminal.
+      expect(sendJson).toHaveBeenCalledWith({ agent: { ...agent, resources: { memMb: null, cpuPct: null, processes: [] } } });
     });
 
     it('returns 404 for missing agent', async () => {

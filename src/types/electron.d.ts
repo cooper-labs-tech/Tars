@@ -1143,6 +1143,43 @@ export interface OrphanFolder {
   /** The newest change in it (caches and .git aside), or null. */
   lastChangedAt: string | null;
 }
+/** One process of an agent's tree. */
+export interface AgentProcess { name: string; memMb: number | null; cpuPct: number | null; /** Secrets masked. */ command: string }
+/** A folder and its size as last measured: null before any measure. */
+export interface MeasuredPath { path: string; bytes: number | null }
+/** What an agent costs. */
+export interface AgentResources {
+  id: string;
+  name: string;
+  /** working, waiting, idle, asleep, stopped, error */
+  status: string;
+  /** When its status began, in ms; null when unknown. */
+  statusSince: number | null;
+  /** Its whole tree's: null when it has no terminal or the table cannot be read (Windows). */
+  memMb: number | null;
+  cpuPct: number | null;
+  processes: AgentProcess[];
+  worktrees: MeasuredPath[];
+  tmp: MeasuredPath | null;
+}
+/** What a project costs: its agents, and their sums. */
+export interface ProjectResources {
+  path: string;
+  name: string;
+  agents: AgentResources[];
+  totals: { memMb: number | null; cpuPct: number | null; diskBytes: number | null; processes: number };
+}
+export interface FleetResources {
+  /** When memory and CPU were read; null when they could not be. */
+  readAt: number | null;
+  /** When the disk was last measured; null before any. */
+  diskMeasuredAt: number | null;
+  /** While the disk is measured. */
+  measuring?: { done: number; total: number } | null;
+  error?: string | null;
+  projects: ProjectResources[];
+}
+
 export interface OrphanListing {
   folders: OrphanFolder[];
   count: number;
@@ -2524,6 +2561,18 @@ export interface ElectronAPI {
     }) => void) => () => void;
     onUpdateDownloaded: (callback: () => void) => () => void;
     onUpdateError: (callback: (error: string) => void) => () => void;
+  };
+
+  /**
+   * What each agent and each project costs (electron/services/fleet-resources.ts): per agent the memory and CPU of its
+   * whole process tree, its processes (command lines masked), the disk of its worktree and temporary folder as last
+   * measured, its status and since when; per project the same summed. `measureDisk` starts a measure and answers at
+   * once; the window follows it through `onChanged` (`measuring`, then `diskMeasuredAt`).
+   */
+  resources: {
+    read: () => Promise<FleetResources>;
+    measureDisk: () => Promise<{ success: boolean; error?: string }>;
+    onChanged: (callback: (state: FleetResources) => void) => () => void;
   };
 
   // The disk and the folders no agent owns (Settings · System)

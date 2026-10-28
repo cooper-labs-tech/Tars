@@ -1407,6 +1407,24 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
 
+## What each agent and each project costs
+
+2.0.5, lot 3 item D (`electron/services/fleet-resources.ts` for the rules, `fleet-resources-runtime.ts` for the app's
+side).
+- **Per agent:**
+  - the memory and CPU of its whole process tree, from its terminal down;
+  - its processes, by memory, their command lines masked (`redactSecrets`);
+  - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
+  - its status and since when (`statusSince`, or `asleepSince` for a sleeping one).
+- **Per project:** the same, summed (`totals`).
+- **How it is read.** One `ps -A -o pid,ppid,rss,%cpu,command` at most every 2 s, on macOS and Linux. On Windows the
+  figures read null, never 0.
+- **The disk** is measured only when the window asks (`resources.measureDisk`), one folder at a time, with its progress
+  (`measuring`), and kept with when (`diskMeasuredAt`). It is never walked on a read or a tick.
+- **The window** reads `window.electronAPI.resources.read()` and is sent `resources:changed`.
+- **The orchestrators** read it through `list_agents` (each agent's `memMb` and `statusSince`) and `get_agent`
+  (`resources`: memory, CPU and processes, masked).
+
 ## MCP servers
 
 Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to

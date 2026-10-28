@@ -1,3 +1,4 @@
+import { agentResources } from '../fleet-resources-runtime';
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { stopAcpRuns } from '../acp/delegate';
@@ -2022,7 +2023,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents: scoped to the caller's project by default (?all=true
   // for the global view). An orchestrator that only ever SEES its own team
   // cannot pick another project's agent ID by mistake.
-  app_.get('/api/agents', (req, sendJson) => {
+  app_.get('/api/agents', async (req, sendJson) => {
     const caller = callerProject(req);
     const showAll = req.url.searchParams.get('all') === 'true';
     // The team: a chat's runner is a conversation with the orchestrator, listed
@@ -2035,6 +2036,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const asker = a.requestedBy ? agents.get(a.requestedBy.agentId) : undefined;
       return asker ? { id: asker.id, name: asker.name || asker.id, ...(asker.kind === 'chat' ? { chat: true } : {}) } : undefined;
     };
+    // Each agent's memory and since when it is in its status (lot 3 item D): null when it cannot be read.
+    const resources = await agentResources().catch(() => new Map());
     const agentList = agentValues.map(withSessionTruth).map(a => ({
       id: a.id,
       name: a.name,
@@ -2049,19 +2052,23 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       role: a.role,
       error: a.error,
       askedBy: askerOf(a),
+      memMb: resources.get(a.id)?.memMb ?? null,
+      statusSince: a.statusSince,
     }));
     sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
   });
 
   // GET /api/agents/:id
-  app_.get(/^\/api\/agents\/([^/]+)$/, (req, sendJson) => {
+  app_.get(/^\/api\/agents\/([^/]+)$/, async (req, sendJson) => {
     const agent = agents.get(req.params.id);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
     const full = req.url.searchParams.get('full') === 'true';
-    sendJson({ agent: full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent) });
+    // Its tree's memory, CPU and processes, their command lines masked (lot 3 item D).
+    const resources = (await agentResources().catch(() => new Map())).get(agent.id) ?? { memMb: null, cpuPct: null, processes: [] };
+    sendJson({ agent: { ...(full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent)), resources } });
   });
 
   // GET /api/agents/:id/bootstrap: identity + team roster context, injected
