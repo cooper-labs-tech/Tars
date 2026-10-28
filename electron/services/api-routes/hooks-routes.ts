@@ -14,6 +14,7 @@ import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
 import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, questionFingerprint, subjectOf } from '../permission-asks';
 import { levelOf } from '../../core/permission-ceiling';
+import { hasOrchestratorPowers } from '../../core/agent-role';
 import { slotTurnEnded } from '../heavy-slot-runtime';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
@@ -721,10 +722,10 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     // at the delay; for any other, back to Claude Code's own dialog at once,
     // one step, as before #538: its owner chose to be asked there.
     // An AskUserQuestion is a question to the person, which nobody answers at a bypass worker's terminal at night
-    // (the Audit's fifth gate of #538, its Low): refused at once, with where to ask instead. An orchestrator's goes to
-    // the person, as does any agent's not in bypass, whose owner chose to be asked there.
+    // (the Audit's fifth gate of #538, its Low): refused at once, with where to ask instead. One with the orchestrator's
+    // powers (a chat's runner too, core/agent-role.ts) goes to the person, as does any agent's not in bypass.
     if (question.tool === 'AskUserQuestion') {
-      if (levelOf(agent) === 'bypass' && agent.role !== 'orchestrator') {
+      if (levelOf(agent) === 'bypass' && !hasOrchestratorPowers(agent)) {
         logPermission(agent, agent.id, question.tool, 'deny', 'Tars (a bypass worker asks its orchestrator)', subjectOf(question.tool, fields));
         sendJson({ decision: 'deny', reason: ASK_YOUR_ORCHESTRATOR, fingerprint: questionFingerprint(question.tool, fields) });
       } else {
