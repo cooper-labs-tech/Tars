@@ -363,7 +363,7 @@ over `e2e/__screenshots__/win32/<name>.png` for the surfaces the change was mean
 on a Windows machine, run `npm run e2e:update` (with `npx tsc -p electron/tsconfig.json` first)
 and review `git diff --stat e2e/__screenshots__/win32/` as below.
 
-The manifest is `e2e/surfaces.mjs`: **20 pages + 19 settings sections + 3 overlays = 42
+The manifest is `e2e/surfaces.mjs`: **21 pages + 19 settings sections + 3 overlays = 43
 surfaces**. `e2e/__screenshots__/` holds one PNG per surface, plus the six Chat rooms that
 their own spec photographs.
 

@@ -47,6 +47,8 @@ export const PAGES = [
   { name: 'review', route: '/review' },
   { name: 'logs', route: '/logs', settle: 3000 },
   { name: 'usage', route: '/usage' },
+  // This computer's own figures (free disk, memory, swap, load) are marked data-volatile and masked below.
+  { name: 'resources', route: '/resources' },
   // The three tabs of Brain, clicked by role rather than by text. Measured on
   // 2026-09-17: `Projects` and `Agents` are sidebar links as well as tabs here,
   // the sidebar comes first in the DOM, and the click landed there. So
@@ -223,7 +225,9 @@ export const VOLATILE = {
     // which a fast machine never shows: measured matching nothing at all in a
     // full run on 2026-09-17, the day the check below was written. Kept, and
     // declared as rare rather than deleted: the marks are in the product for
-    // this mask, and a slow machine is exactly when it earns its place.
+    // this mask, and a slow machine is exactly when it earns its place. Since
+    // 2.0.5 the Resources page marks its live figures of the machine too (free
+    // disk, memory, swap, load), which differ between any two runs.
     sometimes: true,
   },
   'sandbox-paths': {
