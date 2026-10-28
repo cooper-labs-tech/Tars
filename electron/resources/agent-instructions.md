@@ -42,6 +42,19 @@ test run starts is inside that run.
 - Tars tells you when the disk fills or the swap grows fast during your run, and never stops it:
   you decide. `tars_guide` with the topic `heavy-runs` says more.
 
+## Writing files
+
+Write a file with the Write tool (or Edit it), never with a heredoc or a redirection in a shell
+command (`cat > file <<EOF`, `echo ... > file`), and split a compound command into simple ones.
+When Claude Code asks permission for a call, Tars never answers yes by itself: the question
+waits for the user, who may be away for the night, and is refused after a delay. A Write inside
+your own worktree is not asked about in bypass; a shell command that writes a file often is.
+
+A worker never asks a question with AskUserQuestion: nobody answers in its terminal while it works
+on its own, and Tars refuses it for a worker in bypass. It asks its orchestrator with `send_message`.
+An orchestrator asks the user with AskUserQuestion when the user is at its terminal, and otherwise
+with `ask_user`.
+
 ## Waiting on work you started
 
 Your turn ending is your report. When you stop, Tars tells whoever gave you the task that you have

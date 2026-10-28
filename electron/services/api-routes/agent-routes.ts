@@ -1,5 +1,7 @@
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
+import { maskedAsk } from '../permission-asks';
+import { redactSecrets } from '../../utils/redact-secrets';
 import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,7 +16,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogOpen, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -1499,17 +1501,11 @@ async function performDispatchLocked(
 
   const previousStatus = agent.status;
   const livePty = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
-  if (livePty && dialogOpen(agent)) {
-    // A blocking permission dialog expects arrow keys/enter, not text: a
-    // typed message is useless and the delayed \r could ACCEPT the pending
-    // permission. Refuse and surface the reason instead.
-    dropped(agent, taskRef);
-    sendJson({
-      error: `Agent "${agent.name || agent.id}" is blocked on a permission dialog; a typed message cannot answer it. Resolve it in the Tars UI, or stop the agent and re-dispatch.`,
-      waitingReason: 'permission',
-    }, 409);
-    return;
-  }
+  // A dialog in its terminal (a permission, a question) holds the message: the
+  // terminal's writer keeps it while the dialog is open, never typing into it,
+  // and types it once the dialog closes (pty-manager.ts pump). It was refused
+  // (409) until 2.0.5, and a worker's report to an orchestrator at a dialog was
+  // lost (1212 counted 17 on the night of 27/10).
   // Typed into the session only where a CLI runs, read from the terminal and
   // never from the status. Every turn ends on `idle` (the Stop hook posts it)
   // and a failed one on `error`, both with the CLI at its prompt: /dispatch
@@ -2130,6 +2126,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       error: a.error,
       askedBy: askerOf(a),
       ...(a.checkpoint ? { checkpoint: a.checkpoint } : {}),
+      // A permission question Tars holds for the owner (services/permission-asks.ts): what it runs, and why.
+      ...(a.waitingReason ? { waitingReason: a.waitingReason } : {}),
+      ...(a.permissionAsk ? { permissionAsk: {
+        tool: a.permissionAsk.tool, subject: maskedAsk(a.permissionAsk).subject,
+        ...(a.permissionAsk.reason ? { reason: a.permissionAsk.reason } : {}),
+        askedAt: a.permissionAsk.askedAt, until: a.permissionAsk.until,
+      } } : {}),
     }));
     sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
   });
@@ -2145,10 +2148,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // Its queue (2.0.5, lot 2): what the caller may see of it, as GET /api/agents/:id/queue answers.
     const caller = req.internal ? { kind: 'tars' as const } : req.callerAgentId && agents.get(req.callerAgentId) ? { kind: 'agent' as const, agent: agents.get(req.callerAgentId)! } : undefined;
     const right = caller ? queueRight(caller, agent, 'list') : undefined;
-    const view = right?.ok ? queueView(oneTaskQueue, agent.id, right.all || caller?.kind !== 'agent' ? undefined : caller.agent.id) : undefined;
+    const listed = right?.ok ? queueView(oneTaskQueue, agent.id, right.all || caller?.kind !== 'agent' ? undefined : caller.agent.id) : undefined;
     // Only when something waits or the queue is paused: an agent with nothing queued reads as it did.
-    const queue = view && (view.items.length || view.paused) ? view : undefined;
-    sendJson({ agent: { ...(full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent)), ...(queue ? { queue } : {}) } });
+    const queue = listed && (listed.items.length || listed.paused) ? listed : undefined;
+    const view = full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent);
+    // The question masked for an agent (the Audit's L3 on #538): the window keeps it whole.
+    sendJson({ agent: {
+      ...(agent.permissionAsk ? {
+        ...view, permissionAsk: maskedAsk(agent.permissionAsk),
+        ...(view.waitingOn ? { waitingOn: { ...view.waitingOn, text: redactSecrets(view.waitingOn.text) } } : {}),
+      } : view),
+      ...(queue ? { queue } : {}),
+    } });
   });
 
   // GET /api/agents/:id/bootstrap: identity + team roster context, injected
@@ -2865,15 +2876,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // reconnect path below spawns fresh with the correct working directory.
       killStalePty(agent);
 
-      if (agent.ptyId && ptyProcesses.has(agent.ptyId) &&
-          dialogOpen(agent)) {
-        // Same guard as /dispatch: never type into a blocking permission dialog.
-        sendJson({
-          error: `Agent "${agent.name || agent.id}" is blocked on a permission dialog; a typed message cannot answer it. Resolve it in the Tars UI, or stop the agent and re-dispatch.`,
-          waitingReason: 'permission',
-        }, 409);
-        return;
-      }
+      // A dialog holds the message in the terminal's writer, as in /dispatch.
       const noCli = !cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined);
       if (noCli && noteBy) {
         sendJson(noteNeedsSession(agent), 409);

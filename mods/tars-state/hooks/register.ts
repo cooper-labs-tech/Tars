@@ -50,8 +50,15 @@ type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: str
 /** The fields of a tool's input a person decides on: never a file's content. */
 const ASKED_ABOUT = ['command', 'description', 'file_path', 'notebook_path', 'path', 'url', 'query', 'pattern'];
 const INPUT_CAP = 2000;
-/** Asks for one call at most: 40 of Tars's 20 s holds outlast its 10 min bound. */
-const MAX_ASKS = 40;
+/** Bash's fields Tars shows as words, each with the type it shows (the Audit's M1 on #538: one Bash call in eight set a timeout). */
+const BASH_WORDS: Record<string, 'number' | 'boolean'> = { timeout: 'number', run_in_background: 'boolean', dangerouslyDisableSandbox: 'boolean' };
+/**
+ * Asks for one call at most: 190 of Tars's 20 s holds (63 minutes) outlast the
+ * longest delay the owner can set (permissionAskMinutes, 60), after which Tars
+ * refuses the call itself. Fewer, and the dialog showed before Tars's refusal,
+ * where nobody answers at night (fix-permission-dialogs-2810.md).
+ */
+const MAX_ASKS = 190;
 /** Requests that fail in a row before the call goes back to the engine. */
 const MAX_FAILURES = 3;
 /** A classic hook's input, as the shell hooks read it on stdin. */
@@ -152,20 +159,27 @@ function report($: Engine, route: string, body: Body): void {
   }).catch(() => undefined);
 }
 
-/** What the call asks about, as Tars shows it: the decisive fields, cut. */
-function askedAbout(input: unknown): Record<string, string> | null {
-  const out: Record<string, string> = {};
-  if (!input || typeof input !== 'object') return out;
+/**
+ * What the call asks about, as Tars shows it: every field it shows whole, and why each other one is withheld. A
+ * question with a field withheld still goes to Tars, marked so, with the fields shown: the window may refuse it or
+ * hand it back to the terminal, never allow it, and a bypass agent's is refused at the owner's delay instead of
+ * waiting at Claude Code's dialog all night (the Audit's M1 on #538). A tweet's text, a message, a delegated task, a
+ * subagent's prompt, an edit's new content or a heredoc past the cap reached Tars as nothing before #318's rechecks,
+ * and an allow approved what nobody saw: such a field is never sent, only its name.
+ */
+function askedAbout(tool: string, input: unknown): { fields: Record<string, string>; withheld: string[] } {
+  const fields: Record<string, string> = {};
+  const withheld: string[] = [];
+  if (!input || typeof input !== 'object') return { fields, withheld };
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    // Every field is one Tars shows, whole, or the call is not asked at all:
-    // a tweet's text, a message, a delegated task, a subagent's prompt, an
-    // edit's new content reached Tars as nothing, and an allow approved what
-    // nobody saw (the Audit's rechecks of #318). The terminal's dialog shows
-    // the whole call, and so does a field longer than Tars keeps.
-    if (!ASKED_ABOUT.includes(key) || typeof value !== 'string' || value.length > INPUT_CAP) return null;
-    out[key] = value;
+    const word = tool === 'Bash' ? BASH_WORDS[key] : undefined;
+    if (word && typeof value === word) fields[key] = String(value);
+    else if (!word && !ASKED_ABOUT.includes(key)) withheld.push(`${key}: a field the window does not show`);
+    else if (typeof value !== 'string') withheld.push(`${key}: not text`);
+    else if (value.length > INPUT_CAP) withheld.push(`${key}: ${String(value.length).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} characters, past the 2,000 the window shows`);
+    else fields[key] = value;
   }
-  return out;
+  return { fields, withheld };
 }
 
 /**
@@ -187,12 +201,12 @@ async function fingerprint(tool: string, fields: Record<string, string>): Promis
 async function askTars($: Engine, e: Check, verdict: Verdict): Promise<Verdict | null> {
   const to = await proven($);
   if (!to || !sessionId) return null;
-  const fields = askedAbout(e.input);
-  if (!fields) return null;
+  const { fields, withheld } = askedAbout(e.tool, e.input);
   const mine = await fingerprint(e.tool, fields);
   const question = {
     agent_id: to.agentId, session_id: sessionId, tool: e.tool, tool_use_id: e.tool_use_id,
     input: fields, reason: verdict.reason, rule: verdict.rule, via: 'mod',
+    ...(withheld.length ? { withheld: true, withheld_why: withheld.join('; ').slice(0, 1000) } : {}),
   };
   // Tars says `pending` every 20 s and is asked again for the same call: a
   // request held about 30 s ended under the mod, and the dialog showed while
@@ -223,6 +237,8 @@ async function askTars($: Engine, e: Check, verdict: Verdict): Promise<Verdict |
     if (said.decision === 'pending') continue;
     if (said.decision !== 'allow' && said.decision !== 'deny') return null;
     if (said.fingerprint !== mine) return null;
+    // Withheld: the window never saw it whole, so only a refusal is taken.
+    if (withheld.length && said.decision === 'allow') return null;
     return { decision: said.decision, ...(typeof said.reason === 'string' ? { reason: said.reason } : {}) };
   }
   return null;
@@ -286,11 +302,13 @@ export function register(on: On) {
   });
 
   // A call Claude Code would put to its dialog goes to Tars. Only those: a call
-  // the mode or a rule settles is the engine's, an AskUserQuestion is a
-  // question to the person, and a query with no call behind it decides nothing.
+  // the mode or a rule settles is the engine's, and a query with no call behind
+  // it decides nothing. An AskUserQuestion goes too, withheld (its questions are
+  // not sent): Tars, which knows the agent's role and mode, refuses a bypass
+  // worker's and hands any other back to the person (the Audit's fifth gate of #538).
   on<Check>('tool.check', async ($, e, next) => {
     const verdict = await next(e) as Verdict;
-    if (verdict?.decision !== 'ask' || !e.tool_use_id || e.tool === 'AskUserQuestion') return verdict;
+    if (verdict?.decision !== 'ask' || !e.tool_use_id) return verdict;
     return (await askTars($, e, verdict)) ?? verdict;
   });
 

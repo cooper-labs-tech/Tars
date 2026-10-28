@@ -56,6 +56,52 @@
  *     told to the window: permissionAsk goes without an event.
  * 18. (gap 2) permissionAsk is on neither agent:status nor agents:tick.
  * 19. (gap 3) The window cannot tell when the question goes back: no `until`.
+ * And from the night of 27/10, agents in bypass frozen until morning on Claude Code's dialog
+ * (fix-permission-dialogs-2810.md, the owner's 2.0.5), written before the code (28/10):
+ * 20. (Superseded by 27: Tars allows nothing by itself.) A bypass agent's file tool on its own folders waits for the
+ *     owner: Tars answers allow at once, naming the call's fingerprint, with no question shown and the agent never
+ *     waiting. The same call outside its folders, or from an agent not in bypass, is held as before.
+ * 21. A question nobody answers goes back to the dialog (`ask`) and the agent stays frozen there all night: at the
+ *     delay it is refused (`deny`) with a reason the model reads (how long, and to take another way), the agent
+ *     runs again, and the dialog never shows (this replaces 5's `ask`).
+ * 22. The delay is not the owner's: `permissionAskMinutes` (1 to 60, default 10) sets it, `until` says it, and a
+ *     value out of range is the default. Past 60 the mod would stop asking first (MAX_ASKS) and show the dialog.
+ * 23. A decision is not written down with who decided: Tars for a bypass agent's own folders, the window's person,
+ *     the delay, the end of the session or the turn.
+ * 24. An orchestrator's list_agents does not show a teammate's pending question: the tool, what it runs, why
+ *     Claude Code asked, since when and until when.
+ * And from the Audit's gate of #538 (L3):
+ * 25. A secret in the command (a token, a URL's password) reaches permissions.log, which every agent can read, or
+ *     another agent through list_agents or get_agent: both are masked (redactSecrets). The window, where the owner
+ *     decides, keeps the command whole.
+ * And from the orchestrator's decision of 28/10 (#538's re-check): Tars never answers a shell command.
+ * 26. A file tool asked with its content withheld (the mod sends the path alone) and not Tars's to allow goes back to
+ *     the native dialog, frozen for the night as a shell command was (the orchestrator, 28/10, on 99a7fa32); or it is
+ *     held and the window can allow it, approving content it never showed. It is held as a shell command is, shown by
+ *     its path and marked withheld, the window's allow refused (its deny taken), and refused at the delay with why
+ *     Tars could not allow it.
+ * And from the orchestrator's decision of 28/10 after the Audit's third gate of #538 (a dangling or a hard link led
+ * an allowed write into .claude/settings.json, outside, or ~/.tars-private): Tars allows nothing by itself.
+ * 27. Tars answers allow to a question by itself: a file tool even in the agent's own folders and through the
+ *     Audit's six links, or any of the gates' shell commands. Each waits for the owner, and is refused at the delay.
+ * 28. A file tool's question reaches the window whole, or without `withheld` when the body leaves it out (the Audit's
+ *     L2): the route marks every file tool withheld, the window can never allow it.
+ * 29. (the Audit's Info 1 on #544) An agent not in bypass gets its file tool held in Tars, two steps for each edit
+ *     and a refusal at the delay: it goes straight to Claude Code's own dialog, as before #538. Only an agent in
+ *     bypass (autonomous, the nights' case) has its file tools held.
+ * And from the Audit's fourth gate of #538 (M1 at ff0e3f2d): the mod now posts, marked withheld, a question it cannot
+ * show whole (a field the window does not show, one past 2,000 characters, one that is not text).
+ * 30. A withheld question that is not a file tool is held and allowable from the window, or a bypass agent's goes to
+ *     Claude Code's dialog with no delay: it must be held deny-only for a bypass agent, refused at the delay with why
+ *     the window could not show it, and answered `ask` at once for any other mode.
+ * 31. Bash's timeout, background and sandbox fields, which the mod shows as words, are not in the line the window
+ *     shows (`subject`), so the owner allows a call without seeing them: they follow the command.
+ * And from the Audit's fifth gate of #538 (at 62fcbf72):
+ * 32. (M1) The window's line shows one field of a question with several, while an allow covers them all: Grep
+ *     `{ pattern: 'BEGIN OPENSSH', path: '~/.ssh' }` reads "BEGIN OPENSSH". Every field shown goes in the line: the
+ *     main one, then each other as words (a search's path as "in <path>", any other as "<field> <value>").
+ * 33. (Low) A bypass worker's AskUserQuestion waits at its terminal all night: Tars refuses it at once, telling it to
+ *     ask its orchestrator with send_message. An orchestrator's, or an agent's not in bypass, stays with the person.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -225,15 +271,47 @@ describe("the mod's question to Tars", () => {
     expect(a.permissionAsk).toBeUndefined();
   });
 
-  it('5, 12. nobody answers: the bound, counted from the first ask, sends it back to the dialog', async () => {
+  it('5, 12, 21. nobody answers: at the delay, counted from the first ask, it is refused with a reason, and the agent runs on', async () => {
     const a = agent();
     const pending = askUntilAnswered(question());
     await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS - 1);
     expect(await settled(pending)).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(await pending).toEqual({ decision: 'ask' });
+    const answer = await pending;
+    expect(answer).toMatchObject({ decision: 'deny', fingerprint: expect.any(String) });
+    expect(answer.reason).toMatch(/^Nobody answered this permission question in Tars within 10 minutes/);
+    expect(answer.reason).toMatch(/another way/);
+    expect(answer.reason).toMatch(/Write tool/);
     expect(a.permissionAsk).toBeUndefined();
-    expect(a.status).toBe('waiting');
+    expect(a.status).toBe('running');
+    expect(a.waitingReason).toBeUndefined();
+  });
+
+  it('21. a refusal at the delay given between two asks reaches the next ask', async () => {
+    agent();
+    const first = ask(question());
+    await vi.advanceTimersByTimeAsync(PERMISSION_POLL_MS);
+    expect(await first).toEqual({ decision: 'pending' });
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+    expect(await ask(question())).toMatchObject({ decision: 'deny' });
+  });
+
+  it('22. the delay is the owner\'s setting, said by until; out of range, the default', async () => {
+    const a = agent();
+    (ctx.appSettings as AppSettings).permissionAskMinutes = 2;
+    const pending = askUntilAnswered(question());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(Date.parse(a.permissionAsk!.until) - Date.parse(a.permissionAsk!.askedAt)).toBe(2 * 60_000);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect((await pending).reason).toMatch(/within 2 minutes/);
+    for (const bad of [0, 61, 1.5, Number.NaN, '5' as unknown as number]) {
+      (ctx.appSettings as AppSettings).permissionAskMinutes = bad;
+      const again = askUntilAnswered(question({ tool_use_id: `toolu_${String(bad)}` }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(Date.parse(a.permissionAsk!.until) - Date.parse(a.permissionAsk!.askedAt), String(bad)).toBe(PERMISSION_HOLD_MS);
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      await again;
+    }
   });
 
   it('6. a stop, a delete or a new session ends the question: the request is answered ask', async () => {
@@ -447,5 +525,225 @@ describe("the mod's question to Tars", () => {
     registerAgentRoutes(agentApp, ctx);
     const all = [...agentApp.routes, ...app.routes].map(r => String(r.pattern));
     expect(all.filter(p => /permission/i.test(p))).toEqual(['/api/hooks/permission']);
+  });
+});
+
+describe('Tars allows nothing by itself', () => {
+  const heredoc = (dir: string) => `S=${dir}/scratchpad; mkdir -p $S/retry-probe && cat > $S/retry-probe/p.yml <<'EOF'\nsteps: [1]\nEOF`;
+  const write = (file: string, over: Record<string, unknown> = {}) => question({ tool: 'Write', tool_use_id: 'toolu_w', input: { file_path: file }, withheld: true, ...over });
+  const bypass = () => { const a = agent(); Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' }); return a; };
+
+  it('27. a bypass agent\'s file tool, in its own folders or through any of the six links, waits for the owner, then is refused', async () => {
+    const a = bypass();
+    for (const [tool, field, file] of [
+      ['Write', 'file_path', '/p/scratchpad/p.yml'], ['Write', 'file_path', '/p/to-settings'], ['Write', 'file_path', '/p/t/to-mcp'],
+      ['Write', 'file_path', '/p/to-outside'], ['NotebookEdit', 'notebook_path', '/p/c/to-private'], ['Edit', 'file_path', '/p/t/hard-rc'],
+      ['MultiEdit', 'file_path', '/p/t/hard-settings'],
+    ] as const) {
+      const pending = askUntilAnswered(question({ tool, tool_use_id: `toolu_${file}`, input: { [field]: file } }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk, file).toMatchObject({ tool, withheld: true });
+      expect(answerPermission('a1', 'allow', 'the user'), file).toBe(false);
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      const late = await pending;
+      expect(late, file).toMatchObject({ decision: 'deny', reason: expect.stringMatching(/Nobody answered/) });
+      expect(late.reason).toMatch(/never allows a file tool by itself/);
+    }
+  });
+
+  it('27. every shell command of the three gates waits for the owner, who may allow it, and nobody answering refuses it', async () => {
+    const { probeCommands } = await import('../../../fixtures/permission-probes');
+    const a = bypass();
+    const commands = probeCommands({ c: '/p/c', work: '/p', home: '/h', t: '/p/t', privateDir: '/h/.tars-private', tmpRoot: '/h/.tars/tmp' });
+    expect(commands.length).toBeGreaterThan(90);
+    for (const [n, command] of commands.entries()) {
+      const pending = askUntilAnswered(question({ tool_use_id: `toolu_c${n}`, input: { command } }));
+      await vi.advanceTimersByTimeAsync(0);
+      // Past the mod's 2,000 characters: Claude Code's own dialog, which shows it whole (#318). Never Tars's allow.
+      if (command.length > 2000) { expect(await pending, 'too long').toEqual({ decision: 'ask' }); continue; }
+      expect(a.permissionAsk?.subject, command).toBe(command || 'Bash');
+      if (n === 0) {
+        expect(answerPermission('a1', 'allow', 'the user')).toBe(true);
+        expect(await pending).toMatchObject({ decision: 'allow' });
+        continue;
+      }
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      expect(await pending, command).toMatchObject({ decision: 'deny' });
+    }
+  }, 60_000);
+
+  it('28. a file tool is withheld whatever the body says', async () => {
+    const a = bypass();
+    void ask(question({ tool: 'Write', input: { file_path: '/p/x' } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk).toMatchObject({ tool: 'Write', withheld: true });
+    expect(answerPermission('a1', 'allow', 'the user')).toBe(false);
+  });
+
+  it('29. an agent not in bypass has its file tool on Claude Code\'s own dialog at once, its shell commands held for the window', async () => {
+    const b = agent('a2', S2);
+    Object.assign(b, { permissionMode: 'normal', projectPath: '/p' });
+    expect(await ask(write('/p/x', { agent_id: 'a2', session_id: S2 }))).toEqual({ decision: 'ask' });
+    expect(b.permissionAsk).toBeUndefined();
+    const shell = ask(question({ agent_id: 'a2', session_id: S2, input: { command: heredoc('/p') } }));
+    expect(await settled(shell)).toBe(false);
+    expect(b.permissionAsk?.subject).toContain('/p/scratchpad');
+  });
+
+  it('30. a bypass agent\'s withheld question, a Bash with a timeout and a 3,000-character heredoc among them, waits deny-only, then is refused with why', async () => {
+    const a = bypass();
+    const heredoc = `cat > /p/s.md <<'EOF'\n${'y'.repeat(3000)}\nEOF`;
+    const why = `command: ${heredoc.length.toLocaleString('en-US')} characters, past the 2,000 the window shows`;
+    for (const body of [
+      question({ tool_use_id: 'toolu_long', input: { description: 'notes', timeout: '60000' }, withheld: true, withheld_why: why }),
+      question({ tool: 'mcp__dorothy-x__x_post_tweet', tool_use_id: 'toolu_x', input: {}, withheld: true, withheld_why: 'text: a field the window does not show' }),
+    ]) {
+      const pending = askUntilAnswered(body);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk, body.tool_use_id).toMatchObject({ tool: body.tool, withheld: true, withheldWhy: body.withheld_why });
+      expect(answerPermission('a1', 'allow', 'the user')).toBe(false);
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      const late = await pending;
+      expect(late).toMatchObject({ decision: 'deny', reason: expect.stringMatching(/Nobody answered/) });
+      expect(late.reason).toContain(body.withheld_why);
+    }
+    // The window's deny is taken.
+    const pending = askUntilAnswered(question({ tool_use_id: 'toolu_d', input: {}, withheld: true, withheld_why: why }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answerPermission('a1', 'deny', 'the user', 'too long to read')).toBe(true);
+    expect(await pending).toMatchObject({ decision: 'deny' });
+  });
+
+  it('30. an agent not in bypass has any withheld question on Claude Code\'s own dialog at once', async () => {
+    const b = agent('a2', S2);
+    Object.assign(b, { permissionMode: 'normal', projectPath: '/p' });
+    expect(await ask(question({ agent_id: 'a2', session_id: S2, input: {}, withheld: true, withheld_why: 'command: not text' }))).toEqual({ decision: 'ask' });
+    expect(b.permissionAsk).toBeUndefined();
+  });
+
+  it('31. a Bash with a timeout, in the background or outside the sandbox stays allowable, the window\'s line saying so', async () => {
+    const a = bypass();
+    const pending = askUntilAnswered(question({
+      tool_use_id: 'toolu_t', input: { command: 'make deploy', description: 'deploy', timeout: '600000', run_in_background: 'true', dangerouslyDisableSandbox: 'true' },
+    }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk?.withheld).toBeUndefined();
+    expect(a.permissionAsk?.subject).toBe('make deploy (timeout 600000 ms, in the background, outside the sandbox)');
+    expect(answerPermission('a1', 'allow', 'the user')).toBe(true);
+    expect(await pending).toMatchObject({ decision: 'allow' });
+    // The defaults say nothing more.
+    void askUntilAnswered(question({ tool_use_id: 'toolu_f', input: { command: 'ls', run_in_background: 'false', dangerouslyDisableSandbox: 'false' } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk?.subject).toBe('ls');
+  });
+
+  it('32. the window\'s line shows every field an allow covers', async () => {
+    const a = bypass();
+    for (const [input, line] of [
+      [{ pattern: 'BEGIN OPENSSH', path: '/Users/x/.ssh' }, 'BEGIN OPENSSH in /Users/x/.ssh'],
+      [{ query: 'password', path: '/Users/x/Documents' }, 'password in /Users/x/Documents'],
+      [{ command: 'ls', path: '/Users/x/.aws' }, 'ls (path /Users/x/.aws)'],
+      [{ command: 'ls', path: '/Users/x/.aws', url: 'https://x.example' }, 'ls (path /Users/x/.aws, url https://x.example)'],
+      [{ url: 'https://x.example', query: 'q' }, 'https://x.example (query q)'],
+    ] as const) {
+      void askUntilAnswered(question({ tool: 'mcp__any__run', tool_use_id: `toolu_${line}`, input }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk?.subject, line).toBe(line);
+    }
+    for (const [tool, input, line] of [
+      ['Grep', { pattern: 'BEGIN OPENSSH', path: '/Users/x/.ssh' }, 'BEGIN OPENSSH in /Users/x/.ssh'],
+      ['Glob', { pattern: '**/*.pem', path: '/Users/x' }, '**/*.pem in /Users/x'],
+      // A Bash's description is the model's words, not what runs: not in the line.
+      ['Bash', { command: 'make deploy', description: 'deploy', timeout: '600000' }, 'make deploy (timeout 600000 ms)'],
+    ] as const) {
+      void askUntilAnswered(question({ tool, tool_use_id: `toolu_${line}`, input }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk?.subject, line).toBe(line);
+    }
+  });
+
+  it('33. a bypass worker\'s AskUserQuestion is refused at once, to ask its orchestrator; another\'s stays with the person', async () => {
+    const { questionFingerprint } = await import('../../../../electron/services/permission-asks');
+    const a = bypass();
+    const asked = question({ tool: 'AskUserQuestion', tool_use_id: 'toolu_q', input: {}, withheld: true, withheld_why: 'questions: a field the window does not show' });
+    expect(await ask(asked)).toEqual({
+      decision: 'deny', reason: expect.stringMatching(/ask your orchestrator with send_message/), fingerprint: questionFingerprint('AskUserQuestion', {}),
+    });
+    expect(a.permissionAsk).toBeUndefined();
+    Object.assign(a, { role: 'orchestrator' });
+    expect(await ask(asked)).toEqual({ decision: 'ask' });
+    Object.assign(a, { role: 'worker', permissionMode: 'normal' });
+    expect(await ask(asked)).toEqual({ decision: 'ask' });
+  });
+
+  it('23. every decision is written down with who or what decided', async () => {
+    const fs = await import('fs');
+    const { PERMISSION_LOG } = await import('../../../../electron/services/permission-asks');
+    fs.rmSync(PERMISSION_LOG, { force: true });
+    const a = agent();
+    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
+    void askUntilAnswered(question({ tool: 'Write', input: { file_path: '/p/scratchpad/p.yml' }, withheld: true, tool_use_id: 'toolu_file' }));
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+    void askUntilAnswered(question({ tool_use_id: 'toolu_window' }));
+    await vi.advanceTimersByTimeAsync(0);
+    answerPermission('a1', 'deny', 'the user', 'not now');
+    void askUntilAnswered(question({ tool_use_id: 'toolu_late' }));
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+    const lines = fs.readFileSync(PERMISSION_LOG, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/Backend \(a1\) Write deny by the delay \(10 minutes\): Write \/p\/scratchpad\/p\.yml/);
+    expect(lines[1]).toMatch(/Backend \(a1\) Bash deny by the user: rm -rf build/);
+    expect(lines[2]).toMatch(/Backend \(a1\) Bash deny by the delay \(10 minutes\): rm -rf build/);
+  });
+
+  it('24. list_agents shows a teammate\'s pending question: the tool, what it runs, why, since and until when', async () => {
+    const a = agent();
+    void ask(question());
+    await vi.advanceTimersByTimeAsync(0);
+    const agentApp = makeRouteApp();
+    registerAgentRoutes(agentApp, ctx);
+    const route = agentApp.routes.find(r => r.method === 'GET' && r.pattern === '/api/agents')!;
+    const listed = await new Promise<Record<string, unknown>>(resolve => {
+      void route.handler({ body: {}, params: {}, url: new URL('http://x/api/agents'), headers: {} } as unknown as RouteRequest, (b: Record<string, unknown>) => resolve(b), ctx);
+    });
+    const row = (listed.agents as Array<Record<string, unknown>>).find(r => r.id === 'a1')!;
+    expect(row).toMatchObject({
+      status: 'waiting', waitingReason: 'permission',
+      permissionAsk: { tool: 'Bash', subject: 'rm -rf build', reason: 'This command requires approval', askedAt: a.permissionAsk!.askedAt, until: a.permissionAsk!.until },
+    });
+  });
+
+  it('25. a secret in the command is masked in the log and for the agents, kept whole for the window', async () => {
+    const fs = await import('fs');
+    const { PERMISSION_LOG } = await import('../../../../electron/services/permission-asks');
+    fs.rmSync(PERMISSION_LOG, { force: true });
+    const token = ['ghp_', 'K'.repeat(12), 'L'.repeat(12)].join('');
+    const command = `curl -H "Authorization: Bearer ${token}" https://api.x && psql postgres://app:hunter2secret@db/x`;
+    const a = agent();
+    void askUntilAnswered(question({ input: { command } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk!.subject).toBe(command);
+    const agentApp = makeRouteApp();
+    registerAgentRoutes(agentApp, ctx);
+    const get = async (pattern: string, url: string, params: Record<string, string> = {}) => {
+      const route = agentApp.routes.find(r => r.method === 'GET' && String(r.pattern) === pattern)!;
+      return new Promise<Record<string, unknown>>(resolve => {
+        void route.handler({ body: {}, params, url: new URL(`http://x${url}`), headers: {} } as unknown as RouteRequest, (b: Record<string, unknown>) => resolve(b), ctx);
+      });
+    };
+    const one = String(/^\/api\/agents\/([^/]+)$/);
+    const listed = JSON.stringify(await get('/api/agents', '/api/agents'));
+    const single = JSON.stringify(await get(one, '/api/agents/a1', { id: 'a1' }));
+    const full = JSON.stringify(await get(one, '/api/agents/a1?full=true', { id: 'a1' }));
+    for (const [where, text] of [['list', listed], ['get', single], ['full', full]] as const) {
+      expect(text, where).toContain('curl -H');
+      expect(text, where).not.toContain(token);
+      expect(text, where).not.toContain('hunter2secret');
+    }
+    answerPermission('a1', 'deny', 'the user');
+    const log = fs.readFileSync(PERMISSION_LOG, 'utf8');
+    expect(log).toContain('curl -H');
+    expect(log).not.toContain(token);
+    expect(log).not.toContain('hunter2secret');
   });
 });

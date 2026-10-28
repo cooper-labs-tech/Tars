@@ -102,7 +102,7 @@ export interface AgentStatus {
   permissionAsk?: {
     tool: string;
     askedAt: string;
-    /** When Tars hands the question back to the terminal's dialog if nobody answers. */
+    /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
     /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
     subject: string;
@@ -111,6 +111,11 @@ export interface AgentStatus {
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
+    /** A question Tars cannot show whole, a file tool's or one with a field withheld: the window may refuse it or hand
+     *  it back, never allow it. */
+    withheld?: true;
+    /** What was withheld and why, `<field>: <why>` joined by `; ` (the state mod's words). */
+    withheldWhy?: string;
   };
   /** The last start that undid a stop: the stop, and who started it again and when (core/agent-stop.ts). */
   lastRestartAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string; restartedBy: string; restartedAt: string };
@@ -428,6 +433,12 @@ export interface AppSettings {
   /** The floors under which a grant waits: free disk in GB (15) and free memory in % (20). */
   heavySlotMinDiskGb?: number;
   heavySlotMinFreeMemPct?: number;
+  /**
+   * How long Tars holds a permission question for the window before it refuses it with a reason the agent reads
+   * (services/permission-asks.ts): 1 to 60 minutes, 10 when unset or out of range. Past 60 the state mod stops
+   * asking first and Claude Code's dialog shows.
+   */
+  permissionAskMinutes?: number;
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;

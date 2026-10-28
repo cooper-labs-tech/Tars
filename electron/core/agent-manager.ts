@@ -529,6 +529,8 @@ function persistable(agent: AgentStatus): AgentStatus {
     // Runtime state, and the command a dialog asks about can carry a secret:
     // agents.json is in every agent's --add-dir (the gate of #172).
     waitingOn: undefined,
+    // The same for a question Tars holds (services/permission-asks.ts): its command, whole. It dies with the CLI.
+    permissionAsk: undefined,
     // A wake belongs to its launch, which a restart of Tars does not carry.
     waking: undefined,
   } as AgentStatus;

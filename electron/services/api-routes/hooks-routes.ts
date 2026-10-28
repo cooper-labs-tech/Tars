@@ -12,7 +12,8 @@ import { emitAgentStatus, agentStatusEmitter } from '../agent-events';
 import { onTurnEnded, onUsageLimit } from '../claude-accounts/switching';
 import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
-import { dropPermissionAsks, holdPermissionAsk } from '../permission-asks';
+import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, questionFingerprint, subjectOf } from '../permission-asks';
+import { levelOf } from '../../core/permission-ceiling';
 import { slotTurnEnded } from '../heavy-slot-runtime';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
@@ -671,11 +672,19 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
   });
 
   // POST /api/hooks/permission: the state mod's tool.check, when Claude Code
-  // would show its permission dialog (services/permission-asks.ts). Held until
-  // the window answers: allow or deny is then the decision, with no dialog.
-  // `pending` after 20 s, and the mod asks again for the same call. `ask`
-  // hands it back to the dialog: for a session that is not the agent's
-  // current one, nothing to name, a question nobody answers, or one dropped.
+  // would show its permission dialog (services/permission-asks.ts). Tars
+  // allows nothing by itself. A question is held until the window answers:
+  // allow or deny is then the decision, with no dialog. A question the window
+  // cannot show whole (a file tool's, held by its path, or one the mod marks
+  // withheld) is held for an agent in bypass only (the window may refuse it,
+  // never allow it); any other agent's goes to Claude Code's own dialog.
+  // `pending` after 20 s, and the mod asks again for the same call. Nobody
+  // answers within the owner's delay: refused, with a reason the agent reads.
+  // `ask` hands it back to the dialog: for a session that is not the agent's
+  // current one, nothing to name, or a question dropped.
+  const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+  const ASK_YOUR_ORCHESTRATOR = 'Nobody answers a question in your terminal while you work on your own, at night as well: '
+    + 'ask your orchestrator with send_message, and go on with the rest meanwhile.';
   app.post('/api/hooks/permission', async (req, sendJson) => {
     const { agent_id, tool, input, tool_use_id, reason, rule } = req.body as {
       agent_id?: string; tool?: unknown; input?: unknown; tool_use_id?: unknown; reason?: unknown; rule?: unknown;
@@ -698,7 +707,44 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     };
     const afterError = (req.body as { after_error?: unknown }).after_error;
     if (typeof afterError === 'string') console.log(`[permission] ${agent.name || agent.id}'s mod asks again after a failed request: ${oneLine(afterError)}`);
-    const answer = await holdPermissionAsk(agent, question, changed => {
+    // A question the window cannot show whole: a file tool, whose content is a
+    // field the window does not show, marked withheld whatever the body says
+    // (the Audit's L2), or any call the mod marks withheld, a field past 2,000
+    // characters, not text or not shown (the Audit's M1 on #538: a Bash with a
+    // long heredoc waited at Claude Code's dialog all night). The window can
+    // never allow it, and Tars allows nothing by itself (the orchestrator's
+    // decision of 28/10). For an agent in bypass, autonomous, held and refused
+    // at the delay; for any other, back to Claude Code's own dialog at once,
+    // one step, as before #538: its owner chose to be asked there.
+    // An AskUserQuestion is a question to the person, which nobody answers at a bypass worker's terminal at night
+    // (the Audit's fifth gate of #538, its Low): refused at once, with where to ask instead. An orchestrator's goes to
+    // the person, as does any agent's not in bypass, whose owner chose to be asked there.
+    if (question.tool === 'AskUserQuestion') {
+      if (levelOf(agent) === 'bypass' && agent.role !== 'orchestrator') {
+        logPermission(agent, agent.id, question.tool, 'deny', 'Tars (a bypass worker asks its orchestrator)', subjectOf(question.tool, fields));
+        sendJson({ decision: 'deny', reason: ASK_YOUR_ORCHESTRATOR, fingerprint: questionFingerprint(question.tool, fields) });
+      } else {
+        sendJson({ decision: 'ask' });
+      }
+      return;
+    }
+    const fileTool = FILE_TOOLS.has(question.tool);
+    const withheld = fileTool || (req.body as { withheld?: unknown }).withheld === true;
+    const said = (req.body as { withheld_why?: unknown }).withheld_why;
+    const withheldWhy = withheld && typeof said === 'string' && said ? oneLine(said).slice(0, 1000) : undefined;
+    if (withheld && levelOf(agent) !== 'bypass') {
+      const what = fileTool ? 'a file tool' : 'a question the window cannot show whole';
+      logPermission(agent, agent.id, question.tool, 'back to its dialog', `Tars (${what} of an agent not in bypass: Claude Code asks)`, subjectOf(question.tool, fields));
+      sendJson({ decision: 'ask' });
+      return;
+    }
+    const notAllowedBecause = fileTool
+      ? 'Tars never allows a file tool by itself, and the window cannot show its content'
+      : `Tars never allows by itself what the window cannot show whole (${withheldWhy ?? 'a field withheld'})`;
+    const answer = await holdPermissionAsk(agent, {
+      ...question,
+      ...(withheld ? { withheld: true, notAllowedBecause, ...(withheldWhy ? { withheldWhy } : {}) } : {}),
+    }, changed => {
       saveAgents();
       ctx.handleStatusChangeNotificationCallback(changed, changed.status);
       emitAgentStatus(changed.id);
@@ -706,7 +752,7 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
         agentId: changed.id, status: changed.status, waitingReason: changed.waitingReason, permissionAsk: changed.permissionAsk ?? null,
       });
       scheduleTick();
-    });
+    }, permissionHoldMs(ctx.getAppSettings()));
     sendJson(answer);
   });
 

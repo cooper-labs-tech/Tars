@@ -527,7 +527,7 @@ export interface AgentStatus {
   permissionAsk?: {
     tool: string;
     askedAt: string;
-    /** When Tars hands the question back to the terminal's dialog if nobody answers. */
+    /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
     /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
     subject: string;
@@ -536,6 +536,16 @@ export interface AgentStatus {
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
+    /**
+     * A file tool asked by its path alone, its content withheld from Tars: the window shows the path, and may refuse
+     * it or hand it back to the terminal, never allow it (agent:answerPermission answers false to an allow).
+     */
+    withheld?: true;
+    /**
+     * What was withheld and why, as the state mod says it: `<field>: <why>`, joined by `; ` (for instance
+     * `command: 3,014 characters, past the 2,000 the window shows`). Set with withheld only.
+     */
+    withheldWhy?: string;
   };
   /** The last start that undid a stop: who stopped it, when and why, and who started it again and when. */
   lastRestartAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string; restartedBy: string; restartedAt: string };

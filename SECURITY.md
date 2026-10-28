@@ -240,6 +240,25 @@ further out of reach than the rest of `~/.tars-private` (§5).
   missing from the machine, for every agent: a `gemini` placed there runs where gemini is not installed. A login
   shell that sets PATH anew drops the folder; `"$TARS_SLOT"` names the shim without it.
 
+**Tars never answers allow by itself** (2.0.5, #538). The state mod asks Tars instead of Claude Code's dialog, and
+Tars holds the question for the owner: the window shows it, and the owner allows or refuses it. Nobody answering within
+the owner's delay (`permissionAskMinutes`), it is refused with a reason the agent reads, and never handed back to a
+native dialog nobody would answer at night. Tars allowed some questions itself for a while on #538, and the Audit's
+three gates found each rule it tried reaching outside the agent's folders: a reader of shell commands of its own
+(six forms in bash, then thirteen in zsh, the agents' shell on macOS, and in both shells), then a path rule for file
+tools that a dangling or a hard link led into `.claude/settings.json` (the hooks Claude Code runs), outside, or
+`~/.tars-private`. In bypass, Claude Code only asks about the paths it guards or does not know, which is where such
+links lead, so an allow by Tars had almost no honest use and kept that surface open. What the window may allow is only
+what it shows whole: a shell command. A file tool is asked by its path alone, its content withheld (the mod sends no
+content, and the route marks every file tool withheld whatever the request says): the window may refuse it or hand it
+back, never allow it. So is any call the window cannot show whole, a field it does not show, past 2,000 characters
+or not text, which the mod sends withheld with the fields it shows and why the rest is not (the Audit's M1 on #538),
+and the mod takes no allow for it either. Such a question is held only for an agent in bypass, autonomous, whose
+nights this is for, and refused at the owner's delay; any other agent's goes straight to Claude Code's own dialog,
+where its owner chose to be asked. Every decision goes to
+`~/.tars/logs/permissions.log`, masked, which any agent can write, being the same user: a record for the owner, not
+evidence against a hostile agent.
+
 ---
 
 ## 3. An agent's token is not secret from the other agents
