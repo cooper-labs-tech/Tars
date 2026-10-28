@@ -1,8 +1,9 @@
 import { safeGitSync } from '../utils/safe-git';
 import * as fs from 'fs';
+import * as path from 'path';
+import type { AgentStatus } from '../types';
 import { agents, saveAgents } from './agent-manager';
-import { ptyProcesses } from './pty-manager';
-import { killPty } from './pty-kill';
+import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
 import { forgetRestart } from './agent-restart';
 import { stopAcpRuns } from '../services/acp/delegate';
@@ -10,7 +11,6 @@ import { dropPermissionAsks } from '../services/permission-asks';
 import { ignoredNotCaches, saveUncommittedWork, submodulesWithWork } from '../services/save-worktree-work';
 import { gitRefusal } from './chat-slots';
 import { endBornOf } from './agent-stop';
-import type { AgentStatus } from '../types';
 
 export interface RemovedAgent {
   success: true;
@@ -28,27 +28,33 @@ export interface RemovedAgent {
  * (services/chat-runners.ts). Moved here from the handler so both go the
  * same way.
  *
- * Its delegated runs and permission questions end with it; its terminal is
- * killed; its uncommitted work is saved on wip/<name> first, without asking
+ * Its delegated runs and permission questions end with it; its terminal's
+ * whole tree is ended, as a stop ends it; its uncommitted work is saved on wip/<name> first, without asking
  * (JeanBrasse, 05/10), since `--force` below removes whatever was not committed. A
  * save that fails keeps the worktree where it is, and says so, as do files git
  * ignores that are not caches, a repository of its own inside it, and a
  * submodule holding work no remote has (#312, #335), and so does a removal git
  * refuses (a locked worktree, the Audit's L1 on #398). What it was asked and
  * will never finish is told to each requester (the Audit's R3).
+ *
+ * Out of the fleet first, before anything is awaited (the Audit's L1 on #533): while its terminal's tree ends, a
+ * start would have given it a new terminal, left with no agent. And a worktree another agent of the fleet works in
+ * (the window lets two agents share one) is kept, with that agent's name, and nothing saved in this one's (M1):
+ * removing it took the folder from under an agent still running there.
  */
 export async function removeAgent(id: string): Promise<RemovedAgent> {
   const agent = agents.get(id);
+  agents.delete(id);
   if (agent) await stopAcpRuns(agent.id, 'the agent was deleted');
   dropPermissionAsks(id);
   if (agent?.ptyId) {
     const ptyProcess = ptyProcesses.get(agent.ptyId);
-    if (ptyProcess) {
-      killPty(ptyProcess);
-      ptyProcesses.delete(agent.ptyId);
-    }
+    ptyProcesses.delete(agent.ptyId);
     // Nullify so pending onExit callbacks won't mutate state
     agent.ptyId = undefined;
+    // Its whole tree, as a stop ends it (pty-manager.ts): the hangup alone left a CLI deaf to it, and its child,
+    // running with no agent to name them (the Audit's L4 on #523).
+    if (ptyProcess) await endTerminalTree(ptyProcess);
   }
   // What it started outside its terminal, as a stop ends it: once it has left the fleet, nothing would ever
   // name it again (the Audit's Info 2 on #523; Tars's own e2e left 20 `my-cli` orphans that way).
@@ -56,7 +62,12 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
 
   let savedTo: string | undefined;
   let worktreeKept: string | undefined;
-  if (agent?.worktreePath && agent?.branchName && fs.existsSync(agent.worktreePath)) {
+  const sharer = agent?.worktreePath ? agentWorkingIn(agent.worktreePath) : undefined;
+  if (sharer) {
+    worktreeKept = `${sharer.name || sharer.id} works in it too, so its worktree was kept at ${agent!.worktreePath}`;
+    console.warn(`[agent:remove] ${worktreeKept}`);
+  }
+  if (!worktreeKept && agent?.worktreePath && agent?.branchName && fs.existsSync(agent.worktreePath)) {
     try {
       const saved = await saveUncommittedWork(agent.worktreePath, agent.name || agent.id);
       savedTo = saved?.branch;
@@ -108,11 +119,20 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
 
   // What it was asked and will never finish, each requester told (the Audit's R3).
   if (agent) endWorkerRequests(agent, 'deleted', { withLinked: true });
-  agents.delete(id);
   forgetRestart(id);
 
   // Save agents to disk
   saveAgents();
 
   return { success: true, ...(savedTo ? { savedTo } : {}), ...(worktreeKept ? { worktreeKept } : {}), ...(processes ? { processes } : {}) };
+}
+
+/** An agent of the fleet whose worktree is this folder, compared by real path (the removed one is out of it already). */
+function agentWorkingIn(folder: string): AgentStatus | undefined {
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+  const target = real(folder);
+  for (const other of agents.values()) {
+    if (other.worktreePath && real(other.worktreePath) === target) return other;
+  }
+  return undefined;
 }

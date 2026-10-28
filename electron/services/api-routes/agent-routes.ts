@@ -1,7 +1,5 @@
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
-import { stopAcpRuns } from '../acp/delegate';
-import { dropPermissionAsks } from '../permission-asks';
 import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import * as os from 'os';
@@ -10,6 +8,7 @@ import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutp
 import { noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { killPty } from '../../core/pty-kill';
+import { removeAgent } from '../../core/agent-remove';
 import { hasEndOfTurn } from '../../core/end-of-turn';
 import { agentStatusOnExit, isQuitting } from '../../core/quit-state';
 import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../core/agent-stop';
@@ -44,7 +43,7 @@ import { readFinalAnswer } from '../terminal-answer';
 import { typeLaunchTask } from '../../core/typed-task';
 import { accountDir } from '../claude-accounts/registry';
 import { announceTask, firstLineOf } from '../task-banner';
-import { taskOfPrompt, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
+import { taskOfPrompt, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
 import { clientRequestIdOf, liveReceipts, payloadHash, type ReceiptOutcome } from '../request-receipts';
 import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel } from '../../core/permission-ceiling';
 import { canInterrupt } from '../bus-store';
@@ -54,7 +53,7 @@ import { scheduleTick } from '../../utils/agents-tick';
 import { noteWaitingOn } from '../agent-watch';
 import { lastInterruptAt, pendingBackgroundWork, withSessionTruth } from '../agent-truth';
 import { turnInterruptedAt } from '../task-watch';
-import { noteLaunch, launchSettings, restartForSettings, forgetRestart, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
+import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
 import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-update';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
@@ -2838,22 +2837,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayStop(req, agent, sendJson)) return;
-    await stopAcpRuns(agent.id, 'the agent was deleted');
-    dropPermissionAsks(agent.id);
-
-    if (agent.ptyId) {
-      const ptyProcess = ptyProcesses.get(agent.ptyId);
-      if (ptyProcess) {
-        killPty(ptyProcess);
-        ptyProcesses.delete(agent.ptyId);
-      }
-    }
-    endWorkerRequests(agent, 'deleted', { withLinked: true });
-    agents.delete(req.params.id);
-    forgetRestart(req.params.id);
-    saveAgents();
+    // The window's removal, the one path (core/agent-remove.ts): its runs and questions ended, its terminal's whole
+    // tree ended as a stop ends it, its uncommitted work saved, its worktree removed or kept with why, its requesters
+    // told (the Audit's L4 on #523: this route sent the hangup alone, and a deaf CLI outlived the agent).
+    const removed = await removeAgent(agent.id);
     // Gone from the next tick, and the rail reloads a fleet without it.
     announceAgent(agent);
-    sendJson({ success: true });
+    sendJson(removed);
   });
 }
