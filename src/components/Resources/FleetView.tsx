@@ -23,12 +23,21 @@ function partial(values: (number | null)[]): number | null {
   return read.length ? read.reduce((a, b) => a + b, 0) : null;
 }
 
+/**
+ * The worktrees of some agents, added: an agent with none adds nothing, one not measured yet makes the sum not
+ * measured unless another was, never 0 B (the Backend's note on the QA's F6: null means not measured).
+ */
+export function worktreeTotal(agents: AgentResources[]): number | null {
+  const holding = agents.filter((a) => a.worktrees.length);
+  return holding.length ? partial(holding.map(wtBytes)) : 0;
+}
+
 /** A project's figures: memory and CPU as main sums them (PR 546's totals), the disk by folder kind, added. */
 function totals(p: ProjectResources) {
   return {
     mem: p.totals.memMb === null ? null : mbBytes(p.totals.memMb),
     cpu: p.totals.cpuPct,
-    wt: partial(p.agents.map(wtBytes)),
+    wt: worktreeTotal(p.agents),
     tmp: partial(p.agents.map(tmpBytes)),
     working: p.agents.filter((a) => a.status === 'working').length,
   };
@@ -180,7 +189,7 @@ export function FleetView({ chosen, onChoose }: { chosen: string | null; onChoos
       <Figures>
         <Figure volatile caption="AGENTS HOLD" value={state ? bytes(all(memBytes)) : NOT_READ} sub={state ? `${agents.length} agents, ${agents.filter((a) => a.status === 'asleep').length} asleep${unread ? `, ${unread} not read` : ''}` : 'with the fleet\'s figures'} />
         <Figure volatile caption="CPU" value={state ? pct(all((a) => a.cpuPct)) : NOT_READ} sub={state ? 'every agent\'s tree' : 'with the fleet\'s figures'} />
-        <Figure volatile caption="WORKTREES" value={state ? cell(all(wtBytes), measuring) : NOT_READ} sub={state?.diskMeasuredAt ? `${agents.reduce((n, a) => n + a.worktrees.length, 0)} worktrees · measured ${clock(state.diskMeasuredAt)}` : 'not measured yet'} />
+        <Figure volatile caption="WORKTREES" value={state ? cell(worktreeTotal(agents), measuring) : NOT_READ} sub={state?.diskMeasuredAt ? `${agents.reduce((n, a) => n + a.worktrees.length, 0)} worktrees · measured ${clock(state.diskMeasuredAt)}` : 'not measured yet'} />
         <Figure volatile caption="TEMPORARY FOLDERS" value={state ? cell(all(tmpBytes), measuring) : NOT_READ} sub={state ? `${agents.filter((a) => a.tmp).length} folders under ~/.tars/tmp` : 'not measured yet'} />
       </Figures>
       {state?.error && <Unread text="Tars cannot read the processes:" detail={state.error} onRetry={reload} />}

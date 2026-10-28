@@ -14,7 +14,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. the view says it cannot read the fleet although the channel is there;
  * 2. a project or an agent of the fleet is missing, or an agent shows under another project;
  * 3. a project's agent count is not its agents'; or one agent with no terminal makes its project's memory unread,
- *    when another agent of it was read (the Audit's M1 on PR 548);
+ *    when another agent of it was read (the Audit's M1 on PR 548); or an agent started after the view opened stays
+ *    unread, the view reading the fleet once (the QA's F6 on the 2.0.5 train); or a project's worktrees read 0 B
+ *    before any measure;
  * 4. an agent with no terminal shows a figure for its memory, 0 among them: it is said not read;
  * 5. choosing an agent does not show its detail, its tree and its disk, or shows another agent's;
  * 6. a command line in the tree shows a secret: the agent's own token, from its environment, or a password after a
@@ -112,6 +114,8 @@ for (const newInterface of [false, true]) {
       const harborRow = view.locator('[data-project-row="harbor"]');
       await expect(harborRow).toContainText(/\d+(\.\d)? (MB|GB)/, { timeout: 60_000 });
       seen.harborRow = (await harborRow.innerText()).replace(/\s+/g, ' ');
+      // Before any disk measure, harbor's worktrees are not measured, never 0 B (the QA's F6 on the 2.0.5 train).
+      expect(String(seen.harborRow)).not.toMatch(/\b0 B\b/);
       await expect(view.locator('[data-agent-row="Harbor Builder"]')).toContainText(/\d+(\.\d)? (MB|GB)/);
       await expect(where.locator('[data-resource-card="AGENTS HOLD"] [data-value]')).toHaveText(/(MB|GB)$/);
       await expect(where.locator('[data-resource-card="AGENTS HOLD"]')).toContainText('not read');

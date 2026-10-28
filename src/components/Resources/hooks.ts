@@ -15,7 +15,15 @@ export interface Reading<T> {
   reload: () => void;
 }
 
-function useReading<T>(read: (() => Promise<T>) | undefined, onChanged: ((cb: (s: T) => void) => () => void) | undefined): Reading<T> {
+/**
+ * How often Agents and projects reads the fleet while it is shown: the main process reads the process table only when
+ * asked, one table every 2 s at most, and sends resources:changed only while it measures the disk, so a view that read
+ * once kept an agent started after it "not read" (the QA's F6 on the 2.0.5 train).
+ */
+export const FLEET_READ_EVERY_MS = 3000;
+
+/** A channel's state: read when shown, then on each change it sends, and every `everyMs` when given, one read at a time. */
+function useReading<T>(read: (() => Promise<T>) | undefined, onChanged: ((cb: (s: T) => void) => () => void) | undefined, everyMs?: number): Reading<T> {
   const [state, setState] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
@@ -28,10 +36,18 @@ function useReading<T>(read: (() => Promise<T>) | undefined, onChanged: ((cb: (s
   useEffect(() => {
     if (!read) return;
     let live = true;
-    read().then((s) => { if (live) { setState(s); setError(null); } }, (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
+    let inFlight = false;
+    const once = () => {
+      if (inFlight) return;
+      inFlight = true;
+      read().then((s) => { if (live) { setState(s); setError(null); } }, (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); })
+        .finally(() => { inFlight = false; });
+    };
+    once();
+    const every = everyMs ? setInterval(once, everyMs) : undefined;
     const off = onChanged?.((s) => { if (live) { setState(s); setError(null); } });
-    return () => { live = false; off?.(); };
-  }, [read, onChanged, tick]);
+    return () => { live = false; if (every) clearInterval(every); off?.(); };
+  }, [read, onChanged, tick, everyMs]);
 
   const reload = useCallback(() => setTick((n) => n + 1), []);
   return { state, missing, error, reload };
@@ -46,7 +62,7 @@ export function useHeavyRuns(): Reading<HeavySlotStatus> & { giveBack: (ticketId
 
 export function useFleetResources(): Reading<FleetResources> & { measureDisk: () => Promise<string | null> } {
   const api = channel('resources');
-  const reading = useReading(api?.read, api?.onChanged);
+  const reading = useReading(api?.read, api?.onChanged, FLEET_READ_EVERY_MS);
   const measureDisk = useCallback(async () => {
     const res = await api?.measureDisk();
     return res && !res.success ? res.error ?? 'The disk could not be measured.' : null;
