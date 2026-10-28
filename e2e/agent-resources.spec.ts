@@ -20,7 +20,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. the orchestrator's list_agents gives w's memory and status since, and get_agent its processes as their program,
  *    pid, memory and CPU, no arguments;
  * 4. (the Audit's H1 on #546) another project's agent c: get_agent refuses it as unknown (404, `Agent not found`), and
- *    list_agents with all names it with nothing more (no task, no figure).
+ *    list_agents with all names it with nothing more (no task, no figure); its output and its wait are refused alike.
  * Red on main dc623b594: there is no resources read.
  * The artefact: values.json (the window's reads before and after the measure, the orchestrator's answers).
  */
@@ -63,7 +63,7 @@ for (const newInterface of [false, true]) {
       "const wait = setInterval(async () => {",
       "  if (!fs.existsSync(dir + '/ask-now')) return;",
       "  clearInterval(wait);",
-      "  fs.writeFileSync(dir + '/asked.json', JSON.stringify({ list: await get('/api/agents'), one: await get('/api/agents/w'), all: await get('/api/agents?all=true'), other: await get('/api/agents/c') }));",
+      "  fs.writeFileSync(dir + '/asked.json', JSON.stringify({ list: await get('/api/agents'), one: await get('/api/agents/w'), all: await get('/api/agents?all=true'), other: await get('/api/agents/c'), otherOutput: await get('/api/agents/c/output'), otherWait: await get('/api/agents/c/wait?timeout=1') }));",
       "}, 200);",
       "process.stdout.write('stand-in ready\\r\\n');",
       'process.stdin.resume();',
@@ -121,7 +121,7 @@ for (const newInterface of [false, true]) {
       await expect.poll(() => fs.existsSync(path.join(home, 'asked.json')), { timeout: 20_000 }).toBe(true);
       const asked = JSON.parse(fs.readFileSync(path.join(home, 'asked.json'), 'utf8')) as {
         list: { agents: Array<Record<string, unknown>> }; one: { agent: { resources: { memMb: number | null; processes: Array<Record<string, unknown>> } } };
-        all: { agents: Array<Record<string, unknown>> }; other: Record<string, unknown>;
+        all: { agents: Array<Record<string, unknown>> }; other: Record<string, unknown>; otherOutput: Record<string, unknown>; otherWait: Record<string, unknown>;
       };
       keep({ asked });
       expect(asked.list.agents.find(a => a.id === 'w')).toMatchObject({ memMb: expect.any(Number), statusSince: expect.any(String) });
@@ -132,6 +132,8 @@ for (const newInterface of [false, true]) {
 
       // 4. Another project's agent: unknown to get_agent, named only by list_agents' all.
       expect(asked.other).toEqual({ error: 'Agent not found' });
+      expect(asked.otherOutput).toEqual({ error: 'Agent not found' });
+      expect(asked.otherWait).toEqual({ error: 'Agent not found' });
       expect(asked.all.agents.find(a => a.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'idle', projectPath: cove, role: 'worker' });
       expect(JSON.stringify(asked)).not.toContain('rotate the cove');
     } finally {
