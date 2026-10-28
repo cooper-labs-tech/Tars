@@ -1771,7 +1771,6 @@ function registerSettingsHandlers(deps: IpcHandlerDependencies): void {
 
 function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
   const {
-    getMainWindow,
     getAppSettings,
     setAppSettings,
     saveAppSettings,

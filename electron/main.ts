@@ -361,8 +361,7 @@ function createIpcDependencies(): IpcHandlerDependencies {
     getSlackApp,
 
     // Claude data functions. The page's stats come at once, as last computed,
-    // and are computed again behind it once a minute old; the bots keep
-    // getClaudeStats, which waits for numbers no older than that.
+    // and are computed again behind it once a minute old.
     getClaudeSettings,
     getClaudeStats: getClaudeStatsNow,
     getClaudeProjects,
