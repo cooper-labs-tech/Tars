@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import type { OneTaskQueue, QueuedTask, QueueSnapshot } from '../core/one-task';
+import type { MessageSender } from '../core/pty-manager';
 
 /**
  * An agent's queue, kept across a stop and a restart of Tars, and who may act on it (2.0.5, lot 2, item I of the
@@ -89,6 +90,36 @@ export function restoreQueues(queue: OneTaskQueue, replay: (item: QueuedTask) =>
     try { replay(item); } catch (err) { console.warn(`[agent-queues] ${item.ref} could not be handed over again:`, err); }
   }
   return restored;
+}
+
+const CHANNELS = new Set(['Telegram', 'Slack', 'Discord', 'Hermes']);
+
+/**
+ * A kept sender, as one Tars writes it, or nothing (the re-check of #536 at 8dab4d39). The file is Tars's, but it is
+ * read back as it is: never "the user" (a line only services/user-questions.ts produces, from the user's own chat),
+ * never a shape Tars does not write. Nothing means the default line of the replay: Tars's, or its requester's.
+ */
+export function keptSender(raw: unknown): MessageSender | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const s = raw as { kind?: unknown; id?: unknown; name?: unknown; channel?: unknown };
+  if (s.kind === 'tars') return { kind: 'tars' };
+  if (s.kind === 'channel' && typeof s.channel === 'string' && CHANNELS.has(s.channel)) return { kind: 'channel', channel: s.channel as 'Telegram' };
+  if (s.kind === 'agent' && typeof s.id === 'string' && s.id && (s.name === undefined || typeof s.name === 'string')) {
+    return { kind: 'agent', id: s.id, ...(s.name !== undefined ? { name: s.name as string } : {}) };
+  }
+  return undefined;
+}
+
+/** What a run-task waiting its turn keeps, to be handed over again: its sender line as it was queued (the Audit's Info 1 on #536). */
+export interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string; from?: string; sender?: MessageSender; mark?: string }
+
+/** What a kept run-task hands runInTerminal after a restart (api-routes/agent-routes.ts): the task, and its sender line. */
+export function replayJobOf(item: QueuedTask): { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } } | undefined {
+  const replay = item.replay as RunTaskReplay | undefined;
+  if (replay?.kind !== 'run-task') return undefined;
+  const sender = keptSender(replay.sender);
+  const asSent = { ...(replay.from ? { from: replay.from } : {}), ...(sender ? { sender } : {}), ...(replay.mark ? { mark: replay.mark } : {}) };
+  return { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}), ...(Object.keys(asSent).length ? { asSent } : {}) };
 }
 
 export interface QueueItemView {

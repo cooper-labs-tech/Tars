@@ -44,7 +44,7 @@ import { readFinalAnswer } from '../terminal-answer';
 import { typeLaunchTask } from '../../core/typed-task';
 import { accountDir } from '../claude-accounts/registry';
 import { announceTask, firstLineOf } from '../task-banner';
-import { queueRight, queueView } from '../agent-queues';
+import { keptSender, queueRight, queueView, replayJobOf, type RunTaskReplay } from '../agent-queues';
 import { taskOfPrompt, requestTitle, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
 import { clientRequestIdOf, liveReceipts, payloadHash, type ReceiptOutcome } from '../request-receipts';
 import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel } from '../../core/permission-ceiling';
@@ -1667,17 +1667,6 @@ interface DispatchReplay {
   opts: Pick<DispatchOpts, 'message' | 'model' | 'permissionMode' | 'from' | 'sender' | 'mark' | 'noteOnly' | 'information' | 'task' | 'untilRest' | 'taskId'>;
 }
 
-/** What a run-task waiting its turn keeps, for the same: its sender line as it was queued (the Audit's Info 1 on #536). */
-interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string; from?: string; sender?: MessageSender; mark?: string }
-
-/** What a kept run-task hands runInTerminal after a restart: the task, and the sender line it was queued with. */
-export function replayJobOf(item: QueuedTask): { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } } | undefined {
-  const replay = item.replay as RunTaskReplay | undefined;
-  if (replay?.kind !== 'run-task') return undefined;
-  const asSent = { ...(replay.from ? { from: replay.from } : {}), ...(replay.sender ? { sender: replay.sender } : {}), ...(replay.mark ? { mark: replay.mark } : {}) };
-  return { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}), ...(Object.keys(asSent).length ? { asSent } : {}) };
-}
-
 function replayableOpts(opts: DispatchOpts): DispatchReplay['opts'] {
   const { message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId } = opts;
   return JSON.parse(JSON.stringify({ message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId })) as DispatchReplay['opts'];
@@ -1703,7 +1692,8 @@ export function replayQueuedItem(item: QueuedTask): void {
   }
   const replay = item.replay as DispatchReplay | RunTaskReplay | undefined;
   if (replay?.kind === 'dispatch') {
-    awaitTurnAndDispatch(agent, { ...replay.opts }, ctx, item.ref, replay.taskRef);
+    // Its sender, as one Tars writes, or Tars's own line (agent-queues.ts keptSender).
+    awaitTurnAndDispatch(agent, { ...replay.opts, sender: keptSender(replay.opts.sender) ?? { kind: 'tars' } }, ctx, item.ref, replay.taskRef);
     return;
   }
   if (replay?.kind === 'run-task') {
