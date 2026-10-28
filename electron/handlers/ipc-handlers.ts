@@ -8,6 +8,7 @@ import { removeAgent } from '../core/agent-remove';
 import { gitRefusal } from '../core/chat-slots';
 import { restartRunnersOf } from '../services/chat-runners';
 import { diskSpace, listOrphanFolders, removeOrphanFolders } from '../services/orphan-folders';
+import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '../services/disk-janitor';
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
 import { answerPermission, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
@@ -1148,6 +1149,22 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
+  });
+
+  // The disk janitor (services/disk-janitor.ts): a scan that proposes, and the owner's approval of the items it
+  // showed, each checked again just before it goes. The projects are the ones the folders above are read in.
+  setJanitorProjects(() => orphanScope().projects);
+  ipcMain.handle('diskJanitor:state', () => janitorState());
+  // Started, not awaited: the window follows it through diskJanitor:changed.
+  ipcMain.handle('diskJanitor:scan', () => {
+    void janitorScan(null).catch(err => console.warn('[janitor] the scan failed:', err));
+    return { success: true };
+  });
+  ipcMain.handle('diskJanitor:approve', (_event, ids: unknown) => {
+    if (!Array.isArray(ids) || !ids.every(i => typeof i === 'string')) return { success: false, error: 'the items to delete must be the ids the window showed' };
+    if (janitorState().deleting) return { success: false, error: 'an approval is already under way' };
+    void janitorApprove(ids).catch(err => console.warn('[janitor] the approval failed:', err));
+    return { success: true };
   });
 
   // Delete an agent with its worktree, its work saved first (core/agent-remove.ts).

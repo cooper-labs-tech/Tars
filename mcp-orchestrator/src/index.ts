@@ -14,7 +14,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { serveShared, SHARED_TRANSPORT_OPTIONS } from "../../mcp-shared/src/shared-host.js";
 
-import { registerAgentTools, registerChatTools, registerGuideTools, registerHeavySlotTools, registerMessagingTools, registerRoomTools } from "./tools/index.js";
+import { registerAgentTools, registerChatTools, registerDiskTools, registerGuideTools, registerHeavySlotTools, registerMessagingTools, registerRoomTools } from "./tools/index.js";
 
 // Create MCP server
 /** The server and its tools: one per call when shared, one for this agent on stdio. */
@@ -31,6 +31,7 @@ function createServer(): McpServer {
   registerChatTools(server);
   registerGuideTools(server);
   registerHeavySlotTools(server);
+  registerDiskTools(server);
   return server;
 }
 

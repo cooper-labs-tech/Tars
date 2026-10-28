@@ -1207,6 +1207,47 @@ export interface OrphanFolder {
   /** The newest change in it (caches and .git aside), or null. */
   lastChangedAt: string | null;
 }
+/** One item the disk janitor proposes, as the window reads it (electron/services/janitor-state.ts). */
+export interface JanitorItem {
+  id: string;
+  kind: 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp';
+  /** A folder's exact absolute path; for Docker, the image or the VM by name. */
+  path: string;
+  label: string;
+  /** null for the VM's trim, whose gain is not known before. */
+  bytes: number | null;
+  /** The rule it matched, the same sentence for every item of a kind: the view groups by it. */
+  rule: string;
+  /** Why this item matched: its last change, its merged branch, its image. */
+  why: string;
+  /** A worktree's item: its branch, merged into its main branch, days nothing changed in it (caches aside), clean. */
+  details?: { branch: string | null; merged: boolean | null; idleDays: number; clean: boolean };
+  /** After an approval: deleted (and its bytes), kept (and why), failed (and the error). */
+  outcome?: { kind: 'deleted' | 'kept' | 'failed'; bytes?: number | null; why?: string | null } | null;
+}
+
+/** The disk janitor's state, sent on each change (diskJanitor:changed). */
+export interface JanitorState {
+  scan: null | {
+    at: number;
+    /** An agent's name when an agent asked for the scan; null when the window did. Only the owner approves. */
+    askedBy: string | null;
+    running: boolean;
+    /** While it runs: what is being read, how far, and how much was found so far. */
+    progress: { what: string; done: number; total: number; foundBytes: number } | null;
+    items: JanitorItem[];
+  };
+  /** While an approval runs: item n of N, the bytes freed so far, and the item at hand (checking it again, then its outcome). */
+  deleting: null | { done: number; total: number; freedBytes: number; current?: { path: string; phase: 'checking' | 'deleted' | 'kept' | 'failed' } };
+  /** What is never proposed nor deleted, in words. */
+  never: string[];
+  /** What was freed and kept, read back from ~/.tars/logs/janitor.log (and its .1), oldest first. */
+  log: Array<{ at: number; what: string; bytes: number | null }>;
+  /** The scans agents asked for (each answered with its own project's items), newest last. */
+  requests: Array<{ at: number; by: string; project: string; items: number }>;
+  error: string | null;
+}
+
 export interface OrphanListing {
   folders: OrphanFolder[];
   count: number;
@@ -2641,6 +2682,18 @@ export interface ElectronAPI {
     onOrphanRemovalProgress: (callback: (progress: OrphanRemovalProgress) => void) => () => void;
     /** How many chats may work at once, and where that figure came from. */
     chatLimit: () => Promise<ChatLimit>;
+  };
+
+  /**
+   * The disk janitor (electron/services/disk-janitor.ts). `scan` starts a scan and `approve` the owner's approval of
+   * the ids the last scan showed; both answer at once, and the window follows each through `onChanged`. Each approved
+   * item is checked again just before it goes, deleted by its exact path, and logged.
+   */
+  diskJanitor: {
+    state: () => Promise<JanitorState>;
+    scan: () => Promise<{ success: boolean; error?: string }>;
+    approve: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
+    onChanged: (callback: (state: JanitorState) => void) => () => void;
   };
 
   /** The chats of each project. Mirror of the `chat` namespace in electron/preload.ts. */

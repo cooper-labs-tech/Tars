@@ -1412,6 +1412,49 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
 
+## The disk janitor
+
+A scan that proposes, by rule, what may go to give the disk back space, and deletes nothing (2.0.5, lot 3 item H;
+`electron/services/janitor-rules.ts` for the rules, `disk-janitor.ts` for the app's side). The owner approves in the
+window; agents may only ask for a scan.
+
+- **What it proposes**, each item with its size and the rule that matched:
+  - `next-cache`: the `.next` of a project's worktree (under `.worktrees/`), untouched for 3 days;
+  - `test-artefacts`: a worktree's `test-results` and `playwright-report`, untouched for 3 days, that no report under
+    `~/.tars/project-files` cites by its path;
+  - `closed-worktree`: a worktree whose branch is merged into its project's main branch, clean, with no ignored file
+    but the rebuildable caches (a `.env.local`, an e2e run keep it), in no rebase or merge, unlocked, idle a day, its
+    caches aside (removed by `git worktree remove`, never `--force`, with `scripts/worktree.mjs`'s own refusals);
+  - `npx-cache`: an entry of `~/.npm/_npx` untouched for 14 days;
+  - `docker-image`: an image no container uses, a stopped one included (`docker image rm <id>`, never `-f`);
+  - `docker-vm-trim`: `colima ssh -- sudo fstrim -a`, which gives the disk back what the VM freed;
+  - `agent-tmp`: `~/.tars/tmp/<id>` of an agent no longer in the fleet.
+- **Never proposed, never deleted:**
+  - `~/.tars-private`, `~/Documents`, the uv cache, the Trash, `~/Library/Developer` (Xcode, the iOS runtimes and
+    simulators), any Docker volume, a project's own folder;
+  - anything inside a worktree a fleet agent works in, one with uncommitted work, or anything a process runs in or
+    from: by its working folder, its command line or its executable (lsof `cwd,txt` on macOS), and on Linux the files it
+    holds open too (/proc's cwd, exe and fd). Each process's paths are resolved once per scan, off the main thread
+    (`janitor-processes.ts`);
+  - when the processes cannot be read (no lsof, an lsof that fails, Windows), nothing that needs "nothing runs in
+    it".
+- **The window** reads `window.electronAPI.diskJanitor`: `state()`, `scan()`, `approve(ids)` and `onChanged`. The state
+  holds the last scan (when, who asked, running, what is being read and how much was found, its items with their path,
+  bytes, rule, why, a worktree's details and their outcomes), the deletions under way (item n of N, checking again,
+  deleted or kept), the never list in words, the log read back from `janitor.log`, and the scans agents asked for.
+- **The approval.** The window calls `diskJanitor.approve(ids)` with the ids of the items it showed.
+  - Each item is checked again against its rule just before it goes, the world read anew: the processes, the fleet,
+    git, its last change.
+  - Right before it goes, its real path must still be its path and a folder (a link planted on a parent is not
+    followed); it is deleted by its exact absolute path (`fs.rmSync`, never a glob, never a shell).
+  - What no longer matches is kept, with why.
+  - Every deletion (with the bytes it freed) and every item kept goes to `~/.tars/logs/janitor.log`.
+- **For agents.** `GET /api/janitor/scan` and the orchestrator server's `disk_scan` tool run a scan, which the window
+  shows with who asked; the agent is answered with its own project's items only, and once in five minutes. No route
+  takes an approval.
+- **Tests.** Under `DOROTHY_E2E` only, `DOROTHY_DOCKER_BIN` and `DOROTHY_COLIMA_BIN` name stand-ins, so a test never
+  reaches the machine's Docker (`e2e/disk-janitor.spec.ts`).
+
 ## MCP servers
 
 Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to
