@@ -50,8 +50,9 @@ export function registerHeavySlotTools(server: McpServer): void {
         if (ticket) {
           t = ((await apiRequest(`/api/heavy-slot/tickets/${encodeURIComponent(ticket)}`, "GET")) as { ticket: Ticket }).ticket;
         } else {
-          // The CLI that started this server holds the lease: it ends when the CLI ends.
-          t = ((await apiRequest("/api/heavy-slot/ask", "POST", { pid: process.ppid, untilTurnEnds: true, label: label ?? "a heavy run", ...(priority ? { priority } : {}) })) as { ticket: Ticket }).ticket;
+          // Held by the asking agent's terminal, which Tars resolves from its token (this server may be shared, its
+          // parent Tars): given back when the agent's turn ends.
+          t = ((await apiRequest("/api/heavy-slot/ask", "POST", { untilTurnEnds: true, label: label ?? "a heavy run", ...(priority ? { priority } : {}) })) as { ticket: Ticket }).ticket;
         }
         const deadline = Date.now() + (wait_seconds ?? WAIT_DEFAULT_S) * 1000;
         while (t.state !== "granted" && Date.now() < deadline) {

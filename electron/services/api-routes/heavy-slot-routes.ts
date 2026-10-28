@@ -11,10 +11,11 @@ import type { RouteApp, RouteRequest, SendJson } from './types';
  * tools and the `tars-slot` command line call. Authenticated like every route under /api/ (api-server.ts): an ask, a
  * ticket and a give-back take an agent's own token, which names the agent; the status any authenticated caller.
  *
- * POST /api/heavy-slot/ask { pid, priority?, label?, untilTurnEnds? }: the lease is held by `pid`, which must be
- * under the asking agent's terminal where the process table can be read; `gate` is an orchestrator's only. A lease
- * the MCP tool takes (`untilTurnEnds`, held by the agent's CLI), and one on the terminal itself, go back when the
- * agent's turn ends.
+ * POST /api/heavy-slot/ask { pid, priority?, label?, untilTurnEnds? }: a `tars-slot run` lease is held by `pid`, its
+ * run's own process, which must be under the asking agent's terminal where the process table can be read; `gate` is
+ * an orchestrator's only. The MCP tool's lease (`untilTurnEnds`) is held by the asking agent's terminal, resolved from
+ * its token, whatever pid comes with it: the orchestrator server is shared (services/mcp-shared.ts), so its parent is
+ * Tars, not the agent's CLI. It goes back when the agent's turn ends, as one on the terminal itself does.
  * GET  /api/heavy-slot/tickets/:id: the asking agent's own ticket, granted or waiting (position, why, alerts).
  * POST /api/heavy-slot/tickets/:id/give-back
  * GET  /api/heavy-slot: who holds the slot and who waits.
@@ -35,7 +36,15 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
   app.post('/api/heavy-slot/ask', async (req, sendJson) => {
     const agent = callerAgent(req, sendJson);
     if (!agent) return;
-    const { pid, priority, label, untilTurnEnds } = req.body as { pid?: unknown; priority?: unknown; label?: unknown; untilTurnEnds?: unknown };
+    const { priority, label, untilTurnEnds } = req.body as { pid?: unknown; priority?: unknown; label?: unknown; untilTurnEnds?: unknown };
+    const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+    // The tool's lease: the agent's terminal, from its token, never a pid the (shared) server sends.
+    const forTheTurn = untilTurnEnds === true;
+    if (forTheTurn && !terminal) {
+      sendJson({ error: 'heavy_slot_take holds the slot for your terminal, and you have none running.' }, 403);
+      return;
+    }
+    const pid = forTheTurn ? terminal!.pid : (req.body as { pid?: unknown }).pid;
     if (!Number.isInteger(pid) || (pid as number) <= 1) {
       sendJson({ error: 'pid is the process that holds the lease: your run\'s own, or your CLI\'s.' }, 400);
       return;
@@ -44,7 +53,6 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
       sendJson({ error: `priority is one of ${SLOT_PRIORITIES.join(', ')}.` }, 400);
       return;
     }
-    const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
     try {
       const ticket = await askSlot({
         agentId: agent.id, agentName: agent.name || agent.id, projectPath: agent.projectPath,
@@ -53,7 +61,7 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
         // A release gate is a power: the orchestrator's, and a chat's runner's (core/agent-role.ts).
         orchestrator: hasOrchestratorPowers(agent), terminalPid: terminal?.pid,
         // The terminal lives as long as the agent's session: a lease on it is held for the turn, as the tool's is.
-        untilTurnEnds: untilTurnEnds === true || (terminal !== undefined && pid === terminal.pid),
+        untilTurnEnds: forTheTurn || (terminal !== undefined && pid === terminal.pid),
       });
       sendJson({ success: true, ticket });
     } catch (err) {

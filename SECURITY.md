@@ -226,7 +226,8 @@ further out of reach than the rest of `~/.tars-private` (§5).
   Windows the pid is taken as given, and the lease still ends with that process. On every system, an agent with no
   terminal is refused, and so is Tars's own process or one of its parents (found through the table where it can be
   read; Tars's own pid and its parent's on Windows). A lease nests only in a lease of the same agent. A lease the MCP
-  tool takes is the CLI's and goes back at the turn's end; the owner gives any lease back from the window. The label
+  tool takes is held by the asking agent's terminal, resolved from its token whatever pid the shared server sends,
+  and goes back at the turn's end; the owner gives any lease back from the window. The label
   is masked before every agent reads it.
 - **Who may jump the queue.** `gate` is an orchestrator's; anyone else asking for it gets `normal`.
 - **Nothing is ever ended.** The slot never ends a process: an alert is only said.
