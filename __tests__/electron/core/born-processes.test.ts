@@ -50,6 +50,9 @@ import {
  *    process to another agent, whose stop ends it.
  * 5 again (L3): a SIGKILL a test cannot see, its process a zombie of the test's own until reaped: the
  *    processes here are orphans, reaped by init or launchd as soon as they die.
+ * 10 again (the Audit's L5 at 1f9cd23c): on macOS the executables are read with lsof, and when it fails or times out
+ *    no shared daemon is known: a colima an agent started is ended, with every project's containers. A process whose
+ *    executable could not be read must be kept, and said.
  * 8 again (the Audit's re-check of 7243ef48e): the subtree is walked through the tagged processes alone, and macOS
  *    shows no environment of a platform binary: a kept run's task started through /bin/sh (every local ansible
  *    module runs as `/bin/sh -c '<python> AnsiballZ_...'`) is not under the run, and is ended.
@@ -285,6 +288,19 @@ setInterval(() => {}, 1 << 30);
     expect(result.ended).toEqual([sameNameElsewhere.pid]);
     expect(alive(daemon.pid)).toBe(true);
     fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe.skipIf(process.platform !== 'darwin')('10. lsof failing, on macOS', () => {
+  it('keeps, and says, a process whose executable could not be read, rather than ending a shared daemon', async () => {
+    const daemon = detached({ CLAUDE_AGENT_ID: 'agent-born-14', CLAUDE_MGR_API_URL: ADDRESS });
+    await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === daemon.pid));
+    // The daemon is a shared one by its executable, but the lsof that would say so cannot run.
+    const shared = sharedDaemonPaths([{ name: 'a test daemon', paths: [process.execPath] }]);
+    const result = await endBornProcesses('agent-born-14', { address: ADDRESS, graceMs: 300, shared, lsof: '/nonexistent/lsof' });
+    expect(result.ended).toEqual([]);
+    expect(result.spared.map(p => [p.pid, p.why])).toEqual([[daemon.pid, 'its executable could not be read (it may be a shared daemon)']]);
+    expect(alive(daemon.pid)).toBe(true);
   });
 });
 
