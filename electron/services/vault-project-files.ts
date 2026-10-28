@@ -72,6 +72,16 @@ const errnoOf = (err: unknown) => (err as NodeJS.ErrnoException).code ?? (err as
 
 const root = () => path.join(DATA_DIR, PROJECT_FILES_DIR_NAME);
 
+/**
+ * The folder of the project folders is a link: refused as a project folder that is one is (the Audit's L2 on #530).
+ * It was followed in 2.0.4, when it led only to reports/ and tools/; since every folder is shown, a link planted as
+ * `~/.tars/project-files -> ~` would open the whole home folder to the window. A link above it (`~/.tars` itself,
+ * a /var of the system) is the system's or the user's, and is not looked at.
+ */
+function rootIsLink(): boolean {
+  try { return fs.lstatSync(root()).isSymbolicLink(); } catch { return false; }
+}
+
 /** One segment of a name: no separator, no NUL or control character, no colon (a Windows stream), not hidden. */
 function segmentOk(s: unknown, max: number): s is string {
   return typeof s === 'string' && s.length > 0 && s.length <= max && s !== '.' && s !== '..'
@@ -114,6 +124,7 @@ function placeOf(key: unknown, place: unknown): { dir: string; segments: string[
   if (!segmentOk(key, 120)) return fail('invalid_key', 'Not a project folder of the Vault.');
   const segments = segmentsOf(place);
   if ('error' in segments) return segments;
+  if (rootIsLink()) return fail('link', 'The folder of the project folders is a link: the Vault does not follow it.');
   let rootReal: string;
   try {
     rootReal = fs.realpathSync.native(root());
@@ -136,7 +147,13 @@ function placeOf(key: unknown, place: unknown): { dir: string; segments: string[
     if (stat.isSymbolicLink()) return fail('link', `${s} is a link: the Vault does not follow it.`);
     if (!stat.isDirectory()) return fail('not_folder', `${s} is not a folder.`);
   }
-  if (!realDir(dir, dir)) return fail('link', `${[key, ...segments].join('/')} goes through a link: the Vault does not follow it.`);
+  if (!realDir(dir, dir)) {
+    // A name the file system folds (NODE_MODULES on macOS, `node_modules.` on Windows) is the heavy folder itself.
+    let real: string[] = [];
+    try { real = path.relative(rootReal, fs.realpathSync.native(dir)).split(path.sep); } catch { /* said as a link */ }
+    if (real.some(isHeavy)) return fail('heavy', `${[key, ...segments].join('/')} is a folder the Vault does not open.`);
+    return fail('link', `${[key, ...segments].join('/')} goes through a link: the Vault does not follow it.`);
+  }
   return { dir, segments };
 }
 
@@ -171,6 +188,7 @@ export interface ProjectFolderEntry {
 
 /** Every project folder Tars keeps, named and counted; one that cannot be read is said, never fatal. */
 export function listProjectFolders(projects: string[]): ProjectFolderEntry[] {
+  if (rootIsLink()) return [];
   const known = new Map<string, string>();
   for (const p of projects) {
     const key = typeof p === 'string' ? projectFilesKey(p) : null;

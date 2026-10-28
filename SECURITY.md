@@ -699,6 +699,10 @@ named, never opened. Every folder and file is checked where it really lies, at
 every level of the place and the whole path again at the end: a symbolic link,
 a second name (a hard link) or a folder that is a link is never read, written
 or gone through; a link is listed with its target as written, never followed.
+Since 2.0.5 that holds for `~/.tars/project-files` itself too: a link in its
+place (planted as `-> ~`, it would open the whole home folder) is refused, where
+2.0.4 followed it into `reports/` and `tools/`. A heavy folder named in another
+case, which a file system that folds case opens as itself, answers `heavy`.
 The window
 writes text and scripts only (`.md .txt .json .yaml .yml .sh .py .ts .js .mjs`),
 1 MB at most, no NUL, to a new file of its own renamed over the old one, 0600
