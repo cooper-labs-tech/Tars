@@ -21,6 +21,10 @@ import { EventEmitter } from 'node:events';
  * A7. The other routes that name an agent by its id answer another project's: /output (get_agent_output, its whole
  *     terminal), /wait (wait_for_agent, its last answer), /bootstrap (its project's roster) and /health. Each must
  *     refuse it as get_agent does (404, `Agent not found`), and still answer its own project and the owner's token.
+ * And from the train's brief (item 4), with #523's records in:
+ * A8. An orchestrator cannot tell an agent left processes running after its session: list_agents gives how many
+ *     (processes and containers, 0 when none), get_agent their pids and containers and since when, never a command
+ *     line (A6's rule).
  */
 
 vi.mock('electron', () => ({
@@ -32,7 +36,8 @@ vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 const { fleet } = vi.hoisted(() => ({
   fleet: new Map<string, Record<string, unknown>>([
     ['a', { id: 'a', name: 'Harbor Worker', role: 'worker', projectPath: '/w/harbor', status: 'running', statusSince: '2026-10-28T09:30:00.000Z', skills: [], output: [] }],
-    ['b', { id: 'b', name: 'Harbor Tester', role: 'worker', projectPath: '/w/harbor', status: 'idle', statusSince: '2026-10-28T09:00:00.000Z', skills: [], output: [] }],
+    ['b', { id: 'b', name: 'Harbor Tester', role: 'worker', projectPath: '/w/harbor', status: 'idle', statusSince: '2026-10-28T09:00:00.000Z', skills: [], output: [],
+      leftRunning: { pids: [701, 702], commands: ['pid 701: next dev', 'pid 702: node w.js --token Ab3dEf6hIj9kLm2n'], containers: ['harbor-db (3f2a)'], since: '2026-10-28T09:05:00.000Z' } }],
     ['c', { id: 'c', name: 'Cove Worker', role: 'worker', projectPath: '/w/cove', status: 'running', statusSince: '2026-10-28T09:10:00.000Z', currentTask: 'rotate the cove database password', skills: [], output: ['cove secrets'] }],
   ]),
 }));
@@ -123,5 +128,17 @@ describe('every route on an agent id keeps to the caller\'s project', () => {
       expect((await call(`/api/agents/c/${tail}`, { id: 'c' })).status, tail).toBe(200);
     }
     expect(JSON.stringify((await call('/api/agents/c/output', { id: 'c' })).body)).toContain('cove secrets');
+  });
+});
+
+describe('what an agent left running after its session', () => {
+  it('A8. list_agents counts it, get_agent gives its pids, containers and since, never a command line', async () => {
+    const { agents } = await get('/api/agents') as { agents: Array<Record<string, unknown>> };
+    expect(agents.find(x => x.id === 'b')?.outlived).toBe(3);
+    expect(agents.find(x => x.id === 'a')?.outlived).toBe(0);
+    const { agent } = await get('/api/agents/b', { id: 'b' }) as { agent: { resources: Record<string, unknown> } };
+    expect(agent.resources.outlived).toEqual({ since: '2026-10-28T09:05:00.000Z', pids: [701, 702], containers: ['harbor-db (3f2a)'] });
+    expect(JSON.stringify(agent.resources)).not.toContain('Ab3dEf6hIj9kLm2n');
+    expect((await get('/api/agents/a', { id: 'a' }) as { agent: { resources: Record<string, unknown> } }).agent.resources.outlived).toBeNull();
   });
 });

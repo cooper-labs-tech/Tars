@@ -21,6 +21,10 @@ import { buildFleetResources, type FleetInput } from '../../../electron/services
  * F7. A process has no pid, so the window cannot name it apart from another of the same program.
  * F8. A command line keeps a secret after a flag named for one (`--token <value>`, mysql's `-p<value>`): it is masked
  *     whole (redact-command-line.ts).
+ * And from the train's brief (train-2-0-5-4-2810.md, item 4), now #523's records are in:
+ * F9. What an agent left running once its session ended (#523's `leftRunning`) is not shown: `outlived` gives since
+ *     when, each process's pid and its command line masked by the window's rule, and the containers; null when
+ *     nothing was left.
  */
 
 const T = '2026-10-28T10:00:00.000Z';
@@ -100,4 +104,20 @@ describe('the fleet\'s resources', () => {
     expect(agentOf(r, 'o')).toMatchObject({ status: 'waiting' });
     expect(agentOf(r, 's')).toMatchObject({ status: 'asleep', statusSince: Date.parse('2026-10-28T07:30:00.000Z') });
   });
+
+  it('F9. what an agent left running after its session, masked; null when nothing was', () => {
+    const left = {
+      pids: [701, 702], containers: ['harbor-db (3f2a9c1e8b7d)'], since: '2026-10-28T09:00:00.000Z',
+      commands: ['pid 701: next dev --port 3001', 'pid 702: node worker.js --token Ab3dEf6hIj9kLm2n'],
+    };
+    const base = input();
+    const r = buildFleetResources({ ...base, agents: base.agents.map(a => (a.id === 'm' ? { ...a, leftRunning: left } : a)) });
+    expect(agentOf(r, 'm').outlived).toEqual({
+      since: Date.parse('2026-10-28T09:00:00.000Z'),
+      processes: [{ pid: 701, command: 'next dev --port 3001' }, { pid: 702, command: 'node worker.js --token [redacted]' }],
+      containers: ['harbor-db (3f2a9c1e8b7d)'],
+    });
+    expect(agentOf(r, 'a').outlived).toBeNull();
+  });
 });
+
