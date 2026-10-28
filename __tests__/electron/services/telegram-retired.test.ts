@@ -22,6 +22,8 @@ import * as path from 'node:path';
  * R7 another secret of the file, or another setting, is lost or changed;
  * R8 a save that carries the bot's fields (a window of 2.0.4 still open) writes them back;
  * R9 the bot's log of what it sent (~/.tars-private/telegram-sent.json) stays.
+ * R10 (the Audit's L3 on #545) a later launch removes a token the first could not read (its file did not parse then):
+ *    `telegramBotRetired.hadToken` stays false, and the window never says to revoke it; or `at` moves.
  */
 
 vi.mock('electron', () => ({
@@ -119,6 +121,20 @@ describe('the first launch of 2.0.5', () => {
     expect(fs.readFileSync(secretsFile(), 'utf8')).toBe('[ also not');
     error.mockRestore();
     warn.mockRestore();
+  });
+});
+
+describe('a token found by a later launch (the Audit\'s L3 on #545)', () => {
+  it('R10: hadToken turns true, the first date kept', () => {
+    owner({ telegramEnabled: true, telegramChatId: '42' }, {});
+    fs.writeFileSync(secretsFile(), '{ not json yet', { mode: 0o600 });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(retired.retireTelegramBot(new Date('2026-10-28T15:00:00Z'))).toEqual({ retired: true, hadToken: false });
+    warn.mockRestore();
+    fs.writeFileSync(secretsFile(), JSON.stringify({ telegramBotToken: '1:x', slackBotToken: 'xoxb-1' }), { mode: 0o600 });
+    expect(retired.retireTelegramBot(new Date('2026-11-02T09:00:00Z'))).toEqual({ retired: true, hadToken: true });
+    expect(read(settingsFile()).telegramBotRetired).toEqual({ at: '2026-10-28T15:00:00.000Z', hadToken: true });
+    expect(read(secretsFile())).toEqual({ slackBotToken: 'xoxb-1' });
   });
 });
 

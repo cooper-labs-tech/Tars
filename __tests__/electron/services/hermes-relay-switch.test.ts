@@ -18,6 +18,11 @@ import * as path from 'node:path';
  *    Replaced in 2.0.5 by 5 (the bot's removal, the DB brief remove-telegram-bot-2810.md, written before the code):
  * 5. With the relay off as on, mcp-telegram is registered in a CLI, or stays in one a 2.0.4 registered it in: it sends
  *    with a bot that no longer exists, past the relay.
+ * Added with the Audit's Lows on #545, before the code:
+ * 6. (L1) mcp-telegram registered by another install (Tars moved, Dorothy, a dev build, Tars on Windows) stays in a
+ *    CLI, because only this install's exact path is recognised; or a server of the owner's named like it, running
+ *    something else, is taken out.
+ * 7. (L2) The start does not take it out with the relay off (setupMcpOrchestrator).
  *
  * The real switch functions and the real Gemini provider, whose MCP config is a file when its CLI is not installed
  * (~/.gemini/settings.json), under a throwaway HOME.
@@ -75,5 +80,52 @@ describe('the relay off (2.0.5: no bot)', () => {
     const gemini = await geminiWithTelegram();
     await sw.retireTelegramMcp([gemini]);
     expect(Object.keys(JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers)).toEqual(['claude-mgr-orchestrator']);
+  });
+});
+
+describe('another install\'s mcp-telegram (the Audit\'s L1 and L2 on #545)', () => {
+  const withGeminiServer = async (command: string, args: string[]) => {
+    fs.mkdirSync(path.dirname(geminiSettings()), { recursive: true });
+    fs.writeFileSync(geminiSettings(), JSON.stringify({ mcpServers: {
+      'claude-mgr-telegram': { command, args },
+      'claude-mgr-orchestrator': { command: 'node', args: ['/x/mcp-orchestrator/dist/bundle.js'] },
+    } }));
+    const { getProvider } = await import('../../../electron/providers');
+    return getProvider('gemini');
+  };
+  const servers = () => Object.keys(JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers);
+
+  it('6. is recognised by its bundle\'s last parts, wherever that install lives, and the owner\'s own server is not', async () => {
+    for (const bundle of [
+      '/Applications/Dorothy.app/Contents/Resources/mcp-telegram/dist/bundle.js',
+      '/Users/someone/dev/tars/mcp-telegram/dist/bundle.js',
+      'C:\\Users\\someone\\AppData\\Local\\Programs\\Tars\\resources\\mcp-telegram\\dist\\bundle.js',
+    ]) {
+      const gemini = await withGeminiServer('/opt/tars-mcp-node', [bundle]);
+      await sw.retireTelegramMcp([gemini]);
+      expect(servers(), bundle).toEqual(['claude-mgr-orchestrator']);
+    }
+    const gemini = await withGeminiServer('node', ['/Users/someone/my-telegram/server.js']);
+    await sw.retireTelegramMcp([gemini]);
+    expect(servers()).toEqual(['claude-mgr-telegram', 'claude-mgr-orchestrator']);
+  });
+
+  it('6. a CLI whose config is read as text (codex) recognises it the same way', async () => {
+    const { getProvider } = await import('../../../electron/providers');
+    const codex = getProvider('codex');
+    const toml = path.join(codex.configDir as string, 'config.toml');
+    fs.mkdirSync(path.dirname(toml), { recursive: true });
+    fs.writeFileSync(toml, '[mcp_servers.claude-mgr-telegram]\ncommand = "/opt/tars-mcp-node"\nargs = ["/Applications/Dorothy.app/Contents/Resources/mcp-telegram/dist/bundle.js"]\n');
+    expect(codex.isMcpServerRegistered('claude-mgr-telegram', 'mcp-telegram/dist/bundle.js')).toBe(true);
+    fs.writeFileSync(toml, '[mcp_servers.claude-mgr-telegram]\ncommand = "node"\nargs = ["/Users/someone/my-telegram/server.js"]\n');
+    expect(codex.isMcpServerRegistered('claude-mgr-telegram', 'mcp-telegram/dist/bundle.js')).toBe(false);
+    fs.rmSync(toml);
+  });
+
+  it('7. every start takes it out, the relay off', async () => {
+    await withGeminiServer('/opt/tars-mcp-node', ['/Applications/Dorothy.app/Contents/Resources/mcp-telegram/dist/bundle.js']);
+    const { setupMcpOrchestrator } = await import('../../../electron/services/mcp-orchestrator');
+    await setupMcpOrchestrator({ hermesRelayEnabled: false } as never);
+    expect(servers()).toEqual(['claude-mgr-orchestrator']);
   });
 });
