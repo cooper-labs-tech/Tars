@@ -43,14 +43,19 @@ export interface PermissionAskLine {
 const BREAKS = /\r\n|[\n\r\u0085\u2028\u2029]/;
 export const BREAK_MARK = '⏎';
 
+export const TAB_MARK = '⇥';
+/** What hides, turns or reorders text within a line: shown as U+FFFD, never as a space or nothing. */
+const HIDDEN = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
+
 /**
- * The subject's lines, each flattened as the rest is, none at either end. A break is never read as a space: "echo
- * safe" then "rm -rf important" are two commands, and an allow covers both (the Audit's M1 on PR 544).
+ * The subject's lines, none blank at either end. A break is never read as a space: "echo safe" then "rm -rf
+ * important" are two commands, and an allow covers both (the Audit's M1 on PR 544). Within a line every space is
+ * kept, a tab shows as ⇥ and a hidden character as U+FFFD: "a  b" is not "a b" (its Low at the re-check).
  */
 function linesOf(text: string | undefined): string[] {
-  const lines = (text ?? '').split(BREAKS).map(flat);
-  while (lines.length && !lines[0]) lines.shift();
-  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  const lines = (text ?? '').split(BREAKS).map((l) => l.replace(/\t/g, TAB_MARK).replace(HIDDEN, '\uFFFD'));
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
   return lines;
 }
 
@@ -62,7 +67,7 @@ export function permissionAskLine(
   const tool = flat(agent.permissionAsk.tool);
   const lines = linesOf(agent.permissionAsk.subject);
   // A file is named "Read /path", and a tool with nothing to name by itself.
-  if (lines.length && lines[0].startsWith(`${tool} `)) lines[0] = lines[0].slice(tool.length + 1).trim();
+  if (lines.length && lines[0].startsWith(`${tool} `)) lines[0] = lines[0].slice(tool.length + 1);
   if (lines.length === 1 && lines[0] === tool) lines.length = 0;
   const subject = lines.join(` ${BREAK_MARK} `);
   const who = subject ? `Asks to use ${tool}:` : `Asks to use ${tool}`;

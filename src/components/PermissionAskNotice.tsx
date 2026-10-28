@@ -166,7 +166,7 @@ export default function PermissionAskNotice({ agent, layout }: {
           <>
             <p className="min-w-0 flex-1 flex items-baseline gap-1 text-[11px] leading-tight text-muted-foreground">
               <span className="shrink-0 text-foreground">{line.who}</span>
-              <span ref={measure} data-subject className="min-w-0 truncate font-mono">{withheld ? `${line.subject} · ${withheldWhy ? 'withheld' : 'content withheld'}` : line.subject}</span>
+              <span ref={measure} data-subject className="min-w-0 truncate whitespace-pre font-mono">{withheld ? `${line.subject} · ${withheldWhy ? 'withheld' : 'content withheld'}` : line.subject}</span>
             </p>
             <div className="shrink-0 flex items-center">
               {withheld ? null : state.fits ? (
@@ -198,7 +198,7 @@ export default function PermissionAskNotice({ agent, layout }: {
       {line.subject && (
         <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
           {/* Each line on its own: a break is never read as a space (the Audit's M1 on PR 544). */}
-          {line.lines.map((l, i) => <span key={i} data-subject-line className="block">{l}</span>)}
+          {line.lines.map((l, i) => <span key={i} data-subject-line className="block whitespace-pre-wrap">{l}</span>)}
           {withheld && <span className="text-muted-foreground">{` · ${withheldWhy ? 'withheld' : 'content withheld'}`}</span>}
         </p>
       )}
