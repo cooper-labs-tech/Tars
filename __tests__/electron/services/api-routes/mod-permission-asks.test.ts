@@ -674,6 +674,9 @@ describe('Tars allows nothing by itself', () => {
     expect(await ask(asked)).toEqual({ decision: 'ask' });
     Object.assign(a, { role: 'worker', permissionMode: 'normal' });
     expect(await ask(asked)).toEqual({ decision: 'ask' });
+    // A chat's runner has the orchestrator's powers, stored as a worker (QA-PR538 F1): it asks the user too.
+    Object.assign(a, { role: 'worker', kind: 'chat', permissionMode: 'bypass' });
+    expect(await ask(asked)).toEqual({ decision: 'ask' });
   });
 
   it('23. every decision is written down with who or what decided', async () => {
