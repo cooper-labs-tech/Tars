@@ -15,6 +15,9 @@ import * as path from 'node:path';
  *    with the bot's token, past the relay and its rules.
  * 3. The start of Tars registers mcp-telegram again while the relay is on.
  * 4. With the relay off, anything of this is done: the bot keeps its token, mcp-telegram stays.
+ *    Replaced in 2.0.5 by 5 (the bot's removal, the DB brief remove-telegram-bot-2810.md, written before the code):
+ * 5. With the relay off as on, mcp-telegram is registered in a CLI, or stays in one a 2.0.4 registered it in: it sends
+ *    with a bot that no longer exists, past the relay.
  *
  * The real switch functions and the real Gemini provider, whose MCP config is a file when its CLI is not installed
  * (~/.gemini/settings.json), under a throwaway HOME.
@@ -51,14 +54,6 @@ async function geminiWithTelegram() {
 }
 
 describe('the relay turned on', () => {
-  it('1. erases the Tars bot\'s token and turns the bot off', () => {
-    const settings = { hermesRelayEnabled: true, telegramEnabled: true, telegramBotToken: '123:abc', telegramChatId: '42' } as AppSettings;
-
-    const after = sw.settingsForRelay(settings);
-
-    expect(after).toMatchObject({ hermesRelayEnabled: true, telegramEnabled: false, telegramBotToken: '' });
-  });
-
   it('2. takes mcp-telegram out of every CLI, and leaves Tars\'s other servers', async () => {
     const gemini = await geminiWithTelegram();
 
@@ -74,11 +69,13 @@ describe('the relay turned on', () => {
   });
 });
 
-describe('the relay off', () => {
-  it('4. changes nothing: the bot keeps its token, and mcp-telegram is registered as before', () => {
-    const settings = { hermesRelayEnabled: false, telegramEnabled: true, telegramBotToken: '123:abc' } as AppSettings;
-
-    expect(sw.settingsForRelay(settings)).toEqual(settings);
-    expect(sw.bundledMcpServersFor(settings)).toContain('claude-mgr-telegram');
+describe('the relay off (2.0.5: no bot)', () => {
+  it('5. never registers mcp-telegram, and takes it out of a CLI a 2.0.4 registered it in', async () => {
+    expect(sw.bundledMcpServersFor({ hermesRelayEnabled: false } as AppSettings)).not.toContain('claude-mgr-telegram');
+    expect(sw.bundledMcpServersFor({} as AppSettings)).not.toContain('claude-mgr-telegram');
+    expect(sw.bundledMcpServersFor({} as AppSettings)).toContain('claude-mgr-orchestrator');
+    const gemini = await geminiWithTelegram();
+    await sw.retireTelegramMcp([gemini]);
+    expect(Object.keys(JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers)).toEqual(['claude-mgr-orchestrator']);
   });
 });

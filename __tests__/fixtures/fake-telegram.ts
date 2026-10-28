@@ -17,6 +17,8 @@ export async function startFakeTelegram() {
   let nextSent = 900;
   const updates: Array<{ update_id: number; message: Record<string, unknown> }> = [];
   const sent: Array<{ chat_id: string; text: string; message_id: number }> = [];
+  /** Every Bot API method asked, getMe and getUpdates included, whatever the token. */
+  const calls: string[] = [];
   const ok = (res: http.ServerResponse, result: unknown) => {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, result }));
@@ -27,6 +29,7 @@ export async function startFakeTelegram() {
     req.on('end', async () => {
       const url = new URL(req.url ?? '/', 'http://x');
       const [, bot, method] = url.pathname.split('/');
+      calls.push(method ?? '');
       if (bot !== `bot${BOT_TOKEN}`) { res.writeHead(401); res.end('{"ok":false}'); return; }
       let body: Record<string, string> = {};
       try { body = String(req.headers['content-type']).includes('json') ? JSON.parse(raw || '{}') : Object.fromEntries(new URLSearchParams(raw)); } catch { /* none */ }
@@ -48,6 +51,7 @@ export async function startFakeTelegram() {
   return {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,
     sent,
+    calls,
     /** JeanBrasse writes in his private chat with the bot, replying to one of its messages or not. */
     write(text: string, replyTo?: number) {
       const chat = { id: OWNER_ID, type: 'private' };
