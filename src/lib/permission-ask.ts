@@ -44,16 +44,20 @@ const BREAKS = /\r\n|[\n\r\u0085\u2028\u2029]/;
 export const BREAK_MARK = '⏎';
 
 export const TAB_MARK = '⇥';
+/** Any space but U+0020 (no-break, thin, narrow no-break, ideographic...): a shell reads it as part of a word. */
+export const OTHER_SPACE_MARK = '⍽';
+const OTHER_SPACE = /(?! )\p{Zs}/gu;
 /** What hides, turns or reorders text within a line: shown as U+FFFD, never as a space or nothing. */
 const HIDDEN = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
 
 /**
  * The subject's lines, none blank at either end. A break is never read as a space: "echo safe" then "rm -rf
  * important" are two commands, and an allow covers both (the Audit's M1 on PR 544). Within a line every space is
- * kept, a tab shows as ⇥ and a hidden character as U+FFFD: "a  b" is not "a b" (its Low at the re-check).
+ * kept, a tab shows as ⇥, any other space as ⍽ and a hidden character as U+FFFD: "a  b" is not "a b" (its Lows at
+ * the re-checks).
  */
 function linesOf(text: string | undefined): string[] {
-  const lines = (text ?? '').split(BREAKS).map((l) => l.replace(/\t/g, TAB_MARK).replace(HIDDEN, '\uFFFD'));
+  const lines = (text ?? '').split(BREAKS).map((l) => l.replace(/\t/g, TAB_MARK).replace(OTHER_SPACE, OTHER_SPACE_MARK).replace(HIDDEN, '\uFFFD'));
   while (lines.length && !lines[0].trim()) lines.shift();
   while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
   return lines;
