@@ -227,8 +227,11 @@ tools that a dangling or a hard link led into `.claude/settings.json` (the hooks
 links lead, so an allow by Tars had almost no honest use and kept that surface open. What the window may allow is only
 what it shows whole: a shell command. A file tool is asked by its path alone, its content withheld (the mod sends no
 content, and the route marks every file tool withheld whatever the request says): the window may refuse it or hand it
-back, never allow it. It is held only for an agent in bypass, autonomous, whose nights this is for; any other agent's
-file tool goes straight to Claude Code's own dialog, where its owner chose to be asked. Every decision goes to
+back, never allow it. So is any call the window cannot show whole, a field it does not show, past 2,000 characters
+or not text, which the mod sends withheld with the fields it shows and why the rest is not (the Audit's M1 on #538),
+and the mod takes no allow for it either. Such a question is held only for an agent in bypass, autonomous, whose
+nights this is for, and refused at the owner's delay; any other agent's goes straight to Claude Code's own dialog,
+where its owner chose to be asked. Every decision goes to
 `~/.tars/logs/permissions.log`, masked, which any agent can write, being the same user: a record for the owner, not
 evidence against a hostile agent.
 

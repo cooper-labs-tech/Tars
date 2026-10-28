@@ -483,6 +483,11 @@ export interface AgentStatus {
      * it or hand it back to the terminal, never allow it (agent:answerPermission answers false to an allow).
      */
     withheld?: true;
+    /**
+     * What was withheld and why, as the state mod says it: `<field>: <why>`, joined by `; ` (for instance
+     * `command: 3,014 characters, past the 2,000 the window shows`). Set with withheld only.
+     */
+    withheldWhy?: string;
   };
   /** The last start that undid a stop: who stopped it, when and why, and who started it again and when. */
   lastRestartAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string; restartedBy: string; restartedAt: string };

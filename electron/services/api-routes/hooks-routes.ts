@@ -668,9 +668,10 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
   // POST /api/hooks/permission: the state mod's tool.check, when Claude Code
   // would show its permission dialog (services/permission-asks.ts). Tars
   // allows nothing by itself. A question is held until the window answers:
-  // allow or deny is then the decision, with no dialog. A file tool's is held
-  // by its path, withheld, for an agent in bypass only (the window may refuse
-  // it, never allow it); any other agent's goes to Claude Code's own dialog.
+  // allow or deny is then the decision, with no dialog. A question the window
+  // cannot show whole (a file tool's, held by its path, or one the mod marks
+  // withheld) is held for an agent in bypass only (the window may refuse it,
+  // never allow it); any other agent's goes to Claude Code's own dialog.
   // `pending` after 20 s, and the mod asks again for the same call. Nobody
   // answers within the owner's delay: refused, with a reason the agent reads.
   // `ask` hands it back to the dialog: for a session that is not the agent's
@@ -698,22 +699,31 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     };
     const afterError = (req.body as { after_error?: unknown }).after_error;
     if (typeof afterError === 'string') console.log(`[permission] ${agent.name || agent.id}'s mod asks again after a failed request: ${oneLine(afterError)}`);
-    // A file tool: its content is a field the window does not show, so the
-    // window can never allow it, and Tars allows nothing by itself (the
-    // orchestrator's decision of 28/10, after links led a write Tars allowed
-    // into .claude/settings.json). Marked withheld whatever the body says (the
-    // Audit's L2). For an agent in bypass, autonomous, held and refused at the
-    // delay; for any other, back to Claude Code's own dialog at once, one step,
-    // as before #538: its owner chose to be asked there.
-    const withheld = FILE_TOOLS.has(question.tool);
+    // A question the window cannot show whole: a file tool, whose content is a
+    // field the window does not show, marked withheld whatever the body says
+    // (the Audit's L2), or any call the mod marks withheld, a field past 2,000
+    // characters, not text or not shown (the Audit's M1 on #538: a Bash with a
+    // long heredoc waited at Claude Code's dialog all night). The window can
+    // never allow it, and Tars allows nothing by itself (the orchestrator's
+    // decision of 28/10). For an agent in bypass, autonomous, held and refused
+    // at the delay; for any other, back to Claude Code's own dialog at once,
+    // one step, as before #538: its owner chose to be asked there.
+    const fileTool = FILE_TOOLS.has(question.tool);
+    const withheld = fileTool || (req.body as { withheld?: unknown }).withheld === true;
+    const said = (req.body as { withheld_why?: unknown }).withheld_why;
+    const withheldWhy = withheld && typeof said === 'string' && said ? oneLine(said).slice(0, 1000) : undefined;
     if (withheld && levelOf(agent) !== 'bypass') {
-      logPermission(agent, agent.id, question.tool, 'back to its dialog', 'Tars (a file tool of an agent not in bypass: Claude Code asks)', subjectOf(question.tool, fields));
+      const what = fileTool ? 'a file tool' : 'a question the window cannot show whole';
+      logPermission(agent, agent.id, question.tool, 'back to its dialog', `Tars (${what} of an agent not in bypass: Claude Code asks)`, subjectOf(question.tool, fields));
       sendJson({ decision: 'ask' });
       return;
     }
+    const notAllowedBecause = fileTool
+      ? 'Tars never allows a file tool by itself, and the window cannot show its content'
+      : `Tars never allows by itself what the window cannot show whole (${withheldWhy ?? 'a field withheld'})`;
     const answer = await holdPermissionAsk(agent, {
       ...question,
-      ...(withheld ? { withheld: true, notAllowedBecause: 'Tars never allows a file tool by itself, and the window cannot show its content' } : {}),
+      ...(withheld ? { withheld: true, notAllowedBecause, ...(withheldWhy ? { withheldWhy } : {}) } : {}),
     }, changed => {
       saveAgents();
       ctx.handleStatusChangeNotificationCallback(changed, changed.status);

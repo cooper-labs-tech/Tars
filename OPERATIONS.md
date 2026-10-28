@@ -1544,7 +1544,10 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   window may allow or refuse it. A file tool (Write, Edit, MultiEdit, NotebookEdit) is asked by its path alone,
   `withheld` (the route marks it so whatever the request says): for an agent in bypass it is held, the window may
   refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
-  Code's own dialog, as before 2.0.5. SECURITY.md says why. The agents are told to write files with the Write tool.
+  Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field it does not show, past 2,000
+  characters, not text) is asked the same way, `withheld`, with `withheldWhy` naming each field left out and why.
+  Bash's timeout, background and sandbox fields are shown as words after the command, and stay allowable.
+  SECURITY.md says why. The agents are told to write files with the Write tool.
 - **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
   `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads
   (how long, and what to do instead: write files with the Write tool, split the command), and the agent runs on. It no longer goes back to the dialog,

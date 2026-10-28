@@ -29,15 +29,21 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    never handed back to the dialog; w runs again;
  * 5. then, and only then, o's message goes into w's terminal;
  * 6. n, not in bypass, has its Write on Claude Code's own dialog at once, as before #538: one step.
+ * 7. (the Audit's M1 on #538 at ff0e3f2d) w's Bash with a timeout and a heredoc past 2,000 characters, which the mod
+ *    cannot show whole, arrives withheld with the fields it shows and why: held with `withheldWhy`, its timeout in
+ *    the window's line, the window's allow refused, and refused at the delay with the why; never left at the dialog.
  * Red on main dc623b594: the message is refused (409), the expired question goes back to the dialog, and n's Write
  * waits in Tars for the window.
  * The artefact: values.json (each answer, the message's reply, the lines w's terminal got, with their times),
  * screenshots, the app's trace with E2E_TRACE=on.
  */
 
+/** What the mod says of a heredoc past 2,000 characters (mods/tars-state/hooks/register.ts). */
+const LONG_WHY = 'command: 3,014 characters, past the 2,000 the window shows';
+
 type Answer = { call: string; decision: string; reason?: string; at: number };
 type Typed = { at: number; text: string };
-type Agent = { id: string; status: string; waitingReason?: string; permissionAsk?: { subject: string; until: string } };
+type Agent = { id: string; status: string; waitingReason?: string; permissionAsk?: { subject: string; until: string; withheld?: true; withheldWhy?: string } };
 type Api = { electronAPI: { agent: {
   start(p: { id: string; prompt: string }): Promise<unknown>;
   list(): Promise<Agent[]>;
@@ -65,9 +71,10 @@ function worker(home: string, name: string, calls: string): string {
     "  await post('/api/hooks/status', { status: 'idle', source: 'startup' });",
     "  await post('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'probe the retry config' });",
     "  for (const c of calls) {",
+    "    while (c.after && !fs.existsSync(path.join(dir, c.after))) await new Promise(r => setTimeout(r, 200));",
     "    let answer;",
     "    do answer = await post('/api/hooks/permission', { tool: c.tool, tool_use_id: c.tool_use_id, input: c.input,",
-    "      reason: 'This call requires approval', via: 'mod', ...(c.withheld ? { withheld: true } : {}) });",
+    "      reason: 'This call requires approval', via: 'mod', ...(c.withheld ? { withheld: true } : {}), ...(c.why ? { withheld_why: c.why } : {}) });",
     "    while (answer.decision === 'pending');",
     `    log('answers-${name}.jsonl', { call: c.tool_use_id, decision: answer.decision, reason: answer.reason });`,
     "    process.stdout.write('* ' + c.tool + ': ' + answer.decision + '\\r\\n');",
@@ -101,7 +108,7 @@ const lines = <T>(file: string): T[] => (fs.existsSync(file) ? fs.readFileSync(f
 
 for (const newInterface of [false, true]) {
   test(`Tars allows nothing itself: the owner allows a shell command, a bypass agent's Write is held and refused at the delay, another agent's goes to its dialog, and a message waits out the question${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
+    test.setTimeout(360_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-permission-dialogs-${newInterface ? 'ni' : 'classic'}-`));
     const project = path.join(home, 'projects', 'parallel');
     fs.mkdirSync(project, { recursive: true });
@@ -109,7 +116,7 @@ for (const newInterface of [false, true]) {
     fs.mkdirSync(dir, { recursive: true });
     const base = { character: 'robot', provider: 'claude', status: 'idle', projectPath: project, skills: [], createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z' };
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home, 'w', "[{ tool_use_id: 'toolu_shell', tool: 'Bash', input: { command: heredoc(scratch) } }, { tool_use_id: 'toolu_file', tool: 'Write', input: { file_path: path.join(scratch, 'retry-probe', 'p.yml') }, withheld: true }]") },
+      { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home, 'w', "[{ tool_use_id: 'toolu_shell', tool: 'Bash', input: { command: heredoc(scratch) } }, { tool_use_id: 'toolu_file', tool: 'Write', input: { file_path: path.join(scratch, 'retry-probe', 'p.yml') }, withheld: true }, { tool_use_id: 'toolu_long', tool: 'Bash', input: { description: 'write the notes', timeout: '600000' }, withheld: true, why: " + JSON.stringify(LONG_WHY) + ", after: 'long-now' }]") },
       { ...base, id: 'n', name: 'Docs Writer', role: 'worker', permissionMode: 'normal', cliPath: worker(home, 'n', "[{ tool_use_id: 'toolu_n', tool: 'Write', input: { file_path: path.join(scratch, 'n.md') }, withheld: true }]") },
       { ...base, id: 'o', name: 'Parallel Lead', role: 'orchestrator', cliPath: orchestrator(home) },
     ], null, 2));
@@ -189,6 +196,21 @@ for (const newInterface of [false, true]) {
       keep({ n });
       expect(n).toMatchObject({ call: 'toolu_n', decision: 'ask' });
       expect(n.at - late.at, 'n was not held').toBeLessThan(60_000);
+
+      // 7. w's long heredoc, withheld: held deny-only with why, its timeout in the line, refused at the delay.
+      fs.writeFileSync(path.join(home, 'long-now'), '1');
+      await expect.poll(async () => (await w())?.permissionAsk?.withheldWhy ?? '', { timeout: 15_000 }).toBe(LONG_WHY);
+      const long = await w();
+      keep({ long });
+      expect.soft(long?.permissionAsk?.subject).toBe('Bash (timeout 600000 ms)');
+      await stepShot(page, newInterface ? 'permission-withheld-new-interface' : 'permission-withheld');
+      expect(await answer('allow'), 'the window allowed a command it never showed whole').toEqual({ success: false });
+      await expect.poll(() => answers().length, { timeout: 90_000 }).toBe(3);
+      const longLate = answers()[2];
+      keep({ longLate });
+      expect(longLate).toMatchObject({ call: 'toolu_long', decision: 'deny' });
+      expect.soft(longLate.reason).toMatch(/^Nobody answered this permission question in Tars within 1 minute/);
+      expect.soft(longLate.reason).toContain(LONG_WHY);
     } finally {
       await app.close().catch(() => undefined);
       await removeHome(home);

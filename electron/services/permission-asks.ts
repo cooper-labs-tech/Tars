@@ -75,10 +75,13 @@ export type PermissionQuestion = {
   reason?: string;
   rule?: string;
   /**
-   * A file tool asked by its path alone, its content withheld from Tars (the state mod): the window may refuse it,
-   * never allow it, since it would approve content it never showed.
+   * A question Tars cannot show whole (the state mod): a file tool asked by its path alone, or a call with a field the
+   * window does not show, past 2,000 characters or not text. The window may refuse it, never allow it, since it would
+   * approve what it never showed.
    */
   withheld?: boolean;
+  /** What was withheld and why, as the mod says it: `<field>: <why>`, joined by `; `. */
+  withheldWhy?: string;
   /** Why Tars could not allow it itself: said with the refusal at the delay. */
   notAllowedBecause?: string;
 };
@@ -98,7 +101,16 @@ export function questionFingerprint(tool: string, fields: Record<string, string>
 /** What the window names as asked: the command, the path or the address, whole; the tool when there is none. */
 export function subjectOf(tool: string, fields: Record<string, string>): string {
   const path = fields.file_path || fields.notebook_path;
-  return fields.command || (path ? `${tool} ${path}` : '') || fields.url || fields.query || fields.pattern || fields.path || tool;
+  const subject = fields.command || (path ? `${tool} ${path}` : '') || fields.url || fields.query || fields.pattern || fields.path || tool;
+  if (tool !== 'Bash') return subject;
+  // Bash's fields the mod shows as words, in the line the window shows, or an allow approves what was not read (the
+  // Audit's M1 on #538): what is not their default.
+  const words = [
+    ...(fields.timeout ? [`timeout ${fields.timeout} ms`] : []),
+    ...(fields.run_in_background === 'true' ? ['in the background'] : []),
+    ...(fields.dangerouslyDisableSandbox === 'true' ? ['outside the sandbox'] : []),
+  ];
+  return words.length ? `${subject} (${words.join(', ')})` : subject;
 }
 
 type Held = {
@@ -224,6 +236,7 @@ export function holdPermissionAsk(
     ...(question.reason ? { reason: question.reason } : {}),
     ...(question.rule ? { rule: question.rule } : {}),
     ...(question.withheld ? { withheld: true as const } : {}),
+    ...(question.withheld && question.withheldWhy ? { withheldWhy: question.withheldWhy } : {}),
   };
   agent.lastActivity = askedAt.toISOString();
   console.log(`[permission] ${agent.name || agent.id} asks Tars: ${question.tool}${question.waitingOn ? ` ${question.waitingOn.text}` : ''}`);

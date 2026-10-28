@@ -224,7 +224,7 @@ describe("the mod's tool.check", () => {
     await check({ tool: 'mcp__any__run', input: { command: 'ls', timeout: 5 }, tool_use_id: 'toolu_r' }, ASK);
     expect(permissionPosts().slice(1).map(p => [p.body.input, p.body.withheld_why])).toEqual([
       [{ command: 'ls' }, 'timeout: not text'],
-      [{ command: 'ls' }, 'timeout: not text'],
+      [{ command: 'ls' }, 'timeout: a field the window does not show'],
     ]);
   });
 
