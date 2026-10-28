@@ -46,6 +46,11 @@ import { redactCommandLine } from '../../../electron/utils/redact-command-line';
  *     flag (`--dangerously-skip-permissions`, `-aes-256-cbc`), a number (`8080:80`, `1.2.3`), a word under eight.
  * C36. `--name=value` and `NAME=value` lose their name, or keep a value under eight after a name that says secret
  *     (`DB_PASS=pw12`, `--password=short`).
+ * And the orchestrator's refinement, so the owner's window stays readable:
+ * C37. A subcommand of eight letters or more (checkout, playwright, typecheck) is masked: an argument made only of
+ *     lower-case letters and hyphens stays, whatever its length (`git checkout <commit>` reads `git checkout
+ *     [redacted]`).
+ * C38. That makes a lower-case password stay where its place says secret: `--password longlowercaseword` is masked.
  */
 
 const SECRET = 'S3cretPassw0rd9';
@@ -142,8 +147,6 @@ describe('a command line as the window shows it', () => {
 
   it('C34. by default, an argument of eight characters or more that is not a flag, a path or a number is masked', () => {
     expect(redactCommandLine('deploy-tool run Xk9pQ2mZ7vB4')).toBe('deploy-tool run [redacted]');
-    // A subcommand of eight letters or more too: the rule knows no words.
-    expect(redactCommandLine('git checkout 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39')).toBe('git [redacted] [redacted]');
     expect(redactCommandLine('curl https://hooks.example.com/services/T0/B0/XYZ')).toBe('curl [redacted]');
   });
 
@@ -160,5 +163,19 @@ describe('a command line as the window shows it', () => {
   it('C36. a name before = is kept, its value masked by the same rule, always after a name that says secret', () => {
     expect(redactCommandLine(`app --region=eu-1 --zone=eu-west-1a --session=${V} DEBUG=1 HOME=/Users/x`)).toBe('app --region=eu-1 --zone=[redacted] --session=[redacted] DEBUG=1 HOME=/Users/x');
     expect(redactCommandLine('app DB_PASS=pw12 --password=short')).toBe('app DB_PASS=[redacted] --password=[redacted]');
+  });
+
+  it('C37. a subcommand of lower-case letters and hyphens stays, whatever its length', () => {
+    expect(redactCommandLine('git checkout 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39')).toBe('git checkout [redacted]');
+    for (const line of ['npx playwright test', 'npm run typecheck', 'pnpm install --frozen-lockfile', 'tool run-the-long-subcommand']) {
+      expect(redactCommandLine(line), line).toBe(line);
+    }
+    // Mixed case, digits or symbols of eight or more: still masked.
+    expect(redactCommandLine('tool Checkout2 run_this_long abc.DEF.ghi')).toBe('tool [redacted] [redacted] [redacted]');
+  });
+
+  it('C38. a lower-case password where its place says secret is still masked', () => {
+    expect(redactCommandLine('pg_dump --password longlowercaseword shop')).toBe('pg_dump --password [redacted] shop');
+    expect(redactCommandLine('app --api-key=correct-horse-battery DB_PASS=staplestaple')).toBe('app --api-key=[redacted] DB_PASS=[redacted]');
   });
 });
