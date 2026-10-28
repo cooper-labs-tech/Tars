@@ -146,7 +146,9 @@ for (const newInterface of [false, true]) {
       await view.getByRole('button', { name: /measure the disk/ }).click();
       await expect(view.getByRole('region', { name: 'Fleet' })).toContainText(/disk measured \d\d:\d\d/, { timeout: 60_000 });
       const builder = view.locator('[data-agent-row="Harbor Builder"]');
-      await expect(builder).toContainText(/\b3 MB\b/, { timeout: 60_000 });
+      // Its worktree column, the row's fifth cell: read whole, the row's cells run together ("62 MB0 %3 MB0 B"), and no
+      // word boundary follows a size there.
+      await expect(builder.locator(':scope > span').nth(4)).toHaveText('3 MB', { timeout: 60_000 });
       seen.builderRow = (await builder.innerText()).replace(/\s+/g, ' ');
       await stepShot(page, `${tag}2-detail-measured`);
 

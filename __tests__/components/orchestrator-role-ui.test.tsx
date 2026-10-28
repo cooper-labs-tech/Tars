@@ -20,10 +20,11 @@ vi.mock('react', async (importOriginal) => ({
  * side turns this red.
  */
 
-const RUNS = 'Runs the project: it delegates instead of editing files, and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Telegram and Slack.';
+// Since 2.0.5 (5c6aeb30b, frames redrawn in ea5158925): Tars's own Telegram bot is gone, Telegram goes through Hermes.
+const RUNS = 'Runs the project: it delegates instead of editing files, and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Slack. A Telegram message reaches the orchestrator of the project it names, through Hermes.';
 const ONE = 'A project has one, so switching this on takes the role from the current one.';
 const RESTART = 'If it is running, saving restarts it once it is free.';
-const KEEPS = 'Runs the project and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Telegram and Slack. This CLI keeps its editing tools: it is asked to delegate, not stopped.';
+const KEEPS = 'Runs the project and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Slack. A Telegram message reaches the orchestrator of the project it names, through Hermes. This CLI keeps its editing tools: it is asked to delegate, not stopped.';
 const NEXT = 'It takes the change at its next start.';
 
 type El = { type: unknown; props: Record<string, unknown> };
