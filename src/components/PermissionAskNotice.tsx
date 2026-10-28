@@ -37,8 +37,10 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * A permission question the state mod asked Tars instead of Claude Code's
  * dialog (the state mod, PR 318), and its three answers: allow runs the call, deny refuses it
  * with a reason the agent reads if one is given, ask in terminal puts it to
- * the terminal's dialog, as before the mod. Nothing is typed into the
- * terminal. Frame: `Permission asked of Tars`.
+ * Claude Code's own dialog, which has no delay: answer it there. Nothing is
+ * typed into the terminal. Tars never answers allow by itself (PR 538): a
+ * question waits for the owner, and at the delay Tars refuses it, with its
+ * reason. Frame: `Permission asked of Tars`.
  *
  * `panel`: the row of MessageWaitingNotice, 26 high under a panel's header,
  * the sentence cut first and the answers kept. It offers allow only once its
@@ -53,7 +55,7 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * The state belongs to one question: the next call's (another askedAt) starts
  * afresh, whatever the last one left open, its line measured again.
  *
- * A file tool asked with its content withheld from Tars (`withheld`, PR 538):
+ * A file tool asked by an agent in bypass, its content withheld from Tars (`withheld`, PR 538):
  * the path alone, said withheld, and deny and ask in terminal, never allow nor
  * show all. Tars cannot see what would be written, and refuses an allow anyway
  * (frame `Permission asked of Tars`, its withheld row).
@@ -169,7 +171,7 @@ export default function PermissionAskNotice({ agent, layout }: {
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ shown: true })} title="Read the whole call before allowing it">show all</Button>
               )}
               <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
-              <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Put it to the terminal's dialog, as before">ask in terminal</Button>
+              <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Claude Code's own dialog, which has no delay: answer it there">ask in terminal</Button>
             </div>
           </>
         )}
@@ -219,7 +221,7 @@ export default function PermissionAskNotice({ agent, layout }: {
         <div className="flex items-center gap-1.5">
           {!withheld && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
-          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Put it to the terminal's dialog, as before">ask in terminal</Button>
+          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Claude Code's own dialog, which has no delay: answer it there">ask in terminal</Button>
         </div>
       )}
     </div>
