@@ -14,6 +14,15 @@ import * as path from 'path';
  * process, so a Tars launched while the previous one was still shutting down
  * came up looking perfectly healthy with every path back into the app dead.
  *
+ * And from the Audit's gate of #541 (H1), written before the code: claude's
+ * MCP calls to Tars's shared servers carry its token to whatever holds the
+ * port, with no proof it is this Tars, and agents started while Tars retried
+ * its port (about 90 s at launch) handed their token to the process holding it.
+ * No agent CLI starts until this Tars listens (apiListening):
+ * G1. it waits while the port is retried, and goes on once Tars binds;
+ * G2. it refuses (false) once Tars gave the port up;
+ * G3. a process that never started an API (the unit tests) is not held.
+ *
  * These assert the whole chain rather than that a retry was scheduled: the
  * server is raced against a real socket holding the port, and recovery is
  * proved by a real request that comes back 200.
@@ -274,4 +283,38 @@ describe('the local API when it has given up', () => {
     expect(health.status).toBe(200);
     vi.restoreAllMocks();
   }, 25000);
+
+  it('G1. no agent starts while Tars retries its port: apiListening waits, then answers true once it binds', async () => {
+    await occupyPort();
+    start();
+    await waitForPhase(['retrying'], 5_000);
+    let answered: boolean | undefined;
+    void api.apiListening().then(v => { answered = v; });
+    await new Promise(r => setTimeout(r, 300));
+    expect(answered, 'answered while another process held the port').toBeUndefined();
+    await releasePort();
+    await waitForPhase(['listening'], 10_000);
+    await vi.waitFor(() => expect(answered).toBe(true));
+    expect(await api.apiListening()).toBe(true);
+  }, 20_000);
+
+  it('G2. once Tars gave its port up, apiListening answers false', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await occupyPort();
+      start();
+      const pending = api.apiListening();
+      for (let i = 0; i < 10 && api.getApiServerState().phase !== 'failed'; i++) await vi.advanceTimersByTimeAsync(60_000);
+      expect(api.getApiServerState().phase).toBe('failed');
+      expect(await pending).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('G3. a process that never started an API is not held', async () => {
+    expect(api.getApiServerState().phase).toBe('stopped');
+    expect(await api.apiListening()).toBe(true);
+  });
 });
+
