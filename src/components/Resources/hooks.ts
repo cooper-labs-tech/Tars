@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { channel, type FleetResources, type HeavySlotStatus, type JanitorState } from './contract';
+import type { JanitorItem } from '@/types/electron';
+import { channel, type FleetResources, type HeavySlotStatus } from './contract';
 
 /**
  * One data hook per view of the Resources page, each over its backend's channel (contract.ts): what it read, whether
@@ -50,18 +51,68 @@ export function useFleetResources(): Reading<FleetResources> & { measureDisk: ()
   return { ...reading, measureDisk };
 }
 
-export function useDiskJanitor(): Reading<JanitorState> & { scan: () => Promise<string | null>; approve: (ids: string[]) => Promise<string | null> } {
-  const api = channel('diskJanitor');
-  const reading = useReading(api?.state, api?.onChanged);
+/** What became of an item the owner approved: gone with the bytes it freed, or kept and why. */
+export type JanitorOutcome = { kind: 'deleted'; bytes: number } | { kind: 'kept'; why: string };
+
+/**
+ * The disk janitor (PR 542): a scan that proposes, by rule, and deletes nothing; the owner's approval of the ids it
+ * showed, each checked again and deleted by its exact path, or kept with why. What this window freed is kept here
+ * for the page's log; every deletion is also written to ~/.tars/logs/janitor.log.
+ */
+export function useDiskJanitor() {
+  const system = typeof window === 'undefined' ? undefined : window.electronAPI?.system;
+  const missing = !system?.janitorScan || !system?.janitorApprove;
+  const [items, setItems] = useState<JanitorItem[] | null>(null);
+  const [scanAt, setScanAt] = useState<number | null>(null);
+  const [scanning, setScanning] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [outcomes, setOutcomes] = useState<Record<string, JanitorOutcome>>({});
+  const [freed, setFreed] = useState<{ at: number; label: string; bytes: number }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
   const scan = useCallback(async () => {
-    const res = await api?.scan();
-    return res && !res.success ? res.error ?? 'The scan could not start.' : null;
-  }, [api]);
+    if (!system?.janitorScan) return;
+    setScanning(true);
+    setError(null);
+    try {
+      const res = await system.janitorScan();
+      if ('error' in res) setError(res.error);
+      else { setItems(res.items); setScanAt(Date.now()); setOutcomes({}); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setScanning(false);
+    }
+  }, [system]);
+
   const approve = useCallback(async (ids: string[]) => {
-    const res = await api?.approve(ids);
-    return res && !res.success ? res.error ?? 'Nothing was deleted.' : null;
-  }, [api]);
-  return { ...reading, scan, approve };
+    if (!system?.janitorApprove || !items) return;
+    setDeleting(ids.length);
+    setError(null);
+    try {
+      const res = await system.janitorApprove(ids);
+      if ('error' in res) { setError(res.error); return; }
+      const kept = new Map(res.kept.map((k) => [k.id, k.why]));
+      const now = Date.now();
+      const next: Record<string, JanitorOutcome> = {};
+      const gone: { at: number; label: string; bytes: number }[] = [];
+      for (const id of ids) {
+        const item = items.find((i) => i.id === id);
+        if (!item) continue;
+        const why = kept.get(id);
+        if (why !== undefined) next[id] = { kind: 'kept', why };
+        else { next[id] = { kind: 'deleted', bytes: item.sizeBytes }; gone.push({ at: now, label: item.label, bytes: item.sizeBytes }); }
+      }
+      setOutcomes((prev) => ({ ...prev, ...next }));
+      setFreed((prev) => [...gone, ...prev]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDeleting(null);
+    }
+  }, [system, items]);
+
+  return { missing, items, scanAt, scanning, deleting, outcomes, freed, error, scan, approve };
 }
 
 /** The free space of the disk Tars runs on, which main already reads (Settings · System): the one machine figure the
