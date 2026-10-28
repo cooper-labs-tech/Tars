@@ -70,6 +70,12 @@ for (const newInterface of [false, true]) {
     const fleetTmp = path.join(dir, 'tmp', createHash('sha256').update('a-kept-agent').digest('hex').slice(0, 10));
     put(path.join(fleetTmp, 't', 'blob.bin'), 1024 * 1024, 0);
     put(path.join(allowed.staleNpx, 'node_modules', 'pkg', 'index.js'), 1024 * 1024, 30);
+    // The whole entry is stale: its folders too, which npx touches when it writes in them and the rule reads
+    // (the QA's F7 of the final verification: only the file and its own folder were aged, so it read as in use).
+    for (const d of [path.join(allowed.staleNpx, 'node_modules'), allowed.staleNpx]) {
+      const t = (Date.now() - 30 * DAY) / 1000;
+      fs.utimesSync(d, t, t);
+    }
     put(path.join(forbidden.uv, 'archive', 'blob.bin'), 1024 * 1024, 60);
     put(path.join(forbidden.documents, 'trace.zip'), 1024 * 1024, 60);
     put(path.join(forbidden.privateDir, 'blob.bin'), 1024, 60);
