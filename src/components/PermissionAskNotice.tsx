@@ -66,6 +66,8 @@ export default function PermissionAskNotice({ agent, layout }: {
 }) {
   const askedAt = agent.permissionAsk?.askedAt;
   const withheld = agent.permissionAsk?.withheld === true;
+  /** What was withheld and why, as the state mod says it (\`command: 3,014 characters, past the 2,000 the window shows\`). */
+  const withheldWhy = withheld ? agent.permissionAsk?.withheldWhy : undefined;
   const [kept, setKept] = useState<State>(() => fresh(askedAt));
   const state: State = kept.of === askedAt ? kept : fresh(askedAt);
   const update = useCallback(
@@ -142,11 +144,13 @@ export default function PermissionAskNotice({ agent, layout }: {
   );
 
   if (layout === 'panel' && !state.shown) {
+    // A withheld question's why, on a line under it (frame `Permission asked of Tars`, its withheld row at 420).
+    const why = withheldWhy && !late && state.phase !== 'reason' ? (
+      <p data-withheld-why className="truncate pl-[26px] pr-3 pt-[3px] pb-1 bg-secondary border-b border-border font-mono text-[10.5px] text-muted-foreground" title={withheldWhy}>{withheldWhy}</p>
+    ) : null;
     return (
+      <div role="status" data-permission-ask={agent.id} title={late ? `${LATE_WHO} ${LATE_REST}` : line.title} className="shrink-0 flex flex-col">
       <div
-        role="status"
-        data-permission-ask={agent.id}
-        title={late ? `${LATE_WHO} ${LATE_REST}` : line.title}
         className={`shrink-0 flex items-center gap-2 pl-3 pr-1 bg-secondary border-b border-border select-none ${state.phase === 'reason' ? 'py-1' : 'h-[26px]'}`}
       >
         <StatusSquare tone="waiting" />
@@ -162,7 +166,7 @@ export default function PermissionAskNotice({ agent, layout }: {
           <>
             <p className="min-w-0 flex-1 flex items-baseline gap-1 text-[11px] leading-tight text-muted-foreground">
               <span className="shrink-0 text-foreground">{line.who}</span>
-              <span ref={measure} data-subject className="min-w-0 truncate font-mono">{withheld ? `${line.subject} · content withheld` : line.subject}</span>
+              <span ref={measure} data-subject className="min-w-0 truncate font-mono">{withheld ? `${line.subject} · ${withheldWhy ? 'withheld' : 'content withheld'}` : line.subject}</span>
             </p>
             <div className="shrink-0 flex items-center">
               {withheld ? null : state.fits ? (
@@ -175,6 +179,8 @@ export default function PermissionAskNotice({ agent, layout }: {
             </div>
           </>
         )}
+      </div>
+      {why}
       </div>
     );
   }
@@ -192,9 +198,10 @@ export default function PermissionAskNotice({ agent, layout }: {
       {line.subject && (
         <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
           {line.subject}
-          {withheld && <span className="text-muted-foreground"> · content withheld</span>}
+          {withheld && <span className="text-muted-foreground">{` · ${withheldWhy ? 'withheld' : 'content withheld'}`}</span>}
         </p>
       )}
+      {withheldWhy && <p data-withheld-why className="font-mono text-[11px] leading-[15px] text-muted-foreground break-words">{withheldWhy}</p>}
       {(line.reason || line.rule) && (
         <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
           {line.reason && (
