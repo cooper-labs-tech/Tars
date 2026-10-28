@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 299 root frames, 68 of them drawn and not built yet: the 57 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+rather than a companion to it. `design/tars-redesign.pen` holds 305 root frames, 74 of them drawn and not built yet: the 63 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
 `design/chat-design.pen` holds 72 of those, the other two hundred and twenty-seven being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -292,3 +292,6 @@ For 2.0.5:
 - Browser beside an agent's terminal: Browser (2.0.5) · beside an agent's terminal (its light copy, the narrowest
   window), · states (and its light copy), · notes for the Backend.
 - The app's language: Language (2.0.5) · Settings, General, Preferences (and its light copy), · notes.
+- The Vault's project folders as a tree, every folder of a project folder one level at a time (the owner, 28/10): Vault
+  (2.0.5) · project folders as a tree (its light copy, the narrowest window), · project folder tree · states (and its
+  light copy), · notes for the Backend.
