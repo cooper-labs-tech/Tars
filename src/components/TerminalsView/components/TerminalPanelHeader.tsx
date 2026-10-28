@@ -99,7 +99,9 @@ export default function TerminalPanelHeader({
       className={`${showDragHandle ? 'terminal-drag-handle' : ''} window-no-drag bg-card border-b border-border select-none`}
       onContextMenu={onContextMenu}
     >
-    <div className="flex items-center gap-2 h-8 px-3">
+    {/* 31 and the border below it: the header stays 32 high, as before its checkpoint line, or the terminal under it
+        loses a row in a 349-high card (the QA's F2 on the 2.0.5 train). */}
+    <div className="flex items-center gap-2 h-[31px] px-3">
       {/* Drag handle grip - custom tabs only */}
       {showDragHandle && (
         <GripVertical className="w-3 h-3 text-muted-foreground/50 flex-shrink-0" />
