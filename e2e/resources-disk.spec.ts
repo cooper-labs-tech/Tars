@@ -116,7 +116,12 @@ for (const newInterface of [false, true]) {
 
       // 2, 3. A scan: the allowed proposed, with size, rule and why; nothing forbidden.
       await proposed.getByRole('button', { name: 'scan' }).click();
-      await expect(proposed.locator('[data-item]').first()).toBeVisible({ timeout: 120_000 });
+      // The scan streams its items: the list is read once it has ended (its note and scan again), never at the first
+      // item (the QA's F1 on PR 543: one item read, the npx cache still to come).
+      await expect(proposed.getByRole('button', { name: 'scan again' })).toBeVisible({ timeout: 120_000 });
+      await expect(proposed).toContainText('a scan deletes nothing');
+      await expect(proposed).not.toContainText('SCANNING');
+      await expect(proposed.locator('[data-item]').first()).toBeVisible();
       const items = await proposed.locator('[data-item]').evaluateAll((els) => els.map((e) => ({ path: e.getAttribute('data-item'), text: (e as HTMLElement).innerText })));
       seen.proposed = items;
       // The backend may name a folder by its real path (/private/var on macOS for a sandbox under /var).
