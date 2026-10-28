@@ -754,6 +754,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // alerts during a run (the disk filling, the swap growing fast).
   heavySlot: {
     status: () => ipcRenderer.invoke('heavySlot:status'),
+    // The owner gives a lease (or an ask) back; its holder and its orchestrator are told.
+    giveBack: (ticketId: string) => ipcRenderer.invoke('heavySlot:giveBack', ticketId),
     onChanged: (callback: (status: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
       ipcRenderer.on('heavySlot:changed', listener);

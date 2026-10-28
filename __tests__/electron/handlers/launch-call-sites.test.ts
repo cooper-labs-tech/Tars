@@ -295,8 +295,12 @@ const completesOf = (ptyId: string) => vi.mocked(broadcastToAllWindows).mock.cal
   .filter(([channel, payload]) => channel === 'agent:complete' && (payload as { ptyId?: string }).ptyId === ptyId);
 const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
 const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
-/** An agent's terminal gets ~/.tars/bin first on its PATH, for the heavy-run slot's tars-slot (services/heavy-slot-cli.ts). */
-const withSlotBin = (value: string) => [path.join(DATA_DIR, 'bin'), value].join(process.platform === 'win32' ? ';' : ':');
+/**
+ * An agent's terminal gets ~/.tars/bin last on its PATH, for the heavy-run slot's tars-slot (services/heavy-slot-cli.ts):
+ * never first, where a file any agent writes there would run instead of the command it is named after (the Audit's
+ * M1 on #537).
+ */
+const withSlotBin = (value: string) => [value, path.join(DATA_DIR, 'bin')].join(process.platform === 'win32' ? ';' : ':');
 /** The value of PATH the child gets, under any spelling, and how many spellings it has. */
 function pathOf(env: Record<string, string | undefined>): { value: string | undefined; keys: number } {
   const keys = Object.keys(env).filter(k => k.toUpperCase() === 'PATH');

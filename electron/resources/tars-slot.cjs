@@ -9,8 +9,9 @@
  *       Waits for the slot, runs the command as its child, gives the slot back when the command ends, and exits
  *       with its code. The lease is this process's: killed, it goes back by itself.
  *   tars-slot take [--priority ...] [--label <text>] [--wait-seconds <n>]
- *       For a script that holds the slot across steps: the lease is the calling process's (this one's parent), and
- *       ends with it. Prints the ticket once granted.
+ *       From a script that runs the steps itself, to hold the slot across them: the lease is the calling process's
+ *       (this one's parent), and ends with it. From an agent's own Bash tool, that parent is the shell of one command,
+ *       which ends at once: use `run` there. Prints the ticket once granted.
  *   tars-slot give-back <ticket>
  *   tars-slot status
  *
@@ -164,7 +165,7 @@ async function main() {
   if (command === 'take') return take(opts);
   if (command === 'give-back') return giveBack(opts);
   if (command === 'status') return status();
-  fail(2, 'usage: tars-slot run|take|give-back|status (see the head of this script)');
+  fail(2, 'usage: tars-slot run [--label text] -- <command> | take (from a script that runs the steps itself) | give-back <ticket> | status');
 }
 
 main().catch((err) => fail(3, `Tars could not be reached: ${err.message}`));

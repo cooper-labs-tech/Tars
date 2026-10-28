@@ -43,6 +43,8 @@ const RULES: Rule[] = [
   // The bot's id in base64 (it starts M, N or O), a six-character timestamp, the signature.
   { name: 'discord-bot', pattern: /\b[MNO][A-Za-z0-9_-]{22,27}\.[A-Za-z0-9_-]{6}\.[A-Za-z0-9_-]{27,}/g },
 
+  // A URL's password, as a database command line or a clone carries it (scheme://user:password@host).
+  { name: 'url-password', pattern: /\b[a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:([^\s@/]+)@/gi, group: 1 },
   // A bearer token or an api-key header, wherever it appears.
   { name: 'bearer', pattern: /\b[Bb]earer\s+([A-Za-z0-9._~+/=-]{16,})/g, group: 1 },
   { name: 'api-key-header', pattern: /\b[Xx]-[Aa]pi-[Kk]ey:\s*([^\s"']{12,})/g, group: 1 },

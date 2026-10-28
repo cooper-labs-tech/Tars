@@ -220,9 +220,11 @@ describe('the CLI started in place of the shell (win32)', () => {
     expect(cli.file).toBe(CLAUDE_EXE);
     expect(cli.args).toBe(launch.commandLine);
     expect(cli.opts.cwd).toBe(project);
-    // ~/.tars/bin first, for the heavy-run slot's tars-slot (services/heavy-slot-cli.ts), under the key the env uses.
+    // ~/.tars/bin last, for the heavy-run slot's tars-slot (services/heavy-slot-cli.ts), under the key the env uses:
+    // never first, where a file there would shadow a command (the Audit's M1 on #537).
     // (The separator is the running platform's: this file passes win32 to the launch, not to process.platform.)
-    expect(cli.opts.env.Path).toBe(`${path.join(DATA_DIR, 'bin')}${process.platform === 'win32' ? ';' : ':'}${CLI_DIR}`);
+    expect(cli.opts.env.Path).toBe(`${CLI_DIR}${process.platform === 'win32' ? ';' : ':'}${path.join(DATA_DIR, 'bin')}`);
+    expect(cli.opts.env.TARS_SLOT).toBe(path.join(DATA_DIR, 'bin', process.platform === 'win32' ? 'tars-slot.cmd' : 'tars-slot'));
     expect(cli.opts.env.CLAUDE_AGENT_ID).toBe(agent.id);
     expect(agentForToken(cli.opts.env.CLAUDE_MGR_API_TOKEN)).toBe(agent.id);
     expect(shell.write, 'nothing is typed into the shell').not.toHaveBeenCalled();

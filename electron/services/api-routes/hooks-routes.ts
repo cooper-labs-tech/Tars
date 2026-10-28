@@ -13,6 +13,7 @@ import { onTurnEnded, onUsageLimit } from '../claude-accounts/switching';
 import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
 import { dropPermissionAsks, holdPermissionAsk } from '../permission-asks';
+import { slotTurnEnded } from '../heavy-slot-runtime';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
 
@@ -476,7 +477,12 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
 
     // The turn ended: a permission question it left with Tars goes back to its
     // engine, which has moved on, and a later answer allows nothing.
-    if (status === 'idle' || status === 'completed' || status === 'error') dropPermissionAsks(agent.id);
+    if (status === 'idle' || status === 'completed' || status === 'error') {
+      dropPermissionAsks(agent.id);
+      // And a heavy-run lease it took with heavy_slot_take, held by its CLI, goes back with the turn (the Audit's M2
+      // on #537): a `tars-slot run` lease is its own process's and stays.
+      slotTurnEnded(agent.id);
+    }
     // Claude Code showed its dialog after all (a request of the mod's that
     // failed): the terminal asks now, and the window's answer would reach nothing.
     if (status === 'waiting' && waiting_reason === 'permission') dropPermissionAsks(agent.id);

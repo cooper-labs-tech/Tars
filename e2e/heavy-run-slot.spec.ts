@@ -19,6 +19,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. a's `tars-slot` is killed (SIGKILL, no give-back): the lease goes with its process, and o is granted, not b;
  * 4. o's command ends: o's `tars-slot` gives the slot back, and b is granted;
  * 5. (a second launch) the disk floor set above any disk: a's ask waits, and says the floor and the figure.
+ * And from the Audit's gate of #537 (a third launch):
+ * 6. (M1) ~/.tars/bin is last on the agent terminal's PATH, and TARS_SLOT names the shim, which runs without it;
+ * 7. (M2) a lease taken for the turn, as heavy_slot_take takes it (held by the CLI), goes back when the agent's turn
+ *    ends (its Stop's idle), and the waiter behind it is granted; the window's give-back ends the next lease, and
+ *    the day's alerts say both;
+ * 8. (L2) a token in the label is masked in the queue every agent reads.
  * Red on main dc623b59: there is no tars-slot, and no command ever runs.
  * The artefact: values.json (the slot's status at each step), screenshots, the app's trace with E2E_TRACE=on.
  */
@@ -34,7 +40,7 @@ type SlotStatus = {
 type Agent = { id: string; cliRunning?: boolean };
 type Api = { electronAPI: {
   agent: { start(p: { id: string; prompt: string }): Promise<unknown>; list(): Promise<Agent[]> };
-  heavySlot: { status(): Promise<SlotStatus> };
+  heavySlot: { status(): Promise<SlotStatus>; giveBack(id: string): Promise<boolean> };
 } };
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -75,6 +81,40 @@ async function launch(home: string, port: string, newInterface: boolean): Promis
   await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
   await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
   return { app, page };
+}
+
+/**
+ * A stand-in CLI that holds the slot for its turn, as heavy_slot_take does (its own pid, untilTurnEnds), then ends the
+ * turn (the Stop's idle) when the spec writes `end-turn`. It records its terminal's PATH and TARS_SLOT.
+ */
+function turnHolder(home: string, label: string): string {
+  const cli = path.join(home, 'cli-turn.cjs');
+  fs.writeFileSync(cli, [
+    `#!${process.execPath}`,
+    "const fs = require('fs'); const crypto = require('crypto');",
+    "const session = crypto.randomUUID();",
+    `const dir = ${JSON.stringify(home)};`,
+    "const post = (route, body) => fetch(process.env.CLAUDE_MGR_API_URL + route, { method: 'POST',",
+    "  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN },",
+    "  body: JSON.stringify({ agent_id: process.env.CLAUDE_AGENT_ID, session_id: session, ...body }) }).then(r => r.json());",
+    "fs.writeFileSync(dir + '/env-turn.json', JSON.stringify({ PATH: process.env.PATH, TARS_SLOT: process.env.TARS_SLOT }));",
+    "(async () => {",
+    "  await post('/api/hooks/status', { status: 'idle', source: 'startup' });",
+    "  await post('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'run the suite' });",
+    `  const asked = await post('/api/heavy-slot/ask', { pid: process.pid, untilTurnEnds: true, label: ${JSON.stringify(label)} });`,
+    "  fs.writeFileSync(dir + '/ask-turn.json', JSON.stringify(asked));",
+    "  const end = setInterval(async () => {",
+    "    if (!fs.existsSync(dir + '/end-turn')) return;",
+    "    clearInterval(end);",
+    "    await post('/api/hooks/status', { status: 'idle' });",
+    "    fs.writeFileSync(dir + '/turn-ended', '1');",
+    "  }, 200);",
+    "})();",
+    "process.stdout.write('stand-in ready\\n');",
+    'process.stdin.resume();',
+    '',
+  ].join('\n'), { mode: 0o755 });
+  return cli;
 }
 
 function seed(home: string, newInterface: boolean, agents: Array<{ id: string; name: string; role: string; project: string; cli: string }>, settings: Record<string, unknown> = {}) {
@@ -184,6 +224,64 @@ for (const newInterface of [false, true]) {
       expect.soft(fs.existsSync(path.join(home, 'started-a')), 'the command ran under the floor').toBe(false);
     } finally {
       try { const pid = Number(fs.readFileSync(path.join(home, 'slot-a.pid'), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
+      await app.close().catch(() => undefined);
+      await removeHome(home);
+    }
+  });
+
+  test(`a lease taken for the turn goes back when the turn ends, the window gives one back, and the label is masked${newInterface ? ' (new interface)' : ''}`, async () => {
+    test.setTimeout(180_000);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-turn-${newInterface ? 'ni' : 'classic'}-`));
+    const harbor = path.join(home, 'projects', 'harbor');
+    const token = ['ghp_', 'E'.repeat(12), 'F'.repeat(12)].join('');
+    seed(home, newInterface, [
+      { id: 't', name: 'Harbor Worker', role: 'worker', project: harbor, cli: turnHolder(home, `pytest -k smoke --token ${token}`) },
+      { id: 'w', name: 'Harbor Tester', role: 'worker', project: harbor, cli: standIn(home, 'w', ['--label', 'harbor e2e suite']) },
+    ]);
+    const { app, page } = await launch(home, apiPort(newInterface ? 31352 : 31351), newInterface);
+    const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
+    const start = (id: string) => page.evaluate(i => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
+    const values: Record<string, unknown> = { newInterface };
+    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+    try {
+      // 6. The terminal's PATH: ~/.tars/bin last; TARS_SLOT names the shim.
+      await start('t');
+      await expect.poll(async () => (await status()).holders.map(h => h.agentId), { timeout: 30_000 }).toEqual(['t']);
+      const env = JSON.parse(fs.readFileSync(path.join(home, 'env-turn.json'), 'utf8')) as { PATH: string; TARS_SLOT: string };
+      const bin = path.join(home, '.tars', 'bin');
+      const parts = env.PATH.split(':');
+      keep({ env, ask: JSON.parse(fs.readFileSync(path.join(home, 'ask-turn.json'), 'utf8')) });
+      expect.soft(parts.indexOf(bin), 'bin on the PATH').toBeGreaterThan(0);
+      expect.soft(parts.indexOf(bin), 'bin last').toBe(parts.length - 1);
+      expect.soft(env.TARS_SLOT).toBe(path.join(bin, 'tars-slot'));
+
+      // 8. The label every agent reads is masked.
+      const held = await status();
+      keep({ held });
+      expect.soft(held.holders[0].label).not.toContain(token);
+      expect.soft(held.holders[0].label).toMatch(/^pytest -k smoke --token ghp_/);
+
+      // 7. w waits behind t; t's turn ends: its lease goes back, and w is granted.
+      await start('w');
+      await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['w']);
+      fs.writeFileSync(path.join(home, 'end-turn'), '1');
+      await expect.poll(() => fs.existsSync(path.join(home, 'started-w')), { timeout: 15_000 }).toBe(true);
+      const after = await status();
+      keep({ after });
+      expect.soft(after.holders.map(h => h.agentId)).toEqual(['w']);
+      expect.soft(after.alerts.map(a => a.text)).toEqual([expect.stringMatching(/^The heavy-run slot: Harbor Worker's lease .* was given back: its turn ended/)]);
+
+      // The owner gives w's lease back from the window: the queue is empty, and the alert says so.
+      expect(await page.evaluate(id => (window as unknown as Api).electronAPI.heavySlot.giveBack(id), after.holders[0].id)).toBe(true);
+      await expect.poll(async () => (await status()).holders.length, { timeout: 10_000 }).toBe(0);
+      const given = await status();
+      keep({ given });
+      expect.soft(given.alerts.at(-1)?.text).toMatch(/Harbor Tester's lease \(harbor e2e suite\) was given back: the owner gave it back from the window/);
+      await stepShot(page, newInterface ? 'heavy-slot-turn-new-interface' : 'heavy-slot-turn');
+    } finally {
+      for (const file of ['started-w', 'slot-w.pid']) {
+        try { const pid = Number(fs.readFileSync(path.join(home, file), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
+      }
       await app.close().catch(() => undefined);
       await removeHome(home);
     }

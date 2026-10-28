@@ -2,9 +2,10 @@
  * The heavy-run slot for the whole machine (electron/services/heavy-slot.ts, the local API's /api/heavy-slot):
  * test suites, builds, dev servers, Docker and simulators of every project's agents take it in turn.
  *
- * The lease is held by this server's parent, the agent's CLI: it goes back by itself when the CLI ends, and the agent
- * gives it back when its run is over. For a git hook or a script, `tars-slot run -- <command>` in the agent's
- * terminal holds it for the command alone, which is the better way when the run is one command.
+ * The lease is held by this server's parent, the agent's CLI, for the turn: the agent gives it back when its run is
+ * over, and Tars gives it back when the agent's turn ends, or the CLI ends (the Audit's M2 on #537: an agent that
+ * forgot held the machine's only slot for good). For a git hook, a script or a run in the background,
+ * `tars-slot run -- <command>` holds it for the command alone, whatever the turn does.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -24,7 +25,7 @@ const WAIT_MAX_S = 600;
 function said(t: Ticket): string {
   if (t.state === "granted") {
     return [
-      `Granted: ticket ${t.id}${t.nestedIn ? " (inside the run that holds the slot)" : ""}. Run your heavy command now, then give the slot back with heavy_slot_give_back.`,
+      `Granted: ticket ${t.id}${t.nestedIn ? " (inside the run that holds the slot)" : ""}. Run your heavy command now, then give the slot back with heavy_slot_give_back; Tars gives it back at your turn's end.`,
       ...(t.clamped ? ["gate is an orchestrator's: asked as normal."] : []),
       ...t.alerts.map(a => `Alert: ${a}`),
     ].join("\n");
@@ -36,7 +37,7 @@ export function registerHeavySlotTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "heavy_slot_take",
-      description: "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your CLI ends. For one command, `tars-slot run -- <command>` in your terminal is simpler.",
+      description: "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
       schema: {
         label: z.string().max(120).optional().describe("What the run is, as others will see it in the queue: e.g. 'e2e suite' or 'next build'."),
         priority: z.enum(["gate", "normal", "background"]).optional().describe("gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."),
@@ -50,7 +51,7 @@ export function registerHeavySlotTools(server: McpServer): void {
           t = ((await apiRequest(`/api/heavy-slot/tickets/${encodeURIComponent(ticket)}`, "GET")) as { ticket: Ticket }).ticket;
         } else {
           // The CLI that started this server holds the lease: it ends when the CLI ends.
-          t = ((await apiRequest("/api/heavy-slot/ask", "POST", { pid: process.ppid, label: label ?? "a heavy run", ...(priority ? { priority } : {}) })) as { ticket: Ticket }).ticket;
+          t = ((await apiRequest("/api/heavy-slot/ask", "POST", { pid: process.ppid, untilTurnEnds: true, label: label ?? "a heavy run", ...(priority ? { priority } : {}) })) as { ticket: Ticket }).ticket;
         }
         const deadline = Date.now() + (wait_seconds ?? WAIT_DEFAULT_S) * 1000;
         while (t.state !== "granted" && Date.now() < deadline) {

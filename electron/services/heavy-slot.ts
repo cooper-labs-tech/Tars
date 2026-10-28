@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import * as path from 'path';
+import { redactSecrets } from '../utils/redact-secrets';
 
 /**
  * One heavy-run slot for the whole machine (2.0.5, lot 2 item A of the resources plan the owner approved on 28/10):
@@ -11,12 +12,17 @@ import * as path from 'path';
  * during the run.
  *
  * - A lease is held by a live process, the asking agent's (under its terminal, where the process table can be read):
- *   when that process ends, killed or crashed, the lease goes with it. No lock is left by a dead agent.
+ *   when that process ends, killed or crashed, the lease goes with it. No lock is left by a dead agent. An agent with
+ *   no terminal is refused, and so is a lease on Tars's own process or one of its parents, on every system.
+ * - A lease taken with the MCP tool is held by the agent's CLI, which lives for hours: it is given back when that
+ *   agent's turn ends (the Audit's M2 on #537), so an agent that forgets cannot hold the machine's slot for good.
+ *   A `tars-slot run` lease is its own process's, and ends with it. The owner gives back any lease from the window.
  * - A queue: a release gate before ordinary work before background work, then arrival. Only an orchestrator may
  *   ask for `gate` (it orders its project's merges and releases); anyone else asking for it gets `normal`, and is
  *   told.
  * - An ask from under a holder's process (a git hook inside its own run: kotsna's pre-push hook runs inside `git
- *   push`) is granted at once, inside that lease, and takes no slot: the holder never waits behind itself.
+ *   push`) is granted at once, inside that lease, and takes no slot: the holder never waits behind itself. Only
+ *   inside a lease of the same agent: another agent is never let in ahead of the queue.
  * - The machine is read before a grant: under the disk or the memory floor, the grant waits and the waiter is told
  *   the floor and the figure. A figure the system cannot give does not block. During a run, the disk is read again:
  *   alerts at 10, 6 and 3 GB, and on fast swap growth, to the holder, its orchestrator and the window.
@@ -54,6 +60,8 @@ export interface SlotWorld {
   changed(): void;
   /** Said to the holder (on its ticket, which its run reads), its orchestrator and the window. */
   alert(ticket: SlotTicket, text: string): void;
+  /** Tars's own process and its parent: no lease is held on them (their parents are found in the table). */
+  tars(): number[];
 }
 
 export interface SlotAsk {
@@ -67,6 +75,8 @@ export interface SlotAsk {
   orchestrator: boolean;
   /** The asking agent's terminal: the lease's process must be under it, where the table can be read. */
   terminalPid?: number;
+  /** Held by the agent's CLI (the MCP tool): given back when the agent's turn ends. */
+  untilTurnEnds?: boolean;
 }
 
 export interface SlotTicket {
@@ -80,6 +90,8 @@ export interface SlotTicket {
   /** Asked for `gate` without being an orchestrator: given `normal`. */
   clamped?: true;
   label: string;
+  /** Held by the agent's CLI (the MCP tool): given back when the agent's turn ends. */
+  untilTurnEnds?: true;
   askedAt: number;
   grantedAt?: number;
   /** Granted inside this holder's lease (an ask from under its process). */
@@ -125,12 +137,21 @@ export class HeavySlot {
 
   /**
    * A ticket for this ask: granted at once inside a holder's lease when its process is under the holder's, else
-   * queued (pump grants). Refused when its process is not under the asking agent's terminal.
+   * queued (pump grants). Refused for an agent with no terminal, on Tars's own process or a parent of it, and when
+   * its process is not under the asking agent's terminal (where the table can be read).
    */
   async ask(a: SlotAsk): Promise<SlotTicket> {
+    if (a.terminalPid === undefined) {
+      throw new Error('you have no terminal to hold the lease under: a heavy run is asked for from an agent\'s terminal');
+    }
     const table = await this.world.processes();
     const parentOf = table ? new Map(table.map(r => [r.pid, r.ppid])) : undefined;
-    if (parentOf && a.terminalPid !== undefined && a.pid !== a.terminalPid && !under(a.pid, a.terminalPid, parentOf)) {
+    const tars = new Set(this.world.tars());
+    for (const own of [...tars]) {
+      for (let at = parentOf?.get(own); at !== undefined && at > 1 && !tars.has(at); at = parentOf?.get(at)) tars.add(at);
+    }
+    if (tars.has(a.pid)) throw new Error(`process ${a.pid} is Tars's own, or one of its parents: a lease is held by one of your own processes`);
+    if (parentOf && a.pid !== a.terminalPid && !under(a.pid, a.terminalPid, parentOf)) {
       throw new Error(`process ${a.pid} is not under your terminal: a lease is held by one of your own processes`);
     }
     const clamped = a.priority === 'gate' && !a.orchestrator;
@@ -138,9 +159,10 @@ export class HeavySlot {
       id: crypto.randomBytes(6).toString('hex'),
       agentId: a.agentId, agentName: a.agentName, project: path.basename(a.projectPath), projectPath: a.projectPath,
       pid: a.pid, priority: clamped ? 'normal' : a.priority, ...(clamped ? { clamped: true as const } : {}),
-      label: a.label, askedAt: this.world.now(), alerts: [],
+      // Every agent and the window read it: a token or a URL's password in a command line is masked first.
+      label: redactSecrets(a.label), ...(a.untilTurnEnds ? { untilTurnEnds: true as const } : {}), askedAt: this.world.now(), alerts: [],
     };
-    const host = this.holders().find(h => h.pid === a.pid || (parentOf && under(a.pid, h.pid, parentOf)));
+    const host = this.holders().find(h => h.agentId === a.agentId && (h.pid === a.pid || (parentOf && under(a.pid, h.pid, parentOf))));
     if (host) {
       ticket.grantedAt = this.world.now();
       ticket.nestedIn = host.id;
@@ -167,6 +189,26 @@ export class HeavySlot {
     this.drop(t);
     this.world.changed();
     return true;
+  }
+
+  /** The owner, from the window: any lease or ask, with every lease inside it. The ticket, to say whose it was. */
+  giveBackForOwner(id: string): SlotTicket | undefined {
+    const t = this.tickets.get(id);
+    if (!t) return undefined;
+    this.drop(t);
+    this.world.changed();
+    return t;
+  }
+
+  /**
+   * The agent's turn ended (its Stop, or idle on record): every lease and ask it took with the MCP tool, held by its
+   * CLI, goes back. Its `tars-slot run` leases stay: their own processes hold them. Returns what went back.
+   */
+  endTurn(agentId: string): SlotTicket[] {
+    const ended = [...this.tickets.values()].filter(t => t.agentId === agentId && t.untilTurnEnds && this.tickets.has(t.id));
+    for (const t of ended) this.drop(t);
+    if (ended.length) this.world.changed();
+    return ended;
   }
 
   private drop(t: SlotTicket): void {

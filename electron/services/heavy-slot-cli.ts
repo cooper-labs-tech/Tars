@@ -7,8 +7,11 @@ import { getSlotScriptPath } from '../utils';
  * `tars-slot`, the heavy-run slot's command line (electron/resources/tars-slot.cjs), in every agent's terminal: for
  * git hooks and scripts, which cannot call an MCP tool (kotsna's heaviest run is the pre-push hook inside `git push`).
  *
- * Two shims in ~/.tars/bin, `tars-slot` (POSIX sh) and `tars-slot.cmd` (Windows), on the PATH of every agent's
- * terminal. They name no path of the app: they run "$TARS_NODE" "$TARS_SLOT_SCRIPT", which the terminal's environment
+ * Two shims in ~/.tars/bin, `tars-slot` (POSIX sh) and `tars-slot.cmd` (Windows), named by TARS_SLOT in every agent's
+ * terminal and found last on its PATH: last, because every agent can write in ~/.tars, and a file put there first
+ * would run instead of the command it is named after, for every agent (the Audit's M1 on #537). Last, it can only
+ * supply a name nothing else on the PATH has. A login shell that sets PATH anew (Debian's and Ubuntu's /etc/profile)
+ * drops it: "$TARS_SLOT" needs no PATH. They name no path of the app: they run "$TARS_NODE" "$TARS_SLOT_SCRIPT", which the terminal's environment
  * gives (slotEnv), so a run from source writing them changes nothing for a packaged Tars, and a moved app (an
  * AppImage mounted anew at each launch) needs no rewrite. TARS_NODE is the app's own binary, run as Node
  * (ELECTRON_RUN_AS_NODE, which the shim sets and the script takes back from the command it runs).
@@ -70,8 +73,8 @@ export function installSlotShims(bin: string = slotBin()): void {
 
 /**
  * What an agent's terminal gets for `tars-slot`: the script, the Node to run it on (the app's own binary: an
- * AppImage's file, not its mount), and ~/.tars/bin first on its PATH (under the key the environment already uses:
- * `Path` on Windows).
+ * AppImage's file, not its mount), the shim's own path (TARS_SLOT), and ~/.tars/bin last on its PATH (under the key
+ * the environment already uses: `Path` on Windows).
  */
 export function slotEnv(env: Record<string, string | undefined>, bin: string = slotBin()): Record<string, string> {
   const key = Object.keys(env).find(k => k.toUpperCase() === 'PATH') ?? 'PATH';
@@ -86,6 +89,8 @@ export function slotEnv(env: Record<string, string | undefined>, bin: string = s
   return {
     ...(script ? { TARS_SLOT_SCRIPT: script } : {}),
     TARS_NODE: process.env.APPIMAGE || process.execPath,
-    [key]: parts.includes(bin) ? current : [bin, ...parts].join(delimiter),
+    TARS_SLOT: path.join(bin, process.platform === 'win32' ? 'tars-slot.cmd' : 'tars-slot'),
+    // Last, never first: see the header. One already there, wherever it stands, is left where the user put it.
+    [key]: parts.includes(bin) ? current : [...parts, bin].join(delimiter),
   };
 }

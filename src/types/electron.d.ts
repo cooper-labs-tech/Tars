@@ -274,6 +274,8 @@ interface HeavySlotTicket {
   grantedAt?: string;
   /** Granted inside this holder's lease (a git hook inside its run). */
   nestedIn?: string;
+  /** Taken with heavy_slot_take, held by the agent's CLI: given back when its turn ends. */
+  untilTurnEnds?: true;
   alerts: string[];
 }
 interface HeavySlotStatus {
@@ -2197,8 +2199,14 @@ export interface ElectronAPI {
    */
   heavySlot?: {
     status: () => Promise<HeavySlotStatus>;
+    /**
+     * The owner gives a lease or an ask back, by its ticket's id: false when there is none. Its holder and its
+     * project's orchestrator are told, and the give-back is among the day's alerts. A lease taken with heavy_slot_take
+     * goes back by itself when its agent's turn ends.
+     */
+    giveBack: (ticketId: string) => Promise<boolean>;
     onChanged: (callback: (status: HeavySlotStatus) => void) => () => void;
-    /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth. Tars never stops the run. */
+    /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth; and a lease given back without its holder. Tars never stops the run. */
     onAlert: (callback: (alert: HeavySlotStatus['alerts'][number]) => void) => () => void;
   };
   // Vault

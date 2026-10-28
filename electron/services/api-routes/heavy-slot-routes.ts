@@ -11,8 +11,10 @@ import type { RouteApp, RouteRequest, SendJson } from './types';
  * tools and the `tars-slot` command line call. Authenticated like every route under /api/ (api-server.ts): an ask, a
  * ticket and a give-back take an agent's own token, which names the agent; the status any authenticated caller.
  *
- * POST /api/heavy-slot/ask { pid, priority?, label? }: the lease is held by `pid`, which must be under the asking
- * agent's terminal where the process table can be read; `gate` is an orchestrator's only.
+ * POST /api/heavy-slot/ask { pid, priority?, label?, untilTurnEnds? }: the lease is held by `pid`, which must be
+ * under the asking agent's terminal where the process table can be read; `gate` is an orchestrator's only. A lease
+ * the MCP tool takes (`untilTurnEnds`, held by the agent's CLI), and one on the terminal itself, go back when the
+ * agent's turn ends.
  * GET  /api/heavy-slot/tickets/:id: the asking agent's own ticket, granted or waiting (position, why, alerts).
  * POST /api/heavy-slot/tickets/:id/give-back
  * GET  /api/heavy-slot: who holds the slot and who waits.
@@ -33,7 +35,7 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
   app.post('/api/heavy-slot/ask', async (req, sendJson) => {
     const agent = callerAgent(req, sendJson);
     if (!agent) return;
-    const { pid, priority, label } = req.body as { pid?: unknown; priority?: unknown; label?: unknown };
+    const { pid, priority, label, untilTurnEnds } = req.body as { pid?: unknown; priority?: unknown; label?: unknown; untilTurnEnds?: unknown };
     if (!Number.isInteger(pid) || (pid as number) <= 1) {
       sendJson({ error: 'pid is the process that holds the lease: your run\'s own, or your CLI\'s.' }, 400);
       return;
@@ -50,6 +52,8 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
         label: (typeof label === 'string' ? oneLine(label) : '').slice(0, LABEL_MAX) || 'a heavy run',
         // A release gate is a power: the orchestrator's, and a chat's runner's (core/agent-role.ts).
         orchestrator: hasOrchestratorPowers(agent), terminalPid: terminal?.pid,
+        // The terminal lives as long as the agent's session: a lease on it is held for the turn, as the tool's is.
+        untilTurnEnds: untilTurnEnds === true || (terminal !== undefined && pid === terminal.pid),
       });
       sendJson({ success: true, ticket });
     } catch (err) {

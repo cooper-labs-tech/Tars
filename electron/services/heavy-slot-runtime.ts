@@ -38,6 +38,8 @@ export interface SlotView {
   grantedAt?: string;
   /** Granted inside this holder's lease. */
   nestedIn?: string;
+  /** Held by the agent's CLI (heavy_slot_take): given back when its turn ends. */
+  untilTurnEnds?: true;
   alerts: string[];
 }
 
@@ -68,7 +70,9 @@ export interface SlotStatus {
 export interface SlotRuntimeDeps {
   getAppSettings: () => AppSettings;
   /** The holder's orchestrator, told as Tars: how it went ('typed', or why not). */
-  tellOrchestrator: (projectPath: string, text: string) => Promise<string>;
+  tellOrchestrator: (projectPath: string, text: string, unless?: string) => Promise<string>;
+  /** The holder itself, told as Tars, when its lease went back without it: its turn ended, or the owner gave it back. */
+  tellAgent: (agentId: string, text: string) => Promise<string>;
   broadcast: (channel: string, payload: unknown) => void;
 }
 
@@ -78,6 +82,7 @@ const PASS_EVERY_MS = 1_000;
 const WATCH_EVERY_PASSES = 30;
 
 let slot: HeavySlot | undefined;
+let runtimeDeps: SlotRuntimeDeps | undefined;
 let timer: ReturnType<typeof setInterval> | undefined;
 let settings: () => AppSettings = () => ({}) as AppSettings;
 let lastMachine: SlotStatus['machine'] = null;
@@ -142,7 +147,7 @@ function view(t: SlotTicket, snap: SlotSnapshot): SlotView {
     ...(t.why ? { why: t.why } : {}), priority: t.priority, ...(t.clamped ? { clamped: true as const } : {}),
     label: t.label, agentId: t.agentId, agentName: t.agentName, project: t.project, pid: t.pid,
     askedAt: new Date(t.askedAt).toISOString(), ...(t.grantedAt !== undefined ? { grantedAt: new Date(t.grantedAt).toISOString() } : {}),
-    ...(t.nestedIn ? { nestedIn: t.nestedIn } : {}), alerts: [...t.alerts],
+    ...(t.nestedIn ? { nestedIn: t.nestedIn } : {}), ...(t.untilTurnEnds ? { untilTurnEnds: true as const } : {}), alerts: [...t.alerts],
   };
 }
 
@@ -171,6 +176,7 @@ export async function slotStatus(): Promise<SlotStatus> {
 export function startHeavySlot(deps: SlotRuntimeDeps): void {
   if (slot) return;
   settings = deps.getAppSettings;
+  runtimeDeps = deps;
   const alive = (pid: number) => {
     try { process.kill(pid, 0); return true; } catch (err) { return (err as NodeJS.ErrnoException).code === 'EPERM'; }
   };
@@ -182,6 +188,7 @@ export function startHeavySlot(deps: SlotRuntimeDeps): void {
     processes: async () => (await readProcesses())?.map(p => ({ pid: p.pid, ppid: p.ppid })),
     alive,
     now: () => Date.now(),
+    tars: () => [process.pid, process.ppid],
     changed: announce,
     alert: (ticket, text) => {
       const entry: SlotAlert = {
@@ -232,3 +239,42 @@ export function giveSlotBack(id: string, agentId: string): boolean {
   if (done) void slot?.pump().catch(err => console.warn('[heavy-slot] pass failed:', err));
   return done;
 }
+
+/**
+ * A lease that went back without its holder giving it: told to the holder and its project's orchestrator (once when
+ * they are the same agent), and kept with the day's alerts for the window, with whom it reached.
+ */
+function tellReturned(t: SlotTicket, why: string): void {
+  const deps = runtimeDeps;
+  const text = `The heavy-run slot: ${t.agentName}'s lease (${t.label}) was given back: ${why}.`;
+  const entry: SlotAlert = {
+    at: new Date().toISOString(), ticket: t.id, agentName: t.agentName, project: t.project, label: t.label, text, sentTo: ['the window'],
+  };
+  alerts.push(entry);
+  deps?.broadcast('heavySlot:alert', entry);
+  if (!deps) return;
+  const said = (to: string) => (delivery: string) => { entry.sentTo.push(delivery === 'typed' ? to : `${to}: not told (${delivery})`); };
+  const holder = `${t.agentName}`;
+  void deps.tellAgent(t.agentId, `${text} Take it again with heavy_slot_take for your next heavy run, or run it under \`tars-slot run\`, whose lease is its own process.`)
+    .then(said(holder), () => said(holder)('failed'))
+    .then(() => deps.tellOrchestrator(t.projectPath, text, t.agentId))
+    .then(delivery => { if (delivery !== 'self') said(`${t.project}'s orchestrator`)(delivery); }, () => said(`${t.project}'s orchestrator`)('failed'))
+    .finally(() => void slotStatus().then(s => deps.broadcast('heavySlot:changed', s)).catch(() => undefined));
+}
+
+/** The agent's turn ended (its Stop, or idle on record): what it took with heavy_slot_take goes back, and the queue moves. */
+export function slotTurnEnded(agentId: string): void {
+  const ended = slot?.endTurn(agentId) ?? [];
+  for (const t of ended) if (t.grantedAt !== undefined && !t.nestedIn) tellReturned(t, 'its turn ended, and a lease taken with heavy_slot_take ends with the turn');
+  if (ended.length) void slot?.pump().catch(err => console.warn('[heavy-slot] pass failed:', err));
+}
+
+/** The owner, from the window: any lease or ask goes back. False when there is no such ticket. */
+export function giveSlotBackForOwner(id: string): boolean {
+  const t = slot?.giveBackForOwner(id);
+  if (!t) return false;
+  tellReturned(t, 'the owner gave it back from the window');
+  void slot?.pump().catch(err => console.warn('[heavy-slot] pass failed:', err));
+  return true;
+}
+
