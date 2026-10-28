@@ -87,6 +87,9 @@ import { EventEmitter } from 'node:events';
  *      under the sender line it was queued with.
  *  K2. A kept item whose sender reads "the user" (a line only
  *      services/user-questions.ts may produce) is typed after that line.
+ *  K3. (the Audit's Low at d50fd606) The same, for a kept dispatch (a message
+ *      queued behind a busy agent): typed after "the user", or under another
+ *      line than the one it was queued with.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-run-task-terminal-'));
@@ -666,6 +669,29 @@ describe('a run-task kept across a restart of Tars (the re-check of #536 at 8dab
     const t = await replayed(kept('t-0000000f', { kind: 'user', via: 'Telegram' }));
     expect(t.sender).toEqual({ kind: 'tars' });
     turnBegins(dev, `Message from Tars: ${t.data}`);
+    rests(dev);
+  });
+
+  it('(K3) a kept dispatch: its own sender line, and never "the user"', async () => {
+    const dev = liveAgent('dev');
+    const message = (ref: string, sender: unknown) => ({
+      ref, agentId: 'dev', title: 'kept', queuedAt: Date.now(), how: 'message' as const,
+      replay: { kind: 'dispatch', opts: { message: `kept message ${ref}`, from: 'Slack', sender } },
+    });
+    const sent = async (item: ReturnType<typeof message>) => {
+      const [restored] = oneTaskQueue.restore({ items: [item as never], paused: {} });
+      replayQueuedItem(restored);
+      await until(() => typed.some((t) => t.data.includes(item.replay.opts.message)));
+      return typed.find((t) => t.data.includes(item.replay.opts.message))!;
+    };
+    const slack = await sent(message('t-0000001a', { kind: 'channel', channel: 'Slack' }));
+    expect(slack.sender).toEqual({ kind: 'channel', channel: 'Slack' });
+    turnBegins(dev, `Message from Slack: ${slack.data}`);
+    rests(dev);
+    await until(() => !oneTaskQueue.busyRun('dev'));
+    const user = await sent(message('t-0000001b', { kind: 'user', via: 'Telegram' }));
+    expect(user.sender).toEqual({ kind: 'tars' });
+    turnBegins(dev, `Message from Tars: ${user.data}`);
     rests(dev);
   });
 });
