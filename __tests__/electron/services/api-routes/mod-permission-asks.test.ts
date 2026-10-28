@@ -56,6 +56,20 @@
  *     told to the window: permissionAsk goes without an event.
  * 18. (gap 2) permissionAsk is on neither agent:status nor agents:tick.
  * 19. (gap 3) The window cannot tell when the question goes back: no `until`.
+ * And from the night of 27/10, agents in bypass frozen until morning on Claude Code's dialog
+ * (fix-permission-dialogs-2810.md, the owner's 2.0.5), written before the code (28/10):
+ * 20. A bypass agent's call that touches only its own folders (a heredoc into its scratchpad) waits for the
+ *     owner: Tars answers allow at once, naming the call's fingerprint, with no question shown and the agent never
+ *     waiting. The same call outside its folders, or from an agent not in bypass, is held as before.
+ * 21. A question nobody answers goes back to the dialog (`ask`) and the agent stays frozen there all night: at the
+ *     delay it is refused (`deny`) with a reason the model reads (how long, and to take another way), the agent
+ *     runs again, and the dialog never shows (this replaces 5's `ask`).
+ * 22. The delay is not the owner's: `permissionAskMinutes` (1 to 60, default 10) sets it, `until` says it, and a
+ *     value out of range is the default. Past 60 the mod would stop asking first (MAX_ASKS) and show the dialog.
+ * 23. A decision is not written down with who decided: Tars for a bypass agent's own folders, the window's person,
+ *     the delay, the end of the session or the turn.
+ * 24. An orchestrator's list_agents does not show a teammate's pending question: the tool, what it runs, why
+ *     Claude Code asked, since when and until when.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -225,15 +239,46 @@ describe("the mod's question to Tars", () => {
     expect(a.permissionAsk).toBeUndefined();
   });
 
-  it('5, 12. nobody answers: the bound, counted from the first ask, sends it back to the dialog', async () => {
+  it('5, 12, 21. nobody answers: at the delay, counted from the first ask, it is refused with a reason, and the agent runs on', async () => {
     const a = agent();
     const pending = askUntilAnswered(question());
     await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS - 1);
     expect(await settled(pending)).toBe(false);
     await vi.advanceTimersByTimeAsync(1);
-    expect(await pending).toEqual({ decision: 'ask' });
+    const answer = await pending;
+    expect(answer).toMatchObject({ decision: 'deny', fingerprint: expect.any(String) });
+    expect(answer.reason).toMatch(/^Nobody answered this permission question in Tars within 10 minutes/);
+    expect(answer.reason).toMatch(/another way/);
     expect(a.permissionAsk).toBeUndefined();
-    expect(a.status).toBe('waiting');
+    expect(a.status).toBe('running');
+    expect(a.waitingReason).toBeUndefined();
+  });
+
+  it('21. a refusal at the delay given between two asks reaches the next ask', async () => {
+    agent();
+    const first = ask(question());
+    await vi.advanceTimersByTimeAsync(PERMISSION_POLL_MS);
+    expect(await first).toEqual({ decision: 'pending' });
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+    expect(await ask(question())).toMatchObject({ decision: 'deny' });
+  });
+
+  it('22. the delay is the owner\'s setting, said by until; out of range, the default', async () => {
+    const a = agent();
+    (ctx.appSettings as AppSettings).permissionAskMinutes = 2;
+    const pending = askUntilAnswered(question());
+    await vi.advanceTimersByTimeAsync(0);
+    expect(Date.parse(a.permissionAsk!.until) - Date.parse(a.permissionAsk!.askedAt)).toBe(2 * 60_000);
+    await vi.advanceTimersByTimeAsync(2 * 60_000);
+    expect((await pending).reason).toMatch(/within 2 minutes/);
+    for (const bad of [0, 61, 1.5, Number.NaN, '5' as unknown as number]) {
+      (ctx.appSettings as AppSettings).permissionAskMinutes = bad;
+      const again = askUntilAnswered(question({ tool_use_id: `toolu_${String(bad)}` }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(Date.parse(a.permissionAsk!.until) - Date.parse(a.permissionAsk!.askedAt), String(bad)).toBe(PERMISSION_HOLD_MS);
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      await again;
+    }
   });
 
   it('6. a stop, a delete or a new session ends the question: the request is answered ask', async () => {
@@ -449,3 +494,73 @@ describe("the mod's question to Tars", () => {
     expect(all.filter(p => /permission/i.test(p))).toEqual(['/api/hooks/permission']);
   });
 });
+
+describe('Tars answers for a bypass agent inside its own folders', () => {
+  const heredoc = (dir: string) => `S=${dir}/scratchpad; mkdir -p $S/retry-probe && cat > $S/retry-probe/p.yml <<'EOF'\nsteps: [1]\nEOF`;
+
+  it('20. allow at once for a heredoc into its own folder: no question, never waiting, the fingerprint named', async () => {
+    const a = agent();
+    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
+    const fields = { command: heredoc('/p') };
+    const answer = await ask(question({ input: fields }));
+    expect(answer).toMatchObject({
+      decision: 'allow',
+      reason: expect.stringMatching(/^Tars allowed it: Backend is in bypass, and every path it touches is inside its own folders/),
+      fingerprint: createHash('sha256').update(JSON.stringify(['Bash', [['command', fields.command]]])).digest('hex'),
+    });
+    expect(a.status).toBe('running');
+    expect(a.permissionAsk).toBeUndefined();
+    expect(ctx.handleStatusChangeNotificationCallback).not.toHaveBeenCalled();
+  });
+
+  it('20. the same outside its folders, or from an agent not in bypass, is held for the owner', async () => {
+    const a = agent();
+    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
+    const outside = ask(question({ input: { command: heredoc('/elsewhere') } }));
+    expect(await settled(outside)).toBe(false);
+    expect(a.permissionAsk?.subject).toContain('/elsewhere');
+    resetPermissionAsks();
+    const b = agent('a2', S2);
+    Object.assign(b, { permissionMode: 'auto', projectPath: '/p' });
+    const notBypass = ask(question({ agent_id: 'a2', session_id: S2, input: { command: heredoc('/p') } }));
+    expect(await settled(notBypass)).toBe(false);
+    expect(b.status).toBe('waiting');
+  });
+
+  it('23. every decision is written down with who or what decided', async () => {
+    const fs = await import('fs');
+    const { PERMISSION_LOG } = await import('../../../../electron/services/permission-asks');
+    fs.rmSync(PERMISSION_LOG, { force: true });
+    const a = agent();
+    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
+    await ask(question({ input: { command: heredoc('/p') }, tool_use_id: 'toolu_auto' }));
+    void askUntilAnswered(question({ tool_use_id: 'toolu_window' }));
+    await vi.advanceTimersByTimeAsync(0);
+    answerPermission('a1', 'deny', 'the user', 'not now');
+    void askUntilAnswered(question({ tool_use_id: 'toolu_late' }));
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+    const lines = fs.readFileSync(PERMISSION_LOG, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatch(/Backend \(a1\) Bash allow by Tars \(bypass, its own folders\): S=\/p\/scratchpad/);
+    expect(lines[1]).toMatch(/Backend \(a1\) Bash deny by the user: rm -rf build/);
+    expect(lines[2]).toMatch(/Backend \(a1\) Bash deny by the delay \(10 minutes\): rm -rf build/);
+  });
+
+  it('24. list_agents shows a teammate\'s pending question: the tool, what it runs, why, since and until when', async () => {
+    const a = agent();
+    void ask(question());
+    await vi.advanceTimersByTimeAsync(0);
+    const agentApp = makeRouteApp();
+    registerAgentRoutes(agentApp, ctx);
+    const route = agentApp.routes.find(r => r.method === 'GET' && r.pattern === '/api/agents')!;
+    const listed = await new Promise<Record<string, unknown>>(resolve => {
+      void route.handler({ body: {}, params: {}, url: new URL('http://x/api/agents'), headers: {} } as unknown as RouteRequest, (b: Record<string, unknown>) => resolve(b), ctx);
+    });
+    const row = (listed.agents as Array<Record<string, unknown>>).find(r => r.id === 'a1')!;
+    expect(row).toMatchObject({
+      status: 'waiting', waitingReason: 'permission',
+      permissionAsk: { tool: 'Bash', subject: 'rm -rf build', reason: 'This command requires approval', askedAt: a.permissionAsk!.askedAt, until: a.permissionAsk!.until },
+    });
+  });
+});
+

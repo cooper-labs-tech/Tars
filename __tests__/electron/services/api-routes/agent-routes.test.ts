@@ -501,11 +501,15 @@ describe('agent-routes', () => {
       });
     });
 
-    it('refuses to type into a blocking permission dialog (409)', async () => {
-      const mockPty = { write: vi.fn() };
-      ptyProcesses.set('pty-1', mockPty as any);
+    // A message to an agent whose CLI shows a dialog was refused (409) until 2.0.5: a worker's report to its
+    // orchestrator was lost each time (1212 counted 17 on the night of 27/10). It goes to the terminal's writer
+    // now, which holds it while the dialog is open and types it once the dialog closes (pty-manager.ts pump), never
+    // into the dialog (fix-permission-dialogs-2810.md, item 4).
+    it('hands a message to an agent in a permission dialog to the writer, which holds it, and says why it waits', async () => {
+      const mockPty = liveCliTerminal('pty-1');
       const agent = makeAgent({ id: 'a1', status: 'waiting', waitingReason: 'permission', ptyId: 'pty-1' });
       agents.set('a1', agent);
+      vi.mocked(writeProgrammaticInput).mockReturnValueOnce('held' as never);
 
       const app = makeRouteApp();
       registerAgentRoutes(app, ctx);
@@ -514,12 +518,28 @@ describe('agent-routes', () => {
       const sendJson = vi.fn();
       await handler(makeReq({ params: { id: 'a1' }, body: { message: 'yes go on' } }), sendJson, ctx);
 
-      // Typing would be useless and the delayed \r could ACCEPT the pending
-      // permission — the dispatch must be refused with the reason.
-      expect(writeProgrammaticInput).not.toHaveBeenCalled();
-      expect(sendJson.mock.calls[0][1]).toBe(409);
-      expect((sendJson.mock.calls[0][0] as { waitingReason: string }).waitingReason).toBe('permission');
+      expect(writeProgrammaticInput).toHaveBeenCalledWith(mockPty, 'yes go on', true, expect.objectContaining({ agentId: expect.any(String) }));
+      expect(sendJson.mock.calls[0][1]).toBeUndefined();
+      expect(sendJson.mock.calls[0][0]).toMatchObject({ success: true, held: true, heldReason: expect.stringMatching(/shows a dialog/) });
       expect(agent.status).toBe('waiting');
+    });
+
+    it('does the same for /message: held, not refused', async () => {
+      const mockPty = liveCliTerminal('pty-1');
+      const agent = makeAgent({ id: 'a1', status: 'waiting', waitingReason: 'permission', ptyId: 'pty-1' });
+      agents.set('a1', agent);
+      vi.mocked(writeProgrammaticInput).mockReturnValueOnce('held' as never);
+
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'message');
+
+      const sendJson = vi.fn();
+      await handler(makeReq({ params: { id: 'a1' }, body: { message: 'the report' } }), sendJson, ctx);
+
+      expect(writeProgrammaticInput).toHaveBeenCalledWith(mockPty, 'the report', true, expect.objectContaining({ agentId: expect.any(String) }));
+      expect(sendJson.mock.calls[0][1]).toBeUndefined();
+      expect(sendJson.mock.calls[0][0]).toMatchObject({ success: true });
     });
 
     it('spawns a fresh session when the agent is idle', async () => {
