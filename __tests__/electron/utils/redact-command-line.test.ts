@@ -29,9 +29,29 @@ import { redactCommandLine } from '../../../electron/utils/redact-command-line';
  * C16. A value that is no secret is masked: `--port 5432`, `--keyboard-layout us`, `docker run -p 8080:80`,
  *     `docker run -u 1000:1000`, a 40-character git commit, a long absolute path, `mysql -p` alone (it prompts).
  * C17. The flag after a secret-named switch is taken for its value: `--no-auth --verbose` keeps `--verbose`.
+ * And from the Audit's re-check at 5a250033, sixteen more forms in clear (a list of shapes trails the next CLI):
+ * C18 to C20. camelCase flags: `--accessToken <v>`, `--authToken <v>`, `--privateKey <v>`.
+ * C21, C22. Flag names outside the list: `--pwd <v>`, `--credentials <v>`.
+ * C23, C24. OpenSSL: `-passin pass:<v>`, `-k <v>`.
+ * C25. MSSQL: `sqlcmd -P <v>`.
+ * C26. Docker's environment: `docker run -e DB_PASS=<v>`.
+ * C27. An HTTP header: `Authorization: Basic <base64 of user:password>`.
+ * C28 to C32. Vendor prefixes: SendGrid `SG.`, Shopify `shpat_`, DigitalOcean `dop_v1_`, PyPI `pypi-`, Docker Hub
+ *     `dckr_pat_`.
+ * C33. A bare `-p`: `twine upload -p <v>`.
+ * So, the orchestrator's decision, mask by default:
+ * C34. An argument of eight characters or more that is not a flag, a path or a number shows: a key of no known shape,
+ *     a git commit, a URL (a webhook's path is its secret), a hostname-and-user.
+ * C35. What says what runs is masked: the program, a path (absolute, home, relative with a file name), a file name, a
+ *     flag (`--dangerously-skip-permissions`, `-aes-256-cbc`), a number (`8080:80`, `1.2.3`), a word under eight.
+ * C36. `--name=value` and `NAME=value` lose their name, or keep a value under eight after a name that says secret
+ *     (`DB_PASS=pw12`, `--password=short`).
  */
 
 const SECRET = 'S3cretPassw0rd9';
+const V = 'Ab3dEf6hIj9kLm2n';
+// Vendor shapes built at run time, as the live keys below: push protection refuses one written whole.
+const k = (...parts: string[]) => parts.join('');
 // Live-key shapes built at run time: GitHub's push protection refuses one written whole, even a fake.
 const live = (kind: 'sk' | 'rk', rest: string) => [kind, 'live', rest].join('_');
 
@@ -83,13 +103,13 @@ describe('a command line as the window shows it', () => {
   it('C14. a secret is masked whole, not its ends kept', () => {
     const out = redactCommandLine(`pg_dump --password ${SECRET} shop`);
     expect(out).toBe('pg_dump --password [redacted] shop');
-    expect(redactCommandLine(`curl -u admin:${SECRET} https://x`)).toBe('curl -u admin:[redacted] https://x');
+    expect(redactCommandLine(`curl -u admin:${SECRET} https://x`)).toBe('curl -u admin:[redacted] [redacted]');
     expect(redactCommandLine(`redis-cli -u redis://:${SECRET}@cache:6379`)).toBe('redis-cli -u redis://:[redacted]@cache:6379');
   });
 
   it('C15. the program, its other flags, its paths and its host stay', () => {
     expect(redactCommandLine(`mysql -uroot -p${SECRET} -h db.internal shop`)).toBe('mysql -uroot -p[redacted] -h db.internal shop');
-    expect(redactCommandLine(`sshpass -p ${SECRET} ssh deploy@host`)).toBe('sshpass -p [redacted] ssh deploy@host');
+    expect(redactCommandLine(`sshpass -p ${SECRET} ssh deploy@host`)).toBe('sshpass -p [redacted] ssh [redacted]');
     expect(redactCommandLine(`docker login -u me -p ${SECRET} registry.example`)).toBe('docker login -u me -p [redacted] registry.example');
     expect(redactCommandLine(`openssl enc -aes-256-cbc -pass pass:${SECRET} -in f`)).toBe('openssl enc -aes-256-cbc -pass [redacted] -in f');
   });
@@ -97,7 +117,7 @@ describe('a command line as the window shows it', () => {
   it('C16. a value that is no secret stays', () => {
     for (const line of [
       'postgres -D /var/db --port 5432', 'setxkbmap --keyboard-layout us', 'docker run -p 8080:80 nginx', 'docker run -u 1000:1000 alpine',
-      'git checkout 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39', 'node /Users/someone/Library/Application/Support/Tars/x.js',
+      'node /Users/someone/Library/Application/Support/Tars/x.js',
       'mysql -p shop', 'next dev --turbopack', '/bin/zsh -l',
     ]) {
       expect(redactCommandLine(line), line).toBe(line);
@@ -106,5 +126,38 @@ describe('a command line as the window shows it', () => {
 
   it('C17. a switch named for a secret does not take the next flag', () => {
     expect(redactCommandLine('server --no-auth --verbose')).toBe('server --no-auth --verbose');
+  });
+
+  it('C18 to C33. the Audit\'s sixteen further forms keep no secret', () => {
+    for (const line of [
+      `cli --accessToken ${V}`, `cli --authToken ${V}`, `cli --privateKey ${V}`, `cli --pwd ${V}`, `cli --credentials ${V}`,
+      `openssl rsa -passin pass:${V} -in key.pem`, `openssl enc -k ${V} -in f`, `sqlcmd -S db -P ${V}`,
+      `docker run -e DB_PASS=${V} app`, `curl -H "Authorization: Basic ${V}" x`,
+      `mailer ${k('SG', '.', V, '.', V)}`, `shop ${k('shpat', '_', V, V)}`, `doctl ${k('dop', '_v1_', V, V)}`,
+      `twine upload -u __token__ ${k('pypi', '-', V, V)}`, `docker login ${k('dckr', '_pat_', V)}`, `twine upload -p ${V}`,
+    ]) {
+      expect(redactCommandLine(line), line).not.toContain(V);
+    }
+  });
+
+  it('C34. by default, an argument of eight characters or more that is not a flag, a path or a number is masked', () => {
+    expect(redactCommandLine('deploy-tool run Xk9pQ2mZ7vB4')).toBe('deploy-tool run [redacted]');
+    expect(redactCommandLine('git checkout 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39')).toBe('git checkout [redacted]');
+    expect(redactCommandLine('curl https://hooks.example.com/services/T0/B0/XYZ')).toBe('curl [redacted]');
+  });
+
+  it('C35. the program, paths, file names, flags, numbers and short words stay', () => {
+    for (const line of [
+      '/Users/x/.local/bin/claude --dangerously-skip-permissions', 'node server.js --port 3000', 'npx vitest run e2e/x.spec.ts',
+      'openssl enc -aes-256-cbc -in ~/notes.txt -out ./notes.enc', 'docker run -p 8080:80 nginx', 'tool --version 1.2.3',
+      'psql -h db.internal -U app shop',
+    ]) {
+      expect(redactCommandLine(line), line).toBe(line);
+    }
+  });
+
+  it('C36. a name before = is kept, its value masked by the same rule, always after a name that says secret', () => {
+    expect(redactCommandLine(`app --region=eu-west-1 --session=${V} DEBUG=1 HOME=/Users/x`)).toBe('app --region=eu-west-1 --session=[redacted] DEBUG=1 HOME=/Users/x');
+    expect(redactCommandLine('app DB_PASS=pw12 --password=short')).toBe('app DB_PASS=[redacted] --password=[redacted]');
   });
 });

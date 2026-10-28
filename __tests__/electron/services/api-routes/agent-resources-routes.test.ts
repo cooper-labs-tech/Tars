@@ -17,6 +17,10 @@ import { EventEmitter } from 'node:events';
  *     they are (id, name, status, project, role).
  * A6. get_agent gives a process's command line, which carries what the masking misses (a password after a flag, a
  *     key with no known prefix): through the API a process is its program, pid, memory and CPU, no arguments.
+ * And from the Audit's re-check at 5a250033 (H1 still open):
+ * A7. The other routes that name an agent by its id answer another project's: /output (get_agent_output, its whole
+ *     terminal), /wait (wait_for_agent, its last answer), /bootstrap (its project's roster) and /health. Each must
+ *     refuse it as get_agent does (404, `Agent not found`), and still answer its own project and the owner's token.
  */
 
 vi.mock('electron', () => ({
@@ -60,7 +64,7 @@ async function call(url: string, params: Record<string, string> = {}, callerAgen
   const ctx = { getAppSettings: () => ({}), agentStatusEmitter: new EventEmitter() };
   registerAgentRoutes(app as never, ctx as never);
   const u = new URL(`http://x${url}`);
-  const route = routes.find(r => r.method === 'GET' && (r.pattern === u.pathname || (r.pattern instanceof RegExp && r.pattern.test(u.pathname) && String(r.pattern).includes('([^/]+)$'))))!;
+  const route = routes.find(r => r.method === 'GET' && (r.pattern === u.pathname || (r.pattern instanceof RegExp && r.pattern.test(u.pathname))))!;
   let body: Record<string, unknown> = {};
   let status = 200;
   await route.handler({ method: 'GET', url: u, body: {}, params, headers: {}, callerAgentId },
@@ -104,5 +108,20 @@ describe('what one project reads of another\'s agents', () => {
     const { agent } = await get('/api/agents/c', { id: 'c' }) as { agent: { resources: { processes: unknown[] } } };
     expect(agent.resources.processes).toEqual([{ name: 'psql', pid: 31, memMb: 30, cpuPct: 1 }]);
     expect(JSON.stringify(agent)).not.toContain('cove:pw');
+  });
+});
+
+describe('every route on an agent id keeps to the caller\'s project', () => {
+  it('A7. /output, /wait, /bootstrap and /health refuse another project\'s agent as unknown', async () => {
+    for (const tail of ['output', 'wait?timeout=1', 'bootstrap', 'health']) {
+      const url = `/api/agents/c/${tail}`;
+      expect(await call(url, { id: 'c' }, 'a'), url).toEqual({ body: { error: 'Agent not found' }, status: 404 });
+    }
+    // Their own project's agent, and any for the owner's token.
+    for (const tail of ['output', 'bootstrap', 'health']) {
+      expect((await call(`/api/agents/b/${tail}`, { id: 'b' }, 'a')).status, tail).toBe(200);
+      expect((await call(`/api/agents/c/${tail}`, { id: 'c' })).status, tail).toBe(200);
+    }
+    expect(JSON.stringify((await call('/api/agents/c/output', { id: 'c' })).body)).toContain('cove secrets');
   });
 });
