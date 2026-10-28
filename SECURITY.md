@@ -296,6 +296,28 @@ not.
 
 **codex hands its MCP servers what it is told to, by name.** Measured on codex-cli 0.163.0: a server gets HOME, PATH, TERM and the variables its config lists in `env_vars`, nothing else. Tars lists, in its own servers' sections of codex's config.toml, the names they read, the token among them: names only, so the token reaches them from the codex process's environment, where this section already says who can read it, and is written in no file and no command line.
 
+**Tars's shared MCP servers act for the agent whose token reaches them, and for no other** (2.0.5,
+`services/mcp-shared.ts`, `mcp-shared/src/shared-host.ts`). Six of the seven servers (all but telegram, which
+resolves a file against its agent's folder) run once for every agent instead of once per agent. A claude agent's CLI
+reaches each through Tars's API, `/api/mcp/<server>`, which is under `/api/` and so takes the agent's own token:
+resolveCaller names the agent from it, and a different `X-Tars-Caller-Id` beside it is a 403 before the route. Tars
+hands the server that agent's identity from its fleet, never a header the CLI sent, with a secret the server read once
+on its stdin, and the server refuses any request without it. The token is in no file and no command line: claude's
+config holds `Bearer ${CLAUDE_MGR_API_TOKEN}`, and claude expands the name from its own environment (measured on
+2.1.312), where this section already says who can read it. Each call is served by a server built for it, run as its
+caller and closed with its answer, and every call the server makes to Tars presents that caller's token again, so a
+call cannot act as another agent even inside the shared process. What changed: the per-agent copy proved the port was
+the Tars that started its CLI before presenting the token (the instance proof); claude presents it to the port itself,
+unproven. So no agent's CLI starts until this Tars listens on its port (`core/api-listening.ts`, the Audit's H1 on
+#541): at launch Tars retries a busy port for about 90 s, and an agent started meanwhile (a resume, the window, a
+channel, the queue) would have handed a live token to the process holding it; the starts wait, and are refused if Tars
+gives the port up. A process that holds the port after Tars quit would learn a token, which names an agent only in the
+Tars that minted it in memory, and dies with that Tars. The entries are in the role files claude agents are started
+with (`~/.claude/mcp.json`, and a worker's `mcp-worker.json` without telegram and x), never in `~/.claude.json`, which
+every claude session loads, the owner's own included; and the door refuses telegram and x to an agent without the
+orchestrator's powers. What did not: the server's process belongs to the same user as every agent, so
+it is no boundary against them (section 1).
+
 **A codex session posts as an agent only on evidence that it is the agent's.** Tars reads codex's turns from its session logs and posts them with the agent's own token (`services/codex-sessions.ts`). Until the Audit's gate of #465, the first session begun in a codex agent's folder after its launch was taken for the agent's: a codex its user ran in that folder had its turns posted as the agent's, a delegated task could be answered by it, and its id became the session the agent resumed after a restart or a wake. A session is bound now on the agent's identity line in its first message, on the agent's own codex holding its file open, or as a fork of the agent's own session its launch began; a first message naming another agent never is, and where a process's open files cannot be read (Windows), a session that names nobody stays nobody's. What this does not stop: whoever can type into the agent's terminal, or write its codex's rollout, can still make text read as the agent's turn. The boundary is the account, as everywhere in this file.
 
 **Gemini's redaction is let through on purpose.** Gemini CLI withholds from

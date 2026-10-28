@@ -303,9 +303,45 @@ export async function run() {
     return { policy: measured ? 'measured: whole environment' : 'assumed: whole environment', env: { ...process.env, ...own } };
   }
 
+  /**
+   * One call to an HTTP MCP server, as claude makes it (2.1.312, measured): `${VAR}` in a header is expanded from its
+   * own environment, then initialize and the tool's call, each a POST of its own (Tars's shared servers answer JSON).
+   */
+  async function callHttp(server, tool, args) {
+    const headers = Object.fromEntries(Object.entries(server.headers ?? {}).map(([k, v]) => [k, String(v).replace(/\$\{([A-Za-z0-9_]+)\}/g, (_, n) => process.env[n] ?? '')]));
+    log({ mcp: true, tool, to: args.id ?? null, calling: true, where: server.where, policy: 'measured: headers expanded', token: /Bearer \S+/.test(headers.Authorization ?? ''), agentId: process.env.CLAUDE_AGENT_ID ?? null });
+    // Tars's shared servers answer an event stream (progress, then the result), as claude reads it.
+    const post = async (body) => {
+      const r = await fetch(server.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers }, body: JSON.stringify(body) });
+      const text = await r.text();
+      const messages = (r.headers.get('content-type') ?? '').includes('text/event-stream')
+        ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => { try { return JSON.parse(l.slice(5)); } catch { return undefined; } }).filter(Boolean)
+        : (() => { try { return [JSON.parse(text)]; } catch { return []; } })();
+      return { status: r.status, json: messages.find((m) => m.id === body.id) ?? messages[0], text };
+    };
+    let r;
+    try {
+      const init = await post({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: kind, version: spec.version } } });
+      if (init.status !== 200) r = { isError: true, text: `initialize answered ${init.status}: ${init.json?.error ?? init.text.slice(0, 200)}` };
+      else {
+        const called = await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: tool, arguments: args } });
+        const msg = called.json ?? {};
+        r = called.status !== 200
+          ? { isError: true, text: `tools/call answered ${called.status}: ${msg.error?.message ?? msg.error ?? called.text.slice(0, 200)}` }
+          : { isError: !!msg.result?.isError || !!msg.error, text: msg.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(msg.error ?? {}) };
+      }
+    } catch (e) {
+      r = { isError: true, text: `the server did not answer: ${e.message}` };
+    }
+    log({ mcp: true, tool, to: args.id ?? null, isError: r.isError, text: r.text.slice(0, 3000) });
+    return r;
+  }
+
   /** One tool of Tars's MCP server, started as this CLI starts it, then called once. */
   function callTars(tool, args) {
     const server = mcpServers()['claude-mgr-orchestrator'];
+    // Claude's own binary reads an HTTP entry (Tars's shared servers); the other CLIs here read only stdio ones.
+    if (server && server.type === 'http' && server.url && kind === 'claude') return callHttp(server, tool, args);
     if (!server || !server.command) {
       log({ mcp: true, tool, to: args.id ?? null, isError: true, text: 'no Tars server where this CLI reads its MCP servers' });
       return Promise.resolve({ isError: true, text: 'no Tars server where this CLI reads its MCP servers' });

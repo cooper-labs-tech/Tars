@@ -10,8 +10,10 @@ import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { mcpNodeCommand, isTransientAppPath } from '../utils/mcp-node';
 import { writeAtomicSync } from '../utils/secret-file';
 import { bundledMcpServersFor, retireTelegramMcp } from './hermes-relay-switch';
-import { DATA_DIR } from '../constants';
+import { API_PORT, DATA_DIR } from '../constants';
 import { TARS_MCP_ENV } from './mcp-orchestrator-env';
+import { dropSharedMcpEntries, ensureSharedMcp, SHARED_MCP_SERVERS, writeClaudeCopy, writeSharedMcpEntries } from './mcp-shared';
+import { tarsInstanceId } from '../core/agent-tokens';
 
 /**
  * MCP Orchestrator Service
@@ -123,6 +125,35 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
 
     const providers = getAllProviders();
 
+    // The servers one process serves for every agent (services/mcp-shared.ts): started first, then written into
+    // claude's config as HTTP entries on this Tars's API, for claude and the providers that run its binary. The
+    // other CLIs keep their per-agent copies below, and so does claude for a shared server that did not start.
+    const apiUrl = `http://127.0.0.1:${API_PORT}`;
+    const listed = new Set(mcpServers.map(s => s.name));
+    const sharedHere = SHARED_MCP_SERVERS.filter(n => listed.has(n));
+    // A shared server that gives up after its start: its entries go, and claude gets its per-agent copy back where
+    // they were, in the role files, never in ~/.claude.json (the Audit's L1 and L2 on #541). Agents already running
+    // keep failing on it until their restart.
+    const giveUp = (name: string) => {
+      dropSharedMcpEntries([name]);
+      const served = mcpServers.find(s => s.name === name);
+      if (served) writeClaudeCopy(name, mcpNodeCommand(), [served.serverPath]);
+    };
+    const shared = new Set(await ensureSharedMcp(
+      Object.fromEntries(mcpServers.filter(s => sharedHere.includes(s.name)).map(s => [s.name, s.serverPath])),
+      { apiUrl, instanceId: tarsInstanceId() },
+      giveUp,
+    ));
+    const notShared = sharedHere.filter(n => !shared.has(n));
+    if (notShared.length) dropSharedMcpEntries(notShared);
+    if (shared.size) {
+      const outcome = writeSharedMcpEntries(apiUrl, undefined, [...shared]);
+      if (outcome === 'unreadable' || outcome === 'busy') {
+        console.error(`[mcp] ~/.claude.json was ${outcome === 'busy' ? 'changing under every attempt' : 'not JSON'}: the shared servers were not written, claude keeps its copies`);
+        shared.clear();
+      }
+    }
+
     // The program the bundles run on (mcpNodeCommand). The registration check
     // compares the server's path only, so a server registered on another
     // program would be left on it: when the program changes, which the file
@@ -160,6 +191,8 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
         : { command: nodeCommand, args: [serverPath] };
 
       for (const provider of providers) {
+        // Claude's own binary reaches this one through the shared process (above).
+        if (shared.has(name) && provider.binaryName === 'claude') continue;
         try {
           // Every one of Tars's servers reads the agent's identity and token
           // from its environment, which codex hands only by name.

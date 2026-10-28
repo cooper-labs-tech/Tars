@@ -15,6 +15,7 @@ import { registerBusRoutes } from './bus-routes';
 import { registerAskUserRoutes } from './ask-user-routes';
 import { registerTaskRoutes } from './task-routes';
 import { registerHeavySlotRoutes } from './heavy-slot-routes';
+import { registerMcpRoutes } from './mcp-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -33,6 +34,8 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerAskUserRoutes(app, ctx);
   registerTaskRoutes(app);
   registerHeavySlotRoutes(app);
+  // Tars's shared MCP servers, reached by each agent's CLI as itself (services/mcp-shared.ts).
+  registerMcpRoutes(app);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';

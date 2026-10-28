@@ -1,3 +1,4 @@
+import { apiListening, NOT_LISTENING } from '../../core/api-listening';
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { maskedAsk } from '../permission-asks';
@@ -174,6 +175,8 @@ async function spawnAgentSession(
   ctx: RouteContext,
   sendJson: SendJson
 ): Promise<boolean> {
+  // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+  if (!(await apiListening())) throw new Error(NOT_LISTENING);
   // Never wider than the agent's own mode, whoever asked (modeRefusal): the one
   // place a session starts says it last, before anything is ended or spawned.
   const wider = modeRefusal(agent, opts.permissionMode);

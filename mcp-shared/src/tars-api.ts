@@ -10,21 +10,50 @@
 
 import * as fs from "fs";
 import * as http from "http";
+import { AsyncLocalStorage } from "async_hooks";
 import { createHash, randomBytes } from "crypto";
 import { noAnswerWithin, send, TARS_WAIT_MS } from "./http.js";
 import { toolCall } from "./tool-call.js";
 
 export const API_URL = process.env.CLAUDE_MGR_API_URL || "http://127.0.0.1:31415";
 
-// Caller identity, injected into the PTY environment by Tars when it spawns
-// the agent. Sent on every request so the server can scope agent listings and
-// reject cross-project actions (the "orchestrator drove another project's
-// agents" bug).
-const CALLER_AGENT_ID = process.env.CLAUDE_AGENT_ID || "";
-const CALLER_PROJECT_PATH = process.env.CLAUDE_PROJECT_PATH || "";
+/**
+ * Who a call of a shared server is for (2.0.5, lot 3 item G: one process per
+ * server for every agent, shared-host.ts): what Tars put on that call's
+ * request, the agent its token names, kept through every await of that call
+ * and seen by no other. Outside a shared call (a per-agent copy on stdio),
+ * there is none, and the environment Tars gave the process says it, as before.
+ */
+export type Caller = { agentId: string; projectPath: string; agentName: string; chatsRead: boolean; token: string };
+const callers = new AsyncLocalStorage<Caller>();
 
+/** Runs a shared call as its agent. */
+export function runAsCaller<T>(caller: Caller, fn: () => T): T {
+  return callers.run(caller, fn);
+}
+
+// Caller identity: the shared call's, or the one injected into the PTY
+// environment by Tars when it spawns the agent. Sent on every request so the
+// server can scope agent listings and reject cross-project actions (the
+// "orchestrator drove another project's agents" bug). Read at each call: a
+// test or a shared server sets it after this module loads.
 export function getCallerIdentity(): { agentId: string; projectPath: string } {
-  return { agentId: CALLER_AGENT_ID, projectPath: CALLER_PROJECT_PATH };
+  const c = callers.getStore();
+  if (c) return { agentId: c.agentId, projectPath: c.projectPath };
+  return { agentId: process.env.CLAUDE_AGENT_ID || "", projectPath: process.env.CLAUDE_PROJECT_PATH || "" };
+}
+
+/** The caller's name (a vault document's author): its id when it has none. */
+export function callerName(): string {
+  const c = callers.getStore();
+  if (c) return c.agentName || c.agentId;
+  return process.env.CLAUDE_AGENT_NAME || process.env.CLAUDE_AGENT_ID || "";
+}
+
+/** Whether the caller runs a chat that may read the others (chat_list). */
+export function callerReadsChats(): boolean {
+  const c = callers.getStore();
+  return c ? c.chatsRead : process.env.TARS_CHATS_READ === "1";
 }
 
 // This agent's own token, minted by Tars when it spawned the process and
@@ -44,6 +73,11 @@ function tokenFromFile(file: string | undefined): string {
   }
 }
 export const AGENT_API_TOKEN = process.env.CLAUDE_MGR_API_TOKEN || tokenFromFile(process.env.CLAUDE_MGR_API_TOKEN_FILE);
+
+/** The token this call is made with, before the port proves it is Tars: the shared call's agent's, else this process's. */
+export function presentedToken(): string {
+  return callers.getStore()?.token ?? AGENT_API_TOKEN;
+}
 
 /** What the Tars that started this CLI proves it is with (tars-hook.sh): never sent. */
 const INSTANCE_ID = process.env.TARS_INSTANCE_ID || "";
@@ -98,9 +132,10 @@ export async function tokenToPresent(waitMs: number = TARS_WAIT_MS): Promise<str
 
 /** The token a call presents, and whether it was withheld because another Tars holds the port. */
 async function credentials(waitMs: number): Promise<{ token: string | null; anotherTars: boolean }> {
-  if (!AGENT_API_TOKEN) return { token: null, anotherTars: false };
+  const token = presentedToken();
+  if (!token) return { token: null, anotherTars: false };
   const holder = await portHolder(waitMs);
-  return { token: holder === "this" ? AGENT_API_TOKEN : null, anotherTars: holder === "another" };
+  return { token: holder === "this" ? token : null, anotherTars: holder === "another" };
 }
 
 export async function apiRequest(
@@ -125,16 +160,17 @@ export async function apiRequest(
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
-  if (CALLER_AGENT_ID) {
-    headers["X-Tars-Caller-Id"] = CALLER_AGENT_ID;
+  const { agentId: callerId, projectPath: callerProject } = getCallerIdentity();
+  if (callerId) {
+    headers["X-Tars-Caller-Id"] = callerId;
   }
   // The tool this call runs for, so that Tars can report an error it answers with as that tool's (tool-call.ts).
   const tool = toolCall.getStore();
   if (tool) {
     headers["X-Tars-Tool"] = tool;
   }
-  if (CALLER_PROJECT_PATH) {
-    headers["X-Tars-Caller-Project"] = CALLER_PROJECT_PATH;
+  if (callerProject) {
+    headers["X-Tars-Caller-Project"] = callerProject;
   }
 
   const controller = new AbortController();

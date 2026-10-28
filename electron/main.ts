@@ -24,6 +24,7 @@ import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
 import { app, dialog, ipcMain, Notification, powerSaveBlocker } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
+import { stopSharedMcp } from './services/mcp-shared';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -122,6 +123,7 @@ import {
 
 // Handlers
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
+import { noteApiPhase } from './core/api-listening';
 import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
 import { registerBusHandlers } from './handlers/bus-handlers';
 import { registerChatHandlers } from './handlers/chat-handlers';
@@ -560,6 +562,10 @@ const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 app.whenReady().then(async () => {
   if (!isPrimaryInstance) return;
   console.log('App ready, initializing...');
+  // No agent's CLI starts until this Tars listens on its port (core/api-listening.ts): "stopped" lets a start through,
+  // and the window and the IPC come up before initApiServer, so the API reads "starting" from here (the Audit's L3 on
+  // #541).
+  noteApiPhase('starting');
 
   // Ensure data directory exists
   ensureDataDir();
@@ -1103,6 +1109,8 @@ app.on('before-quit', (event) => {
       ['endAcpRunsOnQuit', endAcpRunsOnQuit],
       // A permission question held for the window: the mod's request is answered, back to its dialog.
       ['endPermissionAsks', endPermissionAsks],
+      // The MCP servers shared between agents: their stdin closed, then each stopped by its own process.
+      ['stopSharedMcp', stopSharedMcp],
       ['destroyTray', destroyTray],
       ['stopAgentAutosave', stopAgentAutosave],
       ['stopOverseerWatch', stopOverseerWatch],
