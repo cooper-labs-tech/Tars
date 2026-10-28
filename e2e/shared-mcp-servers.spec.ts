@@ -61,11 +61,14 @@ function standIn(home: string, other: string): string {
     "const session = require('crypto').randomUUID();",
     "const hook = (route, body) => fetch(process.env.CLAUDE_MGR_API_URL + route, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ agent_id: me, session_id: session, ...body }) });",
     "const done = () => fs.writeFileSync(path.join(home, `seen-${me}.json`), JSON.stringify(seen));",
+    // How far it got, at each step, for the artefact when it stalls.
+    "const steps = []; const mark = (step, more) => { steps.push({ at: Date.now(), step, ...(more || {}) }); fs.writeFileSync(path.join(home, `steps-${me}.json`), JSON.stringify(steps)); };",
     "(async () => {",
     "  try {",
-    "    await hook('/api/hooks/status', { status: 'idle', source: 'startup' });",
+    "    mark('started', { url: process.env.CLAUDE_MGR_API_URL || null });",
+    "    mark('session', { status: (await hook('/api/hooks/status', { status: 'idle', source: 'startup' })).status });",
     "    if (me !== 'a') {",
-    "      await hook('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'a turn that does not end' });",
+    "      mark('turn', { status: (await hook('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'a turn that does not end' })).status });",
     "      fs.writeFileSync(path.join(home, `turn-${me}`), '1');",
     "    }",
     // What claude reads: the --mcp-config Tars starts it with (the role file), then its user scope.
@@ -83,6 +86,7 @@ function standIn(home: string, other: string): string {
     "    const r = await post({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'whoami', arguments: {} } });",
     "    const json = messages(await r.text()).find(m => m.id === 2) || {};",
     "    seen.whoami = { status: r.status, text: (json.result && json.result.content || []).map(c => c.text || '').join('\\n').slice(0, 400) };",
+    "    mark('whoami', { status: r.status });",
     "    seen.asOther = (await post({ jsonrpc: '2.0', id: 3, method: 'tools/list' }, { 'X-Tars-Caller-Id': others })).status;",
     "    seen.noToken = (await post({ jsonrpc: '2.0', id: 4, method: 'tools/list' }, {}, {})).status;",
     "    seen.tokenInConfig = !!token && ['.claude.json', path.join('.claude', 'mcp.json')].some(f => { try { return fs.readFileSync(path.join(home, f), 'utf8').includes(token); } catch { return false; } });",
@@ -90,16 +94,18 @@ function standIn(home: string, other: string): string {
     // 5. A long call's keep-alive: wait_for_agent on the other agent, which never ends its turn here.
     "    if (me === 'a') {",
     "      while (!fs.existsSync(path.join(home, `turn-${others}`))) await new Promise(r => setTimeout(r, 200));",
+    "      mark('waiting');",
     "      const stop = new AbortController();",
     "      const started = Date.now();",
     "      const r2 = await post({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'wait_for_agent', arguments: { id: others, timeoutSeconds: 300 }, _meta: { progressToken: 'keep' } } }, {}, headers, stop.signal);",
     "      seen.waitType = r2.headers.get('content-type');",
+    "      mark('wait answered', { status: r2.status, type: seen.waitType });",
     "      const reader = r2.body.getReader(); let got = '';",
     "      for (;;) { const c = await reader.read(); if (c.done) break; got += new TextDecoder().decode(c.value); if (got.includes('notifications/progress')) break; }",
     "      seen.progress = { after: Date.now() - started, event: messages(got).find(m => m.method === 'notifications/progress') || null };",
     "      stop.abort();",
     "    }",
-    "  } catch (e) { seen.error = String(e && e.message || e); }",
+    "  } catch (e) { seen.error = String(e && e.message || e); mark('error', { error: seen.error }); }",
     "  done();",
     "})();",
     "process.stdout.write('stand-in ready\\r\\n');",
@@ -175,7 +181,13 @@ for (const newInterface of [false, true]) {
 
       type Win = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } };
       for (const id of ['a', 'b']) await page.evaluate(i => (window as unknown as Win).electronAPI.agent.start({ id: i, prompt: '' }), id);
-      await expect.poll(() => [seenBy('a'), seenBy('b')].filter(Boolean).length, { timeout: 150_000 }).toBe(2);
+      const stepsOf = (id: string): unknown => { try { return JSON.parse(fs.readFileSync(path.join(home, `steps-${id}.json`), 'utf8')); } catch { return null; } };
+      try {
+        await expect.poll(() => [seenBy('a'), seenBy('b')].filter(Boolean).length, { timeout: 150_000 }).toBe(2);
+      } finally {
+        // Which agent got how far, kept whether or not both answered (the QA's F8 of the final verification).
+        keep({ steps: { a: stepsOf('a'), b: stepsOf('b') }, seen: { a: seenBy('a') ?? null, b: seenBy('b') ?? null } });
+      }
       const a = seenBy('a')!;
       const b = seenBy('b')!;
       const servers = serversOf(resources);
