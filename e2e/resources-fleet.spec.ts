@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
-import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, removeHome, stepShot } from './fixture.mjs';
+import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, removeHome, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -13,7 +13,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * How it can fail, written before its backend:
  * 1. the view says it cannot read the fleet although the channel is there;
  * 2. a project or an agent of the fleet is missing, or an agent shows under another project;
- * 3. a project's agent count is not its agents';
+ * 3. a project's agent count is not its agents'; or one agent with no terminal makes its project's memory unread,
+ *    when another agent of it was read (the Audit's M1 on PR 548);
  * 4. an agent with no terminal shows a figure for its memory, 0 among them: it is said not read;
  * 5. choosing an agent does not show its detail, its tree and its disk, or shows another agent's;
  * 6. a command line in the tree shows a secret (the agent's own token, from its environment);
@@ -41,7 +42,9 @@ for (const newInterface of [false, true]) {
       createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z', ...extra,
     });
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      agent('a-harbor-1', 'Harbor Builder', harbor, { worktreePath: worktree, branchName: 'feature-a' }),
+      // Builder runs: a stand-in CLI that stays, so its tree has memory to read.
+      agent('a-harbor-1', 'Harbor Builder', harbor, { worktreePath: worktree, branchName: 'feature-a', cliPath: writeNodeCli(path.join(home, 'cli-builder.cjs'), [
+        "process.stdout.write('stand-in ready\\r\\n');", 'setInterval(() => {}, 1000);', 'process.stdin.resume();', ''].join('\n')) }),
       agent('a-harbor-2', 'Harbor Reviewer', harbor),
       agent('a-meridian', 'Meridian Writer', meridian),
     ], null, 2));
@@ -75,6 +78,7 @@ for (const newInterface of [false, true]) {
         await where.getByRole('radiogroup', { name: 'Resources view' }).getByRole('radio', { name: 'Agents and projects' }).click();
       }
       const view = where.getByRole('region', { name: 'Agents and projects' });
+      await page.evaluate(() => window.electronAPI!.agent!.start({ id: 'a-harbor-1', prompt: '' } as never));
       // 1. Read, not "cannot read".
       await expect(view.locator('[data-project-row]').first()).toBeVisible({ timeout: 60_000 });
       await expect(view.getByRole('alert')).toHaveCount(0);
@@ -88,6 +92,13 @@ for (const newInterface of [false, true]) {
       expect(new Set(rows)).toEqual(new Set(['Harbor Builder', 'Harbor Reviewer', 'Meridian Writer']));
       await expect(view.locator('[data-project-row="harbor"]')).toContainText('2 agents');
       await expect(view.locator('[data-project-row="meridian"]')).toContainText('1 agent');
+      // 3. Builder read, Reviewer not: harbor's memory is Builder's, never "not read".
+      const harborRow = view.locator('[data-project-row="harbor"]');
+      await expect(harborRow).toContainText(/\d+(\.\d)? (MB|GB)/, { timeout: 60_000 });
+      seen.harborRow = (await harborRow.innerText()).replace(/\s+/g, ' ');
+      await expect(view.locator('[data-agent-row="Harbor Builder"]')).toContainText(/\d+(\.\d)? (MB|GB)/);
+      await expect(where.locator('[data-resource-card="AGENTS HOLD"] [data-value]')).toHaveText(/(MB|GB)$/);
+      await expect(where.locator('[data-resource-card="AGENTS HOLD"]')).toContainText('not read');
       await stepShot(page, `${tag}1-table`);
 
       // 4. An agent with no terminal: its memory is not read, never 0.
