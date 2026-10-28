@@ -45,6 +45,21 @@ import type { AgentStatus } from '../../src/types/electron';
  *    is, and kept whole;
  * 10. a reason or a rule that is not given, or blank, reads as an empty
  *     row: it is '' instead, and nothing is shown for it.
+ * 11. a line break in the subject read as a space: "echo safe" then
+ *     "rm -rf important" read as one harmless echo, and an allow covered both
+ *     (the Audit's M1 on PR 544). Each break is kept: the subject marks it ⏎,
+ *     and its lines are given one by one for a window that shows them so;
+ *     \r\n, \r, \n, U+2028 and U+2029 are each one break, and a break at the
+ *     start or the end is no line of its own.
+ * 12. whitespace within a line collapsed: a quoted path or pattern with two
+ *     spaces, or a tab, read with one space, and an allow covered what was not
+ *     read (the Audit's Low at its re-check of PR 544). Every space is kept,
+ *     a tab shows as ⇥, and a character that hides or turns text shows as
+ *     U+FFFD instead of vanishing into a space.
+ * 13. a space other than U+0020 (no-break U+00A0, thin U+2009, narrow
+ *     no-break U+202F, ideographic U+3000 and the rest of Zs) read as an
+ *     ordinary one, where bash takes it as part of a word (the Audit's Low at
+ *     its second re-check of PR 544): each shows as ⍽.
  */
 
 const NOW = new Date(2026, 9, 5, 14, 30);
@@ -69,6 +84,7 @@ describe('the question, when Tars holds one', () => {
     expect(permissionAskLine(agent(), NOW)).toEqual({
       who: 'Asks to use Bash:',
       subject: 'npm run build && npm test',
+      lines: ['npm run build && npm test'],
       at: 'asked at 14:02',
       title: 'Asks to use Bash: npm run build && npm test',
       reason: '',
@@ -114,8 +130,50 @@ describe('what it names', () => {
       permissionAsk: ask({ tool: 'Ba\u202Esh', subject: 'rm -rf build\u2028&& echo \u202Eok\u200B done' }),
     }), NOW);
     expect(line?.who).toBe('Asks to use Ba sh:');
-    expect(line?.subject).toBe('rm -rf build && echo ok done');
+    expect(line?.subject).toBe('rm -rf build ⏎ && echo \uFFFDok\uFFFD done');
     expect(line?.title).not.toMatch(/[\u2028\u202E\u200B]/);
+  });
+});
+
+describe('its line breaks (11)', () => {
+  it('marks each break ⏎, never a space, and gives each line', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'echo safe\nrm -rf important' }) }), NOW);
+    expect(line?.subject).toBe('echo safe ⏎ rm -rf important');
+    expect(line?.lines).toEqual(['echo safe', 'rm -rf important']);
+    expect(line?.title).toBe('Asks to use Bash: echo safe ⏎ rm -rf important');
+  });
+  it('takes \r\n, \r, U+2028 and U+2029 for one break each, and none at the ends', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: '\na\r\nb\rc\u2028d\u2029e\n' }) }), NOW);
+    expect(line?.lines).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(line?.subject).toBe('a ⏎ b ⏎ c ⏎ d ⏎ e');
+  });
+  it('one line when there is no break', () => {
+    expect(permissionAskLine(agent(), NOW)?.lines).toEqual(['npm run build && npm test']);
+  });
+});
+
+describe('its whitespace within a line (12)', () => {
+  it('keeps every space, and shows a tab as ⇥', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'grep "a  b"\tfile.txt' }) }), NOW);
+    expect(line?.subject).toBe('grep "a  b"⇥file.txt');
+    expect(line?.lines).toEqual(['grep "a  b"⇥file.txt']);
+    expect(line?.title).toBe('Asks to use Bash: grep "a  b"⇥file.txt');
+  });
+  it('keeps a line\'s leading spaces, and drops none between its words', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'cat <<EOF\n  two  spaces\nEOF' }) }), NOW);
+    expect(line?.lines).toEqual(['cat <<EOF', '  two  spaces', 'EOF']);
+  });
+  it('shows a character that hides or turns text, never a space or nothing', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'rm\u200B -rf /tmp/x\u202E' }) }), NOW);
+    expect(line?.subject).toBe('rm\uFFFD -rf /tmp/x\uFFFD');
+  });
+});
+
+describe('a space other than the plain one (13)', () => {
+  it('shows each as ⍽, the plain space kept', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'rm -rf a\u00A0b c\u2009d e\u202Ff g\u3000h' }) }), NOW);
+    expect(line?.subject).toBe('rm -rf a⍽b c⍽d e⍽f g⍽h');
+    expect(line?.lines).toEqual(['rm -rf a⍽b c⍽d e⍽f g⍽h']);
   });
 });
 
