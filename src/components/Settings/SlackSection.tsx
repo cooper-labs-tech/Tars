@@ -166,7 +166,7 @@ export const SlackSection = ({ appSettings, onSaveAppSettings, onSecretChanged }
         }
       />
 
-      {/* One row per ID, as Telegram lists its chats: removing is the way back out. */}
+      {/* One row per ID, as Discord lists its own: removing is the way back out. */}
       {allowed.map(id => (
         <SettingsRow
           key={id}

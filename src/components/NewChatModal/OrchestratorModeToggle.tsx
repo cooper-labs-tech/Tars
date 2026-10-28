@@ -52,8 +52,8 @@ export default function OrchestratorModeToggle({
     enforced
       // Every orchestrator is a member of the global room; Telegram and Slack
       // pick the fleet's first one (getSuperAgent with no project).
-      ? 'Runs the project: it delegates instead of editing files, and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Telegram and Slack.'
-      : 'Runs the project and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Telegram and Slack. This CLI keeps its editing tools: it is asked to delegate, not stopped.',
+      ? 'Runs the project: it delegates instead of editing files, and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Slack. A Telegram message reaches the orchestrator of the project it names, through Hermes.'
+      : 'Runs the project and joins the global Chat room. If it is the fleet’s first orchestrator, it also answers Slack. A Telegram message reaches the orchestrator of the project it names, through Hermes. This CLI keeps its editing tools: it is asked to delegate, not stopped.',
     'A project has one, so switching this on takes the role from the current one.',
     ...(editing
       ? [enforced ? 'If it is running, saving restarts it once it is free.' : 'It takes the change at its next start.']

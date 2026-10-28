@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Select, Dropdown, SegmentedControl } from '@/components/ui';
+import { Select, SegmentedControl } from '@/components/ui';
 import { Toggle } from './Toggle';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
 import type { ClaudeInfo, AppSettings } from './types';
 import { PRIVACY_POLICY_URL } from './constants';
-import { PROVIDER_REGISTRY, computeProviderAvailability } from '@/lib/providers';
 import { errorReportsOffered } from '@/lib/error-reports';
 import { lastReportLine } from '@/lib/error-report-line';
 
@@ -16,7 +15,6 @@ interface GeneralSectionProps {
 }
 
 export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectionProps) => {
-  const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true });
   // Not on a Windows build (lib/error-reports.ts): read after hydration, as the bridge is.
   const [reportsOffered, setReportsOffered] = useState(true);
   useEffect(() => setReportsOffered(errorReportsOffered()), []);
@@ -43,22 +41,6 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
     const every = setInterval(read, 5_000);
     return () => { live = false; clearInterval(every); };
   }, [keepAwakeMode]);
-
-  useEffect(() => {
-    Promise.all([
-      window.electronAPI?.cliPaths?.detect(),
-      window.electronAPI?.appSettings?.get(),
-      window.electronAPI?.ollama?.test(),
-    ]).then(([paths, settings, ollama]) => {
-      if (paths || settings) {
-        setInstalledProviders(computeProviderAvailability(
-          paths as Record<string, string | undefined> | undefined,
-          settings,
-          ollama?.reachable,
-        ));
-      }
-    });
-  }, []);
 
   // The Tars identity card and the whole update checker (check button, release
   // notes, download progress, restart-to-apply) now live in SystemSection - the
@@ -140,50 +122,6 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
               { value: 'always', label: 'always' },
               { value: 'never', label: 'never' },
             ]}
-          />
-        }
-      />
-
-      <SettingsRow
-        label="Default provider"
-        description="Used for Telegram-spawned agents and webhook dispatches."
-        control={
-          <Dropdown
-            className="w-[300px]"
-            ariaLabel="Default provider"
-            searchable
-            value={appSettings.defaultProvider || 'claude'}
-            onChange={(v) => onSaveAppSettings({ defaultProvider: v })}
-            options={PROVIDER_REGISTRY
-              // Why these two and not the others: the answer is that nobody
-              // knows, and the list is kept rather than guessed at. It arrived
-              // in eac841a (2026-04-12) as "Remove OpenCode/Pi from provider
-              // picker (CLI-only tools)", and that reason does not pick them
-              // out: `requiresCli` is true for eight providers here, and amp
-              // has the same single "default" model row as opencode without
-              // being excluded. Nothing in the main process separates them
-              // either, neither `supportsNativeHooks` (false for five) nor the
-              // one-shot builders (both implement them).
-              //
-              // It matters less than it looks, and that is the real finding:
-              // `defaultProvider` is written here and read nowhere. Not in
-              // electron/, not in mcp-*/, not in hooks/. A programmatic spawn
-              // takes `agent.provider` and falls back to a hardcoded 'claude'
-              // (ipc-handlers.ts:437 and :554), so this control changes
-              // nothing and the row's description above it is not true today.
-              // Wiring it or removing it is a decision, not a cleanup.
-              .filter(p => p.id !== 'opencode' && p.id !== 'pi')
-              .map(({ id, label, requiresCli }) => {
-                const notAvailable = installedProviders[id] !== true;
-                return {
-                  value: id,
-                  label,
-                  hint: notAvailable
-                    ? requiresCli ? 'not installed' : 'add an API key first'
-                    : undefined,
-                  disabled: notAvailable,
-                };
-              })}
           />
         }
       />

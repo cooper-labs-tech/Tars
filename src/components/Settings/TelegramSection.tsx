@@ -1,311 +1,36 @@
 'use client';
 
-import { useState } from 'react';
-import { Button, Input, StatusBadge, StatusSquare } from '@/components/ui';
-import { secretIsSet } from '@/lib/secret-settings';
+import { Button } from '@/components/ui';
 import { SettingsRow } from './SettingsRow';
-import { SecretRow } from './SecretRow';
-import { Toggle } from './Toggle';
 import type { AppSettings } from './types';
 
 interface TelegramSectionProps {
   appSettings: AppSettings;
-  onSaveAppSettings: (updates: Partial<AppSettings>) => void;
-  onUpdateLocalSettings: (updates: Partial<AppSettings>) => void;
-  /** What secrets.set or the token's minting answered (useSettings' setSecretState). */
-  onSecretChanged: (field: string, set: boolean) => void;
-  /** Opens Settings, Hermes, where Telegram through Hermes is switched off. */
-  onOpenHermes?: () => void;
+  /** Opens Settings, Hermes, where Telegram is set now. */
+  onOpenHermes: () => void;
 }
 
-/** Row actions are words, never glyphs: 26px bordered lowercase mono. */
-const ACTION = 'font-mono lowercase';
-
-export const TelegramSection = ({ appSettings, onSaveAppSettings, onUpdateLocalSettings, onSecretChanged, onOpenHermes }: TelegramSectionProps) => {
-  const [testingTelegram, setTestingTelegram] = useState(false);
-  const [telegramTestResult, setTelegramTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [generatingToken, setGeneratingToken] = useState(false);
-  const [copiedToken, setCopiedToken] = useState(false);
-  const [tokenGenerated, setTokenGenerated] = useState(false);
-  // Whether each token is set is all the page knows of it (2.0.4, #466).
-  const botSet = secretIsSet(appSettings, 'telegramBotToken');
-  const authSet = secretIsSet(appSettings, 'telegramAuthToken');
-
-  const handleTestToken = async () => {
-    if (!window.electronAPI?.telegram?.test) return;
-    setTestingTelegram(true);
-    setTelegramTestResult(null);
-    try {
-      const result = await window.electronAPI.telegram.test();
-      if (result.success) {
-        setTelegramTestResult({ success: true, message: `Bot @${result.botName} is valid!` });
-      } else {
-        setTelegramTestResult({ success: false, message: result.error || 'Invalid token' });
-      }
-    } catch {
-      setTelegramTestResult({ success: false, message: 'Failed to test connection' });
-    } finally {
-      setTestingTelegram(false);
-    }
-  };
-
-  const handleSendTest = async () => {
-    if (!window.electronAPI?.telegram?.sendTest) return;
-    setTestingTelegram(true);
-    setTelegramTestResult(null);
-    try {
-      const result = await window.electronAPI.telegram.sendTest();
-      if (result.success) {
-        setTelegramTestResult({ success: true, message: 'Test message sent!' });
-      } else {
-        setTelegramTestResult({ success: false, message: result.error || 'Failed to send' });
-      }
-    } catch {
-      setTelegramTestResult({ success: false, message: 'Failed to send test message' });
-    } finally {
-      setTestingTelegram(false);
-    }
-  };
-
-  const handleGenerateAuthToken = async () => {
-    if (!window.electronAPI?.telegram?.generateAuthToken) return;
-    setGeneratingToken(true);
-    try {
-      // Tars shows the new token in a dialog of its own, which the page cannot
-      // read (secret-handoff.ts): the page is told it is set, never the token.
-      const result = await window.electronAPI.telegram.generateAuthToken();
-      if (result.success) {
-        onSecretChanged('telegramAuthToken', result.set ?? true);
-        setTokenGenerated(true);
-      }
-    } catch (err) {
-      console.error('Failed to generate auth token:', err);
-    } finally {
-      setGeneratingToken(false);
-    }
-  };
-
-  // Tars puts the token on the clipboard itself: the page never holds it.
-  const handleCopyAuthToken = async () => {
-    if (!authSet || !window.electronAPI?.telegram?.copyAuthToken) return;
-    try {
-      const result = await window.electronAPI.telegram.copyAuthToken();
-      if (!result.copied) return;
-      setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy token:', err);
-    }
-  };
-
-  const handleRemoveChatId = async (chatId: string) => {
-    if (!window.electronAPI?.telegram?.removeAuthorizedChatId) return;
-    try {
-      await window.electronAPI.telegram.removeAuthorizedChatId(chatId);
-    } catch (err) {
-      console.error('Failed to remove chat ID:', err);
-    }
-  };
-
-  const authorizedChatIds = appSettings.telegramAuthorizedChatIds || [];
-
-  // The auth token row carries the whole story of the token in one line: what is
-  // missing, what to do with it, and whether a restart is owed.
-  const authTokenDescription = !authSet
-    ? 'Required before the bot can run. Generate one to get started.'
-    : tokenGenerated
-      ? <span className="text-warning">Restart the app to apply the new token.</span>
-      : 'Share it with trusted users. They send /auth <token> to your bot.';
-
-  // Telegram through Hermes on (#285): main has erased the bot's token and
-  // keeps the bot off whatever this page sends (settingsForRelay), so nothing
-  // here can be typed or switched, or the page would show a token or a switch
-  // main has just refused. It says the bot is off and what replaced it, and how
-  // to bring it back. Frame: `Settings · Telegram · Telegram through Hermes`,
-  // and its light copy.
-  if (appSettings.hermesRelayEnabled === true) {
-    return (
-      <>
-        <SettingsRow
-          label="Telegram bot"
-          description="Replaced by Telegram through Hermes: Hermes is the only voice on your Telegram, and the bot's token was erased."
-          wrap
-          control={
-            <StatusBadge tone="idle" className="font-mono">
-              <StatusSquare tone="idle" />
-              off
-            </StatusBadge>
-          }
-        />
-        <SettingsRow
-          label="Telegram through Hermes"
-          description="To bring the bot back, turn it off in Settings, Hermes, Connection, then paste a new bot token here."
-          wrap
-          control={<Button size="sm" className={ACTION} onClick={onOpenHermes}>open hermes</Button>}
-        />
-      </>
-    );
-  }
-
-  return (
-    <>
+/**
+ * Settings, Telegram since 2.0.5 (frames `Settings · Telegram · Telegram through Hermes` and its light copy): Tars has
+ * no Telegram bot of its own any more, the owner's decision of 01/10. Telegram goes through Hermes, whose relay,
+ * gateways and senders are set in Settings, Hermes, the one action here. Nothing to type, test or switch. When the
+ * first 2.0.5 launch found the old bot's token (telegramBotRetired.hadToken), one line says to revoke it with
+ * BotFather: Tars erased its copy, Telegram still knows it.
+ */
+export const TelegramSection = ({ appSettings, onOpenHermes }: TelegramSectionProps) => (
+  <>
+    <SettingsRow
+      label="Telegram goes through Hermes"
+      description="Tars has no Telegram bot of its own since 2.0.5. Hermes is the only voice on your Telegram: its relay, its gateways and who may write to Tars from it are set in Settings, Hermes."
+      wrap
+      control={<Button size="sm" className="font-mono lowercase" onClick={onOpenHermes}>open hermes</Button>}
+    />
+    {appSettings.telegramBotRetired?.hadToken && (
       <SettingsRow
-        label="Enable Telegram bot"
-        description={
-          !authSet
-            ? 'Generate an auth token first, it is what keeps the bot yours.'
-            : 'Receive notifications and send commands from Telegram.'
-        }
-        control={
-          <Toggle
-            enabled={appSettings.telegramEnabled}
-            onChange={() => onSaveAppSettings({ telegramEnabled: !appSettings.telegramEnabled })}
-            disabled={!authSet || !botSet}
-          />
-        }
+        label="The old bot"
+        description="Its token was erased from Tars. Revoke it with BotFather too: send /revoke to @BotFather and choose the bot."
+        wrap
       />
-
-      <SecretRow
-        field="telegramBotToken"
-        label="Bot token"
-        noun="token"
-        set={botSet}
-        description={
-          <>
-            Create the bot with{' '}
-            <a
-              href="https://t.me/BotFather"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              @BotFather
-            </a>{' '}
-            and paste what it gives you.
-          </>
-        }
-        clearWarning="Clear the bot token? The bot stops now, and starts again once a token is set."
-        onChanged={onSecretChanged}
-      />
-
-      <SettingsRow
-        label="Secret auth token"
-        description={authTokenDescription}
-        control={
-          <div className="flex w-full items-center justify-end gap-2">
-            {authSet && (
-              <span className="flex items-center gap-1.5 text-[11.5px] text-success"><StatusSquare tone="running" />a token is set</span>
-            )}
-            {authSet && (
-              <Button size="sm" className={ACTION} onClick={handleCopyAuthToken}>
-                {copiedToken ? 'copied' : 'copy token'}
-              </Button>
-            )}
-            <Button
-              size="sm"
-              className={ACTION}
-              onClick={handleGenerateAuthToken}
-              disabled={generatingToken}
-            >
-              {generatingToken ? 'working' : authSet ? 'regenerate' : 'generate'}
-            </Button>
-          </div>
-        }
-      />
-
-      <SettingsRow
-        label="Chat id"
-        description="The chat that receives agent notifications."
-        control={
-          <Input
-            mono
-            width="control"
-            value={appSettings.telegramChatId || ''}
-            onChange={e => onUpdateLocalSettings({ telegramChatId: e.target.value })}
-            onBlur={e => onSaveAppSettings({ telegramChatId: e.target.value.trim() })}
-            placeholder="Set by whoever authenticates first"
-          />
-        }
-      />
-
-      {/* One row per authorized chat: revoking access is the only way back out. */}
-      {authorizedChatIds.length > 0 ? (
-        authorizedChatIds.map(chatId => {
-          const isDefault = appSettings.telegramChatId === chatId;
-          return (
-            <SettingsRow
-              key={chatId}
-              label={<span className="font-mono">{chatId}</span>}
-              description={isDefault ? 'Default chat' : 'Authorized'}
-              control={
-                <div className="flex w-full items-center justify-end gap-2">
-                  {!isDefault && (
-                    <Button
-                      size="sm"
-                      className={ACTION}
-                      onClick={() => onSaveAppSettings({ telegramChatId: chatId })}
-                    >
-                      set default
-                    </Button>
-                  )}
-                  <Button size="sm" className={ACTION} onClick={() => handleRemoveChatId(chatId)}>
-                    remove
-                  </Button>
-                </div>
-              }
-            />
-          );
-        })
-      ) : (
-        <SettingsRow
-          label="Authorized chats"
-          description="None yet. A user authenticates by sending /auth <token> to the bot."
-        />
-      )}
-
-      <SettingsRow
-        label="Require @mention"
-        description="In groups the bot only answers when mentioned. Direct messages always work."
-        control={
-          <Toggle
-            enabled={appSettings.telegramRequireMention || false}
-            onChange={() => onSaveAppSettings({ telegramRequireMention: !appSettings.telegramRequireMention })}
-          />
-        }
-      />
-
-      <SettingsRow
-        label="Test"
-        description={
-          telegramTestResult ? (
-            <span className={telegramTestResult.success ? 'text-success' : 'text-danger'}>
-              {telegramTestResult.message}
-            </span>
-          ) : (
-            'Check the token with Telegram, then send yourself a message.'
-          )
-        }
-        control={
-          <div className="flex w-full items-center justify-end gap-2">
-            <Button
-              size="sm"
-              className={ACTION}
-              onClick={handleTestToken}
-              disabled={!botSet || testingTelegram}
-            >
-              {testingTelegram ? 'working' : 'test token'}
-            </Button>
-            <Button
-              size="sm"
-              className={ACTION}
-              onClick={handleSendTest}
-              disabled={!authorizedChatIds.length || testingTelegram}
-            >
-              send test
-            </Button>
-          </div>
-        }
-      />
-    </>
-  );
-};
+    )}
+  </>
+);

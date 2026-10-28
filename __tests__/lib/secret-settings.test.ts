@@ -30,10 +30,10 @@ import { computeProviderAvailability } from '../../src/lib/providers';
 
 describe('a save never sends a secret (1, 2, 3, 4)', () => {
   it('takes out a secret sent back as the mask, and keeps the rest', () => {
-    expect(withoutSecrets({ telegramBotToken: SECRET_MASK, telegramEnabled: true })).toEqual({ telegramEnabled: true });
+    expect(withoutSecrets({ slackBotToken: SECRET_MASK, slackEnabled: true })).toEqual({ slackEnabled: true });
   });
   it('takes out a mask a field let the user type into', () => {
-    expect(withoutSecrets({ telegramBotToken: `${SECRET_MASK}x` })).toEqual({});
+    expect(withoutSecrets({ slackBotToken: `${SECRET_MASK}x` })).toEqual({});
   });
   it('takes out a key typed into a page', () => {
     expect(withoutSecrets({ openRouterApiKey: 'sk-or-typed', openRouterEnabled: true })).toEqual({ openRouterEnabled: true });
@@ -42,19 +42,19 @@ describe('a save never sends a secret (1, 2, 3, 4)', () => {
     expect(withoutSecrets({ slackAppToken: '', slackEnabled: false })).toEqual({ slackEnabled: false });
   });
   it('takes out secretsSet', () => {
-    expect(withoutSecrets({ secretsSet: { telegramBotToken: true }, notifyOnError: false })).toEqual({ notifyOnError: false });
+    expect(withoutSecrets({ secretsSet: { slackBotToken: true }, notifyOnError: false })).toEqual({ notifyOnError: false });
   });
 });
 
 describe('what is not a secret goes through as it is (5)', () => {
   it('keeps false, 0, an empty string and an empty list', () => {
-    const updates = { telegramEnabled: false, terminalFontSize: 0, defaultProjectPath: '', hiddenProjects: [] as string[] };
+    const updates = { discordEnabled: false, terminalFontSize: 0, defaultProjectPath: '', hiddenProjects: [] as string[] };
     expect(withoutSecrets(updates)).toEqual(updates);
   });
   it('returns a new object and leaves the one it was given alone', () => {
-    const updates = { telegramBotToken: 'typed', telegramEnabled: true };
+    const updates = { discordBotToken: 'typed', discordEnabled: true };
     withoutSecrets(updates);
-    expect(updates).toEqual({ telegramBotToken: 'typed', telegramEnabled: true });
+    expect(updates).toEqual({ discordBotToken: 'typed', discordEnabled: true });
   });
 });
 
@@ -70,25 +70,25 @@ describe("the window's list is main's (6)", () => {
 
 describe('whether a secret is set is what secretsSet says (7)', () => {
   it('reads not set for the mask when secretsSet says not', () => {
-    expect(secretIsSet({ telegramBotToken: SECRET_MASK, secretsSet: { telegramBotToken: false } }, 'telegramBotToken')).toBe(false);
+    expect(secretIsSet({ discordBotToken: SECRET_MASK, secretsSet: { discordBotToken: false } }, 'discordBotToken')).toBe(false);
   });
   it('reads set with no value in the window', () => {
-    expect(secretIsSet({ telegramBotToken: '', secretsSet: { telegramBotToken: true } }, 'telegramBotToken')).toBe(true);
+    expect(secretIsSet({ discordBotToken: '', secretsSet: { discordBotToken: true } }, 'discordBotToken')).toBe(true);
   });
   it('reads not set when secretsSet is missing, whatever the value', () => {
-    expect(secretIsSet({ telegramBotToken: SECRET_MASK }, 'telegramBotToken')).toBe(false);
-    expect(secretIsSet(null, 'telegramBotToken')).toBe(false);
+    expect(secretIsSet({ discordBotToken: SECRET_MASK }, 'discordBotToken')).toBe(false);
+    expect(secretIsSet(null, 'discordBotToken')).toBe(false);
   });
 });
 
 describe("the page's copy after secrets.set (8)", () => {
   it('takes the answer for that secret, keeps the others, and never a value', () => {
-    const before = { telegramBotToken: '', telegramEnabled: true, secretsSet: { telegramBotToken: false, slackBotToken: true } };
-    const after = withSecretState(before, 'telegramBotToken', true);
-    expect(after.secretsSet).toEqual({ telegramBotToken: true, slackBotToken: true });
-    expect(after.telegramBotToken).toBe('');
-    expect(after.telegramEnabled).toBe(true);
-    expect(before.secretsSet.telegramBotToken).toBe(false);
+    const before = { discordBotToken: '', discordEnabled: true, secretsSet: { discordBotToken: false, slackBotToken: true } };
+    const after = withSecretState(before, 'discordBotToken', true);
+    expect(after.secretsSet).toEqual({ discordBotToken: true, slackBotToken: true });
+    expect(after.discordBotToken).toBe('');
+    expect(after.discordEnabled).toBe(true);
+    expect(before.secretsSet.discordBotToken).toBe(false);
   });
   it('says a cleared secret is not set', () => {
     expect(withSecretState({ secretsSet: { deepSeekApiKey: true } }, 'deepSeekApiKey', false).secretsSet).toEqual({ deepSeekApiKey: false });

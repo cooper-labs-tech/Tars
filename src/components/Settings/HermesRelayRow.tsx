@@ -9,13 +9,12 @@ import { Toggle } from './Toggle';
 
 const LABEL = 'Telegram through Hermes';
 const CONFIRM =
-  "Turning it on erases the Tars bot's token and switches the bot off: your Telegram then hears from Hermes alone. Tars needs the tars-relay plugin on your Hermes.";
+  "Turning it on makes Hermes the only voice on your Telegram. Tars needs the tars-relay plugin on your Hermes.";
 
 /**
- * The relay's switch, `hermesRelayEnabled` (#285). Turning it on erases the
- * Tars bot's token and switches the bot off, so a click on the switch asks
- * first and nothing is saved before turn on; turning it off erases nothing and
- * saves at once. Once on, the row says how the relay stands, from main's
+ * The relay's switch, `hermesRelayEnabled` (PR 285), the one way to Telegram
+ * since Tars's own bot went in 2.0.5 (PR 545). A click on the switch asks
+ * first and nothing is saved before turn on; turning it off saves at once. Once on, the row says how the relay stands, from main's
  * `relayStatus()` and each `onRelayStatus` after it. Frames: `Settings ·
  * Connection`, and `Settings · Connection · Telegram through Hermes` with its
  * light copy.

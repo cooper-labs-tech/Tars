@@ -66,7 +66,7 @@ const HEADER_ACTIONS: Record<SettingsSection, { label: string; kind: HeaderActio
   hermes: { label: 'Test connection', kind: 'unwired' },
   // Opens the name row at the top of the list, as drawn: Gateways · states, adding a gateway.
   'hermes-gateways': { label: 'add gateway', kind: 'add-gateway' },
-  telegram: { label: 'Test', kind: 'unwired' },
+  telegram: { label: '', kind: 'none' },
   slack: { label: 'Test', kind: 'unwired' },
   discord: { label: 'Test', kind: 'unwired' },
   memory: { label: 'Check', kind: 'unwired' },
@@ -75,12 +75,6 @@ const HEADER_ACTIONS: Record<SettingsSection, { label: string; kind: HeaderActio
   skills: { label: 'Refresh', kind: 'refresh' },
 };
 
-/**
- * Telegram while Telegram through Hermes is on: the bot is off and its token
- * erased, so there is nothing to test, as `Settings · Telegram · Telegram
- * through Hermes` draws it.
- */
-const NO_ACTION = { label: '', kind: 'none' } as const;
 
 export default function SettingsPage() {
   return (
@@ -141,13 +135,7 @@ function SettingsPageInner() {
         );
       case 'telegram':
         return (
-          <TelegramSection
-            appSettings={appSettings}
-            onSaveAppSettings={handleSaveAppSettings}
-            onUpdateLocalSettings={updateLocalAppSettings}
-            onSecretChanged={setSecretState}
-            onOpenHermes={() => setActiveSection('hermes')}
-          />
+          <TelegramSection appSettings={appSettings} onOpenHermes={() => setActiveSection('hermes')} />
         );
       case 'slack':
         return (
@@ -275,9 +263,7 @@ function SettingsPageInner() {
   // `Terminal`, `Providers`, `Connection`. Title and subtitle both come from
   // the leaf, so the nav and the header can never disagree.
   const activeLeaf = SECTIONS.find(s => s.id === activeSection);
-  const action = activeSection === 'telegram' && appSettings.hermesRelayEnabled === true
-    ? NO_ACTION
-    : HEADER_ACTIONS[activeSection];
+  const action = HEADER_ACTIONS[activeSection];
 
   return (
     <div className="flex flex-col h-[calc(100vh-7rem)] lg:h-[calc(100vh-3rem)] overflow-hidden">
@@ -336,6 +322,7 @@ function SettingsPageInner() {
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.15 }}
           className="flex-1 min-w-0 min-h-0 flex flex-col"
+          data-settings-section={activeSection}
         >
           <SettingsCard>{renderContent()}</SettingsCard>
         </motion.div>

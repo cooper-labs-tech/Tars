@@ -12,7 +12,7 @@ import { SettingsRow } from './SettingsRow';
  * of Providers' key row (CliPanels.tsx, #460).
  */
 export function SecretRow({ field, label, description, wrap, set, noun = 'key', placeholder, clearWarning, onChanged }: {
-  /** The setting secrets.set takes, `telegramBotToken`. */
+  /** The setting secrets.set takes, `slackBotToken`. */
   field: string;
   label: string;
   description?: ReactNode;
