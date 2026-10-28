@@ -974,6 +974,7 @@ to a CLI, and Tars makes it `0700` whichever write creates it:
 | `~/.tars-private/hermes-webhook-<id>.secret` | `electron/services/hermes-gateways.ts` (`rotateGatewaySecret`) | another gateway's bearer for `POST /api/webhooks/hermes/<id>`, 32 random bytes hex, mode `0600`, removed with its gateway (2.0.4) |
 | `~/.tars-private/hermes-webhook-secret` | `electron/services/hermes-webhook-secret.ts` (`provisionWebhookSecret`) | the default gateway's bearer for `POST /api/webhooks/hermes` and the only credential that opens it: 32 random bytes hex, mode `0600`, minted the first time Settings > Hermes asks for it. Moved out of `~/.tars/hermes-webhook-secret` at the first startup that finds it there, value unchanged, so Hermes keeps working; read back before the old file is deleted, and while it cannot be moved the webhook opens to nobody. An old file found beside the private one opens nothing and is deleted |
 | `~/.tars-private/overseer-hermes-sessions.json` | `electron/services/overseer-store.ts` (`rememberHermesSessions`) | the ids of the Hermes sessions the super chat's turns ran in, the last 5000, mode `0600`: `memory_search` leaves them out, so no agent is handed the super chat through Hermes |
+| `~/.tars-private/overseer-hermes-session.json` | `electron/services/overseer-store.ts` (`keepHermesSession`) | the one Hermes session the super chat talks in, its stored id per gateway URL, mode `0600`: every turn resumes it, after a restart or a sleep too; removed when the conversation is cleared, so the next turn starts a new session. A gateway that no longer has it is given a new one (0.21.5 answers 4007), or makes it again under the same id (0.22) |
 | `~/.tars-private/claude-accounts.json` | `electron/handlers/claude-accounts-handlers.ts` | several Claude subscriptions: the option (off by default), each account's id and label, the thresholds. No credential and no folder: each account is the Claude Code folder `~/.claude-accounts/<id>`, derived from its id and signed in by `claude auth login`. `CLAUDE_CONFIG_DIR=<folder> claude auth status` says what Claude Code sees there. A file that does not parse freezes the list (every change refused, Settings says so) until it is fixed or removed; removing it leaves the folders signed in, so sign each out first with `CLAUDE_CONFIG_DIR=<folder> claude auth logout`. With the option on, Tars moves an unpinned agent to the account with most room when a limit cuts its turn (then types "Continue where you left off..." into the new session) or when a turn ends past a threshold, once per agent every ten minutes at most; each move is a `[claude-accounts] <agent>: moving from <id> to <id>` line in the main process log, and the blocks it sets are in memory only, gone at a restart of Tars |
 | `~/.tars-private/run-state.json` | `electron/services/run-state.ts` | this run's record, mode `0600`: `cleanExit: false` while it runs, `true` after a quit. Open at a launch means the last run stopped abruptly, and the agents in `working` are resumed with a note, unless the Tars that wrote it still runs (its pid is a live process of yours that started when the record's `processStart` says, and the machine has not rebooted since; `ps -o lstart= -p <pid>` on macOS shows that start): a second Tars on the same home reads nothing from it and writes nothing to it. Here because it says whom Tars starts: in `~/.tars`, any agent could have had any agent started at the next launch |
 | `~/.tars-private/task-texts.jsonl` | `electron/services/task-ledger.ts` | what each task of the task ledger said, `{ id, text }`, its first line, 200 characters at most, mode `0600`: JeanBrasse's typed prompts and the chat messages handed to orchestrators, which no agent is handed. Moved out of `~/.tars/task-ledger.jsonl` at the first start that finds texts there |
@@ -1581,11 +1582,14 @@ unfinished text went out with the message. Never mix and never block, so:
 
 - **While you are typing**, the message waits. Five seconds of quiet ends the wait, re-armed by
   every key, so it lasts as long as the typing does (`TYPING_PAUSE_MS`, `pty-manager.ts`).
-- **At the first pause**, Tars empties the field, writes the message, submits it, and types your
-  draft back exactly as it was, caret included, without sending it. Keys you type during that
-  window are held and replayed in order.
-- **If it cannot promise to give your draft back**, it writes nothing at all. Your field is
-  never touched by something it does not understand.
+- **While anything is in your field**, the message waits too: Tars never clears, edits or
+  submits what you typed (2.0.5). It goes in at the first pause once the field is empty, after
+  you send what you typed or clear it, and the panel says a message is waiting meanwhile. Until
+  2.0.5 it emptied the field, sent the message and typed your draft back; on Claude Code 2.1.306
+  a click in the prompt moves the caret where the keys cannot see it, and the emptying took the
+  beginning of JeanBrasse's draft and sent the rest behind Tars's message (22/10).
+- **If it cannot read what the field holds**, it writes nothing either, until the
+  `UserPromptSubmit` hook proves the field emptied. A click inside a draft is such a case.
 
 What it understands is rebuilt from the keys the interface relays (`input-draft.ts`): of the 166
 key encodings xterm sends from a Mac keyboard it follows 112 and gives up on 54, among them the

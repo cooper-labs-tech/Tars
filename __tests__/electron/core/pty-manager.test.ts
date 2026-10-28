@@ -45,10 +45,11 @@ describe('writeProgrammaticInput', () => {
     writeProgrammaticInput(pty, msg, true);
 
     // Text is written immediately, but the \r has NOT been sent yet.
-    expect(writes).toEqual([msg]);
+    // In bracket paste markers, short as it is, since 22/10.
+    expect(writes).toEqual([`\x1b[200~${msg}\x1b[201~`]);
 
     vi.advanceTimersByTime(300);
-    expect(writes).toEqual([msg, '\r']);
+    expect(writes).toEqual([`\x1b[200~${msg}\x1b[201~`, '\r']);
   });
 
   it('removes a closing paste marker written in its 7-bit form', () => {

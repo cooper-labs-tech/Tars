@@ -831,10 +831,11 @@ describe('the note on a room message', () => {
    */
   function readNote(terminal: FakeTerminal) {
     const pasted = terminal.written.join('');
-    const start = pasted.indexOf('\u001b[200~');
-    const end = pasted.indexOf('\u001b[201~');
-    if (start < 0 || end < 0) throw new Error(`no pasted note in ${JSON.stringify(pasted)}`);
-    const lines = pasted.slice(start + '\u001b[200~'.length, end).split('\n');
+    // Every piece is a paste of its own since 22/10, the sender line first: the note is the one that announces its fence.
+    const pastes = [...pasted.matchAll(/\u001b\[200~([\s\S]*?)\u001b\[201~/g)].map(m => m[1]);
+    if (pastes.length === 0) throw new Error(`no pasted note in ${JSON.stringify(pasted)}`);
+    const note = pastes.find(p => /the two lines that read tars-/.test(p)) ?? pastes.reduce((a, b) => (b.length > a.length ? b : a));
+    const lines = note.split('\n');
     const declared = /the two lines that read (tars-[0-9a-f]{24})\./.exec(lines[1] ?? '')?.[1];
     const fenceAt = lines.flatMap((line, i) => (line === declared ? [i] : []));
     return {

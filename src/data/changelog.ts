@@ -7,6 +7,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 62,
+    version: '2.0.5',
+    date: '2026-10-22',
+    updates: [
+      'The Chat keeps one Hermes session: it no longer opens a new one at each automatic check-in, each start of Tars or each failed turn, and an automatic check-in never runs the cron job. Clearing the Chat starts a new session.',
+      'Your draft in an agent\'s terminal is never touched: a message from Tars or an agent waits until you have sent or emptied what you typed, and the panel says one is waiting. A click in Claude Code\'s prompt no longer lets a message cut into your text, and a message that follows a long paste you sent is no longer left unsent in your field.',
+      'A permission question shown whole in a small Dashboard panel keeps allow and deny in reach: the call, why and the rule scroll inside it, with no need for full screen.',
+    ],
+  },
+  {
     id: 61,
     version: '2.0.4',
     date: '2026-10-18',
