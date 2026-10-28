@@ -95,8 +95,8 @@ function AgentDetail({ agent, project, diskMeasuredAt }: { agent: AgentResources
         <span className="font-mono text-[10px] text-muted-foreground">secrets masked</span>
       </div>
       <ul aria-label="Its processes">
-        {agent.processes.map((p, i) => (
-          <li key={`${p.name}-${i}`} className="flex flex-col gap-[3px] px-3.5 py-[7px] border-t border-border">
+        {agent.processes.map((p) => (
+          <li key={p.pid} className="flex flex-col gap-[3px] px-3.5 py-[7px] border-t border-border">
             <p className="flex items-center gap-2"><span className="flex-1 min-w-0 text-[11.5px] text-foreground truncate">{p.name}</span><span className="font-mono text-[11px] text-foreground">{mb(p.memMb)}</span><span className="font-mono text-[11px] text-muted-foreground">{pct(p.cpuPct)}</span></p>
             <p data-command className="font-mono text-[10px] leading-[1.45] text-muted-foreground break-all">{p.command}</p>
           </li>
