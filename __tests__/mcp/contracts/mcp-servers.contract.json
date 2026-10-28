@@ -47,6 +47,27 @@
             }
           },
           {
+            "name": "checkpoint",
+            "description": "Write one line about yourself: where you stand in the task in hand, 120 characters at most (for instance: tests written, 3 of 5 green). Tars keeps it with you, shows it on your card, and gives it to whoever follows your task (task_status) or reads you (list_agents, get_agent). A new line replaces the last. Write one at a step worth knowing, not at every action.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "string",
+                  "description": "One line, 120 characters at most, no newline."
+                }
+              },
+              "required": [
+                "line"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
             "name": "get_agent",
             "description": "Get detailed information about a specific agent including its full output history.",
             "inputSchema": {
@@ -142,11 +163,11 @@
                 },
                 "provider": {
                   "type": "string",
-                  "description": "The provider, by id (default claude). Its own CLI: claude, codex, gemini, grok, opencode, pi, amp. Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen, zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai. Default claude."
                 },
                 "model": {
                   "type": "string",
-                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-5-codex' for codex). Omit for the provider's default."
+                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-6-luna' for codex). Omit for the provider's default."
                 },
                 "effort": {
                   "type": "string",
@@ -174,6 +195,106 @@
                   "description": "Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "update_agent",
+            "description": "Change an agent of your project after creating it: its name, provider (any CLI or API-key provider), model, effort, permission mode, CLI path, skills, character or secondary project path. Only your project's orchestrator does this, on its project's other agents: a worker is refused (worker_may_not_update), and so is an agent of another project (other_project). The role stays the user's: an agent is made the orchestrator, or stops being it, in the Agents page of Tars, where the orchestrator's own settings are changed too (orchestrator_settings), and so is a move to another project. A running turn is never cut. A change of model, effort or permission mode on the same CLI restarts a claude agent's CLI once its turn ends, on the same conversation; another CLI takes it at its next start. A change of provider or CLI path is refused while a CLI runs in the agent's terminal (cli_running): stop it with stop_agent once its work is done, then change it; its next start runs the new CLI on a new conversation, and the old CLI's model and CLI path are cleared unless you give new ones. The answer says when the change applies and whether the conversation is kept.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Its new name"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The model, as the provider's CLI names it (e.g. 'opus' or 'sonnet' for claude); null for the provider's default."
+                },
+                "effort": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Reasoning effort; null for the CLI's own."
+                },
+                "permissionMode": {
+                  "type": "string",
+                  "enum": [
+                    "plan",
+                    "normal",
+                    "auto",
+                    "bypass"
+                  ],
+                  "description": "plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing)."
+                },
+                "cliPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Absolute path of the CLI's executable file, run instead of the provider's own; null for the provider's own. Refused unless it is an executable file."
+                },
+                "skills": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Its skills: the whole list, which replaces the one it has"
+                },
+                "character": {
+                  "type": "string",
+                  "enum": [
+                    "robot",
+                    "ninja",
+                    "wizard",
+                    "astronaut",
+                    "knight",
+                    "pirate",
+                    "alien",
+                    "viking"
+                  ],
+                  "description": "Visual character for the agent"
+                },
+                "secondaryProjectPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Secondary project path added as context (--add-dir); null to take it away"
+                }
+              },
+              "required": [
+                "id"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -234,6 +355,10 @@
                   "minLength": 1,
                   "description": "Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"
                 },
+                "dropQueue": {
+                  "type": "boolean",
+                  "description": "Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."
+                },
                 "allowCrossProject": {
                   "type": "boolean",
                   "description": "Explicitly allow acting on an agent of ANOTHER project (normally rejected)"
@@ -293,6 +418,66 @@
               },
               "required": [
                 "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "agent_queue",
+            "description": "What waits in an agent's queue, in the order it goes in (each item's task id, who sent it, since when, whether it is a task, a message or a note, and its first line), and whether the queue is paused. With action 'pause', nothing goes in until it is resumed; the turn in progress is never touched. With 'resume', the items go in again, one at a time, in order. A stop keeps the queue, paused, and a restart of Tars too. The project's orchestrator acts on its agents' queues; a worker sees in another agent's queue only what it sent itself, and pauses nothing. Move an item with task_move, take one back with task_cancel.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "pause",
+                    "resume",
+                    "drop"
+                  ],
+                  "description": "'list' (default), 'pause', 'resume', or 'drop' (everything that waits taken back, each sender told)"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "With 'pause': why, in one line, shown with the queue"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "task_move",
+            "description": "Move an item of an agent's queue: to the head, so it goes in next, or just before another item of the same queue. The project's orchestrator moves any item of its agents' queues; a worker only what it sent itself.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "description": "The item's task id: t- and 8 hex characters"
+                },
+                "before": {
+                  "type": "string",
+                  "description": "The task id it goes just before; omitted, it goes to the head"
+                }
+              },
+              "required": [
+                "taskId"
               ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
@@ -378,7 +563,7 @@
           },
           {
             "name": "delegate_task",
-            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\").",
+            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\"). Write the prompt as a spec in five parts: Target (what must be true at the end), Change (what to do), Constraints (what must not break), May touch (the files, folders and tools the agent may use), Proof (the observable check of acceptance the agent runs and reports); the guide's delegation topic says more.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -388,7 +573,7 @@
                 },
                 "prompt": {
                   "type": "string",
-                  "description": "The task/instruction for the agent"
+                  "description": "The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."
                 },
                 "model": {
                   "type": "string",
@@ -606,6 +791,89 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "heavy_slot_take",
+            "description": "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 120,
+                  "description": "What the run is, as others will see it in the queue: e.g. 'e2e suite' or 'next build'."
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "gate",
+                    "normal",
+                    "background"
+                  ],
+                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                },
+                "ticket": {
+                  "type": "string",
+                  "description": "A ticket a previous call returned waiting: wait on it again instead of asking anew."
+                },
+                "wait_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 600,
+                  "description": "How long to wait for the grant in this call (default 60)."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_give_back",
+            "description": "Give the heavy-run slot back once your heavy run is over (or give up a ticket that still waits), so the next agent in the queue gets it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "ticket": {
+                  "type": "string",
+                  "description": "The ticket heavy_slot_take returned."
+                }
+              },
+              "required": [
+                "ticket"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_status",
+            "description": "Who holds the machine's heavy-run slot, since when and for what, and who waits, in which order and why.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "disk_scan",
+            "description": "List what Tars's disk janitor would propose to delete now, by rule: old .next and test artefacts of idle worktrees, merged worktrees, stale npx cache entries, unused Docker images, gone agents' temporary folders. Read only: nothing is deleted, and only the user approves a deletion, in Tars's window.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -628,6 +896,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: whoami",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -646,6 +915,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: whoami",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -681,6 +951,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: whoami",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -699,6 +970,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: whoami",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -734,6 +1006,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: whoami",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -770,6 +1043,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -805,6 +1079,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -842,6 +1117,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -879,6 +1155,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -916,6 +1193,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -951,6 +1229,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -987,6 +1266,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1023,6 +1303,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1059,6 +1340,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1095,6 +1377,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1133,6 +1416,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: get_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1170,6 +1454,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: get_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1200,7 +1485,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool get_agent: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"id\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool get_agent: Required at id"
               }
             ],
             "isError": true
@@ -1225,6 +1510,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: get_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1263,6 +1549,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: get_agent_output",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1300,6 +1587,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: get_agent_output",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1337,6 +1625,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: get_agent_output",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1375,6 +1664,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: create_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1423,6 +1713,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: create_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1462,6 +1753,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: create_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1496,7 +1788,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool create_agent: [\n  {\n    \"received\": \"dragon\",\n    \"code\": \"invalid_enum_value\",\n    \"options\": [\n      \"robot\",\n      \"ninja\",\n      \"wizard\",\n      \"astronaut\",\n      \"knight\",\n      \"pirate\",\n      \"alien\",\n      \"viking\"\n    ],\n    \"path\": [\n      \"character\"\n    ],\n    \"message\": \"Invalid enum value. Expected 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking', received 'dragon'\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool create_agent: Invalid enum value. Expected 'robot' | 'ninja' | 'wizard' | 'astronaut' | 'knight' | 'pirate' | 'alien' | 'viking', received 'dragon' at character"
               }
             ],
             "isError": true
@@ -1522,6 +1814,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1530,7 +1823,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 100"
               ],
-              "body": "{\"task\":\"Run the tests\",\"clientRequestId\":\"e11021f9-eaaf-41b2-8c9a-b216b6528672\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Run the tests\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -1565,6 +1858,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1573,7 +1867,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 140"
               ],
-              "body": "{\"task\":\"Run the tests\",\"clientRequestId\":\"5b513cf9-554d-4606-81a1-54f3341bdab3\",\"answer\":\"started\",\"model\":\"opus\",\"allowCrossProject\":true}"
+              "body": "{\"task\":\"Run the tests\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\",\"model\":\"opus\",\"allowCrossProject\":true}"
             }
           ],
           "answer": {
@@ -1606,6 +1900,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1614,7 +1909,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 96"
               ],
-              "body": "{\"task\":\"Also lint\",\"clientRequestId\":\"0734e94b-5427-4d37-8192-a72ec2300fdf\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Also lint\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -1647,6 +1942,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1655,7 +1951,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 96"
               ],
-              "body": "{\"task\":\"Also lint\",\"clientRequestId\":\"a2ae6ae7-bd5a-4f65-bde1-658a03b9edb9\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Also lint\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -1688,6 +1984,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1696,7 +1993,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Run\",\"clientRequestId\":\"d9bbb4b6-0546-4829-a5bb-bc7178fac77f\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Run\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -1729,6 +2026,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1737,7 +2035,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Run\",\"clientRequestId\":\"a7a390c7-6347-4efe-8ac9-516df4c44d3c\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Run\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -1770,6 +2068,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: start_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1778,7 +2077,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Run\",\"clientRequestId\":\"4fb21924-3b61-4125-8d30-b0b30c49a285\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Run\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -1811,6 +2110,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: stop_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1826,7 +2126,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Stopped agent a1: frozen on a file read"
+                "text": "Stopped agent a1: frozen on a file read."
               }
             ]
           }
@@ -1844,7 +2144,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool stop_agent: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"reason\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool stop_agent: Required at reason"
               }
             ],
             "isError": true
@@ -1870,6 +2170,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: stop_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1911,6 +2212,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: stop_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -1926,7 +2228,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Stopped agent b1: done"
+                "text": "Stopped agent b1: done."
               }
             ]
           }
@@ -1951,6 +2253,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: stop_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2011,6 +2314,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2019,7 +2323,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 76"
               ],
-              "body": "{\"message\":\"Hello\",\"clientRequestId\":\"b54f5de6-8683-440e-ae3f-733e4766bc7c\"}"
+              "body": "{\"message\":\"Hello\",\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2051,6 +2355,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2059,7 +2364,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 81"
               ],
-              "body": "{\"message\":\"Via prompt\",\"clientRequestId\":\"a2498698-2f47-4bb6-9e09-20cff4d8648e\"}"
+              "body": "{\"message\":\"Via prompt\",\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2091,6 +2396,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2099,7 +2405,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 78"
               ],
-              "body": "{\"message\":\"Careful\",\"clientRequestId\":\"8b82dc57-0cdb-404a-8562-d6fdaa466f39\"}"
+              "body": "{\"message\":\"Careful\",\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2132,6 +2438,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2140,7 +2447,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 100"
               ],
-              "body": "{\"message\":\"Yes\",\"allowCrossProject\":false,\"clientRequestId\":\"d7f17014-56f4-48a9-aa7f-5212f4e32a93\"}"
+              "body": "{\"message\":\"Yes\",\"allowCrossProject\":false,\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2173,6 +2480,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2181,7 +2489,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 74"
               ],
-              "body": "{\"message\":\"One\",\"clientRequestId\":\"4faa25b2-25a1-4a87-a349-08e667bd593b\"}"
+              "body": "{\"message\":\"One\",\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2213,6 +2521,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2221,7 +2530,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 76"
               ],
-              "body": "{\"message\":\"Later\",\"clientRequestId\":\"f0762481-7b78-4a10-8851-fd6d26e44663\"}"
+              "body": "{\"message\":\"Later\",\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2253,6 +2562,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2261,7 +2571,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 73"
               ],
-              "body": "{\"message\":\"Hi\",\"clientRequestId\":\"27ed72f4-172f-4792-9fac-3deedf0fc016\"}"
+              "body": "{\"message\":\"Hi\",\"clientRequestId\":\"<request id>\"}"
             }
           ],
           "answer": {
@@ -2293,6 +2603,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: remove_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2331,6 +2642,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: remove_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2368,6 +2680,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: remove_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2406,6 +2719,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2424,6 +2738,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2462,6 +2777,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2480,6 +2796,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2517,6 +2834,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2535,6 +2853,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2573,6 +2892,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2591,6 +2911,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2629,6 +2950,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2647,6 +2969,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2684,6 +3007,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2702,6 +3026,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2739,6 +3064,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2757,6 +3083,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2794,6 +3121,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2812,6 +3140,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2849,6 +3178,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2867,6 +3197,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2905,6 +3236,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2923,6 +3255,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2961,6 +3294,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -2979,6 +3313,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3018,6 +3353,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: wait_for_agent",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3057,6 +3393,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3065,7 +3402,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 98"
               ],
-              "body": "{\"task\":\"Fix the bug\",\"clientRequestId\":\"0523faa2-3ce2-400f-bcf2-61a7b88839d8\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix the bug\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3099,6 +3436,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3107,7 +3445,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 98"
               ],
-              "body": "{\"task\":\"Fix the bug\",\"clientRequestId\":\"f7ab9dd4-40fe-4a20-b232-0ae9927960c8\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix the bug\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3140,6 +3478,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3148,7 +3487,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"1c332248-3a6d-45ba-ab57-e82a8d983a47\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3182,6 +3521,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3190,7 +3530,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 107"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"97c187f4-3ce3-406c-b449-46dfe8e361a3\",\"answer\":\"started\",\"model\":\"sonnet\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\",\"model\":\"sonnet\"}"
             }
           ],
           "answer": {
@@ -3225,6 +3565,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3233,7 +3574,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 115"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"b3f0d732-87f9-4fde-b704-d7b84402cb62\",\"answer\":\"started\",\"allowCrossProject\":true}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\",\"allowCrossProject\":true}"
             }
           ],
           "answer": {
@@ -3267,6 +3608,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3275,7 +3617,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"e85e3895-f77e-40af-80ba-b37ca4b1c4e0\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3309,6 +3651,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3317,7 +3660,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"b83b6d22-6f4b-4e7c-b081-8c08b7989424\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3351,6 +3694,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3359,7 +3703,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"1f62032b-f5e8-412b-aa34-21783b9806bc\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3393,6 +3737,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3401,7 +3746,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"536e93dc-c529-437f-bf1f-e938b0121247\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3435,6 +3780,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3443,7 +3789,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"cffadda9-1d80-4fcf-b370-f876816124c0\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3477,6 +3823,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3485,7 +3832,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"5c3c094b-2e73-4cbd-a413-8e1df36eeece\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3519,6 +3866,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3527,7 +3875,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"d07d331b-d2d9-49a2-aebb-11308f4cfae5\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3561,6 +3909,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3569,7 +3918,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"b0785da5-57c8-43bb-bc81-205e1855b431\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3604,6 +3953,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3612,7 +3962,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"f47ac3e3-eeaf-45f9-9ca8-3a82cdb7c64f\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3646,6 +3996,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3654,7 +4005,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"3236dd96-75dd-431e-8e10-0f7e5d77b454\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3688,6 +4039,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3696,7 +4048,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"3daa8334-59ed-46d5-ad18-bd0c0e80d4e7\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3731,6 +4083,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3739,7 +4092,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"403f148d-4329-4e9b-ae09-ce409592df90\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "answer": {
@@ -3766,6 +4119,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: delegate_task",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3774,7 +4128,7 @@
                 "accept-encoding: gzip, deflate",
                 "content-length: 90"
               ],
-              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"6675a6bf-6b0c-4009-b702-5be4494f0e4f\",\"answer\":\"started\"}"
+              "body": "{\"task\":\"Fix\",\"clientRequestId\":\"<request id>\",\"answer\":\"started\"}"
             }
           ],
           "notifications": [
@@ -3783,7 +4137,7 @@
                 "content": [
                   {
                     "type": "text",
-                    "text": "Tars could not be reached about this delegation to agent a1 (fetch failed). The task may still be working in its terminal: follow it with task_status({ clientRequestId: \"403f148d-4329-4e9b-ae09-ce409592df90\" }) rather than delegating the task again."
+                    "text": "Tars could not be reached about this delegation to agent a1 (fetch failed). The task may still be working in its terminal: follow it with task_status({ clientRequestId: \"<request id>\" }) rather than delegating the task again."
                   }
                 ],
                 "isError": true
@@ -3816,7 +4170,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool delegate_task: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"prompt\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool delegate_task: Required at prompt"
               }
             ],
             "isError": true
@@ -3841,6 +4195,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_telegram",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3880,6 +4235,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_telegram",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3919,6 +4275,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_telegram",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3958,6 +4315,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_slack",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -3997,6 +4355,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_slack",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4038,6 +4397,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_discord",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4077,6 +4437,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_discord",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4117,6 +4478,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_discord",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4158,6 +4520,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: ask_user",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4197,6 +4560,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: ask_user",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4231,7 +4595,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool ask_user: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"string\",\n    \"received\": \"undefined\",\n    \"path\": [\n      \"question\"\n    ],\n    \"message\": \"Required\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool ask_user: Required at question"
               }
             ],
             "isError": true
@@ -4256,6 +4620,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_post",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4295,6 +4660,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_post",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4338,6 +4704,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_post",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4378,6 +4745,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_post",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4417,6 +4785,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_post",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4455,6 +4824,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_read",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4493,6 +4863,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_read",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4528,6 +4899,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_read",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4563,6 +4935,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: room_read",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -4648,6 +5021,27 @@
             }
           },
           {
+            "name": "checkpoint",
+            "description": "Write one line about yourself: where you stand in the task in hand, 120 characters at most (for instance: tests written, 3 of 5 green). Tars keeps it with you, shows it on your card, and gives it to whoever follows your task (task_status) or reads you (list_agents, get_agent). A new line replaces the last. Write one at a step worth knowing, not at every action.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "string",
+                  "description": "One line, 120 characters at most, no newline."
+                }
+              },
+              "required": [
+                "line"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
             "name": "get_agent",
             "description": "Get detailed information about a specific agent including its full output history.",
             "inputSchema": {
@@ -4743,11 +5137,11 @@
                 },
                 "provider": {
                   "type": "string",
-                  "description": "The provider, by id (default claude). Its own CLI: claude, codex, gemini, grok, opencode, pi, amp. Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen, zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai. Default claude."
                 },
                 "model": {
                   "type": "string",
-                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-5-codex' for codex). Omit for the provider's default."
+                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-6-luna' for codex). Omit for the provider's default."
                 },
                 "effort": {
                   "type": "string",
@@ -4775,6 +5169,106 @@
                   "description": "Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "update_agent",
+            "description": "Change an agent of your project after creating it: its name, provider (any CLI or API-key provider), model, effort, permission mode, CLI path, skills, character or secondary project path. Only your project's orchestrator does this, on its project's other agents: a worker is refused (worker_may_not_update), and so is an agent of another project (other_project). The role stays the user's: an agent is made the orchestrator, or stops being it, in the Agents page of Tars, where the orchestrator's own settings are changed too (orchestrator_settings), and so is a move to another project. A running turn is never cut. A change of model, effort or permission mode on the same CLI restarts a claude agent's CLI once its turn ends, on the same conversation; another CLI takes it at its next start. A change of provider or CLI path is refused while a CLI runs in the agent's terminal (cli_running): stop it with stop_agent once its work is done, then change it; its next start runs the new CLI on a new conversation, and the old CLI's model and CLI path are cleared unless you give new ones. The answer says when the change applies and whether the conversation is kept.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Its new name"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The model, as the provider's CLI names it (e.g. 'opus' or 'sonnet' for claude); null for the provider's default."
+                },
+                "effort": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Reasoning effort; null for the CLI's own."
+                },
+                "permissionMode": {
+                  "type": "string",
+                  "enum": [
+                    "plan",
+                    "normal",
+                    "auto",
+                    "bypass"
+                  ],
+                  "description": "plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing)."
+                },
+                "cliPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Absolute path of the CLI's executable file, run instead of the provider's own; null for the provider's own. Refused unless it is an executable file."
+                },
+                "skills": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Its skills: the whole list, which replaces the one it has"
+                },
+                "character": {
+                  "type": "string",
+                  "enum": [
+                    "robot",
+                    "ninja",
+                    "wizard",
+                    "astronaut",
+                    "knight",
+                    "pirate",
+                    "alien",
+                    "viking"
+                  ],
+                  "description": "Visual character for the agent"
+                },
+                "secondaryProjectPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Secondary project path added as context (--add-dir); null to take it away"
+                }
+              },
+              "required": [
+                "id"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -4835,6 +5329,10 @@
                   "minLength": 1,
                   "description": "Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"
                 },
+                "dropQueue": {
+                  "type": "boolean",
+                  "description": "Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."
+                },
                 "allowCrossProject": {
                   "type": "boolean",
                   "description": "Explicitly allow acting on an agent of ANOTHER project (normally rejected)"
@@ -4894,6 +5392,66 @@
               },
               "required": [
                 "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "agent_queue",
+            "description": "What waits in an agent's queue, in the order it goes in (each item's task id, who sent it, since when, whether it is a task, a message or a note, and its first line), and whether the queue is paused. With action 'pause', nothing goes in until it is resumed; the turn in progress is never touched. With 'resume', the items go in again, one at a time, in order. A stop keeps the queue, paused, and a restart of Tars too. The project's orchestrator acts on its agents' queues; a worker sees in another agent's queue only what it sent itself, and pauses nothing. Move an item with task_move, take one back with task_cancel.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "pause",
+                    "resume",
+                    "drop"
+                  ],
+                  "description": "'list' (default), 'pause', 'resume', or 'drop' (everything that waits taken back, each sender told)"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "With 'pause': why, in one line, shown with the queue"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "task_move",
+            "description": "Move an item of an agent's queue: to the head, so it goes in next, or just before another item of the same queue. The project's orchestrator moves any item of its agents' queues; a worker only what it sent itself.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "description": "The item's task id: t- and 8 hex characters"
+                },
+                "before": {
+                  "type": "string",
+                  "description": "The task id it goes just before; omitted, it goes to the head"
+                }
+              },
+              "required": [
+                "taskId"
               ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
@@ -4979,7 +5537,7 @@
           },
           {
             "name": "delegate_task",
-            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\").",
+            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\"). Write the prompt as a spec in five parts: Target (what must be true at the end), Change (what to do), Constraints (what must not break), May touch (the files, folders and tools the agent may use), Proof (the observable check of acceptance the agent runs and reports); the guide's delegation topic says more.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -4989,7 +5547,7 @@
                 },
                 "prompt": {
                   "type": "string",
-                  "description": "The task/instruction for the agent"
+                  "description": "The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."
                 },
                 "model": {
                   "type": "string",
@@ -5207,6 +5765,89 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "heavy_slot_take",
+            "description": "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 120,
+                  "description": "What the run is, as others will see it in the queue: e.g. 'e2e suite' or 'next build'."
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "gate",
+                    "normal",
+                    "background"
+                  ],
+                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                },
+                "ticket": {
+                  "type": "string",
+                  "description": "A ticket a previous call returned waiting: wait on it again instead of asking anew."
+                },
+                "wait_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 600,
+                  "description": "How long to wait for the grant in this call (default 60)."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_give_back",
+            "description": "Give the heavy-run slot back once your heavy run is over (or give up a ticket that still waits), so the next agent in the queue gets it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "ticket": {
+                  "type": "string",
+                  "description": "The ticket heavy_slot_take returned."
+                }
+              },
+              "required": [
+                "ticket"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_status",
+            "description": "Who holds the machine's heavy-run slot, since when and for what, and who waits, in which order and why.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "disk_scan",
+            "description": "List what Tars's disk janitor would propose to delete now, by rule: old .next and test artefacts of idle worktrees, merged worktrees, stale npx cache entries, unused Docker images, gone agents' temporary folders. Read only: nothing is deleted, and only the user approves a deletion, in Tars's window.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -5244,6 +5885,7 @@
                 "connection: keep-alive",
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
+                "X-Tars-Tool: list_agents",
                 "accept: */*",
                 "accept-language: *",
                 "sec-fetch-mode: cors",
@@ -5279,6 +5921,7 @@
                 "connection: keep-alive",
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
+                "X-Tars-Tool: list_agents",
                 "accept: */*",
                 "accept-language: *",
                 "sec-fetch-mode: cors",
@@ -5334,6 +5977,7 @@
                 "connection: keep-alive",
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
+                "X-Tars-Tool: stop_agent",
                 "accept: */*",
                 "accept-language: *",
                 "sec-fetch-mode: cors",
@@ -5348,7 +5992,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Stopped agent a1: done"
+                "text": "Stopped agent a1: done."
               }
             ]
           }
@@ -5394,6 +6038,27 @@
                   "description": "If true, list agents of ALL projects instead of only your own"
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "checkpoint",
+            "description": "Write one line about yourself: where you stand in the task in hand, 120 characters at most (for instance: tests written, 3 of 5 green). Tars keeps it with you, shows it on your card, and gives it to whoever follows your task (task_status) or reads you (list_agents, get_agent). A new line replaces the last. Write one at a step worth knowing, not at every action.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "string",
+                  "description": "One line, 120 characters at most, no newline."
+                }
+              },
+              "required": [
+                "line"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -5497,11 +6162,11 @@
                 },
                 "provider": {
                   "type": "string",
-                  "description": "The provider, by id (default claude). Its own CLI: claude, codex, gemini, grok, opencode, pi, amp. Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen, zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai. Default claude."
                 },
                 "model": {
                   "type": "string",
-                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-5-codex' for codex). Omit for the provider's default."
+                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-6-luna' for codex). Omit for the provider's default."
                 },
                 "effort": {
                   "type": "string",
@@ -5529,6 +6194,106 @@
                   "description": "Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "update_agent",
+            "description": "Change an agent of your project after creating it: its name, provider (any CLI or API-key provider), model, effort, permission mode, CLI path, skills, character or secondary project path. Only your project's orchestrator does this, on its project's other agents: a worker is refused (worker_may_not_update), and so is an agent of another project (other_project). The role stays the user's: an agent is made the orchestrator, or stops being it, in the Agents page of Tars, where the orchestrator's own settings are changed too (orchestrator_settings), and so is a move to another project. A running turn is never cut. A change of model, effort or permission mode on the same CLI restarts a claude agent's CLI once its turn ends, on the same conversation; another CLI takes it at its next start. A change of provider or CLI path is refused while a CLI runs in the agent's terminal (cli_running): stop it with stop_agent once its work is done, then change it; its next start runs the new CLI on a new conversation, and the old CLI's model and CLI path are cleared unless you give new ones. The answer says when the change applies and whether the conversation is kept.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Its new name"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The model, as the provider's CLI names it (e.g. 'opus' or 'sonnet' for claude); null for the provider's default."
+                },
+                "effort": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Reasoning effort; null for the CLI's own."
+                },
+                "permissionMode": {
+                  "type": "string",
+                  "enum": [
+                    "plan",
+                    "normal",
+                    "auto",
+                    "bypass"
+                  ],
+                  "description": "plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing)."
+                },
+                "cliPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Absolute path of the CLI's executable file, run instead of the provider's own; null for the provider's own. Refused unless it is an executable file."
+                },
+                "skills": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Its skills: the whole list, which replaces the one it has"
+                },
+                "character": {
+                  "type": "string",
+                  "enum": [
+                    "robot",
+                    "ninja",
+                    "wizard",
+                    "astronaut",
+                    "knight",
+                    "pirate",
+                    "alien",
+                    "viking"
+                  ],
+                  "description": "Visual character for the agent"
+                },
+                "secondaryProjectPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Secondary project path added as context (--add-dir); null to take it away"
+                }
+              },
+              "required": [
+                "id"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -5589,6 +6354,10 @@
                   "minLength": 1,
                   "description": "Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"
                 },
+                "dropQueue": {
+                  "type": "boolean",
+                  "description": "Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."
+                },
                 "allowCrossProject": {
                   "type": "boolean",
                   "description": "Explicitly allow acting on an agent of ANOTHER project (normally rejected)"
@@ -5648,6 +6417,66 @@
               },
               "required": [
                 "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "agent_queue",
+            "description": "What waits in an agent's queue, in the order it goes in (each item's task id, who sent it, since when, whether it is a task, a message or a note, and its first line), and whether the queue is paused. With action 'pause', nothing goes in until it is resumed; the turn in progress is never touched. With 'resume', the items go in again, one at a time, in order. A stop keeps the queue, paused, and a restart of Tars too. The project's orchestrator acts on its agents' queues; a worker sees in another agent's queue only what it sent itself, and pauses nothing. Move an item with task_move, take one back with task_cancel.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "pause",
+                    "resume",
+                    "drop"
+                  ],
+                  "description": "'list' (default), 'pause', 'resume', or 'drop' (everything that waits taken back, each sender told)"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "With 'pause': why, in one line, shown with the queue"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "task_move",
+            "description": "Move an item of an agent's queue: to the head, so it goes in next, or just before another item of the same queue. The project's orchestrator moves any item of its agents' queues; a worker only what it sent itself.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "description": "The item's task id: t- and 8 hex characters"
+                },
+                "before": {
+                  "type": "string",
+                  "description": "The task id it goes just before; omitted, it goes to the head"
+                }
+              },
+              "required": [
+                "taskId"
               ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
@@ -5733,7 +6562,7 @@
           },
           {
             "name": "delegate_task",
-            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\").",
+            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\"). Write the prompt as a spec in five parts: Target (what must be true at the end), Change (what to do), Constraints (what must not break), May touch (the files, folders and tools the agent may use), Proof (the observable check of acceptance the agent runs and reports); the guide's delegation topic says more.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -5743,7 +6572,7 @@
                 },
                 "prompt": {
                   "type": "string",
-                  "description": "The task/instruction for the agent"
+                  "description": "The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."
                 },
                 "model": {
                   "type": "string",
@@ -5961,6 +6790,89 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "heavy_slot_take",
+            "description": "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 120,
+                  "description": "What the run is, as others will see it in the queue: e.g. 'e2e suite' or 'next build'."
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "gate",
+                    "normal",
+                    "background"
+                  ],
+                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                },
+                "ticket": {
+                  "type": "string",
+                  "description": "A ticket a previous call returned waiting: wait on it again instead of asking anew."
+                },
+                "wait_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 600,
+                  "description": "How long to wait for the grant in this call (default 60)."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_give_back",
+            "description": "Give the heavy-run slot back once your heavy run is over (or give up a ticket that still waits), so the next agent in the queue gets it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "ticket": {
+                  "type": "string",
+                  "description": "The ticket heavy_slot_take returned."
+                }
+              },
+              "required": [
+                "ticket"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_status",
+            "description": "Who holds the machine's heavy-run slot, since when and for what, and who waits, in which order and why.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "disk_scan",
+            "description": "List what Tars's disk janitor would propose to delete now, by rule: old .next and test artefacts of idle worktrees, merged worktrees, stale npx cache entries, unused Docker images, gone agents' temporary folders. Read only: nothing is deleted, and only the user approves a deletion, in Tars's window.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -5982,6 +6894,7 @@
                 "connection: keep-alive",
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
+                "X-Tars-Tool: whoami",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -6018,6 +6931,7 @@
                 "connection: keep-alive",
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
+                "X-Tars-Tool: list_agents",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -6085,6 +6999,27 @@
             }
           },
           {
+            "name": "checkpoint",
+            "description": "Write one line about yourself: where you stand in the task in hand, 120 characters at most (for instance: tests written, 3 of 5 green). Tars keeps it with you, shows it on your card, and gives it to whoever follows your task (task_status) or reads you (list_agents, get_agent). A new line replaces the last. Write one at a step worth knowing, not at every action.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "line": {
+                  "type": "string",
+                  "description": "One line, 120 characters at most, no newline."
+                }
+              },
+              "required": [
+                "line"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
             "name": "get_agent",
             "description": "Get detailed information about a specific agent including its full output history.",
             "inputSchema": {
@@ -6180,11 +7115,11 @@
                 },
                 "provider": {
                   "type": "string",
-                  "description": "The provider, by id (default claude). Its own CLI: claude, codex, gemini, grok, opencode, pi, amp. Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen, zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai. Default claude."
                 },
                 "model": {
                   "type": "string",
-                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-5-codex' for codex). Omit for the provider's default."
+                  "description": "The model, as the provider names it (e.g. 'opus' for claude, 'gpt-6-luna' for codex). Omit for the provider's default."
                 },
                 "effort": {
                   "type": "string",
@@ -6212,6 +7147,106 @@
                   "description": "Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "update_agent",
+            "description": "Change an agent of your project after creating it: its name, provider (any CLI or API-key provider), model, effort, permission mode, CLI path, skills, character or secondary project path. Only your project's orchestrator does this, on its project's other agents: a worker is refused (worker_may_not_update), and so is an agent of another project (other_project). The role stays the user's: an agent is made the orchestrator, or stops being it, in the Agents page of Tars, where the orchestrator's own settings are changed too (orchestrator_settings), and so is a move to another project. A running turn is never cut. A change of model, effort or permission mode on the same CLI restarts a claude agent's CLI once its turn ends, on the same conversation; another CLI takes it at its next start. A change of provider or CLI path is refused while a CLI runs in the agent's terminal (cli_running): stop it with stop_agent once its work is done, then change it; its next start runs the new CLI on a new conversation, and the old CLI's model and CLI path are cleared unless you give new ones. The answer says when the change applies and whether the conversation is kept.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Its new name"
+                },
+                "provider": {
+                  "type": "string",
+                  "description": "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai."
+                },
+                "model": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "The model, as the provider's CLI names it (e.g. 'opus' or 'sonnet' for claude); null for the provider's default."
+                },
+                "effort": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "enum": [
+                        "low",
+                        "medium",
+                        "high",
+                        "xhigh",
+                        "max"
+                      ]
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Reasoning effort; null for the CLI's own."
+                },
+                "permissionMode": {
+                  "type": "string",
+                  "enum": [
+                    "plan",
+                    "normal",
+                    "auto",
+                    "bypass"
+                  ],
+                  "description": "plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing)."
+                },
+                "cliPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Absolute path of the CLI's executable file, run instead of the provider's own; null for the provider's own. Refused unless it is an executable file."
+                },
+                "skills": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "Its skills: the whole list, which replaces the one it has"
+                },
+                "character": {
+                  "type": "string",
+                  "enum": [
+                    "robot",
+                    "ninja",
+                    "wizard",
+                    "astronaut",
+                    "knight",
+                    "pirate",
+                    "alien",
+                    "viking"
+                  ],
+                  "description": "Visual character for the agent"
+                },
+                "secondaryProjectPath": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Secondary project path added as context (--add-dir); null to take it away"
+                }
+              },
+              "required": [
+                "id"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -6272,6 +7307,10 @@
                   "minLength": 1,
                   "description": "Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"
                 },
+                "dropQueue": {
+                  "type": "boolean",
+                  "description": "Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."
+                },
                 "allowCrossProject": {
                   "type": "boolean",
                   "description": "Explicitly allow acting on an agent of ANOTHER project (normally rejected)"
@@ -6331,6 +7370,66 @@
               },
               "required": [
                 "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "agent_queue",
+            "description": "What waits in an agent's queue, in the order it goes in (each item's task id, who sent it, since when, whether it is a task, a message or a note, and its first line), and whether the queue is paused. With action 'pause', nothing goes in until it is resumed; the turn in progress is never touched. With 'resume', the items go in again, one at a time, in order. A stop keeps the queue, paused, and a restart of Tars too. The project's orchestrator acts on its agents' queues; a worker sees in another agent's queue only what it sent itself, and pauses nothing. Move an item with task_move, take one back with task_cancel.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "The agent ID"
+                },
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "list",
+                    "pause",
+                    "resume",
+                    "drop"
+                  ],
+                  "description": "'list' (default), 'pause', 'resume', or 'drop' (everything that waits taken back, each sender told)"
+                },
+                "reason": {
+                  "type": "string",
+                  "description": "With 'pause': why, in one line, shown with the queue"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "task_move",
+            "description": "Move an item of an agent's queue: to the head, so it goes in next, or just before another item of the same queue. The project's orchestrator moves any item of its agents' queues; a worker only what it sent itself.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "taskId": {
+                  "type": "string",
+                  "description": "The item's task id: t- and 8 hex characters"
+                },
+                "before": {
+                  "type": "string",
+                  "description": "The task id it goes just before; omitted, it goes to the head"
+                }
+              },
+              "required": [
+                "taskId"
               ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
@@ -6416,7 +7515,7 @@
           },
           {
             "name": "delegate_task",
-            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\").",
+            "description": "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\"). Write the prompt as a spec in five parts: Target (what must be true at the end), Change (what to do), Constraints (what must not break), May touch (the files, folders and tools the agent may use), Proof (the observable check of acceptance the agent runs and reports); the guide's delegation topic says more.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -6426,7 +7525,7 @@
                 },
                 "prompt": {
                   "type": "string",
-                  "description": "The task/instruction for the agent"
+                  "description": "The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."
                 },
                 "model": {
                   "type": "string",
@@ -6644,6 +7743,89 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "heavy_slot_take",
+            "description": "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "maxLength": 120,
+                  "description": "What the run is, as others will see it in the queue: e.g. 'e2e suite' or 'next build'."
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "gate",
+                    "normal",
+                    "background"
+                  ],
+                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                },
+                "ticket": {
+                  "type": "string",
+                  "description": "A ticket a previous call returned waiting: wait on it again instead of asking anew."
+                },
+                "wait_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 600,
+                  "description": "How long to wait for the grant in this call (default 60)."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_give_back",
+            "description": "Give the heavy-run slot back once your heavy run is over (or give up a ticket that still waits), so the next agent in the queue gets it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "ticket": {
+                  "type": "string",
+                  "description": "The ticket heavy_slot_take returned."
+                }
+              },
+              "required": [
+                "ticket"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "heavy_slot_status",
+            "description": "Who holds the machine's heavy-run slot, since when and for what, and who waits, in which order and why.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "disk_scan",
+            "description": "List what Tars's disk janitor would propose to delete now, by rule: old .next and test artefacts of idle worktrees, merged worktrees, stale npx cache entries, unused Docker images, gone agents' temporary folders. Read only: nothing is deleted, and only the user approves a deletion, in Tars's window.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -6665,6 +7847,7 @@
                 "connection: keep-alive",
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
+                "X-Tars-Tool: list_agents",
                 "accept: */*",
                 "accept-language: *",
                 "sec-fetch-mode: cors",
@@ -8288,7 +9471,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool list_tasks: [\n  {\n    \"received\": \"later\",\n    \"code\": \"invalid_enum_value\",\n    \"options\": [\n      \"backlog\",\n      \"planned\",\n      \"ongoing\",\n      \"done\"\n    ],\n    \"path\": [\n      \"column\"\n    ],\n    \"message\": \"Invalid enum value. Expected 'backlog' | 'planned' | 'ongoing' | 'done', received 'later'\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool list_tasks: Invalid enum value. Expected 'backlog' | 'planned' | 'ongoing' | 'done', received 'later' at column"
               }
             ],
             "isError": true
@@ -8499,7 +9682,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool update_task_progress: [\n  {\n    \"code\": \"too_big\",\n    \"maximum\": 100,\n    \"type\": \"number\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"Number must be less than or equal to 100\",\n    \"path\": [\n      \"progress\"\n    ]\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool update_task_progress: Number must be less than or equal to 100 at progress"
               }
             ],
             "isError": true
@@ -11609,6 +12792,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11648,6 +12832,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11687,6 +12872,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11726,6 +12912,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11765,6 +12952,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11805,6 +12993,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11845,6 +13034,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11885,6 +13075,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11925,6 +13116,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -11965,6 +13157,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12005,6 +13198,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12045,6 +13239,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12085,6 +13280,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12125,6 +13321,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12160,7 +13357,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool twitter_search: [\n  {\n    \"received\": \"Oldest\",\n    \"code\": \"invalid_enum_value\",\n    \"options\": [\n      \"Latest\",\n      \"Top\"\n    ],\n    \"path\": [\n      \"type\"\n    ],\n    \"message\": \"Invalid enum value. Expected 'Latest' | 'Top', received 'Oldest'\"\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool twitter_search: Invalid enum value. Expected 'Latest' | 'Top', received 'Oldest' at type"
               }
             ],
             "isError": true
@@ -12185,6 +13382,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12224,6 +13422,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12263,6 +13462,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12304,6 +13504,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet_comments",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12343,6 +13544,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet_comments",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12382,6 +13584,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet_comments",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12421,6 +13624,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_tweet_comments",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12461,6 +13665,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12500,6 +13705,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12539,6 +13745,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12581,6 +13788,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user_tweets",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12621,6 +13829,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user_tweets",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12660,6 +13869,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user_tweets",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12699,6 +13909,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_get_user_tweets",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12739,6 +13950,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: twitter_search",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12871,6 +14083,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12911,6 +14124,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12950,6 +14164,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -12989,6 +14204,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13104,6 +14320,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13144,6 +14361,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13184,6 +14402,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13224,6 +14443,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13264,6 +14484,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13304,6 +14525,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13344,6 +14566,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13384,6 +14607,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13424,6 +14648,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13458,7 +14683,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "MCP error -32602: Input validation error: Invalid arguments for tool x_post_tweet: [\n  {\n    \"code\": \"too_big\",\n    \"maximum\": 280,\n    \"type\": \"string\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"String must contain at most 280 character(s)\",\n    \"path\": [\n      \"text\"\n    ]\n  }\n]"
+                "text": "MCP error -32602: Input validation error: Invalid arguments for tool x_post_tweet: String must contain at most 280 character(s) at text"
               }
             ],
             "isError": true
@@ -13484,6 +14709,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_reply_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13524,6 +14750,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_reply_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13584,6 +14811,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_reply_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13624,6 +14852,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_delete_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13663,6 +14892,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_delete_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13721,6 +14951,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_delete_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",
@@ -13761,6 +14992,7 @@
                 "Content-Type: application/json",
                 "X-Tars-Client: mcp",
                 "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: x_post_tweet",
                 "X-Tars-Caller-Project: /projects/alpha",
                 "accept: */*",
                 "accept-language: *",

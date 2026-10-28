@@ -19,7 +19,8 @@
  *   --only=kanban,x   a few servers (check only)
  *
  * What differs from run to run is written as a placeholder: the sandbox paths,
- * the fake's port, a multipart boundary, and X's OAuth nonce, time and
+ * the fake's port, a multipart boundary, the request id the orchestrator's
+ * calls carry (clientRequestId), and X's OAuth nonce, time and
  * signature, the signature after being checked against the credentials.
  * Needs Node 22 (`nvm use`) and, the first time, the network for `npm ci`.
  */
@@ -266,7 +267,11 @@ function normalize(text, sandbox, port) {
     .replaceAll(sandbox, "<sandbox>")
     .replaceAll(encodeURIComponent(sandbox), "<sandbox>")
     .replaceAll(`127.0.0.1:${port}`, "127.0.0.1:<port>")
-    .replace(/----FormBoundary\d+/g, "----FormBoundary<time>");
+    .replace(/----FormBoundary\d+/g, "----FormBoundary<time>")
+    // A fresh id in each start, delegation and message since a52627479 (12/10: a retried request is sent once), in
+    // the body as sent and in the answer that names it to task_status, each a JSON string inside the recording's:
+    // left as it came, no check could ever pass.
+    .replace(/(clientRequestId(?:\\")?:\s?\\")[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, "$1<request id>");
 }
 
 // ------------------------------------------------------------------ the run
