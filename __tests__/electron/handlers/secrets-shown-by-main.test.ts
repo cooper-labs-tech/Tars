@@ -22,6 +22,7 @@ import * as path from 'node:path';
  *  T4. hermes:connection:get or hermes:connection:import hands the page the
  *      dashboard's token; or a save of the form, which holds the mask, writes
  *      the mask over the token, or clears it; or a token typed in is not kept.
+ * (T1 and T2 went with Tars's own Telegram bot in 2.0.5.)
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -71,27 +72,9 @@ beforeAll(async () => {
 }, 60_000);
 
 beforeEach(() => {
-  settings = { telegramAuthToken: '' } as AppSettings;
+  settings = {} as AppSettings;
   shown.length = 0;
   copied.length = 0;
-});
-
-describe('the Telegram auth token', () => {
-  it('T1. a new one is shown to the user by the main process, never answered to the page', async () => {
-    const answer = await call('telegram:generateAuthToken');
-    const token = settings.telegramAuthToken;
-    expect(token).toMatch(/^[0-9a-f]{32}$/);
-    expect(JSON.stringify(answer)).not.toContain(token);
-    expect(answer).toMatchObject({ success: true, set: true });
-    expect(shown.map((o) => `${o.message} ${o.detail}`).join('\n')).toContain(token);
-  });
-
-  it('T2. copied for the user, never answered', async () => {
-    settings.telegramAuthToken = 'a'.repeat(32);
-    const answer = await call('telegram:authToken:copy');
-    expect(copied).toEqual(['a'.repeat(32)]);
-    expect(JSON.stringify(answer)).not.toContain('a'.repeat(32));
-  });
 });
 
 describe('the Hermes webhook secret', () => {

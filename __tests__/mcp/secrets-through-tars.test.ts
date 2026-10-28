@@ -21,6 +21,8 @@ import * as path from 'node:path';
  *      chat not authorized) said as the tool's error.
  *  M5. A file send names no chat, so Tars sends it to the default one when the
  *      agent named another.
+ * (Telegram's cases, M5 and Telegram's part of M1 to M4, went with Tars's own
+ * Telegram bot and mcp-telegram in 2.0.5.)
  */
 
 const net = vi.hoisted(() => ({ outbound: [] as string[], reads: [] as string[] }));
@@ -79,13 +81,10 @@ beforeAll(async () => {
   // The settings as 2.0.4 leaves them: the plain ones in ~/.tars, the keys in ~/.tars-private.
   const home = os.homedir();
   fs.mkdirSync(path.join(home, '.tars'), { recursive: true });
-  fs.writeFileSync(path.join(home, '.tars', 'app-settings.json'), JSON.stringify({ telegramChatId: '111', telegramAuthorizedChatIds: ['222'], xPostingEnabled: true }));
+  fs.writeFileSync(path.join(home, '.tars', 'app-settings.json'), JSON.stringify({ xPostingEnabled: true }));
   fs.mkdirSync(path.join(home, '.tars-private'), { recursive: true });
-  fs.writeFileSync(path.join(home, '.tars-private', 'settings-secrets.json'), JSON.stringify({ telegramBotToken: '123:tg', xApiKey: 'k', xApiSecret: 's', xAccessToken: 't', xAccessTokenSecret: 'ts', socialDataApiKey: 'sd' }));
-  fs.mkdirSync(path.join(home, 'work'), { recursive: true });
-  fs.writeFileSync(path.join(home, 'work', 'report.pdf'), 'PDF');
+  fs.writeFileSync(path.join(home, '.tars-private', 'settings-secrets.json'), JSON.stringify({ xApiKey: 'k', xApiSecret: 's', xAccessToken: 't', xAccessTokenSecret: 'ts', socialDataApiKey: 'sd' }));
 
-  (await import('../../mcp-telegram/src/tools')).registerTelegramTools(fakeServer);
   (await import('../../mcp-x/src/tools/post')).registerPostTools(fakeServer);
   (await import('../../mcp-socialdata/src/tools/search')).registerSearchTools(fakeServer);
 });
@@ -108,30 +107,9 @@ function expectThroughTars(): void {
   expect(net.reads.filter((p) => p.includes('.tars-private')), 'the private folder was read').toEqual([]);
   for (const r of received) {
     expect(r.auth).toBe(`Bearer ${TOKEN}`);
-    expect(JSON.stringify(r.body)).not.toMatch(/123:tg|"sd"|"ts"/);
+    expect(JSON.stringify(r.body)).not.toMatch(/"sd"|"ts"/);
   }
 }
-
-describe('Telegram, through Tars', () => {
-  it('M1 to M4. a message goes to /api/telegram/send, with the chat the agent named', async () => {
-    const r = await tools.get('send_telegram')!({ message: 'Hello', chat_id: '222' });
-    expect(r.isError, r.content[0].text).toBeFalsy();
-    expect(received).toEqual([expect.objectContaining({ path: '/api/telegram/send', body: { message: 'Hello', chat_id: '222' } })]);
-    expectThroughTars();
-  });
-
-  it('M5. a document names its chat; Tars\'s refusal is the tool\'s error', async () => {
-    const file = path.join(os.homedir(), 'work', 'report.pdf');
-    const r = await tools.get('send_telegram_document')!({ document_path: file, chat_id: '222', caption: 'Weekly' });
-    expect(r.isError, r.content[0].text).toBeFalsy();
-    expect(received[0]).toMatchObject({ path: '/api/telegram/send-document', body: { document_path: file, caption: 'Weekly', chat_id: '222' } });
-    answer = () => ({ status: 400, json: { error: 'Telegram not configured or no chat ID' } });
-    const refused = await tools.get('send_telegram')!({ message: 'Hi' });
-    expect(refused.isError).toBe(true);
-    expect(refused.content[0].text).toContain('Telegram not configured');
-    expectThroughTars();
-  });
-});
 
 describe('X, through Tars', () => {
   it('M1 to M4. a post goes to /api/x/request, and its id comes back', async () => {

@@ -1,7 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
 import { EventEmitter } from 'node:events';
 
 /**
@@ -23,6 +20,7 @@ import { EventEmitter } from 'node:events';
  *  R6. A Telegram file send ignores the chat the agent named, or sends to one
  *      the user did not authorize.
  *  R7. An answer carries a key.
+ * (R6 went with Tars's own Telegram bot in 2.0.5, and its file sends with it.)
  */
 
 const out = vi.hoisted(() => ({ calls: [] as Array<{ host?: string; method?: string; path?: string; auth?: string; body?: string }>, status: 200, body: '{}' }));
@@ -46,20 +44,12 @@ vi.mock('https', () => {
 });
 
 import { registerIntegrationRoutes } from '../../../electron/services/api-routes/integration-routes';
-import { registerTelegramRoutes } from '../../../electron/services/api-routes/telegram-routes';
 import type { AppSettings } from '../../../electron/types';
 
 type Handler = (req: { body: Record<string, unknown> }, sendJson: (data: unknown, status?: number) => void) => Promise<void> | void;
 const handlers = new Map<string, Handler>();
 const CREDS = { xApiKey: 'ck', xApiSecret: 'cs', xAccessToken: 'at', xAccessTokenSecret: 'ats' };
 let live: Partial<AppSettings>;
-const sentFiles: Array<{ kind: string; chatId: string }> = [];
-const bot = {
-  sendDocument: vi.fn(async (chatId: string) => { sentFiles.push({ kind: 'document', chatId: String(chatId) }); }),
-  sendPhoto: vi.fn(async (chatId: string) => { sentFiles.push({ kind: 'photo', chatId: String(chatId) }); }),
-  sendVideo: vi.fn(async (chatId: string) => { sentFiles.push({ kind: 'video', chatId: String(chatId) }); }),
-  sendMessage: vi.fn(async () => {}),
-};
 
 async function post(route: string, body: Record<string, unknown>) {
   let answer: { data: Record<string, unknown>; status: number } = { data: {}, status: 0 };
@@ -72,12 +62,10 @@ beforeEach(() => {
   out.calls.length = 0;
   out.status = 200;
   out.body = '{}';
-  sentFiles.length = 0;
-  live = { ...CREDS, xPostingEnabled: true, socialDataApiKey: 'sd-key', telegramChatId: '42', telegramAuthorizedChatIds: ['42', '43'] };
+  live = { ...CREDS, xPostingEnabled: true, socialDataApiKey: 'sd-key' };
   const app = { post: (route: string, h: Handler) => handlers.set(route, h), get: () => {} } as never;
-  const ctx = { getAppSettings: () => live, getTelegramBot: () => bot } as never;
+  const ctx = { getAppSettings: () => live } as never;
   registerIntegrationRoutes(app, ctx);
-  registerTelegramRoutes(app, ctx);
 });
 
 describe('POST /api/x/request', () => {
@@ -130,17 +118,5 @@ describe('POST /api/socialdata/request', () => {
     expect(none.status).toBe(400);
     expect(String(none.data.error)).toContain('SocialData API key not configured');
     expect(out.calls).toEqual([]);
-  });
-});
-
-describe('Telegram file sends', () => {
-  it('R6. go to the chat the agent named when the user authorized it, and to no other', async () => {
-    const doc = path.join(os.homedir(), 'Documents', 'report.pdf');
-    fs.mkdirSync(path.dirname(doc), { recursive: true });
-    fs.writeFileSync(doc, 'PDF');
-    expect((await post('/api/telegram/send-document', { document_path: doc, chat_id: '43' })).status).toBe(200);
-    expect((await post('/api/telegram/send-document', { document_path: doc, chat_id: '999' })).status).toBe(403);
-    expect((await post('/api/telegram/send-document', { document_path: doc })).status).toBe(200);
-    expect(sentFiles).toEqual([{ kind: 'document', chatId: '43' }, { kind: 'document', chatId: '42' }]);
   });
 });

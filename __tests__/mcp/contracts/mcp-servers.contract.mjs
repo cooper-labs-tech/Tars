@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * The seven bundled MCP servers, as an agent's CLI meets them, recorded before
+ * The six bundled MCP servers, as an agent's CLI meets them, recorded before
  * the D4 refactor (refacto-rules: a group's first commit snapshots its
  * contracts, its last proves them byte-identical).
  *
@@ -9,7 +9,7 @@
  * from dist/bundle.js with the environment Tars gives an agent, and asked what
  * a CLI asks: initialize, tools/list, then tools/call for every tool, along
  * every answer it can give (mcp-servers.scenarios.mjs). Tars is a fake HTTP
- * server here, and so are SocialData, X and Telegram (https-to-fake.mjs): each
+ * server here, and so are SocialData and X (https-to-fake.mjs): each
  * request a tool makes is recorded, headers and body as sent, next to the
  * answer the tool gave.
  *
@@ -19,7 +19,7 @@
  *   --only=kanban,x   a few servers (check only)
  *
  * What differs from run to run is written as a placeholder: the sandbox paths,
- * the fake's port, Telegram's multipart boundary, and X's OAuth nonce, time and
+ * the fake's port, a multipart boundary, and X's OAuth nonce, time and
  * signature, the signature after being checked against the credentials.
  * Needs Node 22 (`nvm use`) and, the first time, the network for `npm ci`.
  */

@@ -29,6 +29,9 @@ import * as path from 'node:path';
  *    scanned everything again (measured in the app: the first expired visit's
  *    claude:getData 185 ms, the reads it holds sharing the loop with that scan).
  *
+ * (main.ts handing Telegram's /stats getClaudeStats went with Tars's own Telegram
+ * bot in 2.0.5, the one bot that had /stats; 7 still holds getClaudeStats itself.)
+ *
  * The scan itself is a stand-in here, one that answers when a case says so:
  * what is under test is who waits for it and who does not.
  */
@@ -165,13 +168,10 @@ describe('main.ts', () => {
     expect(main.indexOf('prewarmClaudeStats()', ready)).toBeGreaterThan(catalogue);
   });
 
-  it('1. starts the scan once the app is ready, hands the page the stats at once, and the bots fresh ones', () => {
+  it('1. starts the scan once the app is ready, and hands the page the stats at once', () => {
     const ready = main.indexOf('app.whenReady()');
     const prewarm = main.indexOf('prewarmClaudeStats()');
     expect(prewarm).toBeGreaterThan(ready);
     expect(main).toMatch(/getClaudeStats: getClaudeStatsNow,/);
-    const telegram = /initTelegramBotService\(([\s\S]*?)\n  \);/.exec(main)?.[1] ?? '';
-    expect(telegram).toMatch(/\bgetClaudeStats,/);
-    expect(telegram).not.toMatch(/getClaudeStatsNow/);
   });
 });

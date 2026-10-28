@@ -15,7 +15,6 @@ vi.mock('electron', () => ({
 import {
   isSuperAgent,
   getSuperAgent,
-  formatAgentStatus,
   formatSlackAgentStatus,
 } from '../../electron/utils';
 import type { AgentStatus } from '../../electron/types';
@@ -114,50 +113,6 @@ describe('getSuperAgent', () => {
     agents.delete('lead');
     expect(getSuperAgent(agents)).toBeUndefined();
     expect(getSuperAgent(agents, '/proj/alpha')).toBeUndefined();
-  });
-});
-
-describe('formatAgentStatus', () => {
-  it('formats super agent with crown emoji', () => {
-    const agent = makeAgent({ name: 'Super Agent', role: 'orchestrator', status: 'running' });
-    const result = formatAgentStatus(agent);
-    expect(result).toContain('👑');
-    expect(result).toContain('*Super Agent*');
-    expect(result).toContain('🟢');
-  });
-
-  it('formats regular agent with character emoji', () => {
-    const agent = makeAgent({ name: 'Worker', character: 'ninja', status: 'idle' });
-    const result = formatAgentStatus(agent);
-    expect(result).toContain('🥷');
-    expect(result).toContain('*Worker*');
-    expect(result).toContain('⚪');
-  });
-
-  it('shows status emojis correctly', () => {
-    expect(formatAgentStatus(makeAgent({ name: 'A', status: 'idle' }))).toContain('⚪');
-    expect(formatAgentStatus(makeAgent({ name: 'A', status: 'running' }))).toContain('🟢');
-    expect(formatAgentStatus(makeAgent({ name: 'A', status: 'completed' }))).toContain('✅');
-    expect(formatAgentStatus(makeAgent({ name: 'A', status: 'error' }))).toContain('🔴');
-    expect(formatAgentStatus(makeAgent({ name: 'A', status: 'waiting' }))).toContain('🟡');
-  });
-
-  it('truncates long task names', () => {
-    const agent = makeAgent({ name: 'A', currentTask: 'A'.repeat(100) });
-    const result = formatAgentStatus(agent);
-    expect(result).toContain('...');
-  });
-
-  it('shows project for non-super agents', () => {
-    const agent = makeAgent({ name: 'Worker', projectPath: '/home/user/my-project' });
-    const result = formatAgentStatus(agent);
-    expect(result).toContain('`my-project`');
-  });
-
-  it('hides project for super agents', () => {
-    const agent = makeAgent({ name: 'Super Agent', role: 'orchestrator', projectPath: '/home/user/my-project' });
-    const result = formatAgentStatus(agent);
-    expect(result).not.toContain('Project:');
   });
 });
 

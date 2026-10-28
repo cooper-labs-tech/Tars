@@ -18,6 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * 3. A runner's turn ending while Telegram waits on the orchestrator sends the
  *    runner's screen to Telegram as the orchestrator's answer, and the
  *    orchestrator's own answer then never goes.
+ * (Item 3 went with Tars's own Telegram bot in 2.0.5.)
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -27,13 +28,11 @@ vi.mock('electron', () => ({
   Notification: vi.fn(),
 }));
 
-import { agents, handleStatusChangeNotification, setSuperAgentTelegramTask } from '../../../electron/core/agent-manager';
+import { agents, handleStatusChangeNotification } from '../../../electron/core/agent-manager';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
 
 const settings = { notificationsEnabled: true, notifyOnWaiting: true, notifyOnComplete: true, notifyOnError: true } as AppSettings;
 const notify = vi.fn();
-const telegramText = vi.fn();
-const telegramReply = vi.fn();
 
 function put(id: string, fields: Partial<AgentStatus>): AgentStatus {
   const agent = {
@@ -49,9 +48,9 @@ const worker = () => put('backend', { name: 'Backend', role: 'worker' });
 
 /** The agent leaves a turn for `status`, and the five seconds a notification waits go by. */
 async function ends(agent: AgentStatus, status: 'waiting' | 'completed' | 'error'): Promise<void> {
-  handleStatusChangeNotification(agent, 'running', settings, notify, telegramText, telegramReply);
+  handleStatusChangeNotification(agent, 'running', settings, notify);
   agent.status = status;
-  handleStatusChangeNotification(agent, status, settings, notify, telegramText, telegramReply);
+  handleStatusChangeNotification(agent, status, settings, notify);
   await vi.advanceTimersByTimeAsync(5_000);
 }
 
@@ -59,12 +58,9 @@ beforeEach(() => {
   vi.useFakeTimers();
   agents.clear();
   notify.mockClear();
-  telegramText.mockClear();
-  telegramReply.mockClear();
 });
 
 afterEach(() => {
-  setSuperAgentTelegramTask(false);
   vi.useRealTimers();
 });
 
@@ -77,17 +73,5 @@ describe("a chat's runner, as the notifications see it", () => {
     await ends(worker(), status);
     expect(notify).toHaveBeenCalledTimes(1);
     expect(notify.mock.calls[0][2]).toBe('backend');
-  });
-
-  it("3. never has its screen sent to Telegram as the orchestrator's answer", async () => {
-    setSuperAgentTelegramTask(true);
-
-    await ends(runner(), 'waiting');
-    expect(telegramReply, "a runner's screen went to Telegram").not.toHaveBeenCalled();
-
-    const orchestrator = lead();
-    await ends(orchestrator, 'waiting');
-    expect(telegramReply).toHaveBeenCalledTimes(1);
-    expect(telegramReply).toHaveBeenCalledWith(orchestrator);
   });
 });

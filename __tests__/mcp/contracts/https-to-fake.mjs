@@ -1,6 +1,6 @@
 /**
  * Preloaded into a server under contract (`node --import`): every HTTPS call it
- * makes goes to the contract's fake instead of SocialData, X or Telegram, as
+ * makes goes to the contract's fake instead of SocialData or X, as
  * plain HTTP, with the host it asked for in `x-contract-host`.
  *
  * The servers import `https` as an ES namespace, so the patched functions are

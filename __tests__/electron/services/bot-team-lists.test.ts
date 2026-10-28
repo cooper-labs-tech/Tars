@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
  * The bots' fleet listings leave the chats' runners out (ORCHESTRATOR-PER-CHAT.md
@@ -15,13 +15,11 @@ import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vites
  * 3. Discord's status, agents or projects lists one.
  * 4. A listing leaves out more than the runners: the orchestrator, or a worker
  *    of the same project.
+ * (Item 1 went with Tars's own Telegram bot in 2.0.5.)
  *
  * The bots, their shared core and the agents map are the real ones. Faked: the
- * three chat SDKs, the terminal and the window.
+ * two chat SDKs, the terminal and the window.
  */
-
-type Handler = (...args: unknown[]) => unknown;
-const tg = vi.hoisted(() => ({ texts: [] as Array<{ pattern: RegExp; handler: Handler }>, sent: [] as string[] }));
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 vi.mock('electron', () => ({
@@ -40,26 +38,13 @@ vi.mock('discord.js', () => ({
   GatewayIntentBits: { Guilds: 1, GuildMessages: 512, MessageContent: 32768, DirectMessages: 4096 },
   Partials: { Channel: 1 },
 }));
-vi.mock('node-telegram-bot-api', () => ({
-  default: class {
-    on() {}
-    onText(pattern: RegExp, handler: Handler) { tg.texts.push({ pattern, handler }); }
-    getMe() { return Promise.resolve({ username: 'tars_test_bot' }); }
-    sendMessage(_chatId: unknown, text: string) { tg.sent.push(text); return Promise.resolve({}); }
-    stopPolling() { return Promise.resolve(); }
-  },
-}));
 
 import { agents } from '../../../electron/core/agent-manager';
-import { ptyProcesses } from '../../../electron/core/pty-manager';
-import { initTelegramBotService, initTelegramBot, stopTelegramBot } from '../../../electron/services/telegram-bot';
 import { handleSlackCommand } from '../../../electron/services/slack-bot';
 import { handleDiscordCommand } from '../../../electron/services/discord-bot';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
 
-const settings = {
-  telegramEnabled: true, telegramBotToken: 'tg-bot-token', telegramAuthToken: 'tg-auth-token', telegramAuthorizedChatIds: ['42'],
-} as AppSettings;
+const settings = {} as AppSettings;
 
 /** What only a runner's line has: the title of its chat. */
 const RUNNER = 'Release 1.9.4';
@@ -76,16 +61,6 @@ beforeEach(() => {
   put('backend', { name: 'Backend', role: 'worker', status: 'running', currentTask: 'Fix the build' });
   put('runner', { name: `Atlas-Lead · ${RUNNER}`, role: 'worker', kind: 'chat', chatId: 'c-2', teamOrchestratorId: 'lead', status: 'running' });
 });
-
-/** Everything the bot answered to one command. */
-function telegram(text: string): string {
-  tg.sent.length = 0;
-  for (const { pattern, handler } of tg.texts) {
-    const match = pattern.exec(text);
-    if (match) handler({ chat: { id: 42, type: 'private' }, text, message_id: 1 }, match);
-  }
-  return tg.sent.join('\n');
-}
 
 async function slack(text: string): Promise<string> {
   const said: string[] = [];
@@ -105,18 +80,6 @@ function expectTheTeamOnly(said: string, command: string): void {
   if (!command.endsWith('projects')) expect(said, command).toContain('Atlas-Lead');
   expect(said, command).not.toContain(RUNNER);
 }
-
-describe("1. Telegram's lists", () => {
-  beforeAll(() => {
-    initTelegramBotService(agents, ptyProcesses, () => settings, null, () => undefined, () => {}, async () => null, async () => 'unused', () => {});
-    initTelegramBot();
-  });
-  afterAll(() => stopTelegramBot());
-
-  it.each(['/status', '/agents', '/projects'])("%s leaves the chats' runners out", command => {
-    expectTheTeamOnly(telegram(command), command);
-  });
-});
 
 describe("2. Slack's lists", () => {
   it.each(['status', 'agents', 'projects'])("%s leaves the chats' runners out", async command => {

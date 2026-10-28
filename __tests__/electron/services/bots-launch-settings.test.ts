@@ -13,7 +13,11 @@ import * as path from 'node:path';
  * agent set to medium ran at whatever somebody had last chosen elsewhere.
  *
  * The bots, the provider builders, initAgentPty, spawnAgentPty and the writer
- * are the real ones; node-pty, the Telegram client and the window are fakes.
+ * are the real ones; node-pty and the window are fakes.
+ * (Telegram's launches went with Tars's own Telegram bot in 2.0.5: the cases
+ * that only drove its /start_agent or its message to the super agent are gone,
+ * and the few that used it as the way in, about the shared launch path, now go
+ * in through Slack.)
  */
 
 const { tmpHome } = vi.hoisted(() => ({
@@ -24,10 +28,6 @@ type FakePty = { pid: number; process: string; write: ReturnType<typeof vi.fn>; 
 const spawned = vi.hoisted(() => [] as FakePty[]);
 /** When a fake shell prints its first output (its prompt) after it is spawned, as bash -l does. */
 const shell = vi.hoisted(() => ({ speaksAfterMs: 20 }));
-const bot = vi.hoisted(() => ({
-  texts: [] as Array<{ pattern: RegExp; handler: (msg: Record<string, unknown>, match: RegExpExecArray | null) => unknown }>,
-  sent: [] as string[],
-}));
 
 vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>();
@@ -53,25 +53,12 @@ vi.mock('electron', () => ({
 }));
 vi.mock('../../../electron/core/window-manager', () => ({ getMainWindow: () => null }));
 vi.mock('@slack/bolt', () => ({ App: class {}, LogLevel: { INFO: 'info' } }));
-vi.mock('node-telegram-bot-api', () => ({
-  default: class {
-    on() {}
-    onText(pattern: RegExp, handler: (msg: Record<string, unknown>, match: RegExpExecArray | null) => unknown) {
-      bot.texts.push({ pattern, handler });
-    }
-    getMe() { return Promise.resolve({ username: 'tars_test_bot' }); }
-    sendMessage(_chatId: unknown, text: string) { bot.sent.push(text); return Promise.resolve({}); }
-    stopPolling() { return Promise.resolve(); }
-  },
-}));
-
-import { agents, initAgentPty, wireDialogProbe } from '../../../electron/core/agent-manager';
+import { agents, wireDialogProbe } from '../../../electron/core/agent-manager';
 import { spawnAgentPty } from '../../../electron/core/agent-pty';
 import { resetLaunches, launchBegins, sessionStarting, setSlotGate } from '../../../electron/core/agent-launch';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
-import { initTelegramBotService, initTelegramBot, stopTelegramBot, sendToSuperAgent } from '../../../electron/services/telegram-bot';
 import { handleSlackCommand, sendToSuperAgentFromSlack } from '../../../electron/services/slack-bot';
-import { getSuperAgent, getSuperAgentInstructionsPath } from '../../../electron/utils';
+import { getSuperAgentInstructionsPath } from '../../../electron/utils';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
@@ -86,12 +73,7 @@ afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
 
 
 const project = path.join(tmpHome, 'project');
-const settings = {
-  telegramEnabled: true,
-  telegramBotToken: 'test-bot-token',
-  telegramAuthToken: 'test-auth-token',
-  telegramAuthorizedChatIds: ['42'],
-} as AppSettings;
+const settings = {} as AppSettings;
 
 function agent(fields: Partial<AgentStatus>): AgentStatus {
   const record = {
@@ -126,45 +108,6 @@ beforeEach(() => {
   agents.clear();
   ptyProcesses.clear();
   spawned.length = 0;
-  bot.texts.length = 0;
-  bot.sent.length = 0;
-  initTelegramBotService(
-    agents, ptyProcesses, () => settings, null,
-    // As main.ts hands it over: the first orchestrator, by role.
-    () => getSuperAgent(agents),
-    () => {}, async () => null,
-    (a: AgentStatus) => initAgentPty(a, null, vi.fn(), vi.fn()),
-    () => {},
-  );
-  initTelegramBot();
-});
-
-afterEach(() => {
-  stopTelegramBot();
-});
-
-describe('Telegram', () => {
-  it("/start_agent runs on the agent's model and effort", async () => {
-    agent({});
-    const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-    const text = '/start_agent worker Rebase onto main';
-
-    const typed = await typedAfter(async () => {
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    });
-
-    expect(typed).toContain(" --model 'claude-opus-5-5'");
-    expect(typed).toContain(' --effort medium ');
-  });
-
-  it("a message to the super agent starts it on its model and effort", async () => {
-    agent({ id: 'agent-s', name: 'Super Agent (Orchestrator)', role: 'orchestrator', effort: 'medium', model: 'claude-opus-5-5' });
-
-    const typed = await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing'));
-
-    expect(typed).toContain(" --model 'claude-opus-5-5'");
-    expect(typed).toContain(' --effort medium ');
-  });
 });
 
 describe('the role, on the launches the bots make', () => {
@@ -174,24 +117,7 @@ describe('the role, on the launches the bots make', () => {
   const INSTRUCTIONS = () => `--append-system-prompt-file '${getSuperAgentInstructionsPath()}'`;
   const TOOL_BLOCK = '--disallowed-tools "Edit" "Write" "NotebookEdit" "Task"';
 
-  it('Telegram /start_agent launches an orchestrator with its instructions, and a worker called orchestrator as a worker', async () => {
-    agent({ id: 'agent-o', name: 'Lead', role: 'orchestrator' });
-    agent({ id: 'agent-w', name: 'Tars-Orchestrator', role: 'worker' });
-    const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-    const launch = (text: string) => typedAfter(async () => {
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    });
-
-    const lead = await launch('/start_agent lead Plan the release');
-    const named = await launch('/start_agent tars-orchestrator Fix the build');
-
-    expect(lead).toContain(INSTRUCTIONS());
-    expect(lead).toContain(TOOL_BLOCK);
-    expect(named).not.toContain('--append-system-prompt-file');
-    expect(named).not.toContain('--disallowed-tools');
-  });
-
-  it('Slack `start` does the same', async () => {
+  it('Slack `start` launches an orchestrator with its instructions, and a worker called orchestrator as a worker', async () => {
     agent({ id: 'agent-o', name: 'Lead', role: 'orchestrator' });
     agent({ id: 'agent-w', name: 'Tars-Orchestrator', role: 'worker' });
 
@@ -208,16 +134,11 @@ describe('the role, on the launches the bots make', () => {
   // (ORCHESTRATOR-PER-CHAT.md 4.2, PR D). Written before the code (2026-10-12):
   // started from a bot, it was launched as a worker, without the instructions
   // and with its editing tools.
-  it("Telegram /start_agent launches a chat's runner with the orchestrator's instructions", async () => {
+  it("Slack `start` launches a chat's runner with the orchestrator's instructions", async () => {
     agent({ id: 'agent-o', name: 'Lead', role: 'orchestrator' });
     agent({ id: 'agent-r', name: 'Lead · Release 1.9.4', role: 'worker', kind: 'chat', chatId: 'c-2', teamOrchestratorId: 'agent-o' });
-    const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
     // By its id: a part of a name finds the orchestrator, never one of its chats (bot-core's findAgent).
-    const text = '/start_agent agent-r Ship it';
-
-    const runner = await typedAfter(async () => {
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    });
+    const runner = await typedAfter(() => handleSlackCommand('start agent-r Ship it', 'C1', async () => undefined, settings));
 
     expect(runner).toContain(INSTRUCTIONS());
     expect(runner).toContain(TOOL_BLOCK);
@@ -226,17 +147,16 @@ describe('the role, on the launches the bots make', () => {
   // The Audit's L2 on #379, written before the fix (2026-10-13): a bot started
   // a chat's runner by its exact id through initAgentPty, past the slot gate,
   // over the RAM's limit.
-  it("Telegram /start_agent takes the runner's slot: refused, it opens nothing and says why", async () => {
+  it("Slack `start` takes the runner's slot: refused, it opens nothing and says why", async () => {
     agent({ id: 'agent-o', name: 'Lead', role: 'orchestrator' });
     agent({ id: 'agent-r', name: 'Lead · Release 1.9.4', role: 'worker', kind: 'chat', chatId: 'c-2', teamOrchestratorId: 'agent-o' });
     setSlotGate(async () => ({ ok: false, error: '2 chats are already working, the most this Mac runs at once.' }));
     try {
-      const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-      const text = '/start_agent agent-r Ship it';
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
+      const said: string[] = [];
+      await handleSlackCommand('start agent-r Ship it', 'C1', async (t) => { said.push(t); }, settings);
       await new Promise(resolve => setTimeout(resolve, 450));
       expect(spawned, 'a terminal opened for a start the gate refused').toHaveLength(0);
-      expect(bot.sent.join('\n')).toContain('2 chats are already working');
+      expect(said.join('\n')).toContain('2 chats are already working');
     } finally {
       setSlotGate(undefined);
     }
@@ -246,7 +166,7 @@ describe('the role, on the launches the bots make', () => {
     agent({ id: 'agent-w', name: 'Super Agent', role: 'worker' });
     agent({ id: 'agent-o', name: 'Lead', role: 'orchestrator' });
 
-    await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing'));
+    await typedAfter(() => sendToSuperAgentFromSlack('C1', 'what is everyone doing', async () => undefined, settings));
 
     expect(agents.get('agent-o')!.status).toBe('running');
     expect(agents.get('agent-w')!.status).toBe('idle');
@@ -262,20 +182,6 @@ describe("the super agent's cold start, from a message", () => {
   // instructions and without the editing tools.
   const TOOL_BLOCK = '--disallowed-tools "Edit" "Write" "NotebookEdit" "Task"';
   const promptFile = (typed: string) => /--append-system-prompt-file '([^']+)'/.exec(typed)?.[1];
-
-  it('from Telegram: the instructions, no editing tools, and bypass', async () => {
-    agent({ id: 'agent-s', name: 'Lead', role: 'orchestrator', permissionMode: 'auto' });
-
-    const typed = await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing'));
-
-    expect(typed).toContain(TOOL_BLOCK);
-    expect(typed).toContain(' --dangerously-skip-permissions');
-    expect(typed).not.toContain('--permission-mode');
-    const file = promptFile(typed);
-    expect(file, typed).toBeDefined();
-    // Telegram's own instructions are appended to the orchestration ones, in a file of its data folder.
-    expect(fs.readFileSync(file!, 'utf-8')).toContain(fs.readFileSync(getSuperAgentInstructionsPath(), 'utf-8'));
-  });
 
   it('from Slack: the instructions, no editing tools, and its own permission mode', async () => {
     agent({ id: 'agent-s', name: 'Lead', role: 'orchestrator', permissionMode: 'auto' });
@@ -305,22 +211,6 @@ describe('an agent whose CLI is already up', () => {
   const settle = () => new Promise(resolve => setTimeout(resolve, 450));
   const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
 
-  it('gets a Telegram /start_agent task typed in as a message, not a launch command', async () => {
-    const terminal = live();
-    const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-    const text = '/start_agent worker Rebase onto main';
-
-    await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    await settle();
-
-    expect(typed(terminal)).toContain('Rebase onto main');
-    // Behind the line that says where it came from, like every message Tars types (#128).
-    expect(typed(terminal)).toContain('Message from Telegram: Rebase onto main');
-    expect(typed(terminal)).not.toContain("&& '");
-    expect(spawned, 'a terminal was opened').toHaveLength(1);
-    expect(terminal.kill).not.toHaveBeenCalled();
-  });
-
   it('gets a Slack `start` task typed in as a message, not a launch command', async () => {
     const terminal = live();
 
@@ -331,16 +221,6 @@ describe('an agent whose CLI is already up', () => {
     expect(typed(terminal)).toContain('Message from Slack: Rebase onto main');
     expect(typed(terminal)).not.toContain("&& '");
     expect(spawned).toHaveLength(1);
-  });
-
-  it('gets a Telegram message to the super agent typed into its open session', async () => {
-    const terminal = live({ id: 'agent-s', name: 'Super Agent (Orchestrator)', role: 'orchestrator' });
-
-    await sendToSuperAgent('42', 'what is everyone doing');
-    await settle();
-
-    expect(typed(terminal)).toContain('[FROM TELEGRAM');
-    expect(typed(terminal)).not.toContain("&& '");
   });
 
   it('gets a Slack message to the super agent typed into its open session', async () => {
@@ -375,15 +255,6 @@ describe('a super agent whose status still says it works, over a bare shell', ()
     expect(text).toContain(`cd '${project}' && '`);
     expect(text.indexOf(`cd '${project}'`), 'the message was typed before any launch').toBeLessThan(text.indexOf(marker));
   };
-
-  it.each(['running', 'waiting'] as const)('gets a session started by a Telegram message (%s)', async (status) => {
-    const terminal = bare(status);
-
-    await sendToSuperAgent('42', 'echo MARK-SHELL-$((6*7))');
-    await settle();
-
-    onlyAsTheTaskOfALaunch(typed(terminal), '[FROM TELEGRAM');
-  });
 
   it.each(['running', 'waiting'] as const)('gets a session started by a Slack message (%s)', async (status) => {
     const terminal = bare(status);
@@ -420,12 +291,6 @@ describe('a launch on its way, and the bots (#134)', () => {
   // (a restart, a start from a window) is waited for, and the bot's own
   // launch is marked for every sender after it.
   const entryPoints: Array<[string, boolean, () => Promise<unknown>]> = [
-    ['Telegram /start_agent', false, async () => {
-      const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-      const text = '/start_agent worker Rebase onto main';
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    }],
-    ['Telegram message to the super agent', true, () => sendToSuperAgent('42', 'Rebase onto main')],
     ['Slack `start`', false, () => handleSlackCommand('start worker Rebase onto main', 'C1', async () => undefined, settings)],
     ['Slack message to the super agent', true, () => sendToSuperAgentFromSlack('C1', 'Rebase onto main', async () => undefined, settings)],
   ];
@@ -476,12 +341,6 @@ describe('QA #158: a launch slower than the API senders wait, and the bots', () 
   // this guards: a bot let go with the API senders, at 20 s, types into a
   // claude that is not taking keys yet, and the task is lost.
   const entryPoints: Array<[string, boolean, () => Promise<unknown>]> = [
-    ['Telegram /start_agent', false, async () => {
-      const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-      const text = '/start_agent worker Rebase onto main';
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    }],
-    ['Telegram message to the super agent', true, () => sendToSuperAgent('42', 'Rebase onto main')],
     ['Slack `start`', false, () => handleSlackCommand('start worker Rebase onto main', 'C1', async () => undefined, settings)],
     ['Slack message to the super agent', true, () => sendToSuperAgentFromSlack('C1', 'Rebase onto main', async () => undefined, settings)],
   ];
@@ -548,16 +407,6 @@ describe('the launch command a bot types into a cold terminal', () => {
   }
 
   const launches: Array<[string, () => Promise<unknown>]> = [
-    ['Telegram /start_agent', async () => {
-      agent({});
-      const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-      const text = '/start_agent worker Rebase onto main';
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    }],
-    ['Telegram, a message to the super agent', async () => {
-      agent({ id: 'agent-s', name: 'Chief', role: 'orchestrator' });
-      await sendToSuperAgent('42', 'what is everyone doing');
-    }],
     ['Slack start', async () => {
       agent({});
       await handleSlackCommand('start worker Rebase onto main', 'C1', async () => undefined, settings);
@@ -581,7 +430,7 @@ describe('the launch command a bot types into a cold terminal', () => {
 
   it('keeps the paste for a message into a claude that is already up', async () => {
     agent({ id: 'agent-s', name: 'Chief', role: 'orchestrator' });
-    const { terminal } = await launchIn(() => sendToSuperAgent('42', 'start on this'));
+    const { terminal } = await launchIn(() => sendToSuperAgentFromSlack('C1', 'start on this', async () => undefined, settings));
     // Its claude is up and its launch is over.
     terminal.process = '2.1.280';
     resetLaunches();
@@ -589,7 +438,7 @@ describe('the launch command a bot types into a cold terminal', () => {
 
     // Past the 200 characters where the writer pastes rather than types.
     const long = `and now this, for $HOME: ${'the whole plan '.repeat(20)}`;
-    await sendToSuperAgent('42', long);
+    await sendToSuperAgentFromSlack('C1', long, async () => undefined, settings);
     await new Promise(resolve => setTimeout(resolve, 450));
 
     const writes = terminal.write.mock.calls.map(call => String(call[0]));
@@ -609,12 +458,6 @@ describe('a launch typed into a terminal the bot has just opened (gate of #155)'
   // bytes typed at once run, 1095 do not; after the shell has spoken, 1495 do).
   // So nothing is typed before the shell's first output, then 150 ms of quiet.
   const entryPoints: Array<[string, boolean, () => Promise<unknown>]> = [
-    ['Telegram /start_agent', false, async () => {
-      const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-      const text = '/start_agent worker Rebase onto main';
-      await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    }],
-    ['Telegram message to the super agent', true, () => sendToSuperAgent('42', 'Rebase onto main')],
     ['Slack `start`', false, () => handleSlackCommand('start worker Rebase onto main', 'C1', async () => undefined, settings)],
     ['Slack message to the super agent', true, () => sendToSuperAgentFromSlack('C1', 'Rebase onto main', async () => undefined, settings)],
   ];
@@ -674,7 +517,7 @@ describe('QA #166: the quiet counts from the last thing the shell printed', () =
     agent({ id: 'agent-s', name: 'Super Agent (Orchestrator)', role: 'orchestrator' });
     const before = spawned.length;
 
-    const sent = sendToSuperAgent('42', 'Rebase onto main');
+    const sent = sendToSuperAgentFromSlack('C1', 'Rebase onto main', async () => undefined, settings);
     await vi.advanceTimersByTimeAsync(900);
     const terminal = spawned[before];
     const typed = () => terminal.write.mock.calls.map(call => String(call[0])).join('');
@@ -711,26 +554,6 @@ describe('an agent whose CLI shows a dialog (the Audit\'s census, 2026-09-24)', 
   const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
   const SUPER = { id: 'agent-s', name: 'Super Agent (Orchestrator)', role: 'orchestrator' } as const;
 
-  it('Telegram /start_agent types nothing into it', async () => {
-    const terminal = atDialog();
-    const startAgent = bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-    const text = '/start_agent worker Rebase onto main';
-
-    await startAgent.handler({ chat: { id: 42, type: 'private' }, text }, startAgent.pattern.exec(text));
-    await settle();
-
-    expect(typed(terminal)).not.toContain('Rebase onto main');
-  });
-
-  it('a Telegram message to the super agent types nothing into it', async () => {
-    const terminal = atDialog(SUPER);
-
-    await sendToSuperAgent('42', 'what is everyone doing');
-    await settle();
-
-    expect(typed(terminal)).not.toContain('what is everyone doing');
-  });
-
   it('Slack `start` types nothing into it', async () => {
     const terminal = atDialog();
 
@@ -764,37 +587,28 @@ describe('how Tars works, on the launches the bots make (the Audit\'s M1 on #448
     return script && fs.existsSync(script) ? fs.readFileSync(script, 'utf8') : typed;
   };
   const count = (typed: string) => commandOf(typed).split(SECTION).length - 1;
-  const startAgent = () => bot.texts.find(t => t.pattern.source.includes('start_agent'))!;
-  const launch = async (text: string) => commandOf(await typedAfter(async () => {
-    await startAgent().handler({ chat: { id: 42, type: 'private' }, text }, startAgent().pattern.exec(text));
-  }));
+  const launch = async (text: string) => commandOf(await typedAfter(() => handleSlackCommand(text, 'C1', async () => undefined, settings)));
 
-  it('an opencode worker started from Telegram gets it once, for a worker, with the task', async () => {
+  it('an opencode worker started from Slack gets it once, for a worker, with the task', async () => {
     agent({ id: 'agent-oc', name: 'Opencode', provider: 'opencode', model: undefined });
-    const typed = await launch('/start_agent opencode Rebase onto main');
+    const typed = await launch('start opencode Rebase onto main');
     expect(count(typed), typed).toBe(1);
     expect(typed).toContain('assign_task');
     expect(typed).not.toContain('delegate_task');
     expect(typed).toContain('Rebase onto main');
   });
 
-  it('an opencode worker started from Slack gets it once', async () => {
-    agent({ id: 'agent-oc', name: 'Opencode', provider: 'opencode', model: undefined });
-    const typed = commandOf(await typedAfter(() => handleSlackCommand('start opencode Rebase onto main', 'C1', async () => undefined, settings)));
-    expect(count(typed), typed).toBe(1);
-  });
-
   it('an opencode orchestrator a message starts gets the orchestrator\'s, once', async () => {
     agent({ id: 'agent-s', name: 'Lead', role: 'orchestrator', provider: 'opencode', model: undefined });
-    const typed = commandOf(await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing')));
+    const typed = commandOf(await typedAfter(() => sendToSuperAgentFromSlack('C1', 'what is everyone doing', async () => undefined, settings)));
     expect(count(typed), typed).toBe(1);
     expect(typed).toContain('delegate_task');
   });
 
   it('a claude agent gets it from its bootstrap, not in its prompt', async () => {
     agent({});
-    expect(count(await launch('/start_agent worker Rebase onto main'))).toBe(0);
+    expect(count(await launch('start worker Rebase onto main'))).toBe(0);
     agent({ id: 'agent-s', name: 'Lead', role: 'orchestrator' });
-    expect(count(await typedAfter(() => sendToSuperAgent('42', 'what is everyone doing')))).toBe(0);
+    expect(count(await typedAfter(() => sendToSuperAgentFromSlack('C1', 'what is everyone doing', async () => undefined, settings)))).toBe(0);
   });
 });
