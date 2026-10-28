@@ -1417,8 +1417,9 @@ window; agents may only ask for a scan.
   - `next-cache`: the `.next` of a project's worktree (under `.worktrees/`), untouched for 3 days;
   - `test-artefacts`: a worktree's `test-results` and `playwright-report`, untouched for 3 days, that no report under
     `~/.tars/project-files` cites by its path;
-  - `closed-worktree`: a worktree whose branch is merged into its project's main branch, clean, unlocked, idle a day
-    (removed by `git worktree remove`, never `--force`, as `scripts/worktree.mjs` does);
+  - `closed-worktree`: a worktree whose branch is merged into its project's main branch, clean, with no ignored file
+    but the rebuildable caches (a `.env.local`, an e2e run keep it), in no rebase or merge, unlocked, idle a day, its
+    caches aside (removed by `git worktree remove`, never `--force`, with `scripts/worktree.mjs`'s own refusals);
   - `npx-cache`: an entry of `~/.npm/_npx` untouched for 14 days;
   - `docker-image`: an image no container uses, a stopped one included (`docker image rm <id>`, never `-f`);
   - `docker-vm-trim`: `colima ssh -- sudo fstrim -a`, which gives the disk back what the VM freed;
@@ -1426,16 +1427,24 @@ window; agents may only ask for a scan.
 - **Never proposed, never deleted:**
   - `~/.tars-private`, `~/Documents`, the uv cache, the Trash, `~/Library/Developer` (Xcode, the iOS runtimes and
     simulators), any Docker volume, a project's own folder;
-  - anything inside a worktree a fleet agent works in, one with uncommitted work, or one a process works in;
-  - when the processes cannot be read (no lsof, Windows), nothing that needs "nothing runs in it".
-- **The approval.** The window calls `system.janitorApprove(ids)` with the ids of the items it showed.
+  - anything inside a worktree a fleet agent works in, one with uncommitted work, or anything a process is in: by its
+    working folder, its command line, or its executable and open files (lsof `cwd,txt`; /proc's cwd, exe and fd);
+  - when the processes cannot be read (no lsof, an lsof that fails, Windows), nothing that needs "nothing runs in
+    it".
+- **The window** reads `window.electronAPI.diskJanitor`: `state()`, `scan()`, `approve(ids)` and `onChanged`. The state
+  holds the last scan (when, who asked, running, what is being read and how much was found, its items with their path,
+  bytes, rule, why, a worktree's details and their outcomes), the deletions under way (item n of N, checking again,
+  deleted or kept), the never list in words, the log read back from `janitor.log`, and the scans agents asked for.
+- **The approval.** The window calls `diskJanitor.approve(ids)` with the ids of the items it showed.
   - Each item is checked again against its rule just before it goes, the world read anew: the processes, the fleet,
     git, its last change.
-  - It is deleted by its exact absolute path (`fs.rmSync`, never a glob, never a shell).
+  - Right before it goes, its real path must still be its path and a folder (a link planted on a parent is not
+    followed); it is deleted by its exact absolute path (`fs.rmSync`, never a glob, never a shell).
   - What no longer matches is kept, with why.
   - Every deletion (with the bytes it freed) and every item kept goes to `~/.tars/logs/janitor.log`.
-- **For agents.** `GET /api/janitor/scan` and the orchestrator server's `disk_scan` tool read the scan. No route takes
-  an approval.
+- **For agents.** `GET /api/janitor/scan` and the orchestrator server's `disk_scan` tool run a scan, which the window
+  shows with who asked; the agent is answered with its own project's items only, and once in five minutes. No route
+  takes an approval.
 - **Tests.** Under `DOROTHY_E2E` only, `DOROTHY_DOCKER_BIN` and `DOROTHY_COLIMA_BIN` name stand-ins, so a test never
   reaches the machine's Docker (`e2e/disk-janitor.spec.ts`).
 
