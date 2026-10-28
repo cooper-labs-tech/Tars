@@ -19,6 +19,12 @@ import type { AddressInfo } from 'node:net';
  *     the fleet's record for the token's agent, any x-tars-agent-* header the caller sent is dropped, and the secret
  *     is Tars's. The agent's own token goes through (the server presents it to Tars on every call), and the server's
  *     answer comes back as it was: its status, its type, its body.
+ * And from the Audit's gate of #541:
+ * R5. (M2) A project path above U+00FF (项目, a decomposed é) throws in the header, a 500 for every shared call of
+ *     that project: it is encoded, as the name is.
+ * R6. (M1) The answer is held until it ends: a long call's progress events (wait_for_agent's keep-alive, which keeps
+ *     claude from giving the call up after 30 minutes) must reach the CLI as they come.
+ * R7. (M3) An orchestrator-only server (telegram, x: the owner's decision of 28/10) is reached by a worker.
  */
 
 vi.mock('electron', () => ({
@@ -29,11 +35,13 @@ vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 const { fleet } = vi.hoisted(() => ({
   fleet: new Map<string, Record<string, unknown>>([
     ['a', { id: 'a', name: 'Harbor Worker', role: 'worker', projectPath: '/work/harbor', status: 'running' }],
+    ['z', { id: 'z', name: 'Zhōng Worker', role: 'worker', projectPath: '/work/项目/De\u0301v', status: 'running' }],
     ['o', { id: 'o', name: 'Harbor Lead', role: 'orchestrator', projectPath: '/work/harbor', status: 'running' }],
   ]),
 }));
 vi.mock('../../../../electron/core/agent-manager', () => ({ agents: fleet }));
 vi.mock('../../../../electron/core/chat-inbox', () => ({ chatsReadEnv: (id: string) => (id === 'o' ? { TARS_CHATS_READ: '1' } : {}) }));
+vi.mock('../../../../electron/core/agent-role', () => ({ hasOrchestratorPowers: (a: { role?: string }) => a.role === 'orchestrator' }));
 
 import { registerMcpRoutes } from '../../../../electron/services/api-routes/mcp-routes';
 import { setSharedMcpTarget } from '../../../../electron/services/mcp-shared';
@@ -143,8 +151,47 @@ describe('/api/mcp/<server>', () => {
       name: decodeURIComponent(String(got.headers['x-tars-agent-name'])), chats: got.headers['x-tars-chats-read'],
       auth: got.headers.authorization, version: got.headers['mcp-protocol-version'], accept: got.headers.accept,
     }).toEqual({
-      secret: SECRET, id: 'o', project: '/work/harbor', name: 'Harbor Lead', chats: '1',
+      secret: SECRET, id: 'o', project: encodeURIComponent('/work/harbor'), name: 'Harbor Lead', chats: '1',
       auth: 'Bearer token-of-a', version: '2025-06-18', accept: 'application/json, text/event-stream',
     });
   });
+
+  it('R5. a project path above U+00FF reaches the server, encoded', async () => {
+    const h = await helper();
+    setSharedMcpTarget('claude-mgr-kanban', { port: h.port, secret: SECRET });
+    const res = await post(await tars(), 'claude-mgr-kanban', { 'X-Test-Caller': 'z' });
+    expect(res.status).toBe(200);
+    expect(decodeURIComponent(String(h.seen[0].headers['x-tars-agent-project']))).toBe('/work/项目/De\u0301v');
+  });
+
+  it('R6. an event stream comes back as it comes, its first event before its end', async () => {
+    let finish: () => void = () => undefined;
+    const port = await listen((req, res) => {
+      req.resume();
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.write('event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progressToken":1,"progress":1}}\n\n');
+      finish = () => res.end('event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{}}\n\n');
+    });
+    setSharedMcpTarget('claude-mgr-orchestrator', { port, secret: SECRET });
+    const res = await post(await tars(), 'claude-mgr-orchestrator', { 'X-Test-Caller': 'o' });
+    expect(res.headers.get('content-type')).toBe('text/event-stream');
+    const reader = res.body!.getReader();
+    const first = new TextDecoder().decode((await reader.read()).value);
+    expect(first).toContain('notifications/progress');
+    finish();
+    let rest = '';
+    for (let r = await reader.read(); !r.done; r = await reader.read()) rest += new TextDecoder().decode(r.value);
+    expect(rest).toContain('"result"');
+  });
+
+  it('R7. an orchestrator-only server is refused to a worker, and reached by an orchestrator', async () => {
+    const h = await helper();
+    setSharedMcpTarget('dorothy-x', { port: h.port, secret: SECRET });
+    const port = await tars();
+    expect((await post(port, 'dorothy-x', { 'X-Test-Caller': 'a' })).status).toBe(403);
+    expect(h.seen).toEqual([]);
+    expect((await post(port, 'dorothy-x', { 'X-Test-Caller': 'o' })).status).toBe(200);
+    setSharedMcpTarget('dorothy-x', undefined);
+  });
 });
+

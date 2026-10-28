@@ -17,6 +17,9 @@ import type { AddressInfo } from 'net';
  * H4. The per-agent copy (stdio) loses its identity: outside a shared call, the environment is read as before.
  * H5. A request from Tars without an agent or a token is served: refused, since a tool would then run as nobody.
  * H6. A request's MCP server and transport outlive it: both are closed when its answer ends.
+ * And from the Audit's gate of #541 (M2): Node refuses a header value above U+00FF, so a project under 项目 or with a
+ * decomposed é made every shared call of that project a 500. Tars encodes the project as it does the name:
+ * H7. the project is decoded, whatever its characters.
  */
 
 import { sharedHandler, SHARED_HEADERS } from '../../mcp-shared/src/shared-host';
@@ -68,7 +71,7 @@ const SECRET = 's'.repeat(64);
 const tars = (agent: string, over: Record<string, string> = {}) => ({
   [SHARED_HEADERS.secret]: SECRET,
   [SHARED_HEADERS.agentId]: agent,
-  [SHARED_HEADERS.project]: `/projects/${agent}`,
+  [SHARED_HEADERS.project]: encodeURIComponent(`/projects/${agent}`),
   [SHARED_HEADERS.name]: encodeURIComponent(`Agent ${agent.toUpperCase()}`),
   [SHARED_HEADERS.chatsRead]: agent === 'a' ? '1' : '0',
   Authorization: `Bearer token-of-${agent}`,
@@ -140,4 +143,14 @@ describe('the shared server, as Tars reaches it', () => {
     await call(port, tars('b'));
     await vi.waitFor(() => expect(f.closed.sort()).toEqual(['server 1', 'server 2', 'transport', 'transport']));
   });
+
+  it('H7. the project is decoded, whatever its characters', async () => {
+    const f = fakes();
+    const port = await serve(sharedHandler(SECRET, f.deps));
+    for (const project of ['/Users/x/项目', '/Users/x/De\u0301veloppement', '/Users/x/Développement']) {
+      const { json } = await call(port, tars('a', { [SHARED_HEADERS.project]: encodeURIComponent(project) }));
+      expect(json!.seen.identity.projectPath, project).toBe(project);
+    }
+  });
 });
+
