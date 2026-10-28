@@ -1,4 +1,5 @@
 import { agentResources } from '../fleet-resources-runtime';
+import type { AgentProcess } from '../fleet-resources';
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { stopAcpRuns } from '../acp/delegate';
@@ -2032,13 +2033,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (caller && !showAll) {
       agentValues = agentValues.filter(a => a.projectPath === caller);
     }
+    // Another project's agents, with `all`: who they are and nothing more, no task, figure or asker (the Audit's H1 on
+    // #546, the orchestrator's decision). A caller with no project (the owner's own token) reads everything.
+    const elsewhere = (a: AgentStatus) => !!caller && a.projectPath !== caller;
     const askerOf = (a: AgentStatus) => {
       const asker = a.requestedBy ? agents.get(a.requestedBy.agentId) : undefined;
       return asker ? { id: asker.id, name: asker.name || asker.id, ...(asker.kind === 'chat' ? { chat: true } : {}) } : undefined;
     };
     // Each agent's memory and since when it is in its status (lot 3 item D): null when it cannot be read.
     const resources = await agentResources().catch(() => new Map());
-    const agentList = agentValues.map(withSessionTruth).map(a => ({
+    const agentList = agentValues.map(withSessionTruth).map(a => (elsewhere(a) ? {
+      id: a.id, name: a.name, status: a.status, projectPath: a.projectPath, role: a.role,
+    } : {
       id: a.id,
       name: a.name,
       status: a.status,
@@ -2061,13 +2067,22 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id
   app_.get(/^\/api\/agents\/([^/]+)$/, async (req, sendJson) => {
     const agent = agents.get(req.params.id);
-    if (!agent) {
+    // Another project's agent is refused as an unknown one, naming nothing (the Audit's H1 on #546, the orchestrator's
+    // decision): its output, its task and its processes are its project's. A caller with no project (the owner's own
+    // token) reads any.
+    const caller = callerProject(req);
+    if (!agent || (caller && agent.projectPath !== caller)) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
     const full = req.url.searchParams.get('full') === 'true';
-    // Its tree's memory, CPU and processes, their command lines masked (lot 3 item D).
-    const resources = (await agentResources().catch(() => new Map())).get(agent.id) ?? { memMb: null, cpuPct: null, processes: [] };
+    // Its tree's memory and CPU, and each process as its program, pid, memory and CPU (lot 3 item D): no arguments,
+    // which carry what no masking can know (the Audit's M1 on #546). The window, through IPC, has the command lines.
+    const r = (await agentResources().catch(() => new Map())).get(agent.id);
+    const resources = {
+      memMb: r?.memMb ?? null, cpuPct: r?.cpuPct ?? null,
+      processes: (r?.processes ?? []).map(({ name, pid, memMb, cpuPct }: AgentProcess) => ({ name, pid, memMb, cpuPct })),
+    };
     sendJson({ agent: { ...(full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent)), resources } });
   });
 

@@ -1102,7 +1102,14 @@ export interface OrphanFolder {
   lastChangedAt: string | null;
 }
 /** One process of an agent's tree. */
-export interface AgentProcess { name: string; memMb: number | null; cpuPct: number | null; /** Secrets masked. */ command: string }
+export interface AgentProcess {
+  name: string;
+  pid: number;
+  memMb: number | null;
+  cpuPct: number | null;
+  /** Its command line, every secret in it masked (a password after a flag, a URL's, a key): the window's only. */
+  command: string;
+}
 /** A folder and its size as last measured: null before any measure. */
 export interface MeasuredPath { path: string; bytes: number | null }
 /** What an agent costs. */

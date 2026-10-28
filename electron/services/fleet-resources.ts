@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { redactSecrets } from '../utils/redact-secrets';
+import { redactCommandLine } from '../utils/redact-command-line';
 
 /**
  * What each agent and each project costs, readable (2.0.5, lot 3 item D; brief lot3-agent-resources-2810.md; the
@@ -28,7 +28,7 @@ export type FleetInput = {
   tmpOf: (agentId: string) => string;
 };
 
-export interface AgentProcess { name: string; memMb: number | null; cpuPct: number | null; /** Secrets masked. */ command: string }
+export interface AgentProcess { name: string; pid: number; memMb: number | null; cpuPct: number | null; /** Secrets masked (redact-command-line.ts). */ command: string }
 export interface MeasuredPath { path: string; bytes: number | null }
 export interface AgentResources {
   id: string;
@@ -97,7 +97,7 @@ export function buildFleetResources(input: FleetInput): FleetResources {
   const agents = input.agents.map((a): { project: string; resources: AgentResources; memMb: number | null; cpuPct: number | null; processes: AgentProcess[]; worktrees: MeasuredPath[]; tmp: MeasuredPath | null } => {
     const tree = input.table && a.terminalPid && rows.has(a.terminalPid) ? treeOf(a.terminalPid, children, rows) : null;
     const processes = (tree ?? [])
-      .map(r => ({ name: nameOf(r.command), memMb: tenth(r.kb / 1024), cpuPct: tenth(r.cpu), command: redactSecrets(r.command) }))
+      .map(r => ({ name: nameOf(r.command), pid: r.pid, memMb: tenth(r.kb / 1024), cpuPct: tenth(r.cpu), command: redactCommandLine(r.command) }))
       .sort((x, y) => (y.memMb ?? 0) - (x.memMb ?? 0));
     const resources: AgentResources = {
       id: a.id, name: a.name, status: statusOf(a), statusSince: time(a.asleepSince) ?? time(a.statusSince),
