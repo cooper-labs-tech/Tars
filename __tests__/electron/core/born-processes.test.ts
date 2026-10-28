@@ -5,7 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   bornTagOf, macTagOf, envTokensOfPs, parseEnviron, tarsAndItsParents, spareReason, sharedDaemonPaths,
-  readBornProcesses, endBornProcesses, stopLabelledContainers, type BornProcess,
+  readBornProcesses, endBornProcesses, stopLabelledContainers, describeBorn, type BornProcess,
 } from '../../../electron/core/born-processes';
 
 /**
@@ -56,6 +56,9 @@ import {
  * 8 again (the Audit's re-check of 7243ef48e): the subtree is walked through the tagged processes alone, and macOS
  *    shows no environment of a platform binary: a kept run's task started through /bin/sh (every local ansible
  *    module runs as `/bin/sh -c '<python> AnsiballZ_...'`) is not under the run, and is ended.
+ * And from the Audit's train audit (M1, AUDIT-train-2-0-5-2.md):
+ * 12. A stop's record (`stopProcesses`, its answer) keeps a secret after a flag (`--token <v>`, mysql's `-p<v>`): the
+ *     log rule misses it. A line follows the window's rule (redact-command-line.ts), then is cut.
  */
 
 const ADDRESS = 'http://127.0.0.1:31415';
@@ -364,4 +367,10 @@ else if (a[0] === 'stop') { fs.appendFileSync(${JSON.stringify(log)}, a.slice(1)
     expect(await stopLabelledContainers('agent-born-9', { path: empty })).toEqual({ stopped: [], unknown: true });
     fs.rmSync(empty, { recursive: true, force: true });
   });
+
+  it('12. a stop\'s line masks a secret after a flag by the window\'s rule, and keeps why', () => {
+    expect(describeBorn({ pid: 4100, command: 'node w.js --token Ab3dEf6hIj9kLm2n' })).toBe('pid 4100: node w.js --token [redacted]');
+    expect(describeBorn({ pid: 4101, command: 'mysql -u root -pHunter2xyz shop' }, 'kept')).toBe('pid 4101: mysql -u root -p[redacted] shop (kept)');
+  });
 });
+

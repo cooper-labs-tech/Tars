@@ -17,6 +17,9 @@ import type { BornProcess } from '../../../electron/core/born-processes';
  * 4. An agent with a live session is recorded: what it runs is its work, not a leftover.
  * 5. The record outlives what it recorded: once they are gone, it goes.
  * 6. Windows (no environment to read): the processes are unknown, so none is claimed, and the containers still are.
+ * And from the Audit's train audit (M1, AUDIT-train-2-0-5-2.md):
+ * 7. A secret after a flag (`--token <v>`, mysql's `-p<v>`, `--password <v>`, `--api-key <v>`) stays in the record
+ *    and the hour-on note: the log rule misses them. They follow the window's rule (redact-command-line.ts).
  */
 
 const T0 = Date.parse('2026-10-28T10:00:00.000Z');
@@ -94,4 +97,21 @@ describe('what outlives an agent\'s session', () => {
     await bornWatchPass(T0, d);
     expect(a.leftRunning).toMatchObject({ pids: [], containers: ['kotsna-db (c1)'] });
   });
+
+  it('7. a secret after a flag is masked in the record and in the note, by the window\'s rule', async () => {
+    const a = agent('a1');
+    const born = [
+      { pid: 9001, ppid: 1, agentId: 'a1', command: 'node w.js --token Ab3dEf6hIj9kLm2n' },
+      { pid: 9002, ppid: 1, agentId: 'a1', command: 'mysql -u root -pHunter2xyz shop' },
+      { pid: 9003, ppid: 1, agentId: 'a1', command: 'deploy --api-key 9f8e7d6c5b4a3f2e1d0c --password hunter2long' },
+    ];
+    const { d, told } = deps([a], born);
+    await bornWatchPass(T0, d);
+    await bornWatchPass(T0 + REPORT_AFTER_MS, d);
+    const said = JSON.stringify(a.leftRunning) + JSON.stringify(told);
+    for (const secret of ['Ab3dEf6hIj9kLm2n', 'Hunter2xyz', '9f8e7d6c5b4a3f2e1d0c', 'hunter2long']) expect(said, secret).not.toContain(secret);
+    expect(told).toHaveLength(1);
+    expect(a.leftRunning?.commands).toContain('pid 9001: node w.js --token [redacted]');
+  });
 });
+

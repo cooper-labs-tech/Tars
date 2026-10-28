@@ -24,7 +24,8 @@ import { EventEmitter } from 'node:events';
  * And from the train's brief (item 4), with #523's records in:
  * A8. An orchestrator cannot tell an agent left processes running after its session: list_agents gives how many
  *     (processes and containers, 0 when none), get_agent their pids and containers and since when, never a command
- *     line (A6's rule).
+ *     line (A6's rule), in the resources nor anywhere in the record: #523's `leftRunning.commands` and `stopProcesses`
+ *     came out whole in the agent's record, `?full=true` too (the Audit's train audit, M1).
  */
 
 vi.mock('electron', () => ({
@@ -37,6 +38,7 @@ const { fleet } = vi.hoisted(() => ({
   fleet: new Map<string, Record<string, unknown>>([
     ['a', { id: 'a', name: 'Harbor Worker', role: 'worker', projectPath: '/w/harbor', status: 'running', statusSince: '2026-10-28T09:30:00.000Z', skills: [], output: [] }],
     ['b', { id: 'b', name: 'Harbor Tester', role: 'worker', projectPath: '/w/harbor', status: 'idle', statusSince: '2026-10-28T09:00:00.000Z', skills: [], output: [],
+      stopProcesses: { ended: ['pid 690: mysql -u root -pHunter2xyz'], kept: ['pid 691: ansible-playbook site.yml (an ansible run)'], containers: ['harbor-cache (9e1f)'] },
       leftRunning: { pids: [701, 702], commands: ['pid 701: next dev', 'pid 702: node w.js --token Ab3dEf6hIj9kLm2n'], containers: ['harbor-db (3f2a)'], since: '2026-10-28T09:05:00.000Z' } }],
     ['c', { id: 'c', name: 'Cove Worker', role: 'worker', projectPath: '/w/cove', status: 'running', statusSince: '2026-10-28T09:10:00.000Z', currentTask: 'rotate the cove database password', skills: [], output: ['cove secrets'] }],
   ]),
@@ -138,7 +140,11 @@ describe('what an agent left running after its session', () => {
     expect(agents.find(x => x.id === 'a')?.outlived).toBe(0);
     const { agent } = await get('/api/agents/b', { id: 'b' }) as { agent: { resources: Record<string, unknown> } };
     expect(agent.resources.outlived).toEqual({ since: '2026-10-28T09:05:00.000Z', pids: [701, 702], containers: ['harbor-db (3f2a)'] });
-    expect(JSON.stringify(agent.resources)).not.toContain('Ab3dEf6hIj9kLm2n');
+    // Nowhere in the record, nor with ?full=true: no command line leaves through the API.
+    for (const url of ['/api/agents/b', '/api/agents/b?full=true']) {
+      const whole = JSON.stringify(await get(url, { id: 'b' }));
+      for (const line of ['Ab3dEf6hIj9kLm2n', 'next dev', 'Hunter2xyz', 'ansible-playbook']) expect(whole, `${url}: ${line}`).not.toContain(line);
+    }
     expect((await get('/api/agents/a', { id: 'a' }) as { agent: { resources: Record<string, unknown> } }).agent.resources.outlived).toBeNull();
   });
 });
