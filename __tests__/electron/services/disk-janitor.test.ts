@@ -45,6 +45,10 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  *      item's real path must be its path, and a folder.
  * J20. A worktree item does not give its details (branch, merged, idle days, clean), or its branch is in the rule's
  *      text, which the window groups by; or a scan does not say how far it is.
+ * And from the Audit's re-check at aba0aa08:
+ * J21. (M1) Every path of every process is resolved again for each candidate folder: about 8 s of synchronous work
+ *      on the main thread per scan (545 processes, 8,628 paths). The world gives the paths resolved once, and the
+ *      rules compare strings: a scan over thousands of processes stays well under a second.
  */
 
 const DAY = 86_400_000;
@@ -313,6 +317,23 @@ describe('the Audit\'s gate of #542, and the window\'s details', () => {
     expect(progress.length).toBeGreaterThan(2);
     expect(progress.at(-1)).toMatchObject({ done: progress.at(-1)!.total });
     expect(progress.at(-1)!.foundBytes).toBe(items.reduce((s, i) => s + i.sizeBytes, 0));
+  });
+
+  it('J21. thousands of processes\' paths are compared, not resolved again, for each folder', async () => {
+    const processes = Array.from({ length: 5000 }, (_, i) => ({ pid: 1000 + i, command: `node /opt/app${i}/server.js`, paths: [`/opt/app${i}`, `/opt/app${i}/lib.dylib`] }));
+    const realpath = fs.realpathSync.native;
+    let calls = 0;
+    (fs.realpathSync as unknown as { native: typeof realpath }).native = ((p: string) => { calls++; return realpath(p); }) as typeof realpath;
+    try {
+      const started = Date.now();
+      const items = await scanJanitor(world({ processes }));
+      const took = Date.now() - started;
+      expect(items.length).toBeGreaterThan(5);
+      expect(took, `${took} ms`).toBeLessThan(1_500);
+      expect(calls, 'resolved a process path').toBeLessThan(500);
+    } finally {
+      (fs.realpathSync as unknown as { native: typeof realpath }).native = realpath;
+    }
   });
 });
 

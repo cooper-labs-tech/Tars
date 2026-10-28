@@ -50,7 +50,7 @@ export const NEVER_WORDS: readonly string[] = [
   '~/.tars-private', '~/Documents', 'the uv cache', 'the Trash', 'Xcode, the iOS runtimes and simulators (~/Library/Developer)',
   'any Docker volume', 'a project\'s own folder', 'a worktree an agent of the fleet works in', 'a worktree with uncommitted work',
   'a worktree with ignored files other than rebuildable caches, or in the middle of a rebase or a merge',
-  'anything a process runs in, from, or holds open',
+  'anything a process runs in or from (and, on Linux, holds open)',
 ];
 
 const AGENT_EVERY_MS = 5 * 60_000;
@@ -127,16 +127,17 @@ export function createJanitor(deps: {
   return {
     state,
     /** A scan, the window's (null) or an agent's: the agent is answered with its own project's items, once in five minutes. */
-    async scan(asker: { name: string; project: string } | null): Promise<JanitorItem[]> {
+    async scan(asker: { id: string; name: string; project: string } | null): Promise<JanitorItem[]> {
       if (asker) {
-        const seen = byAgent.get(asker.name);
+        // By its id: two agents of the same name in two projects are two askers (the Audit's L1).
+        const seen = byAgent.get(asker.id);
         if (seen && Date.now() - seen.at < (deps.agentEveryMs ?? AGENT_EVERY_MS)) return seen.items;
       }
       running ??= runScan(asker?.name ?? null).finally(() => { running = undefined; });
       const items = await running;
       if (!asker) return items;
       const mine = items.filter(i => (i.path && inside(i.path, asker.project)) || (i.project && inside(i.project, asker.project)));
-      byAgent.set(asker.name, { at: Date.now(), items: mine });
+      byAgent.set(asker.id, { at: Date.now(), items: mine });
       requests.push({ at: Date.now(), by: asker.name, project: asker.project, items: mine.length });
       if (requests.length > REQUESTS_KEPT) requests.shift();
       tell();

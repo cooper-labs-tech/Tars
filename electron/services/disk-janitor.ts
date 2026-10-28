@@ -9,6 +9,7 @@ import { safeGit } from '../utils/safe-git';
 import { retentionLog } from './agent-tmp';
 import { type JanitorItem, type JanitorOps, type JanitorReport, type JanitorWorld } from './janitor-rules';
 import { createJanitor, type JanitorState } from './janitor-state';
+import { processesNow } from './janitor-processes';
 import { broadcastToAllWindows } from '../utils/broadcast';
 
 /**
@@ -118,42 +119,6 @@ export function setJanitorProjects(projects: () => string[]): void {
 /** A git operation a worktree is in the middle of, as scripts/worktree.mjs reads it. */
 const IN_PROGRESS: Record<string, string> = { 'rebase-merge': 'a rebase', 'rebase-apply': 'a rebase', MERGE_HEAD: 'a merge', CHERRY_PICK_HEAD: 'a cherry-pick', REVERT_HEAD: 'a revert', BISECT_LOG: 'a bisect' };
 
-/**
- * Every process with its command line and the paths it is in: its working folder, its executable and the files it
- * holds open (lsof's cwd and txt on macOS; /proc's cwd, exe and fd on Linux). Null when they cannot be read wholly: an
- * lsof that fails is unreadable even with some output (the Audit's Info 2 on #542), and Windows has neither.
- */
-async function processesNow(): Promise<JanitorWorld['processes']> {
-  if (process.platform === 'win32') return null;
-  const commands = new Map<number, string>();
-  const ps = await run('ps', ['-A', '-o', 'pid=,command=']);
-  if (!ps.ok) return null;
-  for (const line of ps.stdout.split('\n')) {
-    const m = /^\s*(\d+)\s+(.*)$/.exec(line);
-    if (m) commands.set(Number(m[1]), m[2]);
-  }
-  const paths = new Map<number, string[]>();
-  const add = (pid: number, p: string) => { if (p) paths.set(pid, [...(paths.get(pid) ?? []), p]); };
-  if (process.platform === 'linux') {
-    for (const pid of commands.keys()) {
-      for (const link of ['cwd', 'exe']) { try { add(pid, fs.readlinkSync(`/proc/${pid}/${link}`)); } catch { /* gone, or not ours */ } }
-      let fds: string[] = [];
-      try { fds = fs.readdirSync(`/proc/${pid}/fd`); } catch { /* not ours */ }
-      for (const fd of fds) { try { add(pid, fs.readlinkSync(`/proc/${pid}/fd/${fd}`)); } catch { /* closed */ } }
-    }
-  } else {
-    // macOS's own, by its path: /usr/sbin is not on every PATH an app is started with.
-    const lsof = await run('/usr/sbin/lsof', ['-w', '-n', '-P', '-d', 'cwd,txt', '-F', 'pn']);
-    if (!lsof.ok) return null;
-    let pid = 0;
-    for (const line of lsof.stdout.split('\n')) {
-      if (line.startsWith('p')) pid = Number(line.slice(1));
-      else if (line.startsWith('n') && pid) add(pid, line.slice(1));
-    }
-  }
-  return [...commands].map(([pid, command]) => ({ pid, command, paths: paths.get(pid) ?? [] }));
-}
-
 async function worldNow(measure = true): Promise<JanitorWorld> {
   const fleet = [...agents.values()].map(a => ({ id: a.id, projectPath: a.projectPath, ...(a.worktreePath ? { worktreePath: a.worktreePath } : {}) }));
   const projects = [...new Set(projectsOf().filter(p => p && fs.existsSync(p)))];
@@ -162,7 +127,7 @@ async function worldNow(measure = true): Promise<JanitorWorld> {
   const colima = await run(bin('colima'), ['status'], 15_000);
   return {
     home, dataDir: DATA_DIR, privateDir: PRIVATE_DIR, now: Date.now(), projects, fleet,
-    processes: await processesNow(),
+    processes: await processesNow({ run }),
     worktrees: worktreesOf,
     dirty: async (wt) => {
       try { return (await safeGit(wt, ['status', '--porcelain'])).stdout.trim().length > 0; } catch { return null; }
@@ -220,7 +185,7 @@ export function janitorState(): JanitorState {
 }
 
 /** A scan: the window's (null), or an agent's, which is answered with its own project's items, once in five minutes. */
-export function janitorScan(asker: { name: string; project: string } | null): Promise<JanitorItem[]> {
+export function janitorScan(asker: { id: string; name: string; project: string } | null): Promise<JanitorItem[]> {
   return janitor.scan(asker);
 }
 
