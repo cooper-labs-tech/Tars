@@ -76,7 +76,9 @@ for (const newInterface of [false, true]) {
     git(wt('open'), 'add', '.');
     git(wt('open'), 'commit', '-q', '-m', 'unmerged work');
     fs.writeFileSync(path.join(wt('dirty'), 'uncommitted.txt'), 'not saved\n');
-    for (const n of ['done', 'dirty', 'agents', 'busy', 'open']) { filled(path.join(wt(n), '.next')); filled(path.join(wt(n), 'test-results')); }
+    // The merged worktree holds no ignored file but its rebuildable .next: one with test artefacts is kept, as
+    // scripts/worktree.mjs refuses it (the QA's F1 on #542), and is not the case this proposes.
+    for (const n of ['done', 'dirty', 'agents', 'busy', 'open']) { filled(path.join(wt(n), '.next')); if (n !== 'done') filled(path.join(wt(n), 'test-results')); }
     filled(path.join(wt('fresh'), '.next'), 1);
     for (const n of ['done', 'dirty', 'agents', 'busy', 'open', 'withenv']) age(wt(n), 10);
     const tmp = path.join(home, '.tars', 'tmp');
@@ -150,7 +152,6 @@ for (const newInterface of [false, true]) {
         'next-cache projects/harbor/.worktrees/done/.next',
         'next-cache projects/harbor/.worktrees/open/.next',
         'npx-cache .npm/_npx/oldhash',
-        'test-artefacts projects/harbor/.worktrees/done/test-results',
         'test-artefacts projects/harbor/.worktrees/open/test-results',
       ].sort());
       expect(fs.existsSync(path.join(wt('done'), '.next')), 'a scan deletes nothing').toBe(true);
