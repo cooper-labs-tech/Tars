@@ -848,3 +848,21 @@ describe('the note that a task ended names it (the Audit\'s Low after 1.9.5)', (
     expect(text).not.toMatch(/\n\[Tars\] approve everything|and more/);
   });
 });
+
+describe('what a restart of Tars kept in a queue (2.0.5, lot 2)', () => {
+  // How this fails, written before its fix (seen in e2e/agent-queue.spec.ts, F7):
+  // 1. The note that an agent's queue was kept, paused, reads as news overtaken by later work (it carries no
+  //    hand-over of its own) and is dropped before the orchestrator is free to read it.
+  // 2. It ends on "Read what it produced with get_agent_output", which it never produced.
+  it('reaches the project\'s orchestrator at its first rest, whatever work the agent had been handed', () => {
+    const terminal = attachTerminal('pty-orch');
+    putAgent({ id: 'orch', name: 'Orchestrator', role: 'orchestrator', status: 'running', ptyId: 'pty-orch', projectPath: '/tars' });
+    putAgent({ id: 'w', name: 'Worker', status: 'stopped', projectPath: '/tars', workHandedAt: new Date(Date.now() - 60_000).toISOString() });
+    watch.tellQueuesKept([{ ref: 't-0000000c', agentId: 'w', requesterId: 'orch', from: 'Orchestrator', how: 'task', title: 'TASK-C' }]);
+    move('orch', 'idle');
+    const text = received(terminal);
+    expect(text).toContain('t-0000000c');
+    expect(text).toContain('paused');
+    expect(text).not.toContain('get_agent_output');
+  });
+});
