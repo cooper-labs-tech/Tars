@@ -48,6 +48,7 @@ vi.mock('../../../electron/core/pty-manager', () => ({
   rememberTerminalOwner: vi.fn(),
   noteSubmitted: vi.fn(),
 }));
+vi.mock('../../../electron/services/agent-watch', () => ({ tellStartUnconfirmed: vi.fn() }));
 vi.mock('../../../electron/utils/path-builder', () => ({ buildFullPath: vi.fn(() => '/usr/bin') }));
 
 import { agents, armTaskStartWatch } from '../../../electron/core/agent-manager';
@@ -343,5 +344,33 @@ describe('F3: the task arrived and no hook ever reports it', () => {
 
     expect(agent.status).not.toBe('error');
     expect(retyped()).toHaveLength(0);
+  });
+});
+
+/**
+ * Added with the Audit's Low and Info 1 on #549, before the code:
+ * U1 the check gives up asking after 2 h (no turn, no idle prompt) and nobody is told: its requester, or the window;
+ *    or the agent is put in error, said never to have begun, when it may have run;
+ * U2 an idle prompt the hooks route sets aside as stale (work handed, or a turn begun, under a minute ago) is taken as
+ *    the proof that the CLI dropped the task, and the task is typed again.
+ */
+describe('the 2 h bound and a stale idle prompt (the Audit\'s Low and Info 1 on #549)', () => {
+  it('U1: at the bound, its requester is told the start could not be confirmed, and the agent is not put in error', async () => {
+    const agent = liveAgent();
+    agent.requestedBy = { agentId: 'lead', ptyId: 'pty-live', taskRef: 't-0000abcd' };
+    const watch = await import('../../../electron/services/agent-watch');
+    await afterRegistration(2 * 60 * 60_000 + 60_000);
+    await vi.waitFor(() => expect(vi.mocked(watch.tellStartUnconfirmed)).toHaveBeenCalledWith('a1'));
+    expect(agent.status).not.toBe('error');
+    expect(agent.pendingDelivery).toBeUndefined();
+    expect(retyped()).toHaveLength(0);
+  });
+
+  it('U2: a stale idle prompt is no proof the task was dropped', async () => {
+    const agent = liveAgent();
+    // Work handed a moment ago: an idle prompt now is the previous rest's, and the hooks route sets it aside.
+    await afterRegistration(PAST_THE_TURN_BOUND + 5_000, () => { agent.workHandedAt = new Date().toISOString(); }, { idle: true });
+    expect(retyped()).toHaveLength(0);
+    expect(agent.idlePromptAt).toBeUndefined();
   });
 });

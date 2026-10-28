@@ -878,3 +878,20 @@ describe('an end of turn told once (the DB brief fix-twin-deliveries-2810.md)', 
     expect(received(terminal).split('background work still running').length - 1, 'the same rest told twice').toBe(1);
   });
 });
+
+describe('a start Tars could not confirm (the Audit\'s Low on #549)', () => {
+  // How this fails, written before its fix: the delivery check gives up asking after 2 h with no turn and no idle
+  // prompt, and nobody is told (a silent drop); or the requester is told the task never began, when it may have run.
+  it('is told to the requester once, as unconfirmed, never as never begun', async () => {
+    const terminal = attachTerminal('pty-lead');
+    putAgent({ id: 'lead', name: 'Lead', status: 'idle', ptyId: 'pty-lead' });
+    putAgent({ id: 'w2', name: 'Worker', status: 'running', workHandedAt: new Date().toISOString(), requestedBy: { agentId: 'lead', ptyId: '', taskRef: 't-0000abcd' } });
+    const { tellStartUnconfirmed } = await import('../../../electron/services/agent-watch');
+    tellStartUnconfirmed('w2');
+    const said = received(terminal);
+    expect(said).toMatch(/could not confirm/);
+    expect(said).toMatch(/may have run/);
+    expect(said).not.toMatch(/never (ran|began|started)/);
+    expect(said).toContain('t-0000abcd');
+  });
+});
