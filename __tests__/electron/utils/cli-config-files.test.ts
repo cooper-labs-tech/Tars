@@ -23,6 +23,13 @@ import { parse as parseToml } from 'smol-toml';
  * F4. A JSON config written without its final newline (every writer used JSON.stringify alone): the shared
  *     writer (claude's settings, mcp.json, ~/.claude.json, pi, opencode), gemini's settings, amp's, the MCP page's
  *     JSON files, Qwen Code's per-agent settings.
+ *
+ * After the Audit's gate of e324cb6ea (AUDIT-PR531.md), written before the fix:
+ * F5. (M1) A header the remover does not know as one is taken as a line of the table above it, and removed with
+ *     it: a quoted key holding `[`, `]` or `=` (a trust table `[projects."/Users/me/Work [old]/app"]`, an owner's
+ *     `[mcp_servers."a=b"]`), a dotted key with spaces, an array of tables `[[profiles]]`, a header with a comment.
+ *     And a line of a value (`  [1, 2],`, `["a", "b"]`, `]`) taken for a header ends the table too early.
+ * F6. (L1) A file that does not parse once written is left so: the read after the rename is never acted on.
  */
 
 vi.mock('child_process', async (importOriginal) => ({
@@ -107,6 +114,45 @@ describe('F1. removing a table keeps the line before it whole', () => {
     expect((await handlers.get('mcp:delete')!({}, { provider: 'codex', name: 'docs' })).success).toBe(true);
     cliAppends(codexFile());
     expect((parseToml(read(codexFile())) as { tui: unknown }).tui).toEqual({ notice: true });
+  });
+});
+
+describe('F5. every header is one, whatever its key holds, and no value line is', () => {
+  const VAULT = '[mcp_servers.claude-mgr-vault]\ncommand = "node"\nargs = ["/v.js"]\n';
+  it.each([
+    ['a trust table whose folder holds brackets', '[projects."/Users/me/Work [old]/app"]\ntrust_level = "trusted"\n'],
+    ['a trust table whose folder holds =', '[projects."/Users/me/a=b"]\ntrust_level = "trusted"\n'],
+    ['an owner\'s server named with =', '[mcp_servers."a=b"]\ncommand = "x"\n'],
+    ['a literal-string key holding ]', "[projects.'/Users/me/x]y']\ntrust_level = \"trusted\"\n"],
+    ['a dotted key with spaces', '[ mcp_servers . other ]\ncommand = "x"\n'],
+    ['an array of tables', '[[profiles]]\nname = "work"\n'],
+    ['a header with a comment', '[tui] # my settings\nnotice = true\n'],
+  ])('%s, after the Tars table removed, is kept', (_why, owners) => {
+    const left = removeTomlTable(`model = "x"\n\n${VAULT}${owners}`, 'mcp_servers.claude-mgr-vault');
+    expect(left).toBe(`model = "x"\n\n${owners}`);
+    expect(() => parseToml(left)).not.toThrow();
+  });
+
+  it('a value\'s lines are not headers: the whole table goes, the next one stays', () => {
+    const tars = '[mcp_servers.claude-mgr-vault]\nargs = [\n  [1, 2],\n  ["a", "b"],\n]\n';
+    expect(removeTomlTable(`${tars}[tui]\nnotice = true\n`, 'mcp_servers.claude-mgr-vault')).toBe('[tui]\nnotice = true\n');
+  });
+
+  it('a quoted Tars key is found and removed', () => {
+    expect(removeTomlTable('[a]\nx = 1\n[mcp_servers."tasmania.local"]\ncommand = "x"\n', 'mcp_servers."tasmania.local"')).toBe('[a]\nx = 1\n');
+  });
+});
+
+describe('F6. a file that does not parse once written is put back', () => {
+  it('as it was, when there was one; gone, when there was none', () => {
+    // A parse that passes the text before the rename and fails the file read after it: another writer, between.
+    const failsTheSecondTime = () => { let calls = 0; return () => { if (++calls > 1) throw new Error('not TOML'); }; };
+    seed(codexFile(), 'model = "x"\n');
+    expect(updateSharedTextSync(codexFile(), () => 'model = "y"\n', { parse: failsTheSecondTime() })).toBe('refused');
+    expect(read(codexFile())).toBe('model = "x"\n');
+    const fresh = path.join(os.homedir(), '.codex', 'fresh.toml');
+    expect(updateSharedTextSync(fresh, () => 'model = "y"\n', { parse: failsTheSecondTime() })).toBe('refused');
+    expect(fs.existsSync(fresh)).toBe(false);
   });
 });
 
