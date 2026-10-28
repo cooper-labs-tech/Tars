@@ -16,12 +16,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Three agents of one project: the lead (its orchestrator), the worker, and another worker. The worker is held in a
  * long turn; while it works the lead hands it a task (run-task, delegate_task's path), a message in mode 'queue', and
- * a second task, and the other worker sends it a note. The ways this fails, each checked on its own (soft), so a run
- * on the old build shows each:
+ * a second task, and the other worker sends it a note, which is information and no item of the queue (the Audit's
+ * H-A and M1 on #449). The ways this fails, each checked on its own (soft), so a run on the old build shows each:
  * F1 the queue cannot be read, or not in order, or without each item's id, sender, time, kind and first line; a
  *    worker reading another agent's queue sees what others sent;
  * F2 paused, an item still goes in when the turn ends; or the pause cuts the turn in progress;
- * F3 a worker cancels or moves what it did not send; or cannot cancel what it sent;
+ * F3 a worker cancels, moves, pauses or reads what it did not send;
  * F4 an item cannot be moved to the head, or the move does not hold;
  * F5 task_status does not know a queued message's id, or a cancelled item's;
  * F6 a stop empties the queue, or does not leave it paused, or does not say so in its answer;
@@ -183,13 +183,14 @@ for (const newInterface of [false, true]) {
       const items = ((byLead.body?.items ?? []) as QueueItem[]);
       seen.queueByLead = byLead.body;
       soft(byLead.status, 'F1: the queue can be read').toBe(200);
-      soft(items.map((i) => i.ref), 'F1: in the order it was handed').toEqual([refA, refB, refC, refD]);
-      soft(items.map((i) => i.how), 'F1: how each goes in').toEqual(['task', 'message', 'task', 'note']);
-      soft(items.map((i) => i.from), 'F1: who sent each').toEqual(['Project Lead', 'Project Lead', 'Project Lead', 'Other Worker']);
+      soft(items.map((i) => i.ref), 'F1: in the order it was handed, the note no item of it').toEqual([refA, refB, refC]);
+      soft(items.map((i) => i.how), 'F1: how each goes in').toEqual(['task', 'message', 'task']);
+      soft(items.map((i) => i.from), 'F1: who sent each').toEqual(['Project Lead', 'Project Lead', 'Project Lead']);
       soft(items.every((i) => !Number.isNaN(Date.parse(i.queuedAt))), 'F1: since when').toBe(true);
       soft(items[0]?.title, 'F1: its first line').toBe('TASK-A the first task');
       const byOther = await call('other', 'GET', '/api/agents/worker/queue');
-      soft(((byOther.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F1: a worker sees only what it sent').toEqual([refD]);
+      soft(byOther.status, 'F1: a worker may read it').toBe(200);
+      soft(((byOther.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F1: a worker sees only what it sent').toEqual([]);
 
       // ── F2: paused, nothing goes in at the end of the turn; the turn itself is not cut ──
       const paused = await call('lead', 'POST', '/api/agents/worker/queue/pause', { reason: 'hold everything' });
@@ -198,16 +199,16 @@ for (const newInterface of [false, true]) {
       await expect.poll(() => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'worker').length, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
       await new Promise((r) => setTimeout(r, 5_000));
       seen.workerPromptsWhilePaused = promptsOf('worker');
-      soft(promptsOf('worker').filter((p) => /TASK-A|MSG-B|TASK-C|NOTE-D/.test(p)), 'F2: nothing went in while paused').toEqual([]);
+      soft(promptsOf('worker').filter((p) => /TASK-A|MSG-B|TASK-C/.test(p)), 'F2: nothing went in while paused').toEqual([]);
 
       // ── F3: a worker acts on what it sent, and only on that ──
       const otherCancelsA = await call('other', 'POST', `/api/tasks/${refA}/cancel`, {});
       const otherMovesA = await call('other', 'POST', `/api/tasks/${refA}/move`, {});
-      const otherCancelsD = await call('other', 'POST', `/api/tasks/${refD}/cancel`, {});
-      seen.workerRights = { otherCancelsA: otherCancelsA.status, otherMovesA: otherMovesA.status, otherCancelsD: otherCancelsD.status };
+      const otherPauses = await call('other', 'POST', '/api/agents/worker/queue/resume', {});
+      seen.workerRights = { otherCancelsA: otherCancelsA.status, otherMovesA: otherMovesA.status, otherPauses: otherPauses.status, refD };
       soft(otherCancelsA.status, 'F3: a worker cannot cancel what it did not send').toBe(403);
       soft(otherMovesA.status, 'F3: nor move it').toBe(403);
-      soft(otherCancelsD.status, 'F3: it cancels what it sent').toBe(200);
+      soft(otherPauses.status, 'F3: nor resume the queue').toBe(403);
 
       // ── F4: the third task to the head; the message cancelled ──
       const moved = await call('lead', 'POST', `/api/tasks/${refC}/move`, {});
