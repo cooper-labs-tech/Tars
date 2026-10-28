@@ -1,6 +1,6 @@
 # Tars Privacy Policy
 
-Last updated: 2026-10-19.
+Last updated: 2026-10-28.
 
 This policy covers two things: the Tars desktop app, and the website that offers it for download.
 
@@ -9,7 +9,7 @@ This policy covers two things: the Tars desktop app, and the website that offers
 - Tars is a desktop app that runs on your Mac. There is no Tars server and no Tars account, and the app collects no analytics.
 - Error reports are off unless you turn them on. Turned on, Tars sends Sentry a short report when it meets an error, whether it caught it or not, and when it refuses a tool call of one of your agents: what failed, where in Tars's own code, the version, your system and a random id for your installation. For an error Tars caught, its message is never sent: only its kind and its system codes. For one it did not catch, its message is sent with your home folder, your user and machine names and keys taken out, and it can still name a file, a folder, a command or an address.
 - What Tars stores, it stores in folders in your home directory, on your machine.
-- Data leaves your machine only toward services you connect yourself: the AI providers whose command-line tools or API keys you use, integrations such as Telegram, Slack or Discord that you turn on, and Sentry if you turn error reports on. Each of them receives data under its own terms, not ours.
+- Data leaves your machine only toward services you connect yourself: the AI providers whose command-line tools or API keys you use, integrations such as Slack or Discord that you turn on, your own Hermes, through which Tars reaches your Telegram, and Sentry if you turn error reports on. Each of them receives data under its own terms, not ours.
 - The website uses Vercel Web Analytics, which sets no cookies, and counts downloads from GitHub's own release figures.
 
 ## Who runs what
@@ -29,14 +29,14 @@ Tars keeps its data in these places:
   - the chat rooms between agents (`bus.json`), and the files you attach to a room message (`bus-files/`), removed after a week;
   - a usage ledger of tokens and cost per turn (`usage-ledger.jsonl`);
   - a log of what your agents did, per project: commands they ran and file changes, shortened (`observations/`);
-  - files received from Telegram (`telegram-downloads/`);
+  - if you used the Telegram bot of versions before 2.0.5, the files it received (`telegram-downloads/`): Tars no longer has a bot of its own and leaves this folder for you to keep or delete;
   - the model catalogue cache;
   - Claude rate-limit and token counters;
   - a log of CLI updates;
   - if you turned error reports on, the random id of your installation and when the last reports left, and Sentry's answer to the last one (`error-reports.json`).
 
   At every start, Tars closes this folder to the other accounts on your Mac: the folder and its subfolders can be opened by your user account only, and the files directly in it are readable by your account only.
-- **`~/.tars-private/`**: the API keys, bot tokens and passwords you enter in Settings (`settings-secrets.json`), the token that local programs use to talk to Tars, your Hermes connection and its sign-in, your conversation with the super chat (the fleet overseer), the list of Hermes sessions that conversation was held in, the Hermes webhook secret, and, if you use several Claude accounts, their list: each account's name, its place in the order and the thresholds, never a credential. This folder is readable by your user account only, and Tars does not point the agents it starts at it. Settings says whether a key is set and never shows it back, and Tars shows the Telegram token it creates in a window of its own. When an agent searches memory, the super chat's Hermes sessions are left out of what it gets back.
+- **`~/.tars-private/`**: the API keys, bot tokens and passwords you enter in Settings (`settings-secrets.json`), the token that local programs use to talk to Tars, your Hermes connection and its sign-in, your conversation with the super chat (the fleet overseer), the list of Hermes sessions that conversation was held in, the Hermes webhook secret, and, if you use several Claude accounts, their list: each account's name, its place in the order and the thresholds, never a credential. This folder is readable by your user account only, and Tars does not point the agents it starts at it. Settings says whether a key is set and never shows it back, and Tars shows the secrets it creates, such as a Hermes webhook secret, in a window of its own. When an agent searches memory, the super chat's Hermes sessions are left out of what it gets back.
 - **`~/.claude/` and your other CLIs' settings.** So that it can follow your agents, Tars adds entries to the configuration of the command-line tools it runs:
   - hooks in `~/.claude/settings.json`, which run in every Claude Code session on your account, including sessions you start outside Tars. They report only to Tars's local address, 127.0.0.1;
   - its own MCP servers, and a "trusted folder" mark for each project folder, in `~/.claude.json`. Tars never marks your home folder, the root of the disk or a folder above your home;
@@ -58,14 +58,15 @@ Nothing below happens unless you set it up, except where a sentence says otherwi
 - **AI coding CLIs you installed** (Claude Code, Codex, Gemini CLI, Grok, OpenCode, Amp, Pi). Tars starts them in your project folders. Your prompts, your code and their tool output then go to that CLI's vendor, under the account you are signed in with. Tars adds its own instructions to the prompts it sends, such as the agent's name and project. For CLIs other than Claude Code, it also adds a digest of the project's memory.
 - **AI providers you add with an API key** (OpenRouter, DeepSeek, Moonshot/Kimi, MiniMax, Xiaomi MiMo, Zhipu, Qwen, Venice, NVIDIA, Nous Portal, Ollama Cloud, or any OpenAI-compatible address you enter). Tars points the Claude Code program at that provider with your key, so prompts, code and tool output go to that provider. For OpenRouter, Tars also sends its name and the address of its source repository as attribution.
 - **Delegation over the Agent Client Protocol.** To run a delegated task, Tars downloads and runs the matching adapter package from the npm registry (`npx`).
-- **Telegram**, if you turn it on and enter a bot token. Messages you exchange with the bot go through Telegram: the agents' replies, and the files they send. The bot answers only the chats you enrolled with its secret token, and refuses a chat for a while after too many wrong tokens. Messages from other chats are ignored. Before sending the super agent's replies, Tars removes text that looks like an API key or token. Other messages are sent as the agents wrote them. A chat you remove in Settings stops receiving messages at once.
+- **Telegram, through your own Hermes**, if you turn on Telegram through Hermes in Settings > Hermes. Tars has no Telegram bot of its own and holds no Telegram token: your orchestrators' messages and questions, and the event reports (an agent gone to error, a pull request merged or with changes requested), go as plain text to your Hermes gateway, which delivers them to you on Telegram with its own bot, and your replies come back the same way. Tars removes text that looks like an API key or token before sending them. While this is off, nothing reaches Telegram. Versions before 2.0.5 had a bot of their own: at its first launch, 2.0.5 removes that bot's token and settings from your machine, and you can revoke the token with Telegram's BotFather.
 - **Slack**, if you turn it on and enter its tokens. Messages in the workspace the bot is part of, and the agents' replies. The bot answers only the members you list in Settings, and tells anyone else their Slack ID.
 - **Discord**, if you turn it on and enter a bot token. Discord delivers to the bot the messages of the channels it can see and the direct messages sent to it. In a server channel, Tars acts only on a message that mentions the bot, unless you turn that requirement off, and only from the members you list in Settings; it does not store the others. It tells anyone else who mentions it or writes to it directly their Discord ID. The agents' replies and the orchestrator's answers go back through Discord as they were written, and every message the bot posts asks Discord to notify nobody. The invite link Tars gives asks Discord to let the bot see channels and send messages, in channels, threads and direct messages, and nothing else.
 - **X and SocialData**, if you enter their credentials. Agents can then search through SocialData with your key and, while the Posting switch in Settings is on, post, reply to and delete posts on the X account you connected.
 - **Hermes.** Tars talks to the gateway saved in Settings > Hermes. Until one is saved it contacts no gateway, not even one at the default address on your own Mac, 127.0.0.1:9119, unless you press Test connection or Sign in on that page, which reach the address the form shows. The gateway receives:
   - your conversation with the super chat, together with a snapshot of the fleet: each agent's name, project, status and recent output, and the files you attach to your messages;
   - the agents' kanban tasks, which live on the Hermes board, and the kanban and scheduling calls you make;
-  - memory searches, and the memory notes your agents write there.
+  - memory searches, and the memory notes your agents write there;
+  - if you turn on Telegram through Hermes, the messages Tars sends you on Telegram and your replies to them (see Telegram above).
 - **Memory services** (Honcho, gbrain), if you enable them. Memory notes and searches go to the address you enter.
 - **Google Workspace**, if you set up the `gws` tool from Settings. Your agents can then use Gmail, Drive, Calendar, Sheets and Docs through Google, under your authorization.
 - **Jira**, if you enter your details. Tars only checks the connection against your Jira site.

@@ -56,8 +56,8 @@ npm ci
 Since Electron 44 the `electron` package has no install script: its binary is downloaded the first time
 something asks for it (`require('electron')`, `npx electron`, Playwright's launch), into
 `node_modules/electron/dist`. `npx install-electron` fetches it ahead of time, which a first E2E run wants.
-The seven MCP servers under `mcp-*/` have **their own** `package.json` and are installed
-separately by the build scripts (`cd mcp-memory && npm install && npm run build`, ×7). You do
+The six MCP servers under `mcp-*/` have **their own** `package.json` and are installed
+separately by the build scripts (`cd mcp-memory && npm install && npm run build`, ×6). You do
 not need them installed to run `npm run dev` or `npm test`.
 
 ---
@@ -232,10 +232,11 @@ Two E2E runs share the machine when each takes its own `E2E_PORT_OFFSET` (`e2e/p
 moves `next dev` (3100) and every suite's API port together. Unset, nothing moves.
 
 Stand-ins a spec may point the app at, read only under `DOROTHY_E2E=1`: `TARS_CHAT_RAM_GB` (the RAM the
-chats' limit is computed from) and `DOROTHY_TELEGRAM_API_URL` (`http://127.0.0.1:<port>` and nothing
-else: a stand-in of Telegram's Bot API, which the bot's token travels to in every request's path;
-`e2e/chat-senders.spec.ts`), and `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
-200 ms at least; `e2e/health-reports.spec.ts` takes one a second). And one read by any development run,
+chats' limit is computed from) and `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
+200 ms at least; `e2e/health-reports.spec.ts` takes one a second). `DOROTHY_TELEGRAM_API_URL`, a stand-in of
+Telegram's Bot API that 2.0.4's bot read, is read by nothing since the bot went in 2.0.5:
+`e2e/telegram-through-hermes.spec.ts` still sets it, to show that nothing asks the stand-in anything. And one read
+by any development run,
 never by a packaged Tars (`app.isPackaged`): `DOROTHY_ERROR_REPORTS_DSN`, where error reports go, a
 stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 `e2e/error-reports-coverage.spec.ts`).
@@ -290,7 +291,7 @@ agents run the suite; the suite's own opt-ins (`TARS_STRESS`, `TARS_REAL_CLAUDE`
 
 Coverage (`v8`) is scoped to what is actually worth guarding: `electron/constants`,
 `electron/utils`, `electron/services`, `electron/handlers`, `electron/providers`, plus
-`mcp-orchestrator/src/{utils,tools}`, `mcp-telegram/src`, `mcp-kanban/src`.
+`mcp-orchestrator/src/{utils,tools}`, `mcp-kanban/src`.
 
 Layout mirrors the source tree: `__tests__/electron/services/api-routes/*.test.ts`,
 `__tests__/electron/providers/*.test.ts`, `__tests__/mcp/*.test.ts`. Two suites deliberately
@@ -540,7 +541,7 @@ passes on your Mac and fails there is a finding, not noise.
 npm run electron:pack
 ```
 
-`tsc -p electron/tsconfig.json`, then build all seven MCP bundles, then
+`tsc -p electron/tsconfig.json`, then build all six MCP bundles, then
 `electron-builder --dir --mac` as **Tars Sandbox**: its own name, bundle id
 (`xyz.cooperlabs.tars.sandbox`, so macOS keeps its settings, notifications and Application
 Support folder apart from Tars's) and icon (`build/sandbox-icon.icns`, the mark's grid in grey
@@ -600,7 +601,7 @@ git status src/app
 npm run electron:build
 ```
 
-`build:renderer` + `tsc` + all seven MCP bundles + `electron-builder --mac`
+`build:renderer` + `tsc` + all six MCP bundles + `electron-builder --mac`
 (targets `dmg` and `zip`), then `scripts/prune-releases.mjs`. Output: `release/` of the checkout
 it runs in. To publish, do not stop here: `npm run release` runs this build itself, see
 *Cut a release*.
@@ -776,7 +777,7 @@ npm run release:win                # build, check, and add the Windows files to 
    files yet. A GitHub it cannot ask is a refusal, not a pass;
 2. builds, without `CI`, `GH_TOKEN` or `GITHUB_TOKEN`: the app icon (`scripts/make-app-ico.mjs`
    writes `build/icon.ico` from `public/icon.svg`), `npm run build:renderer`, the main process,
-   the seven MCP bundles, then `electron-builder --win --x64 --config
+   the six MCP bundles, then `electron-builder --win --x64 --config
    build/electron-builder-win.json --publish never`. That file is `package.json` `build` plus
    the exclusion of what the packaged app never loads (`next`, `@next/*`, `sharp`, `@img/*`,
    better-sqlite3's `deps/` and non-win32 prebuilds, node-pty's darwin prebuilds), written at
@@ -932,7 +933,7 @@ work.
 |---|---|---|
 | `~/.tars/agents.json` | `electron/core/agent-manager.ts` | the fleet: schema `version: 2`, `savedAt`, `agents[]` |
 | `~/.tars/agents.backup.json` | same | last good copy, taken from content just parsed successfully |
-| `~/.tars/app-settings.json` | `electron/main.ts` (`saveAppSettingsToFile`) | every setting but the secrets: Telegram/Slack/X/Jira switches, CLI paths, memory backends' addresses |
+| `~/.tars/app-settings.json` | `electron/main.ts` (`saveAppSettingsToFile`) | every setting but the secrets: Slack/X/Jira switches, CLI paths, memory backends' addresses. At each launch, before it is read, `electron/services/telegram-retired.ts` takes out the six fields of Tars's own Telegram bot (gone since 2.0.5) and, if the bot had been set up, writes `telegramBotRetired: { at, hadToken }` once |
 | `~/.tars-private/settings-secrets.json` | `electron/services/settings-secrets.ts` (`saveSettingsSplit`) | every secret of the settings: the bots' tokens, provider and CLI keys, SocialData's, X's, Jira's, Hermes's gateway token, gbrain's and Honcho's, mode `0600` (in `app-settings.json` until 2.0.4, moved at the first start with every copy of it erased) |
 | `~/.tars-private/api-token` | `electron/services/api-server.ts` | 32 random bytes hex, mode `0600` (in `~/.dorothy` until 2.0.4) |
 | `~/.tars-private/hermes-connection.json` | `electron/services/hermes-config.ts` | gateway mode/url/ssh (in `~/.dorothy` until 2.0.4); its token is in `~/.tars-private/hermes-token` |
@@ -957,7 +958,7 @@ work.
 | `~/.tars/acp-registry.json` | `electron/services/acp/registry.ts` | ACP launch commands, 24 h TTL |
 | `~/.tars/vault.db` | `electron/services/vault-db.ts` | SQLite, WAL, `foreign_keys=ON` |
 | `~/.tars/vault/` + `vault/attachments/` | same | vault file bodies |
-| `~/.tars/telegram-downloads/` | `electron/services/telegram-bot.ts` | inbound media |
+| `~/.tars/telegram-downloads/` | nothing since 2.0.5 (`telegram-bot.ts` until then) | the media Tars's own Telegram bot received; left in place when the bot went: your files, to keep or delete by hand |
 | `~/.tars/CLAUDE.md` | `electron/utils/index.ts` | copied from the repo at every boot, loaded by agents via `--add-dir` |
 | `~/.tars/statusline.sh` | `electron/utils/statusline.ts` | installed only when the statusline is enabled |
 | `~/.tars/rate-limits.d/<account>.json` | the `statusline.sh` it installs | each Claude account's last 5 h and weekly counters, `default` for account 1; what Tars chooses an agent's account from when several are on, and what the Usage page shows per account (`accountRateLimits` of `claude:getData`). With several accounts on, Tars also asks Claude Code itself every 10 minutes (`get_usage`, `usage-probe.ts`), so an account no agent ran on, or one used on claude.ai, is still read; a failed probe is a `[claude-accounts] the usage of <id> was not read` line in the main process's log, and the account keeps its status line's figures. An account whose own `projects/` is a real folder holding something gets no agent (they start on account 1, and Settings says why): move its contents into `~/.claude/projects` and delete it; an empty one is made the link at the next launch |
@@ -1160,28 +1161,30 @@ curl -s -H "Authorization: Bearer $TOKEN" $API/api/memory/status | jq
 | GET | `/api/local-file` |
 | POST | `/api/kanban/generate` |
 | POST/GET | `/api/bus/post` · `/api/bus/read` (what `room_post` and `room_read` call; authenticated, and the caller is the agent its token names; a call on the shared token has no agent behind it and is refused `403`, before any room is looked at) |
-| POST | `/api/telegram/{send,send-photo,send-video,send-document}` (only to the chats authorized in Settings, read live) · `/api/slack/send` · `/api/discord/send` (only to the channel Settings > Discord detected, or one an allowed member wrote from) |
+| POST | `/api/telegram/send` (through the Hermes relay only, from a project's orchestrator or a chat's runner, text only; `409 telegram_through_hermes` with the relay off; `send-photo`, `send-video` and `send-document` went with the bot in 2.0.5) · `/api/slack/send` · `/api/discord/send` (only to the channel Settings > Discord detected, or one an allowed member wrote from) |
 | GET | `/api/chats/list` (`chat_list`: with `chatsReadEachOther` on, the other chats of the caller's project; `403 chats_read_off` off, `403 not_a_chat` for an agent that runs no chat) |
 | POST | `/api/webhooks/hermes` · `/api/webhooks/hermes/<gateway id>` |
 
 The Slack bot answers only the member ids in Settings > Slack (`slackAllowedUserIds`): with
 none, it answers nobody, and tells whoever mentions it or writes to it directly their own id,
-which is how to find yours. The Telegram bot answers the chats enrolled with `/auth`, which takes
-five wrong tokens from a chat and twenty from all chats in any fifteen minutes, then says "Too many
-attempts" without comparing, with the time it lifts; both read the settings as they are, so a change
-there counts without a restart (SECURITY §6). A lock-out from the count of all chats keeps your own
-new chat out too: turn Telegram off and on in Settings, which restarts the bot and clears the count.
+which is how to find yours. It reads the settings as they are, so a change there counts without a restart
+(SECURITY §6).
 
-`ask_user` (the orchestrator MCP server's tool, `POST /api/user/ask`) and the event reports go through the relay
-to your Hermes, not through this bot: see "The relay (Tars's side)" under Hermes gateway below.
+Tars has no Telegram bot of its own since 2.0.5 (JeanBrasse's decision of 2026-10-01: Hermes is the only voice on
+Telegram, with no fallback). Its `/auth`, `/start_agent` and `/status`, its downloads and its settings went with it,
+and nothing polls Telegram. `send_telegram`, `ask_user` (the orchestrator MCP server's tools, `POST /api/telegram/send`
+and `POST /api/user/ask`) and the event reports go through the relay to your Hermes: see "The relay (Tars's side)"
+under Hermes gateway below. At the first launch of 2.0.5, Tars removes the bot's token and fields from
+`~/.tars-private/settings-secrets.json` and `~/.tars/app-settings.json`, and its sent log; revoke the token with
+BotFather (`/revoke`) if you had set the bot up. `~/.tars/telegram-downloads/` stays.
 
-**Which chat a message reaches** (2.0.0, the chats; SPECS §4, The senders). A message from Telegram, Slack or
-Discord, or through the relay, that names no chat goes to the project's inbox chat: Main, the orchestrator, unless
+**Which chat a message reaches** (2.0.0, the chats; SPECS §4, The senders). A message from Slack or
+Discord, or from Telegram through the relay, that names no chat goes to the project's inbox chat: Main, the orchestrator, unless
 you made another chat the inbox. Start it with `#3 ` (or `@project #3 `) to write to chat 3; an `#N` the project has
 no chat for answers with the numbered list. On Telegram, reply to a chat's message (each starts
 `[<project> #N <title>]`) and it goes to that chat, whatever the text says. A reply that went to the wrong place: the
-bot's log of what it sent for a chat is `~/.tars-private/telegram-sent.json` (Telegram's chat and message ids, the
-chat's id, 7 days), the relay's is `~/.tars-private/relay-sent.json` (each entry's `chatId`); an entry older than its
+relay's log of what it sent is `~/.tars-private/relay-sent.json` (each entry's `chatId`; the bot's
+`telegram-sent.json` went with it in 2.0.5); an entry older than its
 keep reaches nobody, and the sender is told. The kanban's and the error triage's notes, and the stall reports, go
 to the inbox chat too, only while its CLI runs.
 
@@ -1291,7 +1294,7 @@ both behave identically. It:
 2. **refuses with `409`** if the agent is `waiting` on a permission dialog: a typed message
    cannot answer arrow-key UI, and the trailing `\r` could *accept* the pending permission:
    `Agent "X" is blocked on a permission dialog; a typed message cannot answer it.`
-   Every other writer (the bus, delegation notes, "send held", Telegram, Slack) is held by the
+   Every other writer (the bus, delegation notes, "send held", the Hermes relay, Slack) is held by the
    writer itself while a dialog is up, and its message goes in after the answer (SPECS §5).
 3. types the message into the session (`mode: "message"`) when a CLI runs in the terminal,
    whatever the status says (a turn ends on `idle`, a failed one on `error`, both with the CLI
@@ -1351,37 +1354,38 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 
 ## MCP servers
 
-Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to
+Six servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to
 `process.resourcesPath/<name>/dist/bundle.js` by `extraResources`:
 
 | directory | registered as | resolver |
 |---|---|---|
 | `mcp-orchestrator` | `claude-mgr-orchestrator` | `getMcpOrchestratorPath()` |
 | `mcp-memory` | `tars-memory` | `getMcpMemoryPath()` |
-| `mcp-telegram` | `claude-mgr-telegram` | `getMcpTelegramPath()` |
 | `mcp-kanban` | `claude-mgr-kanban` | `getMcpKanbanPath()` |
 | `mcp-vault` | `claude-mgr-vault` | `getMcpVaultPath()` |
 | `mcp-socialdata` | `dorothy-socialdata` | `getMcpSocialDataPath()` |
 | `mcp-x` | `dorothy-x` | `getMcpXPath()` |
 
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
-`tasmaniaServerPath` exists on disk.
+`tasmaniaServerPath` exists on disk. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
+2.0.5: it sent with Tars's own bot's token, and every start takes it out of each CLI a 2.0.4 registered it in
+(`retireTelegramMcp`, `electron/services/hermes-relay-switch.ts`), relay on or off.
 
 Each server builds itself (`npm run build` in its folder): `tsc` checks the types, and esbuild
 bundles `src/index.ts` into `dist/bundle.js`, with `mcp-shared/` in it. That folder is what the
-seven share: the client to Tars, the tool table they register through, one request read whole,
+six share: the client to Tars, the tool table they register through, one request read whole,
 the settings file. It imports node's builtins only; a package imported from there would resolve
 from the repository's root, not from the server's own lock.
 
-What the seven answer is recorded in `__tests__/mcp/contracts/`. Before changing a server:
+What the six answer is recorded in `__tests__/mcp/contracts/`. Before changing a server:
 
 ```bash
-node __tests__/mcp/contracts/mcp-servers.contract.mjs            # builds the seven, compares
+node __tests__/mcp/contracts/mcp-servers.contract.mjs            # builds the six, compares
 node __tests__/mcp/contracts/mcp-servers.contract.mjs --only=x   # one server
 ```
 
 It starts each bundle over stdio with an agent's environment, asks `tools/list`, then calls
-every tool along each of its answers against a fake Tars (SocialData, X and Telegram are
+every tool along each of its answers against a fake Tars (SocialData and X are
 faked too), and prints `identical` or the diff. `--record` rewrites the recording: only for a
 change meant to be seen, recorded on the code before the change.
 
@@ -1398,7 +1402,7 @@ Each provider writes to its own config, CLI-first with a file fallback:
 | provider(s) | config dir | mechanism |
 |---|---|---|
 | `claude` (+ `openrouter`, `deepseek`, `mimo`, `moonshot`, `qwen`, `zhipu`, `minimax`, `nvidia`, `nous-portal`, all share the `claude` binary and `~/.claude`) | `~/.claude` | `claude mcp add -s user …`, fallback `~/.claude/mcp.json`; presence checked in both `~/.claude/mcp.json` and `~/.claude.json` |
-| `codex` | `$CODEX_HOME`, else `~/.codex` | Tars's seven servers: the `[mcp_servers.<name>]` section written by Tars, with `env_vars` naming what they read (`codex mcp add` cannot say it); another server: `codex mcp add`, fallback writes the section into `config.toml` |
+| `codex` | `$CODEX_HOME`, else `~/.codex` | Tars's six servers: the `[mcp_servers.<name>]` section written by Tars, with `env_vars` naming what they read (`codex mcp add` cannot say it); another server: `codex mcp add`, fallback writes the section into `config.toml` |
 | `gemini` | `~/.gemini` | fallback writes `settings.json` |
 | `grok` | `~/.grok` | fallback writes `[mcp_servers.<name>]` into `config.toml` with `enabled = true` |
 | `opencode` | `~/.opencode` | writes `mcp.<name>` (`type: "local"`, `command` as one array) into `opencode.json` of `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`, where opencode 1.19.3 reads it (until 2.0.4, `~/.opencode/config.json`, which it never read; what Tars left there is taken out). A file that is not plain JSON (opencode takes JSONC) is left as it is. `$XDG_CONFIG_HOME` is read in Tars's own environment: set only in a login shell's files (`.zshenv`, `.zprofile`) and Tars started from the Dock, it is unset for Tars and set for the agent's CLI, which then reads a folder Tars did not write. Export it where the desktop session gets it too (`launchctl setenv` on macOS), or leave it unset |
@@ -1646,7 +1650,8 @@ for a person to clear an empty field.
 saying who sent it, as Tars verified it:
 `Message from agent "<name>" ("<id>"), task t-xxxxxxxx` for the agent whose token made the call
 (the request's id: `core/task-requests.ts`), `Message from
-Tars` for Tars's own notes and pass, `Message from Telegram`, `Slack` or `Hermes`. Claude Code
+Tars` for Tars's own notes and pass, `Message from Slack` or `Hermes`, or `Message from the user via Telegram` for your own words
+through the relay (`Message from Telegram`, the bot's, is no longer written since 2.0.5). Claude Code
 2.1.280 hands a folded paste to the model as `<pasted_content>`, and a dispatch used to arrive
 with nothing outside it; the line stays outside the tag (measured once with a real account; a
 stub API with key auth never folds). Never a bare name: any agent can be named "JeanBrasse". A short
@@ -1661,7 +1666,7 @@ message used to go without the line, which let an agent type Tars's own line its
 A note is also skipped while the orchestrator is sitting in `GET /api/agents/:id/wait` on that
 same agent: the long poll's answer already says it, and typing it in again costs the
 orchestrator a whole turn to read what it has been handed. Every other way it is told, from
-`send_message` to Telegram, Slack and the webhook, has no poll behind it and still gets the note.
+`send_message` to the Hermes relay, Slack and the webhook, has no poll behind it and still gets the note.
 
 | Symptom | Where to look |
 |---|---|
@@ -1996,9 +2001,12 @@ curl -s -H "X-Hermes-Session-Token: $TOK" http://127.0.0.1:9119/api/plugins/tars
 
 `services/hermes-relay.ts`, off unless `hermesRelayEnabled` is on (Settings, Hermes, or `app-settings.json`). It needs
 the tars-relay plugin on the Hermes server (`hermes-plugins/tars-relay`, its README says how to install it) and a saved
-Hermes connection. On:
+Hermes connection. It is the only way to your Telegram since 2.0.5, when Tars's own bot went: off, nothing reaches
+Telegram, `send_telegram` answers `409` with "Telegram goes through Hermes: turn on Telegram through Hermes in
+Settings, Hermes, Connection." and sends nothing, and there is no fallback. On:
 
-- Tars's own Telegram bot is off and its token erased, and mcp-telegram is out of every CLI: Hermes is the only voice.
+- Hermes is the only voice; mcp-telegram is out of every CLI, relay on or off. Turning the relay on erases nothing
+  since 2.0.5: there is no bot token left to erase.
 - `ask_user` (a project's orchestrator only), the event reports and `send_telegram` (an orchestrator's) go through
   Hermes, as plain text. Your reply to one of them goes to that project's orchestrator (a question's, to the agent that
   asked); a message you start with `@<project name>` goes to that project's orchestrator. The plugin keeps `@name`
@@ -2506,7 +2514,7 @@ a floor of 30 GB free, a cap of 20, `node_modules` as an APFS clone, and a clean
 every `new`. CLAUDE.md, Workflow Rule 6, says how and why (the disk filled on 2026-10-01).
 The real reason a naive `find . -name '*.test.ts' -not -path './node_modules/*'` returns 1432
 files while `vitest` collects 46 (~31×) is nested `node_modules` the top-level exclude misses:
-166 under `landing/` and 140 in each of the seven `mcp-*/` dirs; the two worktree trees add
+166 under `landing/` and 140 in each of the seven `mcp-*/` dirs of the time (six since 2.0.5); the two worktree trees add
 only 234. The top-level `-not -path './node_modules/*'` is not enough: you must exclude
 `node_modules` at every depth:
 
