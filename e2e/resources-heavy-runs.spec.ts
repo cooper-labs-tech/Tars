@@ -18,7 +18,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    disk differs from system.disk's, in Tars's unit (1024³ bytes, the slot's and Settings'), by more than 0.2 GB;
  * 4. the slots and the floors shown are not the settings' (defaults: 1 slot, 15 GB free disk, 20 % free memory);
  * 5. a holder is not shown with its agent, its project and what it runs, or its label shows a secret it was given;
- * 6. a waiter is not shown behind it;
+ * 6. a waiter is not shown behind it, or its why gives the holder's start in another zone than the holder's line;
  * 7. give back goes without asking once; asked and kept, it gives back; given back, the holder stays, the waiter is not
  *    granted, or the day's alerts do not say it;
  * 8. an uncaught error in the page;
@@ -149,6 +149,16 @@ for (const newInterface of [false, true]) {
         seen.holder = { text: (await holder.innerText()).replace(/\s+/g, ' '), label };
         await expect(holder).toContainText('harbor');
         expect(label).toContain('npm run e2e');
+        // One zone on the row: the waiter's why names the holder's start in the window's own clock (the QA's L1 on PR 539).
+        const heldSince = /holds it since (\d\d:\d\d)/.exec((await holder.innerText()).replace(/\s+/g, ' '))?.[1];
+        const waiterRow = slot.locator('[data-waiter="Meridian Builder"]');
+        await expect(waiterRow).toContainText('held by', { timeout: 30_000 });
+        const why = (await waiterRow.innerText()).replace(/\s+/g, ' ');
+        seen.waiterWhy = why;
+        expect(heldSince).toBeTruthy();
+        expect(why).toContain(`held by Harbor Runner`);
+        expect(/ since (\d\d:\d\d)/.exec(why.slice(why.indexOf('held by')))?.[1]).toBe(heldSince);
+        expect(why).not.toContain('UTC');
         expect(label).not.toContain(SECRET);
         await stepShot(page, `${tag}2-held-and-waiting`);
 
