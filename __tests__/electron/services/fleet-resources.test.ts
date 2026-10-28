@@ -17,6 +17,10 @@ import { buildFleetResources, type FleetInput } from '../../../electron/services
  * F5. An agent with no terminal, or a machine whose process table cannot be read (Windows, a ps that failed), throws
  *     or reads 0: its figures are null, the window says it cannot read them.
  * F6. Its status and since when are missing.
+ * And from the Audit's gate of #546 (M1) and the orchestrator's decision (task t-2be3810b):
+ * F7. A process has no pid, so the window cannot name it apart from another of the same program.
+ * F8. A command line keeps a secret after a flag named for one (`--token <value>`, mysql's `-p<value>`): it is masked
+ *     whole (redact-command-line.ts).
  */
 
 const T = '2026-10-28T10:00:00.000Z';
@@ -56,7 +60,15 @@ describe('the fleet\'s resources', () => {
     const text = JSON.stringify(r);
     expect(text).not.toContain('A'.repeat(12) + 'B'.repeat(12));
     expect(text).not.toContain('hunter2secret');
-    expect(agentOf(r, 'a').processes[1]).toMatchObject({ name: 'node', memMb: 256, cpuPct: 10, command: expect.stringMatching(/^node server\.js --token ghp_/) });
+    expect(agentOf(r, 'a').processes[1]).toMatchObject({ name: 'node', memMb: 256, cpuPct: 10, command: expect.stringMatching(/^node server\.js --token /) });
+  });
+
+  it('F7, F8. each process has its pid, and a secret after a flag is masked whole', () => {
+    const r = buildFleetResources(input({ table: [
+      { pid: 100, ppid: 1, kb: 2048, cpu: 0.5, command: '/bin/bash -l' },
+      { pid: 103, ppid: 100, kb: 1024, cpu: 0, command: 'mysql -uroot -pS3cretPassw0rd9 shop' },
+    ] }));
+    expect(agentOf(r, 'a').processes.map(p => [p.pid, p.command])).toEqual([[100, '/bin/bash -l'], [103, 'mysql -uroot -p[redacted] shop']]);
   });
 
   it('F3. the disk is what was measured, with when; nothing made up before', () => {
