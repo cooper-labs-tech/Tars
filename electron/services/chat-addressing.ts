@@ -1,12 +1,10 @@
-import * as fs from 'fs';
-import { writeSecretFileSync } from '../utils/secret-file';
 import { projectWord } from './orchestrator-routing';
 import { titleOf, type Chat } from './chats';
 
 /**
- * How a message from Telegram, Slack or Discord names one of a project's chats,
- * and how Tars's own Telegram bot remembers which chat each message it sent
- * came from (ORCHESTRATOR-PER-CHAT.md v2.2, 4.6; PR F of 2.0.0).
+ * How a message from Telegram (through Hermes), Slack or Discord names one of a
+ * project's chats (ORCHESTRATOR-PER-CHAT.md v2.2, 4.6; PR F of 2.0.0). The log
+ * of what Tars's own Telegram bot sent went with the bot in 2.0.5.
  *
  * No routing by content: a reply goes to the chat it answers, "#N" at the very
  * start names chat N of the project, and anything else goes to the project's
@@ -65,56 +63,6 @@ export function pickChat(chats: Chat[], projectPath: string, number: number | nu
   }
   const named = own.find((c) => c.number === number);
   return named ? { kind: 'chat', chat: named } : { kind: 'unknown', list: chatListFor(projectPath, chats) };
-}
-
-/** How long a reply to a message Tars's bot sent still reaches its chat. */
-export const CHAT_SENT_KEPT_MS = 7 * 24 * 3_600_000;
-/** The most entries the log holds: the newest are kept. */
-export const CHAT_SENT_MAX = 2_000;
-
-interface SentEntry { telegramChatId: string; messageId: number; chatId: string; at: number }
-
-export interface ChatSentLog {
-  record(entry: { telegramChatId: string; messageId: number; chatId: string }, now?: number): void;
-  /** The chat a message of that Telegram chat was sent for, within the 7 days. */
-  chatOf(telegramChatId: string, messageId: number, now?: number): string | undefined;
-}
-
-const isEntry = (e: unknown): e is SentEntry => {
-  const x = e as Partial<SentEntry> | null;
-  return !!x && typeof x.telegramChatId === 'string' && Number.isSafeInteger(x.messageId)
-    && typeof x.chatId === 'string' && Number.isFinite(x.at);
-};
-
-/**
- * The log of what Tars's own Telegram bot sent for a chat: Telegram's chat and
- * message ids and the chat's id, never the text, in ~/.tars-private (agents
- * are not handed it). Telegram numbers messages per chat, so an entry is the
- * pair of ids.
- */
-export function createChatSentLog(file: string): ChatSentLog {
-  const read = (now: number): SentEntry[] => {
-    try {
-      const entries = (JSON.parse(fs.readFileSync(file, 'utf-8')) as { entries?: unknown }).entries;
-      return Array.isArray(entries) ? entries.filter(isEntry).filter((e) => e.at > now - CHAT_SENT_KEPT_MS) : [];
-    } catch {
-      return [];
-    }
-  };
-  return {
-    record({ telegramChatId, messageId, chatId }, now = Date.now()) {
-      const entries = read(now).filter((e) => !(e.telegramChatId === telegramChatId && e.messageId === messageId));
-      entries.push({ telegramChatId, messageId, chatId, at: now });
-      try {
-        writeSecretFileSync(file, JSON.stringify({ entries: entries.slice(-CHAT_SENT_MAX) }));
-      } catch (err) {
-        console.error(`[chat-addressing] could not record ${file}:`, err instanceof Error ? err.message : err);
-      }
-    },
-    chatOf(telegramChatId, messageId, now = Date.now()) {
-      return read(now).find((e) => e.telegramChatId === telegramChatId && e.messageId === messageId)?.chatId;
-    },
-  };
 }
 
 export type ChannelRoute =

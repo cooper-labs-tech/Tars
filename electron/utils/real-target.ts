@@ -112,8 +112,8 @@ function inRealRoot(spelled: string, real: string, roots: string[], isInside: In
 }
 
 /**
- * Places a linked file may never lead into: the list the Telegram guard keeps
- * (services/api-routes/utils.ts, isSafeTelegramPath), `~/.config/gh` inside it.
+ * Places a linked file may never lead into: the home's credential folders and
+ * Tars's own stores, `~/.config/gh` inside them.
  */
 function blockedPlaces(home: string): string[] {
   return [

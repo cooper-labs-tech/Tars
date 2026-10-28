@@ -9,7 +9,7 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { mcpNodeCommand, isTransientAppPath } from '../utils/mcp-node';
 import { writeAtomicSync } from '../utils/secret-file';
-import { bundledMcpServersFor, retireTelegramMcp } from './hermes-relay-switch';
+import { bundledMcpServers, retireTelegramMcp } from './hermes-relay-switch';
 import { API_PORT, DATA_DIR } from '../constants';
 import { TARS_MCP_ENV } from './mcp-orchestrator-env';
 import { dropSharedMcpEntries, ensureSharedMcp, SHARED_MCP_SERVERS, writeClaudeCopy, writeSharedMcpEntries } from './mcp-shared';
@@ -34,7 +34,9 @@ export function getMcpOrchestratorPath(): string {
 }
 
 /**
- * Get the path to the bundled MCP telegram server
+ * Where a 2.0.4 ran the bundled MCP telegram server from: what a registration
+ * of it names, for its removal (hermes-relay-switch.ts retireTelegramMcp). Tars
+ * no longer ships it (2.0.5).
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpTelegramPath(): string {
@@ -85,7 +87,7 @@ export function getMcpMemoryPath(): string {
 
 /**
  * Auto-setup MCP servers on app start for ALL providers.
- * Registers bundled MCP servers (orchestrator, telegram, kanban, etc.)
+ * Registers bundled MCP servers (orchestrator, memory, kanban, etc.)
  * with each provider's configuration system.
  */
 export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<void> {
@@ -100,19 +102,18 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
       await installBundledSkills();
       return;
     }
-    // Build the list of MCP servers to register: mcp-telegram not while the
-    // relay is on (hermes-relay-switch.ts), which also takes it out below.
+    // Build the list of MCP servers to register: never mcp-telegram since
+    // 2.0.5 (hermes-relay-switch.ts), which is taken out below.
     const bundled: Record<string, () => string> = {
       'claude-mgr-orchestrator': getMcpOrchestratorPath,
       'tars-memory': getMcpMemoryPath,
-      'claude-mgr-telegram': getMcpTelegramPath,
       'claude-mgr-kanban': getMcpKanbanPath,
       'claude-mgr-vault': getMcpVaultPath,
       'dorothy-socialdata': getMcpSocialDataPath,
       'dorothy-x': getMcpXPath,
     };
     const mcpServers: Array<{ name: string; serverPath: string }> =
-      bundledMcpServersFor(appSettings).map(name => ({ name, serverPath: bundled[name]() }));
+      bundledMcpServers().map(name => ({ name, serverPath: bundled[name]() }));
 
     // Add Tasmania if enabled
     if (appSettings?.tasmaniaEnabled && appSettings.tasmaniaServerPath) {
@@ -214,7 +215,7 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
         }
       }
     }
-    if (appSettings?.hermesRelayEnabled === true) await retireTelegramMcp(providers);
+    await retireTelegramMcp(providers);
 
     const moved = providers.map(p => p.id).filter(id => !failed.has(id));
     const unchanged = recorded.command === nodeCommand

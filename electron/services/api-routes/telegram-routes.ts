@@ -1,6 +1,4 @@
-import * as fs from 'fs';
 import { randomUUID } from 'crypto';
-import { isSafeTelegramPath } from './utils';
 import { RouteApp, RouteContext, RouteRequest, SendJson } from './types';
 import { agents } from '../../core/agent-manager';
 import { hasOrchestratorPowers } from '../../core/agent-role';
@@ -8,14 +6,14 @@ import { redactSecrets } from '../../utils/redact-secrets';
 import { relaySend } from '../hermes-relay';
 import { chatTag } from '../chat-addressing';
 import { namedChatRunBy } from '../chat-runners';
-import { sendForChat } from '../telegram-bot';
 
 /**
- * With the relay on (services/hermes-relay.ts), send_telegram is the one way left to write to the user, and goes
- * through their Hermes: from a project's orchestrator only (JeanBrasse's rule of 2026-10-01), or a chat's runner, which has
- * its powers (core/agent-role.ts), under its project, so that the user's reply reaches it, with its secrets masked and
- * in plain text. The chat it names is not read: the relay writes to one person. A file goes nowhere: the relay
- * carries text.
+ * send_telegram (mcp-orchestrator) posts here, and the user's Telegram is reached through their Hermes only: Tars's
+ * own bot is gone since 2.0.5 (JeanBrasse's decision of 2026-10-01, "pas de secours"; services/telegram-retired.ts).
+ * From a project's orchestrator only (JeanBrasse's rule of 2026-10-01), or a chat's runner, which has its powers
+ * (core/agent-role.ts), under its project, so that the user's reply reaches it, with its secrets masked and in plain
+ * text. The chat it names is not read: the relay writes to one person. With the relay off, nothing goes out, and the
+ * answer says where to turn it on. The relay carries text: no photo, video or document has a route.
  */
 async function sendThroughRelay(req: RouteRequest, sendJson: SendJson, message: string): Promise<void> {
   const caller = req.callerAgentId ? agents.get(req.callerAgentId) : undefined;
@@ -33,198 +31,21 @@ async function sendThroughRelay(req: RouteRequest, sendJson: SendJson, message: 
   else sendJson({ error: result.reason }, 503);
 }
 
-const relayOn = (ctx: RouteContext) => ctx.getAppSettings().hermesRelayEnabled === true;
-const textOnly = (sendJson: SendJson) =>
-  sendJson({ error: 'The relay to the user\'s Telegram through Hermes carries text only: no photo, video or document goes out.' }, 410);
-
-/**
- * The chats a send may go to: the ones JeanBrasse authorized, as the settings say
- * now. Read live, never from the snapshot the server was started with: a chat
- * removed in Settings kept receiving until the next launch (the audit's lead
- * #20). The same set mcp-telegram's own send accepts.
- */
-function authorizedChats(ctx: RouteContext): Set<string> {
-  const settings = ctx.getAppSettings();
-  return new Set([settings.telegramChatId, ...(settings.telegramAuthorizedChatIds ?? [])].filter(Boolean).map(String));
-}
-
-/** Where a send goes when its caller names no chat. */
-function defaultChat(ctx: RouteContext): string | undefined {
-  const settings = ctx.getAppSettings();
-  return settings.telegramChatId || settings.telegramAuthorizedChatIds?.[0];
-}
-
-/**
- * Where a file send goes: the chat the caller named, when the user authorized
- * it, or the default one. mcp-telegram's file tools name a chat as its message
- * does, since they go through these routes (2.0.4); the routes sent every file
- * to the default chat. Undefined, with the refusal sent, when it cannot go.
- */
-function fileChat(ctx: RouteContext, chatId: unknown, bot: unknown, sendJson: SendJson): string | undefined {
-  const target = chatId ? String(chatId) : defaultChat(ctx);
-  if (!bot || !target) {
-    sendJson({ error: 'Telegram not configured or no chat ID' }, 400);
-    return undefined;
-  }
-  if (!authorizedChats(ctx).has(target)) {
-    sendJson({ error: 'That chat is not one of the chats authorized in Settings > Telegram.' }, 403);
-    return undefined;
-  }
-  return target;
-}
+/** What send_telegram answers with the relay off: the one way to Telegram, and where to turn it on. */
+export const TELEGRAM_THROUGH_HERMES = 'Telegram goes through Hermes: turn on Telegram through Hermes in Settings, Hermes, Connection.';
 
 export function registerTelegramRoutes(app: RouteApp, ctx: RouteContext): void {
   // POST /api/telegram/send
   app.post('/api/telegram/send', async (req, sendJson) => {
-    const { message, chat_id } = req.body as { message: string; chat_id?: string };
+    const { message } = req.body as { message: string };
     if (!message) {
       sendJson({ error: 'message is required' }, 400);
       return;
     }
-    if (relayOn(ctx)) {
-      await sendThroughRelay(req, sendJson, message);
+    if (ctx.getAppSettings().hermesRelayEnabled !== true) {
+      sendJson({ error: 'telegram_through_hermes', reason: TELEGRAM_THROUGH_HERMES }, 409);
       return;
     }
-
-    const telegramBot = ctx.getTelegramBot();
-    const targetChatId = chat_id ? String(chat_id) : defaultChat(ctx);
-    if (!telegramBot || !targetChatId) {
-      sendJson({ error: 'Telegram not configured or no chat ID. Set a default chat in Settings > Telegram.' }, 400);
-      return;
-    }
-    // Only a chat JeanBrasse authorized. The chat_id comes from a model (send_telegram
-    // in every agent), and a prompt-injected one could name any chat that had
-    // started the bot.
-    if (!authorizedChats(ctx).has(targetChatId)) {
-      sendJson({ error: 'That chat is not one of the chats authorized in Settings > Telegram.' }, 403);
-      return;
-    }
-
-    // From a chat (its runner, or the orchestrator for Main): headed by it and
-    // logged, so that a reply to it goes back to that chat (PR F).
-    const caller = req.callerAgentId ? agents.get(req.callerAgentId) : undefined;
-    const chat = caller ? namedChatRunBy(caller) : undefined;
-    try {
-      await sendForChat(telegramBot, targetChatId, chat ? message : `\u{1F451} ${message}`, chat, { parse_mode: 'Markdown' });
-      sendJson({ success: true });
-    } catch {
-      try {
-        await sendForChat(telegramBot, targetChatId, chat ? message : `\u{1F451} ${message}`, chat);
-        sendJson({ success: true });
-      } catch (err2) {
-        sendJson({ error: `Failed to send: ${err2}` }, 500);
-      }
-    }
-  });
-
-  // POST /api/telegram/send-photo
-  app.post('/api/telegram/send-photo', async (req, sendJson) => {
-    if (relayOn(ctx)) {
-      textOnly(sendJson);
-      return;
-    }
-    const { photo_path, caption, chat_id } = req.body as { photo_path: string; caption?: string; chat_id?: string };
-    if (!photo_path) {
-      sendJson({ error: 'photo_path is required' }, 400);
-      return;
-    }
-    if (!isSafeTelegramPath(photo_path)) {
-      sendJson({ error: 'Access denied: path not allowed' }, 403);
-      return;
-    }
-
-    const telegramBot = ctx.getTelegramBot();
-    const targetChatId = fileChat(ctx, chat_id, telegramBot, sendJson);
-    if (!telegramBot || !targetChatId) return;
-
-    try {
-      if (!fs.existsSync(photo_path)) {
-        sendJson({ error: `File not found: ${photo_path}` }, 400);
-        return;
-      }
-
-      await telegramBot.sendPhoto(
-        targetChatId,
-        photo_path,
-        { caption: caption ? `\u{1F451} ${caption}` : undefined, parse_mode: 'Markdown' }
-      );
-      sendJson({ success: true });
-    } catch (err) {
-      sendJson({ error: `Failed to send photo: ${err}` }, 500);
-    }
-  });
-
-  // POST /api/telegram/send-video
-  app.post('/api/telegram/send-video', async (req, sendJson) => {
-    if (relayOn(ctx)) {
-      textOnly(sendJson);
-      return;
-    }
-    const { video_path, caption, chat_id } = req.body as { video_path: string; caption?: string; chat_id?: string };
-    if (!video_path) {
-      sendJson({ error: 'video_path is required' }, 400);
-      return;
-    }
-    if (!isSafeTelegramPath(video_path)) {
-      sendJson({ error: 'Access denied: path not allowed' }, 403);
-      return;
-    }
-
-    const telegramBot = ctx.getTelegramBot();
-    const targetChatId = fileChat(ctx, chat_id, telegramBot, sendJson);
-    if (!telegramBot || !targetChatId) return;
-
-    try {
-      if (!fs.existsSync(video_path)) {
-        sendJson({ error: `File not found: ${video_path}` }, 400);
-        return;
-      }
-
-      await telegramBot.sendVideo(
-        targetChatId,
-        video_path,
-        { caption: caption ? `\u{1F451} ${caption}` : undefined, parse_mode: 'Markdown' }
-      );
-      sendJson({ success: true });
-    } catch (err) {
-      sendJson({ error: `Failed to send video: ${err}` }, 500);
-    }
-  });
-
-  // POST /api/telegram/send-document
-  app.post('/api/telegram/send-document', async (req, sendJson) => {
-    if (relayOn(ctx)) {
-      textOnly(sendJson);
-      return;
-    }
-    const { document_path, caption, chat_id } = req.body as { document_path: string; caption?: string; chat_id?: string };
-    if (!document_path) {
-      sendJson({ error: 'document_path is required' }, 400);
-      return;
-    }
-    if (!isSafeTelegramPath(document_path)) {
-      sendJson({ error: 'Access denied: path not allowed' }, 403);
-      return;
-    }
-
-    const telegramBot = ctx.getTelegramBot();
-    const targetChatId = fileChat(ctx, chat_id, telegramBot, sendJson);
-    if (!telegramBot || !targetChatId) return;
-
-    try {
-      if (!fs.existsSync(document_path)) {
-        sendJson({ error: `File not found: ${document_path}` }, 400);
-        return;
-      }
-
-      await telegramBot.sendDocument(
-        targetChatId,
-        document_path,
-        { caption: caption ? `\u{1F451} ${caption}` : undefined, parse_mode: 'Markdown' }
-      );
-      sendJson({ success: true });
-    } catch (err) {
-      sendJson({ error: `Failed to send document: ${err}` }, 500);
-    }
+    await sendThroughRelay(req, sendJson, message);
   });
 }

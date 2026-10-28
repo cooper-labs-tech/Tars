@@ -13,10 +13,10 @@
     "test:coverage": "vitest run --coverage",
     "electron:dev": "concurrently \"npm run dev\" \"npm run electron:start\"",
     "electron:start": "wait-on http://localhost:3000 && tsc -p electron/tsconfig.json && node scripts/electron-dev.mjs .",
-    "electron:build": "node scripts/build-renderer.mjs && bash -c 'set -e; tsc -p electron/tsconfig.json; cd mcp-memory && npm install && npm run build && cd ..; cd mcp-orchestrator && npm install && npm run build && cd ..; cd mcp-telegram && npm install && npm run build && cd ..; cd mcp-kanban && npm install && npm run build && cd ..; cd mcp-vault && npm install && npm run build && cd ..; cd mcp-socialdata && npm install && npm run build && cd ..; cd mcp-x && npm install && npm run build && cd ..; electron-builder --mac; node scripts/prune-releases.mjs'",
+    "electron:build": "node scripts/build-renderer.mjs && bash -c 'set -e; tsc -p electron/tsconfig.json; cd mcp-memory && npm install && npm run build && cd ..; cd mcp-orchestrator && npm install && npm run build && cd ..; cd mcp-kanban && npm install && npm run build && cd ..; cd mcp-vault && npm install && npm run build && cd ..; cd mcp-socialdata && npm install && npm run build && cd ..; cd mcp-x && npm install && npm run build && cd ..; electron-builder --mac; node scripts/prune-releases.mjs'",
     "release": "node scripts/release.mjs",
     "release:win": "node scripts/release-win.mjs",
-    "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-memory && npm install && npm run build && cd .. && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-telegram && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && cd mcp-vault && npm install && npm run build && cd .. && cd mcp-socialdata && npm install && npm run build && cd .. && cd mcp-x && npm install && npm run build && cd .. && electron-builder --dir --mac -c.productName=\"Tars Sandbox\" -c.extraMetadata.productName=\"Tars Sandbox\" -c.extraMetadata.tarsSandbox=true -c.appId=xyz.cooperlabs.tars.sandbox -c.mac.icon=build/sandbox-icon.icns && node scripts/prune-releases.mjs",
+    "electron:pack": "tsc -p electron/tsconfig.json && cd mcp-memory && npm install && npm run build && cd .. && cd mcp-orchestrator && npm install && npm run build && cd .. && cd mcp-kanban && npm install && npm run build && cd .. && cd mcp-vault && npm install && npm run build && cd .. && cd mcp-socialdata && npm install && npm run build && cd .. && cd mcp-x && npm install && npm run build && cd .. && electron-builder --dir --mac -c.productName=\"Tars Sandbox\" -c.extraMetadata.productName=\"Tars Sandbox\" -c.extraMetadata.tarsSandbox=true -c.appId=xyz.cooperlabs.tars.sandbox -c.mac.icon=build/sandbox-icon.icns && node scripts/prune-releases.mjs",
     "e2e": "playwright test",
     "e2e:auto": "node scripts/scope-checks.mjs",
     "e2e:update": "playwright test --update-snapshots",
@@ -72,14 +72,6 @@
       {
         "from": "mcp-orchestrator",
         "to": "mcp-orchestrator",
-        "filter": [
-          "package.json",
-          "dist/bundle.js"
-        ]
-      },
-      {
-        "from": "mcp-telegram",
-        "to": "mcp-telegram",
         "filter": [
           "package.json",
           "dist/bundle.js"
@@ -190,7 +182,6 @@
     "lucide-react": "^0.563.0",
     "next": "^16.3.2",
     "node-pty": "^1.1.0",
-    "node-telegram-bot-api": "^0.67.0",
     "prism-react-renderer": "^2.4.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -211,7 +202,6 @@
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20",
-    "@types/node-telegram-bot-api": "^0.64.13",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/uuid": "^9.0.8",

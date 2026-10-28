@@ -15,7 +15,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { shellQuote } from './cli-provider';
+import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
 import { writeSharedJsonSync } from '../utils/shared-file';
 
@@ -331,7 +331,7 @@ export class GeminiProvider implements CLIProvider {
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
       const existing = settings?.mcpServers?.[name];
       if (!existing?.args) return false;
-      return existing.args[existing.args.length - 1] === expectedServerPath;
+      return servedPathMatches(existing.args[existing.args.length - 1], expectedServerPath);
     } catch {
       return false;
     }

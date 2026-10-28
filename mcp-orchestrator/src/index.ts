@@ -5,7 +5,7 @@
  *
  * Provides tools for:
  * - Agent management (create, start, stop, monitor)
- * - Messaging (Telegram, Slack)
+ * - Messaging (Telegram through Hermes, Slack, Discord)
  * - Rooms (room_post, room_read): how an agent talks to its team
  */
 

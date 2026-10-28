@@ -17,7 +17,7 @@ import type {
   HookConfig,
   PtyLaunch,
 } from './cli-provider';
-import { shellQuote } from './cli-provider';
+import { servedPathMatches, shellQuote } from './cli-provider';
 import { qwenRoleArgs } from '../services/mcp-roles';
 
 /**
@@ -137,7 +137,7 @@ export class QwenCodeProvider implements CLIProvider {
 
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
     const server = qwenMcpServers()[name];
-    return !!server && server.args[server.args.length - 1] === expectedServerPath;
+    return !!server && servedPathMatches(server.args[server.args.length - 1], expectedServerPath);
   }
 
   getMcpConfigStrategy(): 'flag' | 'config-file' {

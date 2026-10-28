@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { AgentStatus } from '../types';
-import { TG_CHARACTER_FACES, SLACK_CHARACTER_FACES, DATA_DIR, OLD_DATA_DIR } from '../constants';
+import { SLACK_CHARACTER_FACES, DATA_DIR, OLD_DATA_DIR } from '../constants';
 import { windowsSoundCommand } from '../platform/sound';
 import { projectName } from '../platform/project-name';
 
@@ -229,8 +229,8 @@ export function isSuperAgent(agent: AgentStatus): boolean {
 }
 
 /** Find an orchestrator agent. Pass projectPath to get the orchestrator OF
- *  THAT PROJECT. Without it, callers with no project context (Telegram,
- *  Slack) get the first orchestrator found, all projects considered. Never a
+ *  THAT PROJECT. Without it, callers with no project context (Slack,
+ *  Discord) get the first orchestrator found, all projects considered. Never a
  *  chat's runner, which Tars stores as a worker: should a record ever say
  *  both, the bots still write to the project's own orchestrator. */
 export function getSuperAgent(agents: Map<string, AgentStatus>, projectPath?: string): AgentStatus | undefined {
@@ -239,24 +239,6 @@ export function getSuperAgent(agents: Map<string, AgentStatus>, projectPath?: st
     return orchestrators.find(a => a.projectPath === projectPath);
   }
   return orchestrators[0];
-}
-
-export function formatAgentStatus(agent: AgentStatus): string {
-  const isSuper = isSuperAgent(agent);
-  const emoji = isSuper ? '👑' : (TG_CHARACTER_FACES[agent.character || ''] || '🤖');
-  const statusEmoji = {
-    idle: '⚪', running: '🟢', completed: '✅', error: '🔴', waiting: '🟡', stopped: '⏹', asleep: '💤'
-  }[agent.status] || '⚪';
-
-  let text = `${emoji} *${agent.name || 'Unnamed'}* ${statusEmoji}\n`;
-  text += `   Status: ${agent.status}\n`;
-  if (agent.currentTask) {
-    text += `   Task: ${agent.currentTask.slice(0, 50)}${agent.currentTask.length > 50 ? '...' : ''}\n`;
-  }
-  if (!isSuper) {
-    text += `   Project: \`${projectName(agent.projectPath)}\``;
-  }
-  return text;
 }
 
 export function formatSlackAgentStatus(a: AgentStatus): string {
@@ -319,13 +301,6 @@ export function getLocalAgentRunnerPath(): string {
 }
 
 /**
- * Get the path to the Telegram-specific instructions file
- */
-export function getTelegramInstructionsPath(): string {
-  return getResourcePath('telegram-instructions.md');
-}
-
-/**
  * Read super agent instructions from file
  */
 export function getSuperAgentInstructions(): string {
@@ -339,20 +314,5 @@ export function getSuperAgentInstructions(): string {
   }
   // Fallback instructions
   return 'You are the Super Agent - an orchestrator that manages other Claude agents using MCP tools. Use list_agents, start_agent, get_agent_output, send_telegram, send_slack and send_discord tools.';
-}
-
-/**
- * Read Telegram-specific instructions from file
- */
-export function getTelegramInstructions(): string {
-  const instructionsPath = getTelegramInstructionsPath();
-  try {
-    if (fs.existsSync(instructionsPath)) {
-      return fs.readFileSync(instructionsPath, 'utf-8');
-    }
-  } catch (err) {
-    console.error('Failed to read telegram instructions:', err);
-  }
-  return '';
 }
 

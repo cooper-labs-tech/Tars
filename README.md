@@ -67,17 +67,18 @@ final answer for the task, why it ended, and its tokens and cost, read from the
 agent's own session. A CLI that tells Tars nothing of its turns gets the task
 all the same, and the call says it was delivered rather than pretending.
 
-**Your fleet from Telegram, Slack or Discord.** Each bot answers only the people
-you let in, and takes the same commands: the fleet's status, an agent started on a
-task, and messages to the orchestrator, which answers there. A message goes to the
-orchestrator of the project it names, as in "@tars fix the build", or to your only
-orchestrator; with several and no name, the bot answers with the list of your
-projects. Or let your own Hermes write to you: turn on Telegram through Hermes in
-Settings, Hermes, Connection, and Hermes becomes the only voice on your Telegram.
-Your orchestrators' questions and the event reports reach you there, and your reply
-reaches the orchestrator it answers, or the project you name with @project. It
-needs the tars-relay plugin on your Hermes, and turning it on switches the Tars bot
-off.
+**Your fleet from Slack, Discord or Telegram.** The Slack and Discord bots answer
+only the people you let in, and take the same commands: the fleet's status, an
+agent started on a task, and messages to the orchestrator, which answers there. A
+message goes to the orchestrator of the project it names, as in "@tars fix the
+build", or to your only orchestrator; with several and no name, the bot answers
+with the list of your projects. Telegram goes through your own Hermes: turn on
+Telegram through Hermes in Settings, Hermes, Connection, and Hermes is the only
+voice on your Telegram. Your orchestrators' questions and the event reports reach
+you there, and your reply reaches the orchestrator it answers, or the project you
+name with @project. It needs the tars-relay plugin on your Hermes. Tars has no
+Telegram bot of its own since 2.0.5: with the relay off, nothing reaches your
+Telegram.
 
 **A whole team in one click.** An orchestrator, frontend, backend, QA, audit and
 database engineer on a project, each on its own git worktree, model and brief.
@@ -367,8 +368,8 @@ A local HTTP server on **31415**, bearer-token authenticated, is how the CLIs'
 hooks and the bundled MCP servers call back into the app. It listens on
 `127.0.0.1` only.
 
-Seven MCP servers ship with Tars (orchestration, memory, kanban, vault,
-Telegram, X and SocialData) and are registered with each provider in that
+Six MCP servers ship with Tars (orchestration, memory, kanban, vault, X and
+SocialData) and are registered with each provider in that
 provider's own config format. Every agent is told how Tars works for its role
 when it starts, and its `tars_guide` tool gives the details, from the Tars that
 runs it.

@@ -444,18 +444,17 @@ export interface AppSettings {
   notifyOnComplete: boolean;
   notifyOnStop: boolean;
   notifyOnError: boolean;
-  telegramEnabled: boolean;
-  telegramBotToken: string;
-  telegramChatId: string; // Legacy - kept for backwards compatibility
-  telegramAuthToken: string; // Secret token for authentication
-  telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
-  telegramRequireMention: boolean; // Only respond when bot is @mentioned in groups
   /**
    * The relay to the user's Telegram through their Hermes (services/hermes-relay.ts): off unless turned on in
-   * Settings, Hermes. On, it is the only voice there: the Tars bot's token is erased and the bot off
-   * (hermes-relay-switch.ts), questions, reports and the orchestrator's send_telegram go through it.
+   * Settings, Hermes. The only way to their Telegram since 2.0.5, when Tars's own bot went: questions, reports, the
+   * Sentry go-ahead and the orchestrator's send_telegram go through it, and nothing does while it is off.
    */
   hermesRelayEnabled?: boolean;
+  /**
+   * Set once, by the first launch of 2.0.5 that found Tars's own Telegram bot set up (services/telegram-retired.ts):
+   * when, and whether it had a token, which the owner may then revoke with BotFather.
+   */
+  telegramBotRetired?: { at: string; hadToken: boolean };
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;
@@ -465,7 +464,7 @@ export interface AppSettings {
    * The Slack users (member ids, `U…`) the bot answers. Empty answers nobody:
    * without it, anyone who could reach the bot (a workspace member, a guest, a
    * Slack Connect user in a shared channel) could list, start, stop and brief
-   * agents (the audit's lead #15). The Telegram bot's authorized chats, for Slack.
+   * agents (the audit's lead #15).
    */
   slackAllowedUserIds: string[];
   discordEnabled: boolean;
@@ -614,7 +613,6 @@ export interface AppSettings {
    * Empty means no header, which is exactly today's behaviour.
    */
   memoryHonchoWorkspaceId?: string;
-  defaultProvider?: AgentProvider;
   obsidianVaultPaths?: string[];
   notificationSounds?: {
     waiting?: string;

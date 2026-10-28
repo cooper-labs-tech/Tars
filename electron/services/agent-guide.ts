@@ -113,7 +113,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     text: [
       'A worker asks its requester, not the user: end your turn with the question in your report, or `send_message` to "requester".',
       'An orchestrator asks the user with `ask_user`, from its terminal: Tars sends the question to their Telegram through their Hermes, which takes the relay to Hermes on (Settings, Hermes), and the tool returns at once. Their answer is typed into your terminal later, after the line "Message from the user via Telegram:". Do not wait for it in a loop: go on with other work, or end your turn.',
-      'A request that came from Telegram, Slack or Discord is answered there: `send_telegram`, `send_slack`, `send_discord`. With the relay on, `send_telegram` goes to the user through Hermes and the file tools are gone; with it off, files go with `send_telegram_document`, `send_telegram_photo`, `send_telegram_video`.',
+      'A request that came from Telegram, Slack or Discord is answered there: `send_telegram`, `send_slack`, `send_discord`. `send_telegram` is an orchestrator\'s, and goes to the user through their Hermes, text only; with the relay to Hermes off it sends nothing and says where to turn it on (Settings, Hermes).',
       'Ask only what you cannot decide: otherwise decide, say what you assumed, and go on.',
     ].join('\n'),
   },
@@ -194,10 +194,6 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   heavy_slot_take: 'heavy-runs',
   heavy_slot_give_back: 'heavy-runs',
   heavy_slot_status: 'heavy-runs',
-  // mcp-telegram
-  send_telegram_document: 'asking-the-user',
-  send_telegram_photo: 'asking-the-user',
-  send_telegram_video: 'asking-the-user',
   // mcp-kanban
   list_tasks: 'kanban',
   get_task: 'kanban',

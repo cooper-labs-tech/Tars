@@ -34,7 +34,7 @@ vi.mock('electron', () => ({
 vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.fn() }));
 
 import { projectsReport } from '../../../electron/services/bot-core';
-import { formatAgentStatus, formatSlackAgentStatus } from '../../../electron/utils';
+import { formatSlackAgentStatus } from '../../../electron/utils';
 import { agents } from '../../../electron/core/agent-manager';
 import type { AgentStatus } from '../../../electron/types';
 
@@ -66,10 +66,8 @@ describe('a project is named by its folder', () => {
     expect(report).toContain(onWindows ? 'F *orion*\n' : 'F *Unknown*\n');
   });
 
-  it('2, 3, 4. in Telegram\'s and Slack\'s agent status', () => {
-    expect(formatAgentStatus(agent('a1', ATLAS))).toContain('Project: `atlas`');
+  it('2, 3, 4. in Slack\'s agent status (Telegram\'s went with its bot in 2.0.5)', () => {
     expect(formatSlackAgentStatus(agent('a1', ATLAS))).toContain(':file_folder: `atlas`');
-    expect(formatAgentStatus(agent('a2', ORION_TRAILING))).toContain(onWindows ? 'Project: `orion`' : 'Project: ``');
     expect(formatSlackAgentStatus(agent('a2', ORION_TRAILING))).toContain(onWindows ? ':file_folder: `orion`' : ':file_folder: `Unknown`');
   });
 });

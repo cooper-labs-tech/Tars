@@ -12,7 +12,7 @@ import { AgentStatus, AppSettings } from '../types';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENTS_FILE, API_TOKEN_FILE, DATA_DIR, dataPath } from '../constants';
 import { dropRejectedTails, keysHandedToClaude, maskKeyFragments } from './key-fragments';
-import { ensureDataDir, isSuperAgent } from '../utils';
+import { ensureDataDir } from '../utils';
 import { isSkillName } from '../utils/skill-name';
 import { quoted } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
@@ -186,20 +186,6 @@ export function ensureProjectTrusted(projectPath: string): void {
 }
 
 export let agentsLoaded = false;
-export let superAgentTelegramTask = false;
-export let superAgentOutputBuffer: string[] = [];
-
-export function setSuperAgentTelegramTask(value: boolean) {
-  superAgentTelegramTask = value;
-}
-
-export function getSuperAgentOutputBuffer(): string[] {
-  return superAgentOutputBuffer;
-}
-
-export function clearSuperAgentOutputBuffer() {
-  superAgentOutputBuffer = [];
-}
 
 /**
  * Kill the agent's PTY if its recorded cwd no longer matches the agent's
@@ -277,8 +263,6 @@ export function handleStatusChangeNotification(
   newStatus: string,
   appSettings: AppSettings,
   sendNotification: (title: string, body: string, agentId?: string, settings?: { notificationsEnabled: boolean }) => void,
-  sendTelegramMessage?: (text: string) => void,
-  sendSuperAgentResponseToTelegram?: (agent: AgentStatus) => void
 ) {
   if (statusNotificationsStopped) return;
   const prevStatus = previousAgentStatus.get(agent.id);
@@ -333,9 +317,6 @@ export function handleStatusChangeNotification(
     // Its project's orchestrator and a chat's runner converse with the user,
     // who reads their turns where they happen: no desktop notification for them.
     const conversing = hasOrchestratorPowers(currentAgent);
-    // The reply sent back to Telegram is the project's orchestrator's alone,
-    // the one the bots write to: never a runner's.
-    const isSuper = isSuperAgent(currentAgent);
 
     if (newStatus === 'waiting') {
       if (!conversing && appSettings.notifyOnWaiting) {
@@ -346,10 +327,6 @@ export function handleStatusChangeNotification(
           appSettings
         );
       }
-      if (isSuper && superAgentTelegramTask && sendSuperAgentResponseToTelegram) {
-        sendSuperAgentResponseToTelegram(currentAgent);
-        superAgentTelegramTask = false;
-      }
     } else if (newStatus === 'completed' && appSettings.notifyOnComplete) {
       if (!conversing) {
         sendNotification(
@@ -358,10 +335,6 @@ export function handleStatusChangeNotification(
           currentAgent.id,
           appSettings
         );
-      }
-      if (isSuper && superAgentTelegramTask && sendSuperAgentResponseToTelegram) {
-        sendSuperAgentResponseToTelegram(currentAgent);
-        superAgentTelegramTask = false;
       }
     }
     // To JeanBrasse's Telegram whatever the desktop switch says: that one is the
@@ -384,10 +357,6 @@ export function handleStatusChangeNotification(
           currentAgent.id,
           appSettings
         );
-      }
-      if (isSuper && superAgentTelegramTask && sendTelegramMessage) {
-        sendTelegramMessage(`🔴 Super Agent error: ${currentAgent.error || 'An error occurred.'}`);
-        superAgentTelegramTask = false;
       }
     }
   }, 5000);
@@ -1342,13 +1311,6 @@ function attachAgentTerminal(
       appendAgentOutput(agentData, data);
       agentData.lastActivity = new Date().toISOString();
       agentData.statusLine = extractStatusLine(agentData.output);
-
-      if (superAgentTelegramTask && isSuperAgent(agentData)) {
-        superAgentOutputBuffer.push(data);
-        if (superAgentOutputBuffer.length > 200) {
-          superAgentOutputBuffer = superAgentOutputBuffer.slice(-100);
-        }
-      }
     }
     // OSC 7501: the probe answered at once, the CLI's own report kept, and the
     // status moved only where no hook drives it (services/program-status).

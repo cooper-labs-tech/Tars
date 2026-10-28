@@ -87,7 +87,6 @@ function start(): void {
     null,
     { notificationsEnabled: true } as never,
     () => null,
-    () => null,
     null,
     null,
     () => {},

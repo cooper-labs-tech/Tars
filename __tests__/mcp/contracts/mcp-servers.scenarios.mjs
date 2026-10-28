@@ -179,8 +179,12 @@ const orchestratorAgent = [
   { name: "delegate_task, no prompt", tool: "delegate_task", args: { id: "a1" } },
 
   { name: "send_telegram", tool: "send_telegram", args: { message: "Short" }, tars: [ok({ success: true })] },
-  { name: "send_telegram, long, to a chat", tool: "send_telegram", args: { message: long, chat_id: "123" }, tars: [ok({ success: true })] },
-  { name: "send_telegram, refused", tool: "send_telegram", args: { message: "Hi", chat_id: "999" }, tars: [fail(403, { error: "Chat 999 is not authorized" })] },
+  { name: "send_telegram, long", tool: "send_telegram", args: { message: long }, tars: [ok({ success: true })] },
+  // Tars has no Telegram bot of its own since 2.0.5: with the relay to Hermes off, Tars says how to turn it on.
+  {
+    name: "send_telegram, the relay to Hermes off", tool: "send_telegram", args: { message: "Hi" },
+    tars: [fail(409, { error: "telegram_through_hermes", reason: "Telegram goes through Hermes: turn on Telegram through Hermes in Settings, Hermes, Connection." })],
+  },
   { name: "send_slack", tool: "send_slack", args: { message: long }, tars: [ok({ success: true })] },
   { name: "send_slack, error", tool: "send_slack", args: { message: "Hi" }, tars: [fail(503, { error: "Slack is not connected" })] },
   { name: "send_discord, to its channel", tool: "send_discord", args: { message: "Dune is on it.", channel_id: "C-TEAM" }, tars: [ok({ success: true })] },
@@ -467,75 +471,11 @@ const x = [
   { name: "x_post_tweet, X never answers", tool: "x_post_tweet", args: { text: "Hi" }, tars: [hold] },
 ];
 
-// -------------------------------------------------------------------- telegram
-
-/** The plain settings since 2.0.4: the chats, and no token (Tars holds it and sends: /api/telegram/send*). */
-const TG = { telegramChatId: "111", telegramAuthorizedChatIds: ["222"] };
-const tgOk = ok({ success: true });
-
-/** Files to send, and the ones the guard must refuse, under the sandbox HOME. */
-function telegramFiles(home) {
-  const put = (rel, body) => {
-    fs.mkdirSync(path.dirname(path.join(home, rel)), { recursive: true });
-    fs.writeFileSync(path.join(home, rel), body);
-  };
-  put("work/shot.png", "PNGDATA");
-  put("work/clip.mp4", "MP4DATA");
-  put("work/report.pdf", "PDFDATA");
-  put("work/project/.env", "SECRET=1");
-  put("work/project/.env.local", "SECRET=2");
-  put("work/project/nested/.ssh/key", "KEY");
-  put(".ssh/id_rsa", "KEY");
-  put(".tars/app-settings.json.bak", "{}");
-  put(".tars-private/hermes-webhook-secret", "SECRET");
-  // A junction: Windows lets any account make one, where a symlink needs a privilege; the type is ignored off Windows.
-  fs.symlinkSync(path.join(home, ".tars"), path.join(home, "work", "innocent"), "junction");
-  fs.linkSync(path.join(home, ".tars-private", "hermes-webhook-secret"), path.join(home, "work", "notes.txt"));
-}
-
-const telegram = [
-  { name: "send_telegram, the default chat", tool: "send_telegram", args: { message: "Hello *there*" }, tars: [tgOk] },
-  { name: "send_telegram, an authorized chat, long", tool: "send_telegram", args: { message: long, chat_id: "222" }, tars: [tgOk] },
-  { name: "send_telegram, a chat id as a number", tool: "send_telegram", args: { message: "Hi", chat_id: 111 }, tars: [tgOk] },
-  { name: "send_telegram, a chat that is not authorized", tool: "send_telegram", args: { message: "Hi", chat_id: "999" } },
-  { name: "send_telegram, no bot in Tars: Tars refuses", tool: "send_telegram", args: { message: "Hi" }, tars: [fail(400, { error: "Telegram not configured or no chat ID. Set a default chat in Settings > Telegram." })] },
-  { name: "send_telegram, no chat anywhere", tool: "send_telegram", args: { message: "Hi" }, settings: {} },
-  { name: "send_telegram, no settings file", tool: "send_telegram", args: { message: "Hi" }, settings: null },
-  { name: "send_telegram, settings that are not JSON", tool: "send_telegram", args: { message: "Hi" }, settings: "{ broken" },
-  { name: "send_telegram, settings that are null", tool: "send_telegram", args: { message: "Hi" }, settings: "null" },
-  { name: "send_telegram, Telegram refuses", tool: "send_telegram", args: { message: "Hi" }, tars: [fail(500, { error: "Failed to send: Error: ETELEGRAM: 400 Bad Request: can't parse entities" })] },
-  { name: "send_telegram, Telegram refuses without a word", tool: "send_telegram", args: { message: "Hi" }, tars: [fail(500, {})] },
-  { name: "send_telegram, not JSON", tool: "send_telegram", args: { message: "Hi" }, tars: [raw(502, "Bad gateway")] },
-  { name: "send_telegram, the connection drops", tool: "send_telegram", args: { message: "Hi" }, tars: [drop] },
-  { name: "send_telegram, an answer that is null", tool: "send_telegram", args: { message: "Hi" }, tars: [ok(null)] },
-  { name: "send_telegram_photo, with a long caption", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png", caption: `Look ${long}` }, tars: [tgOk] },
-  { name: "send_telegram_photo, no caption, another chat", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png", chat_id: "222" }, tars: [tgOk] },
-  { name: "send_telegram_photo, a relative path", tool: "send_telegram_photo", args: { photo_path: "../home/work/shot.png" }, tars: [tgOk] },
-  { name: "send_telegram_photo, outside the home", tool: "send_telegram_photo", args: { photo_path: "/etc/hosts" } },
-  { name: "send_telegram_photo, in .ssh", tool: "send_telegram_photo", args: { photo_path: "<home>/.ssh/id_rsa" } },
-  { name: "send_telegram_photo, in .tars", tool: "send_telegram_photo", args: { photo_path: "<home>/.tars/app-settings.json.bak" } },
-  { name: "send_telegram_photo, a .ssh deep in a project", tool: "send_telegram_photo", args: { photo_path: "<home>/work/project/nested/.ssh/key" } },
-  { name: "send_telegram_photo, through a symlink to .tars", tool: "send_telegram_photo", args: { photo_path: "<home>/work/innocent/app-settings.json.bak" } },
-  { name: "send_telegram_photo, not there", tool: "send_telegram_photo", args: { photo_path: "<home>/work/missing.png" } },
-  { name: "send_telegram_photo, an unauthorized chat", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png", chat_id: "999" } },
-  { name: "send_telegram_photo, Telegram refuses", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png" }, tars: [fail(500, { error: "Failed to send photo: Error: ETELEGRAM: 400 Bad Request: PHOTO_INVALID_DIMENSIONS" })] },
-  { name: "send_telegram_photo, not JSON", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png" }, tars: [raw(502, "Bad gateway")] },
-  { name: "send_telegram_photo, an answer that is null", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png" }, tars: [ok(null)] },
-  { name: "send_telegram_photo, the connection drops", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png" }, tars: [drop] },
-  { name: "send_telegram_video", tool: "send_telegram_video", args: { video_path: "<home>/work/clip.mp4", caption: "Demo" }, tars: [tgOk] },
-  { name: "send_telegram_video, a .env", tool: "send_telegram_video", args: { video_path: "<home>/work/project/.env" } },
-  { name: "send_telegram_video, no bot in Tars: Tars refuses", tool: "send_telegram_video", args: { video_path: "<home>/work/clip.mp4" }, tars: [fail(400, { error: "Telegram not configured or no chat ID" })] },
-  { name: "send_telegram_document", tool: "send_telegram_document", args: { document_path: "<home>/work/report.pdf" }, tars: [tgOk] },
-  { name: "send_telegram_document, a .env.local", tool: "send_telegram_document", args: { document_path: "<home>/work/project/.env.local" } },
-  { name: "send_telegram_document, a hard link into .tars-private", tool: "send_telegram_document", args: { document_path: "<home>/work/notes.txt" } },
-  { name: "send_telegram_document, no chat anywhere", tool: "send_telegram_document", args: { document_path: "<home>/work/report.pdf" }, settings: {} },
-  { name: "send_telegram_photo, Telegram never answers", tool: "send_telegram_photo", args: { photo_path: "<home>/work/shot.png" }, tars: [hold] },
-];
-
 // --------------------------------------------------------------------- servers
 
 /**
- * The seven, in the order Tars registers them. `env` is what the agent's
+ * The six, in the order Tars registers them (mcp-telegram went with Tars's own
+ * Telegram bot in 2.0.5). `env` is what the agent's
  * process holds besides HOME, PATH and CLAUDE_MGR_API_URL, which the contract
  * sets for every variant.
  */
@@ -554,17 +494,6 @@ export const SERVERS = [
     variants: [
       { name: "an agent's own token and identity", env: AGENT_ENV, scenarios: memoryAgent },
       { name: "no project in the environment", env: { CLAUDE_MGR_API_TOKEN: "agent-token-lead" }, scenarios: memoryNoProject },
-    ],
-  },
-  {
-    id: "telegram", dir: "mcp-telegram",
-    variants: [
-      { name: "an agent, Telegram configured", env: AGENT_ENV, settings: TG, setup: telegramFiles, scenarios: telegram },
-      // A variant of its own: each call Telegram leaves unanswered is the last of its variant.
-      {
-        name: "an agent, Telegram configured, and Telegram never answers a message", env: AGENT_ENV, settings: TG, setup: telegramFiles,
-        scenarios: [{ name: "send_telegram, Telegram never answers", tool: "send_telegram", args: { message: "Hi" }, tars: [hold] }],
-      },
     ],
   },
   {
