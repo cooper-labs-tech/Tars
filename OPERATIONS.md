@@ -1265,7 +1265,10 @@ agent died.
   project's orchestrator (typed as Tars) and the window (`heavySlot:alert`). **Tars never stops a run itself.**
 - **Settings.** `heavySlots` (1 to 8; default 1), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
   `~/.tars/app-settings.json`.
-- **The window.** `window.electronAPI.heavySlot.status()`, and the events `onChanged` and `onAlert`.
+- **The window.** `window.electronAPI.heavySlot.status()`, and the events `onChanged` (the same status) and `onAlert`.
+  One read gives the settings and floors, the machine's last reading, each holder with its pid and its tree's memory
+  and CPU (one `ps` at most every 5 s; none on Windows), the waiters in order with why, and the day's alerts with whom
+  each was sent to.
 
 | Symptom | Cause | Fix |
 |---|---|---|

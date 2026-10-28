@@ -263,17 +263,36 @@ interface HeavySlotTicket {
   priority: 'gate' | 'normal' | 'background';
   /** Asked for gate without being an orchestrator: given normal. */
   clamped?: true;
+  /** What the run is: the command `tars-slot run` runs, or the label its asker gave. */
   label: string;
   agentId: string;
   agentName: string;
   project: string;
+  /** The process that holds the lease. */
+  pid: number;
   askedAt: string;
   grantedAt?: string;
   /** Granted inside this holder's lease (a git hook inside its run). */
   nestedIn?: string;
   alerts: string[];
 }
-interface HeavySlotStatus { slots: number; holders: HeavySlotTicket[]; waiting: HeavySlotTicket[] }
+interface HeavySlotStatus {
+  /** The setting: how many runs at once. */
+  slots: number;
+  /** Under these a grant waits: free disk in GB, free memory in %. */
+  floors: { diskGb: number; memFreePct: number };
+  /** The machine's last reading (null before the first); a figure the system cannot give is null. */
+  machine: {
+    at: string; diskFreeGb: number | null; memFreePct: number | null; memFreeMb: number | null;
+    swapUsedMb: number | null; swapGrowthMbPerMin: number | null; load1: number | null;
+  } | null;
+  /** With each holder's tree: its process and everything under it (none on Windows). */
+  holders: Array<HeavySlotTicket & { tree?: { processes: number; memoryMb: number; cpuPct: number } }>;
+  /** In the order they will be granted. */
+  waiting: HeavySlotTicket[];
+  /** Since midnight, oldest first, each with whom it was sent to. */
+  alerts: Array<{ at: string; ticket: string; agentName: string; project: string; label: string; text: string; sentTo: string[] }>;
+}
 type VaultSubfolder = 'reports' | 'tools';
 type VaultFailure = { error: string; code: string };
 interface VaultProjectFolder {
@@ -2180,7 +2199,7 @@ export interface ElectronAPI {
     status: () => Promise<HeavySlotStatus>;
     onChanged: (callback: (status: HeavySlotStatus) => void) => () => void;
     /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth. Tars never stops the run. */
-    onAlert: (callback: (alert: { ticket: string; agentName: string; project: string; text: string }) => void) => () => void;
+    onAlert: (callback: (alert: HeavySlotStatus['alerts'][number]) => void) => () => void;
   };
   // Vault
   vault?: {

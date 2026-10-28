@@ -759,8 +759,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('heavySlot:changed', listener);
       return () => ipcRenderer.removeListener('heavySlot:changed', listener);
     },
-    onAlert: (callback: (alert: { ticket: string; agentName: string; project: string; text: string }) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, alert: { ticket: string; agentName: string; project: string; text: string }) => callback(alert);
+    onAlert: (callback: (alert: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, alert: unknown) => callback(alert);
       ipcRenderer.on('heavySlot:alert', listener);
       return () => ipcRenderer.removeListener('heavySlot:alert', listener);
     },

@@ -799,7 +799,7 @@ app.whenReady().then(async () => {
   installSlotShims();
   startHeavySlot({
     getAppSettings: () => appSettings,
-    tellOrchestrator: (projectPath, text) => { void tellOrchestratorAsTars(projectPath, text); },
+    tellOrchestrator: (projectPath, text) => tellOrchestratorAsTars(projectPath, text),
     broadcast: (channel, payload) => broadcastToAllWindows(channel, payload),
   });
   ipcMain.handle('heavySlot:status', () => slotStatus());

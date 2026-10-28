@@ -72,7 +72,7 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
     else sendJson({ error: 'No such ticket of yours: given back already, or its process ended.', code: 'gone' }, 404);
   });
 
-  app.get('/api/heavy-slot', (_req, sendJson) => {
-    sendJson({ success: true, ...slotStatus() });
+  app.get('/api/heavy-slot', async (_req, sendJson) => {
+    sendJson({ success: true, ...(await slotStatus()) });
   });
 }
