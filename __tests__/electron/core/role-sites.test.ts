@@ -87,6 +87,7 @@ const SITES: Site[] = [
   { file: 'electron/core/agent-manager.ts', line: 'const conversing = …;', is: 'powers', why: 'no desktop notification for the turns of the user\'s own conversations' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
   { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
+  { file: 'electron/services/api-routes/mcp-routes.ts', line: 'if (ORCHESTRATOR_ONLY_MCP.includes(name) && !…) {', is: 'powers', why: 'the door to a shared server only the orchestrator\'s powers may call (x), a chat\'s runner included (QA-PR541 F1)' },
   { file: 'electron/services/api-routes/hooks-routes.ts', line: "if (levelOf(agent) === 'bypass' && !…) {", is: 'powers', why: 'an AskUserQuestion a bypass worker is refused, to ask its orchestrator; one with the powers (a chat\'s runner too) asks the user (QA-PR538 F1)' },
   { file: 'electron/core/agent-update.ts', line: 'const demoted = assignRole(agent, role ?? (… ? \'orchestrator\' : \'worker\'), agents.values());', is: 'identity', why: 'agent:update and update_agent keep the role, and one orchestrator per project' },
   { file: 'electron/core/agent-role.ts', line: 'if (… || params.role === \'worker\') return params.role;', is: 'identity', why: 'requestedRole: the role a create or an update names' },
