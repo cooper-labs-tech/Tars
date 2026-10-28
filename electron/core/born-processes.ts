@@ -190,7 +190,7 @@ function run(file: string, args: string[], opts: { env?: NodeJS.ProcessEnv } = {
 
 const LINE = /^\s*(\d+)\s+(\d+)\s(.*)$/;
 
-async function readMac(address: string): Promise<BornProcess[] | undefined> {
+async function readMac(address: string): Promise<BornRead | undefined> {
   const plain = await run('ps', ['-A', '-ww', '-o', 'pid=,ppid=,command=']);
   const withEnv = await run('ps', ['-A', '-E', '-ww', '-o', 'pid=,ppid=,command=']);
   if (!plain.ok || !withEnv.ok) return undefined;
@@ -212,10 +212,10 @@ async function readMac(address: string): Promise<BornProcess[] | undefined> {
     const agentId = tokens && macTagOf(tokens, address);
     if (agentId) born.push({ pid, ppid: before.ppid, agentId, command: before.command });
   }
-  return born;
+  return { born, table };
 }
 
-function readLinux(address: string): BornProcess[] | undefined {
+function readLinux(address: string): BornRead | undefined {
   let pids: number[];
   try {
     pids = fs.readdirSync('/proc').filter(name => /^\d+$/.test(name)).map(Number);
@@ -238,7 +238,26 @@ function readLinux(address: string): BornProcess[] | undefined {
     }
   }
   const tars = tarsAndItsParents(rows);
-  return rows.filter((row): row is BornProcess => !!row.agentId && !tars.has(row.pid));
+  return {
+    born: rows.filter((row): row is BornProcess => !!row.agentId && !tars.has(row.pid)),
+    table: rows.map(row => ({ pid: row.pid, ppid: row.ppid })),
+  };
+}
+
+/**
+ * The agents' processes and the whole table of the processes the system shows (pid and ppid of each, tagged or
+ * not): the parentage a kept run's subtree and the agent's terminal are walked through. macOS shows no environment
+ * of a platform binary, so a task a kept run starts through /bin/sh is reached only through the whole table (the
+ * Audit's re-check of #523).
+ */
+export interface BornRead { born: BornProcess[]; table: Array<{ pid: number; ppid: number }> }
+
+export async function readBornTable(opts: { address?: string; platform?: NodeJS.Platform } = {}): Promise<BornRead | undefined> {
+  const address = opts.address ?? tarsAddress();
+  const platform = opts.platform ?? process.platform;
+  if (platform === 'darwin') return readMac(address);
+  if (platform === 'linux') return readLinux(address);
+  return undefined;
 }
 
 /**
@@ -246,11 +265,7 @@ function readLinux(address: string): BornProcess[] | undefined {
  * environment of another process cannot be read (Windows), or the read failed.
  */
 export async function readBornProcesses(opts: { address?: string; platform?: NodeJS.Platform } = {}): Promise<BornProcess[] | undefined> {
-  const address = opts.address ?? tarsAddress();
-  const platform = opts.platform ?? process.platform;
-  if (platform === 'darwin') return readMac(address);
-  if (platform === 'linux') return readLinux(address);
-  return undefined;
+  return (await readBornTable(opts))?.born;
 }
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
@@ -270,35 +285,45 @@ export interface BornEndOptions {
   address?: string;
   platform?: NodeJS.Platform;
   graceMs?: number;
-  read?: () => Promise<BornProcess[] | undefined>;
+  /** The tagged processes, with the whole table when the reader has it (a stub may give the tagged ones alone). */
+  read?: () => Promise<BornRead | BornProcess[] | undefined>;
   /** The pid of the agent's terminal now, asked after each read: one it got again while the stop ran is left alone. */
   terminal?: () => number | undefined;
   /** Shared daemons by resolved executable (sharedDaemonPaths()). */
   shared?: Map<string, string>;
 }
 
+/** A read as both walks use it: the tagged processes, and every process's parent (the whole table, tagged or not). */
+function asRead(read: BornRead | BornProcess[] | undefined): { born: BornProcess[]; parentOf: Map<number, number> } | undefined {
+  if (!read) return undefined;
+  const born = Array.isArray(read) ? read : read.born;
+  const table = Array.isArray(read) ? read : [...read.table, ...read.born];
+  return { born, parentOf: new Map(table.map(row => [row.pid, row.ppid])) };
+}
+
 /** The agent's processes under its current terminal: its own, not what the stop is for (the Audit's M2 on #523). */
-function underTerminal(all: BornProcess[], terminal: number | undefined): Set<number> {
+function underTerminal(all: BornProcess[], parentOf: Map<number, number>, terminal: number | undefined): Set<number> {
   if (terminal === undefined) return new Set();
-  const parentOf = new Map(all.map(p => [p.pid, p.ppid]));
   const roots = new Set([terminal]);
   return new Set(all.filter(p => rootAbove(p.pid, roots, parentOf) !== undefined).map(p => p.pid));
 }
 
 /**
  * Ends what the agent started that is still alive, by PID: SIGTERM, then SIGKILL after `graceMs`. A kept process
- * is kept with everything under it (the Audit's M1 on #523: an ansible run works through its ssh children).
+ * is kept with everything under it (the Audit's M1 on #523: an ansible run works through its ssh children), walked
+ * through the whole process table: a task it starts through /bin/sh, whose environment macOS does not show, is
+ * still under it (the Audit's re-check).
  */
 export async function endBornProcesses(agentId: string, opts: BornEndOptions = {}): Promise<BornEnd> {
-  const read = opts.read ?? (() => readBornProcesses({ address: opts.address, platform: opts.platform }));
-  const all = await read();
-  if (!all) return { ended: [], endedProcesses: [], spared: [], unknown: true };
+  const read = opts.read ?? (() => readBornTable({ address: opts.address, platform: opts.platform }));
+  const first = asRead(await read());
+  if (!first) return { ended: [], endedProcesses: [], spared: [], unknown: true };
+  const { born: all, parentOf } = first;
   const mine = all.filter(p => p.agentId === agentId);
   const executables = await executablesOf(mine.map(p => p.pid), opts.platform);
   const shared = opts.shared ?? sharedDaemonPaths();
   const whyOf = new Map<number, string>();
   for (const p of mine) { const why = spareReason(p.command, executables.get(p.pid), shared); if (why) whyOf.set(p.pid, why); }
-  const parentOf = new Map(all.map(p => [p.pid, p.ppid]));
   const roots = new Set(whyOf.keys());
   const spared: BornEnd['spared'] = [];
   for (const p of mine) {
@@ -307,7 +332,7 @@ export async function endBornProcesses(agentId: string, opts: BornEndOptions = {
     spared.push({ ...p, why: root === p.pid ? whyOf.get(root)! : `started by ${root}, ${whyOf.get(root)}` });
   }
   const kept = new Set(spared.map(p => p.pid));
-  const own = underTerminal(all, opts.terminal?.());
+  const own = underTerminal(all, parentOf, opts.terminal?.());
   const ending = mine.filter(p => !kept.has(p.pid) && !own.has(p.pid));
   const result = (pids: number[]): BornEnd => ({ ended: pids, endedProcesses: ending.filter(p => pids.includes(p.pid)), spared, unknown: false });
   if (ending.length === 0) return result([]);
@@ -319,9 +344,9 @@ export async function endBornProcesses(agentId: string, opts: BornEndOptions = {
   if (left.length === 0) return result(pids);
   // Read again: a pid that is no longer the agent's (ended, its id given to another process), or is now under the
   // terminal the agent got meanwhile, is left alone.
-  const again = ((await read()) ?? []);
-  const ownNow = underTerminal(again, opts.terminal?.());
-  const still = new Set(again.filter(p => p.agentId === agentId && !ownNow.has(p.pid)).map(p => p.pid));
+  const again = asRead(await read()) ?? { born: [], parentOf: new Map<number, number>() };
+  const ownNow = underTerminal(again.born, again.parentOf, opts.terminal?.());
+  const still = new Set(again.born.filter(p => p.agentId === agentId && !ownNow.has(p.pid)).map(p => p.pid));
   for (const pid of left) {
     if (!still.has(pid)) continue;
     try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ }
