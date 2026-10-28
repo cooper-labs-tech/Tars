@@ -19,7 +19,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    behind them;
  * 2. move to the head does not change the order the tasks will run in;
  * 3. cancel goes without asking once, or asked and kept still cancels, or cancels another task, or the asker is not
- *    told (its delegate_task answers that it was cancelled);
+ *    told, in the queue's words ("It never started: it was taken back by you, in the window.");
  * 4. pause lets a task go in when the task in hand ends; the task in hand is touched by a pause;
  * 5. paused and nothing in hand, the panel shows nothing of what waits;
  * 6. resume does not let the next task go in;
@@ -208,7 +208,8 @@ for (const newInterface of [false, true]) {
       // 3. Cancel asks once; keep keeps it; cancel it cancels that one only, and its asker is told.
       const tests = list.getByRole('listitem').filter({ hasText: 'SLOW run the tests' });
       await tests.getByRole('button', { name: 'Cancel' }).click();
-      await expect(queuePanel.getByText(/Cancel this task\?/)).toBeVisible();
+      // The question says what its asker will read, in the queue's words (frame `Agent queue (2.0.5) · in its panel · states`).
+      await expect(queuePanel.getByText(/Cancel this task\? .+ is told: "It never started: it was taken back by you, in the window\."/)).toBeVisible();
       await queuePanel.getByRole('button', { name: 'keep' }).click();
       expect(await order()).toEqual(['SLOW write the changelog', 'SLOW run the tests']);
       await tests.getByRole('button', { name: 'Cancel' }).click();

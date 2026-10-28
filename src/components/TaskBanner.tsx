@@ -153,7 +153,7 @@ export default function TaskBanner({ agent }: { agent: AgentStatus }) {
             </div>
             {asking === w.ref && (
               <div className="flex items-center gap-2 pl-[26px] pr-2 pb-2">
-                <p className="flex-1 min-w-0 text-[11.5px] leading-[1.45] text-foreground">{`Cancel this task? ${cleanLine(w.from, 40)} is told it was cancelled.`}</p>
+                <p className="flex-1 min-w-0 text-[11.5px] leading-[1.45] text-foreground">{`Cancel this task? ${cleanLine(w.from, 40)} is told: "It never started: it was taken back by you, in the window."`}</p>
                 <Button size="sm" className="font-mono" onClick={() => { setAsking(null); void q.cancel(w.ref); }}>cancel it</Button>
                 <Button size="sm" className="font-mono" onClick={() => setAsking(null)}>keep</Button>
               </div>
