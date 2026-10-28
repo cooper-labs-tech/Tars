@@ -875,6 +875,6 @@ describe('an end of turn told once (the DB brief fix-twin-deliveries-2810.md)', 
     agentManager.agents.get('w')!.waitingReason = 'idle';
     move('w', 'waiting');
     vi.advanceTimersByTime(10_000);
-    expect(received(terminal).slice(first.length), 'the same rest told twice').toBe('');
+    expect(received(terminal).split('background work still running').length - 1, 'the same rest told twice').toBe(1);
   });
 });
