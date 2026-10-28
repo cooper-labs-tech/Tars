@@ -57,7 +57,7 @@ it off (JeanBrasse, 12/10). Off, the app draws exactly as before. On:
 | Surface | Frames |
 |---|---|
 | The new shell: main menu (Chat, Projects, then Dashboard, Kanban and Schedules), New chat, the fixed first entry Tars, all projects (today's room, /chat), the chat list, More at the foot | `tars-redesign.pen`: Shell · chats · empty, Shell · chats · list, a chat open |
-| More open: Agents, Review, Logs, Vault, Extensions, Usage, Brain, Settings, What's New | `tars-redesign.pen`: Shell · chats · More open |
+| More open: Agents, Review, Logs, Vault, Extensions, Usage, Resources, Brain, Settings, What's New | `tars-redesign.pen`: Shell · chats · More open |
 | A page of More, opened as a card above the app, over a scrim, the page under it not moving | `tars-redesign.pen`: Shell · chats · Settings card |
 | Tars, all projects: the current Chat page, unchanged, in the new shell | `chat-redesign-a.pen`: Chat · chats · Tars, all projects |
 | The chat list, read from the chats' records (#361): Pinned, Active, Working, Snoozed and Settled, the last two folded; each row with its title, project and number, and its runner's state; the project filter; "No chats yet" before a project has an orchestrator | `tars-redesign.pen`: Shell · chats · list, a chat open, Shell · chats · empty |
@@ -147,7 +147,7 @@ Agent · Claude account (and their light copies).
 ## Overlays and dialogs (17)
 
 - More (the new shell, with New interface on): Agents, Review, Logs, Vault,
-  Extensions, Usage, Brain, Settings and What's New, opened above the sidebar's
+  Extensions, Usage, Resources, Brain, Settings and What's New, opened above the sidebar's
   foot. Frames: Shell · chats · More open (and its light copy)
 - A page of More as a card above the app (the new shell): the page its own route
   shows, under a head with its icon and name, Escape or the cross to close it.
