@@ -602,7 +602,22 @@ async function spawnAgentSessionInSlot(
  *  when returned to MCP callers. Use /output or ?full=true when needed. */
 function projectAgent(agent: AgentStatus) {
   const { output, ...rest } = agent;
-  return { ...rest, outputChunks: output.length };
+  return { ...withoutCommandLines(rest), outputChunks: output.length };
+}
+
+/**
+ * The record without a command line (the Audit's M1 on the train, A6's rule): what an ended session left running and
+ * what a stop ended or kept, by pid and container. The window reads the lines through IPC; an agent reads none.
+ */
+function withoutCommandLines<T extends Pick<AgentStatus, 'leftRunning' | 'stopProcesses'>>(record: T): T {
+  // `pid <n>: <command> (why)` becomes `pid <n>`.
+  const pids = (lines: string[]) => lines.map(l => /^pid \d+/.exec(l)?.[0]).filter((p): p is string => !!p);
+  const { leftRunning, stopProcesses } = record;
+  return {
+    ...record,
+    ...(leftRunning ? { leftRunning: { ...leftRunning, commands: pids(leftRunning.commands) } } : {}),
+    ...(stopProcesses ? { stopProcesses: { ...stopProcesses, ended: pids(stopProcesses.ended), kept: pids(stopProcesses.kept) } } : {}),
+  };
 }
 
 /**
@@ -2178,7 +2193,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const listed = right?.ok ? queueView(oneTaskQueue, agent.id, right.all || caller?.kind !== 'agent' ? undefined : caller.agent.id) : undefined;
     // Only when something waits or the queue is paused: an agent with nothing queued reads as it did.
     const queue = listed && (listed.items.length || listed.paused) ? listed : undefined;
-    const view = full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent);
+    const view = full ? withoutCommandLines({ ...agent, waitingOn: publishedWaitingOn(agent) }) : projectAgent(agent);
     // The question masked for an agent (the Audit's L3 on #538): the window keeps it whole.
     // Its tree's memory and CPU, and each process as its program, pid, memory and CPU (lot 3 item D): no arguments,
     // which carry what no masking can know (the Audit's M1 on #546). The window, through IPC, has the command lines.

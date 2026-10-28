@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { API_PORT } from '../constants';
 import { buildFullPath } from '../utils/path-builder';
-import { redactSecrets } from '../utils/redact-secrets';
+import { redactCommandLine } from '../utils/redact-command-line';
 
 /**
  * What an agent started, wherever it went: found by its birth tag, ended by its PID (2.0.5, the owner's lot 2 of
@@ -174,9 +174,12 @@ function rootAbove(pid: number, roots: Set<number>, parentOf: Map<number, number
   return undefined;
 }
 
-/** A process as a stop and the watch say it: `pid <n>: <command>`, secrets masked, cut. */
+/**
+ * A process as a stop says it: `pid <n>: <command>`, masked by the window's rule (redact-command-line.ts: a secret
+ * after a flag too, which the log rule missed, the Audit's M1 on the train), then cut.
+ */
 export function describeBorn(p: { pid: number; command: string }, why?: string): string {
-  return `pid ${p.pid}: ${redactSecrets(p.command).replace(/\s+/g, ' ').slice(0, 120)}${why ? ` (${why})` : ''}`;
+  return `pid ${p.pid}: ${redactCommandLine(p.command).replace(/\s+/g, ' ').slice(0, 120)}${why ? ` (${why})` : ''}`;
 }
 
 function run(file: string, args: string[], opts: { env?: NodeJS.ProcessEnv } = {}): Promise<{ ok: boolean; out: string; missing?: boolean }> {

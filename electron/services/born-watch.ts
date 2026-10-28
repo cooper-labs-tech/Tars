@@ -1,6 +1,6 @@
 import type { AgentStatus } from '../types';
 import { labelledContainers, readBornProcesses, type BornProcess } from '../core/born-processes';
-import { redactSecrets } from '../utils/redact-secrets';
+import { redactCommandLine } from '../utils/redact-command-line';
 import type { NoteDelivery } from './error-triage';
 
 /**
@@ -48,7 +48,8 @@ export async function bornWatchPass(now: number, deps: BornWatchDeps): Promise<v
     const before = agent.leftRunning;
     const left: NonNullable<AgentStatus['leftRunning']> = {
       pids: mine.map(p => p.pid),
-      commands: mine.map(p => `pid ${p.pid}: ${redactSecrets(p.command).replace(/\s+/g, ' ').slice(0, COMMAND_CHARS)}`),
+      // The window's rule, as a stop's lines (core/born-processes.ts's describeBorn): the record and the note follow it.
+      commands: mine.map(p => `pid ${p.pid}: ${redactCommandLine(p.command).replace(/\s+/g, ' ').slice(0, COMMAND_CHARS)}`),
       containers: boxes.map(c => `${c.name} (${c.id})`),
       since: before?.since ?? new Date(now).toISOString(),
       ...(before?.reportedAt ? { reportedAt: before.reportedAt } : {}),
