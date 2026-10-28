@@ -62,17 +62,22 @@ export function retireTelegramBot(now: Date = new Date()): { retired: boolean; h
 
     // The token first: a stop between the two writes leaves no token, only fields that read as nothing.
     if (secrets && holdsBot(secrets)) writeSecretFileSync(SECRETS_FILE(), `${JSON.stringify(withoutTelegramBot(secrets), null, 2)}\n`);
-    const tell = setUp && !!settings && !settings.telegramBotRetired;
-    if (settings && (holdsBot(settings) || tell)) {
+    const told = settings?.telegramBotRetired as { at?: unknown; hadToken?: unknown } | undefined;
+    const tell = setUp && !!settings && !told;
+    // A token a later launch found, which the first could not read (its file did not parse then): the owner is told to
+    // revoke it after all, the first date kept (the Audit's L3 on #545).
+    const tokenSince = hadToken && !!settings && !!told && told.hadToken !== true;
+    if (settings && (holdsBot(settings) || tell || tokenSince)) {
       const kept = withoutTelegramBot(settings);
       if (tell) kept.telegramBotRetired = { at: now.toISOString(), hadToken };
+      if (tokenSince) kept.telegramBotRetired = { ...told, hadToken: true };
       writeSecretFileSync(APP_SETTINGS_FILE, JSON.stringify(kept, null, 2));
     }
     try { fs.rmSync(SENT_LOG(), { force: true }); } catch { /* the next launch tries again */ }
     if (found.length) {
       console.log(`[telegram] Tars's own Telegram bot is gone: its settings${hadToken ? ' and its token' : ''} removed. Telegram goes through Hermes (Settings, Hermes).`);
     }
-    return { retired: tell, hadToken: tell && hadToken };
+    return { retired: tell || tokenSince, hadToken: (tell || tokenSince) && hadToken };
   } catch (err) {
     console.error(`[telegram] the old bot's settings could not all be removed (${describeSecretFileError(err)}): the next launch tries again`);
     return { retired: false, hadToken: false };

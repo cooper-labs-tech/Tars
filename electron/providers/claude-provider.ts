@@ -10,7 +10,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
+import { servedPathMatches, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
@@ -307,7 +307,7 @@ export class ClaudeProvider implements CLIProvider {
         const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
         const existing = config?.mcpServers?.[name];
         if (!existing?.args?.length) continue;
-        if (existing.args[existing.args.length - 1] === expectedServerPath) return true;
+        if (servedPathMatches(existing.args[existing.args.length - 1], expectedServerPath)) return true;
       } catch {
         // try the next candidate
       }

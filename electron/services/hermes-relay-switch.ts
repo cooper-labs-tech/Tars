@@ -17,14 +17,18 @@ export function bundledMcpServers(): string[] {
   return ['claude-mgr-orchestrator', 'tars-memory', 'claude-mgr-kanban', 'claude-mgr-vault', 'dorothy-socialdata', 'dorothy-x'];
 }
 
-/** Takes mcp-telegram out of every CLI it is registered in. */
+/**
+ * Takes mcp-telegram out of every CLI it is registered in: by this install's path, or by its bundle's last parts
+ * (`mcp-telegram/dist/bundle.js`, either separator), as another install registered it: Tars moved, Dorothy, a dev
+ * build (the Audit's L1 on #545). A server of the owner's named like it, running anything else, stays.
+ */
 export async function retireTelegramMcp(providers: CLIProvider[]): Promise<void> {
   // Imported here, not at the top: mcp-orchestrator reads this module's list.
   const { getMcpTelegramPath } = await import('./mcp-orchestrator');
-  const telegramPath = getMcpTelegramPath();
+  const paths = [getMcpTelegramPath(), 'mcp-telegram/dist/bundle.js', 'mcp-telegram\\dist\\bundle.js'];
   for (const provider of providers) {
     try {
-      if (provider.isMcpServerRegistered(TELEGRAM_MCP, telegramPath)) await provider.removeMcpServer(TELEGRAM_MCP);
+      if (paths.some((p) => provider.isMcpServerRegistered(TELEGRAM_MCP, p))) await provider.removeMcpServer(TELEGRAM_MCP);
     } catch (err) {
       console.error(`[${provider.id}] could not take mcp-telegram out:`, err instanceof Error ? err.message : err);
     }

@@ -9,7 +9,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { readAppSettingsFromDisk, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
+import { servedPathMatches, readAppSettingsFromDisk, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -117,7 +117,7 @@ export class MoonshotProvider implements CLIProvider {
       const c = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
       const e = c?.mcpServers?.[name];
       if (!e?.args) return false;
-      return e.args[e.args.length - 1] === expectedServerPath;
+      return servedPathMatches(e.args[e.args.length - 1], expectedServerPath);
     } catch { return false; }
   }
 

@@ -9,7 +9,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { readAppSettingsFromDisk, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
+import { servedPathMatches, readAppSettingsFromDisk, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -112,7 +112,7 @@ export class ZhipuProvider implements CLIProvider {
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
     const p = path.join(this.configDir, 'mcp.json');
     if (!fs.existsSync(p)) return false;
-    try { const c = JSON.parse(fs.readFileSync(p, 'utf-8')); const e = c?.mcpServers?.[name]; if (!e?.args) return false; return e.args[e.args.length - 1] === expectedServerPath; } catch { return false; }
+    try { const c = JSON.parse(fs.readFileSync(p, 'utf-8')); const e = c?.mcpServers?.[name]; if (!e?.args) return false; return servedPathMatches(e.args[e.args.length - 1], expectedServerPath); } catch { return false; }
   }
 
   getMcpConfigStrategy(): 'flag' | 'config-file' { return 'flag'; }

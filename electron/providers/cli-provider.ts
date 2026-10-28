@@ -159,7 +159,11 @@ export interface CLIProvider {
   /** Remove an MCP server from this provider's configuration */
   removeMcpServer(name: string): Promise<void>;
 
-  /** Check if an MCP server is registered with the expected server path (and, where the CLI needs them, `envVars`) */
+  /**
+   * Check if an MCP server is registered with the expected server path (and, where the CLI needs them, `envVars`).
+   * An absolute path is this install's, matched as written; a relative one is a bundle's last parts
+   * (`mcp-telegram/dist/bundle.js`), matched wherever its install lives (servedPathMatches).
+   */
   isMcpServerRegistered(name: string, expectedServerPath: string, envVars?: readonly string[]): boolean;
 
   /** Directories where this provider reads skills from */
@@ -426,4 +430,19 @@ export function isValidOpenAIBaseUrl(value: string | undefined): boolean {
   if (host === 'metadata.google.internal') return false;
 
   return true;
+}
+
+/**
+ * Whether the path a registration runs is the one asked for: equal to an absolute one, or, for a relative one (a
+ * bundle's last parts, `mcp-telegram/dist/bundle.js`), ending in those parts, whichever separator either uses. How
+ * the start of 2.0.5 recognises an mcp-telegram another install registered (Tars moved, Dorothy, a dev build, Tars on
+ * Windows), to take it out (the Audit's L1 on #545).
+ */
+export function servedPathMatches(actual: unknown, expected: string): boolean {
+  if (typeof actual !== 'string') return false;
+  if (actual === expected) return true;
+  if (/^([\\/]|[A-Za-z]:)/.test(expected)) return false;
+  const want = expected.split(/[\\/]/).filter(Boolean);
+  const have = actual.split(/[\\/]/).filter(Boolean);
+  return want.length > 0 && have.length >= want.length && have.slice(-want.length).join('/') === want.join('/');
 }

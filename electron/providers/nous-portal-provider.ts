@@ -9,7 +9,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
+import { servedPathMatches, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -131,7 +131,7 @@ export class NousPortalProvider implements CLIProvider {
       const mcpConfig = JSON.parse(fs.readFileSync(mcpConfigPath, 'utf-8'));
       const existing = mcpConfig?.mcpServers?.[name];
       if (!existing?.args) return false;
-      return existing.args[existing.args.length - 1] === expectedServerPath;
+      return servedPathMatches(existing.args[existing.args.length - 1], expectedServerPath);
     } catch { return false; }
   }
 
