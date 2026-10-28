@@ -32,6 +32,8 @@ export interface AgentTickItem {
   permissionAsk?: AgentStatus['permissionAsk'];
   /** What the CLI last said of itself over OSC 7501, with a blocked state's kind and message. See AgentStatus.programStatus. */
   programStatus?: AgentStatus['programStatus'];
+  /** The line the agent last wrote about itself. See AgentStatus.checkpoint. */
+  checkpoint?: AgentStatus['checkpoint'];
   provider: string;
   /** A CLI runs in the agent's PTY, whatever its status says. See cliRunningIn. */
   cliRunning: boolean;
@@ -110,6 +112,7 @@ export function buildTickPayload(): AgentTickItem[] {
         waitingOn: publishedWaitingOn(a),
         permissionAsk: a.permissionAsk,
         programStatus: a.programStatus,
+        checkpoint: a.checkpoint,
         provider: a.provider || 'claude',
         cliRunning: agentCliRunning(a),
         launching,

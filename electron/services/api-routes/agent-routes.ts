@@ -49,6 +49,7 @@ import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
 import { scheduleTick } from '../../utils/agents-tick';
+import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
 import { lastInterruptAt, pendingBackgroundWork, withSessionTruth } from '../agent-truth';
 import { turnInterruptedAt } from '../task-watch';
@@ -2045,6 +2046,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       role: a.role,
       error: a.error,
       askedBy: askerOf(a),
+      ...(a.checkpoint ? { checkpoint: a.checkpoint } : {}),
     }));
     sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
   });
@@ -2356,6 +2358,33 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     });
   });
 
+  // POST /api/agents/:id/checkpoint, `{ line }`: the line an agent writes
+  // about itself (the MCP tool checkpoint, core/agent-checkpoint.ts). Only the
+  // agent itself, by its own token: nobody writes another's line.
+  app_.post(/^\/api\/agents\/([^/]+)\/checkpoint$/, (req, sendJson) => {
+    const driver = resolveDriver(req, sendJson);
+    if (!driver) return;
+    const agent = agents.get(req.params.id);
+    if (!agent) {
+      sendJson({ error: 'Agent not found' }, 404);
+      return;
+    }
+    if (driver.kind !== 'agent' || driver.agent.id !== agent.id) {
+      sendJson({ error: 'An agent writes its own checkpoint, and no other.' }, 403);
+      return;
+    }
+    const line = (req.body as { line?: unknown } | undefined)?.line;
+    const problem = checkpointProblem(line);
+    if (problem) {
+      sendJson({ error: `Not kept: ${problem}.` }, 400);
+      return;
+    }
+    writeCheckpoint(agent, line as string);
+    saveAgents();
+    scheduleTick();
+    sendJson({ checkpoint: agent.checkpoint });
+  });
+
   // POST /api/agents/:id/start
   app_.post(/^\/api\/agents\/([^/]+)\/start$/, async (req, sendJson) => {
     const agent = agents.get(req.params.id);
@@ -2655,6 +2684,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // What the turn used and cost, read from the session (transcripts, the
       // state mod's turns) once it ended; a run over ACP reported its own.
       const usage = found.acp ?? (found.outcome !== 'running' && !answering.has(found.id) ? await terminalUsage(found) : undefined);
+      // The line the agent last wrote about itself, while this task runs (core/agent-checkpoint.ts).
+      const checkpoint = checkpointOfTask(agents.get(found.agentId), found);
       sendJson({
         ...(timedOut ? { timeout: true } : {}),
         task: {
@@ -2666,6 +2697,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
           ...(usage ? { usage } : {}),
           ...((model ?? taskModels.get(found.id)) ? { model: model ?? taskModels.get(found.id) } : {}),
           ...(taskRestarts.get(found.id) ? { restartedAfterStop: taskRestarts.get(found.id) } : {}),
+          ...(checkpoint ? { checkpoint } : {}),
         },
       });
     } finally {

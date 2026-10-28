@@ -372,6 +372,7 @@ export function handleStatusChangeNotification(
         agentName,
         projectPath: currentAgent.projectPath || '',
         reason: currentAgent.error,
+        checkpoint: currentAgent.checkpoint?.line,
       });
     }
     if (newStatus === 'error' && appSettings.notifyOnError) {

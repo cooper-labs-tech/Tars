@@ -331,6 +331,9 @@ export interface AgentStatus {
     /** ISO: when it was read. */
     at: string;
   };
+  /** The line the agent last wrote about itself with the MCP tool `checkpoint` (core/agent-checkpoint.ts): one
+   *  line, 120 characters at most, with when. Saved. */
+  checkpoint?: { line: string; at: string };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line
   lastCleanOutput?: string;  // Clean text output captured from transcript by hooks

@@ -193,6 +193,8 @@ export interface AgentTickItem {
   permissionAsk?: AgentStatus['permissionAsk'];
   /** What the CLI last said of itself over OSC 7501 (2.0.5). See AgentStatus.programStatus. */
   programStatus?: AgentStatus['programStatus'];
+  /** The line the agent last wrote about itself, with when (2.0.5). See AgentStatus.checkpoint. */
+  checkpoint?: AgentStatus['checkpoint'];
   /** A launch is on its way. See AgentStatus.launching. Always set on agents:tick. */
   launching?: boolean;
   provider: string;
@@ -558,6 +560,9 @@ export interface AgentStatus {
     /** ISO: when it was read. */
     at: string;
   };
+  /** The line the agent last wrote about itself with the MCP tool `checkpoint`, 120 characters at most, with when
+   *  (2.0.5, core/agent-checkpoint.ts). For the agent card's line. */
+  checkpoint?: { line: string; at: string };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;

@@ -59,6 +59,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     title: 'Messages and their modes',
     roles: ['orchestrator', 'worker'],
     text: [
+      '`checkpoint` writes one line about yourself, 120 characters at most: where you stand in the task in hand (tests written, 3 of 5 green). Tars keeps it with you and shows it on your card, and whoever follows your task reads it in task_status, list_agents and get_agent. A new line replaces the last: write one at a step worth knowing, not at every action.',
       '`send_message` writes to an agent by id. To answer whoever asked you for your current task, send it to "requester": a chat of the project may have asked, not only the orchestrator.',
       'A task handed to you with delegate_task is typed into your own terminal, after a line naming who gave it and its task id. Your final message when your turn ends is the answer they get back, in full: put the result there.',
       'Its mode says how it goes in: auto (the default, typed at once, into a running turn too), queue (typed once the agent\'s turn ends), steer (its turn interrupted first; claude agents only), restart (the agent stopped and started again with the message). steer and restart are refused while the agent works on a task another agent asked for.',
@@ -164,6 +165,7 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   task_status: 'delegation',
   task_cancel: 'delegation',
   send_message: 'messages',
+  checkpoint: 'messages',
   room_post: 'messages',
   room_read: 'messages',
   chat_list: 'messages',

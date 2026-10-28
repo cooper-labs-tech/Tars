@@ -157,6 +157,8 @@ type TaskView = {
   queuedBehind?: string; queuedAt?: string; error?: string;
   /** Delivered: a task that waited its turn and went into the agent's terminal, typed in or as a session started on it. */
   how?: "typed" | "started"; deliveredAt?: string;
+  /** Running: the line the agent last wrote about itself during this task (checkpoint). */
+  checkpoint?: { line: string; at: string };
 };
 
 /** A task waiting its turn, said for its asker: behind which task, from whom, since when, and how to follow it. */
@@ -202,7 +204,10 @@ function taskText(task: TaskView): string {
       + "it is that agent's work now. Follow it with wait_for_agent and get_agent_output.";
   }
   const head = `Task ${task.id} on agent ${task.agentId}: ${task.outcome}${task.stopReason ? ` (${task.stopReason})` : ""}.`;
-  if (task.outcome === "running") return `${head} It is still working: ask task_status again later.`;
+  if (task.outcome === "running") {
+    const said = task.checkpoint ? ` Its last checkpoint, at ${task.checkpoint.at}: ${task.checkpoint.line}` : "";
+    return `${head} It is still working: ask task_status again later.${said}`;
+  }
   if (task.outcome === "delivered") return `Task ${task.id} on agent ${task.agentId}: delivered. ${task.error ?? ""}`.trim();
   if (task.error && !task.result) return `${head} ${task.error}`;
   return task.result ? `${head}\n\n${task.result}` : `${head} It left no answer.`;
@@ -568,6 +573,21 @@ const AGENT_TOOLS: Tool[] = [
         ? `Agents of your project (${data.scopedToProject}):\n`
         : "";
       return text(`${scopeNote}${JSON.stringify(data.agents, null, 2)}`);
+    },
+  }),
+
+  tool({
+    name: "checkpoint",
+    description: "Write one line about yourself: where you stand in the task in hand, 120 characters at most (for instance: tests written, 3 of 5 green). Tars keeps it with you, shows it on your card, and gives it to whoever follows your task (task_status) or reads you (list_agents, get_agent). A new line replaces the last. Write one at a step worth knowing, not at every action.",
+    schema: {
+      line: z.string().describe("One line, 120 characters at most, no newline."),
+    },
+    failure: "writing your checkpoint",
+    async run({ line }) {
+      const { agentId } = getCallerIdentity();
+      if (!agentId) return problem("No agent identity found in the environment (CLAUDE_AGENT_ID is unset): only an agent Tars started has a checkpoint.");
+      const data = (await apiRequest(`/api/agents/${encodeURIComponent(agentId)}/checkpoint`, "POST", { line })) as { checkpoint: { line: string; at: string } };
+      return text(`Checkpoint kept at ${data.checkpoint.at}: ${data.checkpoint.line}`);
     },
   }),
 
