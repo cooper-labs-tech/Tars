@@ -191,6 +191,8 @@ export interface AgentTickItem {
   waitingOn?: AgentWaitingOn;
   /** A permission question Tars holds for the window. See AgentStatus.permissionAsk. */
   permissionAsk?: AgentStatus['permissionAsk'];
+  /** What the CLI last said of itself over OSC 7501 (2.0.5). See AgentStatus.programStatus. */
+  programStatus?: AgentStatus['programStatus'];
   /** A launch is on its way. See AgentStatus.launching. Always set on agents:tick. */
   launching?: boolean;
   provider: string;
@@ -542,6 +544,20 @@ export interface AgentStatus {
   /** What its last stop ended and kept outside its terminal: `pid <n>: <command>` each, the kept ones with why,
    *  and the containers stopped. Cleared by a start. */
   stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
+  /** What the agent's CLI last said of itself in its terminal over OSC 7501, the Program Status Protocol (2.0.5,
+   *  services/program-status): from its current terminal only, gone with a clear, a new shell prompt or a reset.
+   *  It drives `status` only for a CLI Tars follows no other way (amp, grok, opencode); on the others it adds the
+   *  reason of a blocked state. On agents:tick too. */
+  programStatus?: {
+    state: 'idle' | 'working' | 'done' | 'blocked' | 'error';
+    /** Set with `blocked` only. */
+    kind?: 'permission' | 'question' | 'auth';
+    /** One line, as the CLI wrote it (2,048 characters at most). */
+    msg?: string;
+    app?: string;
+    /** ISO: when it was read. */
+    at: string;
+  };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;

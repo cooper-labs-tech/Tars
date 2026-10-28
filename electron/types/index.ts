@@ -317,6 +317,20 @@ export interface AgentStatus {
   /** What its last stop ended and kept outside its terminal (core/agent-stop.ts, 2.0.5): `pid <n>: <command>` each,
    *  the kept ones with why (the owner's limits, a shared daemon), and the containers stopped. Cleared by a start. */
   stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
+  /** What the agent's CLI last said of itself in its terminal, over OSC 7501 (the Program Status Protocol,
+   *  services/program-status): its root record, from its current terminal only, gone with a clear, a new shell
+   *  prompt or a reset. It drives `status` only for a CLI Tars follows no other way (amp, grok, opencode); on
+   *  the others the hooks or the session log win, and this adds the reason of a blocked state. Not saved. */
+  programStatus?: {
+    state: 'idle' | 'working' | 'done' | 'blocked' | 'error';
+    /** Set with `blocked` only. */
+    kind?: 'permission' | 'question' | 'auth';
+    /** One line, as the CLI wrote it (2,048 characters at most). */
+    msg?: string;
+    app?: string;
+    /** ISO: when it was read. */
+    at: string;
+  };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line
   lastCleanOutput?: string;  // Clean text output captured from transcript by hooks

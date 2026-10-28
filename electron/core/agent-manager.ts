@@ -39,6 +39,7 @@ import { currentApiCall } from '../services/api-routes/call-context';
 import { reportAgentToolError, reportHandledError, taskNeverStarted } from '../services/error-reports/handled';
 import { UNKNOWN_TOOL } from '../services/error-reports/report';
 import { trustsTooMuch } from '../utils/trust-too-much';
+import { readProgramStatus, forgetProgramStatus } from '../services/program-status';
 
 /**
  * When each agent's current status began (`statusSince`), stamped where the
@@ -1341,6 +1342,13 @@ function attachAgentTerminal(
         }
       }
     }
+    // OSC 7501: the probe answered at once, the CLI's own report kept, and the
+    // status moved only where no hook drives it (services/program-status).
+    if (readProgramStatus(agentData, ptyId, ptyProcess, data) && agentData) {
+      handleStatusChangeNotificationCallback(agentData, agentData.status);
+      emitAgentStatus(agentData.id);
+      broadcastToAllWindows('agent:status', { agentId: agentData.id, status: agentData.status, waitingReason: agentData.waitingReason });
+    }
     broadcastToAllWindows('agent:output', {
       type: 'output',
       agentId: agent.id,
@@ -1354,6 +1362,7 @@ function attachAgentTerminal(
   ptyProcess.onExit(({ exitCode }) => {
     console.log(`Agent ${agent.id} PTY exited with code ${exitCode}`);
     ptyProcesses.delete(ptyId);
+    forgetProgramStatus(ptyId);
     // Ended by the quit: neither the agent's completion nor its error, and
     // the closing window is not told it was (the Audit's gate of #235).
     const newStatus = agentStatusOnExit(exitCode);
