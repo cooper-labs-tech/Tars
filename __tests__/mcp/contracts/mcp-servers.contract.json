@@ -69,13 +69,17 @@
           },
           {
             "name": "get_agent_output",
-            "description": "Get the agent's last response as clean text (no terminal formatting). This is captured from the agent's transcript by hooks. Falls back to noting output is available in terminal view if no clean output is captured yet.",
+            "description": "Get an agent's answer as clean text: with taskId, that task's answer, as task_status has it; without, the answer of the agent's last task that ended, whatever it does next. A task's answer is its report and what the agent wrote after it (a memory note, a closing line), whole. Falls back to the hooks' last copy when no task of the agent has an answer yet.",
             "inputSchema": {
               "type": "object",
               "properties": {
                 "id": {
                   "type": "string",
                   "description": "The agent ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "A task's id (t-xxxxxxxx, or the id task_status gives): that task's answer"
                 }
               },
               "required": [
@@ -4673,13 +4677,17 @@
           },
           {
             "name": "get_agent_output",
-            "description": "Get the agent's last response as clean text (no terminal formatting). This is captured from the agent's transcript by hooks. Falls back to noting output is available in terminal view if no clean output is captured yet.",
+            "description": "Get an agent's answer as clean text: with taskId, that task's answer, as task_status has it; without, the answer of the agent's last task that ended, whatever it does next. A task's answer is its report and what the agent wrote after it (a memory note, a closing line), whole. Falls back to the hooks' last copy when no task of the agent has an answer yet.",
             "inputSchema": {
               "type": "object",
               "properties": {
                 "id": {
                   "type": "string",
                   "description": "The agent ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "A task's id (t-xxxxxxxx, or the id task_status gives): that task's answer"
                 }
               },
               "required": [
@@ -5427,13 +5435,17 @@
           },
           {
             "name": "get_agent_output",
-            "description": "Get the agent's last response as clean text (no terminal formatting). This is captured from the agent's transcript by hooks. Falls back to noting output is available in terminal view if no clean output is captured yet.",
+            "description": "Get an agent's answer as clean text: with taskId, that task's answer, as task_status has it; without, the answer of the agent's last task that ended, whatever it does next. A task's answer is its report and what the agent wrote after it (a memory note, a closing line), whole. Falls back to the hooks' last copy when no task of the agent has an answer yet.",
             "inputSchema": {
               "type": "object",
               "properties": {
                 "id": {
                   "type": "string",
                   "description": "The agent ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "A task's id (t-xxxxxxxx, or the id task_status gives): that task's answer"
                 }
               },
               "required": [
@@ -6110,13 +6122,17 @@
           },
           {
             "name": "get_agent_output",
-            "description": "Get the agent's last response as clean text (no terminal formatting). This is captured from the agent's transcript by hooks. Falls back to noting output is available in terminal view if no clean output is captured yet.",
+            "description": "Get an agent's answer as clean text: with taskId, that task's answer, as task_status has it; without, the answer of the agent's last task that ended, whatever it does next. A task's answer is its report and what the agent wrote after it (a memory note, a closing line), whole. Falls back to the hooks' last copy when no task of the agent has an answer yet.",
             "inputSchema": {
               "type": "object",
               "properties": {
                 "id": {
                   "type": "string",
                   "description": "The agent ID"
+                },
+                "taskId": {
+                  "type": "string",
+                  "description": "A task's id (t-xxxxxxxx, or the id task_status gives): that task's answer"
                 }
               },
               "required": [

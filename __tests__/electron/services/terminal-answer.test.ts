@@ -146,7 +146,8 @@ describe('the final answer of a task, from its transcript lines', () => {
 
   it('skips a damaged line and reads on (8)', () => {
     const lines = [assistant(2, 'a', [text('before')]), '{"type":"assistant", broken', assistant(3, 'b', [text('after')])];
-    expect(finalAnswerOf(lines, window)).toBe('after');
+    // Both read: the longer first, as the report, and what followed it (13, since 2.0.5).
+    expect(finalAnswerOf(lines, window)).toBe('before\n\nafter');
     expect(finalAnswerOf([assistant(2, 'a', [text('before')]), '{oops'], window)).toBe('before');
   });
 

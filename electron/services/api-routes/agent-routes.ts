@@ -1933,6 +1933,20 @@ function whenItApplies(
   return { applies: 'now', session: 'kept', text: 'Its CLI already runs on these settings: its session goes on as it is.' };
 }
 
+/**
+ * The agent's last task's answer, kept in the ledger whatever the agent did next and across a restart: what
+ * get_agent_output gives without a task id (the DB brief fix-answer-per-task-2810.md). Read by whom GET /api/tasks/:id
+ * answers: the task's asker, the agent itself, or Tars; nobody else is shown it.
+ */
+function lastAnswerFor(agent: AgentStatus, req: RouteRequest): { taskId: string; result: string; endedAt: number | null } | undefined {
+  const ledger = liveTaskLedger();
+  const last = ledger?.lastAnswerOf(agent.id);
+  if (!last) return undefined;
+  const callerId = resolveCallerId(req);
+  if (req.internal || callerId === agent.id || (callerId && callerId === ledger?.task(last.taskId)?.requesterAgentId)) return last;
+  return undefined;
+}
+
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
@@ -2061,7 +2075,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     const full = req.url.searchParams.get('full') === 'true';
-    sendJson({ agent: full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent) });
+    const lastAnswer = lastAnswerFor(agent, req);
+    sendJson({ agent: { ...(full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent)), ...(lastAnswer ? { lastAnswer } : {}) } });
   });
 
   // GET /api/agents/:id/bootstrap: identity + team roster context, injected

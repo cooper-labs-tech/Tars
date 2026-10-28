@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
+import { reportOf } from './terminal-answer';
 
 /**
  * Codex's turns, read from its own session log and told to Tars the way Claude Code's hooks tell it (2.0.4).
@@ -43,6 +44,8 @@ export type CodexEvent =
   | { kind: 'session'; id: string; cwd: string; subagent: boolean; at: number; forkedFrom?: string }
   | { kind: 'turn_started'; turnId: string }
   | { kind: 'user'; text: string }
+  /** A message codex wrote in the turn (an `AgentMessage` item): its answer is the turn's report (reportOf). */
+  | { kind: 'agent'; text: string }
   | { kind: 'turn_complete'; turnId: string; message: string | null; error: string | null }
   | { kind: 'turn_aborted'; turnId: string };
 
@@ -91,11 +94,11 @@ export function codexEventOf(line: string): CodexEvent | null {
   }
   if (p.type === 'item_completed') {
     const item = p.item as { type?: unknown; content?: unknown } | undefined;
-    if (item?.type !== 'UserMessage' || !Array.isArray(item.content)) return null;
+    if ((item?.type !== 'UserMessage' && item?.type !== 'AgentMessage') || !Array.isArray(item.content)) return null;
     const text = item.content
       .map(c => (c && typeof c === 'object' && typeof (c as { text?: unknown }).text === 'string' ? (c as { text: string }).text : ''))
       .join('');
-    return { kind: 'user', text };
+    return item.type === 'UserMessage' ? { kind: 'user', text } : { kind: 'agent', text };
   }
   return null;
 }
@@ -149,6 +152,8 @@ interface Bound {
   turnOpen: boolean;
   startPosted: boolean;
   asking: boolean;
+  /** What codex wrote in the open turn, in order: the turn's answer is its report (reportOf), not its last line alone. */
+  said?: string[];
   /** Bound as resumed: no session_meta comes, so its registration is posted at its first lines. */
   resumed?: boolean;
 }
@@ -437,6 +442,9 @@ export class CodexSessionWatch {
       } else if (event.kind === 'turn_started') {
         b.turnOpen = true;
         b.startPosted = false;
+        b.said = [];
+      } else if (event.kind === 'agent') {
+        (b.said ??= []).push(event.text);
       } else if (event.kind === 'user') {
         if (b.turnOpen && !b.startPosted) {
           b.startPosted = true;
@@ -450,7 +458,9 @@ export class CodexSessionWatch {
         if (event.error) {
           await this.post(b, '/api/hooks/status', { status: 'error', error_kind: 'codex_turn_failed', error_message: event.error });
         } else {
-          if (event.message) await this.post(b, '/api/hooks/output', { hook: 'Stop', output: event.message });
+          const answer = reportOf(b.said ?? []) ?? event.message;
+          b.said = [];
+          if (answer) await this.post(b, '/api/hooks/output', { hook: 'Stop', output: answer });
           await this.post(b, '/api/hooks/status', { hook: 'Stop', status: 'idle' });
           await this.post(b, '/api/hooks/agent-stopped', { hook: 'Stop' });
         }
