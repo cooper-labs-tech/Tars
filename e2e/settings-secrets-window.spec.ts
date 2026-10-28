@@ -8,19 +8,19 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * The window's side of #466 (2.0.4): since the secrets left ~/.tars, Settings is handed none, and holds none.
- * Frames: `Secrets · Settings, Telegram`, `· Settings, Providers, an API key`, `· Settings, Hermes connection`,
+ * Frames: `Secrets · Settings, Telegram` (whose rows Slack's now are: Telegram's bot went in 2.0.5, PR 545, and Settings,
+ * Telegram says Telegram goes through Hermes, holding nothing), `· Settings, Providers, an API key`, `· Settings, Hermes connection`,
  * `· states`, `· CLIs, one detection` (each with its light copy).
  *
  * The real app on a sandbox HOME whose secrets are where 2.0.4 keeps them (~/.tars-private/settings-secrets.json, and
  * Hermes's connection with its token beside it, in hermes-token), every bot off. Tars's own dialog and the clipboard
  * are stood in for in the main process, so the run reads what Tars showed and copied, and never touches the machine's
  * clipboard. Asserted, once with the classic shell and once with the new interface:
- * 1. Telegram, Slack, Discord, X, Memory backends and Providers: each secret seeded reads set, and no field, text or
- *    attribute of the page holds it, or the mask main hands the window. Telegram's bot token: replace opens an empty
- *    field; a token set through it is the private file's and the row reads set again; clear asks once, then the file
- *    holds none, the row offers its empty field and the bot cannot be turned on. Its auth token: regenerate has Tars
- *    show the new token in its own dialog, never in the page; copy token has Tars copy it. OpenRouter's key: set and
- *    cleared through its row, its label says so. A save of a switch leaves every secret as it was.
+ * 1. Slack, Discord, X, Memory backends and Providers: each secret seeded reads set, and no field, text or attribute
+ *    of the page holds it, or the mask main hands the window; Telegram holds no secret at all. Slack's bot token:
+ *    replace opens an empty field; a token set through it is the private file's and the row reads set again; clear
+ *    asks once, then the file holds none and the row offers its empty field. OpenRouter's key: set and cleared
+ *    through its row, its label says so.
  * 2. Hermes: the form's token reads set and is in no field, and its row says switching to OAuth keeps it, unused
  *    (nothing in the form clears it); replace then save puts a new one in its connection; copy secret, on Hermes's
  *    block in Gateways since #469's window, has Tars copy the webhook's secret, which the page never holds.
@@ -40,7 +40,6 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 const MASK = '•'.repeat(8);
 const SEEDED = {
-  telegramBotToken: '7000001:e2e-window-bot-token', telegramAuthToken: 'e2e-window-auth-token-0000',
   slackBotToken: 'xoxb-e2e-window-slack', slackAppToken: 'xapp-e2e-window-slack', discordBotToken: 'e2e-window-discord-token',
   socialDataApiKey: 'e2e-window-socialdata', xApiKey: 'e2e-window-x-key', xApiSecret: 'e2e-window-x-secret',
   xAccessToken: 'e2e-window-x-access', xAccessTokenSecret: 'e2e-window-x-access-secret',
@@ -48,7 +47,7 @@ const SEEDED = {
   memoryGbrainAuthToken: 'e2e-window-gbrain', memoryHonchoApiKey: 'e2e-window-honcho',
 };
 const HERMES_TOKEN = 'e2e-window-hermes-form-token';
-const NEW_BOT = '7000002:e2e-window-bot-token-NEW';
+const NEW_BOT = 'xoxb-e2e-window-slack-NEW';
 const NEW_ROUTER = 'sk-or-e2e-window-openrouter-NEW';
 const NEW_HERMES = 'e2e-window-hermes-form-token-NEW';
 const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
@@ -71,9 +70,9 @@ function seed(newInterface: boolean, tag: string) {
   fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface,
-    telegramEnabled: false, slackEnabled: false, discordEnabled: false, socialDataEnabled: false, xPostingEnabled: false,
+    slackEnabled: false, discordEnabled: false, socialDataEnabled: false, xPostingEnabled: false,
     openRouterEnabled: true, deepSeekEnabled: true, memoryGbrainEnabled: false, memoryHonchoEnabled: false,
-    telegramRequireMention: false, cliPaths: { codex, additionalPaths: [] },
+    cliPaths: { codex, additionalPaths: [] },
   }));
   fs.writeFileSync(path.join(priv, 'settings-secrets.json'), JSON.stringify(SEEDED), { mode: 0o600 });
   fs.writeFileSync(path.join(priv, 'hermes-connection.json'), JSON.stringify({ mode: 'remote', url: 'http://127.0.0.1:9', authMode: 'token' }), { mode: 0o600 });
@@ -151,7 +150,7 @@ async function launch(newInterface: boolean, tag: string, base: number, env: (sa
 for (const newInterface of [false, true]) {
   const shell = newInterface ? ' (new interface)' : '';
 
-  test(`settings shows each secret as set and never holds it; telegram's and openrouter's are set and cleared through their rows${shell}`, async () => {
+  test(`settings shows each secret as set and never holds it; slack's and openrouter's are set and cleared through their rows${shell}`, async () => {
     test.setTimeout(300_000);
     const s = await launch(newInterface, 'pages', newInterface ? 31552 : 31551);
     const values: Record<string, unknown> = { newInterface };
@@ -159,21 +158,18 @@ for (const newInterface of [false, true]) {
     const { page } = s;
     const needles = [...Object.values(SEEDED), MASK];
     try {
-      // Telegram: both tokens set, held nowhere.
+      // Telegram: nothing of a bot since 2.0.5, and no secret.
       await section(page, 'Integrations', 'Telegram');
-      await expect(rowOf(page, 'Bot token')).toContainText('a token is set', { timeout: 30_000 });
-      await expect(rowOf(page, 'Secret auth token')).toContainText('a token is set');
-      await expect(rowOf(page, 'Bot token').locator('input')).toHaveCount(0);
+      await expect(rowOf(page, 'Telegram goes through Hermes')).toBeVisible({ timeout: 30_000 });
+      await expect(rowsOf(page).locator('input')).toHaveCount(0);
       expect(await held(page, needles), 'Telegram holds no secret').toEqual([]);
-      await stepShot(page, '01-telegram-set');
+      await stepShot(page, '01-telegram-through-hermes');
 
-      // A save of a switch carries no secret: every one stays as it was.
-      await rowOf(page, 'Require @mention').getByRole('switch').click();
-      await expect.poll(() => s.settings().telegramRequireMention, { timeout: 15_000 }).toBe(true);
+      // Slack's bot token: replace opens an empty field; the token set lands in the private file and reads set again.
+      await section(page, 'Integrations', 'Slack');
+      await expect(rowOf(page, 'Bot token')).toContainText('a token is set', { timeout: 30_000 });
+      await expect(rowOf(page, 'Bot token').locator('input')).toHaveCount(0);
       expect(s.secrets()).toMatchObject(SEEDED);
-      expect(JSON.stringify(s.settings())).not.toContain(MASK);
-
-      // Replace opens an empty field; the token set lands in the private file and reads set again.
       await rowOf(page, 'Bot token').getByRole('button', { name: 'replace', exact: true }).click();
       const field = rowOf(page, 'Bot token').locator('input');
       await expect(field).toHaveValue('');
@@ -181,39 +177,24 @@ for (const newInterface of [false, true]) {
       await rowOf(page, 'Bot token').getByRole('button', { name: 'set', exact: true }).click();
       await expect(rowOf(page, 'Bot token')).toContainText('a token is set', { timeout: 15_000 });
       await expect(rowOf(page, 'Bot token').locator('input')).toHaveCount(0);
-      await expect.poll(() => s.secrets().telegramBotToken, { timeout: 15_000 }).toBe(NEW_BOT);
+      await expect.poll(() => s.secrets().slackBotToken, { timeout: 15_000 }).toBe(NEW_BOT);
       expect(await held(page, [...needles, NEW_BOT]), 'the new token is held nowhere').toEqual([]);
-      await stepShot(page, '02-telegram-replaced');
+      await stepShot(page, '02-slack-replaced');
 
-      // Clear asks once; then the file holds none, the row offers its empty field, and the bot cannot be turned on.
+      // Clear asks once; then the file holds none and the row offers its empty field.
       await rowOf(page, 'Bot token').getByRole('button', { name: 'clear', exact: true }).click();
       const ask = page.getByRole('alertdialog', { name: 'Clear Bot token' });
       await expect(ask).toBeVisible();
-      await stepShot(page, '03-telegram-clear-asks');
+      await stepShot(page, '03-slack-clear-asks');
       await ask.getByRole('button', { name: 'clear', exact: true }).click();
-      await expect.poll(() => s.secrets().telegramBotToken ?? '', { timeout: 15_000 }).toBe('');
+      await expect.poll(() => s.secrets().slackBotToken ?? '', { timeout: 15_000 }).toBe('');
       await expect(rowOf(page, 'Bot token').locator('input')).toHaveValue('');
-      await expect(rowOf(page, 'Enable Telegram bot').getByRole('switch')).toBeDisabled();
-
-      // The auth token: Tars shows the new one in its own dialog, and copies it; the page holds it never.
-      await rowOf(page, 'Secret auth token').getByRole('button', { name: 'regenerate', exact: true }).click();
-      await expect.poll(async () => (await handoffs(s.app)).dialogs.length, { timeout: 15_000 }).toBe(1);
-      const minted = s.secrets().telegramAuthToken;
-      expect(minted).not.toBe(SEEDED.telegramAuthToken);
-      const shown = (await handoffs(s.app)).dialogs[0];
-      expect(shown.message).toBe('Telegram authorization token');
-      expect(shown.detail).toContain(minted);
-      await rowOf(page, 'Secret auth token').getByRole('button', { name: 'copy token', exact: true }).click();
-      await expect(rowOf(page, 'Secret auth token').getByRole('button', { name: 'copied', exact: true })).toBeVisible();
-      expect((await handoffs(s.app)).copied).toEqual([minted]);
-      expect(await held(page, [...needles, minted]), 'the minted token is held nowhere').toEqual([]);
-      await stepShot(page, '04-telegram-auth-copied');
-      keep({ telegram: { secretsAfter: Object.keys(s.secrets()), dialogs: (await handoffs(s.app)).dialogs.map((d) => d.message) } });
+      keep({ slack: { secretsAfter: Object.keys(s.secrets()) } });
 
       // Slack, Discord, X and SocialData, Memory backends: each set, held nowhere.
       const readsSet: Record<string, string[]> = {};
       for (const [group, child, rows] of [
-        ['Integrations', 'Slack', ['Bot token', 'App token']],
+        ['Integrations', 'Slack', ['App token']],
         ['Integrations', 'Discord', ['Bot token']],
         ['Integrations', 'X (Twitter)', ['SocialData key', 'Consumer key', 'Consumer secret', 'Access token', 'Access token secret']],
         ['Workspace', 'Memory Backends', ['Auth token', 'API key']],

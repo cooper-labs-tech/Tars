@@ -13,7 +13,6 @@
  * window sets too): __tests__/lib/secret-settings.test.ts fails when the two lists part.
  */
 export const WINDOW_SECRETS = [
-  'telegramBotToken', 'telegramAuthToken',
   'slackBotToken', 'slackAppToken', 'slackSigningSecret',
   'discordBotToken',
   'jiraApiToken', 'socialDataApiKey',

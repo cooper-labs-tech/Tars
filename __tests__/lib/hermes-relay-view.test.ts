@@ -9,8 +9,8 @@ import type { HermesRelayStatus } from '../../src/types/electron';
  * Hermes` with its light copy. Written before the code. How it can fail:
  * 1. a state under another's word or tone: unreachable in the waiting colour,
  *    ready not green, a word written with its hyphen ("not-configured");
- * 2. off, or no status yet, shows a word, or anything but the warning that
- *    turning it on erases the bot's token;
+ * 2. off, or no status yet, shows a word, or anything but what turning it on
+ *    does (since 2.0.5 there is no bot of Tars's own whose token it erases);
  * 3. what waits is not said, said when nothing waits, or said "1 messages";
  * 4. a time from another day read as today's, or a missing or broken time
  *    printed as "Invalid Date", "NaN" or "undefined";
@@ -51,7 +51,8 @@ describe('relayView', () => {
       expect(v.tone).toBeNull();
       expect(v.line).toBe(RELAY_OFF_LINE);
     }
-    expect(RELAY_OFF_LINE).toContain("Turning it on erases the Tars bot's token and switches the bot off.");
+    expect(RELAY_OFF_LINE).toContain('Hermes becomes the only voice on your Telegram');
+    expect(RELAY_OFF_LINE).not.toMatch(/bot/i);
   });
 
   it('says what waits for Hermes, in the singular and the plural, and nothing when nothing does (3)', () => {
