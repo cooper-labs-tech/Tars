@@ -11,7 +11,7 @@ import { AgentStatus, AppSettings } from '../types';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENTS_FILE, API_TOKEN_FILE, DATA_DIR, dataPath } from '../constants';
 import { dropRejectedTails, keysHandedToClaude, maskKeyFragments } from './key-fragments';
-import { ensureDataDir, isSuperAgent } from '../utils';
+import { ensureDataDir, isSuperAgent, sendNotification } from '../utils';
 import { isSkillName } from '../utils/skill-name';
 import { quoted } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
@@ -1038,8 +1038,18 @@ function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
         pending.checkArmed = true;
         scheduleDeliveryCheck(agentId, ptyId);
       } else {
+        // Given up, and said: never a silent drop, and never "it never began", which it may have (the Audit's Low on #549).
         console.warn(`[agent] ${live.name || live.id} has neither taken its task nor said it is idle in ${DELIVERY_ASK_FOR_MS / 60_000} minutes: no longer asked, nothing typed again`);
         live.pendingDelivery = undefined;
+        saveAgents();
+        const settings = readAppSettingsFromDisk();
+        sendNotification(
+          `${live.name || 'An agent'}: its start could not be confirmed`,
+          `Tars could not confirm in ${DELIVERY_ASK_FOR_MS / 3_600_000} hours that it began its task. It may have run: look at its terminal before sending it again.`,
+          live.id, { ...settings, notificationsEnabled: settings.notificationsEnabled === true },
+        );
+        // agent-watch reads this module: imported when needed.
+        void import('../services/agent-watch').then((watch) => watch.tellStartUnconfirmed(live.id));
       }
       return;
     }

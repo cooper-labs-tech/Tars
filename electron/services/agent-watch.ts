@@ -585,6 +585,18 @@ export function tellDelegationCut(requesterId: string, workerId: string, firstLi
   handToRequester(requesterId, child, { kind: 'not_delivered', status: child.status, reason: 'interrupted', ...(title ? { title } : {}) });
 }
 
+/**
+ * A task handed at a launch that Tars could not confirm began: in 2 hours its CLI neither started a turn on it nor said
+ * it was idle at its prompt (core/agent-manager.ts, the delivery check). Its requester is told, once, in words that do
+ * not say it never began, since it may have run (the Audit's Low on #549).
+ */
+export function tellStartUnconfirmed(workerId: string): void {
+  const child = agents.get(workerId);
+  const link = child?.requestedBy;
+  if (!child || !link || link.agentId === workerId) return;
+  handToRequester(link.agentId, child, { kind: 'not_delivered', status: child.status, reason: 'unconfirmed', handedAt: child.workHandedAt, ...(link.taskRef ? { taskRef: link.taskRef } : {}) });
+}
+
 /** What a requester is owed about a child: held for it, and typed in when it is free. */
 function handToRequester(requesterId: string, child: AgentStatus, news: News): void {
   const link = { agentId: requesterId };
@@ -886,6 +898,7 @@ function describeNews(news: News): string {
   if (news.kind === 'not_delivered') {
     if (news.reason === 'cancelled') return `never ran what you asked of it: it was cancelled before it went in, ${news.detail ?? 'by another agent'}. Nothing was retried; ask again if it is still needed`;
     if (news.reason === 'deleted') return 'was deleted before it finished what you asked of it. Nothing was retried; ask again if it is still needed';
+    if (news.reason === 'unconfirmed') return 'was handed your task at its launch, and Tars could not confirm it began: in 2 hours it neither started a turn on it nor said it was idle at its prompt. It may have run: read its output with get_agent_output before asking again'
     if (news.reason === 'interrupted') return 'was running a task you delegated to it when Tars stopped: the run was cut, and nothing was retried; ask again if it is still needed';
     if (news.reason === 'cut') return 'was stopped while working on what you asked of it, and did not finish. Nothing was retried; ask again if it is still needed';
     const why = news.reason === 'stopped' ? 'it was stopped before it ran it'
