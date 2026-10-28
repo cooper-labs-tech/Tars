@@ -52,12 +52,18 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  *
  * The state belongs to one question: the next call's (another askedAt) starts
  * afresh, whatever the last one left open, its line measured again.
+ *
+ * A file tool asked with its content withheld from Tars (`withheld`, PR 538):
+ * the path alone, said withheld, and deny and ask in terminal, never allow nor
+ * show all. Tars cannot see what would be written, and refuses an allow anyway
+ * (frame `Permission asked of Tars`, its withheld row).
  */
 export default function PermissionAskNotice({ agent, layout }: {
   agent: Pick<AgentStatus, 'id' | 'status' | 'permissionAsk'>;
   layout: 'panel' | 'window';
 }) {
   const askedAt = agent.permissionAsk?.askedAt;
+  const withheld = agent.permissionAsk?.withheld === true;
   const [kept, setKept] = useState<State>(() => fresh(askedAt));
   const state: State = kept.of === askedAt ? kept : fresh(askedAt);
   const update = useCallback(
@@ -154,10 +160,10 @@ export default function PermissionAskNotice({ agent, layout }: {
           <>
             <p className="min-w-0 flex-1 flex items-baseline gap-1 text-[11px] leading-tight text-muted-foreground">
               <span className="shrink-0 text-foreground">{line.who}</span>
-              <span ref={measure} data-subject className="min-w-0 truncate font-mono">{line.subject}</span>
+              <span ref={measure} data-subject className="min-w-0 truncate font-mono">{withheld ? `${line.subject} · content withheld` : line.subject}</span>
             </p>
             <div className="shrink-0 flex items-center">
-              {state.fits ? (
+              {withheld ? null : state.fits ? (
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>
               ) : (
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ shown: true })} title="Read the whole call before allowing it">show all</Button>
@@ -184,6 +190,7 @@ export default function PermissionAskNotice({ agent, layout }: {
       {line.subject && (
         <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
           {line.subject}
+          {withheld && <span className="text-muted-foreground"> · content withheld</span>}
         </p>
       )}
       {(line.reason || line.rule) && (
@@ -210,7 +217,7 @@ export default function PermissionAskNotice({ agent, layout }: {
         </div>
       ) : late ? lateLine : (
         <div className="flex items-center gap-1.5">
-          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>
+          {!withheld && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Put it to the terminal's dialog, as before">ask in terminal</Button>
         </div>
