@@ -153,7 +153,7 @@ test('with the new interface on, the shell of the frames: the main menu, Tars fi
     await page.goto(`${DEV_URL}/settings`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(SPLASH)).toHaveCount(0, { timeout: 30_000 });
     const rowsOff = page.locator('[data-settings-row]');
-    await expect(rowsOff.filter({ hasText: 'Default provider' })).toBeVisible({ timeout: 60_000 });
+    await expect(rowsOff.filter({ hasText: 'Start agents when Tars opens' })).toBeVisible({ timeout: 60_000 });
     const rowOff = rowsOff.filter({ hasText: 'New interface' });
     await expect(rowOff).toHaveCount(1);
     await expect(rowsOff.last()).toContainText('New interface');

@@ -174,7 +174,6 @@ export const DEFAULT_APP_SETTINGS = {
   customOpenAIBaseUrl: '',
   customOpenAIApiKey: '',
   customOpenAIModel: '',
-  defaultProvider: 'claude',
   obsidianVaultPaths: [] as string[],
   terminalFontSize: 11,
   terminalTheme: 'dark' as const,

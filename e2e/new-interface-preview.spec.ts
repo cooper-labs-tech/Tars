@@ -54,7 +54,7 @@ test('an install that never chose it: Settings, Preferences offers New interface
 
     // 1 to 4: the row, last and off, under today's interface.
     const rows = page.locator('[data-settings-row]');
-    await expect(rows.filter({ hasText: 'Default provider' })).toBeVisible({ timeout: 90_000 });
+    await expect(rows.filter({ hasText: 'Start agents when Tars opens' })).toBeVisible({ timeout: 90_000 });
     const row = rows.filter({ hasText: 'New interface' });
     await expect(row).toHaveCount(1);
     await expect(rows.last()).toContainText('New interface');
