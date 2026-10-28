@@ -127,8 +127,9 @@ for (const newInterface of [false, true]) {
       expect.soft([one.slots, one.floors]).toEqual([1, { diskGb: 15, memFreePct: 20 }]);
       expect.soft(one.machine?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
       expect.soft(one.holders[0].pid).toBe(pidOf('slot-a.pid'));
-      expect.soft(one.holders[0].tree?.processes ?? 0).toBeGreaterThanOrEqual(2);
-      expect.soft(one.holders[0].tree?.memoryMb ?? 0).toBeGreaterThan(0);
+      // Its tree: tars-slot and the command under it, read from ps (at most every 2 s, so polled).
+      await expect.poll(async () => (await status()).holders[0]?.tree?.processes ?? 0, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
+      expect.soft((await status()).holders[0].tree?.memoryMb ?? 0).toBeGreaterThan(0);
       expect.soft(one.alerts).toEqual([]);
 
       // 2. o asks for a release gate after b: o first.
