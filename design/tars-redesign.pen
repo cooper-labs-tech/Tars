@@ -766908,7 +766908,7 @@
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Data Engineer's session ended at 12:10 and 3 of its processes run on: next dev, a postgres container, node. 1.4 GB. Tars ends them on a stop of the agent; it does not end them by itself.",
+                      "content": "Data Engineer's session ended at 12:10 and 3 of what it started run on: next dev, node, the container postgres. Tars ends them on a stop of the agent; it does not end them by itself.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -766935,11 +766935,236 @@
                           "id": "o3fc7u",
                           "name": "l",
                           "fill": "$text-secondary",
-                          "content": "show them",
+                          "content": "hide them",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
                           "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "H37sR",
+                  "name": "Outlived",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mo63U",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14,
+                        8,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YCVGA",
+                          "name": "caption",
+                          "fill": "$text-muted",
+                          "content": "WHAT OUTLIVED ITS SESSION · SINCE 12:10",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "lW3f2",
+                          "name": "spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "kkBlj",
+                          "name": "masked",
+                          "fill": "$text-muted",
+                          "content": "secrets masked",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yVGtm",
+                      "name": "proc next dev",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        7,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "TVcNs",
+                          "name": "l1",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "J3JIG",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "next dev",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Q0spJ",
+                              "name": "pid",
+                              "fill": "$text-muted",
+                              "content": "pid 48211",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "A7k9FZ",
+                          "name": "command",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "node …/node_modules/.bin/next dev --port 3100",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yOmvx",
+                      "name": "proc node",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        7,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "dbfgL",
+                          "name": "l1",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "h2ajMr",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "node",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "QcNAv",
+                              "name": "pid",
+                              "fill": "$text-muted",
+                              "content": "pid 48230",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "UJu5A",
+                          "name": "command",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "node scripts/seed.mjs --password ••••••••",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Hrj2y",
+                      "name": "proc postgres (3f2a9c1b07e4)",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        7,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "hqfnP",
+                          "name": "l1",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "HPqci",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "postgres (3f2a9c1b07e4)",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "E0v8u",
+                              "name": "pid",
+                              "fill": "$text-muted",
+                              "content": "container",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
                         }
                       ]
                     }
@@ -770113,7 +770338,7 @@
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Data Engineer's session ended at 12:10 and 3 of its processes run on: next dev, a postgres container, node. 1.4 GB. Tars ends them on a stop of the agent; it does not end them by itself.",
+                      "content": "Data Engineer's session ended at 12:10 and 3 of what it started run on: next dev, node, the container postgres. Tars ends them on a stop of the agent; it does not end them by itself.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -770140,11 +770365,236 @@
                           "id": "bnuBX",
                           "name": "l",
                           "fill": "$text-secondary",
-                          "content": "show them",
+                          "content": "hide them",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
                           "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "FZEzn",
+                  "name": "Outlived",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "hYBbM",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14,
+                        8,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zFTzx",
+                          "name": "caption",
+                          "fill": "$text-muted",
+                          "content": "WHAT OUTLIVED ITS SESSION · SINCE 12:10",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ucuZs",
+                          "name": "spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "N3AXJy",
+                          "name": "masked",
+                          "fill": "$text-muted",
+                          "content": "secrets masked",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "a9Txv",
+                      "name": "proc next dev",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        7,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Q7Ts3",
+                          "name": "l1",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "WgMzI",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "next dev",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "aHplH",
+                              "name": "pid",
+                              "fill": "$text-muted",
+                              "content": "pid 48211",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y2qoTa",
+                          "name": "command",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "node …/node_modules/.bin/next dev --port 3100",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "AXmjZ",
+                      "name": "proc node",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        7,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "yonom",
+                          "name": "l1",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "wkVfd",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "node",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZN9mS",
+                              "name": "pid",
+                              "fill": "$text-muted",
+                              "content": "pid 48230",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "v9tu6C",
+                          "name": "command",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "node scripts/seed.mjs --password ••••••••",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VTo6j",
+                      "name": "proc postgres (3f2a9c1b07e4)",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "top": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        7,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "S8XsI",
+                          "name": "l1",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "rQvYi",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "postgres (3f2a9c1b07e4)",
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Zd4E3",
+                              "name": "pid",
+                              "fill": "$text-muted",
+                              "content": "container",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
                         }
                       ]
                     }

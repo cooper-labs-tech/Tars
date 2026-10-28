@@ -20,13 +20,19 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. a command line in the tree shows a secret: the agent's own token, from its environment, or a password after a
  *    flag (--password <value>, the Audit's Low on PR 548), which PR 546 masks as [redacted];
  * 7. "measure the disk again" does not measure: the worktree's size stays unmeasured, or the time does not move;
- * 8. an uncaught error in the page.
+ * 8. an uncaught error in the page;
+ * 9. what outlived an agent's session (its record's leftRunning, services/born-watch.ts) is not said on its row, nor in a
+ *    notice with since when and what, or "show them" does not list each process with its pid and masked command and each
+ *    container, or a secret in such a command shows (frame `· agents and projects · states`, pane `what outlived a
+ *    session · alert`). Seeded on Meridian Writer, which has no terminal: macOS and Linux record it, Windows never.
  *
  * The artefact: the table as read, the detail, and the measured sizes, in values.json; a screenshot of each step.
  */
 
 const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
 const PASSWORD = 'e2e-flag-secret-4815162342';
+const OUTLIVED_SECRET = 'e2e-outlived-secret-2718281828';
+const OUTLIVED_SINCE = '2026-10-28T08:10:00.000Z';
 
 for (const newInterface of [false, true]) {
   test(`resources, agents and projects: each project's agents, an agent's tree and disk, the disk measured on demand${newInterface ? ' (new interface)' : ''}`, async () => {
@@ -50,7 +56,13 @@ for (const newInterface of [false, true]) {
         "require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', '--password', " + JSON.stringify(PASSWORD) + "], { stdio: 'ignore' });",
         "process.stdout.write('stand-in ready\\r\\n');", 'setInterval(() => {}, 1000);', 'process.stdin.resume();', ''].join('\n')) }),
       agent('a-harbor-2', 'Harbor Reviewer', harbor),
-      agent('a-meridian', 'Meridian Writer', meridian),
+      // 9. What its ended session left running, as born-watch records it (one line each, `pid <n>: <command>`).
+      agent('a-meridian', 'Meridian Writer', meridian, { leftRunning: {
+        pids: [48211, 48230],
+        commands: ['pid 48211: node /x/meridian/node_modules/.bin/next dev --port 3100', `pid 48230: node scripts/seed.mjs --password ${OUTLIVED_SECRET}`],
+        containers: ['postgres (3f2a9c1b07e4)'],
+        since: OUTLIVED_SINCE,
+      } }),
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([harbor, meridian]));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
@@ -133,6 +145,28 @@ for (const newInterface of [false, true]) {
       await expect(builder).toContainText(/\b3 MB\b/, { timeout: 60_000 });
       seen.builderRow = (await builder.innerText()).replace(/\s+/g, ' ');
       await stepShot(page, `${tag}2-detail-measured`);
+
+      // 9. What outlived Meridian Writer's session: its row, the notice, and each item once shown.
+      const writer = view.locator('[data-agent-row="Meridian Writer"]');
+      await expect(writer.locator('[data-outlived-note]')).toHaveText('3 outlived its session');
+      const at = new Date(OUTLIVED_SINCE);
+      const hhmm = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+      const outlived = view.locator('[data-outlived="Meridian Writer"]');
+      await expect(outlived).toContainText(`Meridian Writer's session ended at ${hhmm} and 3 of what it started run on: next dev, node, the container postgres.`);
+      await expect(outlived).toContainText('Tars ends them on a stop of the agent; it does not end them by itself.');
+      await expect(view.locator('[data-outlived]')).toHaveCount(1);
+      await outlived.getByRole('button', { name: 'show them' }).click();
+      const list = outlived.getByRole('list', { name: 'What outlived its session' });
+      await expect(list.getByRole('listitem')).toHaveCount(3);
+      const items = (await list.getByRole('listitem').allInnerTexts()).map((t) => t.replace(/\s+/g, ' '));
+      seen.outlived = { notice: (await outlived.getByRole('status').innerText()).replace(/\s+/g, ' '), items };
+      expect(items[0]).toContain('pid 48211');
+      expect(items[1]).toContain('pid 48230');
+      expect(items[1]).toContain('[redacted]');
+      expect(items[2]).toContain('postgres (3f2a9c1b07e4)');
+      expect(await outlived.innerText()).not.toContain(OUTLIVED_SECRET);
+      await expect(outlived.getByRole('button', { name: 'hide them' })).toBeVisible();
+      await stepShot(page, `${tag}3-outlived`);
 
       // 8.
       seen.errors = errors;

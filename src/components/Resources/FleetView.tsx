@@ -4,10 +4,11 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
-import { Box, Empty, Figure, Figures, Unread } from './bits';
+import { Box, Empty, Figure, Figures, Notice, Unread } from './bits';
 import type { AgentResources, FleetResources, ProjectResources } from './contract';
 import { NOT_READ, bytes, clock, lasted, mb, mbBytes, pct, sum } from './format';
 import { useFleetResources } from './hooks';
+import { outlivedNote, outlivedNotice, processName } from './outlived';
 
 const TONE: Record<string, StatusTone> = { working: 'running', waiting: 'waiting', error: 'error' };
 const INK: Record<string, string> = { working: 'text-status-running', waiting: 'text-status-waiting', error: 'text-status-error' };
@@ -64,6 +65,9 @@ function AgentRow({ agent, chosen, onChoose, measuring }: { agent: AgentResource
       className={`${COLS} w-full pl-10 pr-3.5 py-[7px] text-left ${chosen ? 'bg-bg-elevated border border-border-accent' : 'border-t border-border hover:bg-secondary/60'}`}>
       <span className="flex flex-col gap-0.5 min-w-0 overflow-hidden">
         <span className="text-[12px] text-foreground truncate">{agent.name}</span>
+        {outlivedNote(agent.outlived) && (
+          <span data-outlived-note className="flex items-center gap-1.5 font-mono text-[10px] text-status-waiting"><StatusSquare tone="waiting" />{outlivedNote(agent.outlived)}</span>
+        )}
       </span>
       <span className="flex items-center gap-1.5 min-w-0 font-mono text-[11px]">
         <span className={INK[agent.status] ?? 'text-muted-foreground'}>{agent.status}</span>
@@ -74,6 +78,42 @@ function AgentRow({ agent, chosen, onChoose, measuring }: { agent: AgentResource
       <span className="text-right font-mono text-[11px] text-text-secondary">{cell(wtBytes(agent), measuring)}</span>
       <span className="text-right font-mono text-[11px] text-text-secondary">{cell(agent.tmp ? agent.tmp.bytes : 0, measuring)}</span>
     </button>
+  );
+}
+
+/**
+ * What outlived an agent's session: the notice, and once shown each process with its pid and masked command, each
+ * container by name (frame `· agents and projects · states`, pane `what outlived a session · alert`). Tars ends them
+ * on a stop of the agent, never by itself: the window only shows them.
+ */
+function Outlived({ agent }: { agent: AgentResources }) {
+  const [shown, setShown] = useState(false);
+  const o = agent.outlived;
+  const notice = outlivedNotice(agent.name, o);
+  if (!o || !notice) return null;
+  return (
+    <div data-outlived={agent.name} className="flex flex-col gap-2">
+      <Notice tone="waiting" actions={<Button size="sm" className="font-mono shrink-0" aria-expanded={shown} onClick={() => setShown(!shown)}>{shown ? 'hide them' : 'show them'}</Button>}>
+        {notice}
+      </Notice>
+      {shown && (
+        <Box name={`What outlived ${agent.name}'s session`} caption={`WHAT OUTLIVED ITS SESSION${o.since !== null ? ` · SINCE ${clock(o.since)}` : ''}`} note="secrets masked">
+          <ul aria-label="What outlived its session">
+            {o.processes.map((p) => (
+              <li key={p.pid} className="flex flex-col gap-[3px] px-3.5 py-[7px] border-t border-border">
+                <p className="flex items-center gap-2"><span className="flex-1 min-w-0 text-[11.5px] text-foreground truncate">{processName(p.command)}</span><span className="font-mono text-[11px] text-muted-foreground">{`pid ${p.pid}`}</span></p>
+                <p data-command className="font-mono text-[10px] leading-[1.45] text-muted-foreground break-all">{p.command}</p>
+              </li>
+            ))}
+            {o.containers.map((c) => (
+              <li key={c} className="flex items-center gap-2 px-3.5 py-[7px] border-t border-border">
+                <span className="flex-1 min-w-0 text-[11.5px] text-foreground truncate">{c}</span><span className="font-mono text-[11px] text-muted-foreground">container</span>
+              </li>
+            ))}
+          </ul>
+        </Box>
+      )}
+    </div>
   );
 }
 
@@ -176,6 +216,7 @@ export function FleetView({ chosen, onChoose }: { chosen: string | null; onChoos
         </Box>
         {pick && <AgentDetail agent={pick} project={pickProject} diskMeasuredAt={state?.diskMeasuredAt ?? null} />}
       </div>
+      {agents.filter((a) => a.outlived).map((a) => <Outlived key={a.id} agent={a} />)}
     </section>
   );
 }
