@@ -6,5 +6,5 @@
  */
 export const APP_PAGES: ReadonlySet<string> = new Set([
   '/', '/agents', '/chat', '/chats', '/crons', '/kanban', '/logs', '/memory', '/project', '/projects',
-  '/review', '/settings', '/skills', '/tray-panel', '/usage', '/vault', '/whats-new',
+  '/resources', '/review', '/settings', '/skills', '/tray-panel', '/usage', '/vault', '/whats-new',
 ]);
