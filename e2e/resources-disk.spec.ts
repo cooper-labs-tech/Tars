@@ -20,7 +20,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. a scan proposes a forbidden item, or misses an allowed one;
  * 3. an item comes without its size, its rule or why;
  * 4. what is never proposed is not said;
- * 5. an item the owner unticked is deleted, or a ticked one is not;
+ * 5. a scan comes with items ticked; delete goes without asking once, or asked and kept still deletes; an item the
+ *    owner did not tick is deleted, or a ticked one is not;
  * 6. a forbidden item is touched;
  * 7. a deletion is not in the log with its bytes;
  * 8. an uncaught error in the page.
@@ -133,14 +134,21 @@ for (const newInterface of [false, true]) {
       expect(await proposed.locator('[data-rule]').count()).toBeGreaterThan(0);
       await stepShot(page, `${tag}2-proposed`);
 
-      // 5. Untick the npx entry, delete the rest that is ticked.
-      const npxItem = proposed.locator('[data-item]').filter({ hasText: path.basename(allowed.staleNpx) });
-      await npxItem.getByRole('checkbox').click();
-      await expect(npxItem.getByRole('checkbox')).not.toBeChecked();
-      const ticked = await proposed.getByRole('checkbox', { checked: true }).count();
-      seen.tickedBoxes = ticked;
-      await proposed.getByRole('button', { name: /^delete \d+ items?$/ }).click();
+      // 5. Nothing comes ticked; the owner ticks the gone agent's folder; delete asks once, keep keeps everything.
+      expect(await proposed.getByRole('checkbox', { checked: true }).count(), 'a scan comes unticked').toBe(0);
       const tmpItem = proposed.locator('[data-item]').filter({ hasText: path.basename(allowed.goneAgentTmp) });
+      await tmpItem.getByRole('checkbox').click();
+      await expect(tmpItem.getByRole('checkbox')).toBeChecked();
+      seen.tickedBoxes = await proposed.getByRole('checkbox', { checked: true }).count();
+      await proposed.getByRole('button', { name: 'delete 1 item', exact: true }).click();
+      const confirm = proposed.getByRole('alertdialog', { name: 'Delete the ticked items' });
+      await expect(confirm).toContainText('this cannot be undone');
+      await confirm.getByRole('button', { name: 'keep', exact: true }).click();
+      await expect(confirm).toHaveCount(0);
+      expect(fs.existsSync(allowed.goneAgentTmp), 'keep deletes nothing').toBe(true);
+      await proposed.getByRole('button', { name: 'delete 1 item', exact: true }).click();
+      await stepShot(page, `${tag}2b-delete-asks`);
+      await proposed.getByRole('alertdialog', { name: 'Delete the ticked items' }).getByRole('button', { name: 'delete them', exact: true }).click();
       await expect(tmpItem).toContainText(/deleted · .* freed/, { timeout: 120_000 });
       seen.after = {
         goneAgentTmp: fs.existsSync(allowed.goneAgentTmp),
