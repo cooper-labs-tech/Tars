@@ -19,7 +19,11 @@ function useReading<T>(read: (() => Promise<T>) | undefined, onChanged: ((cb: (s
   const [state, setState] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
-  const missing = !read;
+  // Whether the channel is there is known in the window only: before it is mounted (the server's render, the
+  // first client render), nothing is said missing, so both render the same.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+  const missing = mounted && !read;
 
   useEffect(() => {
     if (!read) return;

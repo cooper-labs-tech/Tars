@@ -106,7 +106,8 @@ function FloorLine({ k, v }: { k: string; v: string }) {
 function Machine({ state }: { state: HeavySlotStatus | null }) {
   const disk = useDiskSpace();
   const m = state?.machine ?? null;
-  const diskFree = m?.diskFreeGb ?? (disk ? disk.freeBytes / 1e9 : null);
+  // The disk as the window reads it now (system.disk); the slot's last sample only when that cannot be read.
+  const diskFree = disk ? disk.freeBytes / 1e9 : m?.diskFreeGb ?? null;
   const floorGb = state?.floors.diskGb ?? (disk ? disk.floorBytes / 1e9 : null);
   const memTone = m?.memFreePct != null && state && m.memFreePct < state.floors.memFreePct ? 'waiting' : undefined;
   const diskTone = diskFree == null ? undefined : diskFree < 6 ? 'error' : diskFree < 10 ? 'waiting' : undefined;
