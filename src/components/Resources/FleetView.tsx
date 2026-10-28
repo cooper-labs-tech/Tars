@@ -6,14 +6,14 @@ import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
 import { Box, Empty, Figure, Figures, Unread } from './bits';
 import type { AgentResources, FleetResources, ProjectResources } from './contract';
-import { NOT_READ, bytes, clock, lasted, mb, pct, sum } from './format';
+import { NOT_READ, bytes, clock, lasted, mb, mbBytes, pct, sum } from './format';
 import { useFleetResources } from './hooks';
 
 const TONE: Record<string, StatusTone> = { working: 'running', waiting: 'waiting', error: 'error' };
 const INK: Record<string, string> = { working: 'text-status-running', waiting: 'text-status-waiting', error: 'text-status-error' };
 const wtBytes = (a: AgentResources) => sum(a.worktrees.map((w) => w.bytes));
 const tmpBytes = (a: AgentResources) => (a.tmp ? a.tmp.bytes : 0);
-const memBytes = (a: AgentResources) => (a.memMb === null ? null : a.memMb * 1e6);
+const memBytes = (a: AgentResources) => (a.memMb === null ? null : mbBytes(a.memMb));
 
 /** A project's figures, summed over its agents: unread if any agent's is. */
 /** What was read, added: null only when nothing could be read. An agent with no terminal holds nothing to read. */
@@ -25,7 +25,7 @@ function partial(values: (number | null)[]): number | null {
 /** A project's figures: memory and CPU as main sums them (PR 546's totals), the disk by folder kind, added. */
 function totals(p: ProjectResources) {
   return {
-    mem: p.totals.memMb === null ? null : p.totals.memMb * 1e6,
+    mem: p.totals.memMb === null ? null : mbBytes(p.totals.memMb),
     cpu: p.totals.cpuPct,
     wt: partial(p.agents.map(wtBytes)),
     tmp: partial(p.agents.map(tmpBytes)),
