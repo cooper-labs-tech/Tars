@@ -22,6 +22,8 @@ import * as path from 'node:path';
  * R7 another secret of the file, or another setting, is lost or changed;
  * R8 a save that carries the bot's fields (a window of 2.0.4 still open) writes them back;
  * R9 the bot's log of what it sent (~/.tars-private/telegram-sent.json) stays.
+ * R11 (the orchestrator's addition to #545) a save carrying `defaultProvider`, a setting nothing reads (its only use
+ *    was the Settings row #547 removes), writes it back.
  * R10 (the Audit's L3 on #545) a later launch removes a token the first could not read (its file did not parse then):
  *    `telegramBotRetired.hadToken` stays false, and the window never says to revoke it; or `at` moves.
  */
@@ -138,9 +140,15 @@ describe('a token found by a later launch (the Audit\'s L3 on #545)', () => {
   });
 });
 
+describe('a dead setting a save still carries (the orchestrator\'s addition to #545)', () => {
+  it('R11: defaultProvider is dropped, the rest kept', () => {
+    expect(retired.withoutRetiredSettings({ theme: 'dark', defaultProvider: 'codex', telegramEnabled: true })).toEqual({ theme: 'dark' });
+  });
+});
+
 describe('a save after it', () => {
   it('R8: the bot\'s fields a save carries are dropped, the rest kept', () => {
-    const saved = retired.withoutTelegramBot({ theme: 'dark', telegramEnabled: true, telegramBotToken: '1:x', telegramChatId: '42', telegramAuthToken: 'a', telegramAuthorizedChatIds: ['42'], telegramRequireMention: true, telegramBotRetired: { at: 'x', hadToken: true } });
+    const saved = retired.withoutRetiredSettings({ theme: 'dark', telegramEnabled: true, telegramBotToken: '1:x', telegramChatId: '42', telegramAuthToken: 'a', telegramAuthorizedChatIds: ['42'], telegramRequireMention: true, telegramBotRetired: { at: 'x', hadToken: true } });
     expect(saved).toEqual({ theme: 'dark', telegramBotRetired: { at: 'x', hadToken: true } });
   });
 });
