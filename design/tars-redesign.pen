@@ -260883,8 +260883,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -263539,7 +263539,7 @@
           "type": "frame",
           "id": "wDALl",
           "x": 8,
-          "y": 488,
+          "y": 455,
           "name": "More menu",
           "width": 224,
           "fill": "$surface-raised",
@@ -263776,6 +263776,42 @@
                   "name": "label",
                   "fill": "$text-secondary",
                   "content": "Usage",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "JWbjp",
+              "name": "nav Resources",
+              "width": "fill_container",
+              "height": 32,
+              "gap": 10,
+              "padding": [
+                0,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "pbyBa",
+                  "name": "gauge",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "gauge",
+                  "library": "lucide",
+                  "fill": "$text-muted"
+                },
+                {
+                  "type": "text",
+                  "id": "o8opEy",
+                  "name": "label",
+                  "fill": "$text-secondary",
+                  "content": "Resources",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-ui",
                   "fontSize": 13,
@@ -271887,8 +271923,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -274543,7 +274579,7 @@
           "type": "frame",
           "id": "tpq2N",
           "x": 8,
-          "y": 488,
+          "y": 455,
           "name": "More menu",
           "width": 224,
           "fill": "$surface-raised",
@@ -274780,6 +274816,42 @@
                   "name": "label",
                   "fill": "$text-secondary",
                   "content": "Usage",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "aOVz9",
+              "name": "nav Resources",
+              "width": "fill_container",
+              "height": 32,
+              "gap": 10,
+              "padding": [
+                0,
+                10
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "icon",
+                  "id": "lutqu",
+                  "name": "gauge",
+                  "width": 14,
+                  "height": 14,
+                  "icon": "gauge",
+                  "library": "lucide",
+                  "fill": "$text-muted"
+                },
+                {
+                  "type": "text",
+                  "id": "d4qoY",
+                  "name": "label",
+                  "fill": "$text-secondary",
+                  "content": "Resources",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-ui",
                   "fontSize": 13,
