@@ -23,6 +23,11 @@ import * as path from 'node:path';
  *     orchestrator-only servers, and Tars's own per-agent copies of the shared servers leave ~/.claude.json.
  * G7. (L1) A shared server that gives up after its start keeps its entries: every claude agent then gets 503 on it.
  *     Its entries go (dropSharedMcpEntries), only Tars's own.
+ * And from the Audit's re-check of #541 (L2):
+ * G8. A server that gives up gets claude's copy back with `claude mcp add -s user`: into ~/.claude.json, which every
+ *     claude session loads, workers included (x reached them again, past the door) and the owner's own sessions. The
+ *     copy goes where the shared entry was: mcp.json, and mcp-worker.json only for a server workers may have; an
+ *     entry the owner added is left alone.
  */
 
 vi.mock('electron', () => ({
@@ -30,7 +35,7 @@ vi.mock('electron', () => ({
   BrowserWindow: Object.assign(vi.fn(), { getAllWindows: () => [] }),
 }));
 
-import { SHARED_MCP_SERVERS, ORCHESTRATOR_ONLY_MCP, sharedMcpEntry, writeSharedMcpEntries, dropSharedMcpEntries, ensureSharedMcp, stopSharedMcp } from '../../../electron/services/mcp-shared';
+import { SHARED_MCP_SERVERS, ORCHESTRATOR_ONLY_MCP, sharedMcpEntry, writeSharedMcpEntries, dropSharedMcpEntries, writeClaudeCopy, ensureSharedMcp, stopSharedMcp } from '../../../electron/services/mcp-shared';
 
 let dir: string;
 let files: { claudeJson: string; mcpDir: string };
@@ -127,6 +132,29 @@ describe('the shared servers in claude\'s config', () => {
       expect(read(role(f)).mcpServers['claude-mgr-orchestrator'], f).toEqual(sharedMcpEntry(API, 'claude-mgr-orchestrator'));
     }
     expect(read(role('mcp.json')).mcpServers['someone-else']).toEqual({ type: 'http', url: 'https://example.com/mcp' });
+  });
+
+  it('G8. a server given up gets claude\'s copy in the role files, a worker\'s only for a server workers may have', () => {
+    fs.writeFileSync(role('mcp-worker.json'), JSON.stringify({ mcpServers: {} }));
+    writeSharedMcpEntries(API, files);
+    const claudeJson = fs.readFileSync(files.claudeJson, 'utf8');
+    for (const name of ['claude-mgr-kanban', 'dorothy-x']) {
+      dropSharedMcpEntries([name], files);
+      writeClaudeCopy(name, '/Users/x/.tars/bin/tars-mcp-node', [bundle(name.replace('claude-mgr-', 'mcp-').replace('dorothy-', 'mcp-'))], files);
+    }
+    const copy = (name: string) => ({ command: '/Users/x/.tars/bin/tars-mcp-node', args: [bundle(name.replace('claude-mgr-', 'mcp-').replace('dorothy-', 'mcp-'))] });
+    expect(read(role('mcp.json')).mcpServers['claude-mgr-kanban']).toEqual(copy('claude-mgr-kanban'));
+    expect(read(role('mcp-worker.json')).mcpServers['claude-mgr-kanban']).toEqual(copy('claude-mgr-kanban'));
+    expect(ORCHESTRATOR_ONLY_MCP).toContain('dorothy-x');
+    expect(read(role('mcp.json')).mcpServers['dorothy-x']).toEqual(copy('dorothy-x'));
+    expect(read(role('mcp-worker.json')).mcpServers['dorothy-x']).toBeUndefined();
+    expect(fs.readFileSync(files.claudeJson, 'utf8')).toBe(claudeJson);
+    // The owner's own entry under that name is theirs.
+    const m = read(role('mcp.json'));
+    m.mcpServers['claude-mgr-vault'] = { type: 'stdio', command: 'node', args: ['/my/own/vault.js'] };
+    fs.writeFileSync(role('mcp.json'), JSON.stringify(m));
+    writeClaudeCopy('claude-mgr-vault', '/Users/x/.tars/bin/tars-mcp-node', [bundle('mcp-vault')], files);
+    expect(read(role('mcp.json')).mcpServers['claude-mgr-vault']).toEqual({ type: 'stdio', command: 'node', args: ['/my/own/vault.js'] });
   });
 
   it('G7. a server that ends five times in a minute after its start is given up, and the registration is told', async () => {

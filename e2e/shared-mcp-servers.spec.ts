@@ -47,7 +47,8 @@ type Seen = {
 const SHARED = ['mcp-orchestrator', 'mcp-memory', 'mcp-kanban', 'mcp-vault', 'mcp-socialdata', 'mcp-x'];
 
 function standIn(home: string, other: string): string {
-  return writeNodeCli(path.join(home, 'cli-claude.cjs'), [
+  // One file per agent: each stand-in names the other agent it tries to pass for.
+  return writeNodeCli(path.join(home, `cli-claude-${other}.cjs`), [
     "const fs = require('fs'); const path = require('path'); const { execFileSync } = require('child_process');",
     "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
     `const home = ${JSON.stringify(home)};`,

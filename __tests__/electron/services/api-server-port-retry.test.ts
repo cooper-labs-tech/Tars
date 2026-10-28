@@ -22,6 +22,10 @@ import * as path from 'path';
  * G1. it waits while the port is retried, and goes on once Tars binds;
  * G2. it refuses (false) once Tars gave the port up;
  * G3. a process that never started an API (the unit tests) is not held.
+ * And from the Audit's re-check of #541 (L3): `stopped` reads as "may start", and the app is `stopped` from its boot
+ * until initApiServer, the window and the IPC already up; only the order of main.ts kept an agent from starting there.
+ * G4. The app does not mark its API starting before it creates the window and registers the IPC: "not started yet"
+ *     must wait as a retry does, and a quit's stop never answer true to a start begun before it.
  *
  * These assert the whole chain rather than that a retry was scheduled: the
  * server is raced against a real socket holding the port, and recovery is
@@ -310,6 +314,24 @@ describe('the local API when it has given up', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('G4. the app marks its API starting before its window and its IPC, so no start runs before Tars listens', async () => {
+    const main = fs.readFileSync(path.resolve('electron/main.ts'), 'utf8');
+    const ready = main.indexOf('app.whenReady().then(');
+    const starting = main.indexOf("noteApiPhase('starting')", ready);
+    expect(starting).toBeGreaterThan(ready);
+    expect(starting).toBeLessThan(main.indexOf('createWindow();', ready));
+    expect(starting).toBeLessThan(main.indexOf('registerIpcHandlers(deps)', ready));
+    const { noteApiPhase } = await import('../../../electron/core/api-listening');
+    noteApiPhase('starting');
+    let answered: boolean | undefined;
+    void api.apiListening().then(v => { answered = v; });
+    await new Promise(r => setTimeout(r, 20));
+    expect(answered).toBeUndefined();
+    noteApiPhase('listening');
+    await new Promise(r => setTimeout(r, 0));
+    expect(answered).toBe(true);
   });
 
   it('G3. a process that never started an API is not held', async () => {
