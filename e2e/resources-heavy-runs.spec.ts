@@ -14,13 +14,15 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. the view says it cannot read the slot although the channel is there;
  * 2. with nobody holding it and nothing waiting, it does not say so;
  * 3. the machine's memory, swap or load say "not read" on a platform that reads them (macOS and Linux), or the free
- *    disk differs from system.disk's by more than half a gigabyte;
+ *    disk differs from system.disk's, in Tars's unit (1024³ bytes, the slot's and Settings'), by more than 0.2 GB;
  * 4. the slots and the floors shown are not the settings' (defaults: 1 slot, 15 GB free disk, 20 % free memory);
  * 5. a holder is not shown with its agent, its project and what it runs, or its label shows a secret it was given;
  * 6. a waiter is not shown behind it;
  * 7. give back goes without asking once; asked and kept, it gives back; given back, the holder stays, the waiter is not
  *    granted, or the day's alerts do not say it;
- * 8. an uncaught error in the page.
+ * 8. an uncaught error in the page;
+ * 9. a run the disk floor holds back: the free disk shown and the slot's why disagree, or the figure reads above the
+ *    floor that holds it (the Audit's M1 at the re-check of PR 539: 10⁹ bytes beside the slot's 1024³).
  * Two agents of two projects, whose CLI is a stand-in that asks for the slot with its own pid as the backend's spec
  * (heavy-run-slot.spec.ts) does: macOS and Linux (the stand-ins post to the API; Windows is the backend's to drive).
  *
@@ -113,7 +115,7 @@ for (const newInterface of [false, true]) {
       if (process.platform !== 'win32') for (const c of ['FREE MEMORY', 'SWAP']) expect(values[c]).not.toBe('not read');
       if (process.platform !== 'win32') expect(values.LOAD).toMatch(/^\d+\.\d$/);
       const disk = await page.evaluate(() => window.electronAPI!.system.disk());
-      expect(Math.abs(Number.parseFloat(values['FREE DISK']) - disk!.freeBytes / 1e9)).toBeLessThan(0.5);
+      expect(Math.abs(Number.parseFloat(values['FREE DISK']) - disk!.freeBytes / 1024 ** 3)).toBeLessThan(0.2);
 
       // 4. The settings' slots and floors.
       const floors = view.getByRole('region', { name: 'Slots and floors' });
@@ -157,6 +159,77 @@ for (const newInterface of [false, true]) {
       }
 
       // 8.
+      seen.errors = errors;
+      expect(errors).toEqual([]);
+    } finally {
+      recordValues(seen);
+      await app.close().catch(() => {});
+      removeHome(home);
+    }
+  });
+}
+
+for (const newInterface of [false, true]) {
+  test(`resources, heavy runs: a run the disk floor holds back, its why and the free disk in one unit${newInterface ? ' (new interface)' : ''}`, async () => {
+    test.skip(process.platform === 'win32', 'the stand-in posts to the API; Windows is the backend\'s to drive');
+    test.setTimeout(240_000);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-resources-floor-'));
+    const dir = path.join(home, '.tars');
+    fs.mkdirSync(dir, { recursive: true });
+    const harbor = path.join(home, 'projects', 'harbor');
+    fs.mkdirSync(harbor, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
+      id: 'h', name: 'Harbor Runner', character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: harbor, skills: [],
+      cliPath: asker(home, 'h', 'npm run e2e'), createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
+    }], null, 2));
+    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([harbor]));
+    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+    // A floor no disk meets: the run waits for disk, whatever this machine has free.
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, heavySlotMinDiskGb: 1_000_000 }));
+    const seen: Record<string, unknown> = { newInterface };
+    const errors: string[] = [];
+
+    const app = await launchSandboxed(electron, home, {
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31578 : 31577), DOROTHY_E2E: '1', DOROTHY_HEALTH_EVERY_MS: '500' },
+    });
+    try {
+      const page = await app.firstWindow();
+      listenForErrors(page, errors);
+      await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
+      await page.setViewportSize({ width: 1440, height: 900 });
+      let where;
+      if (!newInterface) {
+        await page.goto(`${DEV_URL}/resources`, { waitUntil: 'domcontentloaded' });
+        await expect(page.locator(SPLASH)).toHaveCount(0, { timeout: 90_000 });
+        where = page.locator('main');
+      } else {
+        await page.goto(`${DEV_URL}/chats`, { waitUntil: 'domcontentloaded' });
+        const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+        await expect(sidebar.getByRole('navigation', { name: 'Main menu' })).toBeVisible({ timeout: 90_000 });
+        await expect(page.locator(SPLASH)).toHaveCount(0, { timeout: 30_000 });
+        await sidebar.getByRole('button', { name: 'More' }).click();
+        await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Resources' }).click();
+        where = page.getByRole('dialog', { name: 'Resources' });
+      }
+      const view = where.getByRole('region', { name: 'Heavy runs' });
+      await page.evaluate(() => window.electronAPI!.agent!.start({ id: 'h', prompt: '' } as never));
+
+      // 9. Harbor Runner waits for disk; the slot's why and the figure say the same free disk, under the same floor.
+      const waiter = view.locator('[data-waiter="Harbor Runner"]');
+      await expect(waiter).toContainText('waiting for free disk', { timeout: 60_000 });
+      const why = (await waiter.innerText()).replace(/\s+/g, ' ');
+      const card = view.locator('[data-resource-card="FREE DISK"]');
+      const shown = (await card.locator('[data-value]').innerText()).trim();
+      const sub = (await card.innerText()).replace(/\s+/g, ' ');
+      const disk = await page.evaluate(() => window.electronAPI!.system.disk());
+      seen.floor = { why, shown, sub, freeBytes: disk?.freeBytes ?? null };
+      const slotFree = Number.parseFloat(/waiting for free disk: ([\d.]+) GB free/.exec(why)![1]);
+      expect(Math.abs(Number.parseFloat(shown) - slotFree)).toBeLessThan(0.2);
+      expect(Math.abs(Number.parseFloat(shown) - disk!.freeBytes / 1024 ** 3)).toBeLessThan(0.2);
+      expect(why).toContain('the floor is 1000000 GB');
+      expect(sub).toContain('floor 1000000 GB');
+      await stepShot(page, `${newInterface ? 'new-' : ''}4-held-by-the-disk-floor`);
+
       seen.errors = errors;
       expect(errors).toEqual([]);
     } finally {

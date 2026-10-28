@@ -100,7 +100,7 @@ for (const newInterface of [false, true]) {
       const shownFree = await card('FREE DISK').locator('[data-value]').innerText();
       seen.diskFree = { shown: shownFree, freeBytes: disk?.freeBytes ?? null };
       expect(disk).not.toBeNull();
-      expect(Math.abs(Number.parseFloat(shownFree) - disk!.freeBytes / 1e9)).toBeLessThan(0.5);
+      expect(Math.abs(Number.parseFloat(shownFree) - disk!.freeBytes / 1024 ** 3)).toBeLessThan(0.2);
       const hasSlot = await page.evaluate(() => Boolean((window.electronAPI as unknown as { heavySlot?: unknown }).heavySlot));
       seen.backends = { heavySlot: hasSlot };
       for (const caption of ['FREE MEMORY', 'SWAP', 'LOAD']) {
