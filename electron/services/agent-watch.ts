@@ -690,8 +690,9 @@ function stillNews(childId: string, news: News, requesterId: string): boolean {
   const child = agents.get(childId);
   // Gone since: what it did is still what it did.
   if (!child) return true;
-  // A request that never ran stays news whatever the worker does next.
-  if (news.kind === 'not_delivered') return true;
+  // A request that never ran stays news whatever the worker does next, and so
+  // does what a restart of Tars kept in its queue (2.0.5): no hand-over of its own.
+  if (news.kind === 'not_delivered' || news.kind === 'kept') return true;
   // Work handed since overtakes this news only when this requester handed
   // it: another's request is another task (core/task-requests.ts).
   if (child.workHandedAt !== news.handedAt && (!child.requestedBy || child.requestedBy.agentId === requesterId)) return false;
