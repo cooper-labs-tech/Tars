@@ -17,7 +17,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    when another agent of it was read (the Audit's M1 on PR 548);
  * 4. an agent with no terminal shows a figure for its memory, 0 among them: it is said not read;
  * 5. choosing an agent does not show its detail, its tree and its disk, or shows another agent's;
- * 6. a command line in the tree shows a secret (the agent's own token, from its environment);
+ * 6. a command line in the tree shows a secret: the agent's own token, from its environment, or a password after a
+ *    flag (--password <value>, the Audit's Low on PR 548), which PR 546 masks as [redacted];
  * 7. "measure the disk again" does not measure: the worktree's size stays unmeasured, or the time does not move;
  * 8. an uncaught error in the page.
  *
@@ -25,6 +26,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  */
 
 const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
+const PASSWORD = 'e2e-flag-secret-4815162342';
 
 for (const newInterface of [false, true]) {
   test(`resources, agents and projects: each project's agents, an agent's tree and disk, the disk measured on demand${newInterface ? ' (new interface)' : ''}`, async () => {
@@ -44,6 +46,8 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
       // Builder runs: a stand-in CLI that stays, so its tree has memory to read.
       agent('a-harbor-1', 'Harbor Builder', harbor, { worktreePath: worktree, branchName: 'feature-a', cliPath: writeNodeCli(path.join(home, 'cli-builder.cjs'), [
+        // A child with a password after a flag, as a script an agent runs might take one.
+        "require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', '--', '--password', " + JSON.stringify(PASSWORD) + "], { stdio: 'ignore' });",
         "process.stdout.write('stand-in ready\\r\\n');", 'setInterval(() => {}, 1000);', 'process.stdin.resume();', ''].join('\n')) }),
       agent('a-harbor-2', 'Harbor Reviewer', harbor),
       agent('a-meridian', 'Meridian Writer', meridian),
@@ -114,7 +118,13 @@ for (const newInterface of [false, true]) {
       await expect(detail).toContainText('feature-a');
       const commands = await detail.locator('[data-command]').allInnerTexts();
       seen.commands = commands;
-      for (const c of commands) expect(c).not.toMatch(/CLAUDE_MGR_API_TOKEN=(?!\*|•)\S/);
+      for (const c of commands) expect(c).not.toMatch(/CLAUDE_MGR_API_TOKEN=(?!\*|•|\[redacted\])\S/);
+      // The child's password, after its flag: masked, never shown.
+      await expect(detail.locator('[data-command]').filter({ hasText: '--password' })).toHaveCount(1, { timeout: 60_000 });
+      const withFlag = await detail.locator('[data-command]').filter({ hasText: '--password' }).innerText();
+      seen.passwordLine = withFlag;
+      expect(withFlag).toContain('[redacted]');
+      expect(await detail.innerText()).not.toContain(PASSWORD);
 
       // 7. Measured on demand: the worktree's 3 MB, and the time it was measured.
       await view.getByRole('button', { name: /measure the disk/ }).click();
