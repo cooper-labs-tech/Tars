@@ -14,7 +14,7 @@ import type { AppSettings } from '../types';
  *
  * What the window's Resources page reads (the Frontend's notes of #535), in one call (`heavySlot:status`) and in the
  * event sent on each change (`heavySlot:changed`): the settings and floors, the machine's last reading, the holders
- * with their pid and the memory and CPU of their tree (one `ps`, at most every 5 seconds; none on Windows), the
+ * with their pid and the memory and CPU of their tree (one `ps`, at most every 2 seconds; none on Windows), the
  * waiters in order with why, and the day's alerts with whom each was sent to.
  */
 
@@ -73,7 +73,7 @@ export interface SlotRuntimeDeps {
 }
 
 const MACHINE_EVERY_MS = 5_000;
-const TREES_EVERY_MS = 5_000;
+const TREES_EVERY_MS = 2_000;
 const PASS_EVERY_MS = 1_000;
 const WATCH_EVERY_PASSES = 30;
 
