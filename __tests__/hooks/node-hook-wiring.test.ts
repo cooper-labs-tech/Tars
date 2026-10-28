@@ -173,7 +173,8 @@ describe('on darwin and linux the .sh wiring stays, Gemini on the event it fires
         },
         security: { environmentVariableRedaction: { allowed: ['CLAUDE_MGR_API_TOKEN'] } },
       };
-      expect(fs.readFileSync(geminiSettingsFile(), 'utf-8')).toBe(JSON.stringify(expected, null, 2));
+      // With its final newline since 28/10 (utils/shared-file.ts, cli-config-files.test.ts).
+      expect(fs.readFileSync(geminiSettingsFile(), 'utf-8')).toBe(`${JSON.stringify(expected, null, 2)}\n`);
     });
 
     it(`6. Gemini lets the agent token through its redaction, the user's own settings kept (${platform})`, async () => {

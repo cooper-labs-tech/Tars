@@ -5,6 +5,7 @@ import { DATA_DIR } from '../constants';
 import { nodeHookCommand, usesNodeHooks } from '../utils/hook-command';
 import { safeEffort } from '../providers/cli-provider';
 import type { AgentPermissionMode } from '../types';
+import { writeSharedJsonSync } from '../utils/shared-file';
 
 /**
  * Qwen Code, as Tars runs it (2.0.4). Measured with qwen 0.25.2 (a Gemini CLI
@@ -130,7 +131,7 @@ const readJson = <T>(file: string, fallback: T): T => {
 };
 const writeJson = (file: string, value: unknown) => {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(value, null, 2));
+  writeSharedJsonSync(file, value);
 };
 
 const hooksFile = (dataDir?: string) => path.join(qwenDataDir(dataDir), 'hooks.json');

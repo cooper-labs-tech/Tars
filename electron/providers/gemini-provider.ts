@@ -17,6 +17,7 @@ import type {
 } from './cli-provider';
 import { shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
+import { writeSharedJsonSync } from '../utils/shared-file';
 
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
@@ -239,7 +240,7 @@ export class GeminiProvider implements CLIProvider {
     if (allowAgentToken(settings)) updated = true;
 
     if (updated) {
-      fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+      writeSharedJsonSync(settingsPath, settings);
       console.log('Gemini hooks configured/updated in', settingsPath);
     } else {
       console.log('Gemini hooks already configured');
@@ -287,7 +288,7 @@ export class GeminiProvider implements CLIProvider {
     }
 
     (settings.mcpServers as Record<string, unknown>)[name] = { command, args };
-    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+    writeSharedJsonSync(settingsPath, settings);
     console.log(`[gemini] Registered MCP server ${name} in settings.json (fallback)`);
   }
 
@@ -315,7 +316,7 @@ export class GeminiProvider implements CLIProvider {
       const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
       if (settings?.mcpServers?.[name]) {
         delete settings.mcpServers[name];
-        fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2));
+        writeSharedJsonSync(settingsPath, settings);
         console.log(`[gemini] Removed MCP server ${name} from settings.json`);
       }
     } catch {
