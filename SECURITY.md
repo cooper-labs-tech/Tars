@@ -216,28 +216,21 @@ names. A hash is not secret from a guess: an agent that can read the file can co
 text it already suspects. It is out of the directory every agent is handed, and no
 further out of reach than the rest of `~/.tars-private` (§5).
 
-**What Tars answers for an agent in bypass, and what that is not** (2.0.5,
-`services/permission-auto.ts`). For an agent the owner set to bypass, Tars answers yes itself to one kind of
-question only: a file tool's (Write, Edit, MultiEdit, NotebookEdit) on an absolute path that resolves (links
-followed, `..` refused) inside the agent's working folder, its `t` or its `c` temporary folder; never under
-`~/.tars-private`, another agent's worktree or temporary folders, or its own `.git`, `.claude` and `.mcp.json` (its
-hooks, its settings and its servers, which Claude Code asks about on purpose), compared as the file system folds names
-(NFKC and lower case; on Windows, no part ending in a dot or a space). The state mod asks about a file tool by its
-path alone, its content withheld. One Tars does not allow is held as a shell command is, shown by its path and marked
-withheld: the window may refuse it, never allow it, since it would approve content it never showed; nobody answering,
-it is refused at the delay with why Tars could not allow it. It never goes back to Claude Code's native dialog,
-where nobody answers at night.
-
-**Tars never answers a shell command.** It did, for a while on #538, with a reader of its own, and the Audit's two
-gates found it allowing what the shell then ran outside the agent's folders: six forms in bash, then thirteen in zsh
-(the agents' shell on macOS: `$D:h`, `>!`, `=cmd`, `NULLCMD`, `path`) and in both shells (`printf -v`, `>&1/..`, a
-heredoc delimiter split by a backslash line, `$[x]`), one of them writing `.claude/settings.json`. A reader of its own
-will always differ from the shell, and what Claude Code still asks in bypass is its last protection: every shell
-command waits for the owner, and is refused at the owner's delay with what to do instead (write the file with the
-Write tool, split the command). This is the owner's bypass applied to Claude Code's questions, not a boundary: an
-agent in bypass already runs whatever Claude Code does not ask about, and nothing here confines it. Every decision
-goes to `~/.tars/logs/permissions.log`, masked, which any agent can write, being the same user: a record for the
-owner, not evidence against a hostile agent.
+**Tars never answers allow by itself** (2.0.5, #538). The state mod asks Tars instead of Claude Code's dialog, and
+Tars holds the question for the owner: the window shows it, and the owner allows or refuses it. Nobody answering within
+the owner's delay (`permissionAskMinutes`), it is refused with a reason the agent reads, and never handed back to a
+native dialog nobody would answer at night. Tars allowed some questions itself for a while on #538, and the Audit's
+three gates found each rule it tried reaching outside the agent's folders: a reader of shell commands of its own
+(six forms in bash, then thirteen in zsh, the agents' shell on macOS, and in both shells), then a path rule for file
+tools that a dangling or a hard link led into `.claude/settings.json` (the hooks Claude Code runs), outside, or
+`~/.tars-private`. In bypass, Claude Code only asks about the paths it guards or does not know, which is where such
+links lead, so an allow by Tars had almost no honest use and kept that surface open. What the window may allow is only
+what it shows whole: a shell command. A file tool is asked by its path alone, its content withheld (the mod sends no
+content, and the route marks every file tool withheld whatever the request says): the window may refuse it or hand it
+back, never allow it. It is held only for an agent in bypass, autonomous, whose nights this is for; any other agent's
+file tool goes straight to Claude Code's own dialog, where its owner chose to be asked. Every decision goes to
+`~/.tars/logs/permissions.log`, masked, which any agent can write, being the same user: a record for the owner, not
+evidence against a hostile agent.
 
 ---
 

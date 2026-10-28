@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { shortIdOf } from '../../../electron/services/agent-tmp';
+import { shortIdOf } from '../../electron/services/agent-tmp';
 
 /**
  * Every shell command of #538's three gates (the brief's own heredocs, the first gate's six forms in bash, the

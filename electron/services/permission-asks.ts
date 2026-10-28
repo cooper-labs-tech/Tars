@@ -19,9 +19,10 @@ import { redactSecrets } from '../utils/redact-secrets';
  * (`permissionAskMinutes`, 10 by default) is refused with a reason the model
  * reads, so the agent takes another way instead of freezing at a dialog all
  * night (2.0.5, fix-permission-dialogs-2810.md; until then it went back to
- * the dialog, and three projects' agents waited there until morning). For an
- * agent in bypass, Tars answers yes itself to a call that touches only its own
- * folders (permission-auto.ts, in the route). Every decision is written to
+ * the dialog, and three projects' agents waited there until morning). Tars
+ * allows nothing by itself; a file tool's question, its content withheld, is
+ * held for an agent in bypass only, and the window may refuse it, never allow
+ * it (hooks-routes.ts). Every decision is written to
  * ~/.tars/logs/permissions.log with who or what decided. Measured on 2.1.289:
  * a hook may await Tars past its 10 s budget, since a `$` call in flight is not
  * counted, and the model reads a deny's reason.

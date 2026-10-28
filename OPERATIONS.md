@@ -1540,13 +1540,11 @@ process log says `[permission] <agent> asks Tars: Bash <command>`, then the answ
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
 meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
 answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
-- **Tars answers for a bypass agent's file tools on its own folders, never its shell commands.** For an agent in
-  bypass, a Write, Edit, MultiEdit or NotebookEdit on an absolute path inside its working folder (its worktree, or its
-  project), its `t` or its `c` temporary folder (`services/permission-auto.ts`) is allowed at once: `allow by Tars
-  (bypass, its own folders)`. Never under `~/.tars-private`, another agent's folders, or its own `.git`, `.claude` or
-  `.mcp.json` (NFKC, any case). The mod asks about a file tool by its path alone (`withheld`); one Tars does not
-  allow is held by its path, refused (never allowed) from the window, and refused at the delay with why. A shell command always waits for the owner (SECURITY.md says
-  why), and the agents are told to write files with the Write tool.
+- **Tars allows nothing by itself.** Every question waits for the owner. A shell command is shown whole, and the
+  window may allow or refuse it. A file tool (Write, Edit, MultiEdit, NotebookEdit) is asked by its path alone,
+  `withheld` (the route marks it so whatever the request says): for an agent in bypass it is held, the window may
+  refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
+  Code's own dialog, as before 2.0.5. SECURITY.md says why. The agents are told to write files with the Write tool.
 - **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
   `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads
   (how long, and what to do instead: write files with the Write tool, split the command), and the agent runs on. It no longer goes back to the dialog,

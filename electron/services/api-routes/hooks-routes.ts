@@ -12,8 +12,8 @@ import { emitAgentStatus, agentStatusEmitter } from '../agent-events';
 import { onTurnEnded, onUsageLimit } from '../claude-accounts/switching';
 import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
-import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, questionFingerprint, subjectOf } from '../permission-asks';
-import { judgeCall, placesOf } from '../permission-auto';
+import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, subjectOf } from '../permission-asks';
+import { levelOf } from '../../core/permission-ceiling';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
 
@@ -666,14 +666,16 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
   });
 
   // POST /api/hooks/permission: the state mod's tool.check, when Claude Code
-  // would show its permission dialog (services/permission-asks.ts). For an
-  // agent in bypass, a call that touches only its own folders is allowed at
-  // once by Tars (services/permission-auto.ts). Anything else is held until
-  // the window answers: allow or deny is then the decision, with no dialog.
+  // would show its permission dialog (services/permission-asks.ts). Tars
+  // allows nothing by itself. A question is held until the window answers:
+  // allow or deny is then the decision, with no dialog. A file tool's is held
+  // by its path, withheld, for an agent in bypass only (the window may refuse
+  // it, never allow it); any other agent's goes to Claude Code's own dialog.
   // `pending` after 20 s, and the mod asks again for the same call. Nobody
   // answers within the owner's delay: refused, with a reason the agent reads.
   // `ask` hands it back to the dialog: for a session that is not the agent's
   // current one, nothing to name, or a question dropped.
+  const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
   app.post('/api/hooks/permission', async (req, sendJson) => {
     const { agent_id, tool, input, tool_use_id, reason, rule } = req.body as {
       agent_id?: string; tool?: unknown; input?: unknown; tool_use_id?: unknown; reason?: unknown; rule?: unknown;
@@ -696,28 +698,22 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     };
     const afterError = (req.body as { after_error?: unknown }).after_error;
     if (typeof afterError === 'string') console.log(`[permission] ${agent.name || agent.id}'s mod asks again after a failed request: ${oneLine(afterError)}`);
-    // The owner's bypass, applied to what Claude Code still asks: yes, when
-    // everything the call touches is inside the agent's own folders.
-    const places = placesOf(agent, agents.values());
-    const judged = places ? judgeCall(question.tool, fields, places) : undefined;
-    if (judged?.allow) {
-      logPermission(agent, agent.id, question.tool, 'allow', 'Tars (bypass, its own folders)', subjectOf(question.tool, fields));
-      sendJson({
-        decision: 'allow',
-        reason: `Tars allowed it: ${agent.name || agent.id} is in bypass, and ${judged.why}`,
-        fingerprint: questionFingerprint(question.tool, fields),
-      });
+    // A file tool: its content is a field the window does not show, so the
+    // window can never allow it, and Tars allows nothing by itself (the
+    // orchestrator's decision of 28/10, after links led a write Tars allowed
+    // into .claude/settings.json). Marked withheld whatever the body says (the
+    // Audit's L2). For an agent in bypass, autonomous, held and refused at the
+    // delay; for any other, back to Claude Code's own dialog at once, one step,
+    // as before #538: its owner chose to be asked there.
+    const withheld = FILE_TOOLS.has(question.tool);
+    if (withheld && levelOf(agent) !== 'bypass') {
+      logPermission(agent, agent.id, question.tool, 'back to its dialog', 'Tars (a file tool of an agent not in bypass: Claude Code asks)', subjectOf(question.tool, fields));
+      sendJson({ decision: 'ask' });
       return;
     }
-    if (places && judged) console.log(`[permission] ${agent.name || agent.id} is in bypass, and the call waits for the owner: ${judged.why}`);
-    // A file tool the mod asked about by its path alone (its content is a field the window does not show), and not
-    // Tars's to allow: held as a shell command is, by its path, marked withheld so the window can refuse it and never
-    // allow it, and refused at the delay with why Tars could not (the orchestrator, 28/10: never the native dialog,
-    // where nobody answers at night).
-    const withheld = (req.body as { withheld?: unknown }).withheld === true;
     const answer = await holdPermissionAsk(agent, {
       ...question,
-      ...(withheld ? { withheld: true, notAllowedBecause: judged?.why ?? 'it is not a bypass agent\'s own folder' } : {}),
+      ...(withheld ? { withheld: true, notAllowedBecause: 'Tars never allows a file tool by itself, and the window cannot show its content' } : {}),
     }, changed => {
       saveAgents();
       ctx.handleStatusChangeNotificationCallback(changed, changed.status);

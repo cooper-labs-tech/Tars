@@ -546,7 +546,9 @@ describe('Tars allows nothing by itself', () => {
     for (const [n, command] of commands.entries()) {
       const pending = askUntilAnswered(question({ tool_use_id: `toolu_c${n}`, input: { command } }));
       await vi.advanceTimersByTimeAsync(0);
-      expect(a.permissionAsk?.subject, command).toBe(command);
+      // Past the mod's 2,000 characters: Claude Code's own dialog, which shows it whole (#318). Never Tars's allow.
+      if (command.length > 2000) { expect(await pending, 'too long').toEqual({ decision: 'ask' }); continue; }
+      expect(a.permissionAsk?.subject, command).toBe(command || 'Bash');
       if (n === 0) {
         expect(answerPermission('a1', 'allow', 'the user')).toBe(true);
         expect(await pending).toMatchObject({ decision: 'allow' });

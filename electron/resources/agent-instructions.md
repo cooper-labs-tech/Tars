@@ -29,10 +29,10 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 ## Writing files
 
 Write a file with the Write tool (or Edit it), never with a heredoc or a redirection in a shell
-command (`cat > file <<EOF`, `echo ... > file`). A shell command Claude Code asks about waits for
-the user, who may be away for the night, and is refused after a delay; a Write inside your own
-worktree or temporary folders is not asked about, or Tars allows it. Split a compound command into
-simple ones for the same reason.
+command (`cat > file <<EOF`, `echo ... > file`), and split a compound command into simple ones.
+When Claude Code asks permission for a call, Tars never answers yes by itself: the question
+waits for the user, who may be away for the night, and is refused after a delay. A Write inside
+your own worktree is not asked about in bypass; a shell command that writes a file often is.
 
 ## Waiting on work you started
 

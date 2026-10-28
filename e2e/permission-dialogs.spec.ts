@@ -13,23 +13,24 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * scratchpad; a worker's report to an orchestrator at a dialog was refused (1212 counted 17); an ask that expired
  * left the native dialog open.
  *
- * Two agents of one project, each a stand-in for claude with the state mod: the worker w, in bypass, asks Tars about
- * two calls the way the mod's tool.check does (POST /api/hooks/permission with its own token, again while Tars
- * answers `pending`; a file tool by its path alone, `withheld`), and writes each answer, and every line typed into
- * its terminal, to a file. The orchestrator o sends w a message (POST /api/agents/w/message with its own token) when
- * the spec says so.
+ * Three agents of one project, each a stand-in for claude with the state mod, asking Tars the way the mod's
+ * tool.check does (POST /api/hooks/permission with its own token, again while Tars answers `pending`; a file tool by
+ * its path alone, `withheld`), writing each answer and every line typed into its terminal to a file: the worker w in
+ * bypass, the worker n in the default mode, and the orchestrator o, which sends w a message when the spec says so.
+ * Tars allows nothing by itself (the orchestrator's decision of 28/10, after the Audit's third gate of #538).
  *
  * Asserted:
- * 1. w's Write into its own scratchpad ($CLAUDE_CODE_TMPDIR) is allowed by Tars at once, without a question;
- * 2. a shell command, the night's own heredoc into that same scratchpad, is held for the owner (Tars never answers a
- *    shell command, the orchestrator's decision of 28/10 after the Audit's re-check): the window reads it, w waits;
+ * 1. w's shell command, the night's own heredoc into its own scratchpad, is held for the owner: the window reads it
+ *    whole, and the owner allows it from the window;
+ * 2. w's Write into that scratchpad is held by its path, withheld: the window's allow is refused, Tars allows nothing;
  * 3. o's message to w meanwhile is not refused: it is held (`held`, the dialog's reason), and nothing is typed into
  *    w's terminal while the question stands;
- * 4. nobody answers: at the owner's delay (permissionAskMinutes, 1 here) the call is refused with a reason w reads,
- *    which tells it to write files with the Write tool, never handed back to the dialog; w runs again;
- * 5. then, and only then, o's message goes into w's terminal.
- * Red on main dc623b594: the first call waits for the window, the message is refused (409), and the expired question
- * goes back to the dialog.
+ * 4. nobody answers: at the owner's delay (permissionAskMinutes, 1 here) the Write is refused with a reason w reads,
+ *    never handed back to the dialog; w runs again;
+ * 5. then, and only then, o's message goes into w's terminal;
+ * 6. n, not in bypass, has its Write on Claude Code's own dialog at once, as before #538: one step.
+ * Red on main dc623b594: the message is refused (409), the expired question goes back to the dialog, and n's Write
+ * waits in Tars for the window.
  * The artefact: values.json (each answer, the message's reply, the lines w's terminal got, with their times),
  * screenshots, the app's trace with E2E_TRACE=on.
  */
@@ -37,27 +38,28 @@ import { DEV_URL, apiPort } from './ports.mjs';
 type Answer = { call: string; decision: string; reason?: string; at: number };
 type Typed = { at: number; text: string };
 type Agent = { id: string; status: string; waitingReason?: string; permissionAsk?: { subject: string; until: string } };
-type Api = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown>; list(): Promise<Agent[]> } } };
+type Api = { electronAPI: { agent: {
+  start(p: { id: string; prompt: string }): Promise<unknown>;
+  list(): Promise<Agent[]>;
+  answerPermission(id: string, decision: 'allow' | 'deny' | 'ask', reason?: string): Promise<{ success: boolean }>;
+} } };
 
 const MARK = 'MARK-REPORT-FROM-O';
 
-function worker(home: string): string {
-  return writeNodeCli(path.join(home, 'cli-w.cjs'), [
+function worker(home: string, name: string, calls: string): string {
+  return writeNodeCli(path.join(home, `cli-${name}.cjs`), [
     "const fs = require('fs'); const path = require('path'); const crypto = require('crypto');",
     "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
     "const session = crypto.randomUUID();",
     `const dir = ${JSON.stringify(home)};`,
     "const log = (file, entry) => fs.appendFileSync(path.join(dir, file), JSON.stringify({ at: Date.now(), ...entry }) + '\\n');",
-    "process.stdin.on('data', d => log('typed-w.jsonl', { text: String(d) }));",
+    `process.stdin.on('data', d => log('typed-${name}.jsonl', { text: String(d) }));`,
     "const post = (route, body) => fetch(process.env.CLAUDE_MGR_API_URL + route, { method: 'POST',",
     "  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN },",
     "  body: JSON.stringify({ agent_id: process.env.CLAUDE_AGENT_ID, session_id: session, ...body }) }).then(r => r.json());",
     "const heredoc = s => `S=${s}; mkdir -p $S/retry-probe && cat > $S/retry-probe/p.yml <<'EOF'\\nsteps:\\n  - run: echo $(whoami)\\nEOF`;",
     "const scratch = path.join(process.env.CLAUDE_CODE_TMPDIR, 'scratchpad');",
-    "const calls = [",
-    "  { tool_use_id: 'toolu_own', tool: 'Write', input: { file_path: path.join(scratch, 'retry-probe', 'p.yml') }, withheld: true },",
-    "  { tool_use_id: 'toolu_out', tool: 'Bash', input: { command: heredoc(scratch) } },",
-    "];",
+    `const calls = ${calls};`,
     "(async () => {",
     "  process.stdout.write('stand-in ready\\r\\n');",
     "  await post('/api/hooks/status', { status: 'idle', source: 'startup' });",
@@ -67,7 +69,7 @@ function worker(home: string): string {
     "    do answer = await post('/api/hooks/permission', { tool: c.tool, tool_use_id: c.tool_use_id, input: c.input,",
     "      reason: 'This call requires approval', via: 'mod', ...(c.withheld ? { withheld: true } : {}) });",
     "    while (answer.decision === 'pending');",
-    "    log('answers-w.jsonl', { call: c.tool_use_id, decision: answer.decision, reason: answer.reason });",
+    `    log('answers-${name}.jsonl', { call: c.tool_use_id, decision: answer.decision, reason: answer.reason });`,
     "    process.stdout.write('* ' + c.tool + ': ' + answer.decision + '\\r\\n');",
     "    if (answer.decision === 'ask') process.stdout.write('Do you want to proceed?\\r\\n');",
     "  }",
@@ -98,7 +100,7 @@ function orchestrator(home: string): string {
 const lines = <T>(file: string): T[] => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l) as T) : []);
 
 for (const newInterface of [false, true]) {
-  test(`a bypass agent's own-folder call is answered by Tars, the rest refused at the delay, and a message waits out the dialog${newInterface ? ' (new interface)' : ''}`, async () => {
+  test(`Tars allows nothing itself: the owner allows a shell command, a bypass agent's Write is held and refused at the delay, another agent's goes to its dialog, and a message waits out the question${newInterface ? ' (new interface)' : ''}`, async () => {
     test.setTimeout(240_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-permission-dialogs-${newInterface ? 'ni' : 'classic'}-`));
     const project = path.join(home, 'projects', 'parallel');
@@ -107,7 +109,8 @@ for (const newInterface of [false, true]) {
     fs.mkdirSync(dir, { recursive: true });
     const base = { character: 'robot', provider: 'claude', status: 'idle', projectPath: project, skills: [], createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z' };
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home) },
+      { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home, 'w', "[{ tool_use_id: 'toolu_shell', tool: 'Bash', input: { command: heredoc(scratch) } }, { tool_use_id: 'toolu_file', tool: 'Write', input: { file_path: path.join(scratch, 'retry-probe', 'p.yml') }, withheld: true }]") },
+      { ...base, id: 'n', name: 'Docs Writer', role: 'worker', permissionMode: 'normal', cliPath: worker(home, 'n', "[{ tool_use_id: 'toolu_n', tool: 'Write', input: { file_path: path.join(scratch, 'n.md') }, withheld: true }]") },
       { ...base, id: 'o', name: 'Parallel Lead', role: 'orchestrator', cliPath: orchestrator(home) },
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
@@ -133,20 +136,25 @@ for (const newInterface of [false, true]) {
       await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'o', prompt: '' }));
       await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'w', prompt: '' }));
 
-      // 1. Its own scratchpad: allowed by Tars, at once.
-      await expect.poll(() => answers().length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
-      const own = answers()[0];
-      keep({ own });
-      expect(own).toMatchObject({ call: 'toolu_own', decision: 'allow' });
-      expect.soft(own.reason).toMatch(/^Tars allowed it: Cloud Architect is in bypass, and .*scratchpad.*p\.yml is inside its own folders/);
+      const answer = (decision: 'allow' | 'deny' | 'ask') => page.evaluate(d => (window as unknown as Api).electronAPI.agent.answerPermission('w', d), decision);
 
-      // 2. A shell command, even into its own scratchpad: held for the owner, and the window reads it.
-      await expect.poll(async () => (await w())?.permissionAsk?.subject ?? '', { timeout: 15_000 }).toContain('retry-probe/p.yml <<');
-      const held = await w();
-      keep({ held });
-      expect.soft([held?.status, held?.waitingReason]).toEqual(['waiting', 'permission']);
+      // 1. The shell command: held for the owner, whole, and the owner allows it from the window.
+      await expect.poll(async () => (await w())?.permissionAsk?.subject ?? '', { timeout: 30_000 }).toContain('retry-probe/p.yml <<');
+      const shell = await w();
+      keep({ shell });
+      expect.soft([shell?.status, shell?.waitingReason]).toEqual(['waiting', 'permission']);
       await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
       await stepShot(page, newInterface ? 'permission-held-new-interface' : 'permission-held');
+      expect(await answer('allow')).toEqual({ success: true });
+      await expect.poll(() => answers().length, { timeout: 15_000 }).toBe(1);
+      expect(answers()[0]).toMatchObject({ call: 'toolu_shell', decision: 'allow' });
+
+      // 2. The Write: held by its path, withheld; the window cannot allow it.
+      await expect.poll(async () => (await w())?.permissionAsk?.withheld ?? false, { timeout: 15_000 }).toBe(true);
+      const file = await w();
+      keep({ file });
+      expect(file?.permissionAsk?.subject).toMatch(/^Write .*retry-probe\/p\.yml$/);
+      expect(await answer('allow'), 'the window allowed content it never showed').toEqual({ success: false });
 
       // 3. o's message meanwhile: held, not refused, and not typed while the question stands.
       fs.writeFileSync(path.join(home, 'send-now'), '1');
@@ -162,9 +170,9 @@ for (const newInterface of [false, true]) {
       await expect.poll(() => answers().length, { timeout: 90_000 }).toBe(2);
       const late = answers()[1];
       keep({ late });
-      expect(late).toMatchObject({ call: 'toolu_out', decision: 'deny' });
+      expect(late).toMatchObject({ call: 'toolu_file', decision: 'deny' });
       expect.soft(late.reason).toMatch(/^Nobody answered this permission question in Tars within 1 minute, so Tars refused it/);
-      expect.soft(late.reason).toMatch(/Write tool/);
+      expect.soft(late.reason).toMatch(/never allows a file tool by itself/);
       await expect.poll(async () => (await w())?.permissionAsk ?? null, { timeout: 10_000 }).toBeNull();
 
       // 5. Then the message goes in.
@@ -173,6 +181,14 @@ for (const newInterface of [false, true]) {
       keep({ typed: typed(), markAfterRefusalMs: mark.at - late.at });
       expect(mark.at).toBeGreaterThanOrEqual(late.at);
       await stepShot(page, newInterface ? 'permission-refused-new-interface' : 'permission-refused');
+
+      // 6. n, not in bypass: its Write on Claude Code's own dialog at once.
+      await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'n', prompt: '' }));
+      await expect.poll(() => lines<Answer>(path.join(home, 'answers-n.jsonl')).length, { timeout: 30_000 }).toBe(1);
+      const n = lines<Answer>(path.join(home, 'answers-n.jsonl'))[0];
+      keep({ n });
+      expect(n).toMatchObject({ call: 'toolu_n', decision: 'ask' });
+      expect(n.at - late.at, 'n was not held').toBeLessThan(60_000);
     } finally {
       await app.close().catch(() => undefined);
       await removeHome(home);
