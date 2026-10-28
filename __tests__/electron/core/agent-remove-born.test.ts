@@ -36,7 +36,7 @@ describe.skipIf(process.platform === 'win32')('deleting an agent', () => {
     agents.set(id, { id, name: 'Gone', status: 'idle', provider: 'claude', projectPath: '/p', skills: [], output: [], lastActivity: '2026-10-28T00:00:00.000Z' } as AgentStatus);
     const tag = { ...process.env, CLAUDE_AGENT_ID: id, CLAUDE_MGR_API_URL: tarsAddress() };
     // node, not sleep: macOS shows no environment of a platform binary, so no tag.
-    const server = Number(execFileSync('/bin/sh', ['-c', `nohup "$0" -e 'setInterval(() => {}, 1 << 30)' remove-1 >/dev/null 2>&1 & echo $!`, process.execPath], { env: tag }).toString().trim());
+    const server = Number(execFileSync('/bin/sh', ['-c', `nohup "$0" -e 'setInterval(() => {}, 1 << 30)' remove-one >/dev/null 2>&1 & echo $!`, process.execPath], { env: tag }).toString().trim());
     leftovers.push(server);
     await new Promise(r => setTimeout(r, 300));
 
@@ -44,7 +44,7 @@ describe.skipIf(process.platform === 'win32')('deleting an agent', () => {
 
     expect(await new Promise(r => setTimeout(() => r(alive(server)), 200))).toBe(false);
     expect(removed.processes?.ended).toHaveLength(1);
-    expect(removed.processes?.ended[0]).toMatch(new RegExp(`^pid ${server}: .* remove-1$`));
+    expect(removed.processes?.ended[0]).toMatch(new RegExp(`^pid ${server}: .* remove-one$`));
     expect(agents.has(id)).toBe(false);
   });
 });
