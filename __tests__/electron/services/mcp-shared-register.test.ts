@@ -136,10 +136,10 @@ describe('the shared servers in claude\'s config', () => {
     try {
       const running = await ensureSharedMcp({ 'claude-mgr-kanban': script }, { apiUrl: API, instanceId: 'x' }, name => { gaveUp.push(name); });
       expect(running).toEqual(['claude-mgr-kanban']);
-      await vi.waitFor(() => expect(gaveUp).toEqual(['claude-mgr-kanban']), { timeout: 10_000 });
+      await vi.waitFor(() => expect(gaveUp).toEqual(['claude-mgr-kanban']), { timeout: 25_000 });
     } finally {
       stopSharedMcp();
     }
-  });
+  }, 30_000);
 });
 

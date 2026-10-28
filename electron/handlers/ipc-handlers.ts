@@ -1,3 +1,4 @@
+import { apiListening, NOT_LISTENING } from '../core/api-listening';
 import { safeGit, safeGitSync } from '../utils/safe-git';
 import { ipcMain, dialog, shell, app } from 'electron';
 import { stopTask, taskBannerOf } from '../services/task-banner';
@@ -399,6 +400,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     }
 
     console.log(`Creating PTY for agent ${id} with shell ${shell} in ${cwd}`);
+    // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+    if (!(await apiListening())) throw new Error(NOT_LISTENING);
 
     // Build PATH that includes user-configured paths, nvm, and other common locations for claude
     const currentSettings = getAppSettings();
@@ -646,6 +649,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       // Writing `export ...` to an already-running shell is racy: the shell may not
       // process the export before the claude command runs. Baking vars into pty.spawn()
       // guarantees they're in the process environment from the start.
+      // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+      if (!(await apiListening())) throw new Error(NOT_LISTENING);
       refuseWhileQuitting('agent terminal');
       const oldPty = ptyProcesses.get(agent.ptyId!);
       if (oldPty) {

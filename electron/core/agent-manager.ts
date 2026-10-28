@@ -1,3 +1,4 @@
+import { apiListening, NOT_LISTENING } from './api-listening';
 import { hasClaudeHooks } from './end-of-turn';
 import { keyPrintOf } from '../services/cli-keys';
 import { readAppSettingsFromDisk } from '../providers/cli-provider';
@@ -1131,6 +1132,8 @@ export async function startCliInTerminal(
 ): Promise<pty.IPty> {
   const refused = cliStartRefusal(agent, launch);
   if (refused) throw new Error(refused);
+  // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+  if (!(await apiListening())) throw new Error(NOT_LISTENING);
   const shellId = agent.ptyId;
   const shell = shellId ? deps.ptyProcesses.get(shellId) : undefined;
   if (shellId) deps.ptyProcesses.delete(shellId);
@@ -1198,6 +1201,8 @@ async function initAgentPtyLocked(
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
   saveAgentsCallback: () => void
 ): Promise<string> {
+  // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+  if (!(await apiListening())) throw new Error(NOT_LISTENING);
   // Re-check under the lock: the caller's check happened before it queued here,
   // and the call it was queued behind may have just created the PTY it wanted.
   if (agent.ptyId && ptyProcesses.has(agent.ptyId)) return agent.ptyId;

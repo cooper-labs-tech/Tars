@@ -310,11 +310,14 @@ export async function run() {
   async function callHttp(server, tool, args) {
     const headers = Object.fromEntries(Object.entries(server.headers ?? {}).map(([k, v]) => [k, String(v).replace(/\$\{([A-Za-z0-9_]+)\}/g, (_, n) => process.env[n] ?? '')]));
     log({ mcp: true, tool, to: args.id ?? null, calling: true, where: server.where, policy: 'measured: headers expanded', token: /Bearer \S+/.test(headers.Authorization ?? ''), agentId: process.env.CLAUDE_AGENT_ID ?? null });
+    // Tars's shared servers answer an event stream (progress, then the result), as claude reads it.
     const post = async (body) => {
       const r = await fetch(server.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers }, body: JSON.stringify(body) });
       const text = await r.text();
-      let json; try { json = JSON.parse(text); } catch { json = undefined; }
-      return { status: r.status, json, text };
+      const messages = (r.headers.get('content-type') ?? '').includes('text/event-stream')
+        ? text.split('\n').filter((l) => l.startsWith('data:')).map((l) => { try { return JSON.parse(l.slice(5)); } catch { return undefined; } }).filter(Boolean)
+        : (() => { try { return [JSON.parse(text)]; } catch { return []; } })();
+      return { status: r.status, json: messages.find((m) => m.id === body.id) ?? messages[0], text };
     };
     let r;
     try {

@@ -1,3 +1,4 @@
+import { noteApiPhase } from '../core/api-listening';
 import * as http from 'http';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -107,8 +108,12 @@ export function getApiServerState(): ApiServerState {
   return { ...apiServerState };
 }
 
+/** Whether an agent's CLI may start (core/api-listening.ts). */
+export { apiListening } from '../core/api-listening';
+
 function setApiServerState(patch: Partial<ApiServerState>): void {
   apiServerState = { ...apiServerState, ...patch };
+  noteApiPhase(apiServerState.phase);
   apiServerEmitter.emit('state', getApiServerState());
 }
 

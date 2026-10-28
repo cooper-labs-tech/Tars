@@ -28,8 +28,17 @@ export const SHARED_MCP_SERVERS: readonly string[] = [
   'claude-mgr-orchestrator', 'tars-memory', 'claude-mgr-kanban', 'claude-mgr-vault', 'dorothy-socialdata', 'dorothy-x',
 ];
 
+/** An orchestrator's only (the owner's decision of 28/10): never in a worker's role file, and refused to one at the door. */
+export const ORCHESTRATOR_ONLY_MCP: readonly string[] = ['claude-mgr-telegram', 'dorothy-x'];
+
+/** Each shared server's folder in the app's resources: how Tars's own per-agent copy is told from one the owner added. */
+const BUNDLE_DIR: Record<string, string> = {
+  'claude-mgr-orchestrator': 'mcp-orchestrator', 'tars-memory': 'mcp-memory', 'claude-mgr-kanban': 'mcp-kanban',
+  'claude-mgr-vault': 'mcp-vault', 'dorothy-socialdata': 'mcp-socialdata', 'dorothy-x': 'mcp-x',
+};
+
 type Target = { port: number; secret: string };
-type Host = { child?: ChildProcess; target?: Target; restarts: number[]; stopping: boolean; bundle: string };
+type Host = { child?: ChildProcess; target?: Target; restarts: number[]; stopping: boolean; bundle: string; onGiveUp?: (name: string) => void };
 const hosts = new Map<string, Host>();
 const tests = new Map<string, Target | undefined>();
 
@@ -89,6 +98,8 @@ function startOne(name: string, host: Host, env: { apiUrl: string; instanceId: s
       host.restarts = host.restarts.filter(t => now - t < 60_000);
       if (host.restarts.length >= RESTARTS_PER_MINUTE) {
         console.warn(`[mcp-shared] ${name} ended ${RESTARTS_PER_MINUTE} times in a minute (last ${code}): not started again`);
+        // Its entries go, and claude gets its per-agent copy back (the Audit's L1 on #541).
+        host.onGiveUp?.(name);
         return;
       }
       host.restarts.push(now);
@@ -102,7 +113,12 @@ function startOne(name: string, host: Host, env: { apiUrl: string; instanceId: s
  * Starts every shared server whose bundle is there and is not running yet; resolves with those that answer.
  * `bundles` names each server's bundle (mcp-orchestrator.ts resolves them under the app's resources).
  */
-export async function ensureSharedMcp(bundles: Record<string, string>, env: { apiUrl: string; instanceId: string }): Promise<string[]> {
+export async function ensureSharedMcp(
+  bundles: Record<string, string>,
+  env: { apiUrl: string; instanceId: string },
+  /** A server that gives up after its start: what the registration does then. */
+  onGiveUp?: (name: string) => void,
+): Promise<string[]> {
   const running: string[] = [];
   await Promise.all(SHARED_MCP_SERVERS.map(async name => {
     const bundle = bundles[name];
@@ -110,7 +126,7 @@ export async function ensureSharedMcp(bundles: Record<string, string>, env: { ap
     let host = hosts.get(name);
     if (host?.target && host.bundle === bundle) { running.push(name); return; }
     if (host?.child) { host.stopping = true; host.child.kill(); }
-    host = { bundle, restarts: [], stopping: false };
+    host = { bundle, restarts: [], stopping: false, ...(onGiveUp ? { onGiveUp } : {}) };
     hosts.set(name, host);
     if (await startOne(name, host, env)) running.push(name);
   }));
@@ -134,58 +150,78 @@ export function sharedMcpEntry(apiUrl: string, name: string): { type: 'http'; ur
 
 type Servers = Record<string, unknown>;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+type ConfigFiles = { claudeJson: string; mcpDir: string };
+const DEFAULT_FILES = (): ConfigFiles => ({ claudeJson: path.join(os.homedir(), '.claude.json'), mcpDir: path.join(os.homedir(), '.claude') });
+
+/** The role files claude agents are started with: mcp.json (made when missing), and a worker's own when there is one. */
+function roleFiles(files: ConfigFiles): Array<{ file: string; worker: boolean; make: boolean }> {
+  return [
+    { file: path.join(files.mcpDir, 'mcp.json'), worker: false, make: true },
+    { file: path.join(files.mcpDir, 'mcp-worker.json'), worker: true, make: false },
+  ];
+}
+
+/** Tars's own per-agent copy of a shared server: a stdio entry running that server's bundle from Tars's resources. */
+function tarsCopy(name: string, entry: unknown): boolean {
+  const args = (entry as { args?: unknown } | undefined)?.args;
+  const last = Array.isArray(args) ? args[args.length - 1] : undefined;
+  return typeof last === 'string' && last.replace(/\\/g, '/').endsWith(`/${BUNDLE_DIR[name]}/dist/bundle.js`);
+}
 
 /**
- * The shared servers into claude's config: ~/.claude.json (where `claude mcp add -s user` writes, read by every claude
- * agent) gets each one; ~/.claude/mcp.json (every claude agent's --mcp-config) has its copies replaced, and is not
- * made when there is none. Nothing else in either file changes, a file that does not parse is left alone, and an
- * unchanged file is not written.
+ * The shared servers into the role files claude agents are started with (--mcp-config): ~/.claude/mcp.json, and
+ * mcp-worker.json where there is one, without the orchestrator-only servers. Never into ~/.claude.json, the user
+ * scope every claude session loads whatever its --mcp-config says (a worker would get x back, and the owner's own
+ * sessions would warn of a missing variable: the Audit's M3 on #541), whose Tars copies of the shared servers go
+ * instead. Nothing else in any file changes, a file that does not parse is left alone, an unchanged file is not
+ * written.
  */
 export function writeSharedMcpEntries(
   apiUrl: string,
-  files: { claudeJson: string; mcpJson: string } = { claudeJson: path.join(os.homedir(), '.claude.json'), mcpJson: path.join(os.homedir(), '.claude', 'mcp.json') },
+  files: ConfigFiles = DEFAULT_FILES(),
   names: readonly string[] = SHARED_MCP_SERVERS,
 ): SharedJsonOutcome | 'unchanged' {
   let changed = false;
-  const outcome = updateSharedJsonSync<{ mcpServers?: Servers; [key: string]: unknown }>(files.claudeJson, current => {
-    const cfg = current ?? {};
-    const servers: Servers = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
-    changed = false;
-    for (const name of names) {
-      const entry = sharedMcpEntry(apiUrl, name);
-      if (!same(servers[name], entry)) { servers[name] = entry; changed = true; }
-    }
-    if (!changed) return undefined;
-    cfg.mcpServers = servers;
-    return cfg;
-  });
-  if (fs.existsSync(files.mcpJson)) {
-    updateSharedJsonSync<{ mcpServers?: Servers; [key: string]: unknown }>(files.mcpJson, current => {
-      const servers = current?.mcpServers;
-      if (!current || !servers || typeof servers !== 'object') return undefined;
+  let failed: SharedJsonOutcome | undefined;
+  const note = (o: SharedJsonOutcome) => { if (o === 'written') changed = true; if (o === 'unreadable' || o === 'busy') failed ??= o; };
+  for (const { file, worker, make } of roleFiles(files)) {
+    if (!make && !fs.existsSync(file)) continue;
+    note(updateSharedJsonSync<{ mcpServers?: Servers; [key: string]: unknown }>(file, current => {
+      const cfg = current ?? {};
+      const servers: Servers = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
       let here = false;
       for (const name of names) {
-        if (!(name in servers)) continue;
+        if (worker && ORCHESTRATOR_ONLY_MCP.includes(name)) {
+          if (name in servers) { delete servers[name]; here = true; }
+          continue;
+        }
         const entry = sharedMcpEntry(apiUrl, name);
         if (!same(servers[name], entry)) { servers[name] = entry; here = true; }
       }
-      if (here) changed = true;
-      return here ? current : undefined;
-    });
+      if (!here) return undefined;
+      cfg.mcpServers = servers;
+      return cfg;
+    }));
   }
-  if (outcome === 'unreadable' || outcome === 'busy') return outcome;
+  if (fs.existsSync(files.claudeJson)) {
+    note(updateSharedJsonSync<{ mcpServers?: Servers; [key: string]: unknown }>(files.claudeJson, current => {
+      const servers = current?.mcpServers;
+      if (!current || !servers || typeof servers !== 'object') return undefined;
+      let here = false;
+      for (const name of names) if (tarsCopy(name, servers[name])) { delete servers[name]; here = true; }
+      return here ? current : undefined;
+    }));
+  }
+  if (failed) return failed;
   return changed ? 'written' : 'unchanged';
 }
 
 /**
- * A shared server that did not start: its HTTP entries come out of claude's config (only Tars's own, by their URL), so
- * claude gets its per-agent copy back from the registration that follows.
+ * A shared server that did not start, or gave up since: its HTTP entries come out of the role files (only Tars's own,
+ * by their URL), so claude gets its per-agent copy back from the registration.
  */
-export function dropSharedMcpEntries(
-  names: readonly string[],
-  files: { claudeJson: string; mcpJson: string } = { claudeJson: path.join(os.homedir(), '.claude.json'), mcpJson: path.join(os.homedir(), '.claude', 'mcp.json') },
-): void {
-  for (const file of [files.claudeJson, files.mcpJson]) {
+export function dropSharedMcpEntries(names: readonly string[], files: ConfigFiles = DEFAULT_FILES()): void {
+  for (const { file } of roleFiles(files)) {
     if (!fs.existsSync(file)) continue;
     updateSharedJsonSync<{ mcpServers?: Servers; [key: string]: unknown }>(file, current => {
       const servers = current?.mcpServers;
@@ -199,4 +235,3 @@ export function dropSharedMcpEntries(
     });
   }
 }
-

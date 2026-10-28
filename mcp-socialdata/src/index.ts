@@ -33,7 +33,7 @@ function createServer(): McpServer {
 async function main() {
   if (await serveShared("dorothy-socialdata", {
     createServer,
-    createTransport: () => new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true }),
+    createTransport: () => new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: false }),
   })) return;
   const transport = new StdioServerTransport();
   await createServer().connect(transport);

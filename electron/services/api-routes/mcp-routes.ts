@@ -1,7 +1,8 @@
 import * as http from 'http';
 import { agents } from '../../core/agent-manager';
 import { chatsReadEnv } from '../../core/chat-inbox';
-import { SHARED_MCP_SERVERS, sharedMcpTarget } from '../mcp-shared';
+import { hasOrchestratorPowers } from '../../core/agent-role';
+import { ORCHESTRATOR_ONLY_MCP, SHARED_MCP_SERVERS, sharedMcpTarget } from '../mcp-shared';
 import type { RouteApp, RouteRequest, SendJson } from './types';
 
 /**
@@ -27,6 +28,12 @@ function proxy(req: RouteRequest, sendJson: SendJson): void {
     sendJson({ error: 'A shared MCP server is reached by an agent: with its own token (CLAUDE_MGR_API_TOKEN).' }, 403);
     return;
   }
+  // The owner's decision of 28/10: telegram and x are an orchestrator's (#525 keeps them out of a worker's config);
+  // the door is a second wall (the Audit's M3 on #541).
+  if (ORCHESTRATOR_ONLY_MCP.includes(name) && !hasOrchestratorPowers(agent)) {
+    sendJson({ error: `${name} is an orchestrator's server` }, 403);
+    return;
+  }
   const target = sharedMcpTarget(name);
   if (!target) {
     sendJson({ error: `${name} is not running in Tars right now` }, 503);
@@ -40,7 +47,8 @@ function proxy(req: RouteRequest, sendJson: SendJson): void {
   Object.assign(headers, {
     'x-tars-mcp-secret': target.secret,
     'x-tars-agent-id': agent.id,
-    'x-tars-agent-project': agent.projectPath,
+    // Encoded, as the name: Node refuses a header value above U+00FF (the Audit's M2 on #541).
+    'x-tars-agent-project': encodeURIComponent(agent.projectPath),
     'x-tars-agent-name': encodeURIComponent(agent.name || agent.id),
     'x-tars-chats-read': chatsReadEnv(agent.id).TARS_CHATS_READ === '1' ? '1' : '0',
   });

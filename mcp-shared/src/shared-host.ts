@@ -72,9 +72,10 @@ export function sharedHandler(secret: string, deps: SharedDeps): http.RequestLis
       const agentId = header(req, SHARED_HEADERS.agentId);
       const token = /^Bearer (\S+)$/.exec(header(req, "authorization"))?.[1] ?? "";
       if (!agentId || !token) return refuse(res, 400, "a shared call names its agent and carries its token");
-      let agentName = header(req, SHARED_HEADERS.name);
-      try { agentName = decodeURIComponent(agentName); } catch { /* as sent */ }
-      const caller = { agentId, projectPath: header(req, SHARED_HEADERS.project), agentName, chatsRead: header(req, SHARED_HEADERS.chatsRead) === "1", token };
+      // Both encoded by Tars: Node refuses a header value above U+00FF (项目, a decomposed é; the Audit's M2 on #541).
+      const decoded = (name: string) => { const v = header(req, name); try { return decodeURIComponent(v); } catch { return v; } };
+      const agentName = decoded(SHARED_HEADERS.name);
+      const caller = { agentId, projectPath: decoded(SHARED_HEADERS.project), agentName, chatsRead: header(req, SHARED_HEADERS.chatsRead) === "1", token };
       let body: unknown;
       try { body = await bodyOf(req); } catch { return refuse(res, 400, "a body that is not JSON"); }
       await runAsCaller(caller, async () => {

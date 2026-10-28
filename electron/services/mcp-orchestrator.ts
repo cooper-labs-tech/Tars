@@ -131,9 +131,26 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
     const apiUrl = `http://127.0.0.1:${API_PORT}`;
     const listed = new Set(mcpServers.map(s => s.name));
     const sharedHere = SHARED_MCP_SERVERS.filter(n => listed.has(n));
+    // A shared server that gives up after its start: its entries go, and claude gets its per-agent copy back, as
+    // when it does not start (the Audit's L1 on #541). Agents already running keep failing on it until their restart.
+    const giveUp = (name: string) => {
+      dropSharedMcpEntries([name]);
+      const served = mcpServers.find(s => s.name === name);
+      if (!served) return;
+      void (async () => {
+        for (const provider of providers.filter(p => p.binaryName === 'claude')) {
+          try {
+            await provider.registerMcpServer(name, mcpNodeCommand(), [served.serverPath], TARS_MCP_ENV);
+          } catch (err) {
+            console.error(`[${provider.id}] Failed to register ${name} again:`, err);
+          }
+        }
+      })();
+    };
     const shared = new Set(await ensureSharedMcp(
       Object.fromEntries(mcpServers.filter(s => sharedHere.includes(s.name)).map(s => [s.name, s.serverPath])),
       { apiUrl, instanceId: tarsInstanceId() },
+      giveUp,
     ));
     const notShared = sharedHere.filter(n => !shared.has(n));
     if (notShared.length) dropSharedMcpEntries(notShared);

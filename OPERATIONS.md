@@ -1374,17 +1374,23 @@ against its agent's folder.
   secret on its stdin, and reads the loopback port it says on its stdout (`listening <port>`). It is started again
   if it ends, at most five times a minute; the quit closes its stdin and stops it by its own process
   (`stopSharedMcp`).
-- **How a claude agent reaches them.** Tars writes each into `~/.claude.json`, and in place of a copy already in
-  `~/.claude/mcp.json`, as `{ type: 'http', url: 'http://127.0.0.1:<API_PORT>/api/mcp/<name>', headers:
-  { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } }`. Claude expands the variable from its own environment.
+- **How a claude agent reaches them.** Tars writes each into the role files claude agents are started with
+  (`--mcp-config ~/.claude/mcp.json`, made when missing, and a worker's `mcp-worker.json` where there is one, without
+  telegram and x) as `{ type: 'http', url: 'http://127.0.0.1:<API_PORT>/api/mcp/<name>', headers:
+  { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } }`. Claude expands the variable from its own environment. Never
+  into `~/.claude.json`, which every claude session loads, the owner's own included; Tars's own stdio copies of the
+  shared servers leave it. The servers answer an event stream, so a long call's progress (wait_for_agent's keep-alive)
+  reaches claude as it comes.
+- **No agent starts before Tars listens** on its port (`core/api-listening.ts`): claude's calls carry the token
+  unproven, and at launch Tars retries a busy port for about 90 s. The starts wait, and are refused if Tars gives up.
 - **The route.** `/api/mcp/<name>` proxies the call with the agent's identity from the fleet
   (`api-routes/mcp-routes.ts`):
-  - 403 without an agent's own token;
+  - 403 without an agent's own token, and for telegram or x to an agent without the orchestrator's powers;
   - 404 for a server that is not shared;
   - 503 while it is not running.
 - **The other CLIs** (codex, gemini, Qwen Code, opencode, pi, amp, grok) keep their per-agent copies, registered as
-  before. So does claude for a shared server that did not start: its HTTP entries are taken out
-  (`dropSharedMcpEntries`) and the per-agent copy registered again.
+  before. So does claude for a shared server that did not start, or that gave up later (five ends in a minute): its
+  HTTP entries are taken out (`dropSharedMcpEntries`) and the per-agent copy registered again.
 - **Measured on 28/10:** 19 agents ran 133 copies, 20 to 25 MB each, 2.75 GB. Shared, that is six processes for the
   six shared servers plus one telegram copy per agent, for the claude agents (the report of lot 3 has the figures).
 
