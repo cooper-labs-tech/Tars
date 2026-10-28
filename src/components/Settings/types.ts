@@ -49,17 +49,10 @@ export interface AppSettings {
   notifyOnComplete: boolean;
   notifyOnStop: boolean;
   notifyOnError: boolean;
-  telegramEnabled: boolean;
-  telegramBotToken: string;
-  /**
-   * Telegram through Hermes (#285): on, main erases the bot's token and turns
-   * the bot off.
-   */
+  /** Telegram through Hermes (PR 285), the one way to Telegram since 2.0.5. */
   hermesRelayEnabled?: boolean;
-  telegramChatId: string; // Legacy - kept for backwards compatibility
-  telegramAuthToken: string; // Secret token for authentication
-  telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
-  telegramRequireMention: boolean; // Only respond when bot is @mentioned in groups
+  /** Set once by the first 2.0.5 launch that found the old bot's settings; hadToken when a bot token was among them. */
+  telegramBotRetired?: { at: string; hadToken: boolean };
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;
