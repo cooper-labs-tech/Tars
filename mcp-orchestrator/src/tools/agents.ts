@@ -922,8 +922,16 @@ const AGENT_TOOLS: Tool[] = [
       timeoutSeconds: z.number().optional().describe("Maximum time to wait in seconds (default: 300)"),
     },
     failure: "waiting for agent",
-    async run({ id, timeoutSeconds = 300 }) {
-      const data = await waitForAgentStatus(id, timeoutSeconds);
+    async run({ id, timeoutSeconds = 300 }, extra) {
+      // As delegate_task's: any timeoutSeconds is taken, and Claude Code gives up a call silent for 30 minutes
+      // (the QA's F8 of the 2.0.5 final verification: the keep-alive everyone counted on was delegate_task's only).
+      const stopProgress = keepCallerListening(extra);
+      let data: WaitResult;
+      try {
+        data = await waitForAgentStatus(id, timeoutSeconds);
+      } finally {
+        stopProgress();
+      }
 
       const agentData = (await apiRequest(`/api/agents/${id}`)) as {
         agent: { name?: string };
