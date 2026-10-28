@@ -216,7 +216,8 @@ for (const newInterface of [false, true]) {
       await expect.poll(order, { timeout: 15_000 }).toEqual(['SLOW write the changelog']);
       const two = await second;
       keep({ two });
-      expect(two.text).toMatch(/cancel/i);
+      // The asker is told in the queue's words (PR 536, core/task-cancel.ts): it never started, taken back in the window.
+      expect(two.text).toMatch(/never started: it was taken back by you, in the window/);
       await stepShot(page, `${tag}2-moved-cancelled`);
 
       // 4. Pause, then stop the task in hand: nothing goes in.
