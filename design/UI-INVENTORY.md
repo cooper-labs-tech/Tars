@@ -4,8 +4,8 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 329 root frames, 98 of them drawn and not built yet: the 87 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
-`design/chat-design.pen` holds 72 of those, the other two hundred and fifty-seven being newer than the
+rather than a companion to it. `design/tars-redesign.pen` holds 331 root frames, 100 of them drawn and not built yet: the 89 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+`design/chat-design.pen` holds 72 of those, the other two hundred and fifty-nine being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
 room listed on the `/chat` line below: 85 in all. 71 share their ids
@@ -313,3 +313,5 @@ For 2.0.5:
   window), · quick open and a file dropped into a prompt (and its light copy).
 - Terminal splits and a search through the scrollback: Terminal splits (2.0.5) · free splits and a search through the
   scrollback (its light copy, the narrowest window).
+- A board past nine agents keeps three columns and its terminals a 3x3 cell's size, and scrolls (JeanBrasse, 22/10):
+  Dashboard (2.0.5) · twelve agents, three columns, scrolled (and its light copy).

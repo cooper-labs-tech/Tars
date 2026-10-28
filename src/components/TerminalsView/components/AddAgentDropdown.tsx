@@ -5,10 +5,7 @@ import { lastPathPart } from '@/lib/display-path';
 import { ChevronDown } from 'lucide-react';
 import type { AgentStatus } from '@/types/electron';
 import { Button } from '@/components/ui';
-import { STATUS_COLORS, LAYOUT_PRESETS } from '../constants';
-
-// Largest grid the board can render (3x3); agents beyond it are never shown.
-const MAX_BOARD_PANELS = Math.max(...Object.values(LAYOUT_PRESETS).map(p => p.maxPanels));
+import { STATUS_COLORS } from '../constants';
 
 interface AddAgentDropdownProps {
   /** Bulk add - every listed agent of a project in one click. */
@@ -136,24 +133,14 @@ export default function AddAgentDropdown({
                     {group.projectName}
                   </span>
                   {onAddAgents && group.agents.length > 1 && (() => {
-                    const capacity = Math.max(0, MAX_BOARD_PANELS - currentTabAgentIds.length);
-                    const addable = Math.min(group.agents.length, capacity);
-                    if (addable === 0) {
-                      return (
-                        <span className="text-[10px] font-mono text-muted-foreground shrink-0" title={`Board is full (${MAX_BOARD_PANELS} max)`}>
-                          board full
-                        </span>
-                      );
-                    }
+                    // No cap: past nine panels the board scrolls (JeanBrasse, 22/10).
                     return (
                       <button
-                        onClick={() => { onAddAgents(group.agents.slice(0, addable).map(a => a.id)); setOpen(false); }}
+                        onClick={() => { onAddAgents(group.agents.map(a => a.id)); setOpen(false); }}
                         className="text-[10px] font-mono text-primary hover:underline shrink-0"
-                        title={addable < group.agents.length
-                          ? `Board holds ${MAX_BOARD_PANELS} max - adds the first ${addable} of ${group.agents.length}`
-                          : `Add all ${group.agents.length} agents of ${group.projectName}`}
+                        title={`Add all ${group.agents.length} agents of ${group.projectName}`}
                       >
-                        {addable < group.agents.length ? `add first ${addable}` : `add all (${group.agents.length})`}
+                        {`add all (${group.agents.length})`}
                       </button>
                     );
                   })()}

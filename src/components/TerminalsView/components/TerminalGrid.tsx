@@ -105,14 +105,19 @@ function TerminalGrid({
   const MARGIN: readonly [number, number] = [GRID_GAP, GRID_GAP];
   const CONTAINER_PADDING: readonly [number, number] = [0, 0];
   const rowHeight = Math.max(GRID_MIN_ROW, (containerHeight - MARGIN[1] * (expectedRows + 1)) / expectedRows);
+  // Past the preset's rows (the largest preset past nine panels), the cells keep
+  // their height and the board grows by rows, scrolled in its container.
+  const contentRows = Math.max(expectedRows, Math.ceil(visiblePanels.length / Math.max(1, cols)));
+  const scrolls = !orchestratorId && contentRows > expectedRows;
+  const boardHeight = scrolls ? contentRows * rowHeight + (contentRows + 1) * MARGIN[1] : containerHeight;
 
   const gridConfig = useMemo(() => ({
     cols,
     rowHeight,
     margin: MARGIN,
     containerPadding: CONTAINER_PADDING,
-    maxRows: expectedRows,
-  }), [cols, rowHeight, expectedRows]);
+    maxRows: contentRows,
+  }), [cols, rowHeight, contentRows]);
 
   const dragConfig = useMemo(() => ({
     enabled: isEditable,
@@ -259,7 +264,7 @@ function TerminalGrid({
         onLayoutChange={handleLayoutChange}
         onDragStop={handleDragStop}
         autoSize={false}
-        style={{ height: containerHeight }}
+        style={{ height: boardHeight }}
       >
         {visiblePanels.map(panel => {
           const agent = agents.find(a => a.id === panel.agentId);
@@ -293,7 +298,7 @@ function TerminalGrid({
   };
 
   return (
-    <div ref={containerRef} data-board-layout={orchestratorId ? 'orchestrator' : 'grid'} className="h-full w-full overflow-hidden">
+    <div ref={containerRef} data-board-layout={orchestratorId ? 'orchestrator' : 'grid'} className={`h-full w-full ${scrolls ? 'overflow-y-auto overflow-x-hidden' : 'overflow-hidden'}`}>
       {renderContent()}
     </div>
   );
