@@ -16,14 +16,15 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * How it can fail, written before the window's change:
  * 1. the panel's line reads the break as a space ("echo safe rm -rf important");
  * 2. the panel's line or its title does not mark the break;
- * 3. the agent window shows the two commands on one line;
+ * 3. the agent window shows the two commands on one line, or collapses the two spaces of a quoted name into one
+ *    (the Audit's Low at its re-check of PR 544);
  * 4. an uncaught error in the page.
  * Once with the classic shell and once with the new interface: on the Dashboard's panel, and in the agent window.
  * Red on PR 538's head with the frames and the spec (the window flattening the break into a space).
  * The artefact: values.json (the line and the window's block as read), screenshots.
  */
 
-const COMMAND = 'echo safe\nrm -rf important';
+const COMMAND = 'echo safe\nrm -rf "important  file"';
 
 function worker(home: string): string {
   return writeNodeCli(path.join(home, 'cli-w.cjs'), [
@@ -87,7 +88,7 @@ for (const newInterface of [false, true]) {
       seen.panel = { subject, title };
       expect(subject).toContain('⏎');
       expect(subject).not.toContain('echo safe rm');
-      expect(title).toContain('echo safe ⏎ rm -rf important');
+      expect(title).toContain('echo safe ⏎ rm -rf "important  file"');
       await stepShot(page, `${tag}1-panel`);
 
       // 3. The agent window: each command on its own line.
@@ -97,7 +98,7 @@ for (const newInterface of [false, true]) {
       await expect(block).toBeVisible();
       const lines = await block.locator('[data-subject-line]').allInnerTexts();
       seen.windowLines = lines;
-      expect(lines.map((l) => l.trim())).toEqual(['echo safe', 'rm -rf important']);
+      expect(lines).toEqual(['echo safe', 'rm -rf "important  file"']);
       expect(await block.innerText()).not.toContain('echo safe rm');
       await stepShot(page, `${tag}2-window`);
 

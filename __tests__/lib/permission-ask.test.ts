@@ -51,6 +51,11 @@ import type { AgentStatus } from '../../src/types/electron';
  *     and its lines are given one by one for a window that shows them so;
  *     \r\n, \r, \n, U+2028 and U+2029 are each one break, and a break at the
  *     start or the end is no line of its own.
+ * 12. whitespace within a line collapsed: a quoted path or pattern with two
+ *     spaces, or a tab, read with one space, and an allow covered what was not
+ *     read (the Audit's Low at its re-check of PR 544). Every space is kept,
+ *     a tab shows as ⇥, and a character that hides or turns text shows as
+ *     U+FFFD instead of vanishing into a space.
  */
 
 const NOW = new Date(2026, 9, 5, 14, 30);
@@ -121,7 +126,7 @@ describe('what it names', () => {
       permissionAsk: ask({ tool: 'Ba\u202Esh', subject: 'rm -rf build\u2028&& echo \u202Eok\u200B done' }),
     }), NOW);
     expect(line?.who).toBe('Asks to use Ba sh:');
-    expect(line?.subject).toBe('rm -rf build ⏎ && echo ok done');
+    expect(line?.subject).toBe('rm -rf build ⏎ && echo \uFFFDok\uFFFD done');
     expect(line?.title).not.toMatch(/[\u2028\u202E\u200B]/);
   });
 });
@@ -140,6 +145,23 @@ describe('its line breaks (11)', () => {
   });
   it('one line when there is no break', () => {
     expect(permissionAskLine(agent(), NOW)?.lines).toEqual(['npm run build && npm test']);
+  });
+});
+
+describe('its whitespace within a line (12)', () => {
+  it('keeps every space, and shows a tab as ⇥', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'grep "a  b"\tfile.txt' }) }), NOW);
+    expect(line?.subject).toBe('grep "a  b"⇥file.txt');
+    expect(line?.lines).toEqual(['grep "a  b"⇥file.txt']);
+    expect(line?.title).toBe('Asks to use Bash: grep "a  b"⇥file.txt');
+  });
+  it('keeps a line\'s leading spaces, and drops none between its words', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'cat <<EOF\n  two  spaces\nEOF' }) }), NOW);
+    expect(line?.lines).toEqual(['cat <<EOF', '  two  spaces', 'EOF']);
+  });
+  it('shows a character that hides or turns text, never a space or nothing', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'rm\u200B -rf /tmp/x\u202E' }) }), NOW);
+    expect(line?.subject).toBe('rm\uFFFD -rf /tmp/x\uFFFD');
   });
 });
 
