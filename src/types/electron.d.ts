@@ -292,6 +292,9 @@ interface HeavySlotStatus {
   /** The machine's last reading (null before the first); a figure the system cannot give is null. */
   machine: {
     at: string; diskFreeGb: number | null; memFreePct: number | null; memFreeMb: number | null;
+    /** The machine's memory, and the free memory memFreePct speaks of (its share of it): "6.2 GB, 26 % of 24 GB". memFreeMb
+     *  is another figure (free and speculative pages on macOS). */
+    memTotalMb: number | null; memFreeShareMb: number | null;
     swapUsedMb: number | null; swapGrowthMbPerMin: number | null; load1: number | null;
   } | null;
   /** With each holder's tree: its process and everything under it (none on Windows). */

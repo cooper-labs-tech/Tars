@@ -217,6 +217,19 @@ export class HeavySlot {
   }
 
   /** Leases and asks whose process ended go; then the free slots go to the queue, when the machine allows. */
+  /**
+   * Who holds the slot, and since when, as a waiter reads it: in the machine's own zone, the window's (the
+   * orchestrator's note on #539: in UTC beside the window's local times, it read hours off).
+   */
+  private heldBy(holders: SlotTicket[]): string {
+    const at = (ms: number | undefined) => {
+      if (ms === undefined) return '';
+      const d = new Date(ms);
+      return ` since ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    };
+    return `held by ${holders.map(h => `${h.agentName} (${h.label})${at(h.grantedAt)}`).join(', ')}`;
+  }
+
   async pump(): Promise<void> {
     let changed = false;
     for (const t of [...this.tickets.values()]) {
@@ -227,8 +240,8 @@ export class HeavySlot {
     let free = this.slots() - holders.length;
     const say = (t: SlotTicket, why: string) => { if (t.why !== why) { t.why = why; changed = true; } };
     if (waiting.length && free <= 0) {
-      const held = holders.map(h => `${h.agentName} (${h.label}) since ${new Date(h.grantedAt!).toISOString().slice(11, 16)} UTC`).join(', ');
-      for (const t of waiting) say(t, `held by ${held}`);
+      const held = this.heldBy(holders);
+      for (const t of waiting) say(t, held);
     } else if (waiting.length) {
       const m = await this.world.machine();
       const f = this.world.floors();
@@ -245,7 +258,7 @@ export class HeavySlot {
           free--;
           changed = true;
         } else {
-          say(t, `held by ${this.holders().map(h => `${h.agentName} (${h.label})`).join(', ')}`);
+          say(t, this.heldBy(this.holders()));
         }
       }
     }

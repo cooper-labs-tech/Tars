@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import * as os from 'os';
 import { HeavySlot, type SlotAsk, type SlotMachine, type SlotSnapshot, type SlotTicket } from './heavy-slot';
 import { readMachine } from './health/machine';
 import { readProcesses } from './stall-watch';
@@ -60,7 +61,12 @@ export interface SlotAlert {
 export interface SlotStatus {
   slots: number;
   floors: { diskGb: number; memFreePct: number };
-  machine: (SlotMachine & { at: string; memFreeMb: number | null; swapUsedMb: number | null; load1: number | null }) | null;
+  machine: (SlotMachine & {
+    at: string; memFreeMb: number | null; swapUsedMb: number | null; load1: number | null;
+    /** The machine's memory, and the free memory `memFreePct` speaks of (the share of it): "6.2 GB, 26 % of 24 GB".
+     *  `memFreeMb` is another figure (free and speculative pages on macOS), which the share does not count alone. */
+    memTotalMb: number | null; memFreeShareMb: number | null;
+  }) | null;
   holders: Array<SlotView & { tree?: SlotTree }>;
   waiting: SlotView[];
   /** Since midnight, oldest first. */
@@ -99,9 +105,11 @@ async function machineNow(): Promise<SlotMachine> {
   const now = Date.now();
   if (lastMachine && now - Date.parse(lastMachine.at) < MACHINE_EVERY_MS) return lastMachine;
   const m = await readMachine({ previous: previousSwap, now });
+  const total = os.totalmem() > 0 ? Math.round(os.totalmem() / (1024 * 1024)) : null;
   previousSwap = { at: now, swapUsedMb: m.swapUsedMb };
   lastMachine = {
     at: new Date(now).toISOString(), diskFreeGb: m.diskFreeGb, memFreePct: m.memFreePct, memFreeMb: m.memFreeMb,
+    memTotalMb: total, memFreeShareMb: total !== null && m.memFreePct !== null ? Math.round((m.memFreePct / 100) * total) : null,
     swapUsedMb: m.swapUsedMb, swapGrowthMbPerMin: m.swapGrowthMbPerMin, load1: m.load1,
   };
   return lastMachine;
@@ -160,9 +168,9 @@ function todaysAlerts(): SlotAlert[] {
 }
 
 export async function slotStatus(): Promise<SlotStatus> {
+  if (!lastMachine) await machineNow().catch(() => undefined);
   if (!slot) return { slots: 1, floors: floors(), machine: lastMachine, holders: [], waiting: [], alerts: todaysAlerts() };
   const snap = slot.snapshot();
-  if (!lastMachine) await machineNow().catch(() => undefined);
   const holders = await Promise.all(snap.holders.map(async t => {
     const tree = await treeOf(t.pid).catch(() => undefined);
     return { ...view(t, snap), ...(tree ? { tree } : {}) };
