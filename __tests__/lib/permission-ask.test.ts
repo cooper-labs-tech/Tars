@@ -56,6 +56,10 @@ import type { AgentStatus } from '../../src/types/electron';
  *     read (the Audit's Low at its re-check of PR 544). Every space is kept,
  *     a tab shows as ⇥, and a character that hides or turns text shows as
  *     U+FFFD instead of vanishing into a space.
+ * 13. a space other than U+0020 (no-break U+00A0, thin U+2009, narrow
+ *     no-break U+202F, ideographic U+3000 and the rest of Zs) read as an
+ *     ordinary one, where bash takes it as part of a word (the Audit's Low at
+ *     its second re-check of PR 544): each shows as ⍽.
  */
 
 const NOW = new Date(2026, 9, 5, 14, 30);
@@ -162,6 +166,14 @@ describe('its whitespace within a line (12)', () => {
   it('shows a character that hides or turns text, never a space or nothing', () => {
     const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'rm\u200B -rf /tmp/x\u202E' }) }), NOW);
     expect(line?.subject).toBe('rm\uFFFD -rf /tmp/x\uFFFD');
+  });
+});
+
+describe('a space other than the plain one (13)', () => {
+  it('shows each as ⍽, the plain space kept', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'rm -rf a\u00A0b c\u2009d e\u202Ff g\u3000h' }) }), NOW);
+    expect(line?.subject).toBe('rm -rf a⍽b c⍽d e⍽f g⍽h');
+    expect(line?.lines).toEqual(['rm -rf a⍽b c⍽d e⍽f g⍽h']);
   });
 });
 
