@@ -16,6 +16,7 @@ import { isSkillName } from '../utils/skill-name';
 import { quoted } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
 import { holdsMessages } from './one-task';
+import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
 import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput } from './pty-manager';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
@@ -987,10 +988,21 @@ export function noteTurnStarted(agent: AgentStatus): void {
 }
 
 /**
+ * How long the check keeps asking, for a CLI that neither takes its task nor says it is idle: then it stops,
+ * typing nothing and accusing nothing. Two hours, well past the 36 s hooks of a loaded machine.
+ */
+const DELIVERY_ASK_FOR_MS = 2 * 60 * 60_000;
+
+/**
  * Confirm the delivery, and send it a second way before giving up.
  *
  * The second way is the one that has always worked: typing into the live
  * session, which is what /dispatch does to an agent that is already running.
+ * Only on proof that the CLI dropped it (core/delivery-proof.ts): it said it is
+ * idle at its prompt, and nothing of the task is on its record. The clock alone
+ * typed tasks a second time into CLIs still running their hooks, which ran
+ * them twice (the DB brief fix-twin-deliveries-2810.md). Until then, it asks
+ * again every TURN_START_BOUND_MS.
  */
 function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
   const timer = setTimeout(() => {
@@ -1004,16 +1016,48 @@ function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
     const ptyProcess = ptyProcesses.get(ptyId);
     // The process is gone: onExit owns that outcome and knows the exit code.
     if (!ptyProcess) return;
+    const time = (iso: string | undefined) => (iso ? Date.parse(iso) : NaN);
+    const registeredAt = time(live.sessionRegisteredAt);
+    const verdict = deliveryVerdict({
+      registeredAt: Number.isFinite(registeredAt) ? registeredAt : time(pending.dispatchedAt),
+      turnStartedAt: Number.isFinite(time(live.lastTurnStartedAt)) ? time(live.lastTurnStartedAt) : undefined,
+      idlePromptAt: Number.isFinite(time(live.idlePromptAt)) ? time(live.idlePromptAt) : undefined,
+      retypedAt: Number.isFinite(time(pending.retypedAt)) ? time(pending.retypedAt) : undefined,
+      onRecord: taskOnRecord(sessionTail(live), pending.task),
+    });
+    if (verdict === 'taken') {
+      // In, late: its turn's own post had not landed, or the CLI holds it queued. Nobody is told it never began.
+      console.log(`[agent] ${live.name || live.id}'s task is on its CLI's record: taken, nothing typed again`);
+      live.pendingDelivery = undefined;
+      saveAgents();
+      return;
+    }
+    if (verdict === 'wait') {
+      // Not idle at its prompt since: its hooks still run, or it works. Asked again later; nothing typed, nobody accused.
+      if (Date.now() - time(pending.dispatchedAt) < DELIVERY_ASK_FOR_MS) {
+        pending.checkArmed = true;
+        scheduleDeliveryCheck(agentId, ptyId);
+      } else {
+        console.warn(`[agent] ${live.name || live.id} has neither taken its task nor said it is idle in ${DELIVERY_ASK_FOR_MS / 60_000} minutes: no longer asked, nothing typed again`);
+        live.pendingDelivery = undefined;
+      }
+      return;
+    }
     // A blocking permission dialog reads typed text as its answer, so a
     // redelivery there would accept the dialog rather than deliver anything.
-    if (dialogOpen(live)) return;
+    if (dialogOpen(live)) {
+      pending.checkArmed = true;
+      scheduleDeliveryCheck(agentId, ptyId);
+      return;
+    }
 
-    if (!pending.retried) {
+    if (verdict === 'retype' && !pending.retried) {
       console.warn(
-        `[agent] ${live.name || live.id} registered but has not started a turn after `
-        + `${Math.round(TURN_START_BOUND_MS / 1000)}s: typing the task into the live session`,
+        `[agent] ${live.name || live.id} is idle at its prompt with nothing of its task on record: `
+        + 'typing the task into the live session',
       );
       pending.retried = true;
+      pending.retypedAt = new Date().toISOString();
       live.lastActivity = new Date().toISOString();
       saveAgents();
       const outcome = writeProgrammaticInput(ptyProcess, pending.task, true, {
@@ -1039,8 +1083,8 @@ function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
     }
 
     console.error(
-      `[agent] ${live.name || live.id} never started a turn: the task reached the CLI neither as an `
-      + 'argument nor typed in',
+      `[agent] ${live.name || live.id} never started a turn: idle at its prompt twice, nothing of the task on its record, `
+      + 'neither as an argument nor typed in',
     );
     live.pendingDelivery = undefined;
     live.status = 'error';

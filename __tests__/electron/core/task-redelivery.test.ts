@@ -142,25 +142,41 @@ afterEach(() => {
   agentStatusEmitter.removeAllListeners('status:a1');
 });
 
-/** Arm the watch, register the session as SessionStart does, then run the clock. */
-async function afterRegistration(ms: number, between?: () => void): Promise<void> {
-  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+/** Claude Code at rest at its prompt: its idle_prompt notification, as notification.sh posts it. */
+function idlePrompt(): void {
+  post({ agent_id: 'a1', session_id: sid('sess-1'), status: 'waiting', waiting_reason: 'idle' });
+}
+
+/**
+ * Arm the watch, register the session as SessionStart does, then run the clock. `idle`: the CLI says it is idle at
+ * its prompt a moment after it registered, and again after anything is typed into it (since the DB brief
+ * fix-twin-deliveries-2810.md, the one proof the check takes that a task was dropped, core/delivery-proof.ts).
+ */
+async function afterRegistration(ms: number, between?: () => void, opts: { idle?: boolean } = {}): Promise<void> {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
   try {
     const agent = agents.get('a1') as AgentStatus;
     armTaskStartWatch(agent, agent.ptyId, TASK);
     post({ agent_id: 'a1', session_id: sid('sess-1'), status: 'idle', source: 'startup' });
     between?.();
-    await vi.advanceTimersByTimeAsync(ms);
+    if (opts.idle) {
+      for (let elapsed = 0; elapsed < ms; elapsed += 5_000) {
+        await vi.advanceTimersByTimeAsync(5_000);
+        idlePrompt();
+      }
+    } else {
+      await vi.advanceTimersByTimeAsync(ms);
+    }
   } finally {
     vi.useRealTimers();
   }
 }
 
 describe('a session that registered but never began a turn', () => {
-  it('gets the task typed into the terminal that is already up', async () => {
+  it('gets the task typed into the terminal that is already up, once the CLI says it is idle at its prompt', async () => {
     liveAgent();
 
-    await afterRegistration(PAST_THE_TURN_BOUND);
+    await afterRegistration(PAST_THE_TURN_BOUND, undefined, { idle: true });
 
     // The message path, which is the one measured to work in production: the
     // same write a task from Slack or Telegram takes.
@@ -174,7 +190,7 @@ describe('a session that registered but never began a turn', () => {
   it('types it once, however long nothing happens', async () => {
     liveAgent();
 
-    await afterRegistration(PAST_EVERYTHING);
+    await afterRegistration(PAST_EVERYTHING, undefined, { idle: true });
 
     // Receiving the task twice is visible and recoverable; receiving it three
     // times because a timer kept firing is a different bug.
@@ -184,7 +200,7 @@ describe('a session that registered but never began a turn', () => {
   it('says so on the bus when even the retyped task never starts a turn', async () => {
     const agent = liveAgent();
 
-    await afterRegistration(PAST_EVERYTHING);
+    await afterRegistration(PAST_EVERYTHING, undefined, { idle: true });
 
     expect(agent.status).toBe('error');
     expect(agent.error).toMatch(/never|task/i);
@@ -201,7 +217,7 @@ describe('a session that registered but never began a turn', () => {
     vi.mocked(writeProgrammaticInput).mockImplementationOnce(() => 'held');
     const agent = liveAgent();
 
-    await afterRegistration(PAST_EVERYTHING);
+    await afterRegistration(PAST_EVERYTHING, undefined, { idle: true });
 
     expect(retyped(), 'the task was typed in once and then held').toHaveLength(1);
     expect(agent.status, 'accused of never taking a task that is still waiting for its terminal').not.toBe('error');
@@ -224,10 +240,12 @@ describe('a session that does begin a turn', () => {
   it('is left alone when the turn only comes after the task was retyped', async () => {
     const agent = liveAgent();
 
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     try {
       armTaskStartWatch(agent, agent.ptyId, TASK);
       post({ agent_id: 'a1', session_id: sid('sess-1'), status: 'idle', source: 'startup' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      idlePrompt();
       await vi.advanceTimersByTimeAsync(PAST_THE_TURN_BOUND);
       expect(retyped()).toHaveLength(1);
 
@@ -299,34 +317,31 @@ describe('the cases where typing into the terminal would be wrong', () => {
  * Put that beside the delivery check and a case falls out that nobody
  * dispatched badly: the task reached the CLI on the command line, the CLI is
  * working on it, and the one post that would say so never arrives, because the
- * hooks are not installed, or `jq` is missing, or the API refused it. From
- * Tars's side that is indistinguishable from a task that never landed.
+ * hooks are not installed, or `jq` is missing, or the API refused it, or its
+ * UserPromptSubmit hooks take 36 s on a loaded machine (27/10).
  *
- * Written as observed rather than as it ought to be, and reported rather than
- * repaired here: this is a permanent outcome for a misconfigured agent, on
- * every dispatch, not a rare race.
+ * Written as observed until 2.0.5: the task typed in a second time and the
+ * agent marked broken while it worked. Measured over 23 to 28/10, three tasks
+ * ran twice that way (the DB brief fix-twin-deliveries-2810.md). Since, the CLI
+ * working says nothing of being idle at its prompt, so nothing is typed again
+ * and nobody is accused; its record holding the task is taken as the task in.
  */
 describe('F3: the task arrived and no hook ever reports it', () => {
-  it('types the task in a second time, although the CLI already has it', async () => {
+  it('is not typed in a second time while the CLI never says it is idle at its prompt', async () => {
     const agent = liveAgent();
 
-    // The dispatch went out on the command line and the CLI took it. What is
-    // missing is only the UserPromptSubmit post.
     await afterRegistration(PAST_THE_TURN_BOUND);
 
-    expect(retyped()).toHaveLength(1);
-    expect(retyped()[0][1]).toBe(TASK);
-    // The whole of what Tars can see: no turn was ever reported.
+    expect(retyped()).toHaveLength(0);
     expect(agent.lastTurnStartedAt).toBeUndefined();
   });
 
-  it('marks the agent broken while its session is working', async () => {
+  it('is not marked broken while its session works', async () => {
     const agent = liveAgent();
 
     await afterRegistration(PAST_EVERYTHING);
 
-    expect(agent.status).toBe('error');
-    expect(agent.error).toMatch(/sent twice|never took the task/i);
-    expect(agent.lastTurnStartedAt).toBeUndefined();
+    expect(agent.status).not.toBe('error');
+    expect(retyped()).toHaveLength(0);
   });
 });

@@ -121,7 +121,11 @@ const lastSeen = new Map<string, string>();
  * never reached the orchestrator. The reason and the turn tell them apart.
  */
 function stateOf(agent: AgentStatus): string {
-  return [agent.status, agent.waitingReason ?? '', agent.lastTurnStartedAt ?? ''].join('|');
+  // The idle prompt's `waiting` is the same rest as the `idle` before it: Claude Code says so 60 s on. Read as a
+  // second transition, an end of turn with background work (its link kept) was told twice, 18 times in 4 days on
+  // Parallel's orchestrator (the DB brief fix-twin-deliveries-2810.md).
+  const resting = agent.status === 'waiting' && agent.waitingReason === 'idle';
+  return [resting ? 'idle' : agent.status, resting ? '' : agent.waitingReason ?? '', agent.lastTurnStartedAt ?? ''].join('|');
 }
 
 function isAtRest(agent: AgentStatus): boolean {
