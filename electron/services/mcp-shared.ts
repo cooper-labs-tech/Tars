@@ -18,17 +18,21 @@ import { updateSharedJsonSync, type SharedJsonOutcome } from '../utils/shared-fi
  *   every route under /api/, so the caller is the agent its own token names, and Tars hands the server that agent's
  *   identity from its fleet. The token is in no command line and no file: claude's config names the variable, and
  *   claude expands it from its own environment (measured on 2.1.312).
- * - The telegram server stays per agent: it resolves a file to send against its agent's working folder.
+ * - Tars's own telegram server is gone since 2.0.5 (Telegram goes through Hermes, services/hermes-relay-switch.ts):
+ *   the six above are every server Tars ships.
  * - The CLIs that cannot read such an entry (codex, gemini, qwen, opencode, pi, amp, grok) keep their per-agent
  *   copies, registered as before.
  */
 
-/** The servers one process serves for every agent; telegram is not one (above). */
+/** The servers one process serves for every agent: all six Tars ships. */
 export const SHARED_MCP_SERVERS: readonly string[] = [
   'claude-mgr-orchestrator', 'tars-memory', 'claude-mgr-kanban', 'claude-mgr-vault', 'dorothy-socialdata', 'dorothy-x',
 ];
 
-/** An orchestrator's only (the owner's decision of 28/10): never in a worker's role file, and refused to one at the door. */
+/**
+ * An orchestrator's only (the owner's decision of 28/10): never in a worker's role file, and refused to one at the door.
+ * `claude-mgr-telegram` is no longer shipped; it stays listed so a stale entry a 2.0.4 left never reaches a worker.
+ */
 export const ORCHESTRATOR_ONLY_MCP: readonly string[] = ['claude-mgr-telegram', 'dorothy-x'];
 
 /** Each shared server's folder in the app's resources: how Tars's own per-agent copy is told from one the owner added. */
