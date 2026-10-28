@@ -16,35 +16,8 @@ export type HeavySlotHolder = HeavySlotStatus['holders'][number];
 export type HeavySlotTicket = HeavySlotStatus['waiting'][number];
 export type HeavySlotAlert = HeavySlotStatus['alerts'][number];
 
-export interface AgentProcess { name: string; memMb: number | null; cpuPct: number | null; /** Secrets already masked. */ command: string }
-export interface MeasuredPath { path: string; bytes: number | null }
-
-export interface AgentResources {
-  id: string;
-  name: string;
-  /** working, waiting, idle, asleep, stopped, error */
-  status: string;
-  statusSince: number | null;
-  memMb: number | null;
-  cpuPct: number | null;
-  processes: AgentProcess[];
-  worktrees: MeasuredPath[];
-  tmp: MeasuredPath | null;
-  /** Processes of a session that ended and still run. */
-  outlived?: { count: number; memMb: number | null; names: string[] } | null;
-}
-
-export interface ProjectResources { path: string; name: string; agents: AgentResources[] }
-
-export interface FleetResources {
-  /** When memory and CPU were read; null when they could not be. */
-  readAt: number | null;
-  diskMeasuredAt: number | null;
-  /** While the disk is measured. */
-  measuring?: { done: number; total: number } | null;
-  error?: string | null;
-  projects: ProjectResources[];
-}
+export type { AgentProcess, MeasuredPath, AgentResources, ProjectResources, FleetResources } from '@/types/electron';
+import type { FleetResources } from '@/types/electron';
 
 export interface FleetApi {
   read: () => Promise<FleetResources>;

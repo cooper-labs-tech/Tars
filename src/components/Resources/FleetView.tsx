@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
-import { Box, Empty, Figure, Figures, Notice, Unread } from './bits';
+import { Box, Empty, Figure, Figures, Unread } from './bits';
 import type { AgentResources, FleetResources, ProjectResources } from './contract';
 import { NOT_READ, bytes, clock, lasted, mb, mbBytes, pct, sum } from './format';
 import { useFleetResources } from './hooks';
@@ -16,12 +16,19 @@ const tmpBytes = (a: AgentResources) => (a.tmp ? a.tmp.bytes : 0);
 const memBytes = (a: AgentResources) => (a.memMb === null ? null : mbBytes(a.memMb));
 
 /** A project's figures, summed over its agents: unread if any agent's is. */
+/** What was read, added: null only when nothing could be read. An agent with no terminal holds nothing to read. */
+function partial(values: (number | null)[]): number | null {
+  const read = values.filter((v): v is number => v !== null);
+  return read.length ? read.reduce((a, b) => a + b, 0) : null;
+}
+
+/** A project's figures: memory and CPU as main sums them (PR 546's totals), the disk by folder kind, added. */
 function totals(p: ProjectResources) {
   return {
-    mem: sum(p.agents.map(memBytes)),
-    cpu: sum(p.agents.map((a) => a.cpuPct)),
-    wt: sum(p.agents.map(wtBytes)),
-    tmp: sum(p.agents.map(tmpBytes)),
+    mem: p.totals.memMb === null ? null : mbBytes(p.totals.memMb),
+    cpu: p.totals.cpuPct,
+    wt: partial(p.agents.map(wtBytes)),
+    tmp: partial(p.agents.map(tmpBytes)),
     working: p.agents.filter((a) => a.status === 'working').length,
   };
 }
@@ -57,9 +64,6 @@ function AgentRow({ agent, chosen, onChoose, measuring }: { agent: AgentResource
       className={`${COLS} w-full pl-10 pr-3.5 py-[7px] text-left ${chosen ? 'bg-bg-elevated border border-border-accent' : 'border-t border-border hover:bg-secondary/60'}`}>
       <span className="flex flex-col gap-0.5 min-w-0 overflow-hidden">
         <span className="text-[12px] text-foreground truncate">{agent.name}</span>
-        {agent.outlived && agent.outlived.count > 0 && (
-          <span className="flex items-center gap-1.5 font-mono text-[10px] text-status-waiting"><StatusSquare tone="waiting" />{`${agent.outlived.count} outlived its session`}</span>
-        )}
       </span>
       <span className="flex items-center gap-1.5 min-w-0 font-mono text-[11px]">
         <span className={INK[agent.status] ?? 'text-muted-foreground'}>{agent.status}</span>
@@ -91,8 +95,8 @@ function AgentDetail({ agent, project, diskMeasuredAt }: { agent: AgentResources
         <span className="font-mono text-[10px] text-muted-foreground">secrets masked</span>
       </div>
       <ul aria-label="Its processes">
-        {agent.processes.map((p, i) => (
-          <li key={`${p.name}-${i}`} className="flex flex-col gap-[3px] px-3.5 py-[7px] border-t border-border">
+        {agent.processes.map((p) => (
+          <li key={p.pid} className="flex flex-col gap-[3px] px-3.5 py-[7px] border-t border-border">
             <p className="flex items-center gap-2"><span className="flex-1 min-w-0 text-[11.5px] text-foreground truncate">{p.name}</span><span className="font-mono text-[11px] text-foreground">{mb(p.memMb)}</span><span className="font-mono text-[11px] text-muted-foreground">{pct(p.cpuPct)}</span></p>
             <p data-command className="font-mono text-[10px] leading-[1.45] text-muted-foreground break-all">{p.command}</p>
           </li>
@@ -126,25 +130,20 @@ export function FleetView({ chosen, onChoose }: { chosen: string | null; onChoos
   const pick = agents.find((a) => a.id === chosen) ?? null;
   const pickProject = projects.find((p) => p.agents.some((a) => a.id === chosen))?.name ?? '';
   const measuring = Boolean(state?.measuring);
-  const all = (f: (a: AgentResources) => number | null) => sum(agents.map(f));
-  const outlived = agents.filter((a) => a.outlived && a.outlived.count > 0);
+  const all = (f: (a: AgentResources) => number | null) => partial(agents.map(f));
+  const unread = agents.filter((a) => a.memMb === null).length;
 
   const measure = async () => { setMeasureError(await measureDisk()); };
 
   return (
     <section role="region" aria-label="Agents and projects" className="flex flex-col gap-3 min-h-0">
       <Figures>
-        <Figure volatile caption="AGENTS HOLD" value={state ? bytes(all(memBytes)) : NOT_READ} sub={state ? `${agents.length} agents, ${agents.filter((a) => a.status === 'asleep').length} asleep` : 'with the fleet\'s figures'} />
+        <Figure volatile caption="AGENTS HOLD" value={state ? bytes(all(memBytes)) : NOT_READ} sub={state ? `${agents.length} agents, ${agents.filter((a) => a.status === 'asleep').length} asleep${unread ? `, ${unread} not read` : ''}` : 'with the fleet\'s figures'} />
         <Figure volatile caption="CPU" value={state ? pct(all((a) => a.cpuPct)) : NOT_READ} sub={state ? 'every agent\'s tree' : 'with the fleet\'s figures'} />
         <Figure volatile caption="WORKTREES" value={state ? cell(all(wtBytes), measuring) : NOT_READ} sub={state?.diskMeasuredAt ? `${agents.reduce((n, a) => n + a.worktrees.length, 0)} worktrees · measured ${clock(state.diskMeasuredAt)}` : 'not measured yet'} />
         <Figure volatile caption="TEMPORARY FOLDERS" value={state ? cell(all(tmpBytes), measuring) : NOT_READ} sub={state ? `${agents.filter((a) => a.tmp).length} folders under ~/.tars/tmp` : 'not measured yet'} />
       </Figures>
       {state?.error && <Unread text="Tars cannot read the processes:" detail={state.error} onRetry={reload} />}
-      {outlived.map((a) => (
-        <Notice key={a.id} tone="waiting">
-          {`${a.name}'s session ended and ${a.outlived!.count} of its processes run on${a.outlived!.names.length ? `: ${a.outlived!.names.join(', ')}` : ''}${a.outlived!.memMb != null ? `. ${mb(a.outlived!.memMb)}` : ''}. Tars ends them on a stop of the agent; it does not end them by itself.`}
-        </Notice>
-      ))}
       <div className="flex gap-3 items-start min-w-0">
         <Box name="Fleet" className="flex-1"
           caption={state ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} · ${agents.length} ${agents.length === 1 ? 'agent' : 'agents'}` : 'PROJECTS AND AGENTS'}
