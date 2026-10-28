@@ -58,7 +58,7 @@
  * 19. (gap 3) The window cannot tell when the question goes back: no `until`.
  * And from the night of 27/10, agents in bypass frozen until morning on Claude Code's dialog
  * (fix-permission-dialogs-2810.md, the owner's 2.0.5), written before the code (28/10):
- * 20. A bypass agent's call that touches only its own folders (a heredoc into its scratchpad) waits for the
+ * 20. A bypass agent's file tool on its own folders (Write into its scratchpad) waits for the
  *     owner: Tars answers allow at once, naming the call's fingerprint, with no question shown and the agent never
  *     waiting. The same call outside its folders, or from an agent not in bypass, is held as before.
  * 21. A question nobody answers goes back to the dialog (`ask`) and the agent stays frozen there all night: at the
@@ -74,6 +74,9 @@
  * 25. A secret in the command (a token, a URL's password) reaches permissions.log, which every agent can read, or
  *     another agent through list_agents or get_agent: both are masked (redactSecrets). The window, where the owner
  *     decides, keeps the command whole.
+ * And from the orchestrator's decision of 28/10 (#538's re-check): Tars never answers a shell command.
+ * 26. A file tool asked with its content withheld (the mod sends the path alone) and not Tars's to allow is held for
+ *     the window, which would then approve content it never showed: it goes back to the dialog at once.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -253,6 +256,7 @@ describe("the mod's question to Tars", () => {
     expect(answer).toMatchObject({ decision: 'deny', fingerprint: expect.any(String) });
     expect(answer.reason).toMatch(/^Nobody answered this permission question in Tars within 10 minutes/);
     expect(answer.reason).toMatch(/another way/);
+    expect(answer.reason).toMatch(/Write tool/);
     expect(a.permissionAsk).toBeUndefined();
     expect(a.status).toBe('running');
     expect(a.waitingReason).toBeUndefined();
@@ -501,34 +505,42 @@ describe("the mod's question to Tars", () => {
 
 describe('Tars answers for a bypass agent inside its own folders', () => {
   const heredoc = (dir: string) => `S=${dir}/scratchpad; mkdir -p $S/retry-probe && cat > $S/retry-probe/p.yml <<'EOF'\nsteps: [1]\nEOF`;
+  const write = (file: string, over: Record<string, unknown> = {}) => question({ tool: 'Write', tool_use_id: 'toolu_w', input: { file_path: file }, withheld: true, ...over });
 
-  it('20. allow at once for a heredoc into its own folder: no question, never waiting, the fingerprint named', async () => {
+  it('20. allow at once for a file tool on its own folder: no question, never waiting, the fingerprint named', async () => {
     const a = agent();
     Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    const fields = { command: heredoc('/p') };
-    const answer = await ask(question({ input: fields }));
+    const answer = await ask(write('/p/scratchpad/p.yml'));
     expect(answer).toMatchObject({
       decision: 'allow',
-      reason: expect.stringMatching(/^Tars allowed it: Backend is in bypass, and every path it touches is inside its own folders/),
-      fingerprint: createHash('sha256').update(JSON.stringify(['Bash', [['command', fields.command]]])).digest('hex'),
+      reason: expect.stringMatching(/^Tars allowed it: Backend is in bypass, and \/p\/scratchpad\/p\.yml is inside its own folders/),
+      fingerprint: createHash('sha256').update(JSON.stringify(['Write', [['file_path', '/p/scratchpad/p.yml']]])).digest('hex'),
     });
     expect(a.status).toBe('running');
     expect(a.permissionAsk).toBeUndefined();
     expect(ctx.handleStatusChangeNotificationCallback).not.toHaveBeenCalled();
   });
 
-  it('20. the same outside its folders, or from an agent not in bypass, is held for the owner', async () => {
+  it('20. a shell command, even a heredoc into its own folder, is held for the owner, as is any call of an agent not in bypass', async () => {
     const a = agent();
     Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    const outside = ask(question({ input: { command: heredoc('/elsewhere') } }));
-    expect(await settled(outside)).toBe(false);
-    expect(a.permissionAsk?.subject).toContain('/elsewhere');
+    const own = ask(question({ input: { command: heredoc('/p') } }));
+    expect(await settled(own)).toBe(false);
+    expect(a.permissionAsk?.subject).toContain('/p/scratchpad');
     resetPermissionAsks();
     const b = agent('a2', S2);
     Object.assign(b, { permissionMode: 'auto', projectPath: '/p' });
-    const notBypass = ask(question({ agent_id: 'a2', session_id: S2, input: { command: heredoc('/p') } }));
-    expect(await settled(notBypass)).toBe(false);
-    expect(b.status).toBe('waiting');
+    const notBypass = ask(write('/p/x', { agent_id: 'a2', session_id: S2 }));
+    expect(await notBypass).toEqual({ decision: 'ask' });
+  });
+
+  it('26. a file tool whose content was withheld and that Tars does not allow goes back to the dialog at once, never held', async () => {
+    const a = agent();
+    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
+    expect(await ask(write('/elsewhere/x'))).toEqual({ decision: 'ask' });
+    expect(await ask(write('/p/.claude/settings.json'))).toEqual({ decision: 'ask' });
+    expect(a.permissionAsk).toBeUndefined();
+    expect(a.status).toBe('running');
   });
 
   it('23. every decision is written down with who or what decided', async () => {
@@ -537,9 +549,7 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
     fs.rmSync(PERMISSION_LOG, { force: true });
     const a = agent();
     Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    await ask(question({ input: { command: heredoc('/p') }, tool_use_id: 'toolu_auto' }));
-    // Inside its own folder `rm -rf build` would be Tars's to allow too: the next two are a normal agent's.
-    a.permissionMode = 'normal';
+    await ask(question({ tool: 'Write', input: { file_path: '/p/scratchpad/p.yml' }, withheld: true, tool_use_id: 'toolu_auto' }));
     void askUntilAnswered(question({ tool_use_id: 'toolu_window' }));
     await vi.advanceTimersByTimeAsync(0);
     answerPermission('a1', 'deny', 'the user', 'not now');
@@ -547,7 +557,7 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
     await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
     const lines = fs.readFileSync(PERMISSION_LOG, 'utf8').trim().split('\n');
     expect(lines).toHaveLength(3);
-    expect(lines[0]).toMatch(/Backend \(a1\) Bash allow by Tars \(bypass, its own folders\): S=\/p\/scratchpad/);
+    expect(lines[0]).toMatch(/Backend \(a1\) Write allow by Tars \(bypass, its own folders\): Write \/p\/scratchpad\/p\.yml/);
     expect(lines[1]).toMatch(/Backend \(a1\) Bash deny by the user: rm -rf build/);
     expect(lines[2]).toMatch(/Backend \(a1\) Bash deny by the delay \(10 minutes\): rm -rf build/);
   });

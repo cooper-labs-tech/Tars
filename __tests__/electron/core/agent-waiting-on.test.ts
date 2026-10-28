@@ -168,6 +168,18 @@ describe('what a waiting agent waits on', { timeout: 20_000 }, () => {
     expect(fs.readFileSync(path.join(tmp, 'agents.json'), 'utf-8')).not.toContain('TOKEN=secret');
   });
 
+  it('(L2 of the re-check of #538) a question held by Tars is not written to agents.json either', async () => {
+    const a1 = manager.agents.get('a1')!;
+    manager.loadAgents();
+    if (!manager.agents.has('a1')) manager.agents.set('a1', a1);
+    manager.agents.get('a1')!.permissionAsk = {
+      tool: 'Bash', askedAt: new Date().toISOString(), until: new Date().toISOString(),
+      subject: 'export TOKEN=secret2; deploy', fields: { command: 'export TOKEN=secret2; deploy' },
+    };
+    manager.saveAgents();
+    expect(fs.readFileSync(path.join(tmp, 'agents.json'), 'utf-8')).not.toContain('TOKEN=secret2');
+  });
+
   it('reaches the renderer on agents:tick', async () => {
     vi.useFakeTimers();
     try {

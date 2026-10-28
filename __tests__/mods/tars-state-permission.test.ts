@@ -58,6 +58,12 @@
  *    at all, it stays with the terminal's dialog, which shows it all.
  * And from the night of 27/10 (fix-permission-dialogs-2810.md): Tars now holds
  * a question up to the owner's delay, 1 to 60 minutes, and refuses it then.
+ * And from the orchestrator's decision of 28/10 (#538's re-check): Tars answers
+ * a file tool for a bypass agent by its path alone, never a shell command.
+ * 15. A file tool's call (Write, Edit, MultiEdit, NotebookEdit) never reaches
+ *    Tars, its content being a field the window does not show: it must ask
+ *    with the path alone, marked `withheld` (the window is never shown it),
+ *    take an allow, and keep the dialog on anything else.
  * 14. The mod gives up first (40 asks, about 13 minutes) and the dialog shows,
  *    where nobody answers at night: it must keep asking past 60 minutes of
  *    `pending`, and still stop in the end, should Tars never decide.
@@ -204,6 +210,22 @@ describe("the mod's tool.check", () => {
     answer = async () => ({ text: JSON.stringify({ decision: answers.shift(), reason: 'you allowed it in Tars' }) });
     expect(await check(bash, ASK)).toEqual({ decision: 'allow', reason: 'you allowed it in Tars' });
     expect(permissionPosts().map(p => p.body.tool_use_id)).toEqual(['toolu_1', 'toolu_1', 'toolu_1']);
+  });
+
+  it('15. asks Tars about a file tool by its path alone, withheld, and keeps the dialog unless Tars allows it', async () => {
+    await start();
+    const write = { tool: 'Write', input: { file_path: '/p/notes.md', content: 'a whole file' }, tool_use_id: 'toolu_w' };
+    expect(await check(write, ASK)).toEqual({ decision: 'allow', reason: 'you allowed it in Tars' });
+    expect(permissionPosts()).toHaveLength(1);
+    expect(permissionPosts()[0].body).toMatchObject({ tool: 'Write', input: { file_path: '/p/notes.md' }, withheld: true });
+    expect(JSON.stringify(permissionPosts()[0].body)).not.toContain('a whole file');
+    const edit = { tool: 'NotebookEdit', input: { notebook_path: '/p/n.ipynb', new_source: 'x', cell_id: 'c' }, tool_use_id: 'toolu_n' };
+    answer = async () => ({ text: JSON.stringify({ decision: 'ask' }) });
+    expect(await check(edit, ASK)).toEqual(ASK);
+    expect(permissionPosts()[1].body).toMatchObject({ tool: 'NotebookEdit', input: { notebook_path: '/p/n.ipynb' }, withheld: true });
+    // Not a file tool: still the dialog's, without a word to Tars.
+    expect(await check({ tool: 'mcp__x__post', input: { text: 'hi', file_path: '/p/x' }, tool_use_id: 'toolu_m' }, ASK)).toEqual(ASK);
+    expect(permissionPosts()).toHaveLength(2);
   });
 
   it('7. gives up to the engine after a bounded number of asks', async () => {
