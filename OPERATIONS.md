@@ -1413,7 +1413,10 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 side).
 - **Per agent:**
   - the memory and CPU of its whole process tree, from its terminal down;
-  - its processes, by memory, their command lines masked (`redactSecrets`);
+  - its processes, by memory, each with its pid and its command line masked for the window (`utils/redact-command-line.ts`:
+    the value after any flag named for a password, pass, secret, token, key or auth, a URL's password with or without
+    a user, `curl -u`, `sshpass -p`, mysql's `-p<value>`, `docker login -p`, live Stripe keys, `hf_` tokens, AWS secret
+    keys, and what `redactSecrets` masks, each masked whole);
   - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
   - its status and since when (`statusSince`, or `asleepSince` for a sleeping one).
 - **Per project:** the same, summed (`totals`).
@@ -1423,7 +1426,11 @@ side).
   (`measuring`), and kept with when (`diskMeasuredAt`). It is never walked on a read or a tick.
 - **The window** reads `window.electronAPI.resources.read()` and is sent `resources:changed`.
 - **The orchestrators** read it through `list_agents` (each agent's `memMb` and `statusSince`) and `get_agent`
-  (`resources`: memory, CPU and processes, masked).
+  (`resources`: memory, CPU, and each process as its program, pid, memory and CPU, never its arguments: no masking
+  knows every secret a command line carries). Their own project's agents only: `get_agent` answers another project's
+  agent as an unknown one (404, `Agent not found`), and `list_agents` with `all` names other projects' agents with
+  their status, project and role, nothing more (the Audit's H1 on #546). A caller with no project, the owner's own
+  token, reads everything, and so does the window through IPC.
 
 ## MCP servers
 

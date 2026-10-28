@@ -10,6 +10,13 @@ import { EventEmitter } from 'node:events';
  * A1. list_agents gives no agent's memory nor since when it is in its status.
  * A2. get_agent gives not its tree's memory, CPU and processes (command lines masked).
  * A3. An agent whose figures cannot be read reads 0 rather than null.
+ * And from the Audit's gate of #546 (H1, M1) and the orchestrator's decision (task t-2be3810b):
+ * A4. An agent of one project reads another project's agent with get_agent, its processes, its full record: it must
+ *     be refused as an unknown id is (404, `Agent not found`), naming nothing.
+ * A5. list_agents with `all` gives another project's agents with their tasks, memory, since or who asked: only who
+ *     they are (id, name, status, project, role).
+ * A6. get_agent gives a process's command line, which carries what the masking misses (a password after a flag, a
+ *     key with no known prefix): through the API a process is its program, pid, memory and CPU, no arguments.
  */
 
 vi.mock('electron', () => ({
@@ -22,6 +29,7 @@ const { fleet } = vi.hoisted(() => ({
   fleet: new Map<string, Record<string, unknown>>([
     ['a', { id: 'a', name: 'Harbor Worker', role: 'worker', projectPath: '/w/harbor', status: 'running', statusSince: '2026-10-28T09:30:00.000Z', skills: [], output: [] }],
     ['b', { id: 'b', name: 'Harbor Tester', role: 'worker', projectPath: '/w/harbor', status: 'idle', statusSince: '2026-10-28T09:00:00.000Z', skills: [], output: [] }],
+    ['c', { id: 'c', name: 'Cove Worker', role: 'worker', projectPath: '/w/cove', status: 'running', statusSince: '2026-10-28T09:10:00.000Z', currentTask: 'rotate the cove database password', skills: [], output: ['cove secrets'] }],
   ]),
 }));
 vi.mock('../../../../electron/core/agent-manager', async (orig) => ({ ...(await orig<object>()), agents: fleet, saveAgents: vi.fn() }));
@@ -29,12 +37,17 @@ vi.mock('../../../../electron/services/fleet-resources-runtime', () => ({
   agentResources: async () => new Map([
     ['a', { memMb: 770, cpuPct: 50.5, processes: [{ name: 'claude', memMb: 512, cpuPct: 40, command: 'claude --token ghp_AAAA[redacted]BBBB' }] }],
     ['b', { memMb: null, cpuPct: null, processes: [] }],
+    ['c', { memMb: 300, cpuPct: 5, processes: [{ name: 'psql', pid: 31, memMb: 30, cpuPct: 1, command: 'psql postgres://cove:pw@db/cove' }] }],
   ]),
 }));
 
 import { registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
 
-async function get(url: string, params: Record<string, string> = {}) {
+async function get(url: string, params: Record<string, string> = {}, callerAgentId?: string): Promise<Record<string, unknown>> {
+  return (await call(url, params, callerAgentId)).body;
+}
+
+async function call(url: string, params: Record<string, string> = {}, callerAgentId?: string) {
   const routes: Array<{ method: string; pattern: unknown; handler: (...a: unknown[]) => unknown }> = [];
   const app = {
     routes,
@@ -49,8 +62,10 @@ async function get(url: string, params: Record<string, string> = {}) {
   const u = new URL(`http://x${url}`);
   const route = routes.find(r => r.method === 'GET' && (r.pattern === u.pathname || (r.pattern instanceof RegExp && r.pattern.test(u.pathname) && String(r.pattern).includes('([^/]+)$'))))!;
   let body: Record<string, unknown> = {};
-  await route.handler({ method: 'GET', url: u, body: {}, params, headers: {} }, (b: Record<string, unknown>) => { body = b; }, ctx);
-  return body;
+  let status = 200;
+  await route.handler({ method: 'GET', url: u, body: {}, params, headers: {}, callerAgentId },
+    (b: Record<string, unknown>, code?: number) => { body = b; status = code ?? 200; }, ctx);
+  return { body, status };
 }
 
 describe('an orchestrator reads its agents\' resources', () => {
@@ -62,6 +77,32 @@ describe('an orchestrator reads its agents\' resources', () => {
 
   it('A2. get_agent gives its tree\'s memory, CPU and processes, masked', async () => {
     const { agent } = await get('/api/agents/a', { id: 'a' }) as { agent: Record<string, unknown> };
-    expect(agent.resources).toEqual({ memMb: 770, cpuPct: 50.5, processes: [{ name: 'claude', memMb: 512, cpuPct: 40, command: 'claude --token ghp_AAAA[redacted]BBBB' }] });
+    expect(agent.resources).toEqual({ memMb: 770, cpuPct: 50.5, processes: [{ name: 'claude', memMb: 512, cpuPct: 40 }] });
+  });
+});
+
+describe('what one project reads of another\'s agents', () => {
+  it('A4. get_agent refuses another project\'s agent as an unknown one, full or not', async () => {
+    for (const url of ['/api/agents/c', '/api/agents/c?full=true']) {
+      const { body, status } = await call(url, { id: 'c' }, 'a');
+      expect(status, url).toBe(404);
+      expect(body, url).toEqual({ error: 'Agent not found' });
+      expect(await call('/api/agents/nobody', { id: 'nobody' }, 'a')).toEqual({ body, status });
+    }
+    // Its own project's agent, as before.
+    expect((await get('/api/agents/b', { id: 'b' }, 'a')).agent).toMatchObject({ id: 'b', resources: { memMb: null } });
+  });
+
+  it('A5. list_agents with all names another project\'s agents, nothing more', async () => {
+    const { agents } = await get('/api/agents?all=true', {}, 'a') as { agents: Array<Record<string, unknown>> };
+    expect(agents.find(x => x.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'running', projectPath: '/w/cove', role: 'worker' });
+    expect(agents.find(x => x.id === 'b')).toMatchObject({ memMb: null, statusSince: '2026-10-28T09:00:00.000Z' });
+    expect(JSON.stringify(agents)).not.toContain('rotate the cove');
+  });
+
+  it('A6. a process through the API is its program, pid, memory and CPU, no arguments', async () => {
+    const { agent } = await get('/api/agents/c', { id: 'c' }) as { agent: { resources: { processes: unknown[] } } };
+    expect(agent.resources.processes).toEqual([{ name: 'psql', pid: 31, memMb: 30, cpuPct: 1 }]);
+    expect(JSON.stringify(agent)).not.toContain('cove:pw');
   });
 });

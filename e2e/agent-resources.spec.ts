@@ -17,7 +17,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. the window reads w's whole tree (its terminal, its CLI, the child): its memory, CPU and processes, the child's
  *    command line masked, its status and since when; the project's totals are its agents' sums;
  * 2. the disk is not measured on a read: w's worktree reads null until the window asks, then its size, with when;
- * 3. the orchestrator's list_agents gives w's memory and status since, and get_agent its processes, masked.
+ * 3. the orchestrator's list_agents gives w's memory and status since, and get_agent its processes as their program,
+ *    pid, memory and CPU, no arguments;
+ * 4. (the Audit's H1 on #546) another project's agent c: get_agent refuses it as unknown (404, `Agent not found`), and
+ *    list_agents with all names it with nothing more (no task, no figure).
  * Red on main dc623b594: there is no resources read.
  * The artefact: values.json (the window's reads before and after the measure, the orchestrator's answers).
  */
@@ -37,6 +40,8 @@ for (const newInterface of [false, true]) {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-resources-${newInterface ? 'ni' : 'classic'}-`));
     const project = path.join(home, 'projects', 'harbor');
     const worktree = path.join(project, '.worktrees', 'w');
+    const cove = path.join(home, 'projects', 'cove');
+    fs.mkdirSync(cove, { recursive: true });
     fs.mkdirSync(worktree, { recursive: true });
     fs.writeFileSync(path.join(worktree, 'data.bin'), Buffer.alloc(2 * 1024 * 1024, 1));
     const child = path.join(home, 'child.cjs');
@@ -58,7 +63,7 @@ for (const newInterface of [false, true]) {
       "const wait = setInterval(async () => {",
       "  if (!fs.existsSync(dir + '/ask-now')) return;",
       "  clearInterval(wait);",
-      "  fs.writeFileSync(dir + '/asked.json', JSON.stringify({ list: await get('/api/agents'), one: await get('/api/agents/w') }));",
+      "  fs.writeFileSync(dir + '/asked.json', JSON.stringify({ list: await get('/api/agents'), one: await get('/api/agents/w'), all: await get('/api/agents?all=true'), other: await get('/api/agents/c') }));",
       "}, 200);",
       "process.stdout.write('stand-in ready\\r\\n');",
       'process.stdin.resume();',
@@ -70,8 +75,9 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
       { ...base, id: 'w', name: 'Harbor Worker', role: 'worker', worktreePath: worktree, cliPath: worker },
       { ...base, id: 'o', name: 'Harbor Lead', role: 'orchestrator', cliPath: orchestrator },
+      { ...base, id: 'c', name: 'Cove Worker', role: 'worker', projectPath: cove, currentTask: 'rotate the cove database password' },
     ], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project, cove]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
     const values: Record<string, unknown> = { newInterface };
@@ -95,7 +101,7 @@ for (const newInterface of [false, true]) {
       keep({ first });
       const wf = w(first);
       expect(JSON.stringify(first)).not.toContain(TOKEN);
-      expect(wf.processes.find(p => p.command.includes('child.cjs'))?.command).toMatch(/--token ghp_/);
+      expect(wf.processes.find(p => p.command.includes('child.cjs'))?.command).toMatch(/--token \[redacted\]$/);
       expect(wf.statusSince).toEqual(expect.any(Number));
       const harbor = first.projects.find(p => p.name === 'harbor')!;
       expect(harbor.agents.map(a => a.id).sort()).toEqual(['o', 'w']);
@@ -113,11 +119,21 @@ for (const newInterface of [false, true]) {
       // 3. The orchestrator's list_agents and get_agent.
       fs.writeFileSync(path.join(home, 'ask-now'), '1');
       await expect.poll(() => fs.existsSync(path.join(home, 'asked.json')), { timeout: 20_000 }).toBe(true);
-      const asked = JSON.parse(fs.readFileSync(path.join(home, 'asked.json'), 'utf8')) as { list: { agents: Array<Record<string, unknown>> }; one: { agent: { resources: { memMb: number | null; processes: Array<{ command: string }> } } } };
+      const asked = JSON.parse(fs.readFileSync(path.join(home, 'asked.json'), 'utf8')) as {
+        list: { agents: Array<Record<string, unknown>> }; one: { agent: { resources: { memMb: number | null; processes: Array<Record<string, unknown>> } } };
+        all: { agents: Array<Record<string, unknown>> }; other: Record<string, unknown>;
+      };
       keep({ asked });
       expect(asked.list.agents.find(a => a.id === 'w')).toMatchObject({ memMb: expect.any(Number), statusSince: expect.any(String) });
       expect(asked.one.agent.resources.memMb).toEqual(expect.any(Number));
+      expect(asked.one.agent.resources.processes.length).toBeGreaterThanOrEqual(2);
+      for (const proc of asked.one.agent.resources.processes) expect(Object.keys(proc).sort()).toEqual(['cpuPct', 'memMb', 'name', 'pid']);
       expect(JSON.stringify(asked)).not.toContain(TOKEN);
+
+      // 4. Another project's agent: unknown to get_agent, named only by list_agents' all.
+      expect(asked.other).toEqual({ error: 'Agent not found' });
+      expect(asked.all.agents.find(a => a.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'idle', projectPath: cove, role: 'worker' });
+      expect(JSON.stringify(asked)).not.toContain('rotate the cove');
     } finally {
       // The child, by its own pid.
       try { const pid = Number(fs.readFileSync(path.join(home, 'child.pid'), 'utf8')); if (pid > 1) process.kill(pid); } catch { /* gone */ }
