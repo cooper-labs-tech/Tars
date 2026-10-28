@@ -182,3 +182,71 @@ describe('delegate_task keeps its caller listening while it waits', () => {
   });
 });
 
+describe('wait_for_agent keeps its caller listening while it waits too', () => {
+  // The QA's F8 of the 2.0.5 final verification: the shared servers' spec, OPERATIONS and the Audit all took
+  // wait_for_agent's keep-alive for granted, and it had none. Only delegate_task sent progress. A wait_for_agent on an
+  // agent in a long turn, any timeoutSeconds being accepted, sent nothing until it ended, and Claude Code gives a call
+  // silent for 30 minutes up.
+  //
+  // How this fails, written before the code:
+  // 1. No progress is sent while it waits on an agent at work, and the caller aborts past 30 minutes.
+  // 2. Progress is sent without a progressToken, which the protocol forbids.
+  // 3. The progress timer outlives the call.
+  async function loadWait() {
+    const { registerAgentTools } = await import('../../mcp-orchestrator/src/tools/agents.js');
+    const tools = new Map<string, (args: Record<string, unknown>, extra?: unknown) => Promise<unknown>>();
+    registerAgentTools({ tool: (name: string, _d: string, _s: unknown, h: typeof tools extends Map<string, infer H> ? H : never) => tools.set(name, h) } as never);
+    return tools.get('wait_for_agent')!;
+  }
+
+  it('1, 2, 3. sends progress while the agent works, with the token, and stops when it answers', async () => {
+    vi.useFakeTimers();
+    try {
+      const waitForAgent = await loadWait();
+      let finish: (v: unknown) => void = () => {};
+      mockApiRequest.mockImplementation((endpoint: string) => {
+        if (endpoint.includes('/wait')) return new Promise(resolve => { finish = resolve; });
+        if (endpoint === '/api/agents/b') return Promise.resolve({ agent: { name: 'Harbor Tester' } });
+        throw new Error(`unexpected ${endpoint}`);
+      });
+      const sent: Array<{ method: string; params: { progressToken: unknown } }> = [];
+      const extra = { _meta: { progressToken: 'keep' }, sendNotification: async (n: never) => { sent.push(n); } };
+
+      const call = waitForAgent({ id: 'b', timeoutSeconds: 3600 }, extra);
+      await vi.advanceTimersByTimeAsync(5 * 60_000);
+      const during = sent.length;
+      finish({ status: 'idle', lastCleanOutput: 'done' });
+      await call;
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(during, 'no progress in five minutes of waiting').toBeGreaterThanOrEqual(4);
+      expect(sent.every(n => n.method === 'notifications/progress' && n.params.progressToken === 'keep')).toBe(true);
+      expect(sent.length, 'progress kept coming after the answer').toBe(during);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('2. sends nothing to a caller that asked for no progress', async () => {
+    vi.useFakeTimers();
+    try {
+      const waitForAgent = await loadWait();
+      let finish: (v: unknown) => void = () => {};
+      mockApiRequest.mockImplementation((endpoint: string) => {
+        if (endpoint.includes('/wait')) return new Promise(resolve => { finish = resolve; });
+        if (endpoint === '/api/agents/b') return Promise.resolve({ agent: { name: 'Harbor Tester' } });
+        throw new Error(`unexpected ${endpoint}`);
+      });
+      const sent: unknown[] = [];
+
+      const call = waitForAgent({ id: 'b', timeoutSeconds: 600 }, { sendNotification: async (n: unknown) => { sent.push(n); } });
+      await vi.advanceTimersByTimeAsync(3 * 60_000);
+      finish({ status: 'idle' });
+      await call;
+
+      expect(sent).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
