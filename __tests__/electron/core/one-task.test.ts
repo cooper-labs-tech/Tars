@@ -259,6 +259,11 @@ describe('a task queued before Tars restarted', () => {
     expect(text).toContain('restart');
     expect(text).toContain('never started');
     expect(text).toContain('asked again');
+    // Since #536 a task waiting its turn is kept across a restart, paused (the QA's F1 on the 2.0.5 train): an id no
+    // queue holds is not one a restart dropped.
+    expect(text).toContain('kept');
+    expect(text).toContain('paused');
+    expect(text).not.toMatch(/keeps no task/);
   });
 });
 
