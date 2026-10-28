@@ -1349,6 +1349,38 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
 
+## The disk janitor
+
+A scan that proposes, by rule, what may go to give the disk back space, and deletes nothing (2.0.5, lot 3 item H;
+`electron/services/janitor-rules.ts` for the rules, `disk-janitor.ts` for the app's side). The owner approves in the
+window; agents may only ask for a scan.
+
+- **What it proposes**, each item with its size and the rule that matched:
+  - `next-cache`: the `.next` of a project's worktree (under `.worktrees/`), untouched for 3 days;
+  - `test-artefacts`: a worktree's `test-results` and `playwright-report`, untouched for 3 days, that no report under
+    `~/.tars/project-files` cites by its path;
+  - `closed-worktree`: a worktree whose branch is merged into its project's main branch, clean, unlocked, idle a day
+    (removed by `git worktree remove`, never `--force`, as `scripts/worktree.mjs` does);
+  - `npx-cache`: an entry of `~/.npm/_npx` untouched for 14 days;
+  - `docker-image`: an image no container uses, a stopped one included (`docker image rm <id>`, never `-f`);
+  - `docker-vm-trim`: `colima ssh -- sudo fstrim -a`, which gives the disk back what the VM freed;
+  - `agent-tmp`: `~/.tars/tmp/<id>` of an agent no longer in the fleet.
+- **Never proposed, never deleted:**
+  - `~/.tars-private`, `~/Documents`, the uv cache, the Trash, `~/Library/Developer` (Xcode, the iOS runtimes and
+    simulators), any Docker volume, a project's own folder;
+  - anything inside a worktree a fleet agent works in, one with uncommitted work, or one a process works in;
+  - when the processes cannot be read (no lsof, Windows), nothing that needs "nothing runs in it".
+- **The approval.** The window calls `system.janitorApprove(ids)` with the ids of the items it showed.
+  - Each item is checked again against its rule just before it goes, the world read anew: the processes, the fleet,
+    git, its last change.
+  - It is deleted by its exact absolute path (`fs.rmSync`, never a glob, never a shell).
+  - What no longer matches is kept, with why.
+  - Every deletion (with the bytes it freed) and every item kept goes to `~/.tars/logs/janitor.log`.
+- **For agents.** `GET /api/janitor/scan` and the orchestrator server's `disk_scan` tool read the scan. No route takes
+  an approval.
+- **Tests.** Under `DOROTHY_E2E` only, `DOROTHY_DOCKER_BIN` and `DOROTHY_COLIMA_BIN` name stand-ins, so a test never
+  reaches the machine's Docker (`e2e/disk-janitor.spec.ts`).
+
 ## MCP servers
 
 Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to

@@ -469,6 +469,14 @@ query is text, never an option or a pattern.
 
 ## 5. What is where on disk
 
+**The disk janitor deletes only what the owner approved** (2.0.5, `services/janitor-rules.ts`). A scan proposes
+and deletes nothing. Only the window's IPC approves, by the ids of the items it showed: an agent can ask for a scan
+(`GET /api/janitor/scan`, `disk_scan`), and no route takes an approval. Each approved item is checked again against its
+rule just before it goes, and deleted by its exact path, never through a shell. The never list (`~/.tars-private`,
+`~/Documents`, the uv cache, the Trash, `~/Library/Developer`, Docker volumes, a fleet agent's worktree, one with
+uncommitted work, one a process works in) is checked at the scan and again at the deletion. What this is not: an
+agent that runs as the user can delete any of those itself; the janitor only never does.
+
 | Path | Holds | Reachable by an agent |
 |---|---|---|
 | `~/.tars/` | the fleet, the settings without their secrets (`app-settings.json`: since 2.0.4 no key, token or password, the paragraph below the table), the vault, the bus journal, Tars's health samples (`health-samples.jsonl`, 24 h, numbers with the names of Tars's own calls and pages, `0600`, and on Windows closed to every account but the user's and SYSTEM, like `app-settings.json`: an agent may write it, so every line is rebuilt from numbers and checked words before anything is read or sent, SPECS.md, Error reports), and the files staged for a room (`bus-files/`, a week, then removed), and each agent's temporary folder (`tmp/`: its commands' temporary files and Claude Code's scratchpad and background task output, kept 7 days, a day for a running agent's leftovers), and the task ledger (`task-ledger.jsonl`: who handed each task to whom, when it started and ended, its sessions and what it cost, without what it said) | Yes, deliberately: it is in every agent's `--add-dir`. A file sent to one room can be read by every agent of every project, as its journal can; `bus-files/` is refused when it is a link, and each file is written in a folder of its own that must not exist yet |

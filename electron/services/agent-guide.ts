@@ -140,6 +140,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       'Your identity, your team and your project come from Tars and are current as of your session\'s start: `whoami` reads them again.',
       'You act in your own project. Tools that act on another project refuse unless they take allowCrossProject.',
       'An agent sleeps after 30 minutes without a turn; a message or a task wakes it.',
+      'A disk short of space: `disk_scan` lists what Tars\'s disk janitor would propose to delete, by rule. Only the user approves a deletion, in Tars\'s window: never delete those yourself.',
       '`tars_guide` with no topic lists the topics; with one, returns it. The guide is the one of the Tars that runs you.',
     ].join('\n'),
   },
@@ -148,6 +149,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
 /** The topic that explains each tool an agent can see. */
 export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   // mcp-orchestrator
+  disk_scan: 'limits',
   whoami: 'limits',
   list_agents: 'delegation',
   get_agent: 'delegation',
