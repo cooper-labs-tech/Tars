@@ -217,6 +217,29 @@ export function writeSharedMcpEntries(
 }
 
 /**
+ * Claude's per-agent copy of a shared server that gave up, where its shared entry was (the Audit's L2 on #541): in
+ * mcp.json, and in mcp-worker.json only for a server workers may have. Never through `claude mcp add -s user`, into
+ * ~/.claude.json, which every claude session loads, workers and the owner's own included. An entry under that name
+ * that is not Tars's (another program, another bundle) is left as it is.
+ */
+export function writeClaudeCopy(name: string, command: string, args: string[], files: ConfigFiles = DEFAULT_FILES()): void {
+  for (const { file, worker, make } of roleFiles(files)) {
+    if (worker && ORCHESTRATOR_ONLY_MCP.includes(name)) continue;
+    if (!make && !fs.existsSync(file)) continue;
+    updateSharedJsonSync<{ mcpServers?: Servers; [key: string]: unknown }>(file, current => {
+      const cfg = current ?? {};
+      const servers: Servers = cfg.mcpServers && typeof cfg.mcpServers === 'object' ? cfg.mcpServers : {};
+      if (servers[name] && !tarsCopy(name, servers[name])) return undefined;
+      const entry = { command, args };
+      if (same(servers[name], entry)) return undefined;
+      servers[name] = entry;
+      cfg.mcpServers = servers;
+      return cfg;
+    });
+  }
+}
+
+/**
  * A shared server that did not start, or gave up since: its HTTP entries come out of the role files (only Tars's own,
  * by their URL), so claude gets its per-agent copy back from the registration.
  */

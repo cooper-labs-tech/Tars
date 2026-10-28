@@ -7,7 +7,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { serveShared } from "../../mcp-shared/src/shared-host.js";
+import { serveShared, SHARED_TRANSPORT_OPTIONS } from "../../mcp-shared/src/shared-host.js";
 import { registerDocumentTools } from "./tools/documents.js";
 import { registerFolderTools } from "./tools/folders.js";
 import { registerSearchTools } from "./tools/search.js";
@@ -32,7 +32,7 @@ function createServer(): McpServer {
 async function main() {
   if (await serveShared("claude-mgr-vault", {
     createServer,
-    createTransport: () => new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: false }),
+    createTransport: () => new StreamableHTTPServerTransport(SHARED_TRANSPORT_OPTIONS),
   })) return;
   const transport = new StdioServerTransport();
   await createServer().connect(transport);

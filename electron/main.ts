@@ -123,6 +123,7 @@ import {
 
 // Handlers
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
+import { noteApiPhase } from './core/api-listening';
 import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
 import { registerBusHandlers } from './handlers/bus-handlers';
 import { registerChatHandlers } from './handlers/chat-handlers';
@@ -540,6 +541,10 @@ const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 app.whenReady().then(async () => {
   if (!isPrimaryInstance) return;
   console.log('App ready, initializing...');
+  // No agent's CLI starts until this Tars listens on its port (core/api-listening.ts): "stopped" lets a start through,
+  // and the window and the IPC come up before initApiServer, so the API reads "starting" from here (the Audit's L3 on
+  // #541).
+  noteApiPhase('starting');
 
   // Ensure data directory exists
   ensureDataDir();

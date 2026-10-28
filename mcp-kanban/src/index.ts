@@ -14,7 +14,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { serveShared } from "../../mcp-shared/src/shared-host.js";
+import { serveShared, SHARED_TRANSPORT_OPTIONS } from "../../mcp-shared/src/shared-host.js";
 import { z } from "zod";
 import { registerTools, tool } from "../../mcp-shared/src/tools.js";
 
@@ -119,7 +119,7 @@ function createServer(): McpServer {
 async function main() {
   if (await serveShared("claude-mgr-kanban", {
     createServer,
-    createTransport: () => new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: false }),
+    createTransport: () => new StreamableHTTPServerTransport(SHARED_TRANSPORT_OPTIONS),
   })) return;
   const transport = new StdioServerTransport();
   await createServer().connect(transport);

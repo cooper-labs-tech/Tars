@@ -46,6 +46,13 @@ export type SharedTransport = {
 };
 export type SharedDeps = { createServer: () => SharedServer; createTransport: () => SharedTransport };
 
+/**
+ * The options every shared server builds its transport with: stateless, and answering over an event stream, so a
+ * long tool's progress keeps claude's request alive (the Audit's M1 on #541: in one JSON body, claude's request
+ * timeout ended wait_for_agent). One constant, pinned by a unit through sharedHandler (the Audit's L1).
+ */
+export const SHARED_TRANSPORT_OPTIONS = { sessionIdGenerator: undefined, enableJsonResponse: false } as const;
+
 function header(req: http.IncomingMessage, name: string): string {
   const v = req.headers[name];
   return typeof v === "string" ? v : "";

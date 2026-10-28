@@ -1390,7 +1390,13 @@ against its agent's folder.
   - 503 while it is not running.
 - **The other CLIs** (codex, gemini, Qwen Code, opencode, pi, amp, grok) keep their per-agent copies, registered as
   before. So does claude for a shared server that did not start, or that gave up later (five ends in a minute): its
-  HTTP entries are taken out (`dropSharedMcpEntries`) and the per-agent copy registered again.
+  HTTP entries are taken out (`dropSharedMcpEntries`) and the per-agent copy is written where they were
+  (`writeClaudeCopy`): in `~/.claude/mcp.json`, and in `mcp-worker.json` only for a server workers may have. Never
+  in `~/.claude.json`, which every claude session loads.
+- **The stream.** Every shared server builds its transport from `SHARED_TRANSPORT_OPTIONS` (`mcp-shared/src/shared-host.ts`):
+  stateless, answering over an event stream, so a long tool's progress keeps claude's request alive.
+- **Before the API listens.** The app marks its API `starting` as it boots, before its window and its IPC, so no
+  agent starts until Tars listens on its port.
 - **Measured on 28/10:** 19 agents ran 133 copies, 20 to 25 MB each, 2.75 GB. Shared, that is six processes for the
   six shared servers plus one telegram copy per agent, for the claude agents (the report of lot 3 has the figures).
 
