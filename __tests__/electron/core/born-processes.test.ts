@@ -50,6 +50,9 @@ import {
  *    process to another agent, whose stop ends it.
  * 5 again (L3): a SIGKILL a test cannot see, its process a zombie of the test's own until reaped: the
  *    processes here are orphans, reaped by init or launchd as soon as they die.
+ * 8 again (the Audit's re-check of 7243ef48e): the subtree is walked through the tagged processes alone, and macOS
+ *    shows no environment of a platform binary: a kept run's task started through /bin/sh (every local ansible
+ *    module runs as `/bin/sh -c '<python> AnsiballZ_...'`) is not under the run, and is ended.
  */
 
 const ADDRESS = 'http://127.0.0.1:31415';
@@ -216,6 +219,29 @@ setInterval(() => {}, 1 << 30);
     expect(result.ended).toEqual([]);
     expect(result.spared.map(p => p.pid).sort()).toEqual([run.pid, child.pid].sort());
     expect(alive(run.pid) && alive(child.pid)).toBe(true);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('8. keeps a kept run\'s task started through /bin/sh, as the Audit\'s re-check probed it', async () => {
+    const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-born-'));
+    const grandPid = path.join(dir, 'grand.pid');
+    // The task: a tagged node process (as a Homebrew or uv python is), under a shell macOS shows no environment of.
+    const task = `"${process.execPath}" -e "require('fs').writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1 << 30)" "${grandPid}"; true`;
+    const fake = path.join(dir, 'ansible-playbook');
+    fs.writeFileSync(fake, `#!${process.execPath}
+require('child_process').spawn('/bin/sh', ['-c', ${JSON.stringify(task)}], { stdio: 'ignore' });
+setInterval(() => {}, 1 << 30);
+`, { mode: 0o755 });
+    const run = detached({ CLAUDE_AGENT_ID: 'agent-born-13', CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
+    expect(await until(() => fs.existsSync(grandPid) && fs.readFileSync(grandPid, 'utf8').length > 0)).toBe(true);
+    const grand = { pid: Number(fs.readFileSync(grandPid, 'utf8')) };
+    started.push(grand);
+    await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === grand.pid));
+    const result = await endBornProcesses('agent-born-13', { address: ADDRESS, graceMs: 300 });
+    expect(result.ended).toEqual([]);
+    expect(result.spared.map(p => p.pid)).toContain(grand.pid);
+    expect(await until(() => !alive(grand.pid), 500)).toBe(false);
+    expect(alive(run.pid)).toBe(true);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
