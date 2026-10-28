@@ -118,6 +118,12 @@ export interface AgentStatus {
    *  at least) and its CLI runs no tool (services/stall-watch.ts). Cleared by
    *  a write or by any other status. Not saved. */
   stalledSince?: string;
+  /** Why the sleep pass last left it awake, and when it read it (services/agent-sleep.ts,
+   *  SleepRefusal): set on each agent with a terminal, gone once asleep. */
+  sleepHeld?: { why: string; at: string };
+  /** The last time its status was put right from its CLI's own record, an event
+   *  having never reached Tars (services/status-truth.ts, StatusFix). */
+  statusReconciled?: { from: string; to: string; why: string; at: string };
   projectPath: string;
   secondaryProjectPath?: string;
   worktreePath?: string;

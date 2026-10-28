@@ -125,7 +125,7 @@ const SITES: Site[] = [
   { file: 'electron/services/agent-guide.ts', line: 'const role: GuideRole = … ? \'orchestrator\' : \'worker\';', is: 'powers', why: 'the identity\'s How Tars works section: what an orchestrator uses, a chat\'s runner included' },
   { file: 'electron/services/agent-guide.ts', line: 'if (…) {', is: 'definition', why: 'identitySection: the role handed in by agentGuideSection, read from hasOrchestratorPowers' },
   { file: 'electron/services/agent-sleep.ts', line: 'orchestrator: …,', is: 'identity', why: 'the sleep rule: the orchestrator never sleeps' },
-  { file: 'electron/services/agent-sleep.ts', line: '.filter((a) => atRest(a) && !… && a.ptyId);', is: 'identity', why: 'who may be put to sleep' },
+  { file: 'electron/services/agent-sleep.ts', line: "if (…) held(agent, 'orchestrator');", is: 'identity', why: 'who may be put to sleep, and why an orchestrator is not (sleepHeld)' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const isSuperAgentApi = …;', is: 'powers', why: 'spawnAgentSession: the instructions, the denied tools' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: '|| (… && agent.projectPath === caller.projectPath))) return undefined;', is: 'powers', why: 'a worker writing to it reports, and asks nothing' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (!caller || … || isReportTo(caller, agent)) return undefined;', is: 'powers', why: 'what a worker sends another worker is a note, typed once its turn ends' },

@@ -89,6 +89,16 @@ describe('saveAgents', () => {
     expect(manager.agents.get('a2')?.status).toBe('idle');
   });
 
+  it('writes a working agent as working: agents.json says what the window says (the DB brief of 28/10)', () => {
+    // Every running agent was written idle with its running's statusSince: on 28/10, 15 of 19 working agents read
+    // idle there, and an orchestrator nearly stopped them on it. A launch still reads them at rest (no CLI runs then).
+    manager.loadAgents();
+    manager.agents.set('a2', agent('a2', { status: 'running' }) as never);
+    manager.saveAgents();
+    const raw = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8'));
+    expect(raw.agents.find((a: { id: string }) => a.id === 'a2').status).toBe('running');
+  });
+
   it('leaves no partial file behind: the write is a rename', () => {
     manager.loadAgents();
     manager.agents.set('a1', agent('a1') as never);

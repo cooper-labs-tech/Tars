@@ -24,6 +24,8 @@ export interface AgentTickItem {
   lastActivity: string;
   /** When the current status began. See AgentStatus.statusSince. */
   statusSince?: string;
+  /** Why the sleep pass last left it awake. See AgentStatus.sleepHeld. */
+  sleepHeld?: AgentStatus['sleepHeld'];
   /** What a waiting agent waits on. See AgentStatus.waitingOn. */
   waitingOn?: AgentWaitingOn;
   /** A permission question Tars holds for the window. See AgentStatus.permissionAsk. */
@@ -102,6 +104,7 @@ export function buildTickPayload(): AgentTickItem[] {
         projectName: a.projectPath ? path.basename(a.projectPath) : '',
         lastActivity: a.lastActivity,
         statusSince: a.statusSince,
+        sleepHeld: a.sleepHeld,
         waitingOn: publishedWaitingOn(a),
         permissionAsk: a.permissionAsk,
         provider: a.provider || 'claude',

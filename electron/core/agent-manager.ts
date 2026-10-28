@@ -71,6 +71,8 @@ function watchStatus(agent: AgentStatus, previous: AgentStatus | undefined): voi
       if (next === value) return;
       value = next;
       agent.statusSince = new Date().toISOString();
+      // agents.json says the status the window says, within the autosave's period.
+      markAgentsDirty();
       // What it waited on belongs to that wait, whichever line ended it.
       if (next !== 'waiting') agent.waitingOn = undefined;
     },
@@ -518,7 +520,10 @@ function persistable(agent: AgentStatus): AgentStatus {
     ptyId: undefined,
     pathMissing: undefined,
     output: agent.output.slice(-100),
-    status: agent.status === 'running' ? 'idle' : agent.status,
+    // The status as it is: a working agent written `idle`, with its running's
+    // statusSince, read as resting to every reader of the file (15 of 19 working
+    // agents on 28/10, the DB brief). A launch reads every agent at rest anyway
+    // (loadAgents), its CLI gone.
     // Runtime state, and the command a dialog asks about can carry a secret:
     // agents.json is in every agent's --add-dir (the gate of #172).
     waitingOn: undefined,
