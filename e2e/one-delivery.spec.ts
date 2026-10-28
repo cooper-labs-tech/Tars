@@ -205,7 +205,9 @@ for (const newInterface of [false, true]) {
       // Its idle prompt, 62 s after its rest, then a moment for a second note.
       await expect.poll(() => lines(path.join(home, 'idle-prompted.jsonl')).filter((l) => l.id === 'bg').length, { timeout: 90_000 }).toBe(1);
       await new Promise((r) => setTimeout(r, 6_000));
-      const notes = lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'lead' && /Background Worker.*background work still running/.test(String(p.prompt)));
+      // Every note about it, whatever it says: a second rest read as a second end of turn may come without the
+      // background work (read again 60 s later), and is a twin all the same.
+      const notes = lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'lead' && String(p.prompt).includes('"Background Worker" ("bg")'));
       seen.bgNotes = notes.map((n) => n.prompt);
       soft(notes.length, 'F4: the note is told once').toBe(1);
     } finally {
