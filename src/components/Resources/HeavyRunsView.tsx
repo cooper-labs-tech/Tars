@@ -6,7 +6,7 @@ import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
 import { Box, Empty, Figure, Figures, Notice, Row, Unread } from './bits';
 import type { HeavySlotAlert, HeavySlotHolder, HeavySlotStatus, HeavySlotTicket } from './contract';
-import { NOT_READ, clock, gb, mb, pct, since } from './format';
+import { NOT_READ, clock, diskGb, gb, mb, pct, since } from './format';
 import { useDiskSpace, useHeavyRuns } from './hooks';
 
 const PRIORITY: Record<HeavySlotTicket['priority'], string> = { gate: 'release gate', normal: 'ordinary', background: 'background' };
@@ -107,8 +107,8 @@ function Machine({ state }: { state: HeavySlotStatus | null }) {
   const disk = useDiskSpace();
   const m = state?.machine ?? null;
   // The disk as the window reads it now (system.disk); the slot's last sample only when that cannot be read.
-  const diskFree = disk ? disk.freeBytes / 1e9 : m?.diskFreeGb ?? null;
-  const floorGb = state?.floors.diskGb ?? (disk ? disk.floorBytes / 1e9 : null);
+  const diskFree = disk ? diskGb(disk.freeBytes) : m?.diskFreeGb ?? null;
+  const floorGb = state?.floors.diskGb ?? (disk ? diskGb(disk.floorBytes) : null);
   const memTone = m?.memFreePct != null && state && m.memFreePct < state.floors.memFreePct ? 'waiting' : undefined;
   const diskTone = diskFree == null ? undefined : diskFree < 6 ? 'error' : diskFree < 10 ? 'waiting' : undefined;
   const later = state ? 'not read yet' : 'with the heavy-run slot';
@@ -119,7 +119,7 @@ function Machine({ state }: { state: HeavySlotStatus | null }) {
       <Figure volatile caption="SWAP" value={m ? mb(m.swapUsedMb) : NOT_READ}
         sub={m?.swapGrowthMbPerMin != null ? `${m.swapGrowthMbPerMin >= 0 ? '+' : ''}${mb(m.swapGrowthMbPerMin)} a minute` : m ? 'its growth not read yet' : later} />
       <Figure volatile caption="FREE DISK" value={gb(diskFree)} tone={diskTone}
-        sub={diskFree == null ? 'cannot be read' : `${disk ? `of ${gb(disk.totalBytes / 1e9)}` : 'free'}${floorGb != null ? ` · floor ${Math.round(floorGb)} GB` : ''}`} />
+        sub={diskFree == null ? 'cannot be read' : `${disk ? `of ${gb(diskGb(disk.totalBytes))}` : 'free'}${floorGb != null ? ` · floor ${Math.round(floorGb)} GB` : ''}`} />
       <Figure volatile caption="LOAD" value={m?.load1 != null ? m.load1.toFixed(1) : NOT_READ}
         sub={m ? (m.load1 != null ? '1 min average' : 'not given on this system') : later} />
     </Figures>
