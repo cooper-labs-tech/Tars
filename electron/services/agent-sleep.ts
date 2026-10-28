@@ -20,6 +20,7 @@ import { waitingDeliveries } from './bus-store';
 import { openQuestionOf } from './user-questions';
 import { cliProcess, readProcesses, signOfLife, toolAtWork, type Proc } from './stall-watch';
 import { isOwedByRequests } from '../core/task-requests';
+import { readBornProcesses, type BornProcess } from '../core/born-processes';
 
 /**
  * Agents with no turn for 30 minutes are put to sleep: their CLI and all it
@@ -35,7 +36,11 @@ import { isOwedByRequests } from '../core/task-requests';
  *   question to the user) or owed by others to it (work it handed out): each
  *   is bound to its session, and dropped with it (agent-watch.ts, flush);
  * - a draft in its field, a write on its way, a pause in typing;
- * - a conversation Tars cannot resume: woken, it would start a new one.
+ * - a conversation Tars cannot resume: woken, it would start a new one;
+ * - what it started outside its terminal's tree, found by its birth tag
+ *   (core/born-processes.ts): a dev server started with nohup, its parent gone.
+ *   The sleep ends the tree only, and that one would run on with no session to
+ *   answer for it (2.0.5).
  */
 
 /**
@@ -54,7 +59,7 @@ export const { afterMs: SLEEP_AFTER_MS, everyMs: CHECK_EVERY_MS } = sleepTiming(
 
 export type SleepRefusal =
   | 'orchestrator' | 'not-at-rest' | 'no-cli' | 'starting' | 'recent'
-  | 'not-resumable' | 'owed' | 'owes' | 'pending' | 'field' | 'no-process-table' | 'busy';
+  | 'not-resumable' | 'owed' | 'owes' | 'pending' | 'field' | 'no-process-table' | 'busy' | 'detached';
 
 export interface SleepFacts {
   agent: Pick<AgentStatus, 'status' | 'waitingReason' | 'statusSince' | 'lastTurnStartedAt' | 'workHandedAt'>;
@@ -78,6 +83,8 @@ export interface SleepFacts {
   terminalPid: number | undefined;
   /** Which CLI runs in the terminal, as the process table names it: claude, unless codex (2.0.4). */
   binary?: 'claude' | 'codex';
+  /** What it started that runs outside its terminal's tree (bornOutsideOf); undefined where it cannot be read (Windows). */
+  bornOutside?: number[];
 }
 
 function atRest(agent: SleepFacts['agent']): boolean {
@@ -106,6 +113,7 @@ export function sleepRefusal(f: SleepFacts, opts: { anyAge?: boolean } = {}): Sl
   if (f.owed) return 'owed';
   if (f.owes) return 'owes';
   if (f.pending) return 'pending';
+  if (f.bornOutside?.length) return 'detached';
   if (f.fieldInUse) return 'field';
   if (!f.procs || f.terminalPid === undefined) return 'no-process-table';
   const cli = cliProcess(f.terminalPid, f.procs, f.binary);
@@ -114,8 +122,22 @@ export function sleepRefusal(f: SleepFacts, opts: { anyAge?: boolean } = {}): Sl
   return null;
 }
 
+/**
+ * The pids of what the agent started (its birth tag) that are not under its terminal: its CLI and its MCP
+ * servers carry the tag and are inside. Undefined when the tags or the tree cannot be read.
+ */
+export function bornOutsideOf(agentId: string, terminalPid: number | undefined, procs: Proc[] | undefined, born: BornProcess[] | undefined): number[] | undefined {
+  if (!born || !procs || terminalPid === undefined) return undefined;
+  const inside = new Set([terminalPid]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const p of procs) if (!inside.has(p.pid) && inside.has(p.ppid)) { inside.add(p.pid); grew = true; }
+  }
+  return born.filter(p => p.agentId === agentId && !inside.has(p.pid)).map(p => p.pid);
+}
+
 /** What the sleep rule reads of an agent, from the fleet as it is. Exported for its tests. */
-export function factsOf(agent: AgentStatus, procs: Proc[] | undefined, now: number): SleepFacts {
+export function factsOf(agent: AgentStatus, procs: Proc[] | undefined, now: number, born?: BornProcess[]): SleepFacts {
   const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   const fleet = [...agents.values()];
   return {
@@ -144,6 +166,7 @@ export function factsOf(agent: AgentStatus, procs: Proc[] | undefined, now: numb
     procs,
     terminalPid: terminal?.pid,
     binary: getProvider(agent.provider).binaryName === 'codex' ? 'codex' : 'claude',
+    bornOutside: bornOutsideOf(agent.id, terminal?.pid, procs, born),
   };
 }
 
@@ -184,7 +207,7 @@ export interface SleepOutcome { agentId: string; slept: boolean; why?: SleepRefu
  */
 export async function checkSleep(
   now: number = Date.now(),
-  read: { procs?: () => Promise<Proc[] | undefined> } = {},
+  read: { procs?: () => Promise<Proc[] | undefined>; born?: () => Promise<BornProcess[] | undefined> } = {},
 ): Promise<SleepOutcome[]> {
   const watched = [...agents.values()].filter((a) => a.ptyId);
   const outcomes: SleepOutcome[] = [];
@@ -200,10 +223,12 @@ export async function checkSleep(
   }
   if (candidates.length === 0) return outcomes;
   const procs = await (read.procs ?? readProcesses)();
+  // One read of the birth tags for every candidate: about 0.2 s on macOS (two ps), a walk of /proc on Linux.
+  const born = await (read.born ?? (() => readBornProcesses()))();
   const ending: Promise<void>[] = [];
   for (const agent of candidates) {
     // Read again now, after the wait on ps: a message may have come in.
-    const why = agents.get(agent.id) === agent && agent.ptyId ? sleepRefusal(factsOf(agent, procs, now)) : 'no-cli';
+    const why = agents.get(agent.id) === agent && agent.ptyId ? sleepRefusal(factsOf(agent, procs, now, born)) : 'no-cli';
     if (why) held(agent, why);
     else {
       outcomes.push({ agentId: agent.id, slept: true });

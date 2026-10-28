@@ -119,9 +119,9 @@ type SpawnOpts = {
  * The payload is the one the IPC paths send.
  */
 /** The stop, for the callers that read an agent's state: who, when, why. Nothing once it is not stopped. */
-function stopOf(agent: AgentStatus): { stoppedBy?: string; stoppedAt?: string; stopReason?: string } {
+function stopOf(agent: AgentStatus): { stoppedBy?: string; stoppedAt?: string; stopReason?: string; stopProcesses?: AgentStatus['stopProcesses'] } {
   return agent.status === 'stopped'
-    ? { stoppedBy: agent.stoppedBy, stoppedAt: agent.stoppedAt, stopReason: agent.stopReason }
+    ? { stoppedBy: agent.stoppedBy, stoppedAt: agent.stoppedAt, stopReason: agent.stopReason, ...(agent.stopProcesses ? { stopProcesses: agent.stopProcesses } : {}) }
     : {};
 }
 

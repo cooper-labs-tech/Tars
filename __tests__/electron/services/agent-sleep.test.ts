@@ -58,6 +58,10 @@ import type { Proc } from '../../../electron/services/stall-watch';
  * 22. (the same, before its code) The delay cannot be shortened for an E2E run, so no E2E can watch the real pass put
  *     an agent to sleep: DOROTHY_SLEEP_AFTER_MS, under DOROTHY_E2E only and 2 s at least, or 30 minutes; the pass
  *     then runs four times per delay, never less than every 500 ms and never more than every minute.
+ * 23. (2.0.5, before its code) An agent is put to sleep while something it started runs outside its terminal's
+ *     tree, found by its birth tag (core/born-processes.ts): a dev server started with nohup, its parent gone. The
+ *     sleep ends the tree only, and that one would outlive it with no session to answer for it. Or one inside
+ *     the tree (its MCP servers, which carry the tag too) counts as outside.
  */
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z');
@@ -275,5 +279,26 @@ describe('why an agent stays awake (the DB brief of 28/10)', () => {
     for (const bad of ['1999', 'soon', '', '-5']) {
       expect(sleepTiming({ DOROTHY_E2E: '1', DOROTHY_SLEEP_AFTER_MS: bad }), bad).toEqual({ afterMs: 30 * 60_000, everyMs: 60_000 });
     }
+  });
+});
+
+describe('what it started outside its terminal (2.0.5)', () => {
+  it('23. leaves alone an agent with a tagged process outside its terminal\'s tree, and counts none inside it', () => {
+    expect(sleepRefusal(facts({ bornOutside: [7001] }))).toBe('detached');
+    expect(sleepRefusal(facts({ bornOutside: [] }))).toBeNull();
+    // Unknown (Windows): the other rules decide, as before.
+    expect(sleepRefusal(facts({ bornOutside: undefined }))).toBeNull();
+  });
+
+  it('23. outside means not under its terminal: its CLI and MCP servers are inside, an orphan is not', async () => {
+    const { bornOutsideOf } = await import('../../../electron/services/agent-sleep');
+    const born = [
+      { pid: CLI, ppid: 1, agentId: 'a', command: 'claude' },
+      { pid: 4101, ppid: CLI, agentId: 'a', command: 'node bundle.js' },
+      { pid: 7001, ppid: 1, agentId: 'a', command: 'node next dev' },
+      { pid: 7002, ppid: 1, agentId: 'b', command: 'node next dev' },
+    ];
+    expect(bornOutsideOf('a', CLI, procs(), born)).toEqual([7001]);
+    expect(bornOutsideOf('a', CLI, procs(), undefined)).toBeUndefined();
   });
 });

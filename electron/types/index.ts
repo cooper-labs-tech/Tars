@@ -302,6 +302,21 @@ export interface AgentStatus {
   /** Why the agent is 'waiting': 'permission' = blocking permission dialog
    *  (auto-continue must NOT type into it), 'idle' = waiting for next prompt. */
   waitingReason?: string;
+  /** What the agent started that still runs while it has no live session (services/born-watch.ts, 2.0.5): its
+   *  processes found by their birth tag and its containers labelled `tars.agent=<id>`, since when they were first
+   *  seen so, and when the project's orchestrator was told (once, an hour on). Never ended by Tars: said. Saved. */
+  leftRunning?: {
+    pids: number[];
+    /** One line each, `pid <n>: <command>`, secrets masked and cut. */
+    commands: string[];
+    /** `<name> (<id>)` of each container. */
+    containers: string[];
+    since: string;
+    reportedAt?: string;
+  };
+  /** What its last stop ended and kept outside its terminal (core/agent-stop.ts, 2.0.5): `pid <n>: <command>` each,
+   *  the kept ones with why (the owner's limits, a shared daemon), and the containers stopped. Cleared by a start. */
+  stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line
   lastCleanOutput?: string;  // Clean text output captured from transcript by hooks
