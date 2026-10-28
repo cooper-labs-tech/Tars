@@ -5,6 +5,7 @@ import { requestDropped } from '../core/task-requests';
 import { queueView, type QueueView } from '../services/agent-queues';
 import { announceTask } from '../services/task-banner';
 import { tellCancelled } from '../services/agent-watch';
+import { broadcastToAllWindows } from '../utils/broadcast';
 
 /**
  * The window's hold on an agent's queue (2.0.5, lot 2, services/agent-queues.ts): the owner reads it, pauses and
@@ -18,7 +19,46 @@ function answer(agentId: string): Answer {
   return { success: true, view: queueView(oneTaskQueue, agentId) };
 }
 
+/** An item taken back by the owner: it never goes in, and whoever sent it is told who took it back. */
+function takeBack(ref: string, why: string): void {
+  const item = oneTaskQueue.cancel(ref, why);
+  const worker = item ? agents.get(item.agentId) : undefined;
+  if (!item || !worker) return;
+  requestDropped(worker, item.ref);
+  if (item.requesterId && item.requesterId !== worker.id) tellCancelled(item.requesterId, worker.id, 'the owner, in the window', 'taken back by the owner');
+}
+
+/** Why a cancel found no item in a queue: it started (its turn taken, or typed in), or no queue ever held it. */
+function notWaiting(ref: string): { success: false; error: string; code: 'already_started' | 'not_found' } {
+  const was = oneTaskQueue.lookup(ref);
+  if (was && (was.state === 'starting' || was.state === 'started' || was.state === 'delivered')) {
+    return { success: false, code: 'already_started', error: 'It has started: it is no longer waiting in the queue. Its turn can be stopped from the task banner.' };
+  }
+  return { success: false, code: 'not_found', error: 'No queue holds this task: it ended, or was never asked.' };
+}
+
+/** What each window was last told of each queue, so a burst of changes is told once, and only what moved. */
+const told = new Map<string, string>();
+let telling: ReturnType<typeof setTimeout> | undefined;
+
+/** agentQueue:changed, with the queue as it now reads, for each agent whose queue moved. */
+function tellChanges(): void {
+  telling = undefined;
+  const snapshot = oneTaskQueue.snapshot();
+  const ids = new Set([...snapshot.items.map((i) => i.agentId), ...Object.keys(snapshot.paused), ...told.keys()]);
+  for (const agentId of ids) {
+    const view = queueView(oneTaskQueue, agentId);
+    const json = JSON.stringify(view);
+    if (told.get(agentId) === json) continue;
+    if (!view.items.length && !view.paused) told.delete(agentId);
+    else told.set(agentId, json);
+    broadcastToAllWindows('agentQueue:changed', view);
+  }
+}
+
 export function registerAgentQueueHandlers(): void {
+  oneTaskQueue.onChange(() => { telling ??= setTimeout(tellChanges, 0); });
+
   ipcMain.handle('agentQueue:get', (_e, agentId: unknown) => {
     if (typeof agentId !== 'string' || !agents.has(agentId)) return { error: 'not_found' };
     return queueView(oneTaskQueue, agentId);
@@ -48,18 +88,22 @@ export function registerAgentQueueHandlers(): void {
     return answer(item.agentId);
   });
 
-  // An item taken back by the owner: it never goes in, and whoever sent it is told who took it back.
   ipcMain.handle('agentQueue:cancel', (_e, ref: unknown) => {
     const item = typeof ref === 'string' ? oneTaskQueue.find(ref) : undefined;
-    if (!item) return { success: false, error: 'No queue holds this task: it went in, ended, or was never asked.' };
-    oneTaskQueue.cancel(item.ref, 'it was taken back by you, in the window');
-    const worker = agents.get(item.agentId);
-    if (worker) {
-      requestDropped(worker, item.ref);
-      saveAgents();
-      if (item.requesterId && item.requesterId !== worker.id) tellCancelled(item.requesterId, worker.id, 'the owner, in the window', 'taken back by the owner');
-    }
+    if (!item) return notWaiting(String(ref));
+    takeBack(item.ref, 'it was taken back by you, in the window');
+    saveAgents();
     announceTask(item.agentId);
     return answer(item.agentId);
+  });
+
+  // Everything that waits, taken back at once; the pause, if any, stays as it was.
+  ipcMain.handle('agentQueue:drop', (_e, agentId: unknown) => {
+    if (typeof agentId !== 'string' || !agents.has(agentId)) return { success: false, error: 'No agent has this id.' };
+    const items = oneTaskQueue.queued(agentId);
+    for (const item of items) takeBack(item.ref, 'it was dropped by you, in the window, with the rest of the queue');
+    saveAgents();
+    announceTask(agentId);
+    return { ...answer(agentId), dropped: items.length };
   });
 }

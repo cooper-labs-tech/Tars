@@ -1229,7 +1229,7 @@ export interface AgentQueue {
   items: AgentQueueItem[];
 }
 
-type AgentQueueAnswer = { success: true; view: AgentQueue } | { success: false; error: string };
+type AgentQueueAnswer = { success: true; view: AgentQueue } | { success: false; error: string; code?: 'already_started' | 'not_found' };
 
 /** agent:queue: a worker's work in hand and the requests waiting behind it. */
 export interface AgentQueueEntry {
@@ -1443,7 +1443,12 @@ export interface ElectronAPI {
     pause: (agentId: string, reason?: string) => Promise<AgentQueueAnswer>;
     resume: (agentId: string) => Promise<AgentQueueAnswer>;
     move: (ref: string, before?: string) => Promise<AgentQueueAnswer>;
+    /** `already_started` when its turn was taken, or it was typed in, before the cancel came. */
     cancel: (ref: string) => Promise<AgentQueueAnswer>;
+    /** Everything that waits, taken back, each sender told; a pause stays as it was. */
+    drop: (agentId: string) => Promise<AgentQueueAnswer & { dropped?: number }>;
+    /** Each change of a queue (queued, moved, cancelled, dropped, paused, resumed, gone in), with the queue as it now reads. */
+    onChanged: (callback: (view: AgentQueue) => void) => () => void;
   };
   skill: {
     install: (repo: string) => Promise<{ success: boolean; output?: string; message?: string }>;

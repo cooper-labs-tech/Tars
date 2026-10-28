@@ -14,6 +14,7 @@ const CANCEL_REFUSALS: Record<string, string> = {
   not_your_task: "another chat asked for it, and only that chat, or the project's orchestrator with a reason, may cancel it",
   reason_required: "cancelling a task another chat asked for needs a reason, which that chat is told",
   already_delivered: "it is already in the agent's terminal, where it cannot be taken back: stop the agent to end it",
+  already_started: "it has started, and no longer waits in the agent's queue: stop the agent to end it",
 };
 
 type WaitResult = {
@@ -799,7 +800,7 @@ const AGENT_TOOLS: Tool[] = [
     description: "What waits in an agent's queue, in the order it goes in (each item's task id, who sent it, since when, whether it is a task, a message or a note, and its first line), and whether the queue is paused. With action 'pause', nothing goes in until it is resumed; the turn in progress is never touched. With 'resume', the items go in again, one at a time, in order. A stop keeps the queue, paused, and a restart of Tars too. The project's orchestrator acts on its agents' queues; a worker sees in another agent's queue only what it sent itself, and pauses nothing. Move an item with task_move, take one back with task_cancel.",
     schema: {
       id: z.string().describe("The agent ID"),
-      action: z.enum(["list", "pause", "resume"]).optional().describe("'list' (default), 'pause' or 'resume'"),
+      action: z.enum(["list", "pause", "resume", "drop"]).optional().describe("'list' (default), 'pause', 'resume', or 'drop' (everything that waits taken back, each sender told)"),
       reason: z.string().optional().describe("With 'pause': why, in one line, shown with the queue"),
     },
     failure: "reading the agent's queue",
@@ -809,7 +810,7 @@ const AGENT_TOOLS: Tool[] = [
         : await apiRequest(`/api/agents/${encodeURIComponent(id)}/queue`)) as
         { paused?: { since: string; why: string }; items?: Array<{ ref: string; position: number; from?: string; how?: string; title: string; queuedAt: string }> };
       const items = view.items ?? [];
-      const head = action === "pause" ? `Paused ${id}'s queue.` : action === "resume" ? `Resumed ${id}'s queue.` : `${id}'s queue${view.paused ? `, paused since ${view.paused.since} (${view.paused.why})` : ""}:`;
+      const head = action === "pause" ? `Paused ${id}'s queue.` : action === "resume" ? `Resumed ${id}'s queue.` : action === "drop" ? `Dropped what waited in ${id}'s queue.` : `${id}'s queue${view.paused ? `, paused since ${view.paused.since} (${view.paused.why})` : ""}:`;
       if (!items.length) return text(`${head} Nothing waits in it.`);
       return text([head, ...items.map((i) => `${i.position}. ${i.ref}, ${i.how ?? "task"} from ${i.from ?? "Tars"}, since ${i.queuedAt}: ${JSON.stringify(i.title)}`)].join("\n"));
     },

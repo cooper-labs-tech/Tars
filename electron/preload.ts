@@ -230,6 +230,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resume: (agentId: string) => ipcRenderer.invoke('agentQueue:resume', agentId),
     move: (ref: string, before?: string) => ipcRenderer.invoke('agentQueue:move', ref, before),
     cancel: (ref: string) => ipcRenderer.invoke('agentQueue:cancel', ref),
+    drop: (agentId: string) => ipcRenderer.invoke('agentQueue:drop', agentId),
+    onChanged: (callback: (view: unknown) => void) => {
+      const listener = (_: unknown, view: unknown) => callback(view);
+      ipcRenderer.on('agentQueue:changed', listener);
+      return () => ipcRenderer.removeListener('agentQueue:changed', listener);
+    },
   },
 
   skill: {

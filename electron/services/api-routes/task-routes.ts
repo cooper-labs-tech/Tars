@@ -47,11 +47,29 @@ function registerQueueRoutes(app_: RouteApp): void {
     sendJson(queueView(oneTaskQueue, agent.id, right.all || caller.kind !== 'agent' ? undefined : caller.agent.id));
   });
 
-  app_.post(/^\/api\/agents\/([^/]+)\/queue\/(pause|resume)$/, (req, sendJson) => {
+  app_.post(/^\/api\/agents\/([^/]+)\/queue\/(pause|resume|drop)$/, (req, sendJson) => {
     const agent = agents.get(req.params.id);
     const caller = queueCaller(req);
     if (!agent || !caller) { sendJson({ error: 'Agent not found' }, 404); return; }
-    const op = req.pathname.endsWith('/pause') ? 'pause' : 'resume';
+    const op = req.pathname.endsWith('/pause') ? 'pause' : req.pathname.endsWith('/drop') ? 'drop' : 'resume';
+    if (op === 'drop') {
+      // Everything that waits, taken back, each sender told; the same right as a pause.
+      const right = queueRight(caller, agent, 'pause');
+      if (!right.ok) { sendJson({ error: 'not_your_queue', reason: right.reason }, 403); return; }
+      const by = caller.kind === 'agent' ? (caller.agent as { name?: string }).name || caller.agent.id : 'Tars';
+      const items = oneTaskQueue.queued(agent.id);
+      for (const item of items) {
+        oneTaskQueue.cancel(item.ref, `it was dropped by ${by} with the rest of the queue`);
+        requestDropped(agent, item.ref);
+        if (item.requesterId && item.requesterId !== agent.id && item.requesterId !== (caller.kind === 'agent' ? caller.agent.id : undefined)) {
+          tellCancelled(item.requesterId, agent.id, by, 'the queue was dropped');
+        }
+      }
+      saveAgents();
+      announceTask(agent.id);
+      sendJson({ success: true, dropped: items.length, ...queueView(oneTaskQueue, agent.id) });
+      return;
+    }
     const right = queueRight(caller, agent, op);
     if (!right.ok) { sendJson({ error: 'not_your_queue', reason: right.reason }, 403); return; }
     const by = caller.kind === 'agent' ? (caller.agent as { name?: string }).name || caller.agent.id : 'Tars';
@@ -119,6 +137,13 @@ export function registerTaskRoutes(app_: RouteApp): void {
       return;
     }
     const verdict = cancelVerdict(req.params.id, callerId, reason, agents.values());
+    // Started already (its turn taken, or typed in), and no longer held anywhere: said so, not "no such task" (2.0.5,
+    // the window's frames of #535). Its asker, or the agent it was for, only: anyone else learns nothing of it.
+    const was = !verdict.ok && verdict.error === 'not_found' ? oneTaskQueue.lookup(req.params.id) : undefined;
+    if (was && (was.state === 'starting' || was.state === 'started' || was.state === 'delivered') && callerId && (callerId === was.task.requesterId || callerId === was.task.agentId)) {
+      sendJson({ error: 'already_started', reason: 'This task has started: it is no longer waiting in the queue. Stop the agent, or its turn, to end it.' }, 409);
+      return;
+    }
     if (!verdict.ok) {
       sendJson({ error: verdict.error, reason: verdict.reason }, STATUS[verdict.error]);
       return;
