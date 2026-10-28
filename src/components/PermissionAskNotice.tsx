@@ -197,7 +197,8 @@ export default function PermissionAskNotice({ agent, layout }: {
       </div>
       {line.subject && (
         <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
-          {line.subject}
+          {/* Each line on its own: a break is never read as a space (the Audit's M1 on PR 544). */}
+          {line.lines.map((l, i) => <span key={i} data-subject-line className="block">{l}</span>)}
           {withheld && <span className="text-muted-foreground">{` · ${withheldWhy ? 'withheld' : 'content withheld'}`}</span>}
         </p>
       )}

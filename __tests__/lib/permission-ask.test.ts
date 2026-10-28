@@ -75,6 +75,7 @@ describe('the question, when Tars holds one', () => {
     expect(permissionAskLine(agent(), NOW)).toEqual({
       who: 'Asks to use Bash:',
       subject: 'npm run build && npm test',
+      lines: ['npm run build && npm test'],
       at: 'asked at 14:02',
       title: 'Asks to use Bash: npm run build && npm test',
       reason: '',
