@@ -1,8 +1,7 @@
 import { safeGitSync } from '../utils/safe-git';
 import * as fs from 'fs';
 import { agents, saveAgents } from './agent-manager';
-import { ptyProcesses } from './pty-manager';
-import { killPty } from './pty-kill';
+import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
 import { forgetRestart } from './agent-restart';
 import { stopAcpRuns } from '../services/acp/delegate';
@@ -24,8 +23,8 @@ export interface RemovedAgent {
  * (services/chat-runners.ts). Moved here from the handler so both go the
  * same way.
  *
- * Its delegated runs and permission questions end with it; its terminal is
- * killed; its uncommitted work is saved on wip/<name> first, without asking
+ * Its delegated runs and permission questions end with it; its terminal's
+ * whole tree is ended, as a stop ends it; its uncommitted work is saved on wip/<name> first, without asking
  * (JeanBrasse, 05/10), since `--force` below removes whatever was not committed. A
  * save that fails keeps the worktree where it is, and says so, as do files git
  * ignores that are not caches, a repository of its own inside it, and a
@@ -39,12 +38,12 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
   dropPermissionAsks(id);
   if (agent?.ptyId) {
     const ptyProcess = ptyProcesses.get(agent.ptyId);
-    if (ptyProcess) {
-      killPty(ptyProcess);
-      ptyProcesses.delete(agent.ptyId);
-    }
+    ptyProcesses.delete(agent.ptyId);
     // Nullify so pending onExit callbacks won't mutate state
     agent.ptyId = undefined;
+    // Its whole tree, as a stop ends it (pty-manager.ts): the hangup alone left a CLI deaf to it, and its child,
+    // running with no agent to name them (the Audit's L4 on #523).
+    if (ptyProcess) await endTerminalTree(ptyProcess);
   }
 
   let savedTo: string | undefined;
