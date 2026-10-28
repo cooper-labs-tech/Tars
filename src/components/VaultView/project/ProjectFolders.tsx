@@ -68,7 +68,7 @@ export function ProjectFolders({ folders, place, levels, open, onToggle, onChoos
           <Package className="w-3 h-3 shrink-0 text-muted-foreground" />
           <span className="truncate font-mono text-text-secondary">{name}</span>
           <span className="flex-1" />
-          <span className="font-mono text-[10px] text-muted-foreground">not opened</span>
+          <span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-muted-foreground">not opened</span>
         </div>
       );
     }
@@ -89,7 +89,7 @@ export function ProjectFolders({ folders, place, levels, open, onToggle, onChoos
           <Lock className="w-3 h-3 shrink-0 text-muted-foreground" />
           <span className="truncate text-text-secondary">{name}</span>
           <span className="flex-1" />
-          <span className="font-mono text-[10px] text-danger">cannot be read</span>
+          <span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-danger">cannot be read</span>
         </button>
       );
     }
