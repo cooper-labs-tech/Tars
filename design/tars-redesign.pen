@@ -192307,7 +192307,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "hnpFg",
+                          "id": "UVf1j",
                           "name": "body",
                           "width": 946,
                           "height": "fill_container",
@@ -192324,8 +192324,8 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "heRaM",
-                              "name": "row Telegram bot",
+                              "id": "WjrBp",
+                              "name": "row Telegram goes through Hermes",
                               "width": "fill_container",
                               "stroke": "$border",
                               "strokeWidth": {
@@ -192341,7 +192341,7 @@
                               "children": [
                                 {
                                   "type": "frame",
-                                  "id": "JeVh6",
+                                  "id": "ViEcH",
                                   "name": "l",
                                   "width": 560,
                                   "layout": "vertical",
@@ -192349,10 +192349,10 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "Ue1gZ",
+                                      "id": "FIo9G",
                                       "name": "n",
                                       "fill": "$text-primary",
-                                      "content": "Telegram bot",
+                                      "content": "Telegram goes through Hermes",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-ui",
                                       "fontSize": 12.5,
@@ -192360,12 +192360,12 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "tPSrL",
+                                      "id": "PPqRP",
                                       "name": "h",
                                       "fill": "$text-muted",
                                       "textGrowth": "fixed-width",
                                       "width": 560,
-                                      "content": "Replaced by Telegram through Hermes: Hermes is the only voice on your Telegram, and the bot's token was erased.",
+                                      "content": "Tars has no Telegram bot of its own since 2.0.5. Hermes is the only voice on your Telegram: its relay, its gateways and who may write to Tars from it are set in Settings, Hermes.",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-ui",
                                       "fontSize": 11,
@@ -192375,88 +192375,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "Wcigx",
-                                  "name": "st",
-                                  "gap": 8,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "rectangle",
-                                      "id": "HnRFh",
-                                      "name": "d",
-                                      "fill": "$status-idle",
-                                      "width": 6,
-                                      "height": 6
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "f1mQb",
-                                      "name": "l",
-                                      "fill": "$status-idle",
-                                      "content": "off",
-                                      "lineHeight": 1.4,
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 11.5,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "gHvJU",
-                              "name": "row Telegram through Hermes",
-                              "width": "fill_container",
-                              "stroke": "$border",
-                              "strokeWidth": {
-                                "bottom": 1
-                              },
-                              "gap": 16,
-                              "padding": [
-                                11,
-                                0
-                              ],
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "D21UgD",
-                                  "name": "l",
-                                  "width": 560,
-                                  "layout": "vertical",
-                                  "gap": 2,
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "xEN8Z",
-                                      "name": "n",
-                                      "fill": "$text-primary",
-                                      "content": "Telegram through Hermes",
-                                      "lineHeight": 1.4,
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 12.5,
-                                      "fontWeight": "normal"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "ouksT",
-                                      "name": "h",
-                                      "fill": "$text-muted",
-                                      "textGrowth": "fixed-width",
-                                      "width": 560,
-                                      "content": "To bring the bot back, turn the relay off in Settings, Hermes, Relay, then paste a new bot token here.",
-                                      "lineHeight": 1.4,
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "ekKtq",
+                                  "id": "RnqpB",
                                   "name": "b open hermes",
                                   "height": 26,
                                   "stroke": "$border",
@@ -192470,12 +192389,65 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "IwYzS",
+                                      "id": "C42qVl",
                                       "name": "l",
                                       "fill": "$text-secondary",
-                                      "content": "open relay",
+                                      "content": "open hermes",
                                       "lineHeight": 1.35,
                                       "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "H1fBGf",
+                              "name": "row The old bot",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "js5TO",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "tLVbT",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "The old bot",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "CZcAf",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Its token was erased from Tars. Revoke it with BotFather too: send /revoke to @BotFather and choose the bot.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
                                       "fontSize": 11,
                                       "fontWeight": "normal"
                                     }
@@ -193473,7 +193445,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "xUfVX",
+                          "id": "HKFNK",
                           "name": "body",
                           "width": 946,
                           "height": "fill_container",
@@ -193490,8 +193462,8 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "qCXrJ",
-                              "name": "row Telegram bot",
+                              "id": "TswSt",
+                              "name": "row Telegram goes through Hermes",
                               "width": "fill_container",
                               "stroke": "$border",
                               "strokeWidth": {
@@ -193507,7 +193479,7 @@
                               "children": [
                                 {
                                   "type": "frame",
-                                  "id": "o5Xdv",
+                                  "id": "GjtLs",
                                   "name": "l",
                                   "width": 560,
                                   "layout": "vertical",
@@ -193515,10 +193487,10 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "XrcX4",
+                                      "id": "r9HOaN",
                                       "name": "n",
                                       "fill": "$text-primary",
-                                      "content": "Telegram bot",
+                                      "content": "Telegram goes through Hermes",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-ui",
                                       "fontSize": 12.5,
@@ -193526,12 +193498,12 @@
                                     },
                                     {
                                       "type": "text",
-                                      "id": "ojoVu",
+                                      "id": "oZ7KU",
                                       "name": "h",
                                       "fill": "$text-muted",
                                       "textGrowth": "fixed-width",
                                       "width": 560,
-                                      "content": "Replaced by Telegram through Hermes: Hermes is the only voice on your Telegram, and the bot's token was erased.",
+                                      "content": "Tars has no Telegram bot of its own since 2.0.5. Hermes is the only voice on your Telegram: its relay, its gateways and who may write to Tars from it are set in Settings, Hermes.",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-ui",
                                       "fontSize": 11,
@@ -193541,88 +193513,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "rNMCu",
-                                  "name": "st",
-                                  "gap": 8,
-                                  "alignItems": "center",
-                                  "children": [
-                                    {
-                                      "type": "rectangle",
-                                      "id": "D91BZ",
-                                      "name": "d",
-                                      "fill": "$status-idle",
-                                      "width": 6,
-                                      "height": 6
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "IQbKn",
-                                      "name": "l",
-                                      "fill": "$status-idle",
-                                      "content": "off",
-                                      "lineHeight": 1.4,
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 11.5,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "uFUdu",
-                              "name": "row Telegram through Hermes",
-                              "width": "fill_container",
-                              "stroke": "$border",
-                              "strokeWidth": {
-                                "bottom": 1
-                              },
-                              "gap": 16,
-                              "padding": [
-                                11,
-                                0
-                              ],
-                              "justifyContent": "space_between",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "frame",
-                                  "id": "Ks1y6",
-                                  "name": "l",
-                                  "width": 560,
-                                  "layout": "vertical",
-                                  "gap": 2,
-                                  "children": [
-                                    {
-                                      "type": "text",
-                                      "id": "G1AfK",
-                                      "name": "n",
-                                      "fill": "$text-primary",
-                                      "content": "Telegram through Hermes",
-                                      "lineHeight": 1.4,
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 12.5,
-                                      "fontWeight": "normal"
-                                    },
-                                    {
-                                      "type": "text",
-                                      "id": "X42N8U",
-                                      "name": "h",
-                                      "fill": "$text-muted",
-                                      "textGrowth": "fixed-width",
-                                      "width": 560,
-                                      "content": "To bring the bot back, turn the relay off in Settings, Hermes, Relay, then paste a new bot token here.",
-                                      "lineHeight": 1.4,
-                                      "fontFamily": "$font-ui",
-                                      "fontSize": 11,
-                                      "fontWeight": "normal"
-                                    }
-                                  ]
-                                },
-                                {
-                                  "type": "frame",
-                                  "id": "HCCAd",
+                                  "id": "a4MVPF",
                                   "name": "b open hermes",
                                   "height": 26,
                                   "stroke": "$border",
@@ -193636,12 +193527,65 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "YmNQp",
+                                      "id": "viqsA",
                                       "name": "l",
                                       "fill": "$text-secondary",
-                                      "content": "open relay",
+                                      "content": "open hermes",
                                       "lineHeight": 1.35,
                                       "fontFamily": "$font-mono",
+                                      "fontSize": 11,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "iJLZ6",
+                              "name": "row The old bot",
+                              "width": "fill_container",
+                              "stroke": "$border",
+                              "strokeWidth": {
+                                "bottom": 1
+                              },
+                              "gap": 16,
+                              "padding": [
+                                11,
+                                0
+                              ],
+                              "justifyContent": "space_between",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "yvhaq",
+                                  "name": "l",
+                                  "width": 560,
+                                  "layout": "vertical",
+                                  "gap": 2,
+                                  "children": [
+                                    {
+                                      "type": "text",
+                                      "id": "p1ylK",
+                                      "name": "n",
+                                      "fill": "$text-primary",
+                                      "content": "The old bot",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
+                                      "fontSize": 12.5,
+                                      "fontWeight": "normal"
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "S33xY",
+                                      "name": "h",
+                                      "fill": "$text-muted",
+                                      "textGrowth": "fixed-width",
+                                      "width": 560,
+                                      "content": "Its token was erased from Tars. Revoke it with BotFather too: send /revoke to @BotFather and choose the bot.",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "$font-ui",
                                       "fontSize": 11,
                                       "fontWeight": "normal"
                                     }
