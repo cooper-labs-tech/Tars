@@ -6,8 +6,9 @@ import { redactSecrets } from './redact-secrets';
  * for the window, where the owner reads what runs.
  *
  * Masked by default (the orchestrator's decision on the Audit's re-check of #546, after 27 forms a list of shapes had
- * missed): the program, the paths, the file names, the flags, the numbers and every argument under eight characters
- * stay; any other argument is masked whole. A secret shorter than that is caught where its place says so: after a flag
+ * missed): the program, the paths, the file names, the flags, the numbers, a word of lower-case letters and hyphens (a
+ * subcommand, so the window stays readable) and every argument under eight characters stay; any other argument is
+ * masked whole. A secret shorter than that is caught where its place says so: after a flag
  * or a name that says password, pass, secret, token, key, auth or credential, in a URL's password, after `curl -u`,
  * `sshpass -p`, mysql's `-p` or `docker login -p`. A secret is masked whole: four characters kept at each end leave
  * eight of a fifteen-character password.
@@ -53,12 +54,14 @@ const FLAG = /^(?:--[A-Za-z][\w.-]*|-[a-z][a-z0-9-]*|-[A-Za-z])$/;
 const NUMBER = /^\d+(?:[.:,x/-]\d+)*$/;
 /** A path: absolute, from home, relative, a drive; or a relative path ending in a file name. */
 const PATH = /^(?:\/|~\/|\.\.?\/|[A-Za-z]:\\)|^[\w.-]+(?:\/[\w.-]+)*\/[\w-]+(?:\.[a-z0-9]+)+$/;
+/** A subcommand: lower-case letters and hyphens only (checkout, playwright, typecheck), whatever its length. */
+const WORD = /^[a-z]+(?:-[a-z]+)*$/;
 /** A file or a host name: words joined by dots, lower-case after the first. */
 const FILE_NAME = /^[A-Za-z0-9_-]+(?:\.[a-z0-9-]+)+$/;
 
 /** An argument by the default rule: kept when short or when it says what runs, else masked. */
 function byDefault(arg: string): string {
-  if (arg.length < LONG || NUMBER.test(arg) || PATH.test(arg) || FILE_NAME.test(arg)) return arg;
+  if (arg.length < LONG || WORD.test(arg) || NUMBER.test(arg) || PATH.test(arg) || FILE_NAME.test(arg)) return arg;
   return MASK;
 }
 

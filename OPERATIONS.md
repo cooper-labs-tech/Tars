@@ -1362,8 +1362,8 @@ side).
     (`utils/redact-command-line.ts`): the program, the paths, the file names, the flags, the numbers and every argument
     under eight characters stay, and any other argument is masked whole. A shorter secret is masked where its place
     says so: after a flag or a name that says password, pass, secret, token, key, auth or credential, in a URL's
-    password, after `curl -u`, `sshpass -p`, mysql's `-p` or `docker login -p`. A subcommand of eight letters or more
-    (`checkout`) is masked too: the rule knows no words;
+    password, after `curl -u`, `sshpass -p`, mysql's `-p` or `docker login -p`. A word of lower-case letters and
+    hyphens stays whatever its length (a subcommand: `git checkout [redacted]`), except where its place says secret;
   - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
   - its status and since when (`statusSince`, or `asleepSince` for a sleeping one).
 - **Per project:** the same, summed (`totals`).
