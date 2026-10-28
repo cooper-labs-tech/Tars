@@ -752,19 +752,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Vault
   vault: {
-    // Each project's folder, reports/ and tools/ (services/vault-project-files.ts): by key, subfolder and name, never a path.
+    // Each project's folder, every folder of it (services/vault-project-files.ts): by key, place and name, never a path.
+    // A place is a list of folder names; `sub` (reports or tools) is the form of 2.0.4.
     projectFolders: () =>
       ipcRenderer.invoke('vault:project-folders'),
     projectFiles: (params: { key: string; sub: 'reports' | 'tools' }) =>
       ipcRenderer.invoke('vault:project-files', params),
-    readProjectFile: (params: { key: string; sub: 'reports' | 'tools'; name: string }) =>
+    projectPlace: (params: { key: string; place: string[]; offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('vault:project-place', params),
+    readProjectFile: (params: ({ key: string; sub: 'reports' | 'tools' } | { key: string; place: string[] }) & { name: string }) =>
       ipcRenderer.invoke('vault:project-file:read', params),
-    writeProjectFile: (params: { key: string; sub: 'reports' | 'tools'; name: string; text: string; mtimeSeen: number | null }) =>
+    writeProjectFile: (params: ({ key: string; sub: 'reports' | 'tools' } | { key: string; place: string[] }) & { name: string; text: string; mtimeSeen: number | null }) =>
       ipcRenderer.invoke('vault:project-file:write', params),
-    showProjectFile: (params: { key: string; sub: 'reports' | 'tools'; name?: string }) =>
+    showProjectFile: (params: ({ key: string; sub: 'reports' | 'tools' } | { key: string; place: string[] }) & { name?: string }) =>
       ipcRenderer.invoke('vault:project-file:show', params),
-    onProjectFilesChanged: (callback: (event: { key: string; sub: 'reports' | 'tools' }) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { key: string; sub: 'reports' | 'tools' }) => callback(data);
+    onProjectFilesChanged: (callback: (event: { key: string; place: string[]; sub?: 'reports' | 'tools' }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { key: string; place: string[]; sub?: 'reports' | 'tools' }) => callback(data);
       ipcRenderer.on('vault:project-files:changed', listener);
       return () => ipcRenderer.removeListener('vault:project-files:changed', listener);
     },
