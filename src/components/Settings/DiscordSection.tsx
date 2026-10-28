@@ -206,7 +206,7 @@ export const DiscordSection = ({ appSettings, onSaveAppSettings, onSecretChanged
         }
       />
 
-      {/* One row per ID, as Slack and Telegram list theirs: removing is the way back out. */}
+      {/* One row per ID, as Slack lists its own: removing is the way back out. */}
       {allowed.map(id => (
         <SettingsRow
           key={id}

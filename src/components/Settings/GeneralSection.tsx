@@ -104,7 +104,7 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
 
       <SettingsRow
         label="Default provider"
-        description="Used for Telegram-spawned agents and webhook dispatches."
+        description="Nothing starts an agent on it since 2.0.5, when Tars's own Telegram bot went."
         control={
           <Dropdown
             className="w-[300px]"
