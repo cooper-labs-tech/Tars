@@ -146,7 +146,7 @@ export function spareReason(command: string, executable?: string, shared?: Map<s
  * The executable each process runs, as the system resolves it: macOS, the first `txt` file lsof gives (one call
  * for all of them); Linux, /proc/<pid>/exe. Read for the agent's processes only, when a stop ends them.
  */
-export async function executablesOf(pids: number[], platform: NodeJS.Platform = process.platform): Promise<Map<number, string>> {
+export async function executablesOf(pids: number[], platform: NodeJS.Platform = process.platform, lsof = 'lsof'): Promise<Map<number, string>> {
   const out = new Map<number, string>();
   if (pids.length === 0) return out;
   if (platform === 'linux') {
@@ -154,7 +154,7 @@ export async function executablesOf(pids: number[], platform: NodeJS.Platform = 
       try { out.set(pid, fs.readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '')); } catch { /* gone, or not ours */ }
     }
   } else if (platform === 'darwin') {
-    const listed = await run('lsof', ['-a', '-p', pids.join(','), '-d', 'txt', '-Fpn']);
+    const listed = await run(lsof, ['-a', '-p', pids.join(','), '-d', 'txt', '-Fpn']);
     let pid = 0;
     for (const line of listed.out.split('\n')) {
       if (line.startsWith('p')) pid = Number(line.slice(1));
@@ -291,6 +291,8 @@ export interface BornEndOptions {
   terminal?: () => number | undefined;
   /** Shared daemons by resolved executable (sharedDaemonPaths()). */
   shared?: Map<string, string>;
+  /** The lsof to read the executables with on macOS (the tests' way to make it fail). */
+  lsof?: string;
 }
 
 /** A read as both walks use it: the tagged processes, and every process's parent (the whole table, tagged or not). */
@@ -320,10 +322,17 @@ export async function endBornProcesses(agentId: string, opts: BornEndOptions = {
   if (!first) return { ended: [], endedProcesses: [], spared: [], unknown: true };
   const { born: all, parentOf } = first;
   const mine = all.filter(p => p.agentId === agentId);
-  const executables = await executablesOf(mine.map(p => p.pid), opts.platform);
+  const platform = opts.platform ?? process.platform;
+  const executables = await executablesOf(mine.map(p => p.pid), platform, opts.lsof);
   const shared = opts.shared ?? sharedDaemonPaths();
   const whyOf = new Map<number, string>();
-  for (const p of mine) { const why = spareReason(p.command, executables.get(p.pid), shared); if (why) whyOf.set(p.pid, why); }
+  for (const p of mine) {
+    // On macOS, an executable lsof could not read (lsof failed, or timed out on a loaded machine) may be a shared
+    // daemon's: kept and said, never ended unknown (the Audit's L5 on #523).
+    const unread = platform === 'darwin' && !executables.has(p.pid) && alive(p.pid);
+    const why = spareReason(p.command, executables.get(p.pid), shared) ?? (unread ? 'its executable could not be read (it may be a shared daemon)' : undefined);
+    if (why) whyOf.set(p.pid, why);
+  }
   const roots = new Set(whyOf.keys());
   const spared: BornEnd['spared'] = [];
   for (const p of mine) {
