@@ -939,6 +939,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     removeVault: (vaultPath: string) => ipcRenderer.invoke('obsidian:removeVault', vaultPath),
   },
 
+  // What each agent and each project costs (services/fleet-resources-runtime.ts): one read, a measure of the disk on
+  // demand, and the same read on each change.
+  resources: {
+    read: () => ipcRenderer.invoke('resources:read'),
+    measureDisk: () => ipcRenderer.invoke('resources:measureDisk'),
+    onChanged: (callback: (state: unknown) => void) => {
+      const listener = (_: unknown, state: unknown) => callback(state);
+      ipcRenderer.on('resources:changed', listener);
+      return () => ipcRenderer.removeListener('resources:changed', listener);
+    },
+  },
+
   // The disk, and the folders no agent owns (Settings · System). The removal
   // asks nothing itself: the window confirms before it calls.
   system: {

@@ -1455,6 +1455,34 @@ window; agents may only ask for a scan.
 - **Tests.** Under `DOROTHY_E2E` only, `DOROTHY_DOCKER_BIN` and `DOROTHY_COLIMA_BIN` name stand-ins, so a test never
   reaches the machine's Docker (`e2e/disk-janitor.spec.ts`).
 
+## What each agent and each project costs
+
+2.0.5, lot 3 item D (`electron/services/fleet-resources.ts` for the rules, `fleet-resources-runtime.ts` for the app's
+side).
+- **Per agent:**
+  - the memory and CPU of its whole process tree, from its terminal down;
+  - its processes, by memory, each with its pid and its command line masked for the window by default
+    (`utils/redact-command-line.ts`): the program, the paths, the file names, the flags, the numbers and every argument
+    under eight characters stay, and any other argument is masked whole. A shorter secret is masked where its place
+    says so: after a flag or a name that says password, pass, secret, token, key, auth or credential, in a URL's
+    password, after `curl -u`, `sshpass -p`, mysql's `-p` or `docker login -p`. A word of lower-case letters and
+    hyphens stays whatever its length (a subcommand: `git checkout [redacted]`), except where its place says secret;
+  - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
+  - its status and since when (`statusSince`, or `asleepSince` for a sleeping one).
+- **Per project:** the same, summed (`totals`).
+- **How it is read.** One `ps -A -o pid,ppid,rss,%cpu,command` at most every 2 s, on macOS and Linux. On Windows the
+  figures read null, never 0.
+- **The disk** is measured only when the window asks (`resources.measureDisk`), one folder at a time, with its progress
+  (`measuring`), and kept with when (`diskMeasuredAt`). It is never walked on a read or a tick.
+- **The window** reads `window.electronAPI.resources.read()` and is sent `resources:changed`.
+- **The orchestrators** read it through `list_agents` (each agent's `memMb` and `statusSince`) and `get_agent`
+  (`resources`: memory, CPU, and each process as its program, pid, memory and CPU, never its arguments: no masking
+  knows every secret a command line carries). Their own project's agents only: `get_agent` answers another project's
+  agent as an unknown one (404, `Agent not found`), and `list_agents` with `all` names other projects' agents with
+  their status, project and role, nothing more (the Audit's H1 on #546). So do `get_agent_output`, `wait_for_agent`,
+  `/bootstrap` and `/health`: every route that names an agent by its id answers its own project only. A caller with no
+  project, the owner's own token, reads everything, and so does the window through IPC.
+
 ## MCP servers
 
 Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to

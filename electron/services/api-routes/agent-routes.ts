@@ -1,4 +1,6 @@
 import { apiListening, NOT_LISTENING } from '../../core/api-listening';
+import { agentResources } from '../fleet-resources-runtime';
+import type { AgentProcess } from '../fleet-resources';
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { maskedAsk } from '../permission-asks';
@@ -601,6 +603,17 @@ async function spawnAgentSessionInSlot(
 function projectAgent(agent: AgentStatus) {
   const { output, ...rest } = agent;
   return { ...rest, outputChunks: output.length };
+}
+
+/**
+ * The agent a route names by its id, for its own project's callers only: another project's reads as unknown, naming
+ * nothing (the Audit's H1 on #546, the orchestrator's decision): its output, its last answer, its roster, its health
+ * and its processes are its project's. A caller with no project (the owner's own token) reads any; the window has IPC.
+ */
+function visibleAgent(req: RouteRequest): AgentStatus | undefined {
+  const agent = agents.get(req.params.id);
+  const caller = callerProject(req);
+  return agent && (!caller || agent.projectPath === caller) ? agent : undefined;
 }
 
 // callerId and callerProject live in ./utils: the bus routes ask the same two
@@ -2015,7 +2028,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   replayContext = ctx;
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2101,7 +2114,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents: scoped to the caller's project by default (?all=true
   // for the global view). An orchestrator that only ever SEES its own team
   // cannot pick another project's agent ID by mistake.
-  app_.get('/api/agents', (req, sendJson) => {
+  app_.get('/api/agents', async (req, sendJson) => {
     const caller = callerProject(req);
     const showAll = req.url.searchParams.get('all') === 'true';
     // The team: a chat's runner is a conversation with the orchestrator, listed
@@ -2110,11 +2123,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (caller && !showAll) {
       agentValues = agentValues.filter(a => a.projectPath === caller);
     }
+    // Another project's agents, with `all`: who they are and nothing more, no task, figure or asker (the Audit's H1 on
+    // #546, the orchestrator's decision). A caller with no project (the owner's own token) reads everything.
+    const elsewhere = (a: AgentStatus) => !!caller && a.projectPath !== caller;
     const askerOf = (a: AgentStatus) => {
       const asker = a.requestedBy ? agents.get(a.requestedBy.agentId) : undefined;
       return asker ? { id: asker.id, name: asker.name || asker.id, ...(asker.kind === 'chat' ? { chat: true } : {}) } : undefined;
     };
-    const agentList = agentValues.map(withSessionTruth).map(a => ({
+    // Each agent's memory and since when it is in its status (lot 3 item D): null when it cannot be read.
+    const resources = await agentResources().catch(() => new Map());
+    const agentList = agentValues.map(withSessionTruth).map(a => (elsewhere(a) ? {
+      id: a.id, name: a.name, status: a.status, projectPath: a.projectPath, role: a.role,
+    } : {
       id: a.id,
       name: a.name,
       status: a.status,
@@ -2136,13 +2156,15 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         ...(a.permissionAsk.reason ? { reason: a.permissionAsk.reason } : {}),
         askedAt: a.permissionAsk.askedAt, until: a.permissionAsk.until,
       } } : {}),
+      memMb: resources.get(a.id)?.memMb ?? null,
+      statusSince: a.statusSince,
     }));
     sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
   });
 
   // GET /api/agents/:id
-  app_.get(/^\/api\/agents\/([^/]+)$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+  app_.get(/^\/api\/agents\/([^/]+)$/, async (req, sendJson) => {
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2156,12 +2178,20 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const queue = listed && (listed.items.length || listed.paused) ? listed : undefined;
     const view = full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent);
     // The question masked for an agent (the Audit's L3 on #538): the window keeps it whole.
+    // Its tree's memory and CPU, and each process as its program, pid, memory and CPU (lot 3 item D): no arguments,
+    // which carry what no masking can know (the Audit's M1 on #546). The window, through IPC, has the command lines.
+    const r = (await agentResources().catch(() => new Map())).get(agent.id);
+    const resources = {
+      memMb: r?.memMb ?? null, cpuPct: r?.cpuPct ?? null,
+      processes: (r?.processes ?? []).map(({ name, pid, memMb, cpuPct }: AgentProcess) => ({ name, pid, memMb, cpuPct })),
+    };
     sendJson({ agent: {
       ...(agent.permissionAsk ? {
         ...view, permissionAsk: maskedAsk(agent.permissionAsk),
         ...(view.waitingOn ? { waitingOn: { ...view.waitingOn, text: redactSecrets(view.waitingOn.text) } } : {}),
       } : view),
       ...(queue ? { queue } : {}),
+      resources,
     } });
   });
 
@@ -2170,7 +2200,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // the "who am I / who is my team" handshake automatic instead of a manual
   // ritual at the start of every working session.
   app_.get(/^\/api\/agents\/([^/]+)\/bootstrap$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2249,7 +2279,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/health: liveness of the agent's PTY and session,
   // so orchestrators/tools can distinguish "working" from "ghost status".
   app_.get(/^\/api\/agents\/([^/]+)\/health$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2268,7 +2298,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
   // GET /api/agents/:id/output
   app_.get(/^\/api\/agents\/([^/]+)\/output$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
