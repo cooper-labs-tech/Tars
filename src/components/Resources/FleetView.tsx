@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
-import { Box, Empty, Figure, Figures, Notice, Unread } from './bits';
+import { Box, Empty, Figure, Figures, Unread } from './bits';
 import type { AgentResources, FleetResources, ProjectResources } from './contract';
 import { NOT_READ, bytes, clock, lasted, mb, pct, sum } from './format';
 import { useFleetResources } from './hooks';
@@ -57,9 +57,6 @@ function AgentRow({ agent, chosen, onChoose, measuring }: { agent: AgentResource
       className={`${COLS} w-full pl-10 pr-3.5 py-[7px] text-left ${chosen ? 'bg-bg-elevated border border-border-accent' : 'border-t border-border hover:bg-secondary/60'}`}>
       <span className="flex flex-col gap-0.5 min-w-0 overflow-hidden">
         <span className="text-[12px] text-foreground truncate">{agent.name}</span>
-        {agent.outlived && agent.outlived.count > 0 && (
-          <span className="flex items-center gap-1.5 font-mono text-[10px] text-status-waiting"><StatusSquare tone="waiting" />{`${agent.outlived.count} outlived its session`}</span>
-        )}
       </span>
       <span className="flex items-center gap-1.5 min-w-0 font-mono text-[11px]">
         <span className={INK[agent.status] ?? 'text-muted-foreground'}>{agent.status}</span>
@@ -127,7 +124,6 @@ export function FleetView({ chosen, onChoose }: { chosen: string | null; onChoos
   const pickProject = projects.find((p) => p.agents.some((a) => a.id === chosen))?.name ?? '';
   const measuring = Boolean(state?.measuring);
   const all = (f: (a: AgentResources) => number | null) => sum(agents.map(f));
-  const outlived = agents.filter((a) => a.outlived && a.outlived.count > 0);
 
   const measure = async () => { setMeasureError(await measureDisk()); };
 
@@ -140,11 +136,6 @@ export function FleetView({ chosen, onChoose }: { chosen: string | null; onChoos
         <Figure volatile caption="TEMPORARY FOLDERS" value={state ? cell(all(tmpBytes), measuring) : NOT_READ} sub={state ? `${agents.filter((a) => a.tmp).length} folders under ~/.tars/tmp` : 'not measured yet'} />
       </Figures>
       {state?.error && <Unread text="Tars cannot read the processes:" detail={state.error} onRetry={reload} />}
-      {outlived.map((a) => (
-        <Notice key={a.id} tone="waiting">
-          {`${a.name}'s session ended and ${a.outlived!.count} of its processes run on${a.outlived!.names.length ? `: ${a.outlived!.names.join(', ')}` : ''}${a.outlived!.memMb != null ? `. ${mb(a.outlived!.memMb)}` : ''}. Tars ends them on a stop of the agent; it does not end them by itself.`}
-        </Notice>
-      ))}
       <div className="flex gap-3 items-start min-w-0">
         <Box name="Fleet" className="flex-1"
           caption={state ? `${projects.length} ${projects.length === 1 ? 'project' : 'projects'} · ${agents.length} ${agents.length === 1 ? 'agent' : 'agents'}` : 'PROJECTS AND AGENTS'}
