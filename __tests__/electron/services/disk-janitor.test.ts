@@ -64,7 +64,7 @@ function world(over: Over = {}): JanitorWorld {
     })),
     dirty: async (p) => (over.dirty ?? new Set(['dirty'])).has(path.basename(p)),
     merged: async (_project, branch) => (over.merged ?? new Set(['b/done', 'b/dirty', 'b/locked', 'b/agents', 'b/busy', 'b/fresh'])).has(branch),
-    named: (base) => (over.named ?? []).some(n => n === base),
+    named: (folder) => (over.named ?? []).some(n => folder.endsWith(n)),
     docker: { images: async () => (over.images === undefined ? [
       { id: 'sha256:unused', repo: 'old/thing:1', sizeBytes: 2e9, used: false },
       { id: 'sha256:used', repo: 'postgres:16', sizeBytes: 4e8, used: true },
@@ -92,10 +92,11 @@ beforeEach(() => {
   for (const n of ['done', 'dirty', 'locked', 'agents', 'busy', 'open']) {
     mk(path.join(project, '.worktrees', n, '.next'));
     mk(path.join(project, '.worktrees', n, 'test-results'));
-    old(path.join(project, '.worktrees', n), 10);
   }
   mk(path.join(project, '.worktrees', 'fresh', '.next'), 1);
   mk(path.join(project, '.worktrees', 'done', 'playwright-report'));
+  // Each worktree's own time last: making a folder in it renews it.
+  for (const n of ['done', 'dirty', 'locked', 'agents', 'busy', 'open']) old(path.join(project, '.worktrees', n), 10);
   mk(path.join(project, '.next'));
   mk(path.join(home, '.tars', 'tmp', shortIdOf('agent-gone')));
   mk(path.join(home, '.tars', 'tmp', shortIdOf('agent-live')));
@@ -134,7 +135,7 @@ describe('the scan', () => {
   });
 
   it('J5. a test artefact a report names is not proposed', async () => {
-    const items = await scanJanitor(world({ named: ['playwright-report'] }));
+    const items = await scanJanitor(world({ named: ['done/playwright-report'] }));
     expect(items.map(keyOf)).not.toContain('test-artefacts projects/harbor/.worktrees/done/playwright-report');
   });
 
