@@ -150,7 +150,7 @@ import { hermesKanban, tellOrchestratorAsTars } from './services/api-routes/kanb
 import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
-import { retireTelegramBot, withoutTelegramBot } from './services/telegram-retired';
+import { retireTelegramBot, withoutRetiredSettings } from './services/telegram-retired';
 import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
 import { endAcpRunsOnQuit, agentsRunningOverAcp } from './services/acp/delegate';
 import { retentionLog, startTmpRetention } from './services/agent-tmp';
@@ -267,7 +267,6 @@ function loadAppSettings(): AppSettings {
     opencodeDefaultModel: '',
     ampEnabled: false,
     ampDefaultModel: '',
-    defaultProvider: 'claude',
     cliPaths: {
       amp: '',
       claude: '',
@@ -310,7 +309,7 @@ function saveAppSettingsToFile(settings: AppSettings) {
     ensureDataDir();
     // 0600 and atomic. The secrets go to ~/.tars-private (settings-secrets.json,
     // and the Sentry token's own file), the rest to app-settings.json.
-    saveSettingsSplit(withoutTelegramBot(settingsToSave(settings)) as AppSettings);
+    saveSettingsSplit(withoutRetiredSettings(settingsToSave(settings)) as AppSettings);
   } catch (err) {
     console.error('Failed to save app settings:', err);
   }

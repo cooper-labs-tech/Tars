@@ -22,8 +22,21 @@ export const TELEGRAM_BOT_FIELDS = [
 const SECRETS_FILE = () => privatePath('settings-secrets.json');
 const SENT_LOG = () => privatePath('telegram-sent.json');
 
-/** The settings without the bot's fields: what a save writes, whatever a window still sends. */
-export function withoutTelegramBot<T extends object>(settings: T): T {
+/**
+ * Settings nothing reads any more, which a save drops whatever a window still sends: the bot's, and
+ * `defaultProvider`, whose only use was the Settings row #547 removes (read nowhere already on 2.0.4).
+ */
+const RETIRED_SETTINGS: readonly string[] = [...TELEGRAM_BOT_FIELDS, 'defaultProvider'];
+
+/** The settings without the retired ones: what a save writes, whatever a window still sends. */
+export function withoutRetiredSettings<T extends object>(settings: T): T {
+  const out = { ...settings } as Record<string, unknown>;
+  for (const f of RETIRED_SETTINGS) delete out[f];
+  return out as T;
+}
+
+/** The settings without the bot's fields alone: what the launch's clean-up writes. */
+function withoutTelegramBot<T extends object>(settings: T): T {
   const out = { ...settings } as Record<string, unknown>;
   for (const f of TELEGRAM_BOT_FIELDS) delete out[f];
   return out as T;

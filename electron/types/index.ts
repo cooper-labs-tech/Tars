@@ -554,7 +554,6 @@ export interface AppSettings {
    * Empty means no header, which is exactly today's behaviour.
    */
   memoryHonchoWorkspaceId?: string;
-  defaultProvider?: AgentProvider;
   obsidianVaultPaths?: string[];
   notificationSounds?: {
     waiting?: string;

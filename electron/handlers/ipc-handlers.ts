@@ -41,7 +41,7 @@ import { landsUnderSafeRoot } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
-import { withoutTelegramBot } from '../services/telegram-retired';
+import { withoutRetiredSettings } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
 import { agentStatusOnExit, refuseWhileQuitting } from '../core/quit-state';
@@ -1975,8 +1975,8 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
                              newSettings.discordBotToken !== undefined;
 
       const currentSettings = getAppSettings();
-      // Tars's own Telegram bot is gone (2.0.5): its fields a window still sends are dropped (telegram-retired.ts).
-      const updatedSettings = withoutTelegramBot(merge(currentSettings));
+      // Settings nothing reads any more (Tars's own Telegram bot's, defaultProvider) are dropped (telegram-retired.ts).
+      const updatedSettings = withoutRetiredSettings(merge(currentSettings));
       setAppSettings(updatedSettings);
       saveAppSettings(updatedSettings);
 

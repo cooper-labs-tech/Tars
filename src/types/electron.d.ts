@@ -1758,7 +1758,6 @@ export interface ElectronAPI {
       socialDataApiKey: string;
       tasmaniaEnabled: boolean;
       tasmaniaServerPath: string;
-      defaultProvider?: string;
       opencodeEnabled?: boolean;
       opencodeDefaultModel?: string;
       openRouterEnabled?: boolean;
@@ -1862,7 +1861,6 @@ export interface ElectronAPI {
       socialDataApiKey?: string;
       tasmaniaEnabled?: boolean;
       tasmaniaServerPath?: string;
-      defaultProvider?: string;
       notificationSounds?: {
         waiting?: string;
         complete?: string;
