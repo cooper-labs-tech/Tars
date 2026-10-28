@@ -26,10 +26,12 @@ vi.mock('electron', () => ({
   BrowserWindow: Object.assign(vi.fn(), { getAllWindows: () => [] }),
 }));
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
-const fleet = new Map<string, Record<string, unknown>>([
-  ['a', { id: 'a', name: 'Harbor Worker', role: 'worker', projectPath: '/work/harbor', status: 'running' }],
-  ['o', { id: 'o', name: 'Harbor Lead', role: 'orchestrator', projectPath: '/work/harbor', status: 'running' }],
-]);
+const { fleet } = vi.hoisted(() => ({
+  fleet: new Map<string, Record<string, unknown>>([
+    ['a', { id: 'a', name: 'Harbor Worker', role: 'worker', projectPath: '/work/harbor', status: 'running' }],
+    ['o', { id: 'o', name: 'Harbor Lead', role: 'orchestrator', projectPath: '/work/harbor', status: 'running' }],
+  ]),
+}));
 vi.mock('../../../../electron/core/agent-manager', () => ({ agents: fleet }));
 vi.mock('../../../../electron/core/chat-inbox', () => ({ chatsReadEnv: (id: string) => (id === 'o' ? { TARS_CHATS_READ: '1' } : {}) }));
 

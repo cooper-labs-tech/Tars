@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { registerTools, text, tool } from "../../../mcp-shared/src/tools.js";
 import { apiRequest } from "../utils/api.js";
+import { callerName, getCallerIdentity } from "../../../mcp-shared/src/tars-api.js";
 
 interface VaultDocument {
   id: string;
@@ -53,8 +54,9 @@ export function registerDocumentTools(server: McpServer): void {
       },
       failure: "creating document",
       async run({ title, content, folder, tags }) {
-        const author = process.env.CLAUDE_AGENT_NAME || process.env.CLAUDE_AGENT_ID || "agent";
-        const agent_id = process.env.CLAUDE_AGENT_ID || undefined;
+        // The caller's, from its shared call or its environment (tars-api.ts).
+        const author = callerName() || "agent";
+        const agent_id = getCallerIdentity().agentId || undefined;
 
         // Resolve folder name to ID (find existing or create new)
         const folder_id = await resolveFolder(folder);

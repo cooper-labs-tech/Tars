@@ -24,6 +24,7 @@ import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
 import { app, dialog, ipcMain, Notification } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
+import { stopSharedMcp } from './services/mcp-shared';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -1026,6 +1027,8 @@ app.on('before-quit', (event) => {
       ['endAcpRunsOnQuit', endAcpRunsOnQuit],
       // A permission question held for the window: the mod's request is answered, back to its dialog.
       ['endPermissionAsks', endPermissionAsks],
+      // The MCP servers shared between agents: their stdin closed, then each stopped by its own process.
+      ['stopSharedMcp', stopSharedMcp],
       ['destroyTray', destroyTray],
       ['stopAgentAutosave', stopAgentAutosave],
       ['stopOverseerWatch', stopOverseerWatch],

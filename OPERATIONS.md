@@ -1367,6 +1367,27 @@ Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
 `tasmaniaServerPath` exists on disk.
 
+**Shared between agents** (2.0.5, `services/mcp-shared.ts`). Six of the seven run once for every agent:
+orchestrator, memory, kanban, vault, socialdata and x. Telegram stays per agent, since it resolves a file to send
+against its agent's folder.
+- **How they run.** `setupMcpOrchestrator` starts each with `TARS_MCP_SHARED=1` on the app's own Node, writes a
+  secret on its stdin, and reads the loopback port it says on its stdout (`listening <port>`). It is started again
+  if it ends, at most five times a minute; the quit closes its stdin and stops it by its own process
+  (`stopSharedMcp`).
+- **How a claude agent reaches them.** Tars writes each into `~/.claude.json`, and in place of a copy already in
+  `~/.claude/mcp.json`, as `{ type: 'http', url: 'http://127.0.0.1:<API_PORT>/api/mcp/<name>', headers:
+  { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } }`. Claude expands the variable from its own environment.
+- **The route.** `/api/mcp/<name>` proxies the call with the agent's identity from the fleet
+  (`api-routes/mcp-routes.ts`):
+  - 403 without an agent's own token;
+  - 404 for a server that is not shared;
+  - 503 while it is not running.
+- **The other CLIs** (codex, gemini, Qwen Code, opencode, pi, amp, grok) keep their per-agent copies, registered as
+  before. So does claude for a shared server that did not start: its HTTP entries are taken out
+  (`dropSharedMcpEntries`) and the per-agent copy registered again.
+- **Measured on 28/10:** 19 agents ran 133 copies, 20 to 25 MB each, 2.75 GB. Shared, that is six processes for the
+  six shared servers plus one telegram copy per agent, for the claude agents (the report of lot 3 has the figures).
+
 Each server builds itself (`npm run build` in its folder): `tsc` checks the types, and esbuild
 bundles `src/index.ts` into `dist/bundle.js`, with `mcp-shared/` in it. That folder is what the
 seven share: the client to Tars, the tool table they register through, one request read whole,

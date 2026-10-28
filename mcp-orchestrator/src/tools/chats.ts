@@ -10,11 +10,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { registerTools, text, tool } from "../../../mcp-shared/src/tools.js";
 import { apiRequest } from "../utils/api.js";
+import { callerReadsChats } from "../../../mcp-shared/src/tars-api.js";
 
 type Listed = { chats?: Array<{ id: string; number: number; title: string; state: string; lastActivityAt: string }>; error?: string; reason?: string };
 
 export function registerChatTools(server: McpServer): void {
-  if (process.env.TARS_CHATS_READ !== "1") return;
+  // Read for each call's server: a shared server builds one per call, as its caller (tars-api.ts).
+  if (!callerReadsChats()) return;
   registerTools(server, [
     tool({
       name: "chat_list",
