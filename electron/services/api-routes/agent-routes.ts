@@ -1130,7 +1130,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * final answer from the transcript. The answer the route gives at the end.
  */
 async function runInTerminal(
-  agent: AgentStatus, req: RouteRequest, ctx: RouteContext, job: { task: string; ref: string; model?: string },
+  agent: AgentStatus, req: RouteRequest, ctx: RouteContext, job: { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } },
   onHanded: (start: Record<string, unknown>) => void,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const ledger = liveTaskLedger();
@@ -1170,7 +1170,8 @@ async function runInTerminal(
     // opens its own (the Audit's H1 on #453).
     ledger?.endedForDelegation(agent.id);
     await performDispatch(agent, {
-      message: job.task, model: job.model, from: senderName(agent, req), sender: senderOf(agent, req), mark: markFor(agent, req),
+      // Its sender line as it was queued, for a task kept across a restart (the Audit's Info 1 on #536).
+      message: job.task, model: job.model, from: job.asSent?.from ?? senderName(agent, req), sender: job.asSent?.sender ?? senderOf(agent, req), mark: job.asSent?.mark ?? markFor(agent, req),
       turnTaken: true,
       onAccepted: () => requestFor(agent, req, job.task, job.ref),
       // An agent's task carries its id on its line, a request queued for it
@@ -1666,8 +1667,16 @@ interface DispatchReplay {
   opts: Pick<DispatchOpts, 'message' | 'model' | 'permissionMode' | 'from' | 'sender' | 'mark' | 'noteOnly' | 'information' | 'task' | 'untilRest' | 'taskId'>;
 }
 
-/** What a run-task waiting its turn keeps, for the same. */
-interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string }
+/** What a run-task waiting its turn keeps, for the same: its sender line as it was queued (the Audit's Info 1 on #536). */
+interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string; from?: string; sender?: MessageSender; mark?: string }
+
+/** What a kept run-task hands runInTerminal after a restart: the task, and the sender line it was queued with. */
+export function replayJobOf(item: QueuedTask): { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } } | undefined {
+  const replay = item.replay as RunTaskReplay | undefined;
+  if (replay?.kind !== 'run-task') return undefined;
+  const asSent = { ...(replay.from ? { from: replay.from } : {}), ...(replay.sender ? { sender: replay.sender } : {}), ...(replay.mark ? { mark: replay.mark } : {}) };
+  return { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}), ...(Object.keys(asSent).length ? { asSent } : {}) };
+}
 
 function replayableOpts(opts: DispatchOpts): DispatchReplay['opts'] {
   const { message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId } = opts;
@@ -1702,7 +1711,7 @@ export function replayQueuedItem(item: QueuedTask): void {
       if (!(await waitTurn(agent, item.ref))) { announceTask(agent.id); return; }
       announceTask(agent.id);
       try {
-        await runInTerminal(agent, replayRequest(replay.requesterId), ctx, { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}) }, () => undefined);
+        await runInTerminal(agent, replayRequest(replay.requesterId), ctx, replayJobOf(item)!, () => undefined);
       } catch (err) {
         console.warn(`[queue] ${item.ref} for ${agent.name || agent.id} did not go in:`, err);
       } finally {
@@ -2643,7 +2652,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const behind = waits ? busyText(agent) : undefined;
       const queued = oneTaskQueue.enqueue(agent.id, {
         ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task), how: 'task', from: senderName(agent, req),
-        replay: { kind: 'run-task', task, ...(typeof model === 'string' ? { model } : {}), ...(requester ? { requesterId: requester } : {}) } satisfies RunTaskReplay,
+        replay: {
+          kind: 'run-task', task, ...(typeof model === 'string' ? { model } : {}), ...(requester ? { requesterId: requester } : {}),
+          from: senderName(agent, req), sender: senderOf(agent, req), ...(markFor(agent, req) ? { mark: markFor(agent, req) } : {}),
+        } satisfies RunTaskReplay,
       });
       const startBody = {
         ok: true, started: false, queued: waits, outcome: waits ? 'queued' : 'starting', taskId: queued.ref,

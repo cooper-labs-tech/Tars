@@ -148,3 +148,26 @@ export function queueRight(caller: QueueCaller, target: { id: string; projectPat
   if (item?.requesterId === agent.id) return { ok: true, all: false };
   return { ok: false, reason: 'You did not send this item: only its sender, the project\'s orchestrator or the owner may act on it.' };
 }
+
+/**
+ * Where a worker's own item may go when it moves it (the Audit's L1 on #536): only among its own items, never ahead
+ * of what someone else queued (the orchestrator's, the owner's, another's). To the head means just after the last
+ * item ahead of it that it does not own (`stays` when that is where it is already); before one of its own, only with
+ * nothing of another's between. `before` is what to hand the line's move.
+ */
+export function moveWithin(line: Array<Pick<QueuedTask, 'ref' | 'requesterId'>>, ref: string, before: string | undefined, callerId: string):
+  { ok: true; before: string | undefined; stays?: true } | { ok: false; reason: string } {
+  const at = line.findIndex((t) => t.ref === ref);
+  if (at < 0) return { ok: false, reason: `${ref} is not in this queue.` };
+  const notMine = (t: Pick<QueuedTask, 'requesterId'>) => t.requesterId !== callerId;
+  if (before === undefined) {
+    let target = 0;
+    for (let i = at - 1; i >= 0; i--) if (notMine(line[i])) { target = i + 1; break; }
+    return target === at ? { ok: true, before: undefined, stays: true } : { ok: true, before: line[target].ref };
+  }
+  const to = line.findIndex((t) => t.ref === before);
+  if (to < 0) return { ok: false, reason: `${before} is not in this queue.` };
+  const passed = to < at ? line.slice(to, at) : [line[to]];
+  if (passed.some(notMine)) return { ok: false, reason: 'You may move your item only among your own: never ahead of what the orchestrator, the owner or another agent queued.' };
+  return { ok: true, before };
+}

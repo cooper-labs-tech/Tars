@@ -9,7 +9,7 @@ import { tellCancelled } from '../agent-watch';
 import { emitAgentStatus } from '../agent-events';
 import { announceTask } from '../task-banner';
 import type { RouteApp, RouteRequest } from './types';
-import { queueRight, queueView, type QueueCaller } from '../agent-queues';
+import { moveWithin, queueRight, queueView, type QueueCaller } from '../agent-queues';
 
 /**
  * Taking back work asked of another agent before it went in
@@ -92,9 +92,16 @@ function registerQueueRoutes(app_: RouteApp): void {
     if (!caller || !item || !worker) { sendJson({ error: 'not_found', reason: `No queue holds a task ${req.params.id}: it went in, ended, or was never asked.` }, 404); return; }
     const right = queueRight(caller, worker, 'move', item);
     if (!right.ok) { sendJson({ error: 'not_your_task', reason: right.reason }, 403); return; }
-    const before = (req.body as { before?: unknown })?.before;
+    let before = (req.body as { before?: unknown })?.before;
     if (before !== undefined && typeof before !== 'string') { sendJson({ error: 'before is the id of another item of the same queue' }, 400); return; }
-    if (!oneTaskQueue.move(item.ref, before)) { sendJson({ error: 'not_found', reason: `${String(before)} is not in ${worker.name || worker.id}'s queue.` }, 400); return; }
+    // A worker, among its own items only (the Audit's L1 on #536).
+    if (!right.all && caller.kind === 'agent') {
+      const within = moveWithin(oneTaskQueue.queued(worker.id), item.ref, before as string | undefined, caller.agent.id);
+      if (!within.ok) { sendJson({ error: 'not_your_task', reason: within.reason }, 403); return; }
+      if (within.stays) { sendJson({ success: true, moved: item.ref, ...queueView(oneTaskQueue, worker.id, caller.agent.id) }); return; }
+      before = within.before;
+    }
+    if (!oneTaskQueue.move(item.ref, before as string | undefined)) { sendJson({ error: 'not_found', reason: `${String(before)} is not in ${worker.name || worker.id}'s queue.` }, 400); return; }
     announceTask(worker.id);
     sendJson({ success: true, moved: item.ref, ...queueView(oneTaskQueue, worker.id, right.all ? undefined : (caller as { agent: { id: string } }).agent.id) });
   });
