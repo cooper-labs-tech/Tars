@@ -42,6 +42,9 @@ import { HeavySlot, type SlotWorld, type SlotMachine } from '../../../electron/s
  *      names whose it was.
  * H17. (L2) A run's label is its command line, read by every agent and the window: a secret in it (a token, a URL's
  *      password) is shown there. Masked before it is recorded.
+ * And from the orchestrator's note on #539's row (28/10):
+ * H18. A waiter's reason names when the holder took the slot in UTC, while the window shows local time: it says the
+ *      time in the machine's own zone, the window's.
  */
 
 type World = SlotWorld & { set: (m: Partial<SlotMachine>) => void; dead: Set<number>; t: number; alerts: Array<{ ticket: string; text: string }>; table: Array<{ pid: number; ppid: number }> | undefined };
@@ -315,5 +318,25 @@ describe('the Audit\'s gate of #537', () => {
     expect(t.label).not.toContain(token);
     expect(t.label).not.toContain('hunter2secret');
     expect(t.label).toMatch(/^curl -H "Authorization: Bearer /);
+  });
+});
+
+describe('the reason a waiter reads', () => {
+  it('H18. names the holder\'s start in the machine\'s own zone, not UTC', async () => {
+    const zone = process.env.TZ;
+    process.env.TZ = 'Asia/Dubai';
+    try {
+      const w = world();
+      const slot = new HeavySlot(w);
+      const a = await slot.ask(ask(102, 'a'));
+      const b = await slot.ask(ask(202, 'b'));
+      await slot.pump();
+      const at = new Date(slot.get(a.id)!.grantedAt!);
+      const local = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+      expect(slot.get(b.id)?.why).toContain(`since ${local}`);
+      expect(slot.get(b.id)?.why).not.toContain('UTC');
+    } finally {
+      if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone;
+    }
   });
 });
