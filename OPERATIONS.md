@@ -1544,8 +1544,8 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   bypass, a Write, Edit, MultiEdit or NotebookEdit on an absolute path inside its working folder (its worktree, or its
   project), its `t` or its `c` temporary folder (`services/permission-auto.ts`) is allowed at once: `allow by Tars
   (bypass, its own folders)`. Never under `~/.tars-private`, another agent's folders, or its own `.git`, `.claude` or
-  `.mcp.json` (NFKC, any case). The mod asks about a file tool by its path alone (`withheld`); anything Tars does
-  not allow goes back to Claude Code's dialog at once. A shell command always waits for the owner (SECURITY.md says
+  `.mcp.json` (NFKC, any case). The mod asks about a file tool by its path alone (`withheld`); one Tars does not
+  allow is held by its path, refused (never allowed) from the window, and refused at the delay with why. A shell command always waits for the owner (SECURITY.md says
   why), and the agents are told to write files with the Write tool.
 - **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
   `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads

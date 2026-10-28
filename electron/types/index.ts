@@ -111,6 +111,8 @@ export interface AgentStatus {
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
+    /** A file tool asked by its path alone, its content withheld: the window may refuse it or hand it back, never allow it. */
+    withheld?: true;
   };
   /** The last start that undid a stop: the stop, and who started it again and when (core/agent-stop.ts). */
   lastRestartAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string; restartedBy: string; restartedAt: string };

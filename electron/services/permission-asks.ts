@@ -73,6 +73,13 @@ export type PermissionQuestion = {
   waitingOn: AgentWaitingOn | undefined;
   reason?: string;
   rule?: string;
+  /**
+   * A file tool asked by its path alone, its content withheld from Tars (the state mod): the window may refuse it,
+   * never allow it, since it would approve content it never showed.
+   */
+  withheld?: boolean;
+  /** Why Tars could not allow it itself: said with the refusal at the delay. */
+  notAllowedBecause?: string;
 };
 
 /**
@@ -105,6 +112,8 @@ type Held = {
   timer: ReturnType<typeof setTimeout>;
   /** Tells the window and the watchers, at the question and at its end. */
   changed: (agent: AgentStatus) => void;
+  /** Its content withheld: the window cannot allow it. */
+  withheld: boolean;
 };
 
 /**
@@ -193,9 +202,11 @@ export function holdPermissionAsk(
     // Never back to the dialog, where nobody may answer until morning.
     timer: setTimeout(() => {
       running(agent);
-      close(agent, entry, { decision: 'deny', reason: expiredReason(minutes) }, `the delay (${minutes} minute${minutes === 1 ? '' : 's'})`);
+      const why = question.notAllowedBecause ? ` Tars could not allow it itself: ${question.notAllowedBecause}.` : '';
+      close(agent, entry, { decision: 'deny', reason: expiredReason(minutes) + why }, `the delay (${minutes} minute${minutes === 1 ? '' : 's'})`);
     }, holdMs),
     changed,
+    withheld: question.withheld === true,
   };
   held.set(agent.id, entry);
   const askedAt = new Date();
@@ -211,6 +222,7 @@ export function holdPermissionAsk(
     fields: { ...question.fields },
     ...(question.reason ? { reason: question.reason } : {}),
     ...(question.rule ? { rule: question.rule } : {}),
+    ...(question.withheld ? { withheld: true as const } : {}),
   };
   agent.lastActivity = askedAt.toISOString();
   console.log(`[permission] ${agent.name || agent.id} asks Tars: ${question.tool}${question.waitingOn ? ` ${question.waitingOn.text}` : ''}`);
@@ -254,6 +266,8 @@ export function answerPermission(agentId: string, decision: PermissionDecision, 
   if (decision !== 'allow' && decision !== 'deny' && decision !== 'ask') return false;
   const entry = held.get(agentId);
   if (!entry) return false;
+  // Content the window never showed is never allowed from it: refused, or handed back to the dialog.
+  if (decision === 'allow' && entry.withheld) return false;
   const agent = agents.get(agentId);
   if (agent && decision !== 'ask') running(agent);
   const text = reasonFor(decision, by, reason);

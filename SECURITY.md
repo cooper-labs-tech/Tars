@@ -223,8 +223,10 @@ followed, `..` refused) inside the agent's working folder, its `t` or its `c` te
 `~/.tars-private`, another agent's worktree or temporary folders, or its own `.git`, `.claude` and `.mcp.json` (its
 hooks, its settings and its servers, which Claude Code asks about on purpose), compared as the file system folds names
 (NFKC and lower case; on Windows, no part ending in a dot or a space). The state mod asks about a file tool by its
-path alone, its content withheld, and anything but Tars's own allow sends it back to Claude Code's dialog: the window
-never approves content it did not show.
+path alone, its content withheld. One Tars does not allow is held as a shell command is, shown by its path and marked
+withheld: the window may refuse it, never allow it, since it would approve content it never showed; nobody answering,
+it is refused at the delay with why Tars could not allow it. It never goes back to Claude Code's native dialog,
+where nobody answers at night.
 
 **Tars never answers a shell command.** It did, for a while on #538, with a reader of its own, and the Audit's two
 gates found it allowing what the shell then ran outside the agent's folders: six forms in bash, then thirteen in zsh
