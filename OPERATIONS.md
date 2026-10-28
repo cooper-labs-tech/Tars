@@ -1472,8 +1472,8 @@ side).
   - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
   - its status and since when (`statusSince`, or `asleepSince` for a sleeping one);
   - what its ended session left running (`outlived`, from #523's records, `services/born-watch.ts`): since when, each
-    process's pid and its command line under the same mask, its containers; null when nothing was left, and always on
-    Windows, where no process is read. `list_agents` counts them (`outlived`), `get_agent` gives their pids and
+    process's pid and its command line under the same mask, its containers; null when nothing was left; on Windows,
+    where no process is read, only the agent's labelled Docker containers. `list_agents` counts them (`outlived`), `get_agent` gives their pids and
     containers, never a command line.
 - **Per project:** the same, summed (`totals`).
 - **How it is read.** One `ps -A -o pid,ppid,rss,%cpu,command` at most every 2 s, on macOS and Linux. On Windows the

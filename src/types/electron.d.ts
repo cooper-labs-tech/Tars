@@ -1279,7 +1279,7 @@ export interface AgentResources {
   /**
    * What its ended session left running (#523's records, services/born-watch.ts): since when (ms), each process with
    * its pid and its command line masked by the window's rule, and its containers as `<name> (<id>)`. Null when nothing
-   * was left running, and always on Windows, where no process is read.
+   * was left running. On Windows, where no process is read, only an agent's labelled containers are.
    */
   outlived: { since: number | null; processes: Array<{ pid: number; command: string }>; containers: string[] } | null;
 }

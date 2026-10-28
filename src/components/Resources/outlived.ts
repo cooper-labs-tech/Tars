@@ -5,7 +5,7 @@ import { clock } from './format';
  * What outlived an agent's session, said as the frame draws it (`Resources (2.0.5) · agents and projects · states`, its
  * pane `what outlived a session · alert`): a note on the agent's row, a notice under the fleet, and each item when
  * shown. The data is the main process's (#523's records, services/born-watch.ts): pids, commands masked by the window's
- * rule, containers as `<name> (<id>)`; null when nothing outlived, and always on Windows.
+ * rule, containers as `<name> (<id>)`; null when nothing outlived. On Windows only the containers can be.
  */
 
 export type Outlived = AgentResources['outlived'];

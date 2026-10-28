@@ -45,7 +45,7 @@ export interface AgentResources {
   processes: AgentProcess[];
   worktrees: MeasuredPath[];
   tmp: MeasuredPath | null;
-  /** Null when nothing was left running (and on Windows, where born-watch reads no process). */
+  /** Null when nothing was left running. On Windows, where born-watch reads no process, only containers are. */
   outlived: Outlived | null;
 }
 export interface ProjectResources {
