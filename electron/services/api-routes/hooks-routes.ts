@@ -491,6 +491,10 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     // Only the idle prompt: a permission prompt is the wait that matters, and
     // it comes in the middle of a turn by definition.
     const staleIdlePrompt = status === 'waiting' && waiting_reason === 'idle' && isStaleIdlePrompt(agent);
+    // The CLI says it is idle at its prompt: kept whatever the status does with it, the one proof the delivery check
+    // takes that a task it does not show was dropped (core/delivery-proof.ts). Not one set aside as stale: it is the
+    // rest before the work just handed (the Audit's Info 1 on #549).
+    if (status === 'waiting' && waiting_reason === 'idle' && !staleIdlePrompt) agent.idlePromptAt = new Date().toISOString();
     if (staleIdlePrompt) {
       console.log(`[hooks] Ignored an idle prompt for ${agent.id}: it was handed work, or began a turn, less than a minute ago`);
     }

@@ -303,7 +303,10 @@ export interface AgentStatus {
    * the live session once and the agent is marked failed if that fails too.
    * Runtime state: reset on load, like ptyId.
    */
-  pendingDelivery?: { ptyId: string; task: string; dispatchedAt: string; retried?: boolean; checkArmed?: boolean };
+  pendingDelivery?: { ptyId: string; task: string; dispatchedAt: string; retried?: boolean; checkArmed?: boolean; retypedAt?: string };
+  /** The last idle prompt the CLI sent (Claude Code's idle_prompt notification, ISO): it is at rest at its prompt,
+   *  which a CLI still running its hooks never says. Read by the delivery check (core/delivery-proof.ts). */
+  idlePromptAt?: string;
   /** Why the agent is 'waiting': 'permission' = blocking permission dialog
    *  (auto-continue must NOT type into it), 'idle' = waiting for next prompt. */
   waitingReason?: string;

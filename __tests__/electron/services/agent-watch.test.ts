@@ -904,3 +904,50 @@ describe('what a restart of Tars kept in a queue (2.0.5, lot 2)', () => {
     expect(text).not.toContain('get_agent_output');
   });
 });
+
+describe('an end of turn told once (the DB brief fix-twin-deliveries-2810.md)', () => {
+  // How this fails, written before its fix: measured 18 times in 4 days on Parallel's orchestrator, a worker's
+  // "has ended its turn with background work still running" is typed a second time when the worker passes from
+  // `idle` to the idle prompt's `waiting` (Claude Code says so 60 s after the rest): the same rest, told twice,
+  // because the link is kept for the background work's own end.
+  const SESSION = 'sess-twin';
+  const t0 = Date.now() - 60_000;
+  const at = (sec: number) => new Date(t0 + sec * 1000).toISOString();
+  it('the idle prompt after a rest is no second end of the turn', () => {
+    vi.useFakeTimers({ now: t0 + 60_000 });
+    const dir = path.join(os.homedir(), '.claude', 'projects', '/tars'.replace(/[/.]/g, '-'));
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${SESSION}.jsonl`), [
+      { type: 'assistant', timestamp: at(5), message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'sleep 600', run_in_background: true } }] } },
+      { type: 'user', timestamp: at(6), toolUseResult: { backgroundTaskId: 'bgjob1' }, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'Command running in background with ID: bgjob1' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const terminal = attachTerminal('pty-orch');
+    putAgent({ id: 'orch', name: 'Orchestrator', status: 'idle', ptyId: 'pty-orch' });
+    putAgent({ id: 'w', name: 'Worker', status: 'running', currentSessionId: SESSION, workHandedAt: at(0), lastTurnStartedAt: at(1), requestedBy: { agentId: 'orch', ptyId: '' } });
+    move('w', 'idle');
+    const first = received(terminal);
+    expect(first).toMatch(/background work still running/);
+    vi.advanceTimersByTime(70_000);
+    agentManager.agents.get('w')!.waitingReason = 'idle';
+    move('w', 'waiting');
+    vi.advanceTimersByTime(10_000);
+    expect(received(terminal).split('background work still running').length - 1, 'the same rest told twice').toBe(1);
+  });
+});
+
+describe('a start Tars could not confirm (the Audit\'s Low on #549)', () => {
+  // How this fails, written before its fix: the delivery check gives up asking after 2 h with no turn and no idle
+  // prompt, and nobody is told (a silent drop); or the requester is told the task never began, when it may have run.
+  it('is told to the requester once, as unconfirmed, never as never begun', async () => {
+    const terminal = attachTerminal('pty-lead');
+    putAgent({ id: 'lead', name: 'Lead', status: 'idle', ptyId: 'pty-lead' });
+    putAgent({ id: 'w2', name: 'Worker', status: 'running', workHandedAt: new Date().toISOString(), requestedBy: { agentId: 'lead', ptyId: '', taskRef: 't-0000abcd' } });
+    const { tellStartUnconfirmed } = await import('../../../electron/services/agent-watch');
+    tellStartUnconfirmed('w2');
+    const said = received(terminal);
+    expect(said).toMatch(/could not confirm/);
+    expect(said).toMatch(/may have run/);
+    expect(said).not.toMatch(/never (ran|began|started)/);
+    expect(said).toContain('t-0000abcd');
+  });
+});
