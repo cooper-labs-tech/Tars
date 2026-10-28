@@ -6,7 +6,7 @@ import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
 import { Box, Empty, Figure, Figures, Notice, Row, Unread } from './bits';
 import type { HeavySlotAlert, HeavySlotHolder, HeavySlotStatus, HeavySlotTicket } from './contract';
-import { NOT_READ, clock, diskGb, gb, mb, pct, since } from './format';
+import { NOT_READ, clock, diskGb, freeMemory, gb, mb, pct, since } from './format';
 import { useDiskSpace, useHeavyRuns } from './hooks';
 
 const PRIORITY: Record<HeavySlotTicket['priority'], string> = { gate: 'release gate', normal: 'ordinary', background: 'background' };
@@ -112,10 +112,11 @@ function Machine({ state }: { state: HeavySlotStatus | null }) {
   const memTone = m?.memFreePct != null && state && m.memFreePct < state.floors.memFreePct ? 'waiting' : undefined;
   const diskTone = diskFree == null ? undefined : diskFree < 6 ? 'error' : diskFree < 10 ? 'waiting' : undefined;
   const later = state ? 'not read yet' : 'with the heavy-run slot';
+  // One measure, as the frame draws it: the share's free memory over its share of the total (the QA's F2 on PR 539).
+  const memory = freeMemory(m, state?.floors.memFreePct);
   return (
     <Figures>
-      <Figure volatile caption="FREE MEMORY" value={m ? mb(m.memFreeMb) : NOT_READ} tone={memTone}
-        sub={m ? `${pct(m.memFreePct)} free${state ? ` · floor ${state.floors.memFreePct} %` : ''}` : later} />
+      <Figure volatile caption="FREE MEMORY" value={memory?.value ?? NOT_READ} tone={memTone} sub={memory?.sub ?? later} />
       <Figure volatile caption="SWAP" value={m ? mb(m.swapUsedMb) : NOT_READ}
         sub={m?.swapGrowthMbPerMin != null ? `${m.swapGrowthMbPerMin >= 0 ? '+' : ''}${mb(m.swapGrowthMbPerMin)} a minute` : m ? 'its growth not read yet' : later} />
       <Figure volatile caption="FREE DISK" value={gb(diskFree)} tone={diskTone}

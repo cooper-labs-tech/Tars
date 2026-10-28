@@ -29,6 +29,20 @@ export const mb = (n: number | null | undefined) => (n === null || n === undefin
 export const gb = (n: number | null | undefined) => (n === null || n === undefined ? NOT_READ : `${n.toFixed(1)} GB`);
 export const pct = (n: number | null | undefined) => (n === null || n === undefined ? NOT_READ : `${Math.round(n)} %`);
 
+/**
+ * Free memory as the frame draws it, one measure: the free memory the share speaks of (memFreeShareMb) over
+ * "26 % of 24 GB · floor 20 %". Never the free pages (memFreeMb) beside the share: on macOS they are another measure,
+ * "144 MB · 43 % free" on a 24 GB Mac (the QA's F2 on PR 539).
+ */
+export function freeMemory(
+  m: { memFreePct: number | null; memFreeShareMb: number | null; memTotalMb: number | null } | null,
+  floorPct?: number,
+): { value: string; sub: string } | null {
+  if (!m) return null;
+  const share = m.memFreePct === null ? NOT_READ : m.memTotalMb === null ? `${pct(m.memFreePct)} free` : `${pct(m.memFreePct)} of ${Math.round(m.memTotalMb / 1024)} GB`;
+  return { value: mb(m.memFreeShareMb), sub: floorPct === undefined ? share : `${share} · floor ${floorPct} %` };
+}
+
 export function clock(ms: number): string {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;

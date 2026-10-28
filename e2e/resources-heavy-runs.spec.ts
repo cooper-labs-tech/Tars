@@ -13,7 +13,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * How it can fail, written before its backend:
  * 1. the view says it cannot read the slot although the channel is there;
  * 2. with nobody holding it and nothing waiting, it does not say so;
- * 3. the machine's memory, swap or load say "not read" on a platform that reads them (macOS and Linux), or the free
+ * 3. the machine's memory, swap or load say "not read" on a platform that reads them (macOS and Linux), free memory is
+ *    not one measure (the share's free memory over "P % of T GB", the QA's F2 on PR 539), or the free
  *    disk differs from system.disk's, in Tars's unit (1024³ bytes, the slot's and Settings'), by more than 0.2 GB;
  * 4. the slots and the floors shown are not the settings' (defaults: 1 slot, 15 GB free disk, 20 % free memory);
  * 5. a holder is not shown with its agent, its project and what it runs, or its label shows a secret it was given;
@@ -114,6 +115,16 @@ for (const newInterface of [false, true]) {
       seen.cards = values;
       if (process.platform !== 'win32') for (const c of ['FREE MEMORY', 'SWAP']) expect(values[c]).not.toBe('not read');
       if (process.platform !== 'win32') expect(values.LOAD).toMatch(/^\d+\.\d$/);
+      // One measure for free memory, as the frame draws it: "6.2 GB" over "26 % of 24 GB · floor 20 %" (the QA's F2 on PR 539).
+      if (process.platform !== 'win32') {
+        const memSub = (await view.locator('[data-resource-card="FREE MEMORY"]').innerText()).replace(/\s+/g, ' ');
+        seen.memory = memSub;
+        const share = /(\d+) % of (\d+) GB · floor 20 %/.exec(memSub);
+        expect(share).not.toBeNull();
+        const shown = Number.parseFloat(values['FREE MEMORY']) * (values['FREE MEMORY'].endsWith('MB') ? 1 / 1024 : 1);
+        // The figure is the share of the total, to the rounding of the share's whole percent.
+        expect(Math.abs(shown - (Number(share![1]) / 100) * Number(share![2]))).toBeLessThan(0.02 * Number(share![2]));
+      }
       const disk = await page.evaluate(() => window.electronAPI!.system.disk());
       expect(Math.abs(Number.parseFloat(values['FREE DISK']) - disk!.freeBytes / 1024 ** 3)).toBeLessThan(0.2);
 
