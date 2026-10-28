@@ -1,82 +1,52 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { AgentQueue } from '@/types/electron';
 
 /**
  * An agent's queue (2.0.5, lot 2, item I; frames `Agent queue (2.0.5) · in its panel` and `· states`, design PR 535),
- * read from the Database Engineer's channel as the frames' notes ask for it: the items in the order they run, each with
- * its task id, who sent it, when, how it came in and its first line; whether the queue is paused, since when and why;
- * and pause, resume, cancel, move and drop. Until that channel and its type are in preload.ts and electron.d.ts the
- * hook says `has: false`, and the banner keeps the list it had without its controls.
+ * on the Database Engineer's agentQueue (PR 536): the items in the order they run, who sent each, when, how it came in
+ * and its first line; whether the queue is paused, since when and why; pause, resume, cancel, move and drop. Without
+ * the channel (a Tars before it), `has` is false and the banner keeps the list it had, with no control.
  */
-
-export interface QueueItem {
-  taskId: string;
-  from: string;
-  /** ISO. */
-  queuedAt: string;
-  /** How it came in: delegate_task, send_message, start_agent, Telegram... */
-  via: string;
-  firstLine: string;
-}
-
-export interface AgentQueue {
-  /** Null while the queue runs; else since when (ISO) and why: you, a stop, or a restart of Tars. */
-  paused: null | { since: string; by: 'you' | 'stop' | 'restart'; orchestratorTold?: boolean };
-  items: QueueItem[];
-}
-
-type Result = { success: boolean; error?: string };
-interface AgentQueueApi {
-  read: (agentId: string) => Promise<AgentQueue>;
-  pause: (agentId: string) => Promise<Result>;
-  resume: (agentId: string) => Promise<Result>;
-  cancel: (agentId: string, taskId: string) => Promise<Result>;
-  /** Before `beforeTaskId`, or to the head when it is null. */
-  move: (agentId: string, taskId: string, beforeTaskId: string | null) => Promise<Result>;
-  drop: (agentId: string) => Promise<Result>;
-  onChanged: (cb: (event: { agentId: string; queue: AgentQueue }) => void) => () => void;
-}
-
-const api = (): AgentQueueApi | undefined =>
-  typeof window === 'undefined' ? undefined : (window.electronAPI as unknown as { agentQueue?: AgentQueueApi } | undefined)?.agentQueue;
-
 export function useAgentQueue(agentId: string) {
+  const api = typeof window === 'undefined' ? undefined : window.electronAPI?.agentQueue;
   const [queue, setQueue] = useState<AgentQueue | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const has = Boolean(api());
 
   useEffect(() => {
-    const q = api();
-    if (!q) return;
+    if (!api) return;
     let live = true;
-    q.read(agentId).then((next) => { if (live) setQueue(next); }, (e: unknown) => { if (live) setError(e instanceof Error ? e.message : String(e)); });
-    const off = q.onChanged((event) => { if (live && event.agentId === agentId) setQueue(event.queue); });
+    api.get(agentId).then((next) => { if (live && 'items' in next) setQueue(next); }, () => {});
+    const off = api.onChanged((view) => { if (live && view.agentId === agentId) setQueue(view); });
     return () => { live = false; off(); };
-  }, [agentId]);
+  }, [api, agentId]);
 
-  /** Runs one action; its refusal, a sentence, is what the list says. */
-  const act = useCallback(async (call: (q: AgentQueueApi) => Promise<Result>) => {
-    const q = api();
-    if (!q) return;
+  /** Runs one action; its refusal, as a sentence, is what the list says. */
+  const act = useCallback(async (call: () => Promise<{ success: boolean; error?: string; code?: string; view?: AgentQueue }>) => {
     setError(null);
     try {
-      const res = await call(q);
-      if (!res.success) setError(res.error ?? 'The queue did not change.');
+      const res = await call();
+      if (res.success && res.view) setQueue(res.view);
+      if (!res.success) {
+        setError(res.code === 'already_started'
+          ? 'That task has started: stop it from the banner with stop task.'
+          : res.error ?? 'The queue did not change.');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, []);
 
   return {
-    has,
+    has: Boolean(api),
     queue,
     error,
-    clearError: () => setError(null),
-    pause: () => act((q) => q.pause(agentId)),
-    resume: () => act((q) => q.resume(agentId)),
-    cancel: (taskId: string) => act((q) => q.cancel(agentId, taskId)),
-    move: (taskId: string, beforeTaskId: string | null) => act((q) => q.move(agentId, taskId, beforeTaskId)),
-    drop: () => act((q) => q.drop(agentId)),
+    pause: () => (api ? act(() => api.pause(agentId)) : Promise.resolve()),
+    resume: () => (api ? act(() => api.resume(agentId)) : Promise.resolve()),
+    cancel: (ref: string) => (api ? act(() => api.cancel(ref)) : Promise.resolve()),
+    /** Before `before`, or to the head when it is null. */
+    move: (ref: string, before: string | null) => (api ? act(() => api.move(ref, before ?? undefined)) : Promise.resolve()),
+    drop: () => (api ? act(() => api.drop(agentId)) : Promise.resolve()),
   };
 }

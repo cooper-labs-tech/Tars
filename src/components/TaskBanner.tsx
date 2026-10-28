@@ -5,17 +5,22 @@ import { ArrowUpToLine, GripVertical, List, Pause, Play, X } from 'lucide-react'
 import { Button, StatusSquare } from '@/components/ui';
 import type { AgentStatus } from '@/types/electron';
 import { useTaskBanner } from '@/hooks/useTaskBanner';
-import { useAgentQueue, type AgentQueue } from '@/hooks/useAgentQueue';
+import { useAgentQueue } from '@/hooks/useAgentQueue';
+import type { AgentQueue } from '@/types/electron';
 import { cleanLine, clockOf, elapsedSince, sendersOf } from '@/lib/task-banner';
 
 interface Waiting { ref: string; from: string; queuedAt: string; firstLine: string; via?: string }
 
-/** What the strip says of a queue kept with nothing in hand: who paused it, and when. */
-function pausedWords(paused: NonNullable<AgentQueue['paused']>, n: number): string {
-  const kept = `${n} waiting, kept and paused`;
-  if (paused.by === 'stop') return `Stopped by you at ${clockOf(paused.since)}. ${kept}.`;
-  if (paused.by === 'restart') return `Tars restarted at ${clockOf(paused.since)}. ${kept}${paused.orchestratorTold ? '; the orchestrator was told what waits' : ''}.`;
-  return `Paused by you at ${clockOf(paused.since)}. ${n} waiting.`;
+type Paused = NonNullable<AgentQueue['paused']>;
+const afterRestart = (p: Paused) => /^tars restarted/i.test(p.why);
+const afterStop = (p: Paused) => /^stopped by/i.test(p.why);
+
+/** What the strip says of a queue kept with nothing in hand: why it is paused (the queue's own words), and when. */
+function pausedWords(paused: Paused, n: number): string {
+  const why = paused.why.charAt(0).toUpperCase() + paused.why.slice(1);
+  if (afterRestart(paused)) return `${why} at ${clockOf(paused.since)}. ${n} waiting, kept and paused; the orchestrator was told what waits.`;
+  if (afterStop(paused)) return `${why} at ${clockOf(paused.since)}. ${n} waiting, kept and paused.`;
+  return `${why} at ${clockOf(paused.since)}. ${n} waiting.`;
 }
 
 /**
@@ -43,7 +48,7 @@ export default function TaskBanner({ agent }: { agent: AgentStatus }) {
   const q = useAgentQueue(agent.id);
   const task = banner?.task ?? null;
   const waiting: Waiting[] = q.queue
-    ? q.queue.items.map((i) => ({ ref: i.taskId, from: i.from, queuedAt: i.queuedAt, firstLine: i.firstLine, via: `${i.via} · ${i.taskId}` }))
+    ? q.queue.items.map((i) => ({ ref: i.ref, from: i.from ?? 'someone', queuedAt: i.queuedAt, firstLine: i.title, via: `${i.how ?? 'task'} · ${i.ref}` }))
     : banner?.waiting ?? [];
   const paused = q.queue?.paused ?? null;
   const [now, setNow] = useState(() => Date.now());
@@ -169,11 +174,11 @@ export default function TaskBanner({ agent }: { agent: AgentStatus }) {
     return (
       <div data-queue-strip role="status" className="@container relative shrink-0 bg-secondary border-b border-border select-none">
         <div className="flex items-center gap-2 pl-3 pr-1.5 py-1 min-w-0">
-          <StatusSquare tone={paused.by === 'restart' ? 'waiting' : 'idle'} />
+          <StatusSquare tone={afterRestart(paused) ? 'waiting' : 'idle'} />
           <p className="flex-1 min-w-0 truncate text-[11.5px] text-text-secondary">{pausedWords(paused, waiting.length)}</p>
           {count}
           <Button size="sm" className="font-mono" onClick={() => void q.resume()}><Play className="w-3 h-3" />resume</Button>
-          {paused.by === 'stop' && (asking === 'all'
+          {afterStop(paused) && (asking === 'all'
             ? <>
                 <Button size="sm" className="font-mono" onClick={() => { setAsking(null); void q.drop(); }}>{`drop ${waiting.length}`}</Button>
                 <Button size="sm" className="font-mono" onClick={() => setAsking(null)}>keep</Button>
