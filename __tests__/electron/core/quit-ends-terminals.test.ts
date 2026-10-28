@@ -364,7 +364,10 @@ posixGroups('the quit, after the Audit\'s gate', () => {
 
 describe('main.ts, at quit', () => {
   const main = fs.readFileSync(path.join(__dirname, '../../../electron/main.ts'), 'utf-8');
-  const quit = main.slice(main.indexOf("app.on('before-quit'"), main.indexOf("app.on('before-quit'") + 3000);
+  // The whole handler, to its closing line: a fixed 3000 characters stopped short of its app.quit() once 2.0.5's
+  // shutdown steps (shared servers, born watch, heavy slot, status watch, permission asks) were added to it.
+  const start = main.indexOf("app.on('before-quit'");
+  const quit = main.slice(start, main.indexOf('\n});\n', start) + 4);
 
   it('4. holds the quit until the terminals have ended, then quits again', () => {
     expect(quit).toMatch(/preventDefault\(\)/);

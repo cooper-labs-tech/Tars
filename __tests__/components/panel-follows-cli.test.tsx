@@ -210,6 +210,15 @@ describe('the pane header menu\'s start or stop follows the terminal, not the st
       expect(onStop).not.toHaveBeenCalled();
     });
   }
+
+  // agent-stopped.test.tsx's 6, in the menu since #515: a stopped agent has nothing left to stop, and a second
+  // stop from the window would file the stop under you and replace who and why.
+  it('offers start to a stopped agent, never a second stop', () => {
+    const b = item(agent({ status: 'stopped', cliRunning: false }));
+    expect(b.text).toBe('start claude');
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onStop).not.toHaveBeenCalled();
+  });
 });
 
 describe('the pane context menu follows the terminal, not the status', () => {

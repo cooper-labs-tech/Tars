@@ -19,7 +19,10 @@ import { useSettings } from '../../src/hooks/useSettings';
  * 3. A save made only of secrets still calls main, with nothing to save, and says saved.
  * 4. The page's copy takes in a key typed or saved through it, so the next render shows it, or the next save sends it.
  * 5. Once secrets.set has answered, the page's copy does not say so: the row goes on reading set after a clear.
- * 6. With Telegram through Hermes turned on, main erases the bot's token: the page's copy goes on saying it is set.
+ *
+ * Slack's bot carries the checks since 2.0.5, as it does in e2e/settings-secrets-window.spec.ts: Tars's own Telegram
+ * bot went with #545, and its tokens with it (#547 took them out of the window's secrets). The sixth way, the bot's
+ * token read as set once Telegram through Hermes had main erase it, went with the bot.
  */
 
 const MASK = '•'.repeat(8);
@@ -35,8 +38,8 @@ async function settings() {
       claude: { getData: vi.fn(async () => ({ skills: [] })) },
       appSettings: {
         get: vi.fn(async () => ({
-          telegramEnabled: true, telegramBotToken: MASK, telegramAuthToken: MASK, openRouterApiKey: '',
-          secretsSet: { telegramBotToken: true, telegramAuthToken: true, openRouterApiKey: false },
+          slackEnabled: true, slackBotToken: MASK, slackAppToken: MASK, openRouterApiKey: '',
+          secretsSet: { slackBotToken: true, slackAppToken: true, openRouterApiKey: false },
         })),
         save,
         onUpdated: vi.fn(() => () => {}),
@@ -51,13 +54,13 @@ async function settings() {
 describe('a save never sends a secret back (1, 2, 3)', () => {
   it('sends a switch without the mask that came with it', async () => {
     const { p, save } = await settings();
-    await p.result.handleSaveAppSettings({ telegramBotToken: MASK, telegramEnabled: false });
-    expect(save.mock.calls).toEqual([[{ telegramEnabled: false }]]);
+    await p.result.handleSaveAppSettings({ slackBotToken: MASK, slackEnabled: false });
+    expect(save.mock.calls).toEqual([[{ slackEnabled: false }]]);
   });
   it('sends nothing for a key typed into a page, nor for a mask typed into', async () => {
     const { p, save } = await settings();
     await p.result.handleSaveAppSettings({ openRouterApiKey: 'sk-or-typed' });
-    await p.result.handleSaveAppSettings({ telegramBotToken: `${MASK}x`, secretsSet: { telegramBotToken: false } });
+    await p.result.handleSaveAppSettings({ slackBotToken: `${MASK}x`, secretsSet: { slackBotToken: false } });
     expect(save).not.toHaveBeenCalled();
   });
 });
@@ -65,28 +68,21 @@ describe('a save never sends a secret back (1, 2, 3)', () => {
 describe("the page's copy never takes a secret in (4)", () => {
   it('keeps what main said through a save and a local change that carry keys', async () => {
     const { p } = await settings();
-    await p.result.handleSaveAppSettings({ openRouterApiKey: 'sk-or-typed', telegramEnabled: false });
-    p.result.updateLocalAppSettings({ telegramBotToken: 'typed', telegramChatId: '42' });
+    await p.result.handleSaveAppSettings({ openRouterApiKey: 'sk-or-typed', slackEnabled: false });
+    p.result.updateLocalAppSettings({ slackBotToken: 'typed', slackChannelId: '42' });
     p.rerender();
     expect(p.result.appSettings.openRouterApiKey).toBe('');
-    expect(p.result.appSettings.telegramBotToken).toBe(MASK);
-    expect([p.result.appSettings.telegramEnabled, p.result.appSettings.telegramChatId]).toEqual([false, '42']);
+    expect(p.result.appSettings.slackBotToken).toBe(MASK);
+    expect([p.result.appSettings.slackEnabled, p.result.appSettings.slackChannelId]).toEqual([false, '42']);
   });
 });
 
-describe("the page's copy says what secrets.set answered (5, 6)", () => {
+describe("the page's copy says what secrets.set answered (5)", () => {
   it('reads a cleared token as not set, and a key set as set', async () => {
     const { p } = await settings();
-    p.result.setSecretState('telegramBotToken', false);
+    p.result.setSecretState('slackBotToken', false);
     p.result.setSecretState('openRouterApiKey', true);
     p.rerender();
-    expect(p.result.appSettings.secretsSet).toEqual({ telegramBotToken: false, telegramAuthToken: true, openRouterApiKey: true });
-  });
-  it('reads the bot token as not set once Telegram through Hermes is on', async () => {
-    const { p } = await settings();
-    await p.result.handleSaveAppSettings({ hermesRelayEnabled: true });
-    p.rerender();
-    expect(p.result.appSettings.telegramEnabled).toBe(false);
-    expect(p.result.appSettings.secretsSet?.telegramBotToken).toBe(false);
+    expect(p.result.appSettings.secretsSet).toEqual({ slackBotToken: false, slackAppToken: true, openRouterApiKey: true });
   });
 });

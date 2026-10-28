@@ -118,8 +118,10 @@ describe('bold, code and what is not markup (4, 5)', () => {
   });
 });
 
+// Both dated 2026-10-28 since 2.0.5's text (92c6f03ee, #545: Telegram through the owner's Hermes, no bot of Tars's own),
+// taken for the owner by the project's orchestrator on 28/10 (t-79a1f60c), the owner free to revise before a deployment.
 describe('the reviewed documents (6)', () => {
-  it.each([['privacy', 'Tars Privacy Policy', '2026-10-19'], ['terms', 'Tars Terms of Use', '2026-09-24']])('the %s page opens on its title, then its date', (name, title, day) => {
+  it.each([['privacy', 'Tars Privacy Policy', '2026-10-28'], ['terms', 'Tars Terms of Use', '2026-10-28']])('the %s page opens on its title, then its date', (name, title, day) => {
     const [heading, date] = parseMarkdown(doc(name));
     expect(heading).toEqual({ kind: 'heading', level: 1, spans: [{ text: title, strong: false, code: false }] });
     expect(date).toEqual({ kind: 'paragraph', spans: [{ text: `Last updated: ${day}.`, strong: false, code: false }] });
