@@ -56,6 +56,11 @@
  * text showed only the tool's name).
  * 13. A call with any field Tars does not show is asked of Tars: whole or not
  *    at all, it stays with the terminal's dialog, which shows it all.
+ * And from the night of 27/10 (fix-permission-dialogs-2810.md): Tars now holds
+ * a question up to the owner's delay, 1 to 60 minutes, and refuses it then.
+ * 14. The mod gives up first (40 asks, about 13 minutes) and the dialog shows,
+ *    where nobody answers at night: it must keep asking past 60 minutes of
+ *    `pending`, and still stop in the end, should Tars never decide.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
@@ -205,8 +210,9 @@ describe("the mod's tool.check", () => {
     await start();
     answer = async () => ({ text: JSON.stringify({ decision: 'pending' }) });
     expect(await check(bash, ASK)).toEqual(ASK);
-    expect(permissionPosts().length).toBeGreaterThan(30);
-    expect(permissionPosts().length).toBeLessThanOrEqual(40);
+    // 14. Past the owner's longest delay (60 minutes of Tars's 20 s holds, 180 asks), and bounded.
+    expect(permissionPosts().length).toBeGreaterThan(180);
+    expect(permissionPosts().length).toBeLessThanOrEqual(200);
   });
 
   it('8. asks again after a request that failed, saying why, and takes the answer', async () => {
