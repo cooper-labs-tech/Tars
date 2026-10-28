@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 352 root frames, 116 of them drawn and not built yet: the 105 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+rather than a companion to it. `design/tars-redesign.pen` holds 352 root frames, 100 of them drawn and not built yet: the 89 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
 `design/chat-design.pen` holds 72 of those, the other two hundred and eighty being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -87,7 +87,7 @@ shows: Chats · shell · notes, Chats · the list from the records · notes, Cha
 page from the transcripts · notes, and Chats · chat page · notes, which also says how
 the room relates to the chats and what follows the Backend's v2.2.
 
-## Pages (17)
+## Pages (18)
 
 | Route | Name | Frame |
 |---|---|---|
@@ -104,6 +104,7 @@ the room relates to the chats and what follows the Backend's v2.2.
 | `/projects` | Projects | Projects · dark, Agent stopped · who and why (a stopped agent's row), Agent asleep · and how it wakes (an asleep agent's row) |
 | `/skills` | Extensions (Skills + Plugins) | Extensions · Skills, Extensions · Plugins |
 | `/usage` | Usage | Usage · dark, Usage · light, Usage · daily messages, Usage · last 24 hours, Usage · limits per account, Usage · cost per task, Usage · cost per agent, Usage · pages (five rows a card, states, narrowest window; notes), Usage · cards while they read (each with its light copy; the agent table's headers, figures highest first, words A to Z, and focused, are its col header states) |
+| `/resources` | Resources (this computer: the heavy-run slot and its queue, what each agent and project holds, the disk janitor; ?view= names the view) | Resources (2.0.5) · heavy runs, · agents and projects, · disk (each with its light copy and at the narrowest window), · heavy runs · states, · agents and projects · states, · disk · states (each with its light copy), · notes |
 | `/memory` | Brain (Projects / Agents / Backends) | Brain · Projects, Brain · Agents, Brain · Backends; a project's row naming the older copy of its memory: Brain · Projects · a row with an older copy · states (and its light copy); fifty agents and a thousand memory files fitted to the canvas, a project's memory one box, with the zoom controls: Brain · Agents · fifty agents, fitted; a project opened, the list of its memory files and one of them open: Brain · Agents · a project's memory files, Brain · Agents · a project's memory file, open (panel) |
 | `/whats-new` | What's new | What's new · dark |
 | `/settings` | Settings | see below |
@@ -316,7 +317,3 @@ For 2.0.5:
   scrollback (its light copy, the narrowest window).
 - A board past nine agents keeps three columns and its terminals a 3x3 cell's size, and scrolls (JeanBrasse, 22/10):
   Dashboard (2.0.5) · twelve agents, three columns, scrolled (and its light copy).
-- Resources, a new page between Usage and Brain, lots 2 and 3 of the resources plan (the owner, 28/10): Resources
-  (2.0.5) · heavy runs, · agents and projects, · disk (each with its light copy and at the narrowest window), · heavy
-  runs · states, · agents and projects · states, · disk · states (each with its light copy), · notes. Its route,
-  /resources, joins the pages above and `e2e/surfaces.mjs` when it is built.
