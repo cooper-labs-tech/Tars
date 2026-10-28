@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { channel, type FleetResources, type HeavySlotStatus, type JanitorState } from './contract';
+import { channel, type FleetResources, type HeavySlotStatus } from './contract';
 
 /**
  * One data hook per view of the Resources page, each over its backend's channel (contract.ts): what it read, whether
@@ -54,18 +54,27 @@ export function useFleetResources(): Reading<FleetResources> & { measureDisk: ()
   return { ...reading, measureDisk };
 }
 
-export function useDiskJanitor(): Reading<JanitorState> & { scan: () => Promise<string | null>; approve: (ids: string[]) => Promise<string | null> } {
-  const api = channel('diskJanitor');
+/**
+ * The disk janitor (PR 542): its state as main keeps it (the scan, what an approval is doing, the never list, the log
+ * read back, the scans agents asked for), and its two actions. A scan proposes and deletes nothing; an approval
+ * takes the ids the owner ticked, and main checks each again before it goes.
+ */
+export function useDiskJanitor() {
+  const api = typeof window === 'undefined' ? undefined : window.electronAPI?.diskJanitor;
   const reading = useReading(api?.state, api?.onChanged);
-  const scan = useCallback(async () => {
-    const res = await api?.scan();
-    return res && !res.success ? res.error ?? 'The scan could not start.' : null;
-  }, [api]);
-  const approve = useCallback(async (ids: string[]) => {
-    const res = await api?.approve(ids);
-    return res && !res.success ? res.error ?? 'Nothing was deleted.' : null;
-  }, [api]);
-  return { ...reading, scan, approve };
+  const [actionError, setActionError] = useState<string | null>(null);
+  const act = useCallback(async (call: () => Promise<{ success: boolean; error?: string }>, fallback: string) => {
+    setActionError(null);
+    try {
+      const res = await call();
+      if (!res.success) setActionError(res.error ?? fallback);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+  const scan = useCallback(() => (api ? act(() => api.scan(), 'The scan could not start.') : Promise.resolve()), [api, act]);
+  const approve = useCallback((ids: string[]) => (api ? act(() => api.approve(ids), 'Nothing was deleted.') : Promise.resolve()), [api, act]);
+  return { ...reading, actionError, scan, approve };
 }
 
 /** The free space of the disk Tars runs on, which main already reads (Settings · System): the one machine figure the
