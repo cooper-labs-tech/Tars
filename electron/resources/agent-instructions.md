@@ -26,6 +26,14 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what is necessary.
 
+## Writing files
+
+Write a file with the Write tool (or Edit it), never with a heredoc or a redirection in a shell
+command (`cat > file <<EOF`, `echo ... > file`). A shell command Claude Code asks about waits for
+the user, who may be away for the night, and is refused after a delay; a Write inside your own
+worktree or temporary folders is not asked about, or Tars allows it. Split a compound command into
+simple ones for the same reason.
+
 ## Waiting on work you started
 
 Your turn ending is your report. When you stop, Tars tells whoever gave you the task that you have

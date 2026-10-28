@@ -710,6 +710,14 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       return;
     }
     if (places && judged) console.log(`[permission] ${agent.name || agent.id} is in bypass, and the call waits for the owner: ${judged.why}`);
+    // A file tool the mod asked about by its path alone (its content is a field the window does not show): Tars's
+    // own rule above is the only answer it may get. Held for the window, the owner would approve content never
+    // shown (the owner's decision of 05/10 keeps edits on Claude Code's dialog): back to the dialog at once.
+    if ((req.body as { withheld?: unknown }).withheld === true) {
+      logPermission(agent, agent.id, question.tool, 'back to its dialog', 'Tars (a file tool whose content the window does not show)', subjectOf(question.tool, fields));
+      sendJson({ decision: 'ask' });
+      return;
+    }
     const answer = await holdPermissionAsk(agent, question, changed => {
       saveAgents();
       ctx.handleStatusChangeNotificationCallback(changed, changed.status);

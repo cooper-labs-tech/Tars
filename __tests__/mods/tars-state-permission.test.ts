@@ -47,7 +47,10 @@
  * on 05/10:
  * 12. A tool that carries content (Edit, Write, NotebookEdit) is asked of
  *    Tars, which shows its path and never its content: an allow there would
- *    approve what nobody saw. It stays with the terminal's dialog.
+ *    approve what nobody saw. It stays with the terminal's dialog. (Since
+ *    28/10, item 15: asked by its path alone and marked withheld, for Tars's
+ *    own rule on a bypass agent's folders, never for the window; anything but
+ *    Tars's allow keeps the dialog.)
  * And from the Audit's second recheck (GATE-PR318-320-RECHECK2.md, proof
  * gate-318/mcp-content.test.ts): the gap was closed for four named tools, not
  * for the class. A call whose input holds a field Tars does not show reached
@@ -303,6 +306,8 @@ describe("the mod's tool.check", () => {
 
   it('12. leaves Edit, Write and NotebookEdit to the terminal\'s dialog, which shows their content', async () => {
     await start();
+    // Tars's answer to a withheld file tool it does not allow (hooks-routes.ts): back to the dialog.
+    answer = async () => ({ text: JSON.stringify({ decision: 'ask' }) });
     for (const call of [
       { tool: 'Edit', input: { file_path: '/p/a.ts', old_string: 'a', new_string: 'b' }, tool_use_id: 'toolu_e' },
       { tool: 'Write', input: { file_path: '/p/b.ts', content: 'x' }, tool_use_id: 'toolu_w2' },
@@ -310,7 +315,10 @@ describe("the mod's tool.check", () => {
     ]) {
       expect(await check(call, ASK)).toEqual(ASK);
     }
-    expect(permissionPosts()).toEqual([]);
+    // Asked by the path alone, never the content, and marked so.
+    expect(permissionPosts().map(p => [p.body.tool, p.body.withheld, Object.keys(p.body.input as object)])).toEqual([
+      ['Edit', true, ['file_path']], ['Write', true, ['file_path']], ['NotebookEdit', true, ['notebook_path']],
+    ]);
   });
 
   it('3. leaves an AskUserQuestion to the person', async () => {

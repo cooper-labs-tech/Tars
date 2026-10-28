@@ -222,9 +222,9 @@ export function holdPermissionAsk(
 /** What the model reads when nobody answered in time: why, and what to do instead of waiting. */
 function expiredReason(minutes: number): string {
   return `Nobody answered this permission question in Tars within ${minutes} minute${minutes === 1 ? '' : 's'}, so Tars refused it. Do not wait `
-    + 'for it and do not ask again for the same call: take another way (work inside your own worktree or temporary '
-    + 'folders, or split the command into simpler ones), or go on with the rest and say in your report what you '
-    + 'needed and why.';
+    + 'for it and do not ask again for the same call: take another way. Write a file with the Write tool, not a '
+    + 'heredoc or a redirection in a shell command; split a compound command into simple ones; work inside your own '
+    + 'worktree or temporary folders. Or go on with the rest and say in your report what you needed and why.';
 }
 
 /** The agent runs again: its question was decided. */

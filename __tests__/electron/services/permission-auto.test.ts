@@ -134,7 +134,6 @@ describe('a shell command', () => {
       'rm -f */a.ts',
       'cat globbed/*.txt',
       'cat globbed/one*',
-      `cat > ${c}/scratchpad/p.yml <<${delim}\nx: 1\nEOF`,
       `D=${home}/elsewhere; D=${work} cp payload.txt $D/x`,
       `HOME=${work} cp payload.txt ~/x`,
       `TMPDIR=${home}/elsewhere mktemp`,

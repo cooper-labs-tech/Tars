@@ -50,6 +50,8 @@ type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: str
 /** The fields of a tool's input a person decides on: never a file's content. */
 const ASKED_ABOUT = ['command', 'description', 'file_path', 'notebook_path', 'path', 'url', 'query', 'pattern'];
 const INPUT_CAP = 2000;
+/** The file tools, and the field that names the file each writes: asked about by that path alone (askTars). */
+const FILE_PATH_OF: Record<string, string> = { Write: 'file_path', Edit: 'file_path', MultiEdit: 'file_path', NotebookEdit: 'notebook_path' };
 /**
  * Asks for one call at most: 190 of Tars's 20 s holds (63 minutes) outlast the
  * longest delay the owner can set (permissionAskMinutes, 60), after which Tars
@@ -192,12 +194,23 @@ async function fingerprint(tool: string, fields: Record<string, string>): Promis
 async function askTars($: Engine, e: Check, verdict: Verdict): Promise<Verdict | null> {
   const to = await proven($);
   if (!to || !sessionId) return null;
-  const fields = askedAbout(e.input);
+  let fields = askedAbout(e.input);
+  // A file tool's content is a field Tars does not show: it is asked by its path alone, marked withheld, for Tars's
+  // own answer on a bypass agent's folders (permission-auto.ts). Tars never holds it for the window, which would
+  // approve content it never showed: anything but an allow keeps the dialog.
+  let withheld = false;
+  if (!fields && FILE_PATH_OF[e.tool] && e.input && typeof e.input === 'object') {
+    const file = (e.input as Record<string, unknown>)[FILE_PATH_OF[e.tool]];
+    if (typeof file === 'string' && file && file.length <= INPUT_CAP) {
+      fields = { [FILE_PATH_OF[e.tool]]: file };
+      withheld = true;
+    }
+  }
   if (!fields) return null;
   const mine = await fingerprint(e.tool, fields);
   const question = {
     agent_id: to.agentId, session_id: sessionId, tool: e.tool, tool_use_id: e.tool_use_id,
-    input: fields, reason: verdict.reason, rule: verdict.rule, via: 'mod',
+    input: fields, reason: verdict.reason, rule: verdict.rule, via: 'mod', ...(withheld ? { withheld: true } : {}),
   };
   // Tars says `pending` every 20 s and is asked again for the same call: a
   // request held about 30 s ended under the mod, and the dialog showed while

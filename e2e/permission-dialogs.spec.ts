@@ -15,16 +15,18 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Two agents of one project, each a stand-in for claude with the state mod: the worker w, in bypass, asks Tars about
  * two calls the way the mod's tool.check does (POST /api/hooks/permission with its own token, again while Tars
- * answers `pending`), and writes each answer, and every line typed into its terminal, to a file. The orchestrator o
- * sends w a message (POST /api/agents/w/message with its own token) when the spec says so.
+ * answers `pending`; a file tool by its path alone, `withheld`), and writes each answer, and every line typed into
+ * its terminal, to a file. The orchestrator o sends w a message (POST /api/agents/w/message with its own token) when
+ * the spec says so.
  *
  * Asserted:
- * 1. w's heredoc into its own scratchpad ($CLAUDE_CODE_TMPDIR) is allowed by Tars at once, without a question;
- * 2. the same command into a folder outside its own is held: the window reads the question, w waits on it;
+ * 1. w's Write into its own scratchpad ($CLAUDE_CODE_TMPDIR) is allowed by Tars at once, without a question;
+ * 2. a shell command, the night's own heredoc into that same scratchpad, is held for the owner (Tars never answers a
+ *    shell command, the orchestrator's decision of 28/10 after the Audit's re-check): the window reads it, w waits;
  * 3. o's message to w meanwhile is not refused: it is held (`held`, the dialog's reason), and nothing is typed into
  *    w's terminal while the question stands;
  * 4. nobody answers: at the owner's delay (permissionAskMinutes, 1 here) the call is refused with a reason w reads,
- *    never handed back to the dialog; w runs again;
+ *    which tells it to write files with the Write tool, never handed back to the dialog; w runs again;
  * 5. then, and only then, o's message goes into w's terminal.
  * Red on main dc623b594: the first call waits for the window, the message is refused (409), and the expired question
  * goes back to the dialog.
@@ -39,7 +41,7 @@ type Api = { electronAPI: { agent: { start(p: { id: string; prompt: string }): P
 
 const MARK = 'MARK-REPORT-FROM-O';
 
-function worker(home: string, outside: string): string {
+function worker(home: string): string {
   return writeNodeCli(path.join(home, 'cli-w.cjs'), [
     "const fs = require('fs'); const path = require('path'); const crypto = require('crypto');",
     "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
@@ -51,9 +53,10 @@ function worker(home: string, outside: string): string {
     "  headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN },",
     "  body: JSON.stringify({ agent_id: process.env.CLAUDE_AGENT_ID, session_id: session, ...body }) }).then(r => r.json());",
     "const heredoc = s => `S=${s}; mkdir -p $S/retry-probe && cat > $S/retry-probe/p.yml <<'EOF'\\nsteps:\\n  - run: echo $(whoami)\\nEOF`;",
+    "const scratch = path.join(process.env.CLAUDE_CODE_TMPDIR, 'scratchpad');",
     "const calls = [",
-    "  { tool_use_id: 'toolu_own', command: heredoc(path.join(process.env.CLAUDE_CODE_TMPDIR, 'scratchpad')) },",
-    `  { tool_use_id: 'toolu_out', command: heredoc(${JSON.stringify(outside)}) },`,
+    "  { tool_use_id: 'toolu_own', tool: 'Write', input: { file_path: path.join(scratch, 'retry-probe', 'p.yml') }, withheld: true },",
+    "  { tool_use_id: 'toolu_out', tool: 'Bash', input: { command: heredoc(scratch) } },",
     "];",
     "(async () => {",
     "  process.stdout.write('stand-in ready\\r\\n');",
@@ -61,11 +64,11 @@ function worker(home: string, outside: string): string {
     "  await post('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'probe the retry config' });",
     "  for (const c of calls) {",
     "    let answer;",
-    "    do answer = await post('/api/hooks/permission', { tool: 'Bash', tool_use_id: c.tool_use_id, input: { command: c.command },",
-    "      reason: 'Command contains a heredoc', via: 'mod' });",
+    "    do answer = await post('/api/hooks/permission', { tool: c.tool, tool_use_id: c.tool_use_id, input: c.input,",
+    "      reason: 'This call requires approval', via: 'mod', ...(c.withheld ? { withheld: true } : {}) });",
     "    while (answer.decision === 'pending');",
     "    log('answers-w.jsonl', { call: c.tool_use_id, decision: answer.decision, reason: answer.reason });",
-    "    process.stdout.write('* Bash: ' + answer.decision + '\\r\\n');",
+    "    process.stdout.write('* ' + c.tool + ': ' + answer.decision + '\\r\\n');",
     "    if (answer.decision === 'ask') process.stdout.write('Do you want to proceed?\\r\\n');",
     "  }",
     "})();",
@@ -99,14 +102,12 @@ for (const newInterface of [false, true]) {
     test.setTimeout(240_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-permission-dialogs-${newInterface ? 'ni' : 'classic'}-`));
     const project = path.join(home, 'projects', 'parallel');
-    const outside = path.join(home, 'elsewhere');
     fs.mkdirSync(project, { recursive: true });
-    fs.mkdirSync(outside, { recursive: true });
     const dir = path.join(home, '.tars');
     fs.mkdirSync(dir, { recursive: true });
     const base = { character: 'robot', provider: 'claude', status: 'idle', projectPath: project, skills: [], createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z' };
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home, outside) },
+      { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home) },
       { ...base, id: 'o', name: 'Parallel Lead', role: 'orchestrator', cliPath: orchestrator(home) },
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
@@ -137,10 +138,10 @@ for (const newInterface of [false, true]) {
       const own = answers()[0];
       keep({ own });
       expect(own).toMatchObject({ call: 'toolu_own', decision: 'allow' });
-      expect.soft(own.reason).toMatch(/^Tars allowed it: Cloud Architect is in bypass, and every path it touches is inside its own folders/);
+      expect.soft(own.reason).toMatch(/^Tars allowed it: Cloud Architect is in bypass, and .*scratchpad.*p\.yml is inside its own folders/);
 
-      // 2. Outside its folders: held for the owner, and the window reads it.
-      await expect.poll(async () => (await w())?.permissionAsk?.subject ?? '', { timeout: 15_000 }).toContain(outside);
+      // 2. A shell command, even into its own scratchpad: held for the owner, and the window reads it.
+      await expect.poll(async () => (await w())?.permissionAsk?.subject ?? '', { timeout: 15_000 }).toContain('retry-probe/p.yml <<');
       const held = await w();
       keep({ held });
       expect.soft([held?.status, held?.waitingReason]).toEqual(['waiting', 'permission']);
@@ -163,6 +164,7 @@ for (const newInterface of [false, true]) {
       keep({ late });
       expect(late).toMatchObject({ call: 'toolu_out', decision: 'deny' });
       expect.soft(late.reason).toMatch(/^Nobody answered this permission question in Tars within 1 minute, so Tars refused it/);
+      expect.soft(late.reason).toMatch(/Write tool/);
       await expect.poll(async () => (await w())?.permissionAsk ?? null, { timeout: 10_000 }).toBeNull();
 
       // 5. Then the message goes in.

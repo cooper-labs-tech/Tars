@@ -1540,15 +1540,16 @@ process log says `[permission] <agent> asks Tars: Bash <command>`, then the answ
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
 meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
 answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
-- **Tars answers for a bypass agent's own folders.** For an agent in bypass, a call whose every path
-  is inside its working folder (its worktree, or its project), its `t` or its `c` temporary folder
-  (`services/permission-auto.ts`) is allowed at once, with no question: `allow by Tars (bypass, its
-  own folders)`. Never under `~/.tars-private`, another agent's worktree or temporary folders, the
-  agent's own `.git`, `.claude` or `.mcp.json`, or for a command it cannot read whole (a
-  substitution, a subshell, a program not on its list). Anything else waits for the owner.
+- **Tars answers for a bypass agent's file tools on its own folders, never its shell commands.** For an agent in
+  bypass, a Write, Edit, MultiEdit or NotebookEdit on an absolute path inside its working folder (its worktree, or its
+  project), its `t` or its `c` temporary folder (`services/permission-auto.ts`) is allowed at once: `allow by Tars
+  (bypass, its own folders)`. Never under `~/.tars-private`, another agent's folders, or its own `.git`, `.claude` or
+  `.mcp.json` (NFKC, any case). The mod asks about a file tool by its path alone (`withheld`); anything Tars does
+  not allow goes back to Claude Code's dialog at once. A shell command always waits for the owner (SECURITY.md says
+  why), and the agents are told to write files with the Write tool.
 - **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
   `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads
-  (how long, and to take another way), and the agent runs on. It no longer goes back to the dialog,
+  (how long, and what to do instead: write files with the Write tool, split the command), and the agent runs on. It no longer goes back to the dialog,
   where nobody answered until morning. The state mod asks for up to 63 minutes, past the longest delay.
 - **Every decision is logged** in `~/.tars/logs/permissions.log` (moved to `.1` past 256 KB): the
   agent, the tool, the decision, who decided (Tars, the window's person, the delay, the end of the
