@@ -8,10 +8,8 @@
  * texts, emoji, price table and command syntax), which is what its users read
  * and what d1-bots.contract.test.ts holds byte for byte.
  */
-import * as path from 'path';
 import { typeLaunchTask } from '../core/typed-task';
 import * as fs from 'fs';
-import * as os from 'os';
 import type * as pty from 'node-pty';
 import type { AgentPermissionMode, AgentStatus, AppSettings } from '../types';
 import { isSuperAgent, getSuperAgentInstructionsPath } from '../utils';
@@ -29,6 +27,7 @@ import { noteLaunch, launchSettings } from '../core/agent-restart';
 import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown, takeSlot } from '../core/agent-launch';
 import { handOffFrom, noteHandOff } from './task-ledger';
 import { guideForPrompt } from './agent-guide';
+import { mcpConfigPathFor } from './mcp-roles';
 
 /** What a bot needs from the rest of Tars. */
 export interface BotFleet {
@@ -211,11 +210,6 @@ export function priceUsage(stats: ClaudeUsageStats): PricedUsage {
   return { cost, input, output, cacheRead, byModel };
 }
 
-function mcpConfigPathFor(provider: CLIProvider): string | undefined {
-  if (provider.getMcpConfigStrategy() !== 'flag') return undefined;
-  const candidate = path.join(os.homedir(), '.claude', 'mcp.json');
-  return fs.existsSync(candidate) ? candidate : undefined;
-}
 
 /**
  * The prompt a CLI starts on, with how Tars works first when the CLI has no
@@ -376,7 +370,7 @@ export async function startWithTask(
     // Resolved before the resume id is taken, as they always were: a throw
     // here leaves the conversation to resume next time.
     const binaryPath = provider.resolveBinaryPath(fleet.settings());
-    const mcpConfigPath = mcpConfigPathFor(provider);
+    const mcpConfigPath = mcpConfigPathFor(provider, hasOrchestratorPowers(agent));
     // What its line needs read from the CLI (codex's flags), off the main thread.
     await provider.prepareLaunch?.(binaryPath, agent.permissionMode ?? (agent.skipPermissions ? 'bypass' : 'normal'));
     const command = provider.buildInteractiveCommand({
@@ -495,7 +489,7 @@ export async function forwardToOrchestrator(
     const workingDir = workingDirOf(orchestrator);
     const provider = getProvider(orchestrator.provider || 'claude');
     const binaryPath = provider.resolveBinaryPath(fleet.settings());
-    const mcpConfigPath = mcpConfigPathFor(provider);
+    const mcpConfigPath = mcpConfigPathFor(provider, true);
     await provider.prepareLaunch?.(binaryPath, opts.permissionMode);
     // A file, never inlined: in a double-quoted shell word the instructions'
     // backticks became command substitutions and ran.

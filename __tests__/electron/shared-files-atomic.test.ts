@@ -483,7 +483,8 @@ describe('~/.claude/mcp.json, when `claude mcp add` or `claude mcp remove` has f
   it('registers beside the servers already there', async () => {
     await register();
 
-    expect(claudeRuns).toEqual([['mcp', 'add', '-s', 'user', 'google-workspace', gws.command, ...gws.args]]);
+    // Since 2.0.5 claude registers into this file itself, and runs no CLI for a server not in its user scope (services/mcp-roles.ts).
+    expect(claudeRuns).toEqual([]);
     expect(readAsJson(mcpJson())).toEqual({ mcpServers: { ...servers.mcpServers, 'google-workspace': gws } });
   });
 

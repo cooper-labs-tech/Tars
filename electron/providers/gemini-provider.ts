@@ -16,6 +16,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { shellQuote } from './cli-provider';
+import { geminiRoleArgs } from '../services/mcp-roles';
 
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
@@ -51,6 +52,11 @@ export class GeminiProvider implements CLIProvider {
     if (params.verbose) {
       command += ' --debug';
     }
+
+    // A worker's gemini is limited to its servers but the orchestrator's own, Telegram and X
+    // (services/mcp-roles.ts; gemini is not installed where this was written: the flag is gemini-cli's documented one).
+    const [allowFlag, ...allowed] = geminiRoleArgs(params.orchestratorMode === true, path.join(this.configDir, 'settings.json'));
+    if (allowFlag) command += ` ${allowFlag} ${allowed.map(shellQuote).join(' ')}`;
 
     // Gemini has no documented skip-permissions flag
 

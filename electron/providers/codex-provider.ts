@@ -13,6 +13,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { readAppSettingsFromDisk, shellQuote } from './cli-provider';
+import { codexRoleArgs } from '../services/mcp-roles';
 import { CODEX_SESSION_ID, codexAccepts, codexEffortArgs, codexHome, codexPermissionArgs, readCodexFlags, readCodexModels } from './codex-cli';
 
 /**
@@ -100,6 +101,11 @@ export class CodexProvider implements CLIProvider {
     // every agent in auto or bypass died at launch on it (codex-cli.ts).
     const permission = codexPermissionArgs(params.permissionMode, codexAccepts(params.binaryPath));
     if (permission.length) command += ` ${permission.join(' ')}`;
+
+    // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
+    // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
+    const role = codexRoleArgs(params.orchestratorMode === true);
+    for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);

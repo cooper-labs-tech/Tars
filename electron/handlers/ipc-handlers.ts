@@ -84,6 +84,7 @@ import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { copySecret, showSecretOnce } from '../services/secret-handoff';
+import { mcpConfigPathFor } from '../services/mcp-roles';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -767,15 +768,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // the name) or a chat's runner (core/agent-role.ts).
     const isSuperAgentCheck = hasOrchestratorPowers(agent);
 
-    // Resolve MCP config path: pass for ALL agents using flag strategy (Claude)
-    let mcpConfigPath: string | undefined;
+    // The MCP config for a flag-strategy CLI (Claude Code and its kin), by role
+    // (services/mcp-roles.ts): a worker's lacks Telegram and X.
+    const mcpConfigPath = mcpConfigPathFor(cliProvider, isSuperAgentCheck);
     let systemPromptFile: string | undefined;
-    if (cliProvider.getMcpConfigStrategy() === 'flag') {
-      const possibleMcpPath = path.join(os.homedir(), '.claude', 'mcp.json');
-      if (fs.existsSync(possibleMcpPath)) {
-        mcpConfigPath = possibleMcpPath;
-      }
-    }
 
     // Super Agent-specific: system prompt file
     if (isSuperAgentCheck) {

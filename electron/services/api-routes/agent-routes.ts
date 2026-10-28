@@ -2,7 +2,6 @@ import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
-import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
 import { noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
@@ -57,6 +56,7 @@ import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, ty
 import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-update';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
+import { mcpConfigPathFor } from '../mcp-roles';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy } from '../../core/one-task';
@@ -279,14 +279,11 @@ async function spawnAgentSessionInSlot(
     (isSuperAgentApi ? '' : ': an orchestrator reads your final message') +
     `.` + (chatIdentityOf(agent) ? ` ${chatIdentityOf(agent)}` : '') + `]`;
 
-  // MCP config for flag-strategy providers (all claude-based ones).
-  let mcpConfigPath: string | undefined;
-  if (cliProvider.getMcpConfigStrategy() === 'flag') {
-    // os.homedir(), which follows HOME, and never Electron's home path, which
-    // on macOS does not: a sandboxed Tars handed its agents the real one.
-    const candidate = path.join(os.homedir(), '.claude', 'mcp.json');
-    if (fs.existsSync(candidate)) mcpConfigPath = candidate;
-  }
+  // MCP config for flag-strategy providers (all claude-based ones), by role
+  // (services/mcp-roles.ts): a worker's lacks Telegram and X. os.homedir(),
+  // which follows HOME, and never Electron's home path, which on macOS does
+  // not: a sandboxed Tars handed its agents the real one.
+  const mcpConfigPath = mcpConfigPathFor(cliProvider, isSuperAgentApi);
 
   // An explicit model on this call wins, otherwise the model the agent is set
   // to. Not the model its last session answered on: that is the session this

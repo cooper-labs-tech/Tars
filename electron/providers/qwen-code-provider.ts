@@ -18,6 +18,7 @@ import type {
   PtyLaunch,
 } from './cli-provider';
 import { shellQuote } from './cli-provider';
+import { qwenRoleArgs } from '../services/mcp-roles';
 
 /**
  * Qwen Code (2.0.4): the CLI `qwen`, a Gemini CLI fork, as a CLI of Tars's
@@ -56,6 +57,9 @@ export class QwenCodeProvider implements CLIProvider {
     command += ` --approval-mode ${qwenApprovalMode(params.permissionMode)}`;
     // An orchestrator delegates: its tools that write and its sub-agents are not there.
     if (params.orchestratorMode) command += ` --exclude-tools ${QWEN_ORCHESTRATOR_EXCLUDED.join(' ')}`;
+    // A worker's Qwen Code starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts).
+    const role = qwenRoleArgs(params.orchestratorMode === true);
+    for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
     // The conversation to continue, already checked against its transcript (resume-session.ts).
     if (params.resumeSessionId && /^[0-9a-fA-F-]{36}$/.test(params.resumeSessionId)) {
       command += ` --resume ${shellQuote(params.resumeSessionId)}`;
