@@ -131,9 +131,11 @@ const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'ut
 
 test.skip(process.platform === 'win32', 'the stand-ins are typed into a POSIX shell and the sleep pass reads ps, which Windows has none of (agent-sleep.ts); on Windows the terminal is the CLI, so a CLI that dies ends its terminal (F3 is the PTY exit there). The status rules themselves read the transcript and are platform-free: __tests__/electron/services/status-truth.test.ts runs them everywhere');
 
-test('the status follows the CLI\'s own record, and the sleep acts on it', async () => {
+// Both shells, the classic one and the new interface (JeanBrasse's rule of 16/10).
+for (const newInterface of [false, true]) {
+test(`the status follows the CLI's own record, and the sleep acts on it${newInterface ? ' (new interface)' : ''}`, async () => {
   test.setTimeout(300_000);
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-status-'));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-status-${newInterface ? 'ni' : 'classic'}-`));
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
   const bin = path.join(home, 'bin');
@@ -151,8 +153,8 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
-  const port = apiPort(31506);
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
+  const port = apiPort(31506 + (newInterface ? 1 : 0));
   // The status pass every 500 ms (its grace is four passes: 2 s), the sleep after 45 s of rest: every scenario below
   // starts within the first seconds, so none of their agents can fall asleep before its own check.
   const SLEEP_AFTER_MS = 45_000;
@@ -164,7 +166,7 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
   const mainLog = fs.createWriteStream(test.info().outputPath('main.log'));
   app.process().stdout?.on('data', (d) => mainLog.write(d));
   app.process().stderr?.on('data', (d) => mainLog.write(d));
-  const seen: Record<string, unknown> = {};
+  const seen: Record<string, unknown> = { newInterface };
   try {
     const page = await app.firstWindow();
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
@@ -260,3 +262,4 @@ test('the status follows the CLI\'s own record, and the sleep acts on it', async
     mainLog.end();
   }
 });
+}
