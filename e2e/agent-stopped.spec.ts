@@ -222,7 +222,10 @@ test('a stopped agent says stopped, who stopped it, when and why, and still does
   await expect(pane.getByText('stopped', { exact: true })).toBeVisible();
   await expect(pane.getByText('feat/frontend', { exact: true })).toHaveCount(0);
   seen.pane = await lineIn(pane, byLead);
-  await expect(pane.getByRole('button', { name: 'start', exact: true })).toBeVisible();
+  // Start is in the panel's menu since 2.0.5, not its header.
+  await pane.getByRole('button', { name: 'Panel actions', exact: true }).click();
+  await expect(pane.getByRole('button', { name: /^start\b/ })).toBeVisible();
+  await pane.getByRole('button', { name: 'Panel actions', exact: true }).click();
   // Their terminals say the session is stopped, as an idle one's says idle.
   await expect(page.locator('.xterm-rows').filter({ hasText: '(Session stopped)' })).toHaveCount(2, { timeout: 30_000 });
   await stepShot(page, '05-dashboard');
