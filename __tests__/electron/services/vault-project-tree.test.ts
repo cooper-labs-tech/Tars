@@ -24,12 +24,19 @@ import * as path from 'node:path';
  *  T5. Pages: more than 200 by default, or past the 1,000 cap when asked for more; no total, no offset, no `more`.
  *  T6. Writes and reads in a nested folder break the rules of 2.0.4: not 0600, not text only, past 1 MB; and the form
  *      the window uses today (`sub: 'reports'`) stops working.
+ *
+ * After the Audit's gate of 6a868cdc (AUDIT-PR530.md), written before the fix:
+ *  T7. (L1) A project folder that is itself a link (`project-files/<key> -> ~/.tars-private`, or any folder outside)
+ *      is listed, read or written through; and a heavy name in another case, which a file system that folds case
+ *      opens as the heavy folder (`NODE_MODULES`), is opened.
+ *  T8. (L2) A `project-files` root that is itself a link is followed: every folder under where it points (the home
+ *      folder, planted as `~/.tars/project-files -> ~`) is listed, read and written from the window.
  */
 
 import { DATA_DIR } from '../../../electron/constants';
 import { ensureProjectFiles } from '../../../electron/utils/project-files';
 import {
-  listProjectPlace, readProjectFile, writeProjectFile, listProjectFiles, HEAVY_FOLDERS, PAGE_DEFAULT, LIST_MAX,
+  listProjectPlace, readProjectFile, writeProjectFile, listProjectFiles, listProjectFolders, HEAVY_FOLDERS, PAGE_DEFAULT, LIST_MAX,
 } from '../../../electron/services/vault-project-files';
 
 const root = () => path.join(DATA_DIR, 'project-files');
@@ -123,6 +130,46 @@ describe.skipIf(!posix)('T3. a folder swapped for a link between the list and th
     expect(readProjectFile(key, ['reports', 'run', 'deep'], 'secret.md')).toMatchObject({ code: 'link' });
     expect(writeProjectFile(key, ['reports', 'run', 'deep'], 'secret.md', 'over', null)).toMatchObject({ code: 'link' });
     expect(fs.readFileSync(path.join(outside, 'deep', 'secret.md'), 'utf8')).toBe('not the vault\'s');
+  });
+});
+
+describe.skipIf(!posix)('T7. a project folder that is a link, and a heavy name in another case', () => {
+  it('refuses a key that is a link to a folder outside: nothing listed, read or written there', () => {
+    const linked = 'planted-0123456789';
+    fs.symlinkSync(outside, path.join(root(), linked));
+    for (const place of [[], ['deep']]) {
+      expect('error' in listProjectPlace(linked, place), place.join('/')).toBe(true);
+      expect('error' in readProjectFile(linked, place, 'secret.md')).toBe(true);
+      expect('error' in writeProjectFile(linked, place, 'x.md', 'x', null)).toBe(true);
+    }
+    expect(fs.readdirSync(outside).sort()).toEqual(['deep', 'secret.md']);
+  });
+
+  it('says heavy, and opens nothing, for a heavy folder named in another case where the system folds case', () => {
+    fs.mkdirSync(path.join(dir, 'reports', 'wt', 'node_modules', 'pkg'), { recursive: true });
+    const folds = fs.existsSync(path.join(dir, 'reports', 'wt', 'NODE_MODULES'));
+    const listed = listProjectPlace(key, ['reports', 'wt', 'NODE_MODULES']);
+    if (folds) expect(listed).toMatchObject({ code: 'heavy' });
+    else expect(listed).toMatchObject({ code: 'no_folder' });
+  });
+});
+
+describe.skipIf(!posix)('T8. a project-files root that is a link', () => {
+  it('is refused like a project folder that is one: no folder listed, read or written through it', () => {
+    // The real folder moved aside, a link in its place: here to a folder holding a project folder of the same key.
+    const elsewhere = fs.mkdtempSync(path.join(os.homedir(), 'elsewhere-'));
+    fs.renameSync(root(), path.join(elsewhere, 'project-files'));
+    fs.symlinkSync(path.join(elsewhere, 'project-files'), root());
+    try {
+      expect(listProjectPlace(key, [])).toMatchObject({ code: 'link' });
+      expect(listProjectPlace(key, ['reports'])).toMatchObject({ code: 'link' });
+      expect(readProjectFile(key, 'reports', 'x.md')).toMatchObject({ code: 'link' });
+      expect(writeProjectFile(key, ['reports'], 'x.md', 'x', null)).toMatchObject({ code: 'link' });
+      expect(listProjectFolders([])).toEqual([]);
+      expect(fs.existsSync(path.join(elsewhere, 'project-files', key, 'reports', 'x.md'))).toBe(false);
+    } finally {
+      fs.rmSync(root(), { force: true });
+    }
   });
 });
 
