@@ -89,6 +89,13 @@
  * 29. (the Audit's Info 1 on #544) An agent not in bypass gets its file tool held in Tars, two steps for each edit
  *     and a refusal at the delay: it goes straight to Claude Code's own dialog, as before #538. Only an agent in
  *     bypass (autonomous, the nights' case) has its file tools held.
+ * And from the Audit's fourth gate of #538 (M1 at ff0e3f2d): the mod now posts, marked withheld, a question it cannot
+ * show whole (a field the window does not show, one past 2,000 characters, one that is not text).
+ * 30. A withheld question that is not a file tool is held and allowable from the window, or a bypass agent's goes to
+ *     Claude Code's dialog with no delay: it must be held deny-only for a bypass agent, refused at the delay with why
+ *     the window could not show it, and answered `ask` at once for any other mode.
+ * 31. Bash's timeout, background and sandbox fields, which the mod shows as words, are not in the line the window
+ *     shows (`subject`), so the owner allows a call without seeing them: they follow the command.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -575,6 +582,53 @@ describe('Tars allows nothing by itself', () => {
     const shell = ask(question({ agent_id: 'a2', session_id: S2, input: { command: heredoc('/p') } }));
     expect(await settled(shell)).toBe(false);
     expect(b.permissionAsk?.subject).toContain('/p/scratchpad');
+  });
+
+  it('30. a bypass agent\'s withheld question, a Bash with a timeout and a 3,000-character heredoc among them, waits deny-only, then is refused with why', async () => {
+    const a = bypass();
+    const heredoc = `cat > /p/s.md <<'EOF'\n${'y'.repeat(3000)}\nEOF`;
+    const why = `command: ${heredoc.length.toLocaleString('en-US')} characters, past the 2,000 the window shows`;
+    for (const body of [
+      question({ tool_use_id: 'toolu_long', input: { description: 'notes', timeout: '60000' }, withheld: true, withheld_why: why }),
+      question({ tool: 'mcp__dorothy-x__x_post_tweet', tool_use_id: 'toolu_x', input: {}, withheld: true, withheld_why: 'text: a field the window does not show' }),
+    ]) {
+      const pending = askUntilAnswered(body);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk, body.tool_use_id).toMatchObject({ tool: body.tool, withheld: true, withheldWhy: body.withheld_why });
+      expect(answerPermission('a1', 'allow', 'the user')).toBe(false);
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      const late = await pending;
+      expect(late).toMatchObject({ decision: 'deny', reason: expect.stringMatching(/Nobody answered/) });
+      expect(late.reason).toContain(body.withheld_why);
+    }
+    // The window's deny is taken.
+    const pending = askUntilAnswered(question({ tool_use_id: 'toolu_d', input: {}, withheld: true, withheld_why: why }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answerPermission('a1', 'deny', 'the user', 'too long to read')).toBe(true);
+    expect(await pending).toMatchObject({ decision: 'deny' });
+  });
+
+  it('30. an agent not in bypass has any withheld question on Claude Code\'s own dialog at once', async () => {
+    const b = agent('a2', S2);
+    Object.assign(b, { permissionMode: 'normal', projectPath: '/p' });
+    expect(await ask(question({ agent_id: 'a2', session_id: S2, input: {}, withheld: true, withheld_why: 'command: not text' }))).toEqual({ decision: 'ask' });
+    expect(b.permissionAsk).toBeUndefined();
+  });
+
+  it('31. a Bash with a timeout, in the background or outside the sandbox stays allowable, the window\'s line saying so', async () => {
+    const a = bypass();
+    const pending = askUntilAnswered(question({
+      tool_use_id: 'toolu_t', input: { command: 'make deploy', description: 'deploy', timeout: '600000', run_in_background: 'true', dangerouslyDisableSandbox: 'true' },
+    }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk?.withheld).toBeUndefined();
+    expect(a.permissionAsk?.subject).toBe('make deploy (timeout 600000 ms, in the background, outside the sandbox)');
+    expect(answerPermission('a1', 'allow', 'the user')).toBe(true);
+    expect(await pending).toMatchObject({ decision: 'allow' });
+    // The defaults say nothing more.
+    void askUntilAnswered(question({ tool_use_id: 'toolu_f', input: { command: 'ls', run_in_background: 'false', dangerouslyDisableSandbox: 'false' } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk?.subject).toBe('ls');
   });
 
   it('23. every decision is written down with who or what decided', async () => {
