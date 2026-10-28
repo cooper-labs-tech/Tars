@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { neverStarted, TAKEN_BACK_IN_THE_WINDOW } from '../core/one-task';
 import { liveTaskLedger } from './task-ledger';
 import { AgentStatus, BusMessageAuthorKind } from '../types';
 import { agents, saveAgents } from '../core/agent-manager';
@@ -69,6 +70,8 @@ type News = {
   reason?: string;
   /** For a `not_delivered` request `cancelled` by another agent: who, and why, already quoted as data. */
   detail?: string;
+  /** For one the owner took back in the window: the sentence the window says its asker is told, as it is. */
+  said?: string;
   /** The work this is about, so that news overtaken by new work is not handed over. */
   handedAt?: string;
   /**
@@ -338,6 +341,19 @@ export function tellCancelled(requesterId: string, workerId: string, by: string,
   handToRequester(requesterId, worker, {
     kind: 'not_delivered', status: worker.status, reason: 'cancelled',
     detail: `from ${by}: ${envelopeValue(reason.replace(/\s+/g, ' ').trim().slice(0, 300))}`,
+    handedAt: worker.workHandedAt,
+  });
+}
+
+/**
+ * A request the owner took back from the queue in the window, told to its asker in the window's own sentence:
+ * task_status's, `It never started: <why>.` (the one take-back by default, or a whole queue dropped).
+ */
+export function tellTakenBack(requesterId: string, workerId: string, why: string = TAKEN_BACK_IN_THE_WINDOW): void {
+  const worker = agents.get(workerId);
+  if (!worker || requesterId === workerId) return;
+  handToRequester(requesterId, worker, {
+    kind: 'not_delivered', status: worker.status, reason: 'cancelled', said: neverStarted(why),
     handedAt: worker.workHandedAt,
   });
 }
@@ -942,6 +958,7 @@ function describeNews(news: News): string {
       + 'Read get_agent_output; if nothing moves, stop it and start it again with a brief of what is already done';
   }
   if (news.kind === 'not_delivered') {
+    if (news.reason === 'cancelled' && news.said) return `never ran what you asked of it. ${news.said} Nothing was retried; ask again if it is still needed`;
     if (news.reason === 'cancelled') return `never ran what you asked of it: it was cancelled before it went in, ${news.detail ?? 'by another agent'}. Nothing was retried; ask again if it is still needed`;
     if (news.reason === 'deleted') return 'was deleted before it finished what you asked of it. Nothing was retried; ask again if it is still needed';
     if (news.reason === 'unconfirmed') return 'was handed your task at its launch, and Tars could not confirm it began: in 2 hours it neither started a turn on it nor said it was idle at its prompt. It may have run: read its output with get_agent_output before asking again'

@@ -66,7 +66,7 @@ import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
-import { oneTaskQueue, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
+import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
 
 /**
@@ -2754,7 +2754,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       announceTask(agent.id);
       if (!(await waitTurn(agent, queued.ref))) {
         announceTask(agent.id);
-        if (!answered) sendJson({ error: `Task ${queued.ref} was cancelled while it waited${behind ? ` behind ${behind}` : ''}: it never started.`, code: 'cancelled', taskId: queued.ref }, 409);
+        // In the words task_status gives (and the window, for one the owner took back: the Audit's Info 2 on the train).
+        const was = oneTaskQueue.lookup(queued.ref);
+        if (!answered) sendJson({ error: neverStarted(was?.state === 'failed' ? was.error : 'it was cancelled while it waited'), code: 'cancelled', taskId: queued.ref }, 409);
         return;
       }
       announceTask(agent.id);
@@ -2816,7 +2818,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
             queuedAt: new Date(q.queuedAt).toISOString(),
             ...(model ? { model } : {}),
             ...(queued.state === 'failed'
-              ? { outcome: 'error', error: `It never started: ${queued.error}.` }
+              ? { outcome: 'error', error: neverStarted(queued.error) }
               : queued.state === 'delivered'
                 ? { outcome: 'delivered', how: queued.how, deliveredAt: new Date(queued.at).toISOString(), ...(queued.note ? { error: queued.note } : {}) }
                 : { outcome: queued.state, ...(queued.state === 'queued' ? { queuedBehind: busyText(agents.get(q.agentId) ?? ({ id: q.agentId } as AgentStatus), q.ref) } : {}) }),

@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron';
 import { agents, saveAgents } from '../core/agent-manager';
-import { oneTaskQueue } from '../core/one-task';
+import { oneTaskQueue, TAKEN_BACK_IN_THE_WINDOW } from '../core/one-task';
 import { requestDropped } from '../core/task-requests';
 import { queueView, type QueueView } from '../services/agent-queues';
 import { announceTask } from '../services/task-banner';
-import { tellCancelled } from '../services/agent-watch';
+import { tellTakenBack } from '../services/agent-watch';
 import { broadcastToAllWindows } from '../utils/broadcast';
 
 /**
@@ -25,7 +25,7 @@ function takeBack(ref: string, why: string): void {
   const worker = item ? agents.get(item.agentId) : undefined;
   if (!item || !worker) return;
   requestDropped(worker, item.ref);
-  if (item.requesterId && item.requesterId !== worker.id) tellCancelled(item.requesterId, worker.id, 'the owner, in the window', 'taken back by the owner');
+  if (item.requesterId && item.requesterId !== worker.id) tellTakenBack(item.requesterId, worker.id, why);
 }
 
 /** Why a cancel found no item in a queue: it started (its turn taken, or typed in), or no queue ever held it. */
@@ -91,7 +91,7 @@ export function registerAgentQueueHandlers(): void {
   ipcMain.handle('agentQueue:cancel', (_e, ref: unknown) => {
     const item = typeof ref === 'string' ? oneTaskQueue.find(ref) : undefined;
     if (!item) return notWaiting(String(ref));
-    takeBack(item.ref, 'it was taken back by you, in the window');
+    takeBack(item.ref, TAKEN_BACK_IN_THE_WINDOW);
     saveAgents();
     announceTask(item.agentId);
     return answer(item.agentId);

@@ -291,6 +291,14 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
   };
 }
 
+/**
+ * Why an item the owner takes back in the window never went in (agent-queue-handlers.ts), and the one sentence its
+ * asker reads, by task_status, by the held delegate_task's answer and by its note: the window says so word for word
+ * (TaskBanner.tsx; the Audit's Info 2 on the train found three wordings of it).
+ */
+export const TAKEN_BACK_IN_THE_WINDOW = 'it was taken back by you, in the window';
+export const neverStarted = (why: string) => `It never started: ${why}.`;
+
 /** What the busy rule reads of an agent: agent-routes.ts and agent-manager.ts hand it an AgentStatus. */
 export interface TurnView {
   id: string;
