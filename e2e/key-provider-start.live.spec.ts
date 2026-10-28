@@ -22,7 +22,8 @@ import { DEV_URL, PORT_OFFSET, apiPort } from './ports.mjs';
  *
  * Asserted: the task's answer comes back to Lead; every request the stand-in got carried the key as a Bearer
  * (ANTHROPIC_AUTH_TOKEN) and no x-api-key; the question never showed in the agent's terminal; and no file of the
- * sandbox holds the key, or its last 20 characters, but app-settings.json, where it already was. Both shells.
+ * sandbox holds the key, or its last 20 characters, but ~/.tars-private/settings-secrets.json, where Tars moves it
+ * from the app-settings.json it was seeded in at its launch since 2.0.4 (#466). Both shells.
  *
  * Live: E2E_LIVE=1 and a native claude. The artefact: values.json (the tools' answers, every request the stand-in
  * got with the role of its credential, the terminal's last lines, where the key is on disk) and the screenshot.
@@ -205,7 +206,7 @@ for (const newInterface of [false, true]) {
       for (const r of requests()) {
         expect(r.auth, `a request went out with ${JSON.stringify(r.auth)}`).toEqual({ bearer: 'the key', xApiKey: null });
       }
-      expect(holding(home, KEY), 'the key was written somewhere it was not').toEqual({ full: [path.join('.tars', 'app-settings.json')], end: [] });
+      expect(holding(home, KEY), 'the key was written somewhere it was not').toEqual({ full: [path.join('.tars-private', 'settings-secrets.json')], end: [] });
     } finally {
       for (const server of servers) server.kill();
       stub.kill();

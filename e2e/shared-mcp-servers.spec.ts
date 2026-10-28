@@ -138,8 +138,9 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
     // The bundles of this tree where a packaged Tars has them: a development run finds none under its resources.
+    // The six it ships: mcp-telegram went with Tars's own bot in 2.0.5 (#545), and a clone has no such folder.
     const resources = path.join(home, 'resources');
-    for (const s of [...SHARED, 'mcp-telegram']) {
+    for (const s of SHARED) {
       fs.mkdirSync(path.join(resources, s, 'dist'), { recursive: true });
       fs.copyFileSync(path.resolve(s, 'dist', 'bundle.js'), path.join(resources, s, 'dist', 'bundle.js'));
       fs.copyFileSync(path.resolve(s, 'package.json'), path.join(resources, s, 'package.json'));

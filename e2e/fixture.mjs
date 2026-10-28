@@ -668,7 +668,11 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
       }
     }),
   ]), ELECTRON_PATHS);
-  const roots = [sandboxHome, fs.realpathSync(sandboxHome)];
+  // macOS links /var and /tmp to /private/var and /private/tmp, and the app reports /var/... for a sandbox a spec
+  // named through realpath, /private/var/... (disk-janitor.spec.ts): both forms are the sandbox, and nothing else is.
+  const real = fs.realpathSync(sandboxHome);
+  const unlinked = [sandboxHome, real].filter(r => r.startsWith('/private/')).map(r => r.slice('/private'.length));
+  const roots = [...new Set([sandboxHome, real, ...unlinked])];
   const outside = Object.entries(landed)
     .filter(([name]) => !(onWindows && name === 'home'))
     .filter(([, where]) => !roots.some(root => where === root || where.startsWith(root + path.sep)));

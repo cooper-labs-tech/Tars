@@ -239,8 +239,9 @@ for (const newInterface of [false, true]) {
       await expect(strip).toContainText(/paused/i);
       await stepShot(page, `${tag}3-paused-strip`);
 
-      // 6. Resume: the next goes in.
-      await strip.getByRole('button', { name: 'resume' }).click();
+      // 6. Resume: the next goes in. The strip's own resume: the list, still open from 4, sits inside the strip and
+      // has its own in its head.
+      await strip.locator('xpath=.//button[normalize-space(.)="resume" and not(ancestor::*[@data-queue-list])]').click();
       await expect.poll(() => turns().some((t) => t.includes('SLOW write the changelog')), { timeout: 60_000 }).toBe(true);
       await expect(page.locator('[data-task-banner]').filter({ hasText: 'SLOW write the changelog' })).toBeVisible({ timeout: 30_000 });
       await stepShot(page, `${tag}4-resumed`);

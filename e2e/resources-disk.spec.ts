@@ -101,7 +101,8 @@ for (const newInterface of [false, true]) {
         await where.getByRole('radiogroup', { name: 'Resources view' }).getByRole('radio', { name: 'Disk' }).click();
       }
       const view = where.getByRole('region', { name: 'Disk' });
-      const proposed = view.getByRole('region', { name: 'Proposed' });
+      // Exact: a region's name is matched as a substring, and 'Never proposed' holds it.
+      const proposed = view.getByRole('region', { name: 'Proposed', exact: true });
 
       // 1. Read, and nothing proposed before a scan; 4. the never list said.
       await expect(proposed.getByRole('button', { name: 'scan' })).toBeVisible({ timeout: 60_000 });
