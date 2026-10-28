@@ -28,6 +28,9 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  *      an item goes by anything but its exact absolute path (a glob, a shell).
  * J11. A deletion is not logged with what it freed, or a refusal without why.
  * J12. A scan deletes something.
+ * And for the window (the Frontend's contract on #539, `Resources (2.0.5) · disk`):
+ * J13. An item does not say why it matched (its last change, the merged branch, the image's name), or the window
+ *      cannot tell, item by item, what an approval did: deleted with its bytes, kept with why, failed with the error.
  */
 
 const DAY = 86_400_000;
@@ -73,7 +76,9 @@ function world(over: Over = {}): JanitorWorld {
   };
 }
 
+const outcomes: Array<[string, { kind: string; bytes?: number | null; why?: string | null }]> = [];
 const ops = (): JanitorOps => ({
+  done: (id, outcome) => { outcomes.push([id, outcome]); },
   rm: async (p) => { deleted.push(`rm ${p}`); fs.rmSync(p, { recursive: true, force: true }); },
   removeWorktree: async (_project, p) => { deleted.push(`worktree ${p}`); fs.rmSync(p, { recursive: true, force: true }); },
   dockerRm: async (id) => { deleted.push(`docker ${id}`); },
@@ -88,6 +93,7 @@ beforeEach(() => {
   project = path.join(home, 'projects', 'harbor');
   deleted = [];
   logged = [];
+  outcomes.length = 0;
   mk(path.join(project, 'src'));
   for (const n of ['done', 'dirty', 'locked', 'agents', 'busy', 'open']) {
     mk(path.join(project, '.worktrees', n, '.next'));
@@ -193,4 +199,20 @@ describe('the approval', () => {
     const report = await approveJanitor([id], () => world(), ops());
     expect([deleted, report.kept.length]).toEqual([[], 1]);
   });
+
+  it('J13. each item says why it matched, and each approved item\'s outcome reaches the window', async () => {
+    const items = await scanJanitor(world());
+    for (const i of items) expect(i.why, keyOf(i)).toBeTruthy();
+    expect(items.find(i => i.kind === 'closed-worktree')!.why).toMatch(/b\/done is merged/);
+    expect(items.find(i => i.kind === 'docker-image')!.why).toMatch(/old\/thing:1/);
+    const id = (k: string) => items.find(i => keyOf(i) === k)!.id;
+    const failing = { ...ops(), rm: async () => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); } };
+    await approveJanitor([id('docker-image sha256:unused'), id('npx-cache .npm/_npx/oldhash'), 'ffffffffffffffff'], () => world(), failing);
+    expect(outcomes).toEqual([
+      [id('docker-image sha256:unused'), { kind: 'deleted', bytes: 2e9 }],
+      [id('npx-cache .npm/_npx/oldhash'), { kind: 'failed', why: 'the deletion failed: EBUSY' }],
+      ['ffffffffffffffff', { kind: 'kept', why: 'it is not in the scan the window showed' }],
+    ]);
+  });
 });
+
