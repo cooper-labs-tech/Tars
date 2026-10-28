@@ -20,16 +20,20 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. a scan deletes nothing;
  * 3. the approved items are deleted, and only they; an approved item a process started working in since the scan is
  *    kept, with why; the Docker image goes by `docker image rm <id>`;
- * 4. each deletion is logged with what it freed.
+ * 4. each deletion is logged with what it freed;
+ * And from the Audit's gate of #542: an npx entry a server runs from, its working folder elsewhere (M1), and a merged
+ * worktree holding a .env.local (M2), are never proposed.
  * Red on main dc623b594: there is no janitor.
  * The artefact: values.json (the scan, the approval's report, the log).
  */
 
 const DAY = 86_400_000;
-type Item = { id: string; kind: string; path?: string; ref?: string; label: string; sizeBytes: number; rule: string };
-type Api = { electronAPI: { system: {
-  janitorScan(): Promise<{ items: Item[] } | { error: string }>;
-  janitorApprove(ids: string[]): Promise<{ removed: number; freedBytes: number; kept: Array<{ id: string; label: string; why: string }> } | { error: string }>;
+type Item = { id: string; kind: string; path: string; label: string; bytes: number | null; rule: string; why: string; details?: Record<string, unknown>; outcome?: { kind: string; bytes?: number | null; why?: string | null } | null };
+type State = { scan: null | { running: boolean; askedBy: string | null; items: Item[] }; deleting: unknown; log: Array<{ at: number; what: string; bytes: number | null }>; never: string[] };
+type Api = { electronAPI: { diskJanitor: {
+  state(): Promise<State>;
+  scan(): Promise<{ success: boolean; error?: string }>;
+  approve(ids: string[]): Promise<{ success: boolean; error?: string }>;
 } } };
 
 const shortIdOf = (id: string) => crypto.createHash('sha256').update(id).digest('hex').slice(0, 10);
@@ -61,11 +65,12 @@ for (const newInterface of [false, true]) {
     const wt = (n: string) => path.join(project, '.worktrees', n);
     fs.mkdirSync(project, { recursive: true });
     git(project, 'init', '-q', '-b', 'main');
-    fs.writeFileSync(path.join(project, '.gitignore'), '.worktrees/\n.next/\ntest-results/\nplaywright-report/\n');
+    fs.writeFileSync(path.join(project, '.gitignore'), '.worktrees/\n.next/\ntest-results/\nplaywright-report/\n.env.local\n');
     fs.writeFileSync(path.join(project, 'README.md'), 'harbor\n');
     git(project, 'add', '.');
     git(project, 'commit', '-q', '-m', 'one');
-    for (const n of ['done', 'dirty', 'agents', 'busy', 'fresh']) git(project, 'worktree', 'add', '-q', '-b', `b/${n}`, wt(n));
+    for (const n of ['done', 'dirty', 'agents', 'busy', 'fresh', 'withenv']) git(project, 'worktree', 'add', '-q', '-b', `b/${n}`, wt(n));
+    fs.writeFileSync(path.join(wt('withenv'), '.env.local'), 'SECRET=keep-me\n');
     git(project, 'worktree', 'add', '-q', '-b', 'b/open', wt('open'));
     fs.writeFileSync(path.join(wt('open'), 'work.txt'), 'work\n');
     git(wt('open'), 'add', '.');
@@ -73,12 +78,17 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(wt('dirty'), 'uncommitted.txt'), 'not saved\n');
     for (const n of ['done', 'dirty', 'agents', 'busy', 'open']) { filled(path.join(wt(n), '.next')); filled(path.join(wt(n), 'test-results')); }
     filled(path.join(wt('fresh'), '.next'), 1);
-    for (const n of ['done', 'dirty', 'agents', 'busy', 'open']) age(wt(n), 10);
+    for (const n of ['done', 'dirty', 'agents', 'busy', 'open', 'withenv']) age(wt(n), 10);
     const tmp = path.join(home, '.tars', 'tmp');
     filled(path.join(tmp, shortIdOf('agent-gone')));
     filled(path.join(tmp, shortIdOf('live')));
     filled(path.join(home, '.npm', '_npx', 'oldhash'), 30);
     filled(path.join(home, '.npm', '_npx', 'newhash'), 3);
+    // An npx entry a server runs from, its working folder in the project (as six sentry-mcp servers do here).
+    const served = path.join(home, '.npm', '_npx', 'servedhash');
+    fs.mkdirSync(served, { recursive: true });
+    fs.writeFileSync(path.join(served, 'server.cjs'), 'setInterval(() => {}, 1 << 30);\n');
+    age(served, 30);
     const forbidden = ['.tars-private/x/.next', 'Documents/runs/test-results', '.Trash/x/.next', '.cache/uv/wheels', 'Library/Developer/CoreSimulator/Devices'].map(p => filled(path.join(home, p)));
     // Docker and colima as stand-ins: two images, one a stopped container uses; every call recorded.
     const calls = path.join(home, 'docker-calls.log');
@@ -106,6 +116,7 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
     // A process working in the busy worktree from the start.
     const busy = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { cwd: wt('busy'), stdio: 'ignore' });
+    const server = spawn(process.execPath, [path.join(served, 'server.cjs')], { cwd: project, stdio: 'ignore' });
     let late: ReturnType<typeof spawn> | undefined;
     const values: Record<string, unknown> = { newInterface };
     const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
@@ -120,12 +131,13 @@ for (const newInterface of [false, true]) {
       const page = await app.firstWindow();
       await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
       await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
+      const state = () => page.evaluate(() => (window as unknown as Api).electronAPI.diskJanitor.state());
       const scan = async () => {
-        const r = await page.evaluate(() => (window as unknown as Api).electronAPI.system.janitorScan());
-        if ('error' in r) throw new Error(r.error);
-        return r.items;
+        expect(await page.evaluate(() => (window as unknown as Api).electronAPI.diskJanitor.scan())).toEqual({ success: true });
+        await expect.poll(async () => (await state()).scan?.running, { timeout: 60_000 }).toBe(false);
+        return (await state()).scan!.items;
       };
-      const key = (i: Item) => `${i.kind} ${i.path ? path.relative(home, i.path) : i.ref}`;
+      const key = (i: Item) => `${i.kind} ${i.path.startsWith('/') ? path.relative(home, i.path) : i.path}`;
 
       // 1, 2. Exactly the list, and nothing deleted.
       const items = await scan();
@@ -133,8 +145,8 @@ for (const newInterface of [false, true]) {
       expect(items.map(key).sort()).toEqual([
         'agent-tmp .tars/tmp/' + shortIdOf('agent-gone'),
         'closed-worktree projects/harbor/.worktrees/done',
-        'docker-image sha256:unused',
-        'docker-vm-trim colima',
+        'docker-image docker image sha256:unused',
+        'docker-vm-trim the Docker VM (colima)',
         'next-cache projects/harbor/.worktrees/done/.next',
         'next-cache projects/harbor/.worktrees/open/.next',
         'npx-cache .npm/_npx/oldhash',
@@ -147,23 +159,30 @@ for (const newInterface of [false, true]) {
       late = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { cwd: wt('open'), stdio: 'ignore' });
       await page.waitForTimeout(500);
       const id = (k: string) => items.find(i => key(i) === k)!.id;
-      const report = await page.evaluate(ids => (window as unknown as Api).electronAPI.system.janitorApprove(ids), [
+      const approved = [
         id('closed-worktree projects/harbor/.worktrees/done'), id('npx-cache .npm/_npx/oldhash'),
-        id('agent-tmp .tars/tmp/' + shortIdOf('agent-gone')), id('docker-image sha256:unused'),
+        id('agent-tmp .tars/tmp/' + shortIdOf('agent-gone')), id('docker-image docker image sha256:unused'),
         id('next-cache projects/harbor/.worktrees/open/.next'),
-      ]);
+      ];
+      expect(await page.evaluate(ids => (window as unknown as Api).electronAPI.diskJanitor.approve(ids), approved)).toEqual({ success: true });
+      await expect.poll(async () => (await state()).deleting, { timeout: 60_000 }).toBeNull();
+      const after = await state();
       const log = fs.readFileSync(path.join(home, '.tars', 'logs', 'janitor.log'), 'utf8');
-      keep({ report, log, dockerCalls: fs.readFileSync(calls, 'utf8') });
-      if ('error' in report) throw new Error(report.error);
-      expect(report.removed).toBe(4);
-      expect(report.kept.map(k => [k.label, k.why])).toEqual([[expect.stringContaining('open/.next'), expect.stringMatching(/no longer matches/)]]);
+      keep({ after, log, dockerCalls: fs.readFileSync(calls, 'utf8') });
+      const outcomes = after.scan!.items.filter(i => approved.includes(i.id)).map(i => [key(i), i.outcome?.kind]);
+      expect(outcomes.filter(([, k]) => k === 'deleted')).toHaveLength(4);
+      expect(after.scan!.items.find(i => key(i) === 'next-cache projects/harbor/.worktrees/open/.next')!.outcome)
+        .toMatchObject({ kind: 'kept', why: expect.stringMatching(/no longer matches/) });
+      // The log the window reads back: four deletions with their bytes, the kept one with why.
+      expect(after.log.filter(l => l.bytes !== null)).toHaveLength(4);
       expect(fs.existsSync(wt('done')), 'the merged worktree').toBe(false);
       expect(git(project, 'worktree', 'list')).not.toContain(wt('done'));
       expect(fs.existsSync(path.join(home, '.npm', '_npx', 'oldhash'))).toBe(false);
       expect(fs.existsSync(path.join(tmp, shortIdOf('agent-gone')))).toBe(false);
       expect(fs.readFileSync(calls, 'utf8')).toContain('docker image rm sha256:unused');
       // Only those.
-      for (const stays of [path.join(wt('open'), '.next'), path.join(wt('open'), 'test-results'), wt('dirty'), wt('agents'), wt('busy'),
+      expect(fs.readFileSync(path.join(wt('withenv'), '.env.local'), 'utf8')).toBe('SECRET=keep-me\n');
+      for (const stays of [path.join(home, '.npm', '_npx', 'servedhash'), path.join(wt('open'), '.next'), path.join(wt('open'), 'test-results'), wt('dirty'), wt('agents'), wt('busy'),
         path.join(wt('fresh'), '.next'), path.join(home, '.npm', '_npx', 'newhash'), path.join(tmp, shortIdOf('live')), ...forbidden]) {
         expect(fs.existsSync(stays), path.relative(home, stays)).toBe(true);
       }
@@ -172,7 +191,7 @@ for (const newInterface of [false, true]) {
       expect(log.match(/freed \d+ bytes/g)).toHaveLength(4);
       expect(log).toMatch(/kept .*open\/\.next: it no longer matches/);
     } finally {
-      for (const p of [busy, late]) if (p?.pid) { try { process.kill(p.pid); } catch { /* gone */ } }
+      for (const p of [busy, late, server]) if (p?.pid) { try { process.kill(p.pid); } catch { /* gone */ } }
       await app.close().catch(() => undefined);
       await removeHome(home);
     }

@@ -12,6 +12,8 @@ export function registerJanitorRoutes(app: RouteApp): void {
       sendJson({ error: 'A scan is asked for by an agent: with its own token (CLAUDE_MGR_API_TOKEN).' }, 403);
       return;
     }
-    sendJson({ success: true, items: await janitorScan(), approvedBy: 'the owner, in the window' });
+    const agent = agents.get(req.callerAgentId)!;
+    // Its own project's items, once in five minutes; the window sees the whole scan and who asked (janitor-state.ts).
+    sendJson({ success: true, items: await janitorScan({ name: agent.name || agent.id, project: agent.projectPath }), approvedBy: 'the owner, in the window' });
   });
 }

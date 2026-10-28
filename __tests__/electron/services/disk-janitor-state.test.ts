@@ -83,7 +83,7 @@ describe('the janitor as the window reads it', () => {
     expect(sent.at(-1)!.scan!.running).toBe(false);
   });
 
-  it('S2. an agent\\'s scan: its project\\'s items only, the window told who and when, and once in five minutes', async () => {
+  it('S2. an agent\'s scan: its project\'s items only, the window told who and when, and once in five minutes', async () => {
     const j = make();
     const mine = await j.scan({ name: 'Harbor Worker', project: path.join(dir, 'proj') });
     expect(mine.map(i => i.path)).toEqual([path.join(dir, 'proj', '.worktrees', 'w', '.next')]);

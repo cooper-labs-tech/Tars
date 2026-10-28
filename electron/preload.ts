@@ -916,9 +916,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     // How many chats may work at once: one per 5 GB of RAM, from 1 to 8.
     chatLimit: () => ipcRenderer.invoke('system:chatLimit'),
-    // The disk janitor: what it proposes, and the owner's approval of the items the window showed.
-    janitorScan: () => ipcRenderer.invoke('system:janitorScan'),
-    janitorApprove: (ids: string[]) => ipcRenderer.invoke('system:janitorApprove', ids),
+  },
+
+  // The disk janitor (services/disk-janitor.ts): its state (the last scan with its items and outcomes, the deletions
+  // under way, the never list, the log of what was freed, the scans agents asked for), a scan, the owner's approval,
+  // and the state on each change.
+  diskJanitor: {
+    state: () => ipcRenderer.invoke('diskJanitor:state'),
+    scan: () => ipcRenderer.invoke('diskJanitor:scan'),
+    approve: (ids: string[]) => ipcRenderer.invoke('diskJanitor:approve', ids),
+    onChanged: (callback: (state: unknown) => void) => {
+      const listener = (_: unknown, state: unknown) => callback(state);
+      ipcRenderer.on('diskJanitor:changed', listener);
+      return () => ipcRenderer.removeListener('diskJanitor:changed', listener);
+    },
   },
 
   // The chats of each project (handlers/chat-handlers.ts): their records,
