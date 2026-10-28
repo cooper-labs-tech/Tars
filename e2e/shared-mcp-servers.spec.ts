@@ -25,7 +25,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. the token is in no file of claude's config and in no process's command line;
  * And from the Audit's gate of #541:
  * 5. (M1) a long call's progress events reach the CLI: wait_for_agent's keep-alive (every 60 s), which keeps claude
- *    from giving the call up after 30 minutes, comes through the door as an event stream;
+ *    from giving the call up after 30 minutes, comes through the door as an event stream. The agent waited on is in a
+ *    turn that never ends (the QA's F2 on #541: idle, the wait returned at once and no keep-alive was ever sent), so
+ *    the event comes a minute in;
  * 6. (H1) claude's MCP calls carry the token to whatever holds the port, unproven: an agent started while another
  *    process holds Tars's port does not start until Tars binds it, and that process never receives a token.
  * Red on main dc623b594: claude's config holds per-agent stdio copies, there is no shared process to call.
@@ -55,9 +57,17 @@ function standIn(home: string, other: string): string {
     `const others = ${JSON.stringify(other)};`,
     "const me = process.env.CLAUDE_AGENT_ID; const token = process.env.CLAUDE_MGR_API_TOKEN || '';",
     "const seen = {};",
+    // Its own hooks, with its own token: a session, and for the agent waited on, a turn that never ends.
+    "const session = require('crypto').randomUUID();",
+    "const hook = (route, body) => fetch(process.env.CLAUDE_MGR_API_URL + route, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ agent_id: me, session_id: session, ...body }) });",
     "const done = () => fs.writeFileSync(path.join(home, `seen-${me}.json`), JSON.stringify(seen));",
     "(async () => {",
     "  try {",
+    "    await hook('/api/hooks/status', { status: 'idle', source: 'startup' });",
+    "    if (me !== 'a') {",
+    "      await hook('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'a turn that does not end' });",
+    "      fs.writeFileSync(path.join(home, `turn-${me}`), '1');",
+    "    }",
     // What claude reads: the --mcp-config Tars starts it with (the role file), then its user scope.
     "    const at = process.argv.indexOf('--mcp-config');",
     "    const files = [...(at >= 0 ? [process.argv[at + 1]] : []), path.join(home, '.claude.json')];",
@@ -79,6 +89,7 @@ function standIn(home: string, other: string): string {
     "    seen.tokenInCommandLines = process.platform !== 'win32' && !!token && execFileSync('ps', ['-A', '-o', 'command='], { encoding: 'utf8', maxBuffer: 64 << 20 }).includes(token);",
     // 5. A long call's keep-alive: wait_for_agent on the other agent, which never ends its turn here.
     "    if (me === 'a') {",
+    "      while (!fs.existsSync(path.join(home, `turn-${others}`))) await new Promise(r => setTimeout(r, 200));",
     "      const stop = new AbortController();",
     "      const started = Date.now();",
     "      const r2 = await post({ jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'wait_for_agent', arguments: { id: others, timeoutSeconds: 300 }, _meta: { progressToken: 'keep' } } }, {}, headers, stop.signal);",
@@ -185,6 +196,8 @@ for (const newInterface of [false, true]) {
       // 5. The keep-alive's progress event came through the door, as an event stream.
       expect(a.waitType).toContain('text/event-stream');
       expect(a.progress?.event).toMatchObject({ method: 'notifications/progress', params: { progressToken: 'keep' } });
+      // A real wait: the agent waited on is in its turn, and the keep-alive comes a minute in.
+      expect(a.progress?.after ?? 0).toBeGreaterThanOrEqual(50_000);
     } finally {
       await app.close().catch(() => undefined);
       await removeHome(home);
