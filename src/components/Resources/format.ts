@@ -1,12 +1,16 @@
 /**
  * The Resources page's words for figures: sizes in the units the frames use (MB under a gigabyte, GB with one decimal
  * above), clock times, and "since 14:02 · 12 min". A figure Tars could not read is said as such, never as zero.
+ *
+ * One unit in the whole window, Tars's own: a GB is 1024³ bytes, as the heavy-run slot reads the disk and applies its
+ * floor and alerts (health/machine.ts), and as Settings · System shows it (lib/orphan-folders.ts). In 10⁹ bytes the
+ * free disk read above the slot's floor while a run waited for disk (the Audit's M1 at the re-check of PR 539).
  */
 
 export const NOT_READ = 'not read';
 
-const GB = 1e9;
-const MB = 1e6;
+const MB = 1024 ** 2;
+const GB = 1024 ** 3;
 
 export function bytes(n: number | null | undefined): string {
   if (n === null || n === undefined || !Number.isFinite(n)) return NOT_READ;
@@ -15,7 +19,13 @@ export function bytes(n: number | null | undefined): string {
   return `${(n / GB).toFixed(1)} GB`;
 }
 
-export const mb = (n: number | null | undefined) => (n === null || n === undefined ? NOT_READ : bytes(n * MB));
+/** A disk figure in bytes, in the slot's GB. */
+export const diskGb = (n: number) => n / GB;
+
+/** A figure the backends give in MB (KB / 1024), in bytes. */
+export const mbBytes = (n: number) => n * MB;
+
+export const mb = (n: number | null | undefined) => (n === null || n === undefined ? NOT_READ : bytes(mbBytes(n)));
 export const gb = (n: number | null | undefined) => (n === null || n === undefined ? NOT_READ : `${n.toFixed(1)} GB`);
 export const pct = (n: number | null | undefined) => (n === null || n === undefined ? NOT_READ : `${Math.round(n)} %`);
 

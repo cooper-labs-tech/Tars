@@ -5,7 +5,7 @@ import { Check, Lock, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui';
 import type { JanitorItem } from '@/types/electron';
 import { Box, Empty, Figure, Figures, Notice, Unread } from './bits';
-import { bytes, gb, stamp, sum } from './format';
+import { bytes, diskGb, gb, stamp, sum } from './format';
 import { useDiskJanitor, useDiskSpace } from './hooks';
 
 /** Each kind of item, one group, under the window's own title; the items' line is the rule they matched. */
@@ -78,7 +78,7 @@ export function DiskView() {
   const proposedBytes = sum(open.map((i) => i.bytes ?? 0)) ?? 0;
   const freedWeek = (state?.log ?? []).filter((l) => l.at > weekStart && (l.bytes ?? 0) > 0);
   const freedBytes = sum(freedWeek.map((l) => l.bytes ?? 0)) ?? 0;
-  const diskFree = disk ? disk.freeBytes / 1e9 : null;
+  const diskFree = disk ? diskGb(disk.freeBytes) : null;
   const deleting = state?.deleting ?? null;
   const scanning = Boolean(state?.scan?.running);
   const busy = scanning || deleting !== null;
@@ -99,7 +99,7 @@ export function DiskView() {
     <section role="region" aria-label="Disk" className="flex flex-col gap-3 min-h-0 flex-1">
       <Figures>
         <Figure volatile caption="FREE DISK" value={gb(diskFree)} tone={diskFree == null ? undefined : diskFree < 6 ? 'error' : diskFree < 10 ? 'waiting' : undefined}
-          sub={disk ? `of ${gb(disk.totalBytes / 1e9)} · floor ${Math.round(disk.floorBytes / 1e9)} GB` : 'cannot be read'} />
+          sub={disk ? `of ${gb(diskGb(disk.totalBytes))} · floor ${Math.round(diskGb(disk.floorBytes))} GB` : 'cannot be read'} />
         <Figure caption="PROPOSED" value={state?.scan ? bytes(proposedBytes) : '0 B'} sub={state?.scan ? `${count(open.length)} in ${groups.length} ${groups.length === 1 ? 'group' : 'groups'}` : 'no scan yet'} />
         <Figure caption="TICKED" value={bytes(tickedBytes)} sub={count(tickedItems.length)} />
         <Figure caption="FREED THIS WEEK" value={bytes(freedBytes)} sub={`${count(freedWeek.length)}, each in the log`} />
