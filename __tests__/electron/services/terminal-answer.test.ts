@@ -35,6 +35,18 @@ import { encodeProjectDirName, transcriptPath } from '../../../electron/utils/re
  *     account's folder as CLAUDE_CONFIG_DIR, which keeps its transcripts:
  *     looked for under ~/.claude alone, its answer is never found, and the
  *     hooks' 4000 byte copy is returned instead (added before its code).
+ *
+ * Added with the orchestrators' feedback of 28/10 (the DB brief
+ * fix-answer-per-task-2810.md), before the code: the answer is the task's
+ * report, the longest message of its turn, and what the agent wrote after it.
+ * 13. a memory note, or a short closing line ("Done."), written after the
+ *     report replaces it: the asker reads "Saving the durable lessons to
+ *     memory" where the report was (1212's t-acc9dc33, t-0bc5637d);
+ * 14. the narration written before the report ("Let me read the notes") is
+ *     taken into the answer;
+ * 15. an answer past what is kept is cut without saying so;
+ * 16. two messages as long as each other: the earlier is taken, and what the
+ *     agent wrote last is lost.
  */
 
 const T0 = Date.parse('2026-10-18T03:00:00.000Z');
@@ -47,6 +59,41 @@ const user = (s: number, text: string, extra: Record<string, unknown> = {}) => J
 });
 const text = (t: string) => ({ type: 'text', text: t });
 const window = { since: T0, until: T0 + 60_000 };
+
+describe('the report of a task, and what follows it (the DB brief fix-answer-per-task-2810.md)', () => {
+  const REPORT = `## Report\n\nPR #658 updated: the migration is reversible, and the two queries got their index. ${'Detail. '.repeat(40)}`;
+  it('keeps the report when a memory note and a closing line follow it (13)', () => {
+    const lines = [
+      user(1, 'ship the migration'),
+      assistant(2, 'm1', [text('Let me look at the migration.')]),
+      assistant(3, 'm2', [text(REPORT)]),
+      assistant(4, 'm3', [{ type: 'tool_use', id: 'tu1', name: 'Write', input: { file_path: 'memory/MEMORY.md' } }]),
+      user(5, 'ok', { toolUseResult: {} }),
+      assistant(6, 'm4', [text('Saving the durable lessons to memory.')]),
+      assistant(7, 'm5', [text('Done.')]),
+    ];
+    expect(finalAnswerOf(lines, window)).toBe(`${REPORT}\n\nSaving the durable lessons to memory.\n\nDone.`);
+  });
+
+  it('leaves out what was written before the report (14)', () => {
+    const lines = [assistant(2, 'm1', [text('Let me look at the migration.')]), assistant(3, 'm2', [text(REPORT)])];
+    expect(finalAnswerOf(lines, window)).toBe(REPORT);
+  });
+
+  it('says where it cut an answer past what is kept (15)', async () => {
+    const { ANSWER_MAX } = await import('../../../electron/services/terminal-answer');
+    const long = 'x'.repeat(ANSWER_MAX + 500);
+    const answer = finalAnswerOf([assistant(2, 'm1', [text(long)])], window)!;
+    expect(answer.startsWith('x'.repeat(1000))).toBe(true);
+    expect(answer).toMatch(new RegExp(`\\[cut at ${ANSWER_MAX} of ${ANSWER_MAX + 500} characters\\]$`));
+    expect(Array.from(answer).length).toBeLessThan(ANSWER_MAX + 100);
+  });
+
+  it('takes the later of two messages as long as each other (16)', () => {
+    const lines = [assistant(2, 'm1', [text('first of two')]), assistant(3, 'm2', [text('later of two')])];
+    expect(finalAnswerOf(lines, window)).toBe('later of two');
+  });
+});
 
 describe('the final answer of a task, from its transcript lines', () => {
   it('is the last message the agent wrote for the task (1, 3)', () => {

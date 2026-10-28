@@ -773,3 +773,29 @@ describe('a delegation into the agent\'s own terminal (2.0.4)', () => {
     expect(open().task(id)!.result).toBeUndefined();
   });
 });
+
+describe('an agent\'s last answer (the DB brief fix-answer-per-task-2810.md)', () => {
+  // How this fails, written before the code: get_agent_output reads the hooks' last copy, which the agent's next turn
+  // empties, and says "No clean output captured yet" while task_status holds the answer; or it gives another agent's,
+  // or an older task's, or nothing after a restart.
+  const run = (agentId: string) => ({ agent: agent({ id: agentId, provider: 'opencode', model: null as never }), requesterAgentId: 'p1', text: 'review the notes', startedAt: clock });
+  it('A1. is the answer of its latest ended task that has one, by its id, after a restart too', () => {
+    const ledger = open();
+    const first = ledger.acpStarted(run('oc'));
+    clock += 1_000;
+    ledger.acpEnded(first, { outcome: 'completed', stopReason: 'end_turn', result: 'FIRST answer' });
+    clock += 1_000;
+    const other = ledger.acpStarted(run('xx'));
+    clock += 1_000;
+    ledger.acpEnded(other, { outcome: 'completed', stopReason: 'end_turn', result: 'ANOTHER agent' });
+    const second = ledger.acpStarted(run('oc'));
+    clock += 1_000;
+    ledger.acpEnded(second, { outcome: 'completed', stopReason: 'end_turn', result: 'SECOND answer' });
+    clock += 1_000;
+    // Its next task, open, with no answer yet: the last answer stays the second's.
+    ledger.acpStarted(run('oc'));
+    expect(ledger.lastAnswerOf('oc')).toMatchObject({ taskId: second, result: 'SECOND answer' });
+    expect(open().lastAnswerOf('oc')).toMatchObject({ taskId: second, result: 'SECOND answer' });
+    expect(open().lastAnswerOf('nobody')).toBeUndefined();
+  });
+});
