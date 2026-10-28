@@ -1,3 +1,4 @@
+import { measureFleetDisk, readFleetResources } from '../services/fleet-resources-runtime';
 import { safeGit, safeGitSync } from '../utils/safe-git';
 import { ipcMain, dialog, shell, app } from 'electron';
 import { stopTask, taskBannerOf } from '../services/task-banner';
@@ -1132,6 +1133,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     owned: [...agents.values()].flatMap(a => [a.worktreePath, a.projectPath, a.secondaryProjectPath]).filter((p): p is string => !!p),
   });
   ipcMain.handle('system:disk', async () => diskSpace());
+  // What each agent and each project costs (services/fleet-resources-runtime.ts): the disk is measured only when asked,
+  // and the window follows it through resources:changed.
+  ipcMain.handle('resources:read', async () => readFleetResources());
+  ipcMain.handle('resources:measureDisk', () => {
+    void measureFleetDisk().catch(err => console.warn('[resources] the disk could not be measured:', err));
+    return { success: true };
+  });
   ipcMain.handle('system:orphanFolders', async () => listOrphanFolders(orphanScope()));
   // The rows the window showed and the person confirmed: nothing else goes.
   ipcMain.handle('system:removeOrphanFolders', async (_event, paths: unknown) => {
