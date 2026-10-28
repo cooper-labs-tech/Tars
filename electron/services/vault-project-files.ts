@@ -78,7 +78,7 @@ const root = () => path.join(DATA_DIR, PROJECT_FILES_DIR_NAME);
  * `~/.tars/project-files -> ~` would open the whole home folder to the window. A link above it (`~/.tars` itself,
  * a /var of the system) is the system's or the user's, and is not looked at.
  */
-function rootIsLink(): boolean {
+export function rootIsLink(): boolean {
   try { return fs.lstatSync(root()).isSymbolicLink(); } catch { return false; }
 }
 

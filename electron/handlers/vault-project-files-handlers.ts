@@ -6,7 +6,7 @@ import { agents } from '../core/agent-manager';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { PROJECT_FILES_DIR_NAME } from '../utils/project-files';
 import {
-  listProjectFolders, listProjectFiles, listProjectPlace, readProjectFile, writeProjectFile, locateProjectFile, SUBFOLDERS, isHeavy,
+  listProjectFolders, listProjectFiles, listProjectPlace, readProjectFile, writeProjectFile, locateProjectFile, SUBFOLDERS, isHeavy, rootIsLink,
 } from '../services/vault-project-files';
 
 /**
@@ -39,11 +39,17 @@ const pending = new Map<string, NodeJS.Timeout>();
  * Watched once a window has asked for the folders: a write, a removal or a
  * rename in any folder of a project's folder, said by the folder it happened
  * in. What happens in a heavy or a hidden folder, or to a hidden file (a
- * save's temporary file), is not shown anywhere, so it is not said.
+ * save's temporary file), is not shown anywhere, so it is not said. A root that is a link is
+ * not watched, as the listing refuses it (the Audit's Info at 5a7a1266 on #530): planted as `-> ~`, it would watch
+ * the whole home folder and tell the window its folder names. Asked again at the next listing.
  */
 function watchProjectFiles(): void {
   if (watcher) return;
   const root = path.join(DATA_DIR, PROJECT_FILES_DIR_NAME);
+  if (rootIsLink()) {
+    console.warn('[vault] the folder of the project folders is a link: it is not watched');
+    return;
+  }
   try {
     fs.mkdirSync(root, { recursive: true });
     watcher = fs.watch(root, { recursive: true }, (_event, filename) => {
