@@ -1273,6 +1273,12 @@ export interface AgentResources {
   processes: AgentProcess[];
   worktrees: MeasuredPath[];
   tmp: MeasuredPath | null;
+  /**
+   * What its ended session left running (#523's records, services/born-watch.ts): since when (ms), each process with
+   * its pid and its command line masked by the window's rule, and its containers as `<name> (<id>)`. Null when nothing
+   * was left running, and always on Windows, where no process is read.
+   */
+  outlived: { since: number | null; processes: Array<{ pid: number; command: string }>; containers: string[] } | null;
 }
 /** What a project costs: its agents, and their sums. */
 export interface ProjectResources {

@@ -49,7 +49,7 @@ export async function readFleetResources(): Promise<FleetResources> {
   const t = await tableNow();
   const fleet = [...agents.values()].filter(a => a.kind !== 'chat').map(a => ({
     id: a.id, name: a.name || a.id, status: a.status, statusSince: a.statusSince, asleepSince: a.asleepSince,
-    projectPath: a.projectPath, worktreePath: a.worktreePath,
+    projectPath: a.projectPath, worktreePath: a.worktreePath, leftRunning: a.leftRunning,
     terminalPid: a.ptyId ? ptyProcesses.get(a.ptyId)?.pid : undefined,
   }));
   const built = buildFleetResources({ readAt: t.rows ? t.at : null, agents: fleet, table: t.rows, disk, tmpOf });

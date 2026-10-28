@@ -20,6 +20,8 @@ export type FleetInput = {
   agents: Array<{
     id: string; name: string; status: string; statusSince?: string; asleepSince?: string;
     projectPath: string; worktreePath?: string; terminalPid?: number;
+    /** What its ended session left running, as core/born-processes.ts recorded it (services/born-watch.ts, #523). */
+    leftRunning?: { pids: number[]; commands: string[]; containers: string[]; since: string };
   }>;
   /** Every process, or null where the table cannot be read (Windows, a ps that failed). */
   table: ProcessRow[] | null;
@@ -30,6 +32,8 @@ export type FleetInput = {
 
 export interface AgentProcess { name: string; pid: number; memMb: number | null; cpuPct: number | null; /** Secrets masked (redact-command-line.ts). */ command: string }
 export interface MeasuredPath { path: string; bytes: number | null }
+/** What an agent's ended session left running (#523's records): each process with its command line masked, its containers. */
+export interface Outlived { since: number | null; processes: Array<{ pid: number; command: string }>; containers: string[] }
 export interface AgentResources {
   id: string;
   name: string;
@@ -41,6 +45,8 @@ export interface AgentResources {
   processes: AgentProcess[];
   worktrees: MeasuredPath[];
   tmp: MeasuredPath | null;
+  /** Null when nothing was left running (and on Windows, where born-watch reads no process). */
+  outlived: Outlived | null;
 }
 export interface ProjectResources {
   path: string;
@@ -88,6 +94,16 @@ function treeOf(root: number, children: Map<number, ProcessRow[]>, rows: Map<num
   return out;
 }
 
+/** #523's `pid <n>: <command>` lines, each command masked by the window's rule (redact-command-line.ts). */
+function outlivedOf(left: FleetInput['agents'][number]['leftRunning']): Outlived | null {
+  if (!left || (!left.pids.length && !left.containers.length)) return null;
+  const processes = left.commands.map((line) => {
+    const m = /^pid (\d+): ([\s\S]*)$/.exec(line);
+    return m ? { pid: Number(m[1]), command: redactCommandLine(m[2]) } : null;
+  }).filter((p): p is { pid: number; command: string } => p !== null);
+  return { since: time(left.since), processes, containers: [...left.containers] };
+}
+
 export function buildFleetResources(input: FleetInput): FleetResources {
   const rows = new Map((input.table ?? []).map(r => [r.pid, r]));
   const children = new Map<number, ProcessRow[]>();
@@ -106,6 +122,7 @@ export function buildFleetResources(input: FleetInput): FleetResources {
       processes,
       worktrees: a.worktreePath ? [measured(a.worktreePath)] : [],
       tmp: measured(input.tmpOf(a.id)),
+      outlived: outlivedOf(a.leftRunning),
     };
     return { project: a.projectPath, resources, ...resources };
   });

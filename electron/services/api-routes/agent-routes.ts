@@ -2158,6 +2158,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       } } : {}),
       memMb: resources.get(a.id)?.memMb ?? null,
       statusSince: a.statusSince,
+      // What its ended session left running (#523's records): how many processes and containers, 0 when none.
+      outlived: (a.leftRunning?.pids.length ?? 0) + (a.leftRunning?.containers.length ?? 0),
     }));
     sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
   });
@@ -2184,6 +2186,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const resources = {
       memMb: r?.memMb ?? null, cpuPct: r?.cpuPct ?? null,
       processes: (r?.processes ?? []).map(({ name, pid, memMb, cpuPct }: AgentProcess) => ({ name, pid, memMb, cpuPct })),
+      // What its ended session left running (#523's records): pids and containers, never a command line.
+      outlived: agent.leftRunning && (agent.leftRunning.pids.length || agent.leftRunning.containers.length)
+        ? { since: agent.leftRunning.since, pids: [...agent.leftRunning.pids], containers: [...agent.leftRunning.containers] }
+        : null,
     };
     sendJson({ agent: {
       ...(agent.permissionAsk ? {

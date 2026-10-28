@@ -86,7 +86,7 @@ describe('an orchestrator reads its agents\' resources', () => {
 
   it('A2. get_agent gives its tree\'s memory, CPU and processes, masked', async () => {
     const { agent } = await get('/api/agents/a', { id: 'a' }) as { agent: Record<string, unknown> };
-    expect(agent.resources).toEqual({ memMb: 770, cpuPct: 50.5, processes: [{ name: 'claude', memMb: 512, cpuPct: 40 }] });
+    expect(agent.resources).toEqual({ memMb: 770, cpuPct: 50.5, processes: [{ name: 'claude', memMb: 512, cpuPct: 40 }], outlived: null });
   });
 });
 
