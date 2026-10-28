@@ -15,6 +15,7 @@ import { registerBusRoutes } from './bus-routes';
 import { registerAskUserRoutes } from './ask-user-routes';
 import { registerTaskRoutes } from './task-routes';
 import { registerHeavySlotRoutes } from './heavy-slot-routes';
+import { registerJanitorRoutes } from './janitor-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -33,6 +34,8 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerAskUserRoutes(app, ctx);
   registerTaskRoutes(app);
   registerHeavySlotRoutes(app);
+  // The disk janitor's scan, for an agent that asks: read only (services/disk-janitor.ts).
+  registerJanitorRoutes(app);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';

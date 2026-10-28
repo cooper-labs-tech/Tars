@@ -12,7 +12,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
-import { registerAgentTools, registerChatTools, registerGuideTools, registerHeavySlotTools, registerMessagingTools, registerRoomTools } from "./tools/index.js";
+import { registerAgentTools, registerChatTools, registerDiskTools, registerGuideTools, registerHeavySlotTools, registerMessagingTools, registerRoomTools } from "./tools/index.js";
 
 // Create MCP server
 const server = new McpServer({
@@ -27,6 +27,7 @@ registerRoomTools(server);
 registerChatTools(server);
 registerGuideTools(server);
 registerHeavySlotTools(server);
+registerDiskTools(server);
 
 // Start the server
 async function main() {

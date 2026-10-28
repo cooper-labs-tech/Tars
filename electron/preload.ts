@@ -934,6 +934,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     // How many chats may work at once: one per 5 GB of RAM, from 1 to 8.
     chatLimit: () => ipcRenderer.invoke('system:chatLimit'),
+    // The disk janitor: what it proposes, and the owner's approval of the items the window showed.
+    janitorScan: () => ipcRenderer.invoke('system:janitorScan'),
+    janitorApprove: (ids: string[]) => ipcRenderer.invoke('system:janitorApprove', ids),
   },
 
   // The chats of each project (handlers/chat-handlers.ts): their records,

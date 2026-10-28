@@ -4,3 +4,4 @@ export { registerRoomTools } from "./rooms.js";
 export { registerChatTools } from "./chats.js";
 export { registerGuideTools } from "./guide.js";
 export { registerHeavySlotTools } from "./heavy.js";
+export { registerDiskTools } from "./disk.js";

@@ -1143,6 +1143,30 @@ export interface OrphanFolder {
   /** The newest change in it (caches and .git aside), or null. */
   lastChangedAt: string | null;
 }
+/** One item the disk janitor proposes (electron/services/janitor-rules.ts). */
+export interface JanitorItem {
+  id: string;
+  kind: 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp';
+  /** The folder that goes, absolute. */
+  path?: string;
+  /** A Docker image's id, or `colima` for the VM's trim. */
+  ref?: string;
+  /** The worktree or the project it is in. */
+  project?: string;
+  label: string;
+  /** 0 for the VM's trim, whose gain is not known before. */
+  sizeBytes: number;
+  /** The rule that matched, in words. */
+  rule: string;
+}
+
+/** What an approval did: what went, what it freed, and what was kept with why. */
+export interface JanitorReport {
+  removed: number;
+  freedBytes: number;
+  kept: Array<{ id: string; label: string; why: string }>;
+}
+
 export interface OrphanListing {
   folders: OrphanFolder[];
   count: number;
@@ -2535,6 +2559,14 @@ export interface ElectronAPI {
     onOrphanRemovalProgress: (callback: (progress: OrphanRemovalProgress) => void) => () => void;
     /** How many chats may work at once, and where that figure came from. */
     chatLimit: () => Promise<ChatLimit>;
+    /** What the disk janitor proposes now, by rule (electron/services/janitor-rules.ts): it deletes nothing. */
+    janitorScan: () => Promise<{ items: JanitorItem[] } | { error: string }>;
+    /**
+     * The owner's approval, by the ids of the items the last scan showed: each is checked again against its rule just
+     * before it goes, deleted by its exact path, and logged (~/.tars/logs/janitor.log). What no longer matches is kept,
+     * with why.
+     */
+    janitorApprove: (ids: string[]) => Promise<JanitorReport | { error: string }>;
   };
 
   /** The chats of each project. Mirror of the `chat` namespace in electron/preload.ts. */
