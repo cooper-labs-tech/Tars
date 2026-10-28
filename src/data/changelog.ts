@@ -37,7 +37,7 @@ export const CHANGELOG: Release[] = [
       'A new Resources page, between Usage and Brain, shows the heavy-run slot, the memory and CPU of each agent and each project, their disk when you ask, each agent\'s processes with any secret in their command lines masked, and what kept running after an agent\'s session. An orchestrator reads the same for its own project\'s agents, each process by its program and pid only. On Windows memory, CPU and processes read not read, and nothing is shown of what kept running.',
       'Tars\'s own Telegram bot is gone: Telegram goes through Hermes only. A bot token Tars still finds is named so you can revoke it, and the unused Default provider row leaves Settings.',
       'A task goes into an agent once: it is typed again only when its CLI is shown to have dropped it, and the end of an agent\'s turn is told to its orchestrator once.',
-      'A delegated task\'s answer is now its own report and what followed it, read by its task id, on Claude Code, Qwen Code, the API-key providers, Codex and Pi; on Gemini CLI it is still the turn\'s one answer.',
+      'A delegated task\'s answer is now its own report and what followed it, read by its task id, on Claude Code, Qwen Code, the API-key providers, Codex and Pi; on Gemini CLI it is still the turn\'s one answer. An agent\'s answers are read by whoever asked the task, the agent itself, its project\'s orchestrator and Tars, and by nobody else.',
     ],
   },
   {

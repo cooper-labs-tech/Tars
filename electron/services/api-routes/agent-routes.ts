@@ -2039,18 +2039,37 @@ function whenItApplies(
   return { applies: 'now', session: 'kept', text: 'Its CLI already runs on these settings: its session goes on as it is.' };
 }
 
+/** What a caller Tars withholds an agent's answers from is told: whose they are. */
+const ANSWERS_ARE = "its answers are read by its task's asker, the agent itself, its project's orchestrator and Tars";
+
+/**
+ * Who reads an agent's answers, its tasks' reports and the hooks' copy of the last one (`lastCleanOutput`): the task's
+ * asker, the agent itself, its project's orchestrator (or a chat's runner, which has its powers), and Tars; the owner's
+ * window reads them through IPC. Nobody else, neither the report nor the hooks' copy, which would leak what the rule
+ * keeps (the orchestrator's decision on the Audit's L1 on #550). `asker`: the task's, when the answer is one task's.
+ */
+function readsAnswersOf(agent: AgentStatus, req: RouteRequest, asker?: string | null): boolean {
+  if (req.internal) return true;
+  const callerId = resolveCallerId(req);
+  if (!callerId) return false;
+  if (callerId === agent.id || callerId === asker) return true;
+  const caller = agents.get(callerId);
+  return !!caller && hasOrchestratorPowers(caller) && caller.projectPath === agent.projectPath;
+}
+
 /**
  * The agent's last task's answer, kept in the ledger whatever the agent did next and across a restart: what
- * get_agent_output gives without a task id (the DB brief fix-answer-per-task-2810.md). Read by whom GET /api/tasks/:id
- * answers: the task's asker, the agent itself, or Tars; nobody else is shown it.
+ * get_agent_output gives without a task id (the DB brief fix-answer-per-task-2810.md), and the hooks' copy beside it,
+ * for those who read its answers (readsAnswersOf); anyone else is told whose they are, and gets neither.
  */
-function lastAnswerFor(agent: AgentStatus, req: RouteRequest): { taskId: string; result: string; endedAt: number | null } | undefined {
+function answersFor(agent: AgentStatus, req: RouteRequest):
+  | { reads: true; lastAnswer?: { taskId: string; result: string; endedAt: number | null } }
+  | { reads: false; withheld: { taskId?: string; reason: string } } {
   const ledger = liveTaskLedger();
   const last = ledger?.lastAnswerOf(agent.id);
-  if (!last) return undefined;
-  const callerId = resolveCallerId(req);
-  if (req.internal || callerId === agent.id || (callerId && callerId === ledger?.task(last.taskId)?.requesterAgentId)) return last;
-  return undefined;
+  const asker = last ? ledger?.task(last.taskId)?.requesterAgentId : agent.requestedBy?.agentId;
+  if (readsAnswersOf(agent, req, asker ?? agent.requestedBy?.agentId)) return { reads: true, ...(last ? { lastAnswer: last } : {}) };
+  return { reads: false, withheld: { ...(last ? { taskId: last.taskId } : {}), reason: ANSWERS_ARE } };
 }
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
@@ -2072,7 +2091,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         status: agent.status,
         // Asleep: a message wakes it on its conversation (core/agent-asleep.ts).
         asleepSince: agent.asleepSince,
-        lastCleanOutput: agent.lastCleanOutput,
+        lastCleanOutput: readsAnswersOf(agent, req, agent.requestedBy?.agentId) ? agent.lastCleanOutput : undefined,
         error: agent.error,
         waitingReason: agent.waitingReason,
         ...stopOf(agent),
@@ -2106,7 +2125,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const a = agents.get(agentId);
       sendJson({
         status: a?.status || 'idle',
-        lastCleanOutput: a?.lastCleanOutput,
+        lastCleanOutput: a && readsAnswersOf(a, req, a.requestedBy?.agentId) ? a.lastCleanOutput : undefined,
         error: a?.error,
         waitingReason: a?.waitingReason,
         ...(a ? stopOf(a) : {}),
@@ -2125,7 +2144,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         const a = agents.get(agentId);
         sendJson({
           status: a?.status || 'running',
-          lastCleanOutput: a?.lastCleanOutput,
+          lastCleanOutput: a && readsAnswersOf(a, req, a.requestedBy?.agentId) ? a.lastCleanOutput : undefined,
           timeout: true,
         });
       }
@@ -2220,15 +2239,16 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         ? { since: agent.leftRunning.since, pids: [...agent.leftRunning.pids], containers: [...agent.leftRunning.containers] }
         : null,
     };
-    // Its last answer, for the task the caller handed it (#550).
-    const lastAnswer = lastAnswerFor(agent, req);
+    // Its last answer and the hooks' copy, for those who read its answers (#550, readsAnswersOf); anyone else is told whose.
+    const answers = answersFor(agent, req);
+    const { lastCleanOutput, ...shown } = view;
     sendJson({ agent: {
       ...(agent.permissionAsk ? {
-        ...view, permissionAsk: maskedAsk(agent.permissionAsk),
-        ...(view.waitingOn ? { waitingOn: { ...view.waitingOn, text: redactSecrets(view.waitingOn.text) } } : {}),
-      } : view),
+        ...shown, permissionAsk: maskedAsk(agent.permissionAsk),
+        ...(shown.waitingOn ? { waitingOn: { ...shown.waitingOn, text: redactSecrets(shown.waitingOn.text) } } : {}),
+      } : shown),
+      ...(answers.reads ? { ...(lastCleanOutput !== undefined ? { lastCleanOutput } : {}), ...(answers.lastAnswer ? { lastAnswer: answers.lastAnswer } : {}) } : { answersWithheld: answers.withheld }),
       ...(queue ? { queue } : {}),
-      ...(lastAnswer ? { lastAnswer } : {}),
       resources,
     } });
   });
@@ -2521,8 +2541,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const newCli = result.changed.includes('provider') || result.changed.includes('cliPath');
       const newBinary = getProvider(result.agent.provider).binaryName !== binaryBefore;
       if (newBinary) newConversationOnNextStart(agent.id);
+      const { lastCleanOutput, ...updated } = projectAgent(result.agent);
       sendJson({
-        agent: projectAgent(result.agent),
+        agent: { ...updated, ...(readsAnswersOf(result.agent, req, result.agent.requestedBy?.agentId) && lastCleanOutput !== undefined ? { lastCleanOutput } : {}) },
         changed: result.changed,
         ...whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart }),
       });
@@ -2816,7 +2837,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const waitS = Math.min(Math.max(Number(req.url.searchParams.get('wait')) || 0, 0), TASK_WAIT_MAX_S);
     const until = Date.now() + waitS * 1000;
     let queued = id ? oneTaskQueue.lookup(id) : undefined;
-    if (queued && callerId && callerId !== queued.task.requesterId && callerId !== queued.task.agentId) queued = undefined;
+    // Its asker, the agent that runs it, its project's orchestrator (readsAnswersOf), or Tars.
+    const readsTask = (agentId: string, requesterId: string | null | undefined) => {
+      const worker = agents.get(agentId);
+      return !callerId || callerId === agentId || callerId === requesterId || (!!worker && readsAnswersOf(worker, req, requesterId));
+    };
+    if (queued && !readsTask(queued.task.agentId, queued.task.requesterId)) queued = undefined;
     // Its asker waits on it here: its end is this answer, and is not typed
     // into the asker's terminal as well (agent-watch.ts, isWaitingOn).
     const followed = queued && waitS > 0 && callerId && callerId === queued.task.requesterId ? followTask(queued.task.agentId, callerId) : undefined;
@@ -2844,7 +2870,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         return;
       }
       let found = id ? liveTaskLedger()?.task(queued?.state === 'started' ? queued.taskId : id) : undefined;
-      if (!found || (callerId && callerId !== found.requesterAgentId && callerId !== found.agentId)) {
+      if (!found || !readsTask(found.agentId, found.requesterAgentId)) {
         // An id of the queue's shape: a task that waited its turn in another run of Tars.
         sendJson({ error: /^t-[0-9a-f]{8}$/.test(id) ? unknownTaskText(oneTaskQueue.since) : 'No such task.' }, 404);
         return;
