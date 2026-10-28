@@ -619,6 +619,11 @@ app.whenReady().then(async () => {
     everyMs: healthEveryMs(),
     agents: () => ({ total: agents.size, running: [...agents.values()].filter((a) => a.status === 'running').length }),
     page: () => pageOf(getMainWindow()?.webContents.getURL()),
+    // Each agent's whole tree, weighed on the same sample (services/health/machine.ts, 2.0.5).
+    agentTerminals: () => [...agents.values()].flatMap((a) => {
+      const terminal = a.ptyId ? ptyProcesses.get(a.ptyId) : undefined;
+      return terminal ? [{ id: a.id, pid: terminal.pid }] : [];
+    }),
   });
   registerDiagnosticHandlers({ reports: errorReports, samplesFile: HEALTH_FILE, known: healthWords });
   // Bound how much a crash can lose: PTY-driven fields reach disk on a timer.
