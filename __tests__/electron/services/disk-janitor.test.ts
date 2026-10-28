@@ -31,6 +31,20 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  * And for the window (the Frontend's contract on #539, `Resources (2.0.5) · disk`):
  * J13. An item does not say why it matched (its last change, the merged branch, the image's name), or the window
  *      cannot tell, item by item, what an approval did: deleted with its bytes, kept with why, failed with the error.
+ * And from the Audit's gate of #542 (AUDIT-PR542.md), and the window's frames (#535, the Audit's Info 1 on #543):
+ * J14. (M1) "Nothing runs in it" reads only working folders: six live sentry-mcp servers ran from an npx entry with
+ *      their working folder elsewhere, and the entry was proposed. A process is in a folder by its working folder,
+ *      its command line, or its executable and open files.
+ * J15. (M2) A merged worktree goes with its ignored files (a .env.local, an e2e run), or in the middle of a rebase,
+ *      which scripts/worktree.mjs refuses: rebuildable caches aside, it is not proposed.
+ * J16. (L1) A project under ~/Documents, or a .worktrees linked into it, has an item proposed.
+ * J17. (L2) A fleet agent's worktree saved in another case than the disk's is not recognised as its own.
+ * J18. (L3) A merged worktree with a node_modules reads as just touched (its 20,000 entries), and is never proposed:
+ *      the rebuildable caches are left out of the idle walk.
+ * J19. (L4) A link planted on a parent between the re-check and the deletion is followed: right before it goes, the
+ *      item's real path must be its path, and a folder.
+ * J20. A worktree item does not give its details (branch, merged, idle days, clean), or its branch is in the rule's
+ *      text, which the window groups by; or a scan does not say how far it is.
  */
 
 const DAY = 86_400_000;
@@ -51,7 +65,8 @@ function mk(p: string, ageDays = 10): string {
 }
 
 type Over = Partial<{
-  fleet: JanitorWorld['fleet']; cwds: JanitorWorld['cwds']; dirty: Set<string>; merged: Set<string>; locked: Set<string>;
+  fleet: JanitorWorld['fleet']; processes: JanitorWorld['processes']; dirty: Set<string>; merged: Set<string>; locked: Set<string>;
+  ignored: Record<string, string[]>; busy: Set<string>;
   named: string[]; images: Array<{ id: string; repo: string; sizeBytes: number; used: boolean }> | null; vm: boolean;
 }>;
 
@@ -61,7 +76,9 @@ function world(over: Over = {}): JanitorWorld {
     home, dataDir: path.join(home, '.tars'), privateDir: path.join(home, '.tars-private'), now,
     projects: [project],
     fleet: over.fleet ?? [{ id: 'agent-live', projectPath: project, worktreePath: wt('agents') }],
-    cwds: over.cwds === undefined ? [{ pid: 7, command: 'zsh', cwd: wt('busy') }] : over.cwds,
+    processes: over.processes === undefined ? [{ pid: 7, command: 'zsh', paths: [wt('busy')] }] : over.processes,
+    ignored: async (p) => (over.ignored ?? {})[path.basename(p)] ?? [],
+    operation: async (p) => ((over.busy ?? new Set()).has(path.basename(p)) ? 'a rebase' : null),
     worktrees: async () => ['done', 'dirty', 'locked', 'agents', 'busy', 'fresh', 'open'].map(n => ({
       path: wt(n), branch: `b/${n}`, locked: (over.locked ?? new Set(['locked'])).has(n),
     })),
@@ -146,7 +163,7 @@ describe('the scan', () => {
   });
 
   it('J9. the processes unread, nothing that needs "nothing runs in it" is proposed', async () => {
-    const items = await scanJanitor(world({ cwds: null }));
+    const items = await scanJanitor(world({ processes: null }));
     expect(items.map(i => i.kind).sort()).toEqual(['docker-image', 'docker-vm-trim']);
   });
 
@@ -176,7 +193,7 @@ describe('the approval', () => {
     const items = await scanJanitor(world());
     const id = (k: string) => items.find(i => keyOf(i) === k)!.id;
     const changed = () => world({
-      cwds: [{ pid: 9, command: 'next-server', cwd: path.join(project, '.worktrees', 'open') }],
+      processes: [{ pid: 9, command: 'next-server', paths: [path.join(project, '.worktrees', 'open')] }],
       fleet: [{ id: 'agent-live', projectPath: project, worktreePath: path.join(project, '.worktrees', 'locked') }, { id: 'agent-gone', projectPath: project }],
       dirty: new Set(['done']),
     });
@@ -213,6 +230,89 @@ describe('the approval', () => {
       [id('npx-cache .npm/_npx/oldhash'), { kind: 'failed', why: 'the deletion failed: EBUSY' }],
       ['ffffffffffffffff', { kind: 'kept', why: 'it is not in the scan the window showed' }],
     ]);
+  });
+});
+
+describe('the Audit\'s gate of #542, and the window\'s details', () => {
+  it('J14. a process is in a folder by its working folder, its command line, or its executable and open files', async () => {
+    const npx = path.join(home, '.npm', '_npx', 'oldhash');
+    for (const proc of [
+      { pid: 11, command: `node ${npx}/node_modules/.bin/sentry-mcp`, paths: [project] },
+      { pid: 12, command: 'node', paths: [project, path.join(npx, 'node_modules', 'sentry', 'index.js')] },
+    ]) {
+      const items = await scanJanitor(world({ processes: [proc] }));
+      expect(items.map(keyOf), proc.command).not.toContain('npx-cache .npm/_npx/oldhash');
+    }
+  });
+
+  it('J15. a merged worktree with ignored files but the caches, or in the middle of an operation, is not proposed', async () => {
+    const withEnv = await scanJanitor(world({ ignored: { done: ['.env.local', 'e2e-runs/'] } }));
+    expect(withEnv.map(keyOf)).not.toContain('closed-worktree projects/harbor/.worktrees/done');
+    const cachesOnly = await scanJanitor(world({ ignored: { done: ['node_modules/', '.next/', 'electron/dist/', 'next-env.d.ts'] } }));
+    expect(cachesOnly.map(keyOf)).toContain('closed-worktree projects/harbor/.worktrees/done');
+    const rebasing = await scanJanitor(world({ busy: new Set(['done']) }));
+    expect(rebasing.map(keyOf)).not.toContain('closed-worktree projects/harbor/.worktrees/done');
+  });
+
+  it('J16. nothing under ~/Documents, a project there or a .worktrees linked into it', async () => {
+    const docProject = path.join(home, 'Documents', 'proj');
+    mk(path.join(docProject, '.worktrees', 'idle', '.next'));
+    old(path.join(docProject, '.worktrees', 'idle'), 10);
+    const linked = path.join(home, 'projects', 'linked');
+    fs.mkdirSync(linked, { recursive: true });
+    fs.symlinkSync(path.join(docProject, '.worktrees'), path.join(linked, '.worktrees'));
+    const w = world();
+    w.projects = [docProject, linked];
+    w.worktrees = async (p) => [{ path: path.join(p, '.worktrees', 'idle'), branch: 'b/done', locked: false }];
+    const items = await scanJanitor(w);
+    expect(items.filter(i => i.path && (i.path.includes('Documents') || i.path.includes('linked')))).toEqual([]);
+  });
+
+  it('J17. a fleet agent\'s worktree saved in another case is still its own', async () => {
+    const upper = path.join(project, '.worktrees', 'agents').toUpperCase();
+    if (!fs.existsSync(upper)) return; // a case-sensitive volume: no other spelling of it exists
+    const items = await scanJanitor(world({ fleet: [{ id: 'agent-live', projectPath: project, worktreePath: path.join(project, '.worktrees', 'agents').toLowerCase() }] }));
+    expect(items.map(keyOf).filter(k => k.includes('/agents/'))).toEqual([]);
+  });
+
+  it('J18. a merged worktree\'s rebuildable caches do not count for its idleness', async () => {
+    mk(path.join(project, '.worktrees', 'done', 'node_modules', 'pkg'), 0);
+    mk(path.join(project, '.worktrees', 'done', 'electron', 'dist'), 0);
+    old(path.join(project, '.worktrees', 'done', 'electron'), 10);
+    old(path.join(project, '.worktrees', 'done'), 10);
+    const items = await scanJanitor(world());
+    expect(items.map(keyOf)).toContain('closed-worktree projects/harbor/.worktrees/done');
+  });
+
+  it('J19. right before it goes, an item whose real path is no longer its path, or no folder, is kept', async () => {
+    const items = await scanJanitor(world());
+    const target = items.find(i => keyOf(i) === 'next-cache projects/harbor/.worktrees/open/.next')!;
+    const outside = mk(path.join(home, 'Documents', 'x', '.next'));
+    const report = await approveJanitor([target.id], () => world(), {
+      ...ops(),
+      // Planted after the re-check, as an agent racing the deletion would.
+      beforeDelete: () => {
+        fs.renameSync(path.join(project, '.worktrees', 'open'), path.join(project, '.worktrees', 'open-moved'));
+        fs.symlinkSync(path.join(home, 'Documents', 'x'), path.join(project, '.worktrees', 'open'));
+      },
+    });
+    expect(deleted).toEqual([]);
+    expect(report.kept[0].why).toMatch(/is no longer where it was/);
+    expect(fs.existsSync(outside)).toBe(true);
+  });
+
+  it('J20. a worktree item gives its details apart from the rule, and a scan says how far it is', async () => {
+    const progress: Array<{ what: string; done: number; total: number; foundBytes: number }> = [];
+    const items = await scanJanitor(world(), p => progress.push(p));
+    const done = items.find(i => keyOf(i) === 'closed-worktree projects/harbor/.worktrees/done')!;
+    expect(done.details).toEqual({ branch: 'b/done', merged: true, idleDays: expect.any(Number), clean: true });
+    expect(done.details!.idleDays).toBeGreaterThanOrEqual(9);
+    expect(done.rule).not.toContain('b/done');
+    const open = items.find(i => keyOf(i) === 'next-cache projects/harbor/.worktrees/open/.next')!;
+    expect(open.details).toMatchObject({ branch: 'b/open', merged: false, clean: true });
+    expect(progress.length).toBeGreaterThan(2);
+    expect(progress.at(-1)).toMatchObject({ done: progress.at(-1)!.total });
+    expect(progress.at(-1)!.foundBytes).toBe(items.reduce((s, i) => s + i.sizeBytes, 0));
   });
 });
 
