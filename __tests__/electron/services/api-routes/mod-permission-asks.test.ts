@@ -75,8 +75,11 @@
  *     another agent through list_agents or get_agent: both are masked (redactSecrets). The window, where the owner
  *     decides, keeps the command whole.
  * And from the orchestrator's decision of 28/10 (#538's re-check): Tars never answers a shell command.
- * 26. A file tool asked with its content withheld (the mod sends the path alone) and not Tars's to allow is held for
- *     the window, which would then approve content it never showed: it goes back to the dialog at once.
+ * 26. A file tool asked with its content withheld (the mod sends the path alone) and not Tars's to allow goes back to
+ *     the native dialog, frozen for the night as a shell command was (the orchestrator, 28/10, on 99a7fa32); or it is
+ *     held and the window can allow it, approving content it never showed. It is held as a shell command is, shown by
+ *     its path and marked withheld, the window's allow refused (its deny taken), and refused at the delay with why
+ *     Tars could not allow it.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -531,16 +534,29 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
     const b = agent('a2', S2);
     Object.assign(b, { permissionMode: 'auto', projectPath: '/p' });
     const notBypass = ask(write('/p/x', { agent_id: 'a2', session_id: S2 }));
-    expect(await notBypass).toEqual({ decision: 'ask' });
+    expect(await settled(notBypass)).toBe(false);
+    expect(b.permissionAsk).toMatchObject({ tool: 'Write', subject: 'Write /p/x', withheld: true });
   });
 
-  it('26. a file tool whose content was withheld and that Tars does not allow goes back to the dialog at once, never held', async () => {
+  it('26. a withheld file tool Tars does not allow is held by its path, never allowed by the window, refused at the delay with why', async () => {
     const a = agent();
     Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    expect(await ask(write('/elsewhere/x'))).toEqual({ decision: 'ask' });
-    expect(await ask(write('/p/.claude/settings.json'))).toEqual({ decision: 'ask' });
-    expect(a.permissionAsk).toBeUndefined();
-    expect(a.status).toBe('running');
+    const outside = askUntilAnswered(write('/elsewhere/x'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.status).toBe('waiting');
+    expect(a.permissionAsk).toMatchObject({ tool: 'Write', subject: 'Write /elsewhere/x', fields: { file_path: '/elsewhere/x' }, withheld: true });
+    expect(answerPermission('a1', 'allow', 'the user'), 'the window cannot allow unseen content').toBe(false);
+    expect(a.status).toBe('waiting');
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+    const late = await outside;
+    expect(late).toMatchObject({ decision: 'deny' });
+    expect(late.reason).toMatch(/Nobody answered/);
+    expect(late.reason).toMatch(/is outside its own folders/);
+
+    const guarded = askUntilAnswered(write('/p/.claude/settings.json', { tool_use_id: 'toolu_g' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(answerPermission('a1', 'deny', 'the user', 'not that file')).toBe(true);
+    expect(await guarded).toMatchObject({ decision: 'deny', reason: expect.stringMatching(/not that file/) });
   });
 
   it('23. every decision is written down with who or what decided', async () => {
