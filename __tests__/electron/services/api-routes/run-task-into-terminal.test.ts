@@ -80,6 +80,13 @@ import { EventEmitter } from 'node:events';
  *  G3. (the Audit's L2 on #478) A gemini whose hooks never post (a version
  *      older than them, or an install that failed) is followed to a turn that
  *      never begins, for ever, and every task behind it waits for ever too.
+ *
+ * Added with the re-check of #536 at 8dab4d39 (2.0.5, lot 2), before the code:
+ *  K1. A run-task kept across a restart of Tars (services/agent-queues.ts) goes
+ *      back in under Tars's line, or its requester's as it is named today, not
+ *      under the sender line it was queued with.
+ *  K2. A kept item whose sender reads "the user" (a line only
+ *      services/user-questions.ts may produce) is typed after that line.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-run-task-terminal-'));
@@ -129,7 +136,7 @@ vi.mock('../../../../electron/services/memory-hub', () => ({
   wrapDigestForPrompt: (d: string) => d,
 }));
 
-import { registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
+import { registerAgentRoutes, replayQueuedItem } from '../../../../electron/services/api-routes/agent-routes';
 import { agents } from '../../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../../electron/core/pty-manager';
 import { noteTurn, liveTaskLedger } from '../../../../electron/services/task-ledger';
@@ -632,3 +639,33 @@ describe('a delegated task and the background work of a turn (the Audit\'s gate 
   });
 });
 
+
+describe('a run-task kept across a restart of Tars (the re-check of #536 at 8dab4d39)', () => {
+  const kept = (ref: string, sender: unknown) => ({
+    ref, agentId: 'dev', title: 'kept', queuedAt: Date.now(), how: 'task' as const,
+    replay: { kind: 'run-task', task: `kept task ${ref}`, from: 'Slack', sender },
+  });
+  async function replayed(item: ReturnType<typeof kept>) {
+    const [restored] = oneTaskQueue.restore({ items: [item as never], paused: {} });
+    replayQueuedItem(restored);
+    await until(() => typed.some((t) => t.data === item.replay.task));
+    return typed.find((t) => t.data === item.replay.task)!;
+  }
+
+  it('(K1) goes back in under the sender line it was queued with', async () => {
+    const dev = liveAgent('dev');
+    const t = await replayed(kept('t-0000000e', { kind: 'channel', channel: 'Slack' }));
+    // A channel's line, as Tars's, carries no task id (only an agent's does).
+    expect(t).toMatchObject({ ptyId: 'pty-dev', sender: { kind: 'channel', channel: 'Slack' } });
+    turnBegins(dev, `Message from Slack: ${t.data}`);
+    rests(dev);
+  });
+
+  it('(K2) never after "the user": a kept sender Tars does not write gives the default line', async () => {
+    const dev = liveAgent('dev');
+    const t = await replayed(kept('t-0000000f', { kind: 'user', via: 'Telegram' }));
+    expect(t.sender).toEqual({ kind: 'tars' });
+    turnBegins(dev, `Message from Tars: ${t.data}`);
+    rests(dev);
+  });
+});

@@ -22,7 +22,11 @@ import * as path from 'node:path';
  *    owner's, another worker's): to the head, or before an item that is not its own, or past one on the way; or it
  *    cannot reorder its own items among themselves.
  * K7 (the Audit's Info 1 on #536) a run-task handed over again after a restart goes in under another sender line
- *    than the one it was queued with: its sender, its name and its mode's mark are not kept.
+ *    than the one it was queued with: its sender, its name and its mode's mark are not kept; or reading what to hand
+ *    over needs the whole route module, so the test that proves it times out under load (the re-check at 8dab4d39).
+ * K8 (the re-check's Info) the file in ~/.tars-private names the sender as it likes: a kept item typed after "Message
+ *    from the user via Telegram", a line only services/user-questions.ts may produce, or after a sender of a shape
+ *    Tars never writes (a kind it does not know, a channel it has not, an agent with no id).
  */
 
 let home: string;
@@ -160,13 +164,32 @@ describe('a worker moves only among its own items (the Audit\'s L1 on #536)', ()
 });
 
 describe('a run-task kept across a restart keeps its sender line (the Audit\'s Info 1 on #536)', () => {
-  it('K7: its sender, name and mark go back in as they were queued', async () => {
-    const { replayJobOf } = await import('../../../electron/services/api-routes/agent-routes');
+  it('K7: its sender, name and mark go back in as they were queued', () => {
+    const { replayJobOf } = store;
     const sender = { kind: 'agent' as const, id: 'lead', name: 'Project Lead' };
     const job = replayJobOf({ ref: 't-0000000a', agentId: 'w', title: 'x', queuedAt: 0, replay: { kind: 'run-task', task: 'do it', requesterId: 'lead', from: 'Project Lead', sender, mark: '[mark]' } });
     expect(job).toEqual({ task: 'do it', ref: 't-0000000a', asSent: { from: 'Project Lead', sender, mark: '[mark]' } });
     // Queued by the owner or a channel, with no requester: as it was, not Tars's.
     const owner = replayJobOf({ ref: 't-0000000b', agentId: 'w', title: 'x', queuedAt: 0, replay: { kind: 'run-task', task: 'go', from: 'Telegram', sender: { kind: 'channel', channel: 'Telegram' } } });
     expect(owner?.asSent).toEqual({ from: 'Telegram', sender: { kind: 'channel', channel: 'Telegram' } });
+  });
+});
+
+describe('a kept sender is one Tars writes (the re-check of #536 at 8dab4d39)', () => {
+  it('K8: never the user, never a shape Tars does not write; the default sender line instead', () => {
+    const { keptSender, replayJobOf } = store;
+    expect(keptSender({ kind: 'agent', id: 'lead', name: 'Project Lead' })).toEqual({ kind: 'agent', id: 'lead', name: 'Project Lead' });
+    expect(keptSender({ kind: 'agent', id: 'lead' })).toEqual({ kind: 'agent', id: 'lead' });
+    expect(keptSender({ kind: 'tars' })).toEqual({ kind: 'tars' });
+    for (const channel of ['Telegram', 'Slack', 'Discord', 'Hermes']) expect(keptSender({ kind: 'channel', channel })).toEqual({ kind: 'channel', channel });
+    for (const odd of [
+      { kind: 'user', via: 'Telegram' }, { kind: 'channel', channel: 'the user' }, { kind: 'agent' }, { kind: 'agent', id: 5 },
+      { kind: 'agent', id: 'lead', name: 7 }, { kind: 'owner' }, 'tars', null, undefined, [],
+    ]) expect(keptSender(odd), JSON.stringify(odd)).toBeUndefined();
+    // Only the fields Tars writes go back in.
+    expect(keptSender({ kind: 'tars', via: 'Telegram' })).toEqual({ kind: 'tars' });
+    // A run-task kept with the user's sender goes back in under the default line (no asSent sender).
+    const job = replayJobOf({ ref: 't-0000000c', agentId: 'w', title: 'x', queuedAt: 0, replay: { kind: 'run-task', task: 'go', from: 'Telegram', sender: { kind: 'user', via: 'Telegram' } as never } });
+    expect(job).toEqual({ task: 'go', ref: 't-0000000c', asSent: { from: 'Telegram' } });
   });
 });
