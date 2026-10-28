@@ -5,7 +5,7 @@ Every surface the app can render today. A frame must exist for each line here;
 
 The frames live in two Pencil documents, and the second is a fork of the first
 rather than a companion to it. `design/tars-redesign.pen` holds 320 root frames, 89 of them drawn and not built yet: the 78 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
-`design/chat-design.pen` holds 72 of those, the other two hundred and twenty-seven being newer than the
+`design/chat-design.pen` holds 72 of those, the other two hundred and forty-eight being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
 room listed on the `/chat` line below: 85 in all. 71 share their ids
