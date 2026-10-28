@@ -58,7 +58,7 @@
  * 19. (gap 3) The window cannot tell when the question goes back: no `until`.
  * And from the night of 27/10, agents in bypass frozen until morning on Claude Code's dialog
  * (fix-permission-dialogs-2810.md, the owner's 2.0.5), written before the code (28/10):
- * 20. A bypass agent's file tool on its own folders (Write into its scratchpad) waits for the
+ * 20. (Superseded by 27: Tars allows nothing by itself.) A bypass agent's file tool on its own folders waits for the
  *     owner: Tars answers allow at once, naming the call's fingerprint, with no question shown and the agent never
  *     waiting. The same call outside its folders, or from an agent not in bypass, is held as before.
  * 21. A question nobody answers goes back to the dialog (`ask`) and the agent stays frozen there all night: at the
@@ -80,6 +80,15 @@
  *     held and the window can allow it, approving content it never showed. It is held as a shell command is, shown by
  *     its path and marked withheld, the window's allow refused (its deny taken), and refused at the delay with why
  *     Tars could not allow it.
+ * And from the orchestrator's decision of 28/10 after the Audit's third gate of #538 (a dangling or a hard link led
+ * an allowed write into .claude/settings.json, outside, or ~/.tars-private): Tars allows nothing by itself.
+ * 27. Tars answers allow to a question by itself: a file tool even in the agent's own folders and through the
+ *     Audit's six links, or any of the gates' shell commands. Each waits for the owner, and is refused at the delay.
+ * 28. A file tool's question reaches the window whole, or without `withheld` when the body leaves it out (the Audit's
+ *     L2): the route marks every file tool withheld, the window can never allow it.
+ * 29. (the Audit's Info 1 on #544) An agent not in bypass gets its file tool held in Tars, two steps for each edit
+ *     and a refusal at the delay: it goes straight to Claude Code's own dialog, as before #538. Only an agent in
+ *     bypass (autonomous, the nights' case) has its file tools held.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -506,57 +515,64 @@ describe("the mod's question to Tars", () => {
   });
 });
 
-describe('Tars answers for a bypass agent inside its own folders', () => {
+describe('Tars allows nothing by itself', () => {
   const heredoc = (dir: string) => `S=${dir}/scratchpad; mkdir -p $S/retry-probe && cat > $S/retry-probe/p.yml <<'EOF'\nsteps: [1]\nEOF`;
   const write = (file: string, over: Record<string, unknown> = {}) => question({ tool: 'Write', tool_use_id: 'toolu_w', input: { file_path: file }, withheld: true, ...over });
+  const bypass = () => { const a = agent(); Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' }); return a; };
 
-  it('20. allow at once for a file tool on its own folder: no question, never waiting, the fingerprint named', async () => {
-    const a = agent();
-    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    const answer = await ask(write('/p/scratchpad/p.yml'));
-    expect(answer).toMatchObject({
-      decision: 'allow',
-      reason: expect.stringMatching(/^Tars allowed it: Backend is in bypass, and \/p\/scratchpad\/p\.yml is inside its own folders/),
-      fingerprint: createHash('sha256').update(JSON.stringify(['Write', [['file_path', '/p/scratchpad/p.yml']]])).digest('hex'),
-    });
-    expect(a.status).toBe('running');
-    expect(a.permissionAsk).toBeUndefined();
-    expect(ctx.handleStatusChangeNotificationCallback).not.toHaveBeenCalled();
+  it('27. a bypass agent\'s file tool, in its own folders or through any of the six links, waits for the owner, then is refused', async () => {
+    const a = bypass();
+    for (const [tool, field, file] of [
+      ['Write', 'file_path', '/p/scratchpad/p.yml'], ['Write', 'file_path', '/p/to-settings'], ['Write', 'file_path', '/p/t/to-mcp'],
+      ['Write', 'file_path', '/p/to-outside'], ['NotebookEdit', 'notebook_path', '/p/c/to-private'], ['Edit', 'file_path', '/p/t/hard-rc'],
+      ['MultiEdit', 'file_path', '/p/t/hard-settings'],
+    ] as const) {
+      const pending = askUntilAnswered(question({ tool, tool_use_id: `toolu_${file}`, input: { [field]: file } }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk, file).toMatchObject({ tool, withheld: true });
+      expect(answerPermission('a1', 'allow', 'the user'), file).toBe(false);
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      const late = await pending;
+      expect(late, file).toMatchObject({ decision: 'deny', reason: expect.stringMatching(/Nobody answered/) });
+      expect(late.reason).toMatch(/never allows a file tool by itself/);
+    }
   });
 
-  it('20. a shell command, even a heredoc into its own folder, is held for the owner, as is any call of an agent not in bypass', async () => {
-    const a = agent();
-    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    const own = ask(question({ input: { command: heredoc('/p') } }));
-    expect(await settled(own)).toBe(false);
-    expect(a.permissionAsk?.subject).toContain('/p/scratchpad');
-    resetPermissionAsks();
+  it('27. every shell command of the three gates waits for the owner, who may allow it, and nobody answering refuses it', async () => {
+    const { probeCommands } = await import('../../../fixtures/permission-probes');
+    const a = bypass();
+    const commands = probeCommands({ c: '/p/c', work: '/p', home: '/h', t: '/p/t', privateDir: '/h/.tars-private', tmpRoot: '/h/.tars/tmp' });
+    expect(commands.length).toBeGreaterThan(90);
+    for (const [n, command] of commands.entries()) {
+      const pending = askUntilAnswered(question({ tool_use_id: `toolu_c${n}`, input: { command } }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk?.subject, command).toBe(command);
+      if (n === 0) {
+        expect(answerPermission('a1', 'allow', 'the user')).toBe(true);
+        expect(await pending).toMatchObject({ decision: 'allow' });
+        continue;
+      }
+      await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
+      expect(await pending, command).toMatchObject({ decision: 'deny' });
+    }
+  }, 60_000);
+
+  it('28. a file tool is withheld whatever the body says', async () => {
+    const a = bypass();
+    void ask(question({ tool: 'Write', input: { file_path: '/p/x' } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk).toMatchObject({ tool: 'Write', withheld: true });
+    expect(answerPermission('a1', 'allow', 'the user')).toBe(false);
+  });
+
+  it('29. an agent not in bypass has its file tool on Claude Code\'s own dialog at once, its shell commands held for the window', async () => {
     const b = agent('a2', S2);
-    Object.assign(b, { permissionMode: 'auto', projectPath: '/p' });
-    const notBypass = ask(write('/p/x', { agent_id: 'a2', session_id: S2 }));
-    expect(await settled(notBypass)).toBe(false);
-    expect(b.permissionAsk).toMatchObject({ tool: 'Write', subject: 'Write /p/x', withheld: true });
-  });
-
-  it('26. a withheld file tool Tars does not allow is held by its path, never allowed by the window, refused at the delay with why', async () => {
-    const a = agent();
-    Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    const outside = askUntilAnswered(write('/elsewhere/x'));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(a.status).toBe('waiting');
-    expect(a.permissionAsk).toMatchObject({ tool: 'Write', subject: 'Write /elsewhere/x', fields: { file_path: '/elsewhere/x' }, withheld: true });
-    expect(answerPermission('a1', 'allow', 'the user'), 'the window cannot allow unseen content').toBe(false);
-    expect(a.status).toBe('waiting');
-    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
-    const late = await outside;
-    expect(late).toMatchObject({ decision: 'deny' });
-    expect(late.reason).toMatch(/Nobody answered/);
-    expect(late.reason).toMatch(/is outside its own folders/);
-
-    const guarded = askUntilAnswered(write('/p/.claude/settings.json', { tool_use_id: 'toolu_g' }));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(answerPermission('a1', 'deny', 'the user', 'not that file')).toBe(true);
-    expect(await guarded).toMatchObject({ decision: 'deny', reason: expect.stringMatching(/not that file/) });
+    Object.assign(b, { permissionMode: 'normal', projectPath: '/p' });
+    expect(await ask(write('/p/x', { agent_id: 'a2', session_id: S2 }))).toEqual({ decision: 'ask' });
+    expect(b.permissionAsk).toBeUndefined();
+    const shell = ask(question({ agent_id: 'a2', session_id: S2, input: { command: heredoc('/p') } }));
+    expect(await settled(shell)).toBe(false);
+    expect(b.permissionAsk?.subject).toContain('/p/scratchpad');
   });
 
   it('23. every decision is written down with who or what decided', async () => {
@@ -565,7 +581,8 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
     fs.rmSync(PERMISSION_LOG, { force: true });
     const a = agent();
     Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' });
-    await ask(question({ tool: 'Write', input: { file_path: '/p/scratchpad/p.yml' }, withheld: true, tool_use_id: 'toolu_auto' }));
+    void askUntilAnswered(question({ tool: 'Write', input: { file_path: '/p/scratchpad/p.yml' }, withheld: true, tool_use_id: 'toolu_file' }));
+    await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
     void askUntilAnswered(question({ tool_use_id: 'toolu_window' }));
     await vi.advanceTimersByTimeAsync(0);
     answerPermission('a1', 'deny', 'the user', 'not now');
@@ -573,7 +590,7 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
     await vi.advanceTimersByTimeAsync(PERMISSION_HOLD_MS);
     const lines = fs.readFileSync(PERMISSION_LOG, 'utf8').trim().split('\n');
     expect(lines).toHaveLength(3);
-    expect(lines[0]).toMatch(/Backend \(a1\) Write allow by Tars \(bypass, its own folders\): Write \/p\/scratchpad\/p\.yml/);
+    expect(lines[0]).toMatch(/Backend \(a1\) Write deny by the delay \(10 minutes\): Write \/p\/scratchpad\/p\.yml/);
     expect(lines[1]).toMatch(/Backend \(a1\) Bash deny by the user: rm -rf build/);
     expect(lines[2]).toMatch(/Backend \(a1\) Bash deny by the delay \(10 minutes\): rm -rf build/);
   });
