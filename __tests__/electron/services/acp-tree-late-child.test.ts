@@ -42,7 +42,7 @@ const state = vi.hoisted(() => ({
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   const answer = (file: string, args: unknown): string => {
-    if (file === 'ps') return state.world.print();
+    if (file === 'ps') return state.world.print(args);
     if (/[\\/]taskkill\.exe$/i.test(file)) { state.taskkills.push(args as string[]); return ''; }
     throw new Error(`not in this test: ${file}`);
   };
