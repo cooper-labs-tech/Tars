@@ -306,6 +306,11 @@ export function getAgentInstructionsPath(): string {
   return getResourcePath('agent-instructions.md');
 }
 
+/** The heavy-run slot's command line (services/heavy-slot-cli.ts), run by node outside the asar. */
+export function getSlotScriptPath(): string {
+  return getResourcePath('tars-slot.cjs');
+}
+
 /**
  * Get the path to the local agent runner script
  */

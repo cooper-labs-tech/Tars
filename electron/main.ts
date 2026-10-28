@@ -159,6 +159,8 @@ import { checksForUpdates } from './core/sandbox-build';
 import { startCliUpdates } from './services/cli-updater';
 import { migrateLocalTasks, setKanbanAgentDirectory } from './services/kanban-board';
 import { hermesKanban, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { startHeavySlot, stopHeavySlot, slotStatus } from './services/heavy-slot-runtime';
+import { installSlotShims } from './services/heavy-slot-cli';
 import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
@@ -792,6 +794,15 @@ app.whenReady().then(async () => {
   startStallWatch();
   // Agents with no turn for 30 minutes sleep, orchestrators never (services/agent-sleep.ts).
   startSleepWatch();
+  // The heavy-run slot for the whole machine (services/heavy-slot.ts): its shims in ~/.tars/bin for `tars-slot`, its
+  // passes, and the window's read of who holds it and who waits.
+  installSlotShims();
+  startHeavySlot({
+    getAppSettings: () => appSettings,
+    tellOrchestrator: (projectPath, text) => { void tellOrchestratorAsTars(projectPath, text); },
+    broadcast: (channel, payload) => broadcastToAllWindows(channel, payload),
+  });
+  ipcMain.handle('heavySlot:status', () => slotStatus());
   // codex's turns, read from its session log and posted as its terminal's hooks
   // would post them, with that terminal's own token (services/codex-sessions.ts).
   // What a CLI without Tars's hooks would have posted, posted as its terminal,
@@ -1041,6 +1052,7 @@ app.on('before-quit', (event) => {
       ['stopStatusNotifications', () => stopStatusNotifications()],
       ['stopErrorTriage', stopErrorTriage],
       ['stopSleepWatch', stopSleepWatch],
+      ['stopHeavySlot', stopHeavySlot],
       ['stopTmpRetention', () => stopTmpRetention()],
       // A claude asked for an account's usage (get_usage) just before the quit.
       ['endUsageProbes', endUsageProbes],

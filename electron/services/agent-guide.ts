@@ -143,6 +143,18 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       '`tars_guide` with no topic lists the topics; with one, returns it. The guide is the one of the Tars that runs you.',
     ].join('\n'),
   },
+  {
+    id: 'heavy-runs',
+    title: 'Heavy runs: one slot for the whole machine',
+    roles: ['orchestrator', 'worker'],
+    text: [
+      'Test suites, builds, dev servers, Docker and simulators take the machine\'s heavy-run slot first: every project\'s agents share it, one run at a time unless the user set more.',
+      'For one command: `tars-slot run --label "<what>" -- <command>` in your terminal waits for the slot, runs the command, gives it back and exits with its code; git hooks and scripts use it too. `tars-slot take` holds it across a script\'s steps (until the script ends or `tars-slot give-back <ticket>`), `tars-slot status` shows the queue.',
+      'From a tool: `heavy_slot_take` (then `heavy_slot_give_back` when the run is over; your CLI ending gives it back too), `heavy_slot_status` for who holds it and who waits.',
+      'The queue: gate (a release gate, orchestrators only), then normal, then background, then arrival. A run started from inside your own run (a pre-push hook) is granted at once. A grant waits while free disk or memory is under the floor, and says so.',
+      'During a run Tars tells you, your orchestrator and the window when the disk fills or the swap grows fast. Tars never stops a run itself: you decide.',
+    ].join('\n'),
+  },
 ];
 
 /** The topic that explains each tool an agent can see. */
@@ -170,6 +182,9 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   send_slack: 'asking-the-user',
   send_discord: 'asking-the-user',
   tars_guide: 'limits',
+  heavy_slot_take: 'heavy-runs',
+  heavy_slot_give_back: 'heavy-runs',
+  heavy_slot_status: 'heavy-runs',
   // mcp-telegram
   send_telegram_document: 'asking-the-user',
   send_telegram_photo: 'asking-the-user',

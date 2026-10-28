@@ -380,6 +380,11 @@ export interface CliKeyState {
 }
 
 export interface AppSettings {
+  /** The heavy-run slot (services/heavy-slot.ts): how many runs at once on this machine (1 when unset). */
+  heavySlots?: number;
+  /** The floors under which a grant waits: free disk in GB (15) and free memory in % (20). */
+  heavySlotMinDiskGb?: number;
+  heavySlotMinFreeMemPct?: number;
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;

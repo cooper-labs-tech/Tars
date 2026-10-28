@@ -14,6 +14,7 @@ import { registerWebhookRoutes } from './webhook-routes';
 import { registerBusRoutes } from './bus-routes';
 import { registerAskUserRoutes } from './ask-user-routes';
 import { registerTaskRoutes } from './task-routes';
+import { registerHeavySlotRoutes } from './heavy-slot-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -31,6 +32,7 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerWebhookRoutes(app, ctx);
   registerAskUserRoutes(app, ctx);
   registerTaskRoutes(app);
+  registerHeavySlotRoutes(app);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';

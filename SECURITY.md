@@ -216,6 +216,20 @@ names. A hash is not secret from a guess: an agent that can read the file can co
 text it already suspects. It is out of the directory every agent is handed, and no
 further out of reach than the rest of `~/.tars-private` (§5).
 
+**The heavy-run slot (2.0.5, `/api/heavy-slot`, `services/heavy-slot.ts`).**
+- **The routes.** An ask, a ticket and a give-back take an agent's own token: the lease is that agent's, and another
+  agent can neither read its ticket nor give it back. The status lists who holds the slot and who waits (agent
+  names, project folder names, labels) to any authenticated caller: every agent of every project reads the queue,
+  which is the point of one queue for the machine.
+- **What a lease is held by.** A pid, which must be under the asking agent's terminal where `ps` can be read (macOS,
+  Linux). So an agent cannot hold the slot forever on pid 1, nor end its lease with another agent's process. On
+  Windows the pid is taken as given, and the lease still ends with that process.
+- **Who may jump the queue.** `gate` is an orchestrator's; anyone else asking for it gets `normal`.
+- **Nothing is ever ended.** The slot never ends a process: an alert is only said.
+- **The shim is not a boundary.** `~/.tars/bin/tars-slot` is in every agent's reach, like `tars-mcp-node`: an agent
+  can rewrite it, being the same user (section 3). It names no path of the app, and runs the script the terminal's
+  environment names.
+
 ---
 
 ## 3. An agent's token is not secret from the other agents

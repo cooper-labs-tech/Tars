@@ -253,6 +253,27 @@ export interface AgentEvent {
   exitCode?: number;
 }
 
+interface HeavySlotTicket {
+  id: string;
+  state: 'granted' | 'waiting';
+  /** 1 for the next to be granted. */
+  position?: number;
+  /** Why it waits: who holds the slot, or the floor and the figure (free disk, free memory). */
+  why?: string;
+  priority: 'gate' | 'normal' | 'background';
+  /** Asked for gate without being an orchestrator: given normal. */
+  clamped?: true;
+  label: string;
+  agentId: string;
+  agentName: string;
+  project: string;
+  askedAt: string;
+  grantedAt?: string;
+  /** Granted inside this holder's lease (a git hook inside its run). */
+  nestedIn?: string;
+  alerts: string[];
+}
+interface HeavySlotStatus { slots: number; holders: HeavySlotTicket[]; waiting: HeavySlotTicket[] }
 type VaultSubfolder = 'reports' | 'tools';
 type VaultFailure = { error: string; code: string };
 interface VaultProjectFolder {
@@ -2150,6 +2171,17 @@ export interface ElectronAPI {
     }) => Promise<{ success: boolean; error?: string }>;
   };
 
+  /**
+   * The heavy-run slot for the whole machine (electron/services/heavy-slot.ts): test suites, builds, dev servers,
+   * Docker and simulators of every project's agents take it in turn. A lease is held by a live process and goes when
+   * it ends; the queue is a release gate, then ordinary work, then background work, then arrival.
+   */
+  heavySlot?: {
+    status: () => Promise<HeavySlotStatus>;
+    onChanged: (callback: (status: HeavySlotStatus) => void) => () => void;
+    /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth. Tars never stops the run. */
+    onAlert: (callback: (alert: { ticket: string; agentName: string; project: string; text: string }) => void) => () => void;
+  };
   // Vault
   vault?: {
     /**
