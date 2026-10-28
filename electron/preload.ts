@@ -223,6 +223,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Skills management
+  // An agent's queue (2.0.5, lot 2): read it in order, pause and resume it, move or cancel an item.
+  agentQueue: {
+    get: (agentId: string) => ipcRenderer.invoke('agentQueue:get', agentId),
+    pause: (agentId: string, reason?: string) => ipcRenderer.invoke('agentQueue:pause', agentId, reason),
+    resume: (agentId: string) => ipcRenderer.invoke('agentQueue:resume', agentId),
+    move: (ref: string, before?: string) => ipcRenderer.invoke('agentQueue:move', ref, before),
+    cancel: (ref: string) => ipcRenderer.invoke('agentQueue:cancel', ref),
+    drop: (agentId: string) => ipcRenderer.invoke('agentQueue:drop', agentId),
+    onChanged: (callback: (view: unknown) => void) => {
+      const listener = (_: unknown, view: unknown) => callback(view);
+      ipcRenderer.on('agentQueue:changed', listener);
+      return () => ipcRenderer.removeListener('agentQueue:changed', listener);
+    },
+  },
+
   skill: {
     install: (repo: string) =>
       ipcRenderer.invoke('skill:install', repo),

@@ -1404,6 +1404,7 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 
 | Symptom | Cause and fix |
 |---|---|
+| An agent's queue does not move | it is paused (`agent_queue({ id })` says since when and why: a stop, a restart of Tars, or someone's pause): resume it with `agent_queue({ id, action: 'resume' })`, or from the window. Kept in `~/.tars-private/agent-queues.json` |
 | `delegate_task` says the task is queued on an agent behind another task | that agent was working: the task starts once it is free. Follow it with `task_status` on the id it names, or `task_cancel` it |
 | a worker is answered `worker_may_not_order` | a worker does not hand work to another agent: it asks its orchestrator (`send_message` to `orchestrator`) |
 | a worker is answered `worker_may_not_stop` | a worker does not stop, restart or remove another agent: it asks its orchestrator, saying why |

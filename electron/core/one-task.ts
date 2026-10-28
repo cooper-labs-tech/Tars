@@ -29,10 +29,10 @@ import type { AgentProvider } from '../types';
  *    Stopping, restarting or removing an agent is reserved to the same
  *    callers (the maintainer's decision of the same day).
  *
- * In memory: a queued task has not started, and a quit of Tars drops it as it
- * drops the request that asked for it. Whoever follows it by its id after a
- * restart is told so (unknownTaskText); keeping the queue across a restart is
- * a later change.
+ * 2.0.5 (lot 2 of the resources plan): the line is the agent's queue. A message sent to wait for the agent's
+ * rest waits here too, and so does anything sent to an agent whose queue is paused. It can be read in order,
+ * paused, reordered and cancelled, and it is kept, paused, across a stop and a restart of Tars
+ * (services/agent-queues.ts writes it to ~/.tars-private).
  */
 
 /** What an agent is busy with: a run over ACP (queued first or not), or a turn in its terminal. */
@@ -54,6 +54,24 @@ export interface QueuedTask {
   requesterId?: string;
   title: string;
   queuedAt: number;
+  /** How it goes in (2.0.5, the agent's queue): a task, a message sent to wait for the agent's rest, a worker's note. */
+  how?: 'task' | 'message' | 'note';
+  /** Who sent it, as the panel names them. */
+  from?: string;
+  /**
+   * What hands it over again after a restart of Tars (services/agent-queues.ts): plain JSON, read by the route
+   * that queued it. Kept in ~/.tars-private only, never in agents.json, which every agent is handed.
+   */
+  replay?: unknown;
+}
+
+/** Why and since when an agent's queue holds what waits in it (2.0.5): nothing goes in while it is paused. */
+export interface QueuePause { since: number; why: string }
+
+/** The line and the pauses, as services/agent-queues.ts keeps them across a restart of Tars. */
+export interface QueueSnapshot {
+  items: QueuedTask[];
+  paused: Record<string, QueuePause>;
 }
 
 /**
@@ -76,7 +94,22 @@ export interface OneTaskQueue {
   busyRun(agentId: string): Busy | undefined;
   /** Whether a task asked now waits: the agent works, or others wait before it. */
   mustQueue(agentId: string, turn: Busy | undefined): boolean;
-  enqueue(agentId: string, task: { requesterId?: string; title: string }, now?: number): QueuedTask;
+  /** Queued last; under `ref` when given (a request's id, which its sender line names), refused if that id is in line. */
+  enqueue(agentId: string, task: { requesterId?: string; title: string; how?: QueuedTask['how']; from?: string; replay?: unknown }, now?: number, ref?: string): QueuedTask;
+  /** To the head of its agent's line, or just before `before`, an item of the same line. False when either is not there. */
+  move(ref: string, before?: string): boolean;
+  /** Nothing in the agent's line takes its turn until it is resumed; the turn or run in progress is not touched. */
+  pause(agentId: string, why: string, now?: number): void;
+  resume(agentId: string): void;
+  pausedOf(agentId: string): QueuePause | undefined;
+  /** A request typed straight into the agent's terminal, known by its id from now: task_status finds it (2.0.5). */
+  noteDelivered(task: QueuedTask, how: Delivered['how'], now?: number): void;
+  /** Every line, in order, and the pauses. */
+  snapshot(): QueueSnapshot;
+  /** A snapshot's items queued again, after what the line holds, and its pauses kept; an id already known is not. Returns those queued. */
+  restore(snapshot: QueueSnapshot): QueuedTask[];
+  /** Told of every change of the lines or the pauses, to keep them (services/agent-queues.ts). */
+  onChange(listener: () => void): () => void;
   /**
    * Its turn: first in line and the agent free (no run, and `turn` undefined).
    * Taken, it leaves the line and its run is on record at once.
@@ -115,6 +148,13 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
   const runs = new Map<string, Busy>();
   const lines = new Map<string, QueuedTask[]>();
   const taken = new Map<string, Taken>();
+  const pauses = new Map<string, QueuePause>();
+  const listeners = new Set<() => void>();
+  const changed = () => {
+    for (const listener of listeners) {
+      try { listener(); } catch (err) { console.warn('[one-task] a listener of the queue failed:', err); }
+    }
+  };
   const lineOf = (agentId: string) => lines.get(agentId) ?? [];
   const leave = (task: QueuedTask) => {
     const line = lineOf(task.agentId).filter((t) => t.ref !== task.ref);
@@ -151,22 +191,71 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
       return runs.get(agentId);
     },
     mustQueue(agentId, turn) {
-      return runs.has(agentId) || !!turn || lineOf(agentId).length > 0;
+      return runs.has(agentId) || !!turn || lineOf(agentId).length > 0 || pauses.has(agentId);
     },
-    enqueue(agentId, task, now = Date.now()) {
-      let ref = newTaskRef();
-      while (find(ref)) ref = newTaskRef();
-      const queued: QueuedTask = { ref, agentId, ...(task.requesterId ? { requesterId: task.requesterId } : {}), title: task.title, queuedAt: now };
+    enqueue(agentId, task, now = Date.now(), asked) {
+      if (asked && find(asked)) throw new Error(`${asked} is already in a queue`);
+      let ref = asked ?? newTaskRef();
+      while (!asked && find(ref)) ref = newTaskRef();
+      const queued: QueuedTask = {
+        ref, agentId, ...(task.requesterId ? { requesterId: task.requesterId } : {}), title: task.title, queuedAt: now,
+        ...(task.how ? { how: task.how } : {}), ...(task.from ? { from: task.from } : {}), ...(task.replay !== undefined ? { replay: task.replay } : {}),
+      };
       lines.set(agentId, [...lineOf(agentId), queued]);
+      changed();
       return queued;
+    },
+    move(ref, before) {
+      const task = find(ref);
+      if (!task || before === ref) return false;
+      const line = lineOf(task.agentId).filter((t) => t.ref !== ref);
+      const at = before === undefined ? 0 : line.findIndex((t) => t.ref === before);
+      if (at < 0) return false;
+      line.splice(at, 0, task);
+      lines.set(task.agentId, line);
+      changed();
+      return true;
+    },
+    pause(agentId, why, now = Date.now()) {
+      pauses.set(agentId, { since: now, why });
+      changed();
+    },
+    resume(agentId) {
+      if (pauses.delete(agentId)) changed();
+    },
+    pausedOf(agentId) {
+      return pauses.get(agentId);
+    },
+    noteDelivered(task, how, now = Date.now()) {
+      if (find(task.ref) || taken.has(task.ref)) return;
+      remember(task.ref, { task, delivered: { how, at: now } });
+    },
+    snapshot() {
+      return { items: [...lines.values()].flat(), paused: Object.fromEntries(pauses) };
+    },
+    restore(snapshot) {
+      const queued: QueuedTask[] = [];
+      for (const item of snapshot.items ?? []) {
+        if (!item?.ref || !item.agentId || find(item.ref) || taken.has(item.ref)) continue;
+        lines.set(item.agentId, [...lineOf(item.agentId), item]);
+        queued.push(item);
+      }
+      for (const [agentId, pause] of Object.entries(snapshot.paused ?? {})) pauses.set(agentId, pause);
+      changed();
+      return queued;
+    },
+    onChange(listener) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
     },
     takeTurn(agentId, ref, turn, now = Date.now()) {
       const line = lineOf(agentId);
-      if (line[0]?.ref !== ref || runs.has(agentId) || turn) return false;
+      if (line[0]?.ref !== ref || runs.has(agentId) || turn || pauses.has(agentId)) return false;
       const task = line[0];
       leave(task);
       remember(ref, { task });
       runs.set(agentId, { kind: 'run', taskRef: ref, ...(task.requesterId ? { requesterId: task.requesterId } : {}), since: now, title: task.title });
+      changed();
       return true;
     },
     find,
@@ -196,6 +285,7 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
       if (!task) return undefined;
       leave(task);
       remember(ref, { task, error: why });
+      changed();
       return task;
     },
   };

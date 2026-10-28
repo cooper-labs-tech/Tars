@@ -6,6 +6,7 @@ import { oneLine } from '../utils/waiting-on';
 import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
 import { describeBorn, endBornProcesses, stopLabelledContainers } from './born-processes';
+import { oneTaskQueue } from './one-task';
 
 /**
  * Stopping an agent: it is ended, and it says who stopped it, when and why
@@ -49,10 +50,18 @@ export function stopReasonOf(raw: unknown): string | undefined {
   return line || undefined;
 }
 
+/**
+ * What a stop did to the agent's queue (2.0.5, lot 2): kept, paused, and said so in its answer, or dropped when asked
+ * (`dropQueue`), each requester told it never ran. A stop used to empty it, and each item had to be sent again by
+ * hand (Kotsna's item 16, 27/10).
+ */
+export interface StopQueueOutcome { kept: number; dropped: number }
+
 export async function stopAgent(
   agent: AgentStatus,
   request: StopRequest,
   notify: { save(): void; announce(agent: AgentStatus): void },
+  opts: { dropQueue?: boolean; outcome?: StopQueueOutcome } = {},
 ): Promise<boolean> {
   // Stopped already: the first stop's who and why stand, and false says so.
   // A second caller used to replace them (the Frontend, on #281).
@@ -77,10 +86,19 @@ export async function stopAgent(
   agent.currentSessionId = undefined;
   agent.lastActivity = agent.stoppedAt;
 
+  // Its queue: kept, paused until someone resumes it (it would start the agent again), or dropped.
+  const waiting = oneTaskQueue.queued(agent.id);
+  if (opts.dropQueue) for (const item of waiting) oneTaskQueue.cancel(item.ref, `it was dropped with the stop by ${request.by}`);
+  else if (waiting.length) oneTaskQueue.pause(agent.id, `stopped by ${request.by}`);
+  if (opts.outcome) {
+    opts.outcome.kept = opts.dropQueue ? 0 : waiting.length;
+    opts.outcome.dropped = opts.dropQueue ? waiting.length : 0;
+  }
   // Every request it will not finish: off it, each requester told (the
   // Audit's R3), the one in hand as cut. The stop clears the terminal before
-  // its status event, so that event alone never told the asker.
-  endWorkerRequests(agent, 'stopped', { withLinked: true });
+  // its status event, so that event alone never told the asker. What its queue
+  // keeps is not ended: it goes in once the queue is resumed.
+  endWorkerRequests(agent, 'stopped', { withLinked: true, keep: new Set(opts.dropQueue ? [] : waiting.map((t) => t.ref)) });
   notify.save();
   emitAgentStatus(agent.id);
   notify.announce(agent);

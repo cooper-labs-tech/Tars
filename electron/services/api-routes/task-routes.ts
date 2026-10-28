@@ -8,7 +8,8 @@ import { liveChatStore } from '../../handlers/chat-handlers';
 import { tellCancelled } from '../agent-watch';
 import { emitAgentStatus } from '../agent-events';
 import { announceTask } from '../task-banner';
-import type { RouteApp } from './types';
+import type { RouteApp, RouteRequest } from './types';
+import { moveWithin, queueRight, queueView, type QueueCaller } from '../agent-queues';
 
 /**
  * Taking back work asked of another agent before it went in
@@ -25,7 +26,89 @@ import type { RouteApp } from './types';
 
 const STATUS = { not_found: 404, not_your_task: 403, reason_required: 400, already_delivered: 409 } as const;
 
+/** Who asks to act on a queue: Tars itself, or the agent whose token makes the call; the shared token is nobody. */
+function queueCaller(req: RouteRequest): QueueCaller | undefined {
+  if (req.internal) return { kind: 'tars' };
+  const agent = req.callerAgentId ? agents.get(req.callerAgentId) : undefined;
+  return agent ? { kind: 'agent', agent } : undefined;
+}
+
+/**
+ * An agent's queue (2.0.5, lot 2, services/agent-queues.ts): read in order, paused and resumed, an item moved.
+ * Cancelling an item is POST /api/tasks/:ref/cancel, below.
+ */
+function registerQueueRoutes(app_: RouteApp): void {
+  app_.get(/^\/api\/agents\/([^/]+)\/queue$/, (req, sendJson) => {
+    const agent = agents.get(req.params.id);
+    const caller = queueCaller(req);
+    if (!agent || !caller) { sendJson({ error: 'Agent not found' }, 404); return; }
+    const right = queueRight(caller, agent, 'list');
+    if (!right.ok) { sendJson({ error: 'not_your_queue', reason: right.reason }, 403); return; }
+    sendJson(queueView(oneTaskQueue, agent.id, right.all || caller.kind !== 'agent' ? undefined : caller.agent.id));
+  });
+
+  app_.post(/^\/api\/agents\/([^/]+)\/queue\/(pause|resume|drop)$/, (req, sendJson) => {
+    const agent = agents.get(req.params.id);
+    const caller = queueCaller(req);
+    if (!agent || !caller) { sendJson({ error: 'Agent not found' }, 404); return; }
+    const op = req.pathname.endsWith('/pause') ? 'pause' : req.pathname.endsWith('/drop') ? 'drop' : 'resume';
+    if (op === 'drop') {
+      // Everything that waits, taken back, each sender told; the same right as a pause.
+      const right = queueRight(caller, agent, 'pause');
+      if (!right.ok) { sendJson({ error: 'not_your_queue', reason: right.reason }, 403); return; }
+      const by = caller.kind === 'agent' ? (caller.agent as { name?: string }).name || caller.agent.id : 'Tars';
+      const items = oneTaskQueue.queued(agent.id);
+      for (const item of items) {
+        oneTaskQueue.cancel(item.ref, `it was dropped by ${by} with the rest of the queue`);
+        requestDropped(agent, item.ref);
+        if (item.requesterId && item.requesterId !== agent.id && item.requesterId !== (caller.kind === 'agent' ? caller.agent.id : undefined)) {
+          tellCancelled(item.requesterId, agent.id, by, 'the queue was dropped');
+        }
+      }
+      saveAgents();
+      announceTask(agent.id);
+      sendJson({ success: true, dropped: items.length, ...queueView(oneTaskQueue, agent.id) });
+      return;
+    }
+    const right = queueRight(caller, agent, op);
+    if (!right.ok) { sendJson({ error: 'not_your_queue', reason: right.reason }, 403); return; }
+    const by = caller.kind === 'agent' ? (caller.agent as { name?: string }).name || caller.agent.id : 'Tars';
+    if (op === 'pause') {
+      const reason = typeof (req.body as { reason?: unknown })?.reason === 'string' ? String((req.body as { reason: string }).reason).replace(/\s+/g, ' ').trim().slice(0, 200) : '';
+      oneTaskQueue.pause(agent.id, `paused by ${by}${reason ? `: ${reason}` : ''}`);
+    } else {
+      oneTaskQueue.resume(agent.id);
+    }
+    console.log(`[queue] ${agent.name || agent.id}'s queue ${op}d by ${by}`);
+    announceTask(agent.id);
+    sendJson({ success: true, ...queueView(oneTaskQueue, agent.id) });
+  });
+
+  // POST /api/tasks/:ref/move, `{ before? }`: to the head of its agent's queue, or just before another of its items.
+  app_.post(/^\/api\/tasks\/([^/]+)\/move$/, (req, sendJson) => {
+    const caller = queueCaller(req);
+    const item = oneTaskQueue.find(req.params.id);
+    const worker = item ? agents.get(item.agentId) : undefined;
+    if (!caller || !item || !worker) { sendJson({ error: 'not_found', reason: `No queue holds a task ${req.params.id}: it went in, ended, or was never asked.` }, 404); return; }
+    const right = queueRight(caller, worker, 'move', item);
+    if (!right.ok) { sendJson({ error: 'not_your_task', reason: right.reason }, 403); return; }
+    let before = (req.body as { before?: unknown })?.before;
+    if (before !== undefined && typeof before !== 'string') { sendJson({ error: 'before is the id of another item of the same queue' }, 400); return; }
+    // A worker, among its own items only (the Audit's L1 on #536).
+    if (!right.all && caller.kind === 'agent') {
+      const within = moveWithin(oneTaskQueue.queued(worker.id), item.ref, before as string | undefined, caller.agent.id);
+      if (!within.ok) { sendJson({ error: 'not_your_task', reason: within.reason }, 403); return; }
+      if (within.stays) { sendJson({ success: true, moved: item.ref, ...queueView(oneTaskQueue, worker.id, caller.agent.id) }); return; }
+      before = within.before;
+    }
+    if (!oneTaskQueue.move(item.ref, before as string | undefined)) { sendJson({ error: 'not_found', reason: `${String(before)} is not in ${worker.name || worker.id}'s queue.` }, 400); return; }
+    announceTask(worker.id);
+    sendJson({ success: true, moved: item.ref, ...queueView(oneTaskQueue, worker.id, right.all ? undefined : (caller as { agent: { id: string } }).agent.id) });
+  });
+}
+
 export function registerTaskRoutes(app_: RouteApp): void {
+  registerQueueRoutes(app_);
   app_.post(/^\/api\/tasks\/([^/]+)\/cancel$/, (req, sendJson) => {
     const callerId = req.callerAgentId;
     const { reason } = (req.body ?? {}) as { reason?: unknown };
@@ -61,6 +144,13 @@ export function registerTaskRoutes(app_: RouteApp): void {
       return;
     }
     const verdict = cancelVerdict(req.params.id, callerId, reason, agents.values());
+    // Started already (its turn taken, or typed in), and no longer held anywhere: said so, not "no such task" (2.0.5,
+    // the window's frames of #535). Its asker, or the agent it was for, only: anyone else learns nothing of it.
+    const was = !verdict.ok && verdict.error === 'not_found' ? oneTaskQueue.lookup(req.params.id) : undefined;
+    if (was && (was.state === 'starting' || was.state === 'started' || was.state === 'delivered') && callerId && (callerId === was.task.requesterId || callerId === was.task.agentId)) {
+      sendJson({ error: 'already_started', reason: 'This task has started: it is no longer waiting in the queue. Stop the agent, or its turn, to end it.' }, 409);
+      return;
+    }
     if (!verdict.ok) {
       sendJson({ error: verdict.error, reason: verdict.reason }, STATUS[verdict.error]);
       return;
