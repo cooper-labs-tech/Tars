@@ -773,6 +773,17 @@ describe('two requests at one worker, each told to its own asker (PR A, core/tas
     expect(note).not.toMatch(/\nMessage from Tars: merge it/);
   });
 
+  // The Audit's Info 2 on the train: the window says the asker is told "It never started: it was taken back by you, in
+  // the window." The note says those words, not another wording of the same cancel.
+  it('a request the owner takes back in the window is told to its asker in the window\'s own sentence', () => {
+    const lead = attachTerminal('pty-lead');
+    putAgent({ id: 'lead', name: 'Lead', status: 'idle', ptyId: 'pty-lead' });
+    putAgent({ id: 'w', name: 'Worker', status: 'running', ptyId: 'pty-w' });
+    watch.tellTakenBack('lead', 'w');
+    const note = received(lead);
+    expect(note).toContain('never ran what you asked of it. It never started: it was taken back by you, in the window.');
+  });
+
   it('a request its own asker cancels, or one without an asker, tells nobody', () => {
     const terminal = attachTerminal('pty-w2');
     putAgent({ id: 'w2', name: 'Worker', status: 'idle', ptyId: 'pty-w2' });

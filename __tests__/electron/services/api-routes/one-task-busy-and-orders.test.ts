@@ -93,6 +93,9 @@ import { EventEmitter } from 'node:events';
  *     is not withdrawn and goes in later, or another turn is interrupted.
  * 25. (L2) A task queued behind a delegated task whose CLI exited meanwhile is
  *     never said started: no session is started for it, or it reads typed.
+ * And from the Audit's train audit (Info 2): one owner's cancel had three wordings.
+ * 23c. A delegated task the owner takes back from its queue in the window answers its waiting asker in other words
+ *     than the window says it is told: "It never started: it was taken back by you, in the window."
  */
 
 type FakePty = { pid: number; process: string; write: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn>; resize: ReturnType<typeof vi.fn>; onData: ReturnType<typeof vi.fn>; onExit: ReturnType<typeof vi.fn> };
@@ -725,6 +728,23 @@ describe('the halves of the fix the QA pinned (gate of 05e31fa4)', () => {
     expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ outcome: 'error' });
     expect(String((seen.answer()?.data.task as { error?: string } | undefined)?.error)).toContain('cancelled');
   });
+});
+
+describe('a delegated task the owner takes back (the Audit\'s Info 2 on the train)', () => {
+  it('23c. its waiting asker reads the window\'s own sentence', async () => {
+    withCli('cl', 'claude', 'idle');
+    call('POST', '/api/agents/cl/run-task', { task: 'TASK-A review', answer: 'started' }, 'orch');
+    await later(1500);
+    const b = call('POST', '/api/agents/cl/run-task', { task: 'TASK-B fix it' }, 'orch');
+    await later(50);
+    const ref = oneTaskQueue.queued('cl').find(t => t.title.includes('TASK-B'))?.ref;
+    expect(ref, 'B waits behind A').toBeDefined();
+    // The window's cancel (agent-queue-handlers.ts's takeBack), with its why.
+    oneTaskQueue.cancel(ref!, 'it was taken back by you, in the window');
+    // The held request sees the cancel at its next look (TASK_WAIT_STEP_MS).
+    await later(1500);
+    expect(b.answer()?.data).toMatchObject({ code: 'cancelled', error: 'It never started: it was taken back by you, in the window.' });
+  }, 20_000);
 });
 
 describe('a task that waited its turn and went in (L3)', () => {
