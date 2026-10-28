@@ -70,6 +70,10 @@
  *     the delay, the end of the session or the turn.
  * 24. An orchestrator's list_agents does not show a teammate's pending question: the tool, what it runs, why
  *     Claude Code asked, since when and until when.
+ * And from the Audit's gate of #538 (L3):
+ * 25. A secret in the command (a token, a URL's password) reaches permissions.log, which every agent can read, or
+ *     another agent through list_agents or get_agent: both are masked (redactSecrets). The window, where the owner
+ *     decides, keeps the command whole.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -564,5 +568,38 @@ describe('Tars answers for a bypass agent inside its own folders', () => {
       permissionAsk: { tool: 'Bash', subject: 'rm -rf build', reason: 'This command requires approval', askedAt: a.permissionAsk!.askedAt, until: a.permissionAsk!.until },
     });
   });
-});
 
+  it('25. a secret in the command is masked in the log and for the agents, kept whole for the window', async () => {
+    const fs = await import('fs');
+    const { PERMISSION_LOG } = await import('../../../../electron/services/permission-asks');
+    fs.rmSync(PERMISSION_LOG, { force: true });
+    const token = ['ghp_', 'K'.repeat(12), 'L'.repeat(12)].join('');
+    const command = `curl -H "Authorization: Bearer ${token}" https://api.x && psql postgres://app:hunter2secret@db/x`;
+    const a = agent();
+    void askUntilAnswered(question({ input: { command } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk!.subject).toBe(command);
+    const agentApp = makeRouteApp();
+    registerAgentRoutes(agentApp, ctx);
+    const get = async (pattern: string, url: string, params: Record<string, string> = {}) => {
+      const route = agentApp.routes.find(r => r.method === 'GET' && String(r.pattern) === pattern)!;
+      return new Promise<Record<string, unknown>>(resolve => {
+        void route.handler({ body: {}, params, url: new URL(`http://x${url}`), headers: {} } as unknown as RouteRequest, (b: Record<string, unknown>) => resolve(b), ctx);
+      });
+    };
+    const one = String(/^\/api\/agents\/([^/]+)$/);
+    const listed = JSON.stringify(await get('/api/agents', '/api/agents'));
+    const single = JSON.stringify(await get(one, '/api/agents/a1', { id: 'a1' }));
+    const full = JSON.stringify(await get(one, '/api/agents/a1?full=true', { id: 'a1' }));
+    for (const [where, text] of [['list', listed], ['get', single], ['full', full]] as const) {
+      expect(text, where).toContain('curl -H');
+      expect(text, where).not.toContain(token);
+      expect(text, where).not.toContain('hunter2secret');
+    }
+    answerPermission('a1', 'deny', 'the user');
+    const log = fs.readFileSync(PERMISSION_LOG, 'utf8');
+    expect(log).toContain('curl -H');
+    expect(log).not.toContain(token);
+    expect(log).not.toContain('hunter2secret');
+  });
+});
