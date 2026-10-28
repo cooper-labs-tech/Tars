@@ -1546,7 +1546,10 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
   Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field it does not show, past 2,000
   characters, not text) is asked the same way, `withheld`, with `withheldWhy` naming each field left out and why.
-  Bash's timeout, background and sandbox fields are shown as words after the command, and stay allowable.
+  Bash's timeout, background and sandbox fields are shown as words after the command, and stay allowable. The
+  window's line names every field an allow covers (a Grep reads `BEGIN OPENSSH in /Users/x/.ssh`). A bypass
+  worker's AskUserQuestion is refused at once, telling it to ask its orchestrator with `send_message`; an
+  orchestrator's, or an agent's not in bypass, stays with the person.
   SECURITY.md says why. The agents are told to write files with the Write tool.
 - **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
   `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads

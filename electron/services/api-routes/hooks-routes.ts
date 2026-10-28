@@ -12,7 +12,7 @@ import { emitAgentStatus, agentStatusEmitter } from '../agent-events';
 import { onTurnEnded, onUsageLimit } from '../claude-accounts/switching';
 import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
-import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, subjectOf } from '../permission-asks';
+import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, questionFingerprint, subjectOf } from '../permission-asks';
 import { levelOf } from '../../core/permission-ceiling';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
@@ -677,6 +677,8 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
   // `ask` hands it back to the dialog: for a session that is not the agent's
   // current one, nothing to name, or a question dropped.
   const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+  const ASK_YOUR_ORCHESTRATOR = 'Nobody answers a question in your terminal while you work on your own, at night as well: '
+    + 'ask your orchestrator with send_message, and go on with the rest meanwhile.';
   app.post('/api/hooks/permission', async (req, sendJson) => {
     const { agent_id, tool, input, tool_use_id, reason, rule } = req.body as {
       agent_id?: string; tool?: unknown; input?: unknown; tool_use_id?: unknown; reason?: unknown; rule?: unknown;
@@ -708,6 +710,18 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     // decision of 28/10). For an agent in bypass, autonomous, held and refused
     // at the delay; for any other, back to Claude Code's own dialog at once,
     // one step, as before #538: its owner chose to be asked there.
+    // An AskUserQuestion is a question to the person, which nobody answers at a bypass worker's terminal at night
+    // (the Audit's fifth gate of #538, its Low): refused at once, with where to ask instead. An orchestrator's goes to
+    // the person, as does any agent's not in bypass, whose owner chose to be asked there.
+    if (question.tool === 'AskUserQuestion') {
+      if (levelOf(agent) === 'bypass' && agent.role !== 'orchestrator') {
+        logPermission(agent, agent.id, question.tool, 'deny', 'Tars (a bypass worker asks its orchestrator)', subjectOf(question.tool, fields));
+        sendJson({ decision: 'deny', reason: ASK_YOUR_ORCHESTRATOR, fingerprint: questionFingerprint(question.tool, fields) });
+      } else {
+        sendJson({ decision: 'ask' });
+      }
+      return;
+    }
     const fileTool = FILE_TOOLS.has(question.tool);
     const withheld = fileTool || (req.body as { withheld?: unknown }).withheld === true;
     const said = (req.body as { withheld_why?: unknown }).withheld_why;

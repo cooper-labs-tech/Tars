@@ -98,19 +98,30 @@ export function questionFingerprint(tool: string, fields: Record<string, string>
   return createHash('sha256').update(JSON.stringify([tool, Object.keys(fields).sort().map(k => [k, fields[k]])])).digest('hex');
 }
 
-/** What the window names as asked: the command, the path or the address, whole; the tool when there is none. */
+/** The field the window's line opens on, in this order: what runs, the file, the address, the search, the folder. */
+const MAIN_FIELDS = ['command', 'file_path', 'notebook_path', 'url', 'query', 'pattern', 'path'];
+/** Bash's fields the mod shows as words (the Audit's M1 on #538), said after the command when not their default. */
+const BASH_WORDS = ['timeout', 'run_in_background', 'dangerouslyDisableSandbox'];
+
+/**
+ * What the window names as asked: every field an allow covers, whole (the Audit's fifth gate of #538, M1: a Grep of
+ * `~/.ssh` read as a search for a string). The main field first (the tool's name when there is none, a file as
+ * `<tool> <path>`), a search's folder as `in <path>`, then each other field as `<field> <value>`, by name. A Bash's
+ * `description` is the model's own words, not what runs, and is left out.
+ */
 export function subjectOf(tool: string, fields: Record<string, string>): string {
-  const path = fields.file_path || fields.notebook_path;
-  const subject = fields.command || (path ? `${tool} ${path}` : '') || fields.url || fields.query || fields.pattern || fields.path || tool;
-  if (tool !== 'Bash') return subject;
-  // Bash's fields the mod shows as words, in the line the window shows, or an allow approves what was not read (the
-  // Audit's M1 on #538): what is not their default.
-  const words = [
-    ...(fields.timeout ? [`timeout ${fields.timeout} ms`] : []),
-    ...(fields.run_in_background === 'true' ? ['in the background'] : []),
-    ...(fields.dangerouslyDisableSandbox === 'true' ? ['outside the sandbox'] : []),
-  ];
-  return words.length ? `${subject} (${words.join(', ')})` : subject;
+  const main = MAIN_FIELDS.find(k => fields[k]);
+  const head = !main ? tool : main === 'file_path' || main === 'notebook_path' ? `${tool} ${fields[main]}` : fields[main];
+  const searchIn = (main === 'pattern' || main === 'query') && fields.path ? ` in ${fields.path}` : '';
+  const words = Object.keys(fields).sort()
+    .filter(k => k !== main && fields[k] && !(searchIn && k === 'path') && !(tool === 'Bash' && (k === 'description' || BASH_WORDS.includes(k))))
+    .map(k => `${k} ${fields[k]}`);
+  if (tool === 'Bash') {
+    if (fields.timeout) words.push(`timeout ${fields.timeout} ms`);
+    if (fields.run_in_background === 'true') words.push('in the background');
+    if (fields.dangerouslyDisableSandbox === 'true') words.push('outside the sandbox');
+  }
+  return `${head}${searchIn}${words.length ? ` (${words.join(', ')})` : ''}`;
 }
 
 type Held = {

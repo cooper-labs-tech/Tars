@@ -302,11 +302,13 @@ export function register(on: On) {
   });
 
   // A call Claude Code would put to its dialog goes to Tars. Only those: a call
-  // the mode or a rule settles is the engine's, an AskUserQuestion is a
-  // question to the person, and a query with no call behind it decides nothing.
+  // the mode or a rule settles is the engine's, and a query with no call behind
+  // it decides nothing. An AskUserQuestion goes too, withheld (its questions are
+  // not sent): Tars, which knows the agent's role and mode, refuses a bypass
+  // worker's and hands any other back to the person (the Audit's fifth gate of #538).
   on<Check>('tool.check', async ($, e, next) => {
     const verdict = await next(e) as Verdict;
-    if (verdict?.decision !== 'ask' || !e.tool_use_id || e.tool === 'AskUserQuestion') return verdict;
+    if (verdict?.decision !== 'ask' || !e.tool_use_id) return verdict;
     return (await askTars($, e, verdict)) ?? verdict;
   });
 

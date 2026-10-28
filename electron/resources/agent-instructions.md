@@ -34,6 +34,10 @@ When Claude Code asks permission for a call, Tars never answers yes by itself: t
 waits for the user, who may be away for the night, and is refused after a delay. A Write inside
 your own worktree is not asked about in bypass; a shell command that writes a file often is.
 
+Never ask a question with AskUserQuestion: nobody answers in your terminal while you work on your
+own, and Tars refuses it for a worker in bypass. A worker asks its orchestrator with `send_message`;
+an orchestrator asks the user with `ask_user`.
+
 ## Waiting on work you started
 
 Your turn ending is your report. When you stop, Tars tells whoever gave you the task that you have
