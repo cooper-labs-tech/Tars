@@ -1358,10 +1358,12 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 side).
 - **Per agent:**
   - the memory and CPU of its whole process tree, from its terminal down;
-  - its processes, by memory, each with its pid and its command line masked for the window (`utils/redact-command-line.ts`:
-    the value after any flag named for a password, pass, secret, token, key or auth, a URL's password with or without
-    a user, `curl -u`, `sshpass -p`, mysql's `-p<value>`, `docker login -p`, live Stripe keys, `hf_` tokens, AWS secret
-    keys, and what `redactSecrets` masks, each masked whole);
+  - its processes, by memory, each with its pid and its command line masked for the window by default
+    (`utils/redact-command-line.ts`): the program, the paths, the file names, the flags, the numbers and every argument
+    under eight characters stay, and any other argument is masked whole. A shorter secret is masked where its place
+    says so: after a flag or a name that says password, pass, secret, token, key, auth or credential, in a URL's
+    password, after `curl -u`, `sshpass -p`, mysql's `-p` or `docker login -p`. A subcommand of eight letters or more
+    (`checkout`) is masked too: the rule knows no words;
   - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
   - its status and since when (`statusSince`, or `asleepSince` for a sleeping one).
 - **Per project:** the same, summed (`totals`).
@@ -1374,8 +1376,9 @@ side).
   (`resources`: memory, CPU, and each process as its program, pid, memory and CPU, never its arguments: no masking
   knows every secret a command line carries). Their own project's agents only: `get_agent` answers another project's
   agent as an unknown one (404, `Agent not found`), and `list_agents` with `all` names other projects' agents with
-  their status, project and role, nothing more (the Audit's H1 on #546). A caller with no project, the owner's own
-  token, reads everything, and so does the window through IPC.
+  their status, project and role, nothing more (the Audit's H1 on #546). So do `get_agent_output`, `wait_for_agent`,
+  `/bootstrap` and `/health`: every route that names an agent by its id answers its own project only. A caller with no
+  project, the owner's own token, reads everything, and so does the window through IPC.
 
 ## MCP servers
 

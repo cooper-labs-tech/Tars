@@ -602,6 +602,17 @@ function projectAgent(agent: AgentStatus) {
   return { ...rest, outputChunks: output.length };
 }
 
+/**
+ * The agent a route names by its id, for its own project's callers only: another project's reads as unknown, naming
+ * nothing (the Audit's H1 on #546, the orchestrator's decision): its output, its last answer, its roster, its health
+ * and its processes are its project's. A caller with no project (the owner's own token) reads any; the window has IPC.
+ */
+function visibleAgent(req: RouteRequest): AgentStatus | undefined {
+  const agent = agents.get(req.params.id);
+  const caller = callerProject(req);
+  return agent && (!caller || agent.projectPath === caller) ? agent : undefined;
+}
+
 // callerId and callerProject live in ./utils: the bus routes ask the same two
 // questions, and one answer to each is one thing to change.
 
@@ -1938,7 +1949,7 @@ function whenItApplies(
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2066,12 +2077,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
   // GET /api/agents/:id
   app_.get(/^\/api\/agents\/([^/]+)$/, async (req, sendJson) => {
-    const agent = agents.get(req.params.id);
-    // Another project's agent is refused as an unknown one, naming nothing (the Audit's H1 on #546, the orchestrator's
-    // decision): its output, its task and its processes are its project's. A caller with no project (the owner's own
-    // token) reads any.
-    const caller = callerProject(req);
-    if (!agent || (caller && agent.projectPath !== caller)) {
+    const agent = visibleAgent(req);
+    if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
@@ -2091,7 +2098,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // the "who am I / who is my team" handshake automatic instead of a manual
   // ritual at the start of every working session.
   app_.get(/^\/api\/agents\/([^/]+)\/bootstrap$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2170,7 +2177,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/health: liveness of the agent's PTY and session,
   // so orchestrators/tools can distinguish "working" from "ghost status".
   app_.get(/^\/api\/agents\/([^/]+)\/health$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2189,7 +2196,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
   // GET /api/agents/:id/output
   app_.get(/^\/api\/agents\/([^/]+)\/output$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;

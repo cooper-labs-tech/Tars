@@ -142,7 +142,8 @@ describe('a command line as the window shows it', () => {
 
   it('C34. by default, an argument of eight characters or more that is not a flag, a path or a number is masked', () => {
     expect(redactCommandLine('deploy-tool run Xk9pQ2mZ7vB4')).toBe('deploy-tool run [redacted]');
-    expect(redactCommandLine('git checkout 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39')).toBe('git checkout [redacted]');
+    // A subcommand of eight letters or more too: the rule knows no words.
+    expect(redactCommandLine('git checkout 4f2a9c1e8b7d6a5f4e3d2c1b0a9f8e7d6c5b4a39')).toBe('git [redacted] [redacted]');
     expect(redactCommandLine('curl https://hooks.example.com/services/T0/B0/XYZ')).toBe('curl [redacted]');
   });
 
@@ -157,7 +158,7 @@ describe('a command line as the window shows it', () => {
   });
 
   it('C36. a name before = is kept, its value masked by the same rule, always after a name that says secret', () => {
-    expect(redactCommandLine(`app --region=eu-west-1 --session=${V} DEBUG=1 HOME=/Users/x`)).toBe('app --region=eu-west-1 --session=[redacted] DEBUG=1 HOME=/Users/x');
+    expect(redactCommandLine(`app --region=eu-1 --zone=eu-west-1a --session=${V} DEBUG=1 HOME=/Users/x`)).toBe('app --region=eu-1 --zone=[redacted] --session=[redacted] DEBUG=1 HOME=/Users/x');
     expect(redactCommandLine('app DB_PASS=pw12 --password=short')).toBe('app DB_PASS=[redacted] --password=[redacted]');
   });
 });
