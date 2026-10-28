@@ -28,8 +28,6 @@ vi.mock('electron', () => ({
   BrowserWindow: Object.assign(vi.fn(), { getAllWindows: () => [] }),
 }));
 
-import type { AppSettings } from '../../../electron/types';
-
 const geminiSettings = () => path.join(os.homedir(), '.gemini', 'settings.json');
 // Where a packaged Tars keeps its bundled MCP servers, as Electron sets it.
 (process as { resourcesPath?: string }).resourcesPath = path.join(os.homedir(), 'Tars.app', 'Contents', 'Resources');
@@ -64,16 +62,16 @@ describe('the relay turned on', () => {
   });
 
   it('3. the start does not register mcp-telegram again', () => {
-    expect(sw.bundledMcpServersFor({ hermesRelayEnabled: true } as AppSettings)).not.toContain('claude-mgr-telegram');
-    expect(sw.bundledMcpServersFor({ hermesRelayEnabled: true } as AppSettings)).toContain('claude-mgr-orchestrator');
+    expect(sw.bundledMcpServers()).not.toContain('claude-mgr-telegram');
+    expect(sw.bundledMcpServers()).toContain('claude-mgr-orchestrator');
   });
 });
 
 describe('the relay off (2.0.5: no bot)', () => {
   it('5. never registers mcp-telegram, and takes it out of a CLI a 2.0.4 registered it in', async () => {
-    expect(sw.bundledMcpServersFor({ hermesRelayEnabled: false } as AppSettings)).not.toContain('claude-mgr-telegram');
-    expect(sw.bundledMcpServersFor({} as AppSettings)).not.toContain('claude-mgr-telegram');
-    expect(sw.bundledMcpServersFor({} as AppSettings)).toContain('claude-mgr-orchestrator');
+    expect(sw.bundledMcpServers()).not.toContain('claude-mgr-telegram');
+    expect(sw.bundledMcpServers()).not.toContain('claude-mgr-telegram');
+    expect(sw.bundledMcpServers()).toContain('claude-mgr-orchestrator');
     const gemini = await geminiWithTelegram();
     await sw.retireTelegramMcp([gemini]);
     expect(Object.keys(JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers)).toEqual(['claude-mgr-orchestrator']);

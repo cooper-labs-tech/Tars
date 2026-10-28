@@ -34,7 +34,6 @@ export {
   type DecodeDeps,
 } from './claude-project-dir';
 export { windowsSoundCommand, type SoundCommand } from './sound';
-export { credentialStoreDirs } from './credential-stores';
 export {
   renameReplacingSync, rmRetryingSync, unlinkRetryingSync, RENAME_RETRY_BUDGET_MS, REMOVE_RETRY_BUDGET_MS,
   type RenameDeps, type RemoveDeps,

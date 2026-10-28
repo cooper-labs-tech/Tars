@@ -5,7 +5,7 @@
  * - Window management and protocol handling
  * - Agent state and PTY management
  * - IPC handlers for renderer communication
- * - External services (Telegram, Slack, HTTP API)
+ * - External services (Slack, Discord, the HTTP API, the relay to Hermes)
  * - MCP orchestrator integration
  */
 
@@ -20,7 +20,6 @@ import { uncaught } from './uncaught';
 import { startGithubWatch } from './services/github-watch';
 import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, startHermesRelay, tellUser } from './services/hermes-relay';
 import { startRelayRouting } from './services/hermes-relay-routing';
-import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
 import { app, dialog, ipcMain, Notification } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
@@ -56,9 +55,6 @@ import {
   saveAgents,
   initAgentPty,
   handleStatusChangeNotification,
-  getSuperAgentOutputBuffer,
-  clearSuperAgentOutputBuffer,
-  superAgentTelegramTask,
 } from './core/agent-manager';
 
 import {
@@ -80,13 +76,6 @@ import { broadcastToAllWindows } from './utils/broadcast';
 import { startApiServer } from './services/api-server';
 import { startOpenAIBridgeServer, stopOpenAIBridgeServer } from './services/openai-bridge';
 import {
-  initTelegramBotService,
-  initTelegramBot as initTelegramBotHandlers,
-  getTelegramBot,
-  sendTelegramMessage,
-  sendSuperAgentResponseToTelegram,
-} from './services/telegram-bot';
-import {
   initSlackBot,
   getSlackApp,
   getSlackResponseChannel,
@@ -102,7 +91,6 @@ import { readAccountsSettings } from './services/claude-accounts/registry';
 import { restartForSettings } from './core/agent-restart';
 import {
   getClaudeSettings,
-  getClaudeStats,
   getClaudeStatsNow,
   prewarmClaudeStats,
   getClaudeProjects,
@@ -162,6 +150,7 @@ import { hermesKanban, tellOrchestratorAsTars } from './services/api-routes/kanb
 import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
+import { retireTelegramBot, withoutTelegramBot } from './services/telegram-retired';
 import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
 import { endAcpRunsOnQuit, agentsRunningOverAcp } from './services/acp/delegate';
 import { retentionLog, startTmpRetention } from './services/agent-tmp';
@@ -177,7 +166,6 @@ import {
   setMainWindow as setUtilsMainWindow,
   sendNotification,
   isSuperAgent,
-  getSuperAgent,
   ensureDataDir,
   ensureAgentInstructions,
   migrateFromClaudeManager,
@@ -233,12 +221,6 @@ function loadAppSettings(): AppSettings {
     notifyOnComplete: true,
     notifyOnStop: true,
     notifyOnError: true,
-    telegramEnabled: false,
-    telegramBotToken: '',
-    telegramChatId: '',
-    telegramAuthToken: '',
-    telegramAuthorizedChatIds: [],
-    telegramRequireMention: false,
     hermesRelayEnabled: false,
     slackEnabled: false,
     slackBotToken: '',
@@ -303,8 +285,10 @@ function loadAppSettings(): AppSettings {
       additionalPaths: [],
     },
   };
-  // Every key out of ~/.tars before anything reads one (services/settings-secrets.ts).
+  // Every key out of ~/.tars before anything reads one (services/settings-secrets.ts),
+  // then what a 2.0.4 left of Tars's own Telegram bot (services/telegram-retired.ts).
   migrateSecrets();
+  retireTelegramBot();
   try {
     if (fs.existsSync(APP_SETTINGS_FILE)) {
       const saved = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf-8'));
@@ -326,36 +310,10 @@ function saveAppSettingsToFile(settings: AppSettings) {
     ensureDataDir();
     // 0600 and atomic. The secrets go to ~/.tars-private (settings-secrets.json,
     // and the Sentry token's own file), the rest to app-settings.json.
-    saveSettingsSplit(settingsToSave(settings) as AppSettings);
+    saveSettingsSplit(withoutTelegramBot(settingsToSave(settings)) as AppSettings);
   } catch (err) {
     console.error('Failed to save app settings:', err);
   }
-}
-
-// ============== Telegram Bot Initialization ==============
-
-function initTelegramBot() {
-  // First inject dependencies into the Telegram bot service
-  initTelegramBotService(
-    agents,
-    ptyProcesses,
-    // Live: a save replaces this object, and the bot must see the new one.
-    () => appSettings,
-    getMainWindow(),
-    () => getSuperAgent(agents),
-    saveAgents,
-    getClaudeStats,
-    (agent: AgentStatus) => initAgentPty(
-      agent,
-      getMainWindow(),
-      handleStatusChangeNotificationWrapper,
-      saveAgents
-    ),
-    saveAppSettingsToFile
-  );
-
-  // Then initialize the bot with handlers
-  initTelegramBotHandlers();
 }
 
 // ============== Notification Handler Wrapper ==============
@@ -366,8 +324,6 @@ function handleStatusChangeNotificationWrapper(agent: AgentStatus, newStatus: st
     newStatus,
     appSettings,
     sendNotification,
-    (text: string) => sendTelegramMessage(text),
-    sendSuperAgentResponseToTelegram
   );
 }
 
@@ -397,26 +353,12 @@ function createIpcDependencies(): IpcHandlerDependencies {
     handleStatusChangeNotification: handleStatusChangeNotificationWrapper,
     isSuperAgent,
     getMcpOrchestratorPath,
-    initTelegramBot,
     initSlackBot: () => initSlackBot(() => appSettings, (settings) => {
       appSettings = settings;
       saveAppSettingsToFile(settings);
     }, getMainWindow()),
     initDiscordBot: startDiscordBot,
-    getTelegramBot,
     getSlackApp,
-    getSuperAgentTelegramTask: () => {
-      // Read at call time, not at wire-up time: this is a mutable module
-      // binding, and TypeScript's CommonJS output dereferences it on each
-      // access, so the import gives the current value the require gave.
-      return superAgentTelegramTask;
-    },
-    getSuperAgentOutputBuffer,
-    setSuperAgentOutputBuffer: (buffer: string[]) => {
-      // This is handled internally by agent-manager
-      clearSuperAgentOutputBuffer();
-      buffer.forEach(item => getSuperAgentOutputBuffer().push(item));
-    },
 
     // Claude data functions. The page's stats come at once, as last computed,
     // and are computed again behind it once a minute old; the bots keep
@@ -444,7 +386,6 @@ function initApiServer() {
   startApiServer(
     getMainWindow(),
     appSettings,
-    getTelegramBot,
     getSlackApp,
     getSlackResponseChannel(),
     getSlackResponseThreadTs(),
@@ -724,13 +665,8 @@ app.whenReady().then(async () => {
 
 
   // The relay to the user's Telegram through their Hermes, following its switch
-  // live (services/hermes-relay.ts). On, it is the only voice there: the Tars
-  // bot's token is gone and the bot stays off (hermes-relay-switch.ts).
-  const forRelay = settingsForRelay(appSettings);
-  if (forRelay !== appSettings) {
-    appSettings = forRelay;
-    saveAppSettingsToFile(forRelay);
-  }
+  // live (services/hermes-relay.ts): the only way to their Telegram since 2.0.5,
+  // when Tars's own bot went (services/telegram-retired.ts).
   startHermesRelay({ enabled: () => appSettings.hermesRelayEnabled === true });
   startRelayRouting({
     agents, ptyProcesses, settings: () => appSettings, saveAgents,
@@ -740,7 +676,6 @@ app.whenReady().then(async () => {
   startHermesSessionWatch();
 
   // Initialize services
-  initTelegramBot();
   initSlackBot(() => appSettings, (settings) => {
     appSettings = settings;
     saveAppSettingsToFile(settings);
@@ -1104,4 +1039,4 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
   }
 });
 
-export { appSettings, getTelegramBot };
+export { appSettings };

@@ -19,8 +19,8 @@ export function dataDir(): string {
  * Tars's settings file (~/.tars/app-settings.json) as it is at this call:
  * what it parses to, or undefined when there is none or it cannot be read.
  * It holds no key since 2.0.4 (they are in ~/.tars-private, which nothing
- * handed to an agent reads): the X server reads its Posting switch here and
- * the Telegram server its authorized chats, and Tars makes their calls.
+ * handed to an agent reads): the X server reads its Posting switch here, and
+ * Tars makes its calls.
  */
 export function readAppSettings(onError?: (error: unknown) => void): unknown {
   const file = path.join(dataDir(), "app-settings.json");

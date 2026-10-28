@@ -25,7 +25,6 @@ import * as os from 'os';
 import { DATA_DIR, DATA_DIR_MOVE, dataPath } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
-import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
@@ -42,7 +41,7 @@ import { landsUnderSafeRoot } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
-import { retireTelegramMcp, settingsForRelay } from '../services/hermes-relay-switch';
+import { withoutTelegramBot } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
 import { agentStatusOnExit, refuseWhileQuitting } from '../core/quit-state';
@@ -83,7 +82,6 @@ import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
-import { copySecret, showSecretOnce } from '../services/secret-handoff';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -118,14 +116,9 @@ export interface IpcHandlerDependencies {
   handleStatusChangeNotification: (agent: AgentStatus, newStatus: string) => void;
   isSuperAgent: (agent: AgentStatus) => boolean;
   getMcpOrchestratorPath: () => string;
-  initTelegramBot: () => void;
   initSlackBot: () => void;
   initDiscordBot: () => void;
-  getTelegramBot: () => TelegramBot | null;
   getSlackApp: () => SlackApp | null;
-  getSuperAgentTelegramTask: () => boolean;
-  getSuperAgentOutputBuffer: () => string[];
-  setSuperAgentOutputBuffer: (buffer: string[]) => void;
 
   // Claude data functions. The real shapes live in claude-service.ts, which is
   // what actually provides these: this used to restate them as `any`, so a
@@ -325,10 +318,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     saveAgents,
     initAgentPty,
     handleStatusChangeNotification,
-    isSuperAgent,
-    getSuperAgentTelegramTask,
-    getSuperAgentOutputBuffer,
-    setSuperAgentOutputBuffer
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
@@ -504,15 +493,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       appendAgentOutput(agent, data);
       agent.lastActivity = new Date().toISOString();
       agent.statusLine = extractStatusLine(agent.output);
-
-      // Capture Super Agent output for Telegram
-      if (getSuperAgentTelegramTask() && isSuperAgent(agent)) {
-        const buffer = getSuperAgentOutputBuffer();
-        buffer.push(data);
-        if (buffer.length > 200) {
-          setSuperAgentOutputBuffer(buffer.slice(-100));
-        }
-      }
 
       broadcastToAllWindows('agent:output', {
         type: 'output',
@@ -709,13 +689,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           appendAgentOutput(agentData, data);
           agentData.lastActivity = new Date().toISOString();
           agentData.statusLine = extractStatusLine(agentData.output);
-          if (getSuperAgentTelegramTask() && isSuperAgent(agentData)) {
-            const buffer = getSuperAgentOutputBuffer();
-            buffer.push(data);
-            if (buffer.length > 200) {
-              setSuperAgentOutputBuffer(buffer.slice(-100));
-            }
-          }
         }
         broadcastToAllWindows('agent:output', {
           type: 'output',
@@ -1802,10 +1775,8 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     getAppSettings,
     setAppSettings,
     saveAppSettings,
-    initTelegramBot,
     initSlackBot,
     initDiscordBot,
-    getTelegramBot,
     getSlackApp
   } = deps;
 
@@ -1995,9 +1966,6 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
 
   async function applySettings(newSettings: Partial<AppSettings>, merge: (current: AppSettings) => AppSettings): Promise<{ success: boolean; error?: string }> {
     try {
-      const telegramChanged = newSettings.telegramEnabled !== undefined ||
-                              newSettings.telegramBotToken !== undefined;
-
       const slackChanged = newSettings.slackEnabled !== undefined ||
                            newSettings.slackBotToken !== undefined ||
                            newSettings.slackAppToken !== undefined;
@@ -2008,22 +1976,10 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
                              newSettings.discordBotToken !== undefined;
 
       const currentSettings = getAppSettings();
-      // With the relay on, Hermes is the only voice on the user's Telegram: the
-      // Tars bot's token is erased and the bot off, whatever else was saved
-      // (hermes-relay-switch.ts).
-      const updatedSettings = settingsForRelay(merge(currentSettings));
-      const relayTurnedOn = updatedSettings.hermesRelayEnabled === true && currentSettings.hermesRelayEnabled !== true;
+      // Tars's own Telegram bot is gone (2.0.5): its fields a window still sends are dropped (telegram-retired.ts).
+      const updatedSettings = withoutTelegramBot(merge(currentSettings));
       setAppSettings(updatedSettings);
       saveAppSettings(updatedSettings);
-
-      // Reinitialize Telegram bot if settings changed
-      if (telegramChanged || relayTurnedOn) {
-        initTelegramBot();
-      }
-      // mcp-telegram sends with the bot's token past the relay: out of every CLI.
-      if (relayTurnedOn) {
-        void retireTelegramMcp(getAllProviders());
-      }
 
       // Reinitialize Slack bot if settings changed
       if (slackChanged) {
@@ -2058,88 +2014,6 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     }
   }
 
-  // Test Telegram connection
-  ipcMain.handle('telegram:test', async () => {
-    const appSettings = getAppSettings();
-    if (!appSettings.telegramBotToken) {
-      return { success: false, error: 'No bot token configured' };
-    }
-
-    try {
-      const testBot = new TelegramBot(appSettings.telegramBotToken);
-      const me = await testBot.getMe();
-      return { success: true, botName: me.username };
-    } catch (err) {
-      console.error('Telegram test failed:', err);
-      return { success: false, error: String(err) };
-    }
-  });
-
-  // Send test message to Telegram
-  ipcMain.handle('telegram:sendTest', async () => {
-    const appSettings = getAppSettings();
-    const telegramBot = getTelegramBot();
-
-    // Use the first authorized chat ID, or fall back to legacy chatId
-    const chatId = appSettings.telegramAuthorizedChatIds?.[0] || appSettings.telegramChatId;
-
-    if (!telegramBot || !chatId) {
-      return { success: false, error: 'Bot not connected or no authorized users. Authenticate with /auth <token> first.' };
-    }
-
-    try {
-      await telegramBot.sendMessage(chatId, '✅ Test message from Tars!');
-      return { success: true };
-    } catch (err) {
-      console.error('Telegram send test failed:', err);
-      return { success: false, error: String(err) };
-    }
-  });
-
-  // Generate or regenerate the Telegram auth token. The page is told it is
-  // set, never the token: the main process shows it once (secret-handoff.ts),
-  // and telegram:authToken:copy copies it again.
-  ipcMain.handle('telegram:generateAuthToken', async () => {
-    const appSettings = getAppSettings();
-    const newToken = crypto.randomBytes(16).toString('hex');
-
-    appSettings.telegramAuthToken = newToken;
-    saveAppSettings(appSettings);
-    setAppSettings(appSettings);
-
-    void showSecretOnce('Telegram authorization token', newToken,
-      'Send /auth followed by this token to your bot from each Telegram account that may use it. Tars shows it only here: Copy puts it on the clipboard, and Copy token in Settings does again.');
-    return { success: true, set: true };
-  });
-
-  ipcMain.handle('telegram:authToken:copy', async () => ({ copied: copySecret(getAppSettings().telegramAuthToken) }));
-
-  // Remove an authorized Telegram chat ID
-  ipcMain.handle('telegram:removeAuthorizedChatId', async (_event, chatId: string) => {
-    const appSettings = getAppSettings();
-
-    if (!appSettings.telegramAuthorizedChatIds) {
-      return { success: false, error: 'No authorized chat IDs' };
-    }
-
-    appSettings.telegramAuthorizedChatIds = appSettings.telegramAuthorizedChatIds.filter(
-      (id: string) => id !== chatId
-    );
-
-    // If removing the legacy chatId, clear it too
-    if (appSettings.telegramChatId === chatId) {
-      appSettings.telegramChatId = appSettings.telegramAuthorizedChatIds[0] || '';
-    }
-
-    saveAppSettings(appSettings);
-    setAppSettings(appSettings);
-
-    // Notify frontend of settings change
-    const mainWindow = getMainWindow();
-    mainWindow?.webContents.send('settings:updated', settingsForWindow(appSettings));
-
-    return { success: true };
-  });
 
   // Test X API credentials (OAuth 1.0a)
   ipcMain.handle('xapi:test', async () => {

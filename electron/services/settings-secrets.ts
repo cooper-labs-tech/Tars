@@ -22,7 +22,6 @@ export const SECRETS_FILE = privatePath('settings-secrets.json');
 
 /** Every credential AppSettings carries. A field named like a key, a token, a secret or a password must be here. */
 export const SECRET_FIELDS = [
-  'telegramBotToken', 'telegramAuthToken',
   'slackBotToken', 'slackAppToken', 'slackSigningSecret',
   'discordBotToken',
   'jiraApiToken', 'socialDataApiKey',

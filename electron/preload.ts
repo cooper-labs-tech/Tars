@@ -463,21 +463,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
-  // Telegram bot
-  telegram: {
-    test: () =>
-      ipcRenderer.invoke('telegram:test'),
-    sendTest: () =>
-      ipcRenderer.invoke('telegram:sendTest'),
-    // Mints a token the main process shows the user once; the page is told it is set (secret-handoff.ts).
-    generateAuthToken: () =>
-      ipcRenderer.invoke('telegram:generateAuthToken'),
-    copyAuthToken: () =>
-      ipcRenderer.invoke('telegram:authToken:copy'),
-    removeAuthorizedChatId: (chatId: string) =>
-      ipcRenderer.invoke('telegram:removeAuthorizedChatId', chatId),
-  },
-
   // Slack bot
   slack: {
     test: () =>

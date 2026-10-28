@@ -52,7 +52,7 @@ process.stdin.resume();
 
 const sha = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const SECRETS = {
-  telegramBotToken: '7000001:e2e-telegram-bot-token', deepSeekApiKey: 'sk-e2e-deepseek-1111', socialDataApiKey: 'e2e-socialdata-2222',
+  discordBotToken: 'e2e-discord-bot-token-0000', deepSeekApiKey: 'sk-e2e-deepseek-1111', socialDataApiKey: 'e2e-socialdata-2222',
   xApiKey: 'e2e-x-key-3333', xApiSecret: 'e2e-x-secret-4444', xAccessToken: 'e2e-x-access-5555', xAccessTokenSecret: 'e2e-x-access-secret-6666',
   hermesGatewayToken: 'e2e-hermes-gateway-7777', memoryHonchoApiKey: 'e2e-honcho-8888', slackBotToken: 'xoxb-e2e-slack-9999',
 };
@@ -111,7 +111,7 @@ for (const newInterface of [false, true]) {
     // An install before 2.0.4: every key in app-settings.json, and copies of it beside it.
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
       autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, deepSeekEnabled: true, codexEnabled: true,
-      cliPaths: { claude: cliPath, codex: codexPath, additionalPaths: [bin] }, telegramEnabled: false, xPostingEnabled: false,
+      cliPaths: { claude: cliPath, codex: codexPath, additionalPaths: [bin] }, discordEnabled: false, xPostingEnabled: false,
       cliApiKeys: { codex: { key: CODEX_KEY } }, ...SECRETS,
     }));
     fs.writeFileSync(path.join(dir, 'app-settings.json.avant-node-22.bak'), JSON.stringify({ openRouterApiKey: BACKUP_KEY }));
@@ -166,7 +166,7 @@ for (const newInterface of [false, true]) {
       for (const k of Object.values(SECRETS)) expect.soft(afterSave.includes(k), 'a save from the window keeps every key').toBe(true);
       const setOne = await api((a) => a.secrets?.set('jiraApiToken', 'e2e-jira-ffff') ?? Promise.resolve('no secrets channel'));
       const clearOne = await api((a) => a.secrets?.set('slackBotToken', null) ?? Promise.resolve('no secrets channel'));
-      const refused = await api((a) => a.secrets?.set('telegramEnabled', 'true') ?? Promise.resolve('no secrets channel'));
+      const refused = await api((a) => a.secrets?.set('discordEnabled', 'true') ?? Promise.resolve('no secrets channel'));
       keep({ setOne, clearOne, refused });
       expect.soft(setOne).toEqual({ success: true, set: true });
       expect.soft(clearOne).toEqual({ success: true, set: false });

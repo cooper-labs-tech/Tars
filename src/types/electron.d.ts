@@ -1727,14 +1727,13 @@ export interface ElectronAPI {
       notifyOnComplete: boolean;
       notifyOnStop: boolean;
       notifyOnError: boolean;
-      telegramEnabled: boolean;
-      telegramBotToken: string;
-      telegramChatId: string;
-      telegramAuthToken: string;
-      telegramAuthorizedChatIds: string[];
-      telegramRequireMention: boolean;
-      /** The relay to the user's Telegram through their Hermes. On, the Tars bot's token is erased and the bot off. */
+      /** The relay to the user's Telegram through their Hermes: the only way to their Telegram since 2.0.5. */
       hermesRelayEnabled?: boolean;
+      /**
+       * Set once by the first launch of 2.0.5 that found Tars's own Telegram bot set up: its settings and token are
+       * gone. `hadToken`: the owner may revoke that token with BotFather (/revoke). Never cleared.
+       */
+      telegramBotRetired?: { at: string; hadToken: boolean };
       slackEnabled: boolean;
       slackBotToken: string;
       slackAppToken: string;
@@ -1840,12 +1839,6 @@ export interface ElectronAPI {
       notifyOnComplete?: boolean;
       notifyOnStop?: boolean;
       notifyOnError?: boolean;
-      telegramEnabled?: boolean;
-      telegramBotToken?: string;
-      telegramChatId?: string;
-      telegramAuthToken?: string;
-      telegramAuthorizedChatIds?: string[];
-      telegramRequireMention?: boolean;
       hermesRelayEnabled?: boolean;
       slackEnabled?: boolean;
       slackBotToken?: string;
@@ -1930,20 +1923,6 @@ export interface ElectronAPI {
   // its native Anthropic-compatible endpoint (Ollama v0.14+).
   ollama?: {
     test: () => Promise<{ reachable: boolean }>;
-  };
-
-  // Telegram bot
-  telegram?: {
-    test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
-    sendTest: () => Promise<{ success: boolean; error?: string }>;
-    /**
-     * A new token, shown to the user once by the main process (a dialog the
-     * page cannot read) and never answered: `token` is gone since 2.0.4 (the
-     * Audit's L2 on PR 466). copyAuthToken copies the current one again.
-     */
-    generateAuthToken: () => Promise<{ success: boolean; set?: boolean; token?: never; error?: string }>;
-    copyAuthToken: () => Promise<{ copied: boolean }>;
-    removeAuthorizedChatId: (chatId: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Slack bot

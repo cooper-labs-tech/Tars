@@ -4,7 +4,6 @@ import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { EventEmitter } from 'events';
 import { BrowserWindow } from 'electron';
-import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp } from '@slack/bolt';
 import { AgentStatus, AppSettings } from '../types';
 import { API_PORT, API_TOKEN_FILE, DATA_DIR, privatePath } from '../constants';
@@ -34,7 +33,7 @@ const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const KEEP_ALIVE_GRACE_MS = 55_000;
 
 // The event bus lives in its own module: the overseer listens to it and must
-// not have to import the HTTP server, the Telegram bot and the Slack app to do
+// not have to import the HTTP server and the Slack app to do
 // so. Re-exported here because callers reach it through this file.
 export { emitAgentStatus } from './agent-events';
 import { agentStatusEmitter } from './agent-events';
@@ -264,7 +263,6 @@ function matchRoute(pattern: string | RegExp, pathname: string): Record<string, 
 export function startApiServer(
   mainWindow: BrowserWindow | null,
   appSettings: AppSettings,
-  getTelegramBot: () => TelegramBot | null,
   getSlackApp: () => SlackApp | null,
   slackResponseChannel: string | null,
   slackResponseThreadTs: string | null,
@@ -299,7 +297,6 @@ export function startApiServer(
     mainWindow,
     appSettings,
     getAppSettings: getAppSettings || (() => appSettings),
-    getTelegramBot,
     getSlackApp,
     slackResponseChannel,
     slackResponseThreadTs,

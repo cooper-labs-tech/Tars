@@ -1,4 +1,0 @@
-{
-  "extends": "../tsconfig.mcp.json",
-  "include": ["src/**/*", "../mcp-shared/src/**/*"]
-}

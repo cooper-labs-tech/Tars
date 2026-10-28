@@ -1,5 +1,5 @@
 /**
- * Messaging tools (Telegram, Slack, Discord) for the MCP server
+ * Messaging tools (Telegram through Hermes, Slack, Discord) for the MCP server
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -38,16 +38,22 @@ export function registerMessagingTools(server: McpServer): void {
     }),
     tool({
       name: "send_telegram",
-      description: "Send a message to Telegram. Use this to respond to the user when the request came from Telegram. "
-        + "With the relay to the user's Hermes on, it is a project orchestrator's: it goes to the user through Hermes, "
-        + "under your project, and their reply comes back to you; chat_id is not read.",
+      description: "For a project's orchestrator: write to the user on their Telegram, through their Hermes, under your "
+        + "project, in plain text; their reply comes back to you. Use it to answer a request that came from Telegram. "
+        + "Tars has no Telegram bot of its own: with the relay to Hermes off (Settings, Hermes), nothing is sent, and the "
+        + "answer says so. A worker does not write to the user: it tells its orchestrator.",
       schema: {
-        message: z.string().describe("The message to send to Telegram"),
-        chat_id: z.string().optional().describe("The chat ID to send to. REQUIRED when responding to a specific Telegram chat. Use the chat_id from the incoming Telegram message. Falls back to the default chat ID if not provided."),
+        message: z.string().describe("The message, as the user should read it"),
       },
       failure: "sending to Telegram",
-      async run({ message, chat_id }) {
-        await apiRequest("/api/telegram/send", "POST", { message, chat_id });
+      async run({ message }) {
+        try {
+          await apiRequest("/api/telegram/send", "POST", { message });
+        } catch (err) {
+          const refused = err as { status?: number; body?: { reason?: string } };
+          if (refused.status === 409 && refused.body?.reason) return text(`Not sent: ${refused.body.reason}`);
+          throw err;
+        }
         return sent("Telegram", message);
       },
     }),

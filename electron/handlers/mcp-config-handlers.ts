@@ -7,7 +7,6 @@ import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 // Tars-managed MCP servers, hidden from the Custom MCP UI
 const DOROTHY_MANAGED_MCPS = new Set([
   'claude-mgr-orchestrator',
-  'claude-mgr-telegram',
   'claude-mgr-kanban',
   'claude-mgr-vault',
   'dorothy-socialdata',

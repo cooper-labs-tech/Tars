@@ -314,13 +314,6 @@ export function getLocalAgentRunnerPath(): string {
 }
 
 /**
- * Get the path to the Telegram-specific instructions file
- */
-export function getTelegramInstructionsPath(): string {
-  return getResourcePath('telegram-instructions.md');
-}
-
-/**
  * Read super agent instructions from file
  */
 export function getSuperAgentInstructions(): string {
@@ -334,20 +327,5 @@ export function getSuperAgentInstructions(): string {
   }
   // Fallback instructions
   return 'You are the Super Agent - an orchestrator that manages other Claude agents using MCP tools. Use list_agents, start_agent, get_agent_output, send_telegram, send_slack and send_discord tools.';
-}
-
-/**
- * Read Telegram-specific instructions from file
- */
-export function getTelegramInstructions(): string {
-  const instructionsPath = getTelegramInstructionsPath();
-  try {
-    if (fs.existsSync(instructionsPath)) {
-      return fs.readFileSync(instructionsPath, 'utf-8');
-    }
-  } catch (err) {
-    console.error('Failed to read telegram instructions:', err);
-  }
-  return '';
 }
 
