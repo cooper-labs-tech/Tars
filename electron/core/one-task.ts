@@ -391,12 +391,14 @@ export function workerStopRefusal(caller: WorkCaller, target: { id: string; name
 
 /**
  * What a follower of a task id this run of Tars does not know is told. A task
- * still waiting its turn when Tars quit was in this queue's memory only: gone,
- * and never started.
+ * still waiting its turn when Tars quit is kept, its queue paused (2.0.5, #536,
+ * services/agent-queues.ts): an id no queue holds was not kept, so it never
+ * started here (the QA's F1 on the 2.0.5 train: the text said a restart drops
+ * every queued task).
  */
 export function unknownTaskText(since: number): string {
-  return `No such task. This Tars started at ${new Date(since).toISOString()} and keeps no task that was still waiting its turn `
-    + 'before a restart: such a task never started, and must be asked again.';
+  return `No such task. This Tars started at ${new Date(since).toISOString()}: a task still waiting its turn is kept across a restart, `
+    + 'its queue paused, and none holds this one: it never started here, and if it still needs doing, it must be asked again.';
 }
 
 /**

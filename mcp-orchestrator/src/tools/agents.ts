@@ -177,9 +177,10 @@ function queuedText(task: TaskView): string {
 }
 
 /**
- * A task that had not started when the wait on it lost Tars's answer. It waits
- * its turn in Tars's memory only (one task at a time): a restart drops it, and
- * keeping it across one is a later change. `err` is what the wait met:
+ * A task that had not started when the wait on it lost Tars's answer. A task
+ * waiting its turn is kept across a restart, its queue paused, and goes in once
+ * the queue is resumed (2.0.5, #536): said so, never "ask it again", which ran
+ * it twice (the QA's F1 on the 2.0.5 train). `err` is what the wait met:
  * another Tars on the port (mcp-shared/src/tars-api.ts, `anotherTars`), this
  * Tars no longer knowing it (404), or null for Tars out of reach past the
  * grace period. Null when it is none of these.
@@ -187,15 +188,17 @@ function queuedText(task: TaskView): string {
 function notStartedText(task: TaskView, err: unknown): string | null {
   if ((err as { anotherTars?: unknown } | null)?.anotherTars === true) {
     return task.outcome === "starting"
-      ? `Tars restarted while task ${task.id} on agent ${task.agentId} was being started, so it may not have run. Tars keeps no task that waited its turn across a restart: unless Tars tells you it ran, ask for it again (delegate_task).`
-      : `Tars restarted while task ${task.id} waited its turn on agent ${task.agentId}${task.queuedAt ? ` (queued since ${task.queuedAt})` : ""}. A task waiting its turn is not kept across a restart: this one never started, and must be asked again (delegate_task).`;
+      ? `Tars restarted while task ${task.id} on agent ${task.agentId} was being started, so it may not have run. A task being started has left its agent's queue, which is what a restart keeps: unless Tars tells you it ran, ask for it again (delegate_task).`
+      : `Tars restarted while task ${task.id} waited its turn on agent ${task.agentId}${task.queuedAt ? ` (queued since ${task.queuedAt})` : ""}. `
+        + `It is kept: a restart keeps an agent's queue, paused, and the task goes in once the queue is resumed (agent_queue with action 'resume', by the project's orchestrator or the owner). `
+        + `Do not delegate it again, which would run it twice: follow it with task_status({ taskId: "${task.id}" }).`;
   }
   if (answerOf(err)?.status === 404) {
     return `Task ${task.id} on agent ${task.agentId} never started, and Tars no longer has it (${(err as Error).message}). Ask for it again if it still needs doing.`;
   }
   if (err === null) {
     return `Tars could not be reached for ${FAILURE_GRACE_MS / 1000} s while task ${task.id} waited its turn on agent ${task.agentId}: it had not started. `
-      + `A task waiting its turn is not kept if Tars quits or restarts: once Tars answers, follow it with task_status({ taskId: "${task.id}" }), and ask for it again if Tars no longer has it.`;
+      + `A task waiting its turn is kept if Tars quits or restarts, its queue paused until it is resumed: once Tars answers, follow it with task_status({ taskId: "${task.id}" }), and ask for it again only if Tars no longer has it.`;
   }
   return null;
 }
@@ -967,7 +970,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "delegate_task",
-    description: "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is not kept across a restart of Tars: it never started, and this says so, to ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\"). Write the prompt as a spec in five parts: Target (what must be true at the end), Change (what to do), Constraints (what must not break), May touch (the files, folders and tools the agent may use), Proof (the observable check of acceptance the agent runs and reports); the guide's delegation topic says more.",
+    description: "Delegate a task to an agent and wait for its answer: the primary tool for handing work. The task goes into the agent's own permanent terminal, the session its card shows, which keeps its conversation, its memory and its background work; with no CLI running there, Tars starts that session on its conversation with the task. You get back the agent's full final answer for this task, why it ended (completed, error, stopped, interrupted), and its tokens and cost where its CLI lets Tars read them (claude: all of them; other CLIs: see the guide's delegation topic). An agent runs one task at a time: a task given to an agent already working waits its turn in that agent's queue, and this keeps waiting and returns its real result; if your wait ends first, the answer says which task it is queued behind, from whom, since when, and how to follow it (task_status) or take it back (task_cancel). The task is never stopped when your wait ends: it goes on in the agent's terminal. A task still waiting its turn is kept across a restart of Tars, its agent's queue paused: this says so, and it goes in once the queue is resumed (agent_queue), so do not ask for it again. Only Tars, the user and the project's orchestrator hand an agent work: a worker calling this is refused, and asks its orchestrator instead (send_message to \"orchestrator\"). Write the prompt as a spec in five parts: Target (what must be true at the end), Change (what to do), Constraints (what must not break), May touch (the files, folders and tools the agent may use), Proof (the observable check of acceptance the agent runs and reports); the guide's delegation topic says more.",
     schema: {
       id: z.string().describe("The agent ID to delegate to"),
       prompt: z.string().describe("The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."),
@@ -991,7 +994,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "task_status",
-    description: "Read a task you delegated, as Tars's ledger keeps it, after a restart too (except a task that was still waiting its turn: a restart drops it before it starts, and it must be asked again): queued behind the agent's work in hand (which task, from whom, since when), running, or how it ended and what the agent answered. By its taskId (delegate_task names it) or by the clientRequestId it was sent with.",
+    description: "Read a task you delegated, as Tars's ledger keeps it, after a restart too (a task still waiting its turn is kept, its agent's queue paused until it is resumed): queued behind the agent's work in hand (which task, from whom, since when), running, or how it ended and what the agent answered. By its taskId (delegate_task names it) or by the clientRequestId it was sent with.",
     schema: {
       taskId: z.string().optional().describe("The task's id"),
       clientRequestId: z.string().optional().describe("The clientRequestId the delegation was sent with"),
