@@ -45,6 +45,12 @@ import type { AgentStatus } from '../../src/types/electron';
  *    is, and kept whole;
  * 10. a reason or a rule that is not given, or blank, reads as an empty
  *     row: it is '' instead, and nothing is shown for it.
+ * 11. a line break in the subject read as a space: "echo safe" then
+ *     "rm -rf important" read as one harmless echo, and an allow covered both
+ *     (the Audit's M1 on PR 544). Each break is kept: the subject marks it ⏎,
+ *     and its lines are given one by one for a window that shows them so;
+ *     \r\n, \r, \n, U+2028 and U+2029 are each one break, and a break at the
+ *     start or the end is no line of its own.
  */
 
 const NOW = new Date(2026, 9, 5, 14, 30);
@@ -114,8 +120,25 @@ describe('what it names', () => {
       permissionAsk: ask({ tool: 'Ba\u202Esh', subject: 'rm -rf build\u2028&& echo \u202Eok\u200B done' }),
     }), NOW);
     expect(line?.who).toBe('Asks to use Ba sh:');
-    expect(line?.subject).toBe('rm -rf build && echo ok done');
+    expect(line?.subject).toBe('rm -rf build ⏎ && echo ok done');
     expect(line?.title).not.toMatch(/[\u2028\u202E\u200B]/);
+  });
+});
+
+describe('its line breaks (11)', () => {
+  it('marks each break ⏎, never a space, and gives each line', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: 'echo safe\nrm -rf important' }) }), NOW);
+    expect(line?.subject).toBe('echo safe ⏎ rm -rf important');
+    expect(line?.lines).toEqual(['echo safe', 'rm -rf important']);
+    expect(line?.title).toBe('Asks to use Bash: echo safe ⏎ rm -rf important');
+  });
+  it('takes \r\n, \r, U+2028 and U+2029 for one break each, and none at the ends', () => {
+    const line = permissionAskLine(agent({ permissionAsk: ask({ subject: '\na\r\nb\rc\u2028d\u2029e\n' }) }), NOW);
+    expect(line?.lines).toEqual(['a', 'b', 'c', 'd', 'e']);
+    expect(line?.subject).toBe('a ⏎ b ⏎ c ⏎ d ⏎ e');
+  });
+  it('one line when there is no break', () => {
+    expect(permissionAskLine(agent(), NOW)?.lines).toEqual(['npm run build && npm test']);
   });
 });
 
