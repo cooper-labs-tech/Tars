@@ -54,9 +54,9 @@ export interface JanitorWorld {
   projects: string[];
   fleet: Array<{ id: string; projectPath: string; worktreePath?: string }>;
   /**
-   * Every process, with its command line and the paths it is in: its working folder, its executable and the files it
-   * holds open (the Audit's M1 on #542: six servers ran from an npx entry with their working folder elsewhere). Null
-   * when they cannot be read, wholly.
+   * Every process, with its command line and the paths it is in, resolved: its working folder, its executable, and on
+   * Linux the files it holds open (the Audit's M1 on #542: six servers ran from an npx entry with their working folder
+   * elsewhere). Null when they cannot be read, wholly (janitor-processes.ts).
    */
   processes: Array<{ pid: number; command: string; paths: string[] }> | null;
   worktrees(project: string): Promise<Array<{ path: string; branch?: string; locked: boolean }> | null>;
@@ -159,8 +159,9 @@ function kept(world: JanitorWorld, p: string, worktree?: string): string | undef
   if (never(world).some(n => inside(at, n))) return 'it is on the never list';
   if (world.processes === null) return 'the processes cannot be read';
   const folder = worktree ? real(worktree) : at;
-  // In it by its working folder, its executable or an open file, or named on its command line (M1).
-  const user = world.processes.find(c => c.paths.some(x => inside(real(x), folder)) || c.command.includes(folder) || (folder !== p && c.command.includes(p)));
+  // In it by its working folder, its executable or an open file, or named on its command line (M1). The paths come
+  // resolved once with the world (janitor-processes.ts): compared as strings here, never resolved again per folder.
+  const user = world.processes.find(c => c.paths.some(x => inside(x, folder)) || c.command.includes(folder) || (folder !== p && c.command.includes(p)));
   if (user) return `${user.command.split(' ')[0]} (${user.pid}) runs in it`;
   if (worktree && world.fleet.some(a => real(a.worktreePath || a.projectPath) === folder)) return 'an agent of the fleet works in it';
   return undefined;

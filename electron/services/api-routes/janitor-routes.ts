@@ -14,6 +14,6 @@ export function registerJanitorRoutes(app: RouteApp): void {
     }
     const agent = agents.get(req.callerAgentId)!;
     // Its own project's items, once in five minutes; the window sees the whole scan and who asked (janitor-state.ts).
-    sendJson({ success: true, items: await janitorScan({ name: agent.name || agent.id, project: agent.projectPath }), approvedBy: 'the owner, in the window' });
+    sendJson({ success: true, items: await janitorScan({ id: agent.id, name: agent.name || agent.id, project: agent.projectPath }), approvedBy: 'the owner, in the window' });
   });
 }

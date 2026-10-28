@@ -1369,8 +1369,10 @@ window; agents may only ask for a scan.
 - **Never proposed, never deleted:**
   - `~/.tars-private`, `~/Documents`, the uv cache, the Trash, `~/Library/Developer` (Xcode, the iOS runtimes and
     simulators), any Docker volume, a project's own folder;
-  - anything inside a worktree a fleet agent works in, one with uncommitted work, or anything a process is in: by its
-    working folder, its command line, or its executable and open files (lsof `cwd,txt`; /proc's cwd, exe and fd);
+  - anything inside a worktree a fleet agent works in, one with uncommitted work, or anything a process runs in or
+    from: by its working folder, its command line or its executable (lsof `cwd,txt` on macOS), and on Linux the files it
+    holds open too (/proc's cwd, exe and fd). Each process's paths are resolved once per scan, off the main thread
+    (`janitor-processes.ts`);
   - when the processes cannot be read (no lsof, an lsof that fails, Windows), nothing that needs "nothing runs in
     it".
 - **The window** reads `window.electronAPI.diskJanitor`: `state()`, `scan()`, `approve(ids)` and `onChanged`. The state
