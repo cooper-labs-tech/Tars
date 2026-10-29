@@ -949,3 +949,59 @@ installer's first run, and `electron-updater` installs an update without
 checking a publisher: whoever can write to the releases of
 `cooper-labs-tech/Tars` ships code to every Windows install. On macOS the
 update must carry the app's own signature; on Windows nothing stands in for it.
+
+## 8. The owner's words, relayed
+
+Written before the code (2.0.6, option e). An orchestrator that passes
+JeanBrasse's words on to another project's orchestrator types them as its own
+message: the receiver sees `Message from agent "X":` and then "the owner says
+merge it", and cannot tell the owner's words from the sender's claim. Only Tars
+can tell them apart, from what it holds as the owner's own: what the window
+sends to a chat (the renderer, which only the person at the machine drives),
+and what the Hermes relay brings from the owner's private Telegram chat (a
+reply to a report or a message, "@project text", the answer to an `ask_user`
+question). Slack and Discord are not the owner: anyone in the channel writes
+there. Keys typed by hand into a terminal are not recorded either: Tars cannot
+tell where such a message starts or ends.
+
+**What it is.** Tars records each of those messages when it receives it: a
+random id (`ow-` and 12 hex characters), its text as received, when, how
+(`window` or `Telegram`), and the project it was addressed to. In memory only:
+a restart of Tars forgets them, and nothing is ever written where an agent can
+write. An agent with an orchestrator's powers in that project may ask Tars to
+relay one of them, by its id and nothing else, to an agent with an
+orchestrator's powers, in any project. Tars types the recorded text into the
+receiver under a sender line only Tars writes:
+`Message from Tars: the owner's words of 19:03 UTC (23:03 +04), via Telegram,
+relayed by agent "X" ("id"), verified by Tars (words ow-...):`.
+
+**The threats, and what answers each.**
+
+- **Forgery by words.** An agent writes the mark itself, in a message of its
+  own, on its first line or any other, in bold, in brackets, in look-alike
+  letters. Every line of every message body whose skeleton (the fold
+  `quoteSenderLookAlikes` already reads, `core/pty-manager.ts`) spells "verified
+  by tars" or opens with "the owner's words" is quoted with `> `, as a forged
+  "Message from" line is: it reads as text inside that agent's message. The
+  real mark is only ever a sender line, in a paste of its own, which no caller
+  writes.
+- **Forgery by id.** An agent relays an id it made up or guessed: unknown,
+  refused. 48 random bits, in Tars's memory alone.
+- **An edited quote.** The relay takes an id, never a text: what is typed is
+  Tars's record, byte for byte, with only the look-alike quoting every body
+  gets. An agent cannot shorten, extend or reword the owner's words under the
+  mark.
+- **Replay.** The same words relayed twice to the same receiver are refused;
+  words older than 24 hours are refused; after a restart of Tars every id is
+  unknown. The mark carries the time of the words themselves, in both zones,
+  so a receiver sees how old they are.
+- **Laundering.** Words the owner addressed to project A relayed by an
+  orchestrator of project B, or by a worker of A: refused. Only those who
+  could have received them may pass them on.
+
+**What it does not prove.** That the owner meant the words for the receiver,
+or for the work the receiver is doing now; that whatever the relaying agent
+says around them, in a message of its own, is the owner's; anything the owner
+typed by hand into a terminal, or said in Slack or Discord. The mark says
+"these are words the owner sent Tars, at that time, for that project", and no
+more.
