@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { NoTerminalLeft } from '../../../electron/core/pty-pool';
-import { markNoTerminal, noTerminalAnswer } from '../../../electron/core/no-terminal';
+import { clearNoTerminal, markNoTerminal, noTerminalAnswer } from '../../../electron/core/no-terminal';
 import type { AgentStatus } from '../../../electron/types';
 
 /**
@@ -16,6 +16,11 @@ import type { AgentStatus } from '../../../electron/types';
  * N3. Any other failure is taken for this one: the agent is marked and told something false.
  * N4. The window's start rejects instead of answering: it must answer { success: false, error, code: 'no_terminal' },
  *     and any other failure is left to throw as before.
+ * And from the Audit's L1 on #553 at 848a307ee (29/10):
+ * N5. Once a terminal opened, the reason stays: the agent reads idle while `error` still says no terminal could be
+ *     opened, and list_agents and get_agent give it to the orchestrators. It must go then, and only that reason: an
+ *     error of another cause is the agent's own and stays.
+ * The call sites are held through the real start paths in no-terminal-call-sites.test.ts.
  */
 
 const full = new NoTerminalLeft({ inUse: 510, max: 511, tars: 30, open: 30 }, 'darwin');
@@ -57,5 +62,15 @@ describe('an agent the machine had no terminal for', () => {
   it('N4. the window\'s start is answered with the reason and its code; any other failure is not', () => {
     expect(noTerminalAnswer(full)).toEqual({ success: false, error: full.message, code: 'no_terminal' });
     expect(noTerminalAnswer(new Error('boom'))).toBeUndefined();
+  });
+
+  it('N5. once a terminal opened, the no-terminal reason goes, and no other', () => {
+    const agent = agentAt('idle');
+    markNoTerminal(agent, full, vi.fn(), vi.fn());
+    clearNoTerminal(agent);
+    expect(agent.error).toBeUndefined();
+    const other = { ...agentAt('error'), error: 'Claude Code is not signed in.' };
+    clearNoTerminal(other);
+    expect(other.error).toBe('Claude Code is not signed in.');
   });
 });
