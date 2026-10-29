@@ -101,7 +101,7 @@ describe('what Claude Code loads of a MEMORY.md', () => {
     expect(guardMemory('z'.repeat(30_000)).notice).toBe('MEMORY.md is 29.3 KB in 1 line. Claude Code reads only its first 24.4 KB: the end of line 1 never reaches an agent (4.9 KB). Keep it an index, one line per memory, and move the details into topic files.');
     expect(guardMemory('q'.repeat(23_000)).notice).toBe('MEMORY.md is 22.5 KB in 1 line, close to what Claude Code reads of it (24.4 KB and 200 lines): past that, the rest never reaches an agent. Keep it an index, one line per memory, and move the details into topic files.');
     expect(guardMemory('short').notice).toBeNull();
-    for (const g of [guardMemory(probeFile(150, 200)), guardMemory('q'.repeat(23_000))]) expect(g.notice).not.toMatch(/[–—]/);
+    for (const g of [guardMemory(probeFile(150, 200)), guardMemory('q'.repeat(23_000))]) expect(g.notice).not.toMatch(/[\u2013\u2014]/);
   });
 });
 
