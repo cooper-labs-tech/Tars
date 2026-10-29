@@ -67,6 +67,12 @@ import {
  *      the one admitted when room comes, one a pass.
  * H26. No run can hold above the floors: with nothing holding, the floors alone decide, never the reserve, the
  *      settle time or the swapouts.
+ * And from the QA's gate of #573 (29/10), the gaps it found:
+ * H27. (F1) With a run holding, a further run is admitted under the memory floor.
+ * H28. (F2) The settle time counts from the first grant, not the last: with a ceiling of 3, a third run starts during
+ *      the second one's boot.
+ * H29. (F3) The run alerts break when the machine cannot be read (a reading that throws, or never comes): nothing is
+ *      said, and nothing throws.
  */
 
 type World = SlotWorld & { set: (m: Partial<SlotMachine>) => void; dead: Set<number>; t: number; alerts: Array<{ ticket: string; text: string }>; table: Array<{ pid: number; ppid: number }> | undefined };
@@ -479,5 +485,59 @@ describe('admitted by the machine\'s room (2.0.6)', () => {
     const b = await slot.ask(ask(202, 'b'));
     await slot.pump();
     expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+});
+
+describe('the QA\'s gaps on #573', () => {
+  it('H27. with a run holding, a further run waits under the memory floor', async () => {
+    const w = world({ slots: 3 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS;
+    w.set({ memFreePct: 19 });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(b.id)?.why).toBe('waiting for free memory: 19 % free, the floor is 20 %');
+    w.set({ memFreePct: 20 });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H28. the settle time counts from the last grant: a third run waits for the second one\'s boot', async () => {
+    const w = world({ slots: 3 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS;
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+    const c = await slot.ask(ask(302, 'o'));
+    w.t += SETTLE_MS - 1_000;
+    await slot.pump();
+    expect(slot.get(c.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(c.id)?.why).toMatch(/^waiting for the last run to settle: B's run started 89 s ago/);
+    w.t += 1_000;
+    await slot.pump();
+    expect(slot.get(c.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H29. a machine that cannot be read during a run says nothing and breaks nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const w = world({ slots: 3 });
+      const slot = new HeavySlot(w);
+      await slot.ask(ask(102, 'a'));
+      await slot.pump();
+      w.machine = async () => { throw new Error('vm_stat failed'); };
+      await expect(slot.watch()).resolves.toBeUndefined();
+      w.machine = () => new Promise(() => {});
+      const watching = slot.watch();
+      await vi.advanceTimersByTimeAsync(MACHINE_READ_TIMEOUT_MS);
+      await expect(watching).resolves.toBeUndefined();
+      expect(w.alerts).toEqual([]);
+    } finally { vi.useRealTimers(); }
   });
 });
