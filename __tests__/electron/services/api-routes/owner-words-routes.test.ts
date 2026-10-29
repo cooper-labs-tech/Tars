@@ -9,16 +9,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * R2. The receiver cannot read back the words relayed to it (the Audit's M1 on #569).
  * R3. (the QA's F4 on #569) The route does not read chatsReadEachOther from the settings: forced on, every chat's
  *     runner gets every chat's words; forced off, never.
+ * R4. (the Audit's I10 on #569) A relay held in the receiver's terminal, then given up, stays listed and refuses a
+ *     new relay as a replay.
  */
 
-const dispatched = vi.hoisted(() => ({ status: 409 as number | undefined, calls: 0 }));
+const dispatched = vi.hoisted(() => ({ status: 409 as number | undefined, calls: 0, dropLater: false, drop: undefined as undefined | (() => void) }));
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] }, app: { getPath: () => '/tmp' } }));
 vi.mock('../../../../electron/services/api-routes/agent-routes', () => ({
-  performDispatch: vi.fn(async (_agent: unknown, _opts: unknown, _ctx: unknown, send: (data: unknown, status?: number) => void) => {
+  performDispatch: vi.fn(async (_agent: unknown, opts: { onDropped?: () => void }, _ctx: unknown, send: (data: unknown, status?: number) => void) => {
     dispatched.calls++;
     if (dispatched.status) send({ error: 'its terminal takes nothing now', code: 'refused' }, dispatched.status);
-    else send({ success: true, mode: 'message' });
+    else send({ success: true, mode: 'message', ...(dispatched.dropLater ? { held: true } : {}) });
+    // Held, then given up later (its terminal ended with it held): the writer calls onDropped.
+    if (dispatched.dropLater) dispatched.drop = opts.onDropped;
   }),
 }));
 
@@ -100,6 +104,22 @@ describe('the relay route', () => {
     } finally {
       setChatLookups(undefined);
       delete settings.chatsReadEachOther;
+    }
+  });
+
+  it("R4. (the Audit's I10 on #569) a relay held, then given up, frees the receiver: no longer listed, and made again", async () => {
+    const { id } = ownerWords.record({ text: 'ROUTE-WORDS-4 held', via: 'Telegram', projectPath: A });
+    dispatched.status = undefined;
+    dispatched.dropLater = true;
+    try {
+      expect(await call('POST', `/api/owner-words/${id}/relay`, 'lead-a', { to: 'lead-b' })).toMatchObject({ status: 200 });
+      dispatched.drop?.();
+      expect(ownerWords.relayedTo('lead-b').filter((w) => w.id === id)).toEqual([]);
+      dispatched.dropLater = false;
+      expect(await call('POST', `/api/owner-words/${id}/relay`, 'lead-a', { to: 'lead-b' })).toMatchObject({ status: 200, data: { relayed: true } });
+    } finally {
+      dispatched.dropLater = false;
+      dispatched.drop = undefined;
     }
   });
 });
