@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as pty from 'node-pty';
+import { explainSpawnFailure, readPtyPool, PtyPool } from './pty-pool';
 
 /**
  * The one way Tars opens a terminal (2.0.6, item 1; its failures: __tests__/electron/core/pty-spawn.test.ts).
@@ -18,11 +19,24 @@ import * as pty from 'node-pty';
  * node-pty leaves nothing, nothing is closed. Linux (forkpty) and Windows (ConPTY) leave nothing: not read there.
  */
 export function spawnPty(file: string, args: string[] | string, options: pty.IPtyForkOptions | pty.IWindowsPtyForkOptions): pty.IPty {
-  if (process.platform !== 'darwin') return pty.spawn(file, args, options);
-  const before = charDevices();
-  const term = pty.spawn(file, args, options);
-  closeLeftovers(term as pty.IPty & { _fd?: unknown; _pty?: unknown }, before);
+  const before = process.platform === 'darwin' ? charDevices() : null;
+  let term: pty.IPty;
+  // A full pool reads as node-pty's bare "posix_spawnp failed." (posix_openpt fails first): say what it is.
+  try { term = pty.spawn(file, args, options); } catch (err) { throw explainSpawnFailure(err, readTerminals()); }
+  if (before) closeLeftovers(term as pty.IPty & { _fd?: unknown; _pty?: unknown }, before);
+  open++;
+  term.onExit(() => { open--; });
   return term;
+}
+
+/** The terminals Tars has open: each counted at its spawn, given back at its child's exit. */
+let open = 0;
+export const openTerminals = (): number => open;
+
+/** The machine's pool with the terminals Tars has open: Tars holding more masters than that is a leak. */
+export function readTerminals(): PtyPool | null {
+  const pool = readPtyPool();
+  return pool && { ...pool, open };
 }
 
 /** The character devices this process holds: fd to rdev. */
