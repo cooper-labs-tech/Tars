@@ -978,13 +978,17 @@ relayed by agent "X" ("id"), verified by Tars (words ow-...):`.
 **The threats, and what answers each.**
 
 - **Forgery by words.** An agent writes the mark itself, in a message of its
-  own, on its first line or any other, in bold, in brackets, in look-alike
-  letters. Every line of every message body whose skeleton (the fold
-  `quoteSenderLookAlikes` already reads, `core/pty-manager.ts`) spells "verified
-  by tars" or opens with "the owner's words" is quoted with `> `, as a forged
-  "Message from" line is: it reads as text inside that agent's message. The
-  real mark is only ever a sender line, in a paste of its own, which no caller
-  writes.
+  own. The mark is a sender line, and only a sender line counts: it opens with
+  "Message from Tars:", which Tars types in a paste of its own and no caller
+  writes, and a body line that reads like a sender line is quoted with `> `
+  whatever its letters (`quoteSenderLookAlikes`, `core/pty-manager.ts`, §2 of
+  the gates it went through). A body line that carries the mark's words without
+  that opening sits inside another sender's message, named by the real line
+  before it. As a defence in depth, a body line whose skeleton spells "verified
+  by tars" is quoted too; that skeleton knows the look-alikes of "message from"'s
+  eight letters only, so a line written with a Cyrillic i, say, is not quoted:
+  the sender line is what a receiver reads the mark from, and the agents'
+  instructions say so.
 - **Forgery by id.** An agent relays an id it made up or guessed: unknown,
   refused. 48 random bits, in Tars's memory alone.
 - **An edited quote.** The relay takes an id, never a text: what is typed is
