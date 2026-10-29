@@ -138,14 +138,15 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
   const taken = state?.holders.length ?? 0;
   // Runs are admitted by the machine's room up to a ceiling (PR 573): how many run, and at most how many.
   const head = !state ? 'THE SLOT' : `${taken === 0 ? 'NONE' : taken} RUNNING · AT MOST ${state.slots}`;
-  const firstWaits = state && taken < state.slots ? state.waiting.find((w) => w.why) : undefined;
+  // The first run that waits with main's why, whatever runs already.
+  const firstWaits = state?.waiting.find((w) => w.why);
 
   return (
     <section role="region" aria-label="Heavy runs" className="flex flex-col gap-3 min-h-0">
       <Machine state={state} />
       {firstWaits && (
         <Notice tone="waiting">
-          {`The slot is free, but ${firstWaits.agentName} waits: ${firstWaits.why}. It starts as soon as the floor is met; nothing is stopped to make room.`}
+          {`${firstWaits.agentName} waits: ${firstWaits.why}. It starts as soon as the machine has room; nothing is stopped to make room.`}
         </Notice>
       )}
       <div className="flex gap-3 items-start min-w-0">
