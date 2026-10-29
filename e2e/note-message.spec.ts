@@ -31,7 +31,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * d. the ledger's task opened by NOTE-OPT's turn names no asker; TASK-ONE's names lead.
  * Red on 54d26ef37 (2.0.5): both notes are refused as invalid_mode. Red on the mutant that gives a note its sender's
  * link (onAccepted's requestFor in /dispatch): NOTE-OPT's end tells lead, c fails. Red on the mutant that records a
- * note's hand-off in the ledger (WriteOrigin.note ignored in pty-manager.ts): NOTE-OPT's turn is lead's task, d fails.
+ * note's hand-off in the ledger (WriteOrigin.note ignored in pty-manager.ts): NOTE-OPT's turn takes NOTE-NOW's
+ * hand-off and is lead's task, d fails (an earlier d, which looked for NOTE-OPT's words, missed it: bench2.log).
  * Green on the mutant that lets a note move the hand-off mark: the unit tests hold that one (N1, N2), and in the app
  * TASK-ONE's end is told lead either way.
  * The artefact: values.json (every tool answer, oc's log, the bytes lead received, the ledger's tasks), a screenshot
@@ -256,10 +257,11 @@ for (const newInterface of [false, true]) {
       // c. One notice in all, for TASK-ONE: NOTE-NOW did not hide it, NOTE-OPT's turn added none.
       expect.soft(noticesAfterTask, "TASK-ONE's end told lead").toBe(1);
       expect.soft(notices(), "NOTE-OPT's end told lead nothing").toBe(1);
-      // d. The ledger: TASK-ONE asked by lead, NOTE-OPT's turn by nobody.
-      expect.soft(tasks.find((t) => t.text.includes('TASK-ONE'))?.requesterAgentId ?? null, JSON.stringify(tasks)).toBe('lead');
-      const noteTask = tasks.find((t) => t.text.includes('NOTE-OPT'));
-      expect.soft(noteTask?.requesterAgentId ?? null, JSON.stringify(tasks)).not.toBe('lead');
+      // d. The ledger: lead asked one task, TASK-ONE; the turn NOTE-OPT opened is a task of nobody's, under whichever
+      // text a hand-off would have given it (a note's hand-off taken by that turn reads NOTE-NOW's words).
+      const askedByLead = tasks.filter((t) => t.requesterAgentId === 'lead');
+      expect.soft(askedByLead.map((t) => t.text), JSON.stringify(tasks)).toEqual(['TASK-ONE review the notes']);
+      expect.soft(tasks.length, "NOTE-OPT's turn is a task of the ledger's").toBe(2);
     } finally {
       for (const s of servers) s.kill();
       await app.close().catch(() => undefined);
