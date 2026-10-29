@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canSave, openedFile } from '../../src/components/Memory/AgentKnowledgeGraph';
+import { canSave, openedFile, openSequence } from '../../src/components/Memory/AgentKnowledgeGraph';
 
 /**
  * A file the Brain graph's panel opens, from memory:read-file or fs:read-text-file's answer: `{ content }`, or
@@ -18,6 +18,11 @@ import { canSave, openedFile } from '../../src/components/Memory/AgentKnowledgeG
  * 6. save is offered while a file loads, whatever draft the panel holds;
  * 7. save is offered for a refused file;
  * 8. save is offered with nothing changed, or withheld for a change made to a file read whole.
+ *
+ * And which answer fills the panel (the Audit's FIX FIRST on #572): a slow read of file A, answered after file B was
+ * opened, filled B's panel with A's text, which save then wrote to B's path. Its ways to fail:
+ * 9. an answer to an open that is no longer the latest is taken;
+ * 10. the latest open's answer is dropped.
  */
 
 describe('a file the graph opens', () => {
@@ -62,5 +67,15 @@ describe('whether the panel may save', () => {
   it('only for a change to a file read whole (8)', () => {
     expect(canSave({ ...read, draft: read.content })).toBe(false);
     expect(canSave(read)).toBe(true);
+  });
+});
+
+describe('which answer fills the panel', () => {
+  it("file A's answer, arriving after file B is opened, is dropped; B's is taken (9, 10)", () => {
+    const opens = openSequence();
+    const a = opens.begin();
+    const b = opens.begin();
+    expect(opens.isLatest(a)).toBe(false);
+    expect(opens.isLatest(b)).toBe(true);
   });
 });
