@@ -303,7 +303,9 @@ export interface AgentStatus {
    * the live session once and the agent is marked failed if that fails too.
    * Runtime state: reset on load, like ptyId.
    */
-  pendingDelivery?: { ptyId: string; task: string; dispatchedAt: string; retried?: boolean; checkArmed?: boolean; retypedAt?: string };
+  /** `sender`: who sent the task, as its retype types it; read back only through keptSender (services/agent-queues.ts),
+   *  since agents.json is any agent's to write (the Audit's M1 on #569). */
+  pendingDelivery?: { ptyId: string; task: string; dispatchedAt: string; retried?: boolean; checkArmed?: boolean; retypedAt?: string; sender?: unknown };
   /** The last idle prompt the CLI sent (Claude Code's idle_prompt notification, ISO): it is at rest at its prompt,
    *  which a CLI still running its hooks never says. Read by the delivery check (core/delivery-proof.ts). */
   idlePromptAt?: string;
@@ -431,7 +433,10 @@ export type KeepAwakeMode = 'while-working' | 'always' | 'never';
 export interface AppSettings {
   /** Missing or unknown reads as 'while-working'. */
   keepAwake?: KeepAwakeMode;
-  /** The heavy-run slot (services/heavy-slot.ts): how many runs at once on this machine (1 when unset). */
+  /**
+   * The heavy-run slot (services/heavy-slot.ts): the ceiling of runs at once on this machine (3 when unset, since
+   * 2.0.6); below it, a further run is admitted by the machine's room, not by this count.
+   */
   heavySlots?: number;
   /** The floors under which a grant waits: free disk in GB (15) and free memory in % (20). */
   heavySlotMinDiskGb?: number;

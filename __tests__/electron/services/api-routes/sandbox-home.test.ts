@@ -38,6 +38,7 @@ vi.mock('electron', () => ({
 }));
 vi.mock('../../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.fn() }));
 vi.mock('../../../../electron/core/pty-manager', () => ({
+  launchPrompt: (_sender: unknown, data: string) => data,
   ptyProcesses: new Map(),
   writeProgrammaticInput: vi.fn(),
   rememberTerminalOwner: vi.fn(),

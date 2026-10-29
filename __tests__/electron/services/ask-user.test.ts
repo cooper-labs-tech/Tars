@@ -242,6 +242,12 @@ describe('the user\'s reply', () => {
 
     expect(all('a1')).toContain('Message from the user via Telegram: ');
     expect(all('a1')).toContain('Use the staging database.');
+    // 2.0.6, option e (the QA's F1 and the Audit's L1 on #569): the owner's words, recorded with the question they answer.
+    const { ownerWords } = await import('../../../electron/services/owner-words');
+    expect(ownerWords.listFor({ id: 'a1', projectPath: PROJECT, orchestrator: true, projectOrchestrator: true })
+      .filter((w) => w.text === 'Use the staging database.')).toEqual([expect.objectContaining({
+      via: 'Telegram', about: 'an answer to a question', question: { text: 'Which database?', by: 'Asker', at: T0 },
+    })]);
     // 2.0.6, option d (the QA's F1 on #563): the question's time, UTC first.
     expect(all('a1')).toContain(`Answer to the question you asked at ${twoZones(T0)}:`);
     expect(all('a2')).toBe('');

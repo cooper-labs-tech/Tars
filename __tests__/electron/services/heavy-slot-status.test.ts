@@ -13,7 +13,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 const { sample } = vi.hoisted(() => ({ sample: { memFreePct: 26 as number | null } }));
 vi.mock('os', async (orig) => ({ ...(await orig<typeof import('os')>()), totalmem: () => 24 * 1024 * 1024 * 1024 }));
-vi.mock('../../../electron/services/health/machine', () => ({
+// The reading stood in; the module's pure helpers (swapOutsPer10s, 2.0.6) kept.
+vi.mock('../../../electron/services/health/machine', async (orig) => ({
+  ...(await orig<typeof import('../../../electron/services/health/machine')>()),
   readMachine: async () => ({
     memFreePct: sample.memFreePct, memFreeMb: 310, compressedMb: null, swapUsedMb: 0, swapGrowthMbPerMin: null,
     diskFreeGb: 100, load1: 1, readMs: 1,

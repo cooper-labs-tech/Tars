@@ -17,6 +17,7 @@ import { registerTaskRoutes } from './task-routes';
 import { registerHeavySlotRoutes } from './heavy-slot-routes';
 import { registerMcpRoutes } from './mcp-routes';
 import { registerJanitorRoutes } from './janitor-routes';
+import { registerOwnerWordsRoutes } from './owner-words-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -39,6 +40,8 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerMcpRoutes(app);
   // The disk janitor's scan, for an agent that asks: read only (services/disk-janitor.ts).
   registerJanitorRoutes(app);
+  // The owner's words, relayed under Tars's mark (services/owner-words.ts, SECURITY.md §8).
+  registerOwnerWordsRoutes(app, ctx);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';

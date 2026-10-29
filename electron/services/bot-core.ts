@@ -16,7 +16,7 @@ import { isSuperAgent, getSuperAgentInstructionsPath } from '../utils';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { getProvider } from '../providers';
 import type { CLIProvider } from '../providers/cli-provider';
-import { writeProgrammaticInput, type MessageSender } from '../core/pty-manager';
+import { launchPrompt, writeProgrammaticInput, type MessageSender } from '../core/pty-manager';
 import { cliRunningIn, shellReady, agentPtyEnv } from '../core/agent-pty';
 import { stopAcpRuns } from './acp/delegate';
 import { killStalePty, armTaskStartWatch, launchIntoTerminal, cliStartRefusal } from '../core/agent-manager';
@@ -275,7 +275,7 @@ async function typeLaunch(
   noteLaunch(cli, launchSettings(agent));
   fleet.saveAgents();
   // Started from a chat, and just as able to come up with no task.
-  armTaskStartWatch(agent, agent.ptyId, task);
+  armTaskStartWatch(agent, agent.ptyId, task, { kind: 'channel', channel: from });
   return cli;
 }
 
@@ -377,7 +377,7 @@ export async function startWithTask(
       agentId: agent.id,
       resumeSessionId: opts.resume || asleep ? consumeResumeSessionId(agent) ?? undefined : undefined,
       binaryPath,
-      prompt: withGuide(agent, provider, task),
+      prompt: withGuide(agent, provider, launchPrompt({ kind: 'channel', channel: from }, task)),
       model: agent.model,
       permissionMode: agent.permissionMode ?? (agent.skipPermissions ? 'bypass' : 'normal'),
       effort: agent.effort,
@@ -397,7 +397,7 @@ export async function startWithTask(
     const start = launchIn(agent, ptyProcess, workingDir, command);
     const before = markRunning(agent, task);
     const cli = await typeLaunch(fleet, agent, ptyProcess, start, task, before, from, task);
-    typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, task), skills: [...new Set(agent.skills || [])], isSuperAgent: hasOrchestratorPowers(agent) });
+    typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, launchPrompt({ kind: 'channel', channel: from }, task)), skills: [...new Set(agent.skills || [])], isSuperAgent: hasOrchestratorPowers(agent) });
     await opts.reply('started');
   } catch (err) {
     if (launch) launchAbandoned(agent.id, launch);
@@ -498,7 +498,7 @@ export async function forwardToOrchestrator(
       agentId: orchestrator.id,
       resumeSessionId: opts.resume ? consumeResumeSessionId(orchestrator) ?? undefined : undefined,
       binaryPath,
-      prompt: withGuide(orchestrator, provider, prompt),
+      prompt: withGuide(orchestrator, provider, launchPrompt(opts.sender ?? { kind: 'channel', channel: from }, prompt)),
       model: orchestrator.model,
       permissionMode: opts.permissionMode,
       effort: orchestrator.effort,
@@ -513,7 +513,7 @@ export async function forwardToOrchestrator(
     const start = launchIn(orchestrator, ptyProcess, workingDir, command);
     const before = markRunning(orchestrator, opts.message);
     const cli = await typeLaunch(fleet, orchestrator, ptyProcess, start, prompt, before, from, opts.message);
-    typeLaunchTask(provider, cli, { prompt: withGuide(orchestrator, provider, prompt), skills: [...new Set(orchestrator.skills || [])], isSuperAgent: true });
+    typeLaunchTask(provider, cli, { prompt: withGuide(orchestrator, provider, launchPrompt(opts.sender ?? { kind: 'channel', channel: from }, prompt)), skills: [...new Set(orchestrator.skills || [])], isSuperAgent: true });
     await opts.reply('started');
   } catch (err) {
     if (launch) launchAbandoned(orchestrator.id, launch);

@@ -64,9 +64,9 @@ const oneLine = (text: string, max: number): string => {
 
 const tag = (text: string, name: string): string | undefined => new RegExp(`<${name}>([\\s\\S]*?)</${name}>`).exec(text)?.[1]?.trim();
 
-/** The envelope Tars types before a message (core/pty-manager.ts senderLine). */
-const AGENT_ENVELOPE = /^Message from agent ("(?:[^"\\]|\\.)*") \("(?:[^"\\]|\\.)*"\)(?:, task t-[0-9a-f]{8})?: /;
-const OTHER_ENVELOPE = /^Message from (Tars|the user via [A-Za-z]+|[A-Z][A-Za-z]+)(?:, task t-[0-9a-f]{8})?: /;
+/** The envelope Tars types before a message (core/pty-manager.ts senderLine), with the line break that ends it since 2.0.6. */
+const AGENT_ENVELOPE = /^Message from agent ("(?:[^"\\]|\\.)*") \("(?:[^"\\]|\\.)*"\)(?:, task t-[0-9a-f]{8})?: \n?/;
+const OTHER_ENVELOPE = /^Message from (Tars|the user via [A-Za-z]+|[A-Z][A-Za-z]+)(?:, task t-[0-9a-f]{8})?: \n?/;
 
 /** A user line's words, said as who they are from. Undefined: not conversation. */
 function userItem(text: string): Pick<ChatItem, 'kind' | 'text' | 'from'> | undefined {

@@ -144,8 +144,10 @@ function Machine({ state, terminals }: { state: HeavySlotStatus | null; terminal
 export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) => void }) {
   const { state, missing, error, reload, giveBack } = useHeavyRuns();
   const taken = state?.holders.length ?? 0;
-  const head = !state ? 'THE SLOT' : taken === 0 ? (state.slots > 1 ? 'THE SLOTS · FREE' : 'THE SLOT · FREE') : `${state.slots > 1 ? 'THE SLOTS' : 'THE SLOT'} · ${taken} OF ${state.slots} TAKEN`;
-  const firstWaits = state && taken < state.slots ? state.waiting.find((w) => w.why) : undefined;
+  // Runs are admitted by the machine's room up to a ceiling (PR 573): how many run, and at most how many.
+  const head = !state ? 'THE SLOT' : `${taken === 0 ? 'NONE' : taken} RUNNING · AT MOST ${state.slots}`;
+  // The first run that waits with main's why, whatever runs already.
+  const firstWaits = state?.waiting.find((w) => w.why);
   const terminals = useTerminals();
   // Full or near full, said at the top as main says it (`notice`; frame `Resources (2.0.6) · terminals left · states`).
   const poolNotice = terminalsNotice(terminals, rendererPlatform());
@@ -156,7 +158,7 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
       <Machine state={state} terminals={terminals} />
       {firstWaits && (
         <Notice tone="waiting">
-          {`The slot is free, but ${firstWaits.agentName} waits: ${firstWaits.why}. It starts as soon as the floor is met; nothing is stopped to make room.`}
+          {`${firstWaits.agentName}: ${firstWaits.why}. It starts as soon as the machine has room; nothing is stopped to make room.`}
         </Notice>
       )}
       <div className="flex gap-3 items-start min-w-0">
@@ -199,7 +201,7 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
           <Box name="Slots and floors" caption="SLOTS AND FLOORS">
             {state ? (
               <>
-                <FloorLine k="Slots for the whole machine" v={String(state.slots)} />
+                <FloorLine k="Runs at once, at most" v={String(state.slots)} />
                 <FloorLine k="A grant waits under" v={`${state.floors.diskGb} GB free disk`} />
                 <FloorLine k="or under" v={`${state.floors.memFreePct} % free memory`} />
                 <FloorLine k="Alerts at free disk of" v="10, 6 and 3 GB" />
