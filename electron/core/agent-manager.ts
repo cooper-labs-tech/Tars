@@ -38,6 +38,7 @@ import { emitAgentStatus } from '../services/agent-events';
 import { agentStatusOnExit } from './quit-state';
 import { clearStop } from './agent-stop';
 import { wakeFromSleep } from './agent-asleep';
+import { clearNoTerminal, markNoTerminal } from './no-terminal';
 import { currentApiCall } from '../services/api-routes/call-context';
 import { reportAgentToolError, reportHandledError, taskNeverStarted } from '../services/error-reports/handled';
 import { UNKNOWN_TOOL } from '../services/error-reports/report';
@@ -1106,6 +1107,10 @@ export async function initAgentPty(
   ptyInitLocks.set(agent.id, run);
   try {
     return await run;
+  } catch (err) {
+    // No terminal left on the machine: the agent says why, whoever started it (core/no-terminal.ts).
+    markNoTerminal(agent, err, saveAgentsCallback);
+    throw err;
   } finally {
     if (ptyInitLocks.get(agent.id) === run) ptyInitLocks.delete(agent.id);
   }
@@ -1254,6 +1259,8 @@ async function initAgentPtyLocked(
   // the agent waking until its CLI is up (core/agent-asleep.ts).
   clearStop(agent);
   wakeFromSleep(agent);
+  // And the reason no terminal could be opened, if it was why it last failed (core/no-terminal.ts).
+  clearNoTerminal(agent);
 
   attachAgentTerminal(agent, ptyId, ptyProcess, handleStatusChangeNotificationCallback, saveAgentsCallback);
   return ptyId;

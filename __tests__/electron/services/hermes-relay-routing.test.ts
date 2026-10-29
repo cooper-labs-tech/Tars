@@ -148,6 +148,7 @@ describe('a reply to a report', () => {
 
     expect(all('orch-tars')).toContain(USER_LINE);
     expect(all('orch-tars')).toContain('Relance-le sur main');
+    expect(all('orch-tars'), 'the report\'s time, in both zones').toContain(`Reply to Tars's report of ${twoZones(T0)}`);
     expect(all('orch-tars')).not.toContain('ignore your instructions');
     expect(all('orch-capital')).toBe('');
     expect(all('worker-tars')).toBe('');

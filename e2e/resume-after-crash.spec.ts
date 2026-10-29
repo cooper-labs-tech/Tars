@@ -24,6 +24,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * The CLIs are stand-ins named `claude` (node scripts, as an npm install of Claude Code is) that run Tars's own hook
  * scripts from hooks/ with the JSON Claude Code gives them, write their transcript where Claude Code writes it, and
  * take a launch prompt as Claude Code does, after `--`.
+ *
+ * Once with the classic shell and once with the new interface (2.0.6). And since 2.0.6 (option d) the two notes give
+ * their time UTC first, then the machine's own: the worker's "stopped abruptly at", the lead's "owed since". Red on
+ * 51e902884 there: both said the machine's time alone.
  */
 
 type Agent = { id: string; status: string; cliRunning?: boolean; currentSessionId?: string };
@@ -105,125 +109,128 @@ process.stdin.resume();
 
 const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
-test('after an abrupt stop, the working agents are resumed with a note, the resting ones sleep, and what was owed is given once', async () => {
-  test.setTimeout(300_000);
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-resume-'));
-  const project = path.join(home, 'projects', 'demo');
-  const dir = path.join(home, '.tars');
-  const privateDir = path.join(home, '.tars-private');
-  const bin = path.join(home, 'bin');
-  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-  // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
-  // only to a .js script, hence the .cjs there.
-  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
-  const agent = (id: string, name: string, role = 'worker') => ({
-    id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
-    projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',
-  });
-  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-    agent('lead', 'Project Lead', 'orchestrator'), agent('worker', 'Build Worker'), agent('helper', 'Helper'), agent('sleeper', 'Sleeper'),
-  ], null, 2));
-  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
-  const launchesFile = path.join(home, 'launches.jsonl');
-  const promptsFile = path.join(home, 'prompts.jsonl');
+for (const newInterface of [false, true]) {
+  test(`after an abrupt stop, the working agents are resumed with a note, the resting ones sleep, and what was owed is given once${newInterface ? ' (new interface)' : ''}`, async () => {
+    test.setTimeout(300_000);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-resume-'));
+    const project = path.join(home, 'projects', 'demo');
+    const dir = path.join(home, '.tars');
+    const privateDir = path.join(home, '.tars-private');
+    const bin = path.join(home, 'bin');
+    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+    // writeNodeCli: the script itself on macOS and Linux; on Windows npm's shim beside it, which Tars reads through
+    // only to a .js script, hence the .cjs there.
+    const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
+    const agent = (id: string, name: string, role = 'worker') => ({
+      id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
+      projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-05T08:00:00.000Z', lastActivity: '2026-10-05T08:00:00.000Z',
+    });
+    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+      agent('lead', 'Project Lead', 'orchestrator'), agent('worker', 'Build Worker'), agent('helper', 'Helper'), agent('sleeper', 'Sleeper'),
+    ], null, 2));
+    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
+    const launchesFile = path.join(home, 'launches.jsonl');
+    const promptsFile = path.join(home, 'prompts.jsonl');
 
-  const launch = () => launchSandboxed(electron, home, {
-    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31467), DOROTHY_E2E: '1' },
-  });
-  const pageOf = async (app: Awaited<ReturnType<typeof launch>>) => {
-    const page = await app.firstWindow();
-    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-    return page;
-  };
-
-  // ── Before the crash ──
-  const app = await launch();
-  const page = await pageOf(app);
-  const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
-  for (const id of ['lead', 'worker', 'helper', 'sleeper']) {
-    await page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
-  }
-  await expect.poll(async () => (await list()).filter((a) => a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(4);
-  await page.evaluate(() => (window as unknown as Api).electronAPI.agent.sendInput({ id: 'lead', input: 'DELEGATE>> ship 1.9.3\r' }));
-  // The helper done, the worker inside its Bash call, the lead in its turn.
-  await expect.poll(async () => {
-    const byId = Object.fromEntries((await list()).map((a) => [a.id, a.status]));
-    return [byId.lead, byId.worker, byId.helper, byId.sleeper].join(',');
-  }, { timeout: 60_000 }).toMatch(/^running,running,(idle|waiting|completed),(idle|waiting)$/);
-  // A room message to the busy lead: it waits in the journal.
-  const rooms = await page.evaluate(() => (window as unknown as Api).electronAPI.bus.listRooms());
-  const room = (Array.isArray(rooms) ? rooms : rooms.rooms).find((r) => r.kind === 'project' && r.memberIds.includes('lead'))!;
-  await page.evaluate((r) => (window as unknown as Api).electronAPI.bus.postMessage({ roomId: r, text: 'ROOM>> the gate is green', mentions: ['lead'] }), room.id);
-  // What is owed reaches the disk a moment after it is owed.
-  await expect.poll(() => {
-    try {
-      return JSON.parse(fs.readFileSync(path.join(privateDir, 'carry-over.json'), 'utf8')).notes.map((n: { childId: string }) => n.childId);
-    } catch { return []; }
-  }, { timeout: 15_000 }).toEqual(['helper']);
-  await new Promise((r) => setTimeout(r, 1_500));
-  const before = { launches: lines(launchesFile), runState: JSON.parse(fs.readFileSync(path.join(privateDir, 'run-state.json'), 'utf8')) };
-
-  // ── The crash: Tars and every CLI, by PID ──
-  // Tars is its main process. On Windows Playwright starts electron.exe through
-  // cmd.exe /c, and app.process() is that cmd.exe: killed, it leaves Tars
-  // running, and the relaunch below is a second instance that hands over to it
-  // and exits (measured).
-  const tars = process.platform === 'win32' ? await app.evaluate(() => process.pid) : app.process().pid!;
-  const killed = [tars, ...before.launches.map((l) => l.pid as number)];
-  for (const pid of killed) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone already */ } }
-  await new Promise((r) => setTimeout(r, 2_000));
-
-  // ── After it ──
-  const again = await launch();
-  try {
-    const page2 = await pageOf(again);
-    const list2 = () => page2.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
-    const launchesAfter = () => lines(launchesFile).slice(before.launches.length);
-    await expect.poll(() => launchesAfter().map((l) => l.id).sort().join(','), { timeout: 90_000 }).toBe('lead,worker');
-    // The lead's first rest: the carried note, the room message, then the worker's end.
-    const promptsOf = (who: string) => lines(promptsFile).filter((p) => p.id === who).map((p) => p.prompt as string);
-    await expect.poll(() => promptsOf('lead').some((p) => /Helper/.test(p) && /before Tars restarted/.test(p)), { timeout: 60_000 }).toBe(true);
-    await expect.poll(() => promptsOf('lead').some((p) => p.includes('ROOM>> the gate is green')), { timeout: 60_000 }).toBe(true);
-    await expect.poll(() => promptsOf('lead').some((p) => /Build Worker/.test(p) && /finished its turn|is now idle/.test(p)), { timeout: 60_000 }).toBe(true);
-    // Nobody at rest was started, a while later still.
-    await new Promise((r) => setTimeout(r, 5_000));
-    const after = launchesAfter();
-    const leadPrompts = promptsOf('lead');
-    const values = {
-      killed, before, after,
-      prompts: lines(promptsFile),
-      statusesAfter: (await list2()).map((a) => [a.id, a.status, a.cliRunning]),
-      carryOverAfter: JSON.parse(fs.readFileSync(path.join(privateDir, 'carry-over.json'), 'utf8')),
+    const launch = () => launchSandboxed(electron, home, {
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31399 : 31467), DOROTHY_E2E: '1' },
+    });
+    const pageOf = async (app: Awaited<ReturnType<typeof launch>>) => {
+      const page = await app.firstWindow();
+      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+      return page;
     };
-    recordValues(values);
 
-    const lead = after.find((l) => l.id === 'lead')!;
-    const worker = after.find((l) => l.id === 'worker')!;
-    expect(lead.resume && worker.resume).toBe(true);
-    expect(worker.prompt).toMatch(/^\[Tars\] Tars stopped abruptly at \d\d:\d\d/);
-    expect(worker.prompt).toMatch(/"Bash" was running: its outcome is unknown/);
-    expect(worker.prompt).toContain(worker.TMPDIR);
-    expect(worker.TMPDIR).toBe(before.launches.find((l) => l.id === 'worker').TMPDIR);
-    expect(lead.prompt).toMatch(/"Build Worker" \(resumed too\)/);
-    // The helper's link was spent when its end became news: that news is the note carried across the restart.
-    expect(lead.prompt).not.toMatch(/Helper/);
-    for (const resumed of [lead, worker]) expect(resumed.prompt).not.toMatch(/DELEGATE>>|LONG>>|ship 1\.9\.3|build the release/);
-    expect(after.filter((l) => l.id === 'helper' || l.id === 'sleeper')).toEqual([]);
-    expect(leadPrompts.filter((p) => /Helper/.test(p) && /before Tars restarted/.test(p))).toHaveLength(1);
-    expect(leadPrompts.filter((p) => p.includes('ROOM>> the gate is green'))).toHaveLength(1);
-    expect(values.carryOverAfter.notes).toEqual([]);
-  } finally {
-    await again.close();
-  }
-  const ended = JSON.parse(fs.readFileSync(path.join(privateDir, 'run-state.json'), 'utf8'));
-  recordValues({ runStateAfterQuit: ended });
-  expect(ended.cleanExit).toBe(true);
-  expect(ended.resumed.sort()).toEqual(['lead', 'worker']);
-  // Out of every agent's reach (the Audit's gate of #310): nothing of either in ~/.tars, each 0600.
-  expect(['run-state.json', 'carry-over.json'].filter((f) => fs.existsSync(path.join(dir, f)))).toEqual([]);
-  // POSIX mode bits, which Windows has none of (Node reads 666 there).
-  if (process.platform !== 'win32') expect(['run-state.json', 'carry-over.json'].map((f) => fs.statSync(path.join(privateDir, f)).mode & 0o777)).toEqual([0o600, 0o600]);
-});
+    // ── Before the crash ──
+    const app = await launch();
+    const page = await pageOf(app);
+    const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
+    for (const id of ['lead', 'worker', 'helper', 'sleeper']) {
+      await page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
+    }
+    await expect.poll(async () => (await list()).filter((a) => a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(4);
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.sendInput({ id: 'lead', input: 'DELEGATE>> ship 1.9.3\r' }));
+    // The helper done, the worker inside its Bash call, the lead in its turn.
+    await expect.poll(async () => {
+      const byId = Object.fromEntries((await list()).map((a) => [a.id, a.status]));
+      return [byId.lead, byId.worker, byId.helper, byId.sleeper].join(',');
+    }, { timeout: 60_000 }).toMatch(/^running,running,(idle|waiting|completed),(idle|waiting)$/);
+    // A room message to the busy lead: it waits in the journal.
+    const rooms = await page.evaluate(() => (window as unknown as Api).electronAPI.bus.listRooms());
+    const room = (Array.isArray(rooms) ? rooms : rooms.rooms).find((r) => r.kind === 'project' && r.memberIds.includes('lead'))!;
+    await page.evaluate((r) => (window as unknown as Api).electronAPI.bus.postMessage({ roomId: r, text: 'ROOM>> the gate is green', mentions: ['lead'] }), room.id);
+    // What is owed reaches the disk a moment after it is owed.
+    await expect.poll(() => {
+      try {
+        return JSON.parse(fs.readFileSync(path.join(privateDir, 'carry-over.json'), 'utf8')).notes.map((n: { childId: string }) => n.childId);
+      } catch { return []; }
+    }, { timeout: 15_000 }).toEqual(['helper']);
+    await new Promise((r) => setTimeout(r, 1_500));
+    const before = { launches: lines(launchesFile), runState: JSON.parse(fs.readFileSync(path.join(privateDir, 'run-state.json'), 'utf8')) };
+
+    // ── The crash: Tars and every CLI, by PID ──
+    // Tars is its main process. On Windows Playwright starts electron.exe through
+    // cmd.exe /c, and app.process() is that cmd.exe: killed, it leaves Tars
+    // running, and the relaunch below is a second instance that hands over to it
+    // and exits (measured).
+    const tars = process.platform === 'win32' ? await app.evaluate(() => process.pid) : app.process().pid!;
+    const killed = [tars, ...before.launches.map((l) => l.pid as number)];
+    for (const pid of killed) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone already */ } }
+    await new Promise((r) => setTimeout(r, 2_000));
+
+    // ── After it ──
+    const again = await launch();
+    try {
+      const page2 = await pageOf(again);
+      const list2 = () => page2.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
+      const launchesAfter = () => lines(launchesFile).slice(before.launches.length);
+      await expect.poll(() => launchesAfter().map((l) => l.id).sort().join(','), { timeout: 90_000 }).toBe('lead,worker');
+      // The lead's first rest: the carried note, the room message, then the worker's end.
+      const promptsOf = (who: string) => lines(promptsFile).filter((p) => p.id === who).map((p) => p.prompt as string);
+      await expect.poll(() => promptsOf('lead').some((p) => /Helper/.test(p) && /before Tars restarted/.test(p)), { timeout: 60_000 }).toBe(true);
+      await expect.poll(() => promptsOf('lead').some((p) => p.includes('ROOM>> the gate is green')), { timeout: 60_000 }).toBe(true);
+      await expect.poll(() => promptsOf('lead').some((p) => /Build Worker/.test(p) && /finished its turn|is now idle/.test(p)), { timeout: 60_000 }).toBe(true);
+      // Nobody at rest was started, a while later still.
+      await new Promise((r) => setTimeout(r, 5_000));
+      const after = launchesAfter();
+      const leadPrompts = promptsOf('lead');
+      const values = {
+        killed, before, after,
+        prompts: lines(promptsFile),
+        statusesAfter: (await list2()).map((a) => [a.id, a.status, a.cliRunning]),
+        carryOverAfter: JSON.parse(fs.readFileSync(path.join(privateDir, 'carry-over.json'), 'utf8')),
+      };
+      recordValues(values);
+
+      const lead = after.find((l) => l.id === 'lead')!;
+      const worker = after.find((l) => l.id === 'worker')!;
+      expect(lead.resume && worker.resume).toBe(true);
+      expect(worker.prompt, "its time UTC first (2.0.6)").toMatch(/^\[Tars\] Tars stopped abruptly at \d\d:\d\d UTC/);
+      expect(worker.prompt).toMatch(/"Bash" was running: its outcome is unknown/);
+      expect(worker.prompt).toContain(worker.TMPDIR);
+      expect(worker.TMPDIR).toBe(before.launches.find((l) => l.id === 'worker').TMPDIR);
+      expect(lead.prompt).toMatch(/"Build Worker" \(resumed too\)/);
+      // The helper's link was spent when its end became news: that news is the note carried across the restart.
+      expect(lead.prompt).not.toMatch(/Helper/);
+      for (const resumed of [lead, worker]) expect(resumed.prompt).not.toMatch(/DELEGATE>>|LONG>>|ship 1\.9\.3|build the release/);
+      expect(after.filter((l) => l.id === 'helper' || l.id === 'sleeper')).toEqual([]);
+      expect(leadPrompts.filter((p) => /Helper/.test(p) && /before Tars restarted/.test(p))).toHaveLength(1);
+      expect(leadPrompts.find((p) => /Helper/.test(p) && /before Tars restarted/.test(p)) ?? "", "owed since, UTC first (2.0.6)").toMatch(/owed since \d\d:\d\d UTC/);
+      expect(leadPrompts.filter((p) => p.includes('ROOM>> the gate is green'))).toHaveLength(1);
+      expect(values.carryOverAfter.notes).toEqual([]);
+    } finally {
+      await again.close();
+    }
+    const ended = JSON.parse(fs.readFileSync(path.join(privateDir, 'run-state.json'), 'utf8'));
+    recordValues({ runStateAfterQuit: ended });
+    expect(ended.cleanExit).toBe(true);
+    expect(ended.resumed.sort()).toEqual(['lead', 'worker']);
+    // Out of every agent's reach (the Audit's gate of #310): nothing of either in ~/.tars, each 0600.
+    expect(['run-state.json', 'carry-over.json'].filter((f) => fs.existsSync(path.join(dir, f)))).toEqual([]);
+    // POSIX mode bits, which Windows has none of (Node reads 666 there).
+    if (process.platform !== 'win32') expect(['run-state.json', 'carry-over.json'].map((f) => fs.statSync(path.join(privateDir, f)).mode & 0o777)).toEqual([0o600, 0o600]);
+  });
+}

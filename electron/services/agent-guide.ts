@@ -151,10 +151,10 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
   },
   {
     id: 'heavy-runs',
-    title: 'Heavy runs: one slot for the whole machine',
+    title: 'Heavy runs: one queue for the whole machine, admitted by its room',
     roles: ['orchestrator', 'worker'],
     text: [
-      'Test suites, builds, Docker and simulators take the machine\'s heavy-run slot first: every project\'s agents share it, one run at a time unless the user set more. A dev server started on its own does not take it (it would hold the only slot for hours); one a test run starts is inside that run.',
+      'Test suites, builds, Docker and simulators take the machine\'s heavy-run slot first: every project\'s agents share it, and a further run starts only when the machine has room for it (free disk and memory, no swapping, the last run settled), up to a ceiling the user sets. A dev server started on its own does not take it (it would hold a place for hours); one a test run starts is inside that run.',
       'For one command: `tars-slot run --label "<what>" -- <command>` in your terminal waits for the slot, runs the command, gives it back and exits with its code; git hooks and scripts use it too, as `"$TARS_SLOT" run ...`, which needs no PATH (a login shell may set PATH anew). `tars-slot take`, from a script that runs the steps itself, holds it across them (until the script ends or `tars-slot give-back <ticket>`); from your own Bash tool its lease ends with that one command. `tars-slot status` shows the queue.',
       'From a tool: `heavy_slot_take` (then `heavy_slot_give_back` when the run is over; Tars gives it back when your turn ends, and the owner can from the window), `heavy_slot_status` for who holds it and who waits.',
       'The queue: gate (a release gate, orchestrators only), then normal, then background, then arrival. A run started from inside your own run (a pre-push hook) is granted at once. A grant waits while free disk or memory is under the floor, and says so.',

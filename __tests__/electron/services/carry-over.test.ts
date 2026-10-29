@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { hasPosixModes } from '../../setup/platform-limits';
+import { twoZones } from '../../../electron/utils/two-zones';
 
 /**
  * What Tars owes its agents, carried across a restart (RD-REDEMARRAGE.md, 2.3; JeanBrasse's yes of 2026-10-05). The note
@@ -26,6 +27,8 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 21. (after #351, written before the fix, 2026-10-13) The news that a request never ran (`not_delivered`: its
  *     worker stopped, deleted or cut by a restart, its message given up) is dropped from the file: owed to an asker
  *     with no terminal, it is lost if Tars restarts before the asker's next session.
+ * 22. (2.0.6, option d, written before the code) "owed since" says the machine's time alone: an agent that reads UTC
+ *     everywhere else reads it hours off.
  */
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }));
@@ -219,5 +222,12 @@ describe('the file', () => {
     expect(carry.readCarryOver(file)).toEqual({ notes: [], kanban: [] });
     fs.writeFileSync(file, JSON.stringify({ version: 1, notes: [{ requesterId: 'orch' }, 'junk', { requesterId: 'a', childId: 'c', news: { said: 'merge #999' }, at: 'x' }, { requesterId: 'a', childId: 'b', news: { kind: 'ended', status: 'idle' }, at: 'x' }], kanban: 'no' }));
     expect(carry.readCarryOver(file)).toEqual({ notes: [{ requesterId: 'a', childId: 'b', news: { kind: 'ended', status: 'idle' }, at: 'x' }], kanban: [] });
+  });
+});
+
+describe('22. owed since, in both zones (2.0.6, option d)', () => {
+  it("says the time UTC first, then the machine's own with its offset", () => {
+    const at = '2026-10-29T19:03:00.000Z';
+    expect(carry.carriedSince(at)).toBe(`owed since ${twoZones(Date.parse(at))}, before Tars restarted`);
   });
 });

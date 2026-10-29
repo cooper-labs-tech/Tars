@@ -433,7 +433,10 @@ export type KeepAwakeMode = 'while-working' | 'always' | 'never';
 export interface AppSettings {
   /** Missing or unknown reads as 'while-working'. */
   keepAwake?: KeepAwakeMode;
-  /** The heavy-run slot (services/heavy-slot.ts): how many runs at once on this machine (1 when unset). */
+  /**
+   * The heavy-run slot (services/heavy-slot.ts): the ceiling of runs at once on this machine (3 when unset, since
+   * 2.0.6); below it, a further run is admitted by the machine's room, not by this count.
+   */
   heavySlots?: number;
   /** The floors under which a grant waits: free disk in GB (15) and free memory in % (20). */
   heavySlotMinDiskGb?: number;

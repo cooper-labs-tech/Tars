@@ -26,7 +26,7 @@ import { agentStatusEmitter, emitAgentStatus } from './agent-events';
 import { factsOf, sleepNow, sleepRefusal } from './agent-sleep';
 import { readProcesses } from './stall-watch';
 import { cloneDependencies, logDependencies } from './worktree-deps';
-import { chatLimitOf, type Chat, type ChatStore } from './chats';
+import { chatLimitOf, launchLimitNote, type Chat, type ChatStore } from './chats';
 
 /**
  * A chat's conversation, run (ORCHESTRATOR-PER-CHAT.md v2.2, 4.2; PR D of 2.0.0).
@@ -559,12 +559,10 @@ export function leaveRunnersAsleep(working: Array<{ agentId: string }>, now = Da
     return !!chat && runnerOf(chat) === agent;
   }).length;
   const { leave } = runnersToResume(runners.map((r) => ({ agentId: r.id, lastActivity: Date.parse(r.lastActivity) || 0 })), limit.limit - mains);
-  const stoppedAt = new Date(now).toTimeString().slice(0, 5);
   for (const id of leave) {
     const runner = agents.get(id)!;
     fallAsleep(runner, undefined, now);
-    notesForNextLaunch.set(id, `[Tars] Tars stopped abruptly while this chat was working, and it was not restarted at launch (${stoppedAt}): `
-      + `the limit is ${limit.limit} chats working at once. Your conversation is as it was; pick up where it stopped.`);
+    notesForNextLaunch.set(id, launchLimitNote(limit.limit, now));
     console.log(`[chat-runners] ${runner.name}: not restarted at launch, the limit is ${limit.limit}; asleep`);
   }
   if (leave.length) saveAgents();

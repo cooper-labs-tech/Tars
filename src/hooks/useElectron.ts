@@ -224,6 +224,9 @@ export function useElectronAgents() {
         fetchAgents();
         return;
       }
+      // Asleep, patched as below and read again: a wake refused for lack of a terminal leaves it asleep with the
+      // reason in `error` (core/no-terminal.ts), announced by this event alone (the Audit's X1 on PR 557).
+      if (event.status === 'asleep') fetchAgents();
       // A permission question Tars holds rides every event of its own, null
       // at its end (#318): an answer, ask in terminal, its ten minutes, a
       // stop. Ask in terminal leaves the agent waiting, and only the question
@@ -279,6 +282,9 @@ export function useElectronAgents() {
         fetchAgents();
         return;
       }
+      // One that has just fallen asleep is patched below at once, and read again: a reason an earlier refused wake
+      // left in the copy may have been cleared by main since (the Audit's X1 on PR 557).
+      if (tickAgents.some(t => t.status === 'asleep' && known.find(a => a.id === t.id)?.status !== 'asleep')) fetchAgents();
       setAgents(prev => {
         // Check if any status, currentTask or running CLI changed. A CLI starts
         // and exits without the status moving (/exit, or claude left at its

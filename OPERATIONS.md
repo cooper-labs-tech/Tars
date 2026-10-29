@@ -246,7 +246,9 @@ stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 `~/.tars/health-samples.jsonl` (`0600`): the main process's heap and RSS, its event loop delay
 (p50, p95), the three slowest IPC handlers of the 5 minutes, the agents and how many run, the page
 open, and since 2.0.5 the machine (`machine`: free memory, compressor, swap and its growth per minute,
-disk free, load) and each agent's tree (`agentTrees`, MB and processes; `null` on Windows). To see
+disk free, load) and each agent's tree (`agentTrees`, MB and processes; `null` on Windows), and since
+2.0.6 the machine's terminals (`terminals`: in use, limit, Tars's masters, its open terminals; `null` on
+Windows; "No terminal can be opened", in Agents and PTYs). To see
 the swap climb during a run: `jq -c '[.at, .machine.swapUsedMb, .machine.swapGrowthMbPerMin]'
 ~/.tars/health-samples.jsonl`. 24 hours rolling, 256 KB at most: numbers, with the names of Tars's own calls and pages, no
 content, no file path, no name (`services/health/`). To see how a session
@@ -1242,9 +1244,10 @@ stat -f '%Sp %N' ~/.tars-private/api-token      # expect -rw-------
 
 ## The heavy-run slot
 
-One slot for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and
-simulators of every project's agents take it in turn. A dev server started on its own does not (it would hold the
-only slot for hours); one a test run starts is inside that run. The plan's item A; the three projects'
+One queue for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and
+simulators of every project's agents wait in it, and since 2.0.6 each further run starts when the machine has room
+for it, up to a ceiling (below). A dev server started on its own does not take a place (it would hold one for
+hours); one a test run starts is inside that run. The plan's item A; the three projects'
 orchestrators each had a lock of their own, which coordinated nothing between projects and stayed taken when its
 agent died.
 
@@ -1271,12 +1274,20 @@ agent died.
   process or one of its parents, on every system.
 - **The label** is masked (`utils/redact-secrets.ts`) before it is recorded: a token or a URL's password in a command
   line does not reach the queue every agent reads.
-- **The machine.** Before a grant, as the health samples read it (`services/health/machine.ts`): under the floor of
-  free disk (`heavySlotMinDiskGb`, 15) or free memory (`heavySlotMinFreeMemPct`, 20 %), the grant waits and the waiter
-  reads why. A figure the system cannot give does not block. During a run, every 30 s: alerts at 10, 6 and 3 GB of
+- **Admitted by the machine's room (2.0.6).** With nothing holding, the floors alone decide: free disk
+  (`heavySlotMinDiskGb`, 15) and free memory (`heavySlotMinFreeMemPct`, 20 %), and a figure the system cannot give
+  does not block. With runs holding, the head of the queue is admitted, one a pass, when all of these hold: fewer
+  runs than the ceiling (`heavySlots`, default 3); the last run granted has run 90 s (its boot is its spike, 2 to 3 GB
+  of swap a minute measured), or ended; free disk at least the floor plus 10 GB for each run holding; free memory at
+  least its floor; and at most 16 MB swapped out per 10 s (room-check.sh's 1,000 pages on Apple silicon's 16 KB
+  pages, in bytes on every system: macOS `vm_stat` Swapouts at its page size, Linux `/proc/vmstat` pswpout at
+  `getconf PAGESIZE`; unknown on Windows, where it does not block). A reading that throws or does not come in 15 s
+  holds a further run back. Passes run one at a time: one asked for while another runs joins the next, which reads
+  the queue as it is then. Each waiter reads why: the holders and the ceiling, the settle
+  time, the disk with its reserve, the memory, the swapping, or no reading. During a run, every 30 s: alerts at 10, 6 and 3 GB of
   free disk and when the swap grows by 1,000 MB a minute or more, to the holder (`tars-slot run` prints them), its
   project's orchestrator (typed as Tars) and the window (`heavySlot:alert`). **Tars never stops a run itself.**
-- **Settings.** `heavySlots` (1 to 8; default 1), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
+- **Settings.** `heavySlots`, the ceiling (1 to 8; default 3 since 2.0.6, 1 before), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
   `~/.tars/app-settings.json`.
 - **The window.** `window.electronAPI.heavySlot.status()`, `giveBack(ticketId)` (the owner gives any lease or ask
   back; its holder and its orchestrator are told, and it is among the day's alerts), and the events `onChanged` (the
@@ -1289,7 +1300,10 @@ agent died.
 |---|---|---|
 | `tars-slot: run it from an agent's terminal started by Tars` | no `TARS_SLOT_SCRIPT` or no token: not an agent's terminal, or one started before 2.0.5 | restart the agent |
 | `process N is not under your terminal` | the lease was asked for a process that is not the agent's | ask from the agent's own terminal; `take` holds it for its caller |
-| waits with `waiting for free disk` / `free memory` | under the floor | free disk or memory, or lower the floor in the settings |
+| waits with `waiting for free disk` / `free memory` | under the floor (with runs holding, the disk floor plus 10 GB each) | free disk or memory, or lower the floor in the settings |
+| waits with `waiting for the last run to settle` | a run was granted less than 90 s ago and still holds | nothing: the next pass after 90 s reads the machine again |
+| waits with `waiting for the machine to stop swapping` | over 16 MB swapped out per 10 s | wait, or end a heavy run of your own |
+| waits with `at most N runs at once` | the ceiling (`heavySlots`) is reached | wait, or raise the ceiling in the settings |
 
 ---
 
@@ -1924,6 +1938,26 @@ Six sources sit behind one interface (`electron/services/memory-hub.ts`):
 | `gbrain` | remote streamable-HTTP MCP server |
 | `honcho` | remote streamable-HTTP MCP server |
 
+**A project's MEMORY.md past what Claude Code loads** (2.0.6, `services/memory-guard.ts`). Measured on Claude Code
+2.1.312 with the real CLI (29/10): it loads the first 200 lines of the trimmed file, then cuts at the last line break
+before 25,000 characters (the "24.4 KB" it names; UTF-16 units, so an accented letter counts one), and says so only to
+the model, in a `> WARNING: MEMORY.md is ...` line after what it kept. No line is cut on its own: a 320-character line
+reaches the model whole (the ` …` some indexes show are in the files). Every 5 minutes Tars reads each project's
+MEMORY.md under `~/.claude/projects` and each Claude account's folder (`~/.claude-accounts/<id>/projects`); past 22 KB
+or 180 lines it types a note into the project's orchestrator, once, and again only when it went from near to cut, or
+grew by at least 2 KB or 20 lines since the last note (what was told is kept in `~/.tars/memory-guard.json`, so a
+restart does not repeat it, and forgotten in the pass that no longer finds the file, so one written again is told
+afresh; a note not typed is owed to a later pass). Only a regular file is read, its link not
+followed (a FIFO or a link named MEMORY.md is neither watched nor read), without blocking the main process, its type
+and size taken from the open file, and never more than 1 MiB of it: a larger one is said too large to read whole. The
+Memory page's listing reads every `.md` of the folder the same way (`readRegularFile`) and lists only regular files of
+1 MiB at most, so the editor is never handed an empty copy of a larger one to save over (a MEMORY.md that large is still
+said too large by its row's guard); `memory:read-file` reads the same way. What was told of a file is forgotten only
+once the file is gone (ENOENT), never on a folder that briefly could not be listed.
+A folder belongs to the project of an agent working in it, through its project or its worktree. The Memory page's
+rows carry the same (`guard` on `memory:list-projects`: state, size, lines, what is cut from which line, and the
+words). To see it by hand: `wc -lc` the file, against 200 lines and 25,000 characters.
+
 Both remote backends are spoken to directly over MCP (`electron/services/mcp-http-client.ts`,
 protocol `2025-06-18`, `Accept: application/json, text/event-stream`, 15 s timeout), so
 "Connected" in the UI means a real `initialize` + `tools/list` round trip, not "a URL is filled
@@ -2340,6 +2374,35 @@ No agent terminal starts under 2 GB free on the home folder's disk: `/start`, `/
 `/message` answer 507 with `diskFull` and the space left, and the window's start is refused with the same
 reason. Free space, then start it again (`node scripts/worktree.mjs status` lists what the
 worktrees hold).
+
+### No terminal can be opened
+
+Every terminal Tars opens takes one PTY from the machine's pool: 511 on macOS (`kern.tty.ptmx_max`), the
+kernel's `/proc/sys/kernel/pty/max` on Linux (4096 by default); Windows' ConPTY has no such pool. Until 2.0.6
+node-pty 1.1.0's macOS spawn left one master open per terminal, for good: Tars 2.0.4 held 510 of the 511
+after 78 hours (28-29/10) and every agent start answered 500. Since 2.0.6 every terminal is opened through
+`spawnPty` (`core/pty-spawn.ts`), which closes what node-pty left, so a stopped or sleeping agent gives its
+terminal back; and after a spawn that failed partway (an argument past the system's limit, a long task prompt on
+the CLI's command line can be one), it closes the PTYs node-pty opened and left, 3 per failed start before.
+A start on macOS opens two (node-pty's spare master, then the terminal's), so it needs two free; Linux one.
+
+What Tars reads (`core/pty-pool.ts`): on macOS, the computer's PTYs in use as its `/dev/ttysNNN` nodes (one
+per allocated PTY, a master with no slave left included: measured), the limit as `kern.tty.ptmx_max`, and
+Tars's own masters as its file descriptors on the PTY master device (major 15, `/dev/ptmx`'s); on Linux,
+`/proc/sys/kernel/pty/nr` and `max`, and its descriptors that link to `/dev/ptmx`. And the terminals Tars has
+open, counted where each is opened and given back at its exit. More masters than open terminals is a leak.
+
+When the pool is full (one free on macOS, none on Linux), a start answers `503` with `code: 'no_terminal'`,
+the window's start `{ success: false, error, code: 'no_terminal' }`, and the agent reads `error` with the same
+words, whatever started it (an asleep agent stays asleep with them, its next message retrying the wake):
+`No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open
+terminals.` followed by the remedy, on macOS `A start on macOS needs two free: stop two agents that do not need
+their terminal, or close terminals in other apps.`, on Linux the same for one. A restart of Tars is named only
+when Tars holds masters it has no terminal open for, since only a restart frees those, and it stops every agent.
+Past 80 % of the limit the window gets a fresh `resources:changed` and every project's orchestrator a note from
+Tars, once, and again after the pool fell under 70 %. The Resources data carries the words to show as they are
+(`terminals.notice`: the refusal once full, the warning past 80 %, else null). To read the pool by hand on macOS: `ls /dev | grep -c '^ttys[0-9]'`, `sysctl -n
+kern.tty.ptmx_max`, and `lsof -p <Tars's pid> | grep -c /dev/ptmx`.
 
 ### Folders no agent owns
 

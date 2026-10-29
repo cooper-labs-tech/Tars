@@ -52,6 +52,15 @@ export const statusWord = (status: AgentStatus['status']): StatusWord =>
 export const errorReason = (agent: Pick<AgentStatus, 'status' | 'error'>): string | null =>
   agent.status === 'error' ? agent.error?.trim() || null : null;
 
+/**
+ * Why an asleep agent did not wake, or null. A wake refused for lack of a terminal leaves the agent asleep with the
+ * reason in `error` (PR 553's second round, core/no-terminal.ts): asleep, its mark and its session clear only once a
+ * terminal opened. Only idle agents fall asleep, so an asleep agent with `error` is that refusal.
+ * Frame: `Agent cannot start · no terminal left (2.0.6)`, its asleep card.
+ */
+export const wakeRefusedReason = (agent: Pick<AgentStatus, 'status' | 'error'>): string | null =>
+  agent.status === 'asleep' ? agent.error?.trim() || null : null;
+
 export const ORCHESTRATOR_PROMPT = `You are the Super Agent - an orchestrator that manages other agents using MCP tools.
 
 AVAILABLE MCP TOOLS (from "claude-mgr-orchestrator"):

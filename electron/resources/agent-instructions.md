@@ -29,9 +29,10 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 ## Heavy runs
 
 Every project's agents share this machine. Before a test suite, a build, Docker or a simulator,
-take the heavy-run slot, which Tars gives to one run at a time across all projects. A dev server
-you start on its own does not take it: it would hold the machine's only slot for hours. One a
-test run starts is inside that run.
+take the heavy-run slot, which Tars gives to the runs of all projects in turn: a further run starts
+only when the machine has room for it (free disk and memory, no swapping, the last run settled). A
+dev server you start on its own does not take it: it would hold a place for hours. One a test run
+starts is inside that run.
 
 - One command: `tars-slot run --label "<what it is>" -- <command>` waits for the slot, runs the
   command, gives the slot back when it ends and exits with its code. Use it in git hooks and

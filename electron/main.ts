@@ -72,6 +72,9 @@ import { lastLocalCommandAt } from './services/agent-truth';
 import { runShutdownSteps } from './core/shutdown';
 import { initTray, destroyTray } from './core/tray-manager';
 import { broadcastToAllWindows } from './utils/broadcast';
+import { readTerminals, useTestPtyMax } from './core/pty-spawn';
+import { ptyTestMax, terminalsNearFullNote } from './core/pty-pool';
+import { readFleetResources } from './services/fleet-resources-runtime';
 
 // Services
 import { startApiServer } from './services/api-server';
@@ -155,6 +158,8 @@ import { checksForUpdates } from './core/sandbox-build';
 import { startCliUpdates } from './services/cli-updater';
 import { migrateLocalTasks, setKanbanAgentDirectory } from './services/kanban-board';
 import { hermesKanban, tellAgentAsTars, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { memoryFolderOwners, startMemoryGuard } from './services/memory-guard';
+import { homedir } from 'os';
 import { giveSlotBackForOwner, startHeavySlot, stopHeavySlot, slotStatus } from './services/heavy-slot-runtime';
 import { inboxAgentOf } from './core/chat-inbox';
 import { installSlotShims } from './services/heavy-slot-cli';
@@ -234,6 +239,12 @@ const HEALTH_FILE = dataPath('health-samples.jsonl');
 /** Every 5 minutes; a test run may ask for a shorter period (DOROTHY_HEALTH_EVERY_MS, under DOROTHY_E2E only). */
 function healthEveryMs(): number {
   const asked = Number(process.env.DOROTHY_HEALTH_EVERY_MS);
+  return process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 200 ? asked : 5 * 60_000;
+}
+
+/** How often every project's MEMORY.md is read against Claude Code's limits: 5 minutes, or a test's own (200 ms at least). */
+function memoryGuardEveryMs(): number {
+  const asked = Number(process.env.DOROTHY_MEMORY_GUARD_EVERY_MS);
   return process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 200 ? asked : 5 * 60_000;
 }
 
@@ -564,6 +575,10 @@ app.whenReady().then(async () => {
   }
   if (DATA_DIR_REWRITTEN.length) console.log(`[data-dir] ~/.dorothy rewritten to ~/.tars in ${DATA_DIR_REWRITTEN.length} file(s)`);
 
+  // An E2E spec's full pool of terminals, before any agent starts: under DOROTHY_E2E only, never in a packaged build
+  // (core/pty-pool.ts ptyTestMax).
+  useTestPtyMax(ptyTestMax(process.env, app.isPackaged));
+
   // Load agents from disk
   loadAgents();
   // And the run token folders a delegated run or a crash left behind (services/acp/run-token-file.ts).
@@ -588,6 +603,14 @@ app.whenReady().then(async () => {
       const terminal = a.ptyId ? ptyProcesses.get(a.ptyId) : undefined;
       return terminal ? [{ id: a.id, pid: terminal.pid }] : [];
     }),
+    // The machine's terminals on the same sample; past 80 % of its limit the window and every project's
+    // orchestrator are told, once (core/pty-pool.ts, 2.0.6: the leak that filled macOS's 511 on 28-29/10).
+    terminals: readTerminals,
+    onTerminalsNearFull: (pool) => {
+      void readFleetResources().then((r) => broadcastToAllWindows('resources:changed', r)).catch(() => undefined);
+      const note = terminalsNearFullNote(pool);
+      for (const project of new Set([...agents.values()].map((a) => a.projectPath))) void tellOrchestratorAsTars(project, note);
+    },
   });
   registerDiagnosticHandlers({ reports: errorReports, samplesFile: HEALTH_FILE, known: healthWords });
   // Bound how much a crash can lose: PTY-driven fields reach disk on a timer.
@@ -770,6 +793,14 @@ app.whenReady().then(async () => {
     tell: tellOrchestratorAsTars,
     save: saveAgents,
   });
+  // Each project's MEMORY.md against what Claude Code loads of it (200 lines, 25,000 characters): past 22 KB or 180
+  // lines its orchestrator is told, once, and again only when it grew (services/memory-guard.ts, 2.0.6).
+  startMemoryGuard(memoryGuardEveryMs(), () => ({
+    home: homedir(),
+    store: dataPath('memory-guard.json'),
+    owners: memoryFolderOwners(agents.values()),
+    tell: tellOrchestratorAsTars,
+  }));
   startKeepAwake();
   // The heavy-run slot for the whole machine (services/heavy-slot.ts): its shims in ~/.tars/bin for `tars-slot`, its
   // passes, and the window's read of who holds it and who waits.

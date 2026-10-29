@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { ProcessTree, processTable, processTableNow } from '../services/acp/client';
 import { beginQuit, isQuitting, refuseWhileQuitting } from './quit-state';
 import * as pty from 'node-pty';
+import { spawnPty } from './pty-spawn';
 import { resolveShell, shellArgs, childEnv } from '../platform';
 import { holdExitUntilTerminalsExit, killPty as endTerminal, shellStillRuns } from './pty-kill';
 import { killTree } from '../platform/kill-tree';
@@ -503,6 +504,8 @@ export interface WriteOrigin {
   /** The work this hands over, as the task ledger should name it, when the
    *  message carries more than the work (a chat's context before it). */
   task?: string;
+  /** A note (2.0.6): it hands no work over, so the task ledger records no hand-off from its sender. */
+  note?: boolean;
   /**
    * Called once, if the message has to wait for a person: somebody is typing
    * in the field, or left something there Tars cannot put back. Not when it
@@ -1017,8 +1020,11 @@ function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): v
     } catch (err) {
       console.error('[pty] a message reached its terminal but its caller threw:', err);
     }
-    // Work handed over, for the task the turn it starts opens (task-ledger.ts).
-    if (item.origin) noteHandOff(item.origin.agentId, { ...handOffFrom(item.origin.sender), text: item.origin.task ?? item.data, ref: taskRef });
+    // Work handed over, for the task the turn it starts opens (task-ledger.ts). A note hands none over: never its
+    // sender's task. The turn it opens at rest is Tars's delivery, with no asker, not one the user typed (the Audit's
+    // L1 on #561); typed into a turn under way, it leaves nothing for the next turn to take.
+    const handOff = !item.origin ? undefined : !item.origin.note ? handOffFrom(item.origin.sender) : opensTurn ? { source: 'tars' as const } : undefined;
+    if (item.origin && handOff) noteHandOff(item.origin.agentId, { ...handOff, text: item.origin.task ?? item.data, ref: taskRef });
   }
   const enter = () => {
     // A dialog that opened after the paste would take this Enter as its answer
@@ -1471,7 +1477,7 @@ export function createQuickPty(
   refuseWhileQuitting('terminal');
   const shell = resolveShell();
 
-  const ptyProcess = pty.spawn(shell, shellArgs(shell), {
+  const ptyProcess = spawnPty(shell, shellArgs(shell), {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,

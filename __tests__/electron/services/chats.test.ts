@@ -99,15 +99,18 @@
  * 46. (GATE-PR391-DELTA, L1, probe PB) A linked project whose target is missing at a launch loses the real spellings
  *     recorded for it, for good: they cannot be checked against a real path that cannot be read, the repair drops
  *     them and writes the file, and they are not back when the target is.
+ * 47. (2.0.6, option d, written before the code) The note a chat left asleep at a launch opens with says the time
+ *     of that launch in the machine's zone alone, where every other notice says UTC first, then the machine's own.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import {
-  createChatStore, chatLimitOf, workOutOf,
+  createChatStore, chatLimitOf, launchLimitNote, workOutOf,
   type Chat, type ChatError, type ChatStore, type OrchestratorFacts, type WorkItem,
 } from '../../../electron/services/chats';
+import { twoZones } from '../../../electron/utils/two-zones';
 
 const SESSION_A = 'e2e00000-0000-4000-8000-0000000000aa';
 const SESSION_B = 'e2e00000-0000-4000-8000-0000000000bb';
@@ -650,6 +653,14 @@ describe('work out at the team (chat_has_work)', () => {
 
 describe('the limit on chats working at once', () => {
   const GB = 2 ** 30;
+
+  it('47. the note of a chat left asleep at a launch says that launch in both zones, and the limit', () => {
+    const at = Date.parse('2026-10-29T19:03:00.000Z');
+    const note = launchLimitNote(3, at);
+    expect(note).toMatch(/^\[Tars\] Tars stopped abruptly while this chat was working/);
+    expect(note).toContain(`not restarted at launch (${twoZones(at)})`);
+    expect(note).toContain('the limit is 3 chats working at once');
+  });
 
   it('31. one chat per 5 GB of RAM, from 1 to 8, a GB being 2^30 bytes', () => {
     const limit = (gb: number) => chatLimitOf(gb * GB, {}).limit;

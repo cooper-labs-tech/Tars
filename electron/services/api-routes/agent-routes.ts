@@ -9,6 +9,7 @@ import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
+import { markNoTerminal } from '../../core/no-terminal';
 import { launchPrompt, noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { killPty } from '../../core/pty-kill';
@@ -54,6 +55,7 @@ import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel }
 import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
+import { createWaitsDigest, WAITS_MINUTE_MS } from '../waits-digest';
 import { scheduleTick } from '../../utils/agents-tick';
 import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
@@ -473,6 +475,8 @@ async function spawnAgentSessionInSlot(
     });
   } catch (err) {
     launchAbandoned(agent.id, launch);
+    // No terminal left on the machine: the agent says why, as the 503 does (core/no-terminal.ts).
+    markNoTerminal(agent, err, saveAgents);
     throw err;
   }
 
@@ -680,68 +684,57 @@ function heldReasonFor(agent: AgentStatus): string {
  * (bug-held-forever-05-10.md: three messages answered HELD, "Nothing needs
  * resending", waited 2 h 20 to 2 h 40, and nobody heard of them again).
  */
-export const HELD_RETELL_MS = 3 * 60_000;
-
-const clockOf = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+export const HELD_RETELL_MS = 3 * WAITS_MINUTE_MS;
 
 /**
- * Tells the agent that sent a message, once, when it is still held
- * HELD_RETELL_MS on: why, and that only a person at the terminal ends the
- * wait. A target in a turn may have somebody typing at it: it is looked at
- * again later. Returns what cancels it, for when the message goes in or is
- * dropped.
+ * What the agents sent that still waits, told each sender in one digest at
+ * most every 30 minutes (services/waits-digest.ts, 2.0.6), typed into its
+ * terminal as Tars's. The window shows held messages per agent and queued
+ * tasks in the agent's queue already: it reads nothing of the digest.
+ */
+const waitsDigest = createWaitsDigest({
+  tell: (senderId, text) => {
+    const from = agents.get(senderId);
+    const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
+    if (!pty) return;
+    writeProgrammaticInput(pty, text, true, { agentId: senderId, from: 'Tars', sender: { kind: 'tars' } });
+  },
+});
+
+/** Test seam: the digest is process memory (services/waits-digest.ts). */
+export function resetWaitsDigest(): void {
+  waitsDigest.reset();
+}
+
+/**
+ * A message still held HELD_RETELL_MS on, put in its sender's digest: why,
+ * and that only a person at the terminal ends the wait. A target in a turn
+ * may have somebody typing at it: it is looked at again later. Returns what
+ * ends it, for when the message goes in or is dropped.
  */
 function retellWhileHeld(target: AgentStatus, sender: MessageSender | undefined, sentAt: number): () => void {
   if (sender?.kind !== 'agent' || sender.id === target.id) return () => undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const arm = () => {
-    timer = setTimeout(() => {
-      if (target.status === 'running') { arm(); return; }
-      const from = agents.get(sender.id);
-      const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
-      if (!pty) return;
-      // Quoted as data, as every value a note of Tars's carries outside a fence
-      // (utils/envelope-value.ts): a name with a line separator in it would
-      // otherwise put a line of its own in Tars's voice (the Audit's gate of #314).
-      const name = envelopeValue(target.name || target.id);
-      const minutes = Math.max(1, Math.round((Date.now() - sentAt) / 60_000));
-      writeProgrammaticInput(pty,
-        `[Tars] Your message to ${name} of ${clockOf(sentAt)} is still not in its terminal, ${minutes} minutes on. `
-        + `${heldReasonFor(target)} Only a person at that terminal can end this wait: if nobody is there, tell the user, `
-        + `or stop ${name} and start it again, which drops the message, and send it again then.`,
-        true, { agentId: sender.id, from: 'Tars', sender: { kind: 'tars' } });
-    }, HELD_RETELL_MS);
-    timer.unref?.();
-  };
-  arm();
-  return () => { if (timer) clearTimeout(timer); };
+  return waitsDigest.track({
+    senderId: sender.id, targetId: target.id, targetName: target.name || target.id, sentAt, why: 'held',
+    reason: () => heldReasonFor(target), dueAfterMs: HELD_RETELL_MS, ready: () => target.status !== 'running',
+  });
 }
 
 /** How long a message waits behind an agent's work before its sender hears it still waits. */
-export const BEHIND_WORK_RETELL_MS = 10 * 60_000;
+export const BEHIND_WORK_RETELL_MS = 10 * WAITS_MINUTE_MS;
 
 /**
- * Tells the agent that sent a message held behind the target's work (a run,
- * or a turn) once, BEHIND_WORK_RETELL_MS on, that it still waits and goes in
- * at the target's next rest: under steady work it heard only `queued` at the
- * start (the Audit's L-D on 9d9a7ad9). Nothing to resend. Returns what cancels
- * it, for when the message goes in or is dropped.
+ * A message held behind the target's work (a run, or a turn)
+ * BEHIND_WORK_RETELL_MS on, put in its sender's digest: it still waits and
+ * goes in at the target's next rest (the Audit's L-D on 9d9a7ad9). Nothing to
+ * resend. Returns what ends it, for when the message goes in or is dropped.
  */
 function retellBehindWork(target: AgentStatus, sender: MessageSender | undefined, sentAt: number): () => void {
   if (sender?.kind !== 'agent' || sender.id === target.id) return () => undefined;
-  const timer = setTimeout(() => {
-    const from = agents.get(sender.id);
-    const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
-    if (!pty) return;
-    const name = envelopeValue(target.name || target.id);
-    const minutes = Math.max(1, Math.round((Date.now() - sentAt) / 60_000));
-    writeProgrammaticInput(pty,
-      `[Tars] Your message to ${name} of ${clockOf(sentAt)} still waits for ${name}'s work to end, ${minutes} minutes on: `
-      + 'it goes in at its next rest. Nothing needs resending.',
-      true, { agentId: sender.id, from: 'Tars', sender: { kind: 'tars' } });
-  }, BEHIND_WORK_RETELL_MS);
-  timer.unref?.();
-  return () => clearTimeout(timer);
+  return waitsDigest.track({
+    senderId: sender.id, targetId: target.id, targetName: target.name || target.id, sentAt, why: 'behind-work',
+    dueAfterMs: BEHIND_WORK_RETELL_MS,
+  });
 }
 
 /** Who a message into an agent's terminal is from, as verified: the agent whose
@@ -951,12 +944,26 @@ function noteSender(req: RouteRequest, agent: AgentStatus): AgentStatus | undefi
 }
 
 /** A note never starts a session: it waits for a turn's end, and an agent with no CLI up has none. */
-function noteNeedsSession(agent: AgentStatus): Record<string, unknown> {
+function noteNeedsSession(agent: AgentStatus, fromWorker: boolean): Record<string, unknown> {
   return {
     error: `${envelopeValue(agent.name || agent.id)} has no session open, and a note does not start one: nothing was sent. `
-      + 'A worker does not hand work to another agent; ask your orchestrator if it needs to do something.',
+      + (fromWorker
+        ? 'A worker does not hand work to another agent; ask your orchestrator if it needs to do something.'
+        : 'Send it as a message or a task if it needs to do something, or once it is up.'),
     code: 'note_needs_session',
   };
+}
+
+/** Who sends a note, as its label says it (core/one-task.ts, noteFrom). */
+function noteRole(caller: AgentStatus, agent: AgentStatus): string {
+  if (!hasOrchestratorPowers(caller)) return 'a worker';
+  return caller.projectPath === agent.projectPath ? "your project's orchestrator" : 'an orchestrator';
+}
+
+/** Whether a note was sent by a worker, from its sender line. */
+function noteFromWorker(sender: MessageSender | undefined): boolean {
+  const caller = sender?.kind === 'agent' ? agents.get(sender.id) : undefined;
+  return !!caller && !hasOrchestratorPowers(caller);
 }
 
 /**
@@ -1328,9 +1335,13 @@ async function runInTerminal(
  * as always (typed at rest, typed into a running turn, held behind a draft),
  * `queue` written only once the turn is over, `steer` the turn interrupted
  * first (claude only), `restart` the agent stopped and started with it.
+ * And a note (2.0.6): `note` typed once the turn is over, `note-now` as
+ * `auto`, labelled a note either way, and no task: no id, no link to its
+ * sender, no end notice.
  */
 type SendMode = 'auto' | 'queue' | 'steer' | 'restart';
-const SEND_MODES: readonly SendMode[] = ['auto', 'queue', 'steer', 'restart'];
+type AskedMode = SendMode | 'note' | 'note-now';
+const SEND_MODES: readonly AskedMode[] = ['auto', 'queue', 'steer', 'restart', 'note', 'note-now'];
 
 /** The mark before a message from an asker in a narrower mode than the agent (core/permission-ceiling.ts). */
 function markFor(agent: AgentStatus, req: RouteRequest): string {
@@ -1605,19 +1616,21 @@ async function performDispatchLocked(
       sender: opts.sender ?? { kind: 'tars' },
       // Both: the agent reads working once the message is in (#314), and the
       // caller hears it went in or was given up (#292).
-      onWritten: () => { handedOver(delivered(agent, taskRef)); opts.onWritten?.(); },
+      onWritten: () => { handedOver(!opts.noteOnly && delivered(agent, taskRef)); opts.onWritten?.(); },
       onDropped: () => { cancelRetell?.(); givenUp(agent, taskRef); opts.onDropped?.(); },
       // Cancelled before it went in (task-routes.ts): whoever cancelled it tells the asker.
       onWithdrawn: () => { cancelRetell?.(); opts.onWithdrawn?.(); },
       taskRef: taskRef ?? opts.taskId,
       untilRest,
       mark: opts.mark,
+      note: !!opts.noteOnly,
     });
     if (outcome === 'refused') {
       dropped(agent, taskRef);
       opts.onDropped?.();
     }
-    if (outcome !== 'held' && outcome !== 'refused') handedOver(delivered(agent, taskRef));
+    // A note hands nothing over: the turn in hand stays the handed work, and its end is told its asker (2.0.6).
+    if (outcome !== 'held' && outcome !== 'refused') handedOver(!opts.noteOnly && delivered(agent, taskRef));
     // Waiting for the turn, or the run, it was sent to wait out: nobody's field holds it.
     const waitsForTurn = outcome === 'held' && untilRest && holdsMessages(agent);
     if (outcome === 'held') cancelRetell = (waitsForTurn ? retellBehindWork : retellWhileHeld)(agent, opts.sender, Date.now());
@@ -1637,7 +1650,7 @@ async function performDispatchLocked(
 
   if (opts.noteOnly) {
     dropped(agent, taskRef);
-    sendJson(noteNeedsSession(agent), 409);
+    sendJson(noteNeedsSession(agent, noteFromWorker(opts.sender)), 409);
     return;
   }
   // One task at a time (core/one-task.ts): a run over ACP holds the agent, or
@@ -2651,9 +2664,14 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'message is required' }, 400);
       return;
     }
-    const askedMode = (asked ?? 'auto') as SendMode;
+    const askedMode = (asked ?? 'auto') as AskedMode;
     if (!SEND_MODES.includes(askedMode)) {
       sendJson({ error: `mode is one of ${SEND_MODES.join(', ')}.`, code: 'invalid_mode' }, 400);
+      return;
+    }
+    const asNote = askedMode === 'note' || askedMode === 'note-now';
+    if (asNote && intent === 'task') {
+      sendJson({ error: 'A note is no task: send it as a note, or as a task without the note mode.', code: 'note_is_no_task' }, 400);
       return;
     }
     // Never wider than the agent's own, refused before a receipt, a stop or anything typed.
@@ -2668,15 +2686,22 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // sends another worker is a note, labelled so and typed in once that
     // agent's turn is over. Its report to whoever leads it is not.
     if (askedMode === 'restart' ? !mayStop(req, agent, sendJson) : (intent === 'task' || askedMode === 'steer') && !mayHandWork(req, agent, sendJson)) return;
-    const noteBy = noteSender(req, agent);
-    const message = noteBy ? noteFrom(noteBy.name || noteBy.id, asSent) : asSent;
-    const mode: SendMode = noteBy ? 'queue' : askedMode;
+    // A note asked for, by whoever may drive the agent, is labelled with who
+    // sends it; a worker's note waits for the turn's end whatever it asked.
+    const workerNote = noteSender(req, agent);
+    const callerId = resolveCallerId(req);
+    const noteCaller = asNote && callerId && callerId !== agent.id ? agents.get(callerId) : undefined;
+    const note = asNote || !!workerNote;
+    const message = workerNote ? noteFrom(workerNote.name || workerNote.id, asSent)
+      : !asNote ? asSent
+        : noteCaller ? noteFrom(noteCaller.name || noteCaller.id, asSent, noteRole(noteCaller, agent))
+          : noteFrom('Tars', asSent, 'the app you run in');
+    const mode: SendMode = workerNote || askedMode === 'note' ? 'queue' : askedMode === 'note-now' ? 'auto' : askedMode;
     await withReceipt(req, sendJson, {
-      route: 'dispatch', agentId: agent.id, payload: { message, model: model ?? null, permissionMode: permissionMode ?? null, mode },
+      route: 'dispatch', agentId: agent.id, payload: { message, model: model ?? null, permissionMode: permissionMode ?? null, mode, ...(note ? { note } : {}) },
     }, async (sendAny) => {
-      const send: SendJson = noteBy ? (data, status) => sendAny(status && status >= 300 ? data : { ...(data as object), note: true }, status) : sendAny;
+      const send: SendJson = note ? (data, status) => sendAny(status && status >= 300 ? data : { ...(data as object), note: true }, status) : sendAny;
       const name = agent.name || agent.id;
-      const callerId = resolveCallerId(req);
       const asker = callerId && callerId !== agent.id ? callerId : undefined;
       if (mode === 'steer' && !canInterrupt(agent)) {
         send({
@@ -2713,13 +2738,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       await performDispatch(agent, {
         message, model, permissionMode, from: by, sender: senderOf(agent, req), mark: markFor(agent, req),
         untilRest: mode === 'queue' || interrupted === false,
-        noteOnly: !!noteBy,
-        task: intent === 'task' && !noteBy,
+        noteOnly: note,
+        task: intent === 'task' && !note,
         // A report to whoever leads the worker waits for that agent's run, as a note does: it is no task.
-        information: !noteBy && !!reportSender(req, agent),
+        information: !note && !!reportSender(req, agent),
         // After the wait: a sender refused 409 typed nothing and takes no link.
         // A note hands nothing over: nobody's request.
-        onAccepted: () => (noteBy ? undefined : requestFor(agent, req, message)),
+        onAccepted: () => (note ? undefined : requestFor(agent, req, message)),
       }, ctx, interrupted === undefined ? send : (data, status) => send(status && status >= 300 ? data : { ...(data as object), interrupted }, status));
     });
   });
@@ -2979,7 +3004,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // A dialog holds the message in the terminal's writer, as in /dispatch.
       const noCli = !cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined);
       if (noCli && noteBy) {
-        sendJson(noteNeedsSession(agent), 409);
+        sendJson(noteNeedsSession(agent, true), 409);
         return;
       }
       // A session started now, or a task typed into the live one, would work
@@ -3038,16 +3063,17 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
           agentId: agent.id,
           from: senderName(agent, req),
           sender,
-          onWritten: () => handedOver(delivered(agent, taskRef)),
+          onWritten: () => handedOver(!noteBy && delivered(agent, taskRef)),
           onDropped: () => { cancelRetell?.(); givenUp(agent, taskRef); },
           onWithdrawn: () => cancelRetell?.(),
           taskRef,
           mark: markFor(agent, req),
           // A note waits for the turn's end, as /dispatch's `queue`; a note or a report, for a run's.
           untilRest: !!noteBy || runHolds,
+          note: !!noteBy,
         });
         if (outcome === 'refused') dropped(agent, taskRef);
-        if (outcome !== 'held' && outcome !== 'refused') handedOver(delivered(agent, taskRef));
+        if (outcome !== 'held' && outcome !== 'refused') handedOver(!noteBy && delivered(agent, taskRef));
         const waitsForTurn = outcome === 'held' && (!!noteBy || runHolds) && holdsMessages(agent);
         if (outcome === 'held') cancelRetell = (waitsForTurn ? retellBehindWork : retellWhileHeld)(agent, sender, Date.now());
         sendJson({

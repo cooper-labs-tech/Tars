@@ -5,6 +5,7 @@ import { projectFolders } from './project-index';
 import { memoryProjectDirName, knownProjectsByFolder, claudeProjectDirNames } from '../platform/claude-project-dir';
 import { unlinkRetryingSync } from '../platform/rename-replacing';
 import { spellingsOf } from '../utils/resume-session';
+import { guardMemoryFile, readRegularFile, type MemoryGuard } from './memory-guard';
 
 export interface MemoryFile {
   name: string;
@@ -32,6 +33,11 @@ export interface ProjectMemory {
    * no MEMORY.md, and are kept where they were.
    */
   olderCopy?: string;
+  /**
+   * What Claude Code loads of this row's MEMORY.md, and what it does not (services/memory-guard.ts, 2.0.6): on a
+   * Claude row whose folder holds one; `unread` when it could not be read.
+   */
+  guard?: MemoryGuard;
 }
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -84,11 +90,15 @@ function readMemoryFile(filePath: string): MemoryFile {
   return memoryFile(filePath, stat, content);
 }
 
-/** The same, without blocking, for the listing of every project. */
-async function readMemoryFileAsync(filePath: string): Promise<MemoryFile> {
-  const stat = await fs.promises.stat(filePath);
-  const content = await fs.promises.readFile(filePath, 'utf-8').catch(() => '');
-  return memoryFile(filePath, stat, content);
+/**
+ * The same, for the listing of every project, the safe way (memory-guard.ts readRegularFile; the Audit's R2 on #558):
+ * a FIFO named notes.md kept the page loading for ever and held one of libuv's threads. What is not a regular file
+ * is not listed, nor one past 1 MiB (the Audit's M1 on #565: listed with an empty content, the page's editor showed
+ * it empty and a save replaced the whole file); a MEMORY.md that large is still said too large by its row's guard.
+ */
+async function readMemoryFileAsync(filePath: string): Promise<MemoryFile | null> {
+  const read = await readRegularFile(filePath);
+  return read.kind === 'text' ? memoryFile(filePath, read.stat, read.text) : null;
 }
 
 /** The folder a project's memory is created in when Claude has none for it yet (platform/claude-project-dir.ts). */
@@ -197,13 +207,18 @@ async function readProjectRow(provider: string, folderName: string, memoryDir: s
           if (b === 'MEMORY.md') return 1;
           return a.localeCompare(b);
         });
-      const files = await Promise.all(mdFiles.map(f => readMemoryFileAsync(path.join(memoryDir, f))));
+      const files = (await Promise.all(mdFiles.map(f => readMemoryFileAsync(path.join(memoryDir, f))))).filter((f): f is MemoryFile => f !== null);
       project.files = files;
       project.totalSize = files.reduce((sum, f) => sum + f.size, 0);
       project.lastModified = files.reduce((latest, f) => (f.lastModified > latest ? f.lastModified : latest), '');
       project.hasMemory = files.length > 0;
     } catch {
       // Skip unreadable directories
+    }
+    const entrypoint = path.join(memoryDir, 'MEMORY.md');
+    // Read as the guard reads it: a regular file only, its link not followed, at most 1 MiB (memory-guard.ts).
+    if (provider === 'claude' && await fs.promises.lstat(entrypoint).then(() => true, () => false)) {
+      project.guard = await guardMemoryFile(entrypoint);
     }
   }
   return project;
@@ -254,16 +269,17 @@ async function keepClaudesRow(projectPath: string, results: ProjectMemory[]): Pr
   results.push(row);
 }
 
-export function readMemoryFileContent(filePath: string): { content: string; error?: string } {
-  try {
-    if (!isWithinProjectsDir(filePath)) {
-      return { content: '', error: 'Access denied: path outside Claude projects directory' };
-    }
-    const content = fs.readFileSync(filePath, 'utf-8');
-    return { content };
-  } catch (err) {
-    return { content: '', error: err instanceof Error ? err.message : 'Failed to read file' };
+/**
+ * One memory file for the window (memory:read-file), read as the listing reads it (memory-guard.ts readRegularFile;
+ * the Audit's L2 on #565): read synchronously on the main thread, a FIFO hung Tars, and a link handed its target to
+ * the window. What is not a regular file, or is past 1 MiB, is not read, and the answer says so.
+ */
+export async function readMemoryFileContent(filePath: string): Promise<{ content: string; error?: string }> {
+  if (!isWithinProjectsDir(filePath)) {
+    return { content: '', error: 'Access denied: path outside Claude projects directory' };
   }
+  const read = await readRegularFile(filePath);
+  return read.kind === 'text' ? { content: read.text } : { content: '', error: 'Not a regular file, or past 1 MB: Tars does not read it.' };
 }
 
 export function writeMemoryFileContent(filePath: string, content: string): { success: boolean; error?: string } {
