@@ -42,14 +42,33 @@ export const SWAP_FAST_MB_PER_MIN = 1000;
 const SWAP_ALERT_EVERY_MS = 5 * 60_000;
 export const SLOTS_MAX = 8;
 
+/**
+ * Admission by the machine's room (2.0.6, the owner's decision of 29/10: "a function of the room available, not a
+ * hard limit"). The setting `heavySlots` is now a ceiling, 3 when unset: on the 24 GB Mac Tars runs on, three heavy
+ * runs is what the room was seen to carry once each had settled, and the room checks below decide before it does.
+ * - SETTLE_MS: a run's boot is its spike (2 to 3 GB of swap a minute, measured on 29/10), so a further run is read
+ *   for only once the last one granted has run this long, the reading then including its climb.
+ * - DISK_RESERVE_GB_PER_RUN: what each run holding may still take of the disk (swap files, artefacts; a `next dev`
+ *   took 6 to 7 GB of swap).
+ * - SWAPOUTS_10S_MAX: the pages swapped out in 10 s past which the machine swaps now, room-check.sh's figure.
+ * - MACHINE_READ_TIMEOUT_MS: a reading that does not come by then is an unknown machine.
+ */
+export const SLOTS_DEFAULT = 3;
+export const SETTLE_MS = 90_000;
+export const DISK_RESERVE_GB_PER_RUN = 10;
+export const SWAPOUTS_10S_MAX = 1000;
+export const MACHINE_READ_TIMEOUT_MS = 15_000;
+
 export interface SlotMachine {
   diskFreeGb: number | null;
   memFreePct: number | null;
   swapGrowthMbPerMin: number | null;
+  /** Pages swapped out in the last 10 s (macOS vm_stat Swapouts, Linux /proc/vmstat pswpout); null where unknown. */
+  swapOutsPer10s?: number | null;
 }
 
 export interface SlotWorld {
-  /** How many slots: a setting, 1 when it is not an integer from 1 to SLOTS_MAX. */
+  /** The ceiling of runs at once: a setting, SLOTS_DEFAULT when it is not an integer from 1 to SLOTS_MAX. */
   slots(): number;
   floors(): { diskGb: number; memFreePct: number };
   machine(): Promise<SlotMachine>;
@@ -123,7 +142,54 @@ export class HeavySlot {
 
   private slots(): number {
     const n = this.world.slots();
-    return Number.isInteger(n) && n >= 1 && n <= SLOTS_MAX ? n : 1;
+    return Number.isInteger(n) && n >= 1 && n <= SLOTS_MAX ? n : SLOTS_DEFAULT;
+  }
+
+  /** The machine as read now, or null: a reading that throws, or does not come within MACHINE_READ_TIMEOUT_MS. */
+  private async readMachine(): Promise<SlotMachine | null> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        this.world.machine(),
+        new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), MACHINE_READ_TIMEOUT_MS); }),
+      ]);
+    } catch {
+      return null;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Why the head of the queue may not start now, or undefined when it may. With nothing holding, the floors alone
+   * decide, and a figure the system cannot give does not block (H8, H26). With runs holding: the ceiling, the settle
+   * time after the last grant, then a reading of the machine: the disk floor plus a reserve per run holding, the memory
+   * floor, and no swapping out now; a reading that cannot be had holds a further run back.
+   */
+  private async refusal(holders: SlotTicket[]): Promise<string | undefined> {
+    const ceiling = this.slots();
+    if (holders.length >= ceiling) return `${this.heldBy(holders)}; at most ${ceiling} run${ceiling === 1 ? '' : 's'} at once`;
+    const last = holders.reduce<SlotTicket | undefined>((a, h) => (a && a.grantedAt! >= h.grantedAt! ? a : h), undefined);
+    if (last && this.world.now() - last.grantedAt! < SETTLE_MS) {
+      return `waiting for the last run to settle: ${last.agentName}'s run started ${Math.round((this.world.now() - last.grantedAt!) / 1000)} s ago, a further run is read for after ${SETTLE_MS / 1000} s`;
+    }
+    const m = await this.readMachine();
+    const f = this.world.floors();
+    if (holders.length === 0) {
+      if (m?.diskFreeGb != null && m.diskFreeGb < f.diskGb) return `waiting for free disk: ${m.diskFreeGb} GB free, the floor is ${f.diskGb} GB`;
+      if (m?.memFreePct != null && m.memFreePct < f.memFreePct) return `waiting for free memory: ${m.memFreePct} % free, the floor is ${f.memFreePct} %`;
+      return undefined;
+    }
+    if (!m || m.diskFreeGb == null || m.memFreePct == null) return 'waiting for a reading of the machine: its free disk or memory could not be read';
+    const need = f.diskGb + DISK_RESERVE_GB_PER_RUN * holders.length;
+    if (m.diskFreeGb < need) {
+      return `waiting for free disk: ${m.diskFreeGb} GB free, a further run needs ${need} GB (the floor of ${f.diskGb} GB and ${DISK_RESERVE_GB_PER_RUN} GB for each of the ${holders.length} run${holders.length === 1 ? '' : 's'} holding)`;
+    }
+    if (m.memFreePct < f.memFreePct) return `waiting for free memory: ${m.memFreePct} % free, the floor is ${f.memFreePct} %`;
+    if (m.swapOutsPer10s != null && m.swapOutsPer10s > SWAPOUTS_10S_MAX) {
+      return `waiting for the machine to stop swapping: ${m.swapOutsPer10s} pages swapped out in 10 s (at most ${SWAPOUTS_10S_MAX})`;
+    }
+    return undefined;
   }
 
   private holders(): SlotTicket[] {
@@ -235,32 +301,19 @@ export class HeavySlot {
     for (const t of [...this.tickets.values()]) {
       if (this.tickets.has(t.id) && !this.world.alive(t.pid)) { this.drop(t); changed = true; }
     }
-    const waiting = this.waiting();
-    const holders = this.holders();
-    let free = this.slots() - holders.length;
     const say = (t: SlotTicket, why: string) => { if (t.why !== why) { t.why = why; changed = true; } };
-    if (waiting.length && free <= 0) {
-      const held = this.heldBy(holders);
-      for (const t of waiting) say(t, held);
-    } else if (waiting.length) {
-      const m = await this.world.machine();
-      const f = this.world.floors();
-      const floor = m.diskFreeGb !== null && m.diskFreeGb < f.diskGb
-        ? `waiting for free disk: ${m.diskFreeGb} GB free, the floor is ${f.diskGb} GB`
-        : m.memFreePct !== null && m.memFreePct < f.memFreePct
-          ? `waiting for free memory: ${m.memFreePct} % free, the floor is ${f.memFreePct} %`
-          : undefined;
-      for (const t of waiting) {
-        if (floor) { say(t, floor); continue; }
-        if (free > 0) {
-          t.grantedAt = this.world.now();
-          delete t.why;
-          free--;
-          changed = true;
-        } else {
-          say(t, this.heldBy(this.holders()));
-        }
+    const waiting = this.waiting();
+    if (waiting.length) {
+      // One a pass, the head of the queue: the next one is read for once this one has settled (H20, H25).
+      const refused = await this.refusal(this.holders());
+      if (!refused) {
+        const head = waiting.shift()!;
+        head.grantedAt = this.world.now();
+        delete head.why;
+        changed = true;
       }
+      const why = refused ?? (waiting.length ? await this.refusal(this.holders()) : undefined);
+      if (why) for (const t of waiting) say(t, why);
     }
     if (changed) this.world.changed();
   }
@@ -269,7 +322,8 @@ export class HeavySlot {
   async watch(): Promise<void> {
     const holders = this.holders();
     if (holders.length === 0) return;
-    const m = await this.world.machine();
+    const m = await this.readMachine();
+    if (!m) return;
     for (const t of holders) {
       const said = (text: string) => { t.alerts.push(text); this.world.alert(t, text); };
       const run = `${t.agentName}'s run (${t.label})`;

@@ -296,6 +296,8 @@ interface HeavySlotStatus {
      *  is another figure (free and speculative pages on macOS). */
     memTotalMb: number | null; memFreeShareMb: number | null;
     swapUsedMb: number | null; swapGrowthMbPerMin: number | null; load1: number | null;
+    /** Pages swapped out per 10 s since the last reading (2.0.6): past 1000 a further run waits; null where unknown (Windows). */
+    swapOutsPer10s?: number | null;
   } | null;
   /** With each holder's tree: its process and everything under it (none on Windows). */
   holders: Array<HeavySlotTicket & { tree?: { processes: number; memoryMb: number; cpuPct: number } }>;

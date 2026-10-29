@@ -152,7 +152,8 @@ async function status() {
   const { status: code, json } = await call('GET', '/api/heavy-slot');
   if (code !== 200) fail(3, json.error || `HTTP ${code}`);
   const line = (t) => `${t.agentName} (${t.project}): ${t.label}, ${t.priority}`;
-  process.stdout.write(`slots: ${json.slots}\n`);
+  // A ceiling since 2.0.6: below it, each run starts when the machine has room (services/heavy-slot.ts).
+  process.stdout.write(`slots: at most ${json.slots} at once, each started when the machine has room\n`);
   for (const t of json.holders) process.stdout.write(`holds  ${line(t)} since ${t.grantedAt}\n`);
   for (const t of json.waiting) process.stdout.write(`waits  ${t.position}. ${line(t)}${t.why ? `: ${t.why}` : ''}\n`);
 }
