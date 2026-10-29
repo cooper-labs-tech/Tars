@@ -1,24 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { terminalsFigure, terminalsNotice } from '@/lib/terminals';
+import { wakeRefusedReason } from '@/app/agents/constants';
 
 /**
- * The machine's terminals on Resources · Heavy runs (2.0.6, item 1, on #553's FleetResources.terminals; frames
- * `Resources (2.0.6) · heavy runs, terminals left` and `· terminals left · states`).
+ * The machine's terminals on Resources · Heavy runs (2.0.6, item 1, on PR 553's FleetResources.terminals at 848a307ee;
+ * frames `Resources (2.0.6) · heavy runs, terminals left` and `· terminals left · states`), and an agent that could
+ * not start for lack of one (frame `Agent cannot start · no terminal left (2.0.6)`).
  *
  * How it can fail, written before the code:
  * 1. the figure is not the machine's count in use, or its line does not name the limit, the terminals Tars holds and
  *    the ones it has open, as the frame writes them;
  * 2. Tars's own count unknown (tars null) reads as a number, or open unknown as "for undefined open";
- * 3. near full (past 80 %, nearFull) or full (inUse at the limit, less one, where #553 refuses a spawn) does not take
- *    the waiting or the error tone;
- * 4. the notice's words are not #553's: the warning's for near full, the 503's (code no_terminal) when full, its
- *    second form only when Tars holds more than it has open, and without the Tars part when its count is unknown;
+ * 3. near full (nearFull) or full does not take the waiting or the error tone, or full is not main's rule: one free
+ *    on macOS, where a start opens two, none on Linux;
+ * 4. the notice is not main's own text (terminals.notice) as it comes, or shows when main gives none;
  * 5. Windows (null, no pool) reads as not read, or a machine whose pool cannot be read reads as "not counted";
  * 6. before the first reading (undefined) a figure shows, or a notice;
- * 7. a restart is offered when Tars holds no more than it has open.
+ * 7. an asleep agent whose wake was refused (asleep, with `error`, PR 553's second round) shows no reason, or an
+ *    agent at work shows an old one.
  */
 
-const pool = (inUse: number, tars: number | null, open?: number, max = 511) => ({ inUse, max, tars, open, nearFull: inUse / max >= 0.8 });
+const SAID = 'main says this, word for word';
+const pool = (inUse: number, tars: number | null, open?: number, notice: string | null = null, max = 511) => ({ inUse, max, tars, open, nearFull: inUse / max >= 0.8, notice });
 
 describe('the terminals figure', () => {
   it('is the machine\'s count in use, its line naming the limit, Tars\'s and its open ones (1)', () => {
@@ -31,10 +34,12 @@ describe('the terminals figure', () => {
     expect(terminalsFigure(pool(511, 505, 0), 'darwin').sub).toBe('of 511 on this machine · Tars holds 505, 0 open');
   });
 
-  it('takes the waiting tone near full and the error tone when full (3)', () => {
+  it('takes the waiting tone near full and the error tone when full, by main\'s rule for each system (3)', () => {
     expect(terminalsFigure(pool(410, 400, 400), 'darwin').tone).toBe('waiting');
     expect(terminalsFigure(pool(510, 18, 18), 'darwin').tone).toBe('error');
-    expect(terminalsFigure(pool(511, 18, 18), 'darwin').tone).toBe('error');
+    expect(terminalsFigure(pool(509, 18, 18), 'darwin').tone).toBe('waiting');
+    expect(terminalsFigure(pool(510, 18, 18), 'linux').tone).toBe('waiting');
+    expect(terminalsFigure(pool(511, 18, 18), 'linux').tone).toBe('error');
     expect(terminalsFigure(pool(300, 18, 18), 'darwin').tone).toBeUndefined();
   });
 
@@ -46,30 +51,27 @@ describe('the terminals figure', () => {
 });
 
 describe('the terminals notice', () => {
-  it('says the warning\'s words near full (4)', () => {
-    expect(terminalsNotice(pool(410, 400, 400))).toEqual({
-      tone: 'waiting',
-      text: "The machine's terminals are filling: 410 of 511 are in use, 400 of them held by Tars for its 400 open terminals. At 511 no agent can start: stop the agents that do not need their terminal.",
-    });
+  it('is main\'s own text, as it comes, in the tone of the figure (4)', () => {
+    expect(terminalsNotice(pool(410, 400, 400, SAID), 'darwin')).toEqual({ tone: 'waiting', text: SAID });
+    expect(terminalsNotice(pool(510, 18, 18, SAID), 'darwin')).toEqual({ tone: 'error', text: SAID });
   });
 
-  it('says the 503\'s words when full, the restart only for a leak (4, 7)', () => {
-    expect(terminalsNotice(pool(511, 18, 18))).toEqual({
-      tone: 'error',
-      text: 'No terminal can be opened on this machine: 511 of 511 are in use, 18 of them held by Tars for its 18 open terminals. Stop an agent that does not need its terminal, or close terminals in other apps, to free one.',
-    });
-    expect(terminalsNotice(pool(511, 505, 0))?.text).toBe(
-      'No terminal can be opened on this machine: 511 of 511 are in use, 505 of them held by Tars, which has 0 open. The other 505 were never given back, and only a restart of Tars frees them: it stops every agent.',
-    );
-    expect(terminalsNotice(pool(511, null))?.text).toBe(
-      'No terminal can be opened on this machine: 511 of 511 are in use. Stop an agent that does not need its terminal, or close terminals in other apps, to free one.',
-    );
-    expect(terminalsNotice(pool(511, 18, 18))?.text).not.toContain('restart');
+  it('says nothing when main says nothing, on Windows or before a reading (4, 6)', () => {
+    expect(terminalsNotice(pool(300, 18, 18), 'darwin')).toBeNull();
+    expect(terminalsNotice(null, 'win32')).toBeNull();
+    expect(terminalsNotice(undefined, 'darwin')).toBeNull();
+  });
+});
+
+describe('an asleep agent whose wake was refused', () => {
+  it('says why under its word (7)', () => {
+    expect(wakeRefusedReason({ status: 'asleep', error: ` ${SAID} ` })).toBe(SAID);
   });
 
-  it('says nothing under 80 %, on Windows or before a reading (6)', () => {
-    expect(terminalsNotice(pool(300, 18, 18))).toBeNull();
-    expect(terminalsNotice(null)).toBeNull();
-    expect(terminalsNotice(undefined)).toBeNull();
+  it('says nothing asleep without a reason, nor in any other status (7)', () => {
+    expect(wakeRefusedReason({ status: 'asleep', error: undefined })).toBeNull();
+    expect(wakeRefusedReason({ status: 'asleep', error: '  ' })).toBeNull();
+    expect(wakeRefusedReason({ status: 'running', error: SAID })).toBeNull();
+    expect(wakeRefusedReason({ status: 'error', error: SAID })).toBeNull();
   });
 });
