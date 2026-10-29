@@ -10,8 +10,16 @@
  */
 import { envelopeValue } from '../utils/envelope-value';
 
+const askedMinute = Number(process.env.DOROTHY_WAITS_MINUTE_MS);
+/**
+ * A minute of the waits' clock: 60 s; a test run may ask for a shorter one (DOROTHY_WAITS_MINUTE_MS, under DOROTHY_E2E
+ * only, 200 ms at least). The wait of a held message (3), of one behind work (10) and the digest's period (30) are
+ * counted in it.
+ */
+export const WAITS_MINUTE_MS = process.env.DOROTHY_E2E === '1' && Number.isFinite(askedMinute) && askedMinute >= 200 ? askedMinute : 60_000;
+
 /** A sender hears of what it sent that still waits at most this often. */
-export const DIGEST_EVERY_MS = 30 * 60_000;
+export const DIGEST_EVERY_MS = 30 * WAITS_MINUTE_MS;
 
 export type WaitWhy = 'held' | 'behind-work';
 
@@ -61,7 +69,7 @@ const reasonOf = (wait: WaitInput) => (typeof wait.reason === 'function' ? wait.
 
 function lineOf(wait: Wait, now: number): string {
   const name = envelopeValue(wait.targetName || wait.targetId);
-  const minutes = Math.max(1, Math.round((now - wait.sentAt) / 60_000));
+  const minutes = Math.max(1, Math.round((now - wait.sentAt) / WAITS_MINUTE_MS));
   if (wait.why === 'behind-work') {
     return `- your message to ${name} of ${clockOf(wait.sentAt)} still waits for ${name}'s work to end, ${minutes} minutes on: `
       + 'it goes in at its next rest. Nothing needs resending.';
@@ -99,7 +107,7 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
     for (const w of due) w.told = true;
     toldAt.set(senderId, now);
     deps.tell(senderId, [
-      `[Tars] Your messages not yet in their terminal, as of ${clockOf(now)} (Tars tells you at most every ${DIGEST_EVERY_MS / 60_000} minutes):`,
+      `[Tars] Your messages not yet in their terminal, as of ${clockOf(now)} (Tars tells you at most every ${DIGEST_EVERY_MS / WAITS_MINUTE_MS} minutes):`,
       ...due.map((w) => lineOf(w, now)),
     ].join('\n'));
     deps.changed?.();

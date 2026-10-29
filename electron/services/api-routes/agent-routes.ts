@@ -54,7 +54,7 @@ import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel }
 import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
-import { createWaitsDigest, type WaitView } from '../waits-digest';
+import { createWaitsDigest, WAITS_MINUTE_MS, type WaitView } from '../waits-digest';
 import { scheduleTick } from '../../utils/agents-tick';
 import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
@@ -680,7 +680,7 @@ function heldReasonFor(agent: AgentStatus): string {
  * (bug-held-forever-05-10.md: three messages answered HELD, "Nothing needs
  * resending", waited 2 h 20 to 2 h 40, and nobody heard of them again).
  */
-export const HELD_RETELL_MS = 3 * 60_000;
+export const HELD_RETELL_MS = 3 * WAITS_MINUTE_MS;
 
 /**
  * What the agents sent that still waits, told each sender in one digest at
@@ -722,7 +722,7 @@ function retellWhileHeld(target: AgentStatus, sender: MessageSender | undefined,
 }
 
 /** How long a message waits behind an agent's work before its sender hears it still waits. */
-export const BEHIND_WORK_RETELL_MS = 10 * 60_000;
+export const BEHIND_WORK_RETELL_MS = 10 * WAITS_MINUTE_MS;
 
 /**
  * A message held behind the target's work (a run, or a turn)
