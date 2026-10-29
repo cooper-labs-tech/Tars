@@ -50,8 +50,8 @@ import { execFileSync } from 'node:child_process';
  * And from the Audit's re-check of #558 at 3d34ca644, and the orchestrator's decision on its I9 (29/10):
  * S1 (its R1). The ceiling is checked on the lstat, not on the file opened: a file grown or swapped in between was
  *     read whole (3 MiB). The size is the open file's own, and no more than the ceiling is ever read.
- * S1b (added after the code, the Audit's I1 on #565: a pin for the mutant "the open file's size not checked", which
- *     the bounded buffer otherwise covers). A file growing past the ceiling while it is read is read past it.
+ * S1b (added after the code, the Audit's I1 on #565; since ea7da32d0 it pins the overflow check after the read and
+ *     the buffer's growth, the QA's F2 on #565). A file growing past the ceiling while it is read is read past it.
  * S2 (its I6). The swap between the lstat and the open is driven by nothing: a FIFO or a link put there after an
  *     lstat that said a regular file must still answer at once, unread (O_NONBLOCK, O_NOFOLLOW, the open fd's stat).
  * S3 (its R2). The Memory page's listing reads every .md of the folder the old way: a FIFO named MEMORY.md or
@@ -72,6 +72,10 @@ import { execFileSync } from 'node:child_process';
  *     Tars, a link hands its target to the window. It reads the same safe way, and says why it did not.
  * S8 (its L3). A pass that cannot list a folder forgets everything told under it, and every orchestrator is told
  *     again: an entry is forgotten only when its file is gone (ENOENT), never on a listing that failed.
+ * And from the QA's F1 on #565 at ea7da32d0 (29/10):
+ * S6b. The buffer takes the file's own size, so without the open file's size checked first, a file past the ceiling
+ *     gets a buffer of its whole size before it is refused (3 MiB for 3 MiB; a MEMORY.md of a few GB, that much in
+ *     the main process). A file past the ceiling is refused before any buffer past the ceiling is taken.
  */
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-memory-guard-')));
@@ -475,6 +479,19 @@ describe('the Audit\'s round on #565', () => {
       expect(await readRegularFile(small)).toMatchObject({ kind: 'text', text: 'ten bytes!' });
     } finally { alloc.mockRestore(); unsafe.mockRestore(); }
     expect(Math.max(...sizes)).toBeLessThanOrEqual(11);
+  });
+
+  it('S6b. a file past the ceiling is refused before any buffer past the ceiling is taken', async () => {
+    const { readRegularFile, MEMORY_READ_CAP } = await import('../../../electron/services/memory-guard');
+    const big = path.join(tmp, 's6b-big.md');
+    fs.writeFileSync(big, 'b'.repeat(3 * 1024 * 1024));
+    const sizes: number[] = [];
+    const alloc = vi.spyOn(Buffer, 'alloc').mockImplementation(((size: number) => { sizes.push(size); return Buffer.allocUnsafeSlow(size).fill(0); }) as typeof Buffer.alloc);
+    const unsafe = vi.spyOn(Buffer, 'allocUnsafe').mockImplementation(((size: number) => { sizes.push(size); return Buffer.allocUnsafeSlow(size); }) as typeof Buffer.allocUnsafe);
+    try {
+      expect(await readRegularFile(big)).toMatchObject({ kind: 'too-large' });
+    } finally { alloc.mockRestore(); unsafe.mockRestore(); }
+    expect(Math.max(0, ...sizes)).toBeLessThanOrEqual(MEMORY_READ_CAP + 1);
   });
 
   it.skipIf(!posix)('S7. memory:read-file reads the same safe way: a FIFO answers at once, a link is not followed', async () => {
