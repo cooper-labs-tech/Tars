@@ -147,8 +147,8 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
   const head = !state ? 'THE SLOT' : taken === 0 ? (state.slots > 1 ? 'THE SLOTS · FREE' : 'THE SLOT · FREE') : `${state.slots > 1 ? 'THE SLOTS' : 'THE SLOT'} · ${taken} OF ${state.slots} TAKEN`;
   const firstWaits = state && taken < state.slots ? state.waiting.find((w) => w.why) : undefined;
   const terminals = useTerminals();
-  // Full or near full, said at the top in main's own words (frame `Resources (2.0.6) · terminals left · states`).
-  const poolNotice = terminalsNotice(terminals);
+  // Full or near full, said at the top as main says it (`notice`; frame `Resources (2.0.6) · terminals left · states`).
+  const poolNotice = terminalsNotice(terminals, rendererPlatform());
 
   return (
     <section role="region" aria-label="Heavy runs" className="flex flex-col gap-3 min-h-0">
