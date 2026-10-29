@@ -119,6 +119,14 @@ export function openedFile(result: { content?: string; error?: string } | null |
   return { content: result.content ?? '', refused: null };
 }
 
+/**
+ * Whether the panel may save its draft: never while a file loads, when the draft is still the previous file's and
+ * would land on the one being opened (the Audit's Low on PR 572), never for a refused file, and only for a change.
+ */
+export function canSave(panel: { loading: boolean; refused: string | null; content: string; draft: string }): boolean {
+  return !panel.loading && !panel.refused && panel.draft !== panel.content;
+}
+
 type ClaudeDataType = {
   plugins: Array<{ name?: string; displayName?: string; enabled?: boolean }>;
   skills: Array<{ name: string; source: string; path: string; description?: string }>;
@@ -482,6 +490,9 @@ export default function AgentKnowledgeGraph() {
     setPanelLoading(true);
     setPanelTab('preview');
     setPanelRefused(null);
+    // The previous file's draft goes with it: it never lands on this one (canSave).
+    setPanelContent('');
+    setPanelDraft('');
     try {
       let content = '';
       if (node.kind === 'memory' && node.meta?.filePath) {
@@ -519,7 +530,7 @@ export default function AgentKnowledgeGraph() {
   }, []);
 
   const savePanel = useCallback(async () => {
-    if (!panelNode?.meta?.filePath || panelRefused) return;
+    if (!panelNode?.meta?.filePath || !canSave({ loading: panelLoading, refused: panelRefused, content: panelContent, draft: panelDraft })) return;
     const fp = panelNode.meta.filePath;
     if (panelNode.kind === 'memory') {
       await window.electronAPI?.memory?.writeFile(fp, panelDraft);
@@ -528,7 +539,8 @@ export default function AgentKnowledgeGraph() {
       await window.electronAPI?.fs?.writeTextFile({ filePath: fp, content: panelDraft });
     }
     setPanelContent(panelDraft);
-  }, [panelNode, panelDraft, panelRefused]);
+  }, [panelNode, panelDraft, panelRefused, panelLoading, panelContent]);
+  const saveable = canSave({ loading: panelLoading, refused: panelRefused, content: panelContent, draft: panelDraft });
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     if (node.kind === 'agent') {
@@ -868,7 +880,7 @@ export default function AgentKnowledgeGraph() {
           {/* Footer - save button for editable files */}
           {panelNode.meta?.editable && !panelRefused && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border shrink-0">
-              {panelDraft !== panelContent && (
+              {saveable && (
                 <span className="text-[10px] text-muted-foreground">Unsaved changes</span>
               )}
               <Button
@@ -876,7 +888,7 @@ export default function AgentKnowledgeGraph() {
                 variant="primary"
                 className="ml-auto font-mono"
                 onClick={savePanel}
-                disabled={panelDraft === panelContent}
+                disabled={!saveable}
               >
                 save
               </Button>
