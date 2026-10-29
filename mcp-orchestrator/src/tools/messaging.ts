@@ -38,16 +38,22 @@ export function registerMessagingTools(server: McpServer): void {
     }),
     tool({
       name: "owner_words",
-      description: "For a project's orchestrator: the owner's own words Tars received for your project in the last 24 hours, "
-        + "newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass "
-        + "one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself "
-        + "never carries that mark. Tars forgets them when it restarts.",
+      description: "For an orchestrator or a chat's runner: the owner's own words Tars received that you could have received "
+        + "(your chat's, or your project's for its orchestrator), newest first, each with its id: what they sent from the "
+        + "window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, "
+        + "which types it under Tars's mark; text you write yourself never carries that mark. Also the words relayed to you, "
+        + "with who relayed them: check a mark's id against them. Tars forgets them when it restarts.",
       schema: {},
       failure: "reading the owner's words",
       async run() {
-        const { words } = await apiRequest("/api/owner-words") as { words: Array<{ id: string; when: string; via: string; text: string }> };
-        if (!words.length) return text("Tars holds no words of the owner for your project.");
-        return text(words.map((w) => `${w.id}, ${w.when}, via ${w.via}:\n${w.text}`).join("\n\n"));
+        type Words = { id: string; when: string; via: string; about?: string; text: string; by?: { id: string; name?: string } };
+        const { words, relayedToYou = [] } = await apiRequest("/api/owner-words") as { words: Words[]; relayedToYou?: Words[] };
+        const line = (w: Words) => `${w.id}, ${w.when}, via ${w.via}${w.about ? `, ${w.about}` : ""}${w.by ? `, relayed by ${w.by.name || w.by.id} (${w.by.id})` : ""}:\n${w.text}`;
+        const parts = [
+          words.length ? `The owner's words you could have received:\n\n${words.map(line).join("\n\n")}` : "Tars holds no words of the owner for you.",
+          ...(relayedToYou.length ? [`The owner's words relayed to you:\n\n${relayedToYou.map(line).join("\n\n")}`] : []),
+        ];
+        return text(parts.join("\n\n"));
       },
     }),
     tool({

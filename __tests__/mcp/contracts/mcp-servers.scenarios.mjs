@@ -194,7 +194,9 @@ const orchestratorAgent = [
   { name: "ask_user, one already open", tool: "ask_user", args: { question: "Again?" }, tars: [fail(409, { error: "You already have a question open for the user" })] },
   { name: "ask_user, no question", tool: "ask_user", args: { context: "nothing asked" }, tars: [] },
   // 2.0.6, option e: the owner's words, listed and relayed under Tars's mark (SECURITY.md §8).
-  { name: "owner_words, listed", tool: "owner_words", args: {}, tars: [ok({ words: [{ id: "ow-0123456789ab", at: "2026-10-29T19:03:00.000Z", when: "19:03 UTC (23:03 +04)", via: "Telegram", text: "Ship 2.0.6 tonight.\nNot before the gate." }] })] },
+  { name: "owner_words, listed", tool: "owner_words", args: {}, tars: [ok({ words: [{ id: "ow-0123456789ab", at: "2026-10-29T19:03:00.000Z", when: "19:03 UTC (23:03 +04)", via: "Telegram", about: "a message to the project", text: "Ship 2.0.6 tonight.\nNot before the gate." }], relayedToYou: [] })] },
+  // The Audit's M1 on #569: a receiver checks a mark's id against what was relayed to it.
+  { name: "owner_words, relayed to you", tool: "owner_words", args: {}, tars: [ok({ words: [], relayedToYou: [{ id: "ow-ba9876543210", at: "2026-10-29T19:03:00.000Z", when: "19:03 UTC (23:03 +04)", via: "Telegram", about: "an answer to a question", text: "In answer to the question \"Deploy tonight?\" that \"Alpha Lead\" asked at 18:00 UTC (22:00 +04):\nyes", by: { id: "orch-a", name: "Alpha Lead" }, relayedAt: "2026-10-29T19:05:00.000Z" }] })] },
   { name: "owner_words, none", tool: "owner_words", args: {}, tars: [ok({ words: [] })] },
   { name: "owner_words, a worker", tool: "owner_words", args: {}, tars: [fail(403, { error: "Only an orchestrator of the project the owner wrote to reads the owner's words.", code: "owner_words_not_yours" })] },
   { name: "relay_owner_words, relayed", tool: "relay_owner_words", args: { id: "ow-0123456789ab", to: "orch-b" }, tars: [ok({ success: true, mode: "message", relayed: true, wordsId: "ow-0123456789ab", to: { id: "orch-b", name: "Beta Lead" } })] },

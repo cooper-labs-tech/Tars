@@ -655,7 +655,7 @@
           },
           {
             "name": "owner_words",
-            "description": "For a project's orchestrator: the owner's own words Tars received for your project in the last 24 hours, newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Tars forgets them when it restarts.",
+            "description": "For an orchestrator or a chat's runner: the owner's own words Tars received that you could have received (your chat's, or your project's for its orchestrator), newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Also the words relayed to you, with who relayed them: check a mark's id against them. Tars forgets them when it restarts.",
             "inputSchema": {
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
@@ -4670,7 +4670,43 @@
             "content": [
               {
                 "type": "text",
-                "text": "ow-0123456789ab, 19:03 UTC (23:03 +04), via Telegram:\nShip 2.0.6 tonight.\nNot before the gate."
+                "text": "The owner's words you could have received:\n\now-0123456789ab, 19:03 UTC (23:03 +04), via Telegram, a message to the project:\nShip 2.0.6 tonight.\nNot before the gate."
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "owner_words, relayed to you",
+          "call": {
+            "tool": "owner_words",
+            "arguments": {}
+          },
+          "requests": [
+            {
+              "to": "tars",
+              "method": "GET",
+              "path": "/api/owner-words",
+              "headers": [
+                "host: 127.0.0.1:<port>",
+                "connection: keep-alive",
+                "Content-Type: application/json",
+                "X-Tars-Client: mcp",
+                "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: owner_words",
+                "X-Tars-Caller-Project: /projects/alpha",
+                "accept: */*",
+                "accept-language: *",
+                "sec-fetch-mode: cors",
+                "user-agent: node",
+                "accept-encoding: gzip, deflate"
+              ]
+            }
+          ],
+          "answer": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Tars holds no words of the owner for you.\n\nThe owner's words relayed to you:\n\now-ba9876543210, 19:03 UTC (23:03 +04), via Telegram, an answer to a question, relayed by Alpha Lead (orch-a):\nIn answer to the question \"Deploy tonight?\" that \"Alpha Lead\" asked at 18:00 UTC (22:00 +04):\nyes"
               }
             ]
           }
@@ -4706,7 +4742,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "Tars holds no words of the owner for your project."
+                "text": "Tars holds no words of the owner for you."
               }
             ]
           }
@@ -5919,7 +5955,7 @@
           },
           {
             "name": "owner_words",
-            "description": "For a project's orchestrator: the owner's own words Tars received for your project in the last 24 hours, newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Tars forgets them when it restarts.",
+            "description": "For an orchestrator or a chat's runner: the owner's own words Tars received that you could have received (your chat's, or your project's for its orchestrator), newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Also the words relayed to you, with who relayed them: check a mark's id against them. Tars forgets them when it restarts.",
             "inputSchema": {
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
@@ -6982,7 +7018,7 @@
           },
           {
             "name": "owner_words",
-            "description": "For a project's orchestrator: the owner's own words Tars received for your project in the last 24 hours, newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Tars forgets them when it restarts.",
+            "description": "For an orchestrator or a chat's runner: the owner's own words Tars received that you could have received (your chat's, or your project's for its orchestrator), newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Also the words relayed to you, with who relayed them: check a mark's id against them. Tars forgets them when it restarts.",
             "inputSchema": {
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
@@ -7973,7 +8009,7 @@
           },
           {
             "name": "owner_words",
-            "description": "For a project's orchestrator: the owner's own words Tars received for your project in the last 24 hours, newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Tars forgets them when it restarts.",
+            "description": "For an orchestrator or a chat's runner: the owner's own words Tars received that you could have received (your chat's, or your project's for its orchestrator), newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself never carries that mark. Also the words relayed to you, with who relayed them: check a mark's id against them. Tars forgets them when it restarts.",
             "inputSchema": {
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
