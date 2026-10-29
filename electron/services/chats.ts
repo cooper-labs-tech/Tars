@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { describeSecretFileError, writeAtomicSync } from '../utils/secret-file';
+import { twoZones } from '../utils/two-zones';
 import type { TaskRequest } from '../core/task-requests';
 
 /**
@@ -747,6 +748,15 @@ export interface ChatLimit {
 const PER_CHAT_GB = 5;
 const MIN_CHATS = 1;
 const MAX_CHATS = 8;
+
+/**
+ * What a chat left asleep at a launch after an abrupt stop is told at its next launch: why, with that launch's time
+ * UTC first, then the machine's own (utils/two-zones.ts, 2.0.6).
+ */
+export function launchLimitNote(limit: number, now: number): string {
+  return `[Tars] Tars stopped abruptly while this chat was working, and it was not restarted at launch (${twoZones(now)}): `
+    + `the limit is ${limit} chats working at once. Your conversation is as it was; pick up where it stopped.`;
+}
 
 /**
  * One chat per 5 GB of RAM, from 1 to 8 (JeanBrasse, 07/10; 4.2): a runner and its

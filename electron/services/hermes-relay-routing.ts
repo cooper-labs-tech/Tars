@@ -3,6 +3,7 @@ import { forwardToOrchestrator, type BotFleet } from './bot-core';
 import { onRelayProjectMessage, onRelayReply, receiptFor, setRelayProjects, tellUser } from './hermes-relay';
 import { orchestratorForProject, orchestratorOf, projectName, projectNames, whereToWrite } from './orchestrator-routing';
 import { getSuperAgentInstructionsPath } from '../utils';
+import { twoZones } from '../utils/two-zones';
 import { chatTag } from './chat-addressing';
 import { deliverFromChannel } from './chat-senders';
 import type { AgentStatus } from '../types';
@@ -27,7 +28,8 @@ import type { AgentStatus } from '../types';
  * never typed a message under that line: a chat's runner is stored as one, and is the orchestrator of its chat.
  */
 
-const clock = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+/** Typed into an orchestrator: UTC first, then the machine's own (utils/two-zones.ts, 2.0.6). */
+const clock = (ms: number) => twoZones(ms);
 
 /** The user's words to a project's orchestrator: typed when its CLI runs, started with them otherwise. */
 async function toOrchestrator(fleet: BotFleet, orchestrator: AgentStatus, projectPath: string, text: string, now: number): Promise<void> {

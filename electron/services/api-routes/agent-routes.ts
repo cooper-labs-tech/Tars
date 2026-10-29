@@ -65,6 +65,7 @@ import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/age
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
 import { envelopeValue } from '../../utils/envelope-value';
+import { twoZones } from '../../utils/two-zones';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
@@ -681,7 +682,8 @@ function heldReasonFor(agent: AgentStatus): string {
  */
 export const HELD_RETELL_MS = 3 * 60_000;
 
-const clockOf = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+/** UTC first, then the machine's own (utils/two-zones.ts, 2.0.6). */
+const clockOf = (ms: number) => twoZones(ms);
 
 /**
  * Tells the agent that sent a message, once, when it is still held
