@@ -77,6 +77,7 @@ DOROTHY_STATUS_EVERY_MS  # under DOROTHY_E2E only: how often a status is set aga
 DOROTHY_SLEEP_AFTER_MS   # under DOROTHY_E2E only: an agent's rest before it is put to sleep (2 s at least; else 30 minutes, services/agent-sleep.ts)
 DOROTHY_HERMES_SESSION_EVERY_MS # under DOROTHY_E2E only: how often Tars asks its Hermes session (200 ms at least; else every 30 minutes)
 DOROTHY_E2E_PASSWD_HOME # under DOROTHY_E2E only: the home a test build takes for the account's own (core/sandbox-build.ts); else the password database's
+DOROTHY_E2E_PTY_MAX   # under DOROTHY_E2E only, never in a packaged build (app.isPackaged): the pool of terminals is Tars's own open terminals out of this many (a whole count, 0 included), and once they reach it a start is refused as on a full machine, NoTerminalLeft, by the same rule on every system; 0 refuses every start (core/pty-pool.ts ptyTestMax, core/pty-spawn.ts useTestPtyMax); else the machine's pool
 DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a stand-in of Sentry); a packaged Tars never reads it (app.isPackaged, services/error-reports/index.ts)
 ELECTRON_BUILD        # '1' switches next.config.ts to output: 'export' for packaging
 PATH SHELL HOME       # read when composing the PTY environment (buildFullPath, cli-paths detection)
