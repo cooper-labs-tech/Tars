@@ -63,7 +63,9 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     "}).catch(() => {});",
     'process.stdin.on(\'data\', b => {',
     `  fs.appendFileSync(${JSON.stringify(typed)}, JSON.stringify(b.toString('utf8')) + '\\n');`,
-    "  if (!b.toString('utf8').includes('\\r')) return;",
+    // Its terminal reads in cooked mode, whose line discipline turns Tars's Enter (\r) into \n (ICRNL): either ends
+    // the line (the E2E at 3d71e83de, 29/10: the first note's chunk ended in \n, so no turn began and none ended).
+    "  if (!/[\\r\\n]/.test(b.toString('utf8'))) return;",
     // `event` as the real hook sends it: the server reads a turn start from it, and with it that the field emptied
     // (hooks/user-prompt-submit.sh); without it, the next note is held behind the first as a draft.
     "  void post({ hook: 'UserPromptSubmit', event: 'UserPromptSubmit', status: 'running' }).then(() => setTimeout(() => void post({ hook: 'Stop', status: 'idle' }), 300));",
