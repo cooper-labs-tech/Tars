@@ -1936,7 +1936,10 @@ restart does not repeat it, and forgotten in the pass that no longer finds the f
 afresh; a note not typed is owed to a later pass). Only a regular file is read, its link not
 followed (a FIFO or a link named MEMORY.md is neither watched nor read), without blocking the main process, its type
 and size taken from the open file, and never more than 1 MiB of it: a larger one is said too large to read whole. The
-Memory page's listing reads every `.md` of the folder the same way (`readRegularFile`) and lists only regular files.
+Memory page's listing reads every `.md` of the folder the same way (`readRegularFile`) and lists only regular files of
+1 MiB at most, so the editor is never handed an empty copy of a larger one to save over (a MEMORY.md that large is still
+said too large by its row's guard); `memory:read-file` reads the same way. What was told of a file is forgotten only
+once the file is gone (ENOENT), never on a folder that briefly could not be listed.
 A folder belongs to the project of an agent working in it, through its project or its worktree. The Memory page's
 rows carry the same (`guard` on `memory:list-projects`: state, size, lines, what is cut from which line, and the
 words). To see it by hand: `wc -lc` the file, against 200 lines and 25,000 characters.

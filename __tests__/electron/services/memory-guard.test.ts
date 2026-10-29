@@ -50,6 +50,8 @@ import { execFileSync } from 'node:child_process';
  * And from the Audit's re-check of #558 at 3d34ca644, and the orchestrator's decision on its I9 (29/10):
  * S1 (its R1). The ceiling is checked on the lstat, not on the file opened: a file grown or swapped in between was
  *     read whole (3 MiB). The size is the open file's own, and no more than the ceiling is ever read.
+ * S1b (added after the code, the Audit's I1 on #565: a pin for the mutant "the open file's size not checked", which
+ *     the bounded buffer otherwise covers). A file growing past the ceiling while it is read is read past it.
  * S2 (its I6). The swap between the lstat and the open is driven by nothing: a FIFO or a link put there after an
  *     lstat that said a regular file must still answer at once, unread (O_NONBLOCK, O_NOFOLLOW, the open fd's stat).
  * S3 (its R2). The Memory page's listing reads every .md of the folder the old way: a FIFO named MEMORY.md or
@@ -61,6 +63,15 @@ import { execFileSync } from 'node:child_process';
  * M14. A MEMORY.md deleted keeps what was told of it: written again past the limit, but smaller than what was told,
  *     it is never told (the QA measured a new file losing 14 lines with no note). A file no longer found is forgotten
  *     in the same pass.
+ * And from the Audit's FIX FIRST on #565 at b74b91187 (29/10):
+ * S5 (its M1). A .md past the ceiling is listed with an empty content: the Memory page's editor shows it empty, and
+ *     a save replaces the whole file. It is left out of the listing; the row's guard still says MEMORY.md is too large.
+ * S6 (its L1). Every read takes a buffer of the whole ceiling (20 small files, 20 MiB at once): it takes the file's
+ *     own size and one byte, and grows only for a file that grew since its stat, never past the ceiling.
+ * S7 (its L2). memory:read-file reads a memory file synchronously, on the main thread, following links: a FIFO hangs
+ *     Tars, a link hands its target to the window. It reads the same safe way, and says why it did not.
+ * S8 (its L3). A pass that cannot list a folder forgets everything told under it, and every orchestrator is told
+ *     again: an entry is forgotten only when its file is gone (ENOENT), never on a listing that failed.
  */
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-memory-guard-')));
@@ -420,5 +431,87 @@ describe('a MEMORY.md deleted, then written again', () => {
     await pass();
     expect(notes).toHaveLength(2);
     expect(notes[1]).toContain('14 of its 137 lines, from line 124, never reach an agent');
+  });
+});
+
+describe('the Audit\'s round on #565', () => {
+  const posix = process.platform !== 'win32';
+  const within = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('blocked')), 2_000))]);
+  /** The memory service with ~/.claude in a home of the test's own. */
+  async function memoryServiceIn(fakeHome: string) {
+    vi.resetModules();
+    vi.doMock('os', async (orig) => {
+      const actual = await orig<typeof import('os')>();
+      return { ...actual, default: { ...actual, homedir: () => fakeHome }, homedir: () => fakeHome };
+    });
+    return import('../../../electron/services/memory-service');
+  }
+  const unmock = () => { vi.doUnmock('os'); vi.resetModules(); };
+
+  it('S5. a .md past the ceiling is not listed for the editor; the row\'s guard says MEMORY.md is too large', async () => {
+    const fakeHome = path.join(tmp, 's5-home');
+    const memory = path.join(fakeHome, '.claude', 'projects', '-p-big', 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'MEMORY.md'), 'm'.repeat(2_200_000));
+    fs.writeFileSync(path.join(memory, 'dock.md'), 'd'.repeat(2_200_000));
+    fs.writeFileSync(path.join(memory, 'topic.md'), '# topic\n');
+    try {
+      const { listProjectMemories } = await memoryServiceIn(fakeHome);
+      const row = (await listProjectMemories([])).find(r => r.memoryDir === memory)!;
+      expect(row.files.map(f => f.name)).toEqual(['topic.md']);
+      expect(row.guard).toMatchObject({ state: 'cut', size: null });
+      expect(row.guard!.notice).toMatch(/^MEMORY\.md is 2\.1 MB, more than Tars reads of it/);
+    } finally { unmock(); }
+  });
+
+  it('S6. a read takes the file\'s own size and a byte, not the whole ceiling', async () => {
+    const { readRegularFile } = await import('../../../electron/services/memory-guard');
+    const small = path.join(tmp, 's6-small.md');
+    fs.writeFileSync(small, 'ten bytes!');
+    const sizes: number[] = [];
+    const alloc = vi.spyOn(Buffer, 'alloc').mockImplementation(((size: number) => { sizes.push(size); return Buffer.allocUnsafeSlow(size).fill(0); }) as typeof Buffer.alloc);
+    const unsafe = vi.spyOn(Buffer, 'allocUnsafe').mockImplementation(((size: number) => { sizes.push(size); return Buffer.allocUnsafeSlow(size); }) as typeof Buffer.allocUnsafe);
+    try {
+      expect(await readRegularFile(small)).toMatchObject({ kind: 'text', text: 'ten bytes!' });
+    } finally { alloc.mockRestore(); unsafe.mockRestore(); }
+    expect(Math.max(...sizes)).toBeLessThanOrEqual(11);
+  });
+
+  it.skipIf(!posix)('S7. memory:read-file reads the same safe way: a FIFO answers at once, a link is not followed', async () => {
+    const fakeHome = path.join(tmp, 's7-home');
+    const memory = path.join(fakeHome, '.claude', 'projects', '-p-read', 'memory');
+    fs.mkdirSync(memory, { recursive: true });
+    fs.writeFileSync(path.join(memory, 'topic.md'), '# a topic\n');
+    execFileSync('mkfifo', [path.join(memory, 'fifo.md')]);
+    fs.writeFileSync(path.join(tmp, 's7-secret.md'), 'a secret elsewhere\n');
+    fs.symlinkSync(path.join(tmp, 's7-secret.md'), path.join(memory, 'linked.md'));
+    try {
+      const { readMemoryFileContent } = await memoryServiceIn(fakeHome);
+      expect(await within(Promise.resolve(readMemoryFileContent(path.join(memory, 'topic.md'))))).toEqual({ content: '# a topic\n' });
+      for (const name of ['fifo.md', 'linked.md']) {
+        const answer = await within(Promise.resolve(readMemoryFileContent(path.join(memory, name))));
+        expect(answer.content).toBe('');
+        expect(answer.error).toBe('Not a regular file, or past 1 MB: Tars does not read it.');
+      }
+    } finally { unmock(); }
+  });
+
+  it.skipIf(!posix || process.getuid?.() === 0)('S8. a folder that cannot be listed keeps what was told under it', async () => {
+    const { runMemoryGuardPass } = await import('../../../electron/services/memory-guard');
+    const home = path.join(tmp, 's8-home');
+    const projects = path.join(home, '.claude', 'projects');
+    const file = path.join(projects, '-owned', 'memory', 'MEMORY.md');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, probeFile(150, 200));
+    const store = path.join(tmp, 's8-store.json');
+    const notes: string[] = [];
+    const pass = () => runMemoryGuardPass({ home, store, owners: new Map([['-owned', '/p/harbor']]), tell: async (_p, text) => { notes.push(text); return 'typed'; } });
+    await pass();
+    expect(notes).toHaveLength(1);
+    fs.chmodSync(projects, 0o000);
+    try { await pass(); } finally { fs.chmodSync(projects, 0o755); }
+    expect(Object.keys(JSON.parse(fs.readFileSync(store, 'utf8')))).toEqual([file]);
+    await pass();
+    expect(notes, 'told again after a pass that could not list the folder').toHaveLength(1);
   });
 });

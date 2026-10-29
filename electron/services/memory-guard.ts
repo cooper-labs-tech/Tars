@@ -99,12 +99,19 @@ export async function readRegularFile(file: string, cap: number = MEMORY_READ_CA
     const stat = await handle.stat();
     if (!stat.isFile()) return { kind: 'not-read' };
     if (stat.size > cap) return { kind: 'too-large', stat };
-    const buffer = Buffer.alloc(cap + 1);
+    // The file's own size and a byte (the Audit's L1 on #565: a buffer of the whole ceiling per read, 20 MiB for 20
+    // small files); a file that grew since its stat fills it, and the buffer then grows to the ceiling and a byte.
+    let buffer = Buffer.allocUnsafe(stat.size + 1);
     let filled = 0;
-    while (filled < buffer.length) {
+    for (;;) {
       const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled);
       if (bytesRead === 0) break;
       filled += bytesRead;
+      if (filled < buffer.length) continue;
+      if (buffer.length > cap) break;
+      const grown = Buffer.allocUnsafe(cap + 1);
+      buffer.copy(grown, 0, 0, filled);
+      buffer = grown;
     }
     // Grown past the cap while it was read.
     if (filled > cap) return { kind: 'too-large', stat };
@@ -207,10 +214,17 @@ export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   const told = readStore(opts.store);
   let changed = false;
   const files = findMemoryFiles(opts.home);
-  // A file no longer found is forgotten, in this pass: written again past the limit, smaller than what was told, it
-  // would never be told (the QA's F1 on #558: a new file losing 14 lines with no note).
+  // A file gone is forgotten, in this pass: written again past the limit, smaller than what was told, it would never
+  // be told (the QA's F1 on #558: a new file losing 14 lines with no note). Gone means ENOENT, never a listing that
+  // failed (the Audit's L3 on #565: a folder briefly unreadable forgot everything under it, and everyone was told
+  // again).
   const found = new Set(files.map(f => f.file));
-  for (const file of Object.keys(told)) if (!found.has(file)) { delete told[file]; changed = true; }
+  for (const file of Object.keys(told)) {
+    if (found.has(file)) continue;
+    try { fs.lstatSync(file); } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') { delete told[file]; changed = true; }
+    }
+  }
   for (const { folder, file } of files) {
     const guard = await guardMemoryFile(file);
     const step = memoryNoteDue(told[file], guard);
