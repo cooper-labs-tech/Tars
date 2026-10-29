@@ -843,7 +843,7 @@ describe('a note, from whoever sends it (2.0.6, option a)', () => {
     await later(3000);
     const typed = typedInto(terminal);
     expect(typed).toContain('NOTE-OPT the release is cut');
-    expect(typed).toMatch(/Note for information from ORCH, your project's orchestrator: it is not a task/);
+    expect(typed).toMatch(/Note for information from "ORCH", your project's orchestrator: it is not a task/);
     // No task: the link stays the run's asker's, the hand-off mark where it was, and the ledger names no task of orch's.
     expect(agent.requestedBy?.agentId).toBe(linkBefore?.agentId);
     expect(agent.workHandedAt).toBe(handedBefore);
