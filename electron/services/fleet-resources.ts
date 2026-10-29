@@ -63,6 +63,23 @@ export interface FleetResources {
   measuring?: { done: number; total: number } | null;
   error?: string | null;
   projects: ProjectResources[];
+  /**
+   * The machine's terminals (core/pty-pool.ts): in use out of the limit, the PTY masters Tars holds and the terminals
+   * it has open (more masters than terminals is a leak, which only a restart frees), and whether past 80 % of the
+   * limit, and `notice`, the words the window shows as they are (core/pty-pool.ts terminalsNotice: the refusal once
+   * full, the warning past 80 %, else null). Null where there is no such pool (Windows) or it cannot be read; absent
+   * from a read built without it.
+   */
+  terminals?: TerminalsResources | null;
+}
+
+export interface TerminalsResources {
+  inUse: number;
+  max: number;
+  tars: number | null;
+  open?: number;
+  nearFull: boolean;
+  notice: string | null;
 }
 
 const tenth = (n: number) => Math.round(n * 10) / 10;

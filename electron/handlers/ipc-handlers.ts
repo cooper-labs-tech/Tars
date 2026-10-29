@@ -28,6 +28,7 @@ import * as os from 'os';
 import { DATA_DIR, DATA_DIR_MOVE, dataPath } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
+import { spawnPty } from '../core/pty-spawn';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
@@ -65,6 +66,7 @@ import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
+import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../core/agent-role';
@@ -255,7 +257,7 @@ function registerPtyHandlers(deps: IpcHandlerDependencies): void {
     const id = uuidv4();
     const shell = resolveShell({ setting: deps.getAppSettings().terminalShell });
 
-    const ptyProcess = pty.spawn(shell, shellArgs(shell), {
+    const ptyProcess = spawnPty(shell, shellArgs(shell), {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -958,15 +960,22 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Through the slot gate, as every start: a chat's runner takes a slot
     // within the RAM's limit, its settings stay the orchestrator's, and the
     // window's words are a turn, not its brief (the Audit's M1 on #379).
-    if (agents.get(id)?.kind === 'chat') return launchAgent(id, prompt, { message: true });
-    // What a window may choose, and nothing else: the session a restart
-    // resumes lands on a command line, and the permission the Kanban
-    // automation imposes is its own. Neither is taken from an IPC message.
-    return launchAgent(id, prompt, {
-      model: options?.model,
-      provider: options?.provider,
-      localModel: options?.localModel,
-    });
+    try {
+      if (agents.get(id)?.kind === 'chat') return await launchAgent(id, prompt, { message: true });
+      // What a window may choose, and nothing else: the session a restart
+      // resumes lands on a command line, and the permission the Kanban
+      // automation imposes is its own. Neither is taken from an IPC message.
+      return await launchAgent(id, prompt, {
+        model: options?.model,
+        provider: options?.provider,
+        localModel: options?.localModel,
+      });
+    } catch (err) {
+      // No terminal left on the machine: answered with why, the agent marked (core/no-terminal.ts).
+      const answer = noTerminalAnswer(err);
+      if (answer) return answer;
+      throw err;
+    }
   });
 
   // Wake an asleep agent: its CLI started on its own conversation, nothing
@@ -1277,7 +1286,7 @@ function registerSkillHandlers(deps: IpcHandlerDependencies): void {
 
     const fullPath = buildFullPath();
     refuseWhileQuitting('skill install');
-    const ptyProcess = spawnSkillInstallerOnWindows(npxArgs, { cols, rows }, withPath(process.env, fullPath, process.platform)) ?? pty.spawn('npx', npxArgs, {
+    const ptyProcess = spawnSkillInstallerOnWindows(npxArgs, { cols, rows }, withPath(process.env, fullPath, process.platform)) ?? spawnPty('npx', npxArgs, {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -1471,7 +1480,7 @@ function registerPluginHandlers(deps: IpcHandlerDependencies): void {
     refuseWhileQuitting('plugin install');
     const onWindows = startPluginInstallOnWindows(id, command, { cols, rows }, env, pluginPtyProcesses, getMainWindow);
     if (onWindows) return onWindows;
-    const ptyProcess = pty.spawn(shell, shellArgs, {
+    const ptyProcess = spawnPty(shell, shellArgs, {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -2851,7 +2860,7 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     const id = uuidv4();
     const shell = resolveShell({ setting: deps.getAppSettings().terminalShell });
 
-    const ptyProcess = pty.spawn(shell, shellArgs(shell), {
+    const ptyProcess = spawnPty(shell, shellArgs(shell), {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,

@@ -43,6 +43,7 @@ import { apiAnswerReports, reportAgentToolError, reportHandledError } from './er
 import { TOOL_TOPIC } from './agent-guide';
 import { agents } from '../core/agent-manager';
 import { getProvider } from '../providers';
+import { apiAnswerForError } from '../core/pty-pool';
 export { agentStatusEmitter };
 
 let apiServer: http.Server | null = null;
@@ -468,7 +469,8 @@ export function startApiServer(
     } catch (error) {
       threw = true;
       console.error('API error:', error);
-      sendJson({ error: 'Internal server error' }, 500);
+      const answer = apiAnswerForError(error);
+      sendJson(answer.body, answer.status);
     } finally {
       const agent = callerAgent && !pathname.startsWith('/api/hooks/') ? agents.get(callerAgent) : undefined;
       const reports = apiAnswerReports({
