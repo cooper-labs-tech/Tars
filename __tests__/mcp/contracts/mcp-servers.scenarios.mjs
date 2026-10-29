@@ -109,6 +109,10 @@ const orchestratorAgent = [
   { name: "send_message, message wins over prompt", tool: "send_message", args: { id: "a1", message: "One", prompt: "Two" }, tars: [messaged()] },
   { name: "send_message, held", tool: "send_message", args: { id: "a1", message: "Later" }, tars: [messaged({ held: true, heldReason: "Its field is being edited." })] },
   { name: "send_message, error", tool: "send_message", args: { id: "a1", message: "Hi" }, tars: [fail(403, { error: "Cross-project action refused" })] },
+  // 2.0.6, option a: a worker's message made a note by Tars, and a note asked for, at the turn's end or at once.
+  { name: "send_message, a worker's note", tool: "send_message", args: { id: "a1", message: "FYI" }, tars: [messaged({ note: true, queued: true, previousStatus: "running" })] },
+  { name: "send_message, a note at the turn's end", tool: "send_message", args: { id: "a1", message: "FYI", mode: "note" }, tars: [messaged({ note: true, queued: true, previousStatus: "running" })] },
+  { name: "send_message, a note now", tool: "send_message", args: { id: "a1", message: "FYI", mode: "note-now" }, tars: [messaged({ note: true, previousStatus: "running" })] },
 
   { name: "remove_agent", tool: "remove_agent", args: { id: "a1" }, tars: [ok({ success: true })] },
   { name: "remove_agent, cross-project", tool: "remove_agent", args: { id: "b1", allowCrossProject: true }, tars: [ok({ success: true })] },

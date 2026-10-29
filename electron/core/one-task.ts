@@ -413,9 +413,13 @@ export function isReportTo(
   return caller.requestedBy?.agentId === target.id || (hasOrchestratorPowers(target) && target.projectPath === caller.projectPath);
 }
 
-/** A worker's message to another agent, as it is typed in: a note, labelled so, never an order. */
-export function noteFrom(senderName: string, message: string): string {
-  return `[Note for information from ${envelopeValue(senderName)}, a worker: it is not a task, and asks nothing of you unless your own work needs it.] ${message}`;
+/**
+ * A note as it is typed in, labelled so, never an order: a worker's message
+ * to another agent, or anyone's sent as a note (2.0.6). `role` says who
+ * sends it: "a worker", "your project's orchestrator", "Tars".
+ */
+export function noteFrom(senderName: string, message: string, role = 'a worker'): string {
+  return `[Note for information from ${envelopeValue(senderName)}, ${role}: it is not a task, and asks nothing of you unless your own work needs it.] ${message}`;
 }
 
 /** The fleet's queue: one for the process, read by the drive routes and the task routes. */
