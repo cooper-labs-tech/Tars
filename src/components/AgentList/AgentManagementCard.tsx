@@ -2,7 +2,7 @@
 
 import type { AgentStatus } from '@/types/electron';
 import { AgentMark, Button } from '@/components/ui';
-import { errorReason } from '@/app/agents/constants';
+import { errorReason, wakeRefusedReason } from '@/app/agents/constants';
 import { stopLine } from '@/lib/stop-line';
 import { permissionAskLine } from '@/lib/permission-ask';
 import { blockedReason } from '@/lib/blocked-reason';
@@ -38,7 +38,8 @@ export function AgentManagementCard({ agent, onClick, onEdit, onStart, onStop, o
 
   // Show the user's last prompt, not terminal output
   const lastPrompt = agent.currentTask || null;
-  const reason = errorReason(agent);
+  // In error, or asleep with its wake refused (no terminal left): why, in main's words.
+  const reason = errorReason(agent) ?? wakeRefusedReason(agent);
   // Who stopped it, when and why. Frame: `Agent stopped · who and why`.
   const stop = stopLine(agent);
   // A permission question Tars holds for it: what the call would do, which

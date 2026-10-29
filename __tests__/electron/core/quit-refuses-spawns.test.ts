@@ -157,11 +157,14 @@ describe('every spawn site and exit handler in electron/', () => {
       // `this.launch.command`: a file holding neither text holds no such call,
       // and only the others are parsed. Parsing all of electron/ took this test
       // past the 5 s default under load (QA, the gate of #358, 2026-10-12).
-      if (!text.includes('pty.spawn') && !text.includes('this.launch.command')) continue;
+      // Since 2.0.6 every terminal is opened through core/pty-spawn.ts's spawnPty, whose own pty.spawn is guarded by
+      // each caller of it: the callers are the sites.
+      if (f === path.join('core', 'pty-spawn.ts')) continue;
+      if (!text.includes('pty.spawn') && !text.includes('spawnPty(') && !text.includes('this.launch.command')) continue;
       const source = ts.createSourceFile(f, text, ts.ScriptTarget.ES2022, true);
       const isSpawn = (node: ts.CallExpression) => {
         const callee = node.expression.getText(source);
-        return callee === 'pty.spawn' || (callee === 'spawn' && node.arguments[0]?.getText(source) === 'this.launch.command');
+        return callee === 'pty.spawn' || callee === 'spawnPty' || (callee === 'spawn' && node.arguments[0]?.getText(source) === 'this.launch.command');
       };
       const isGuard = (node: ts.Node) => ts.isCallExpression(node) && node.expression.getText(source) === 'refuseWhileQuitting';
       // The guards of one function, its nested functions left out: theirs run when they are called.
@@ -189,6 +192,43 @@ describe('every spawn site and exit handler in electron/', () => {
     }
     expect(spawns, 'the scan found no spawn at all').toBeGreaterThan(5);
     expect(unguarded).toEqual([]);
+  });
+
+  // The Audit's L1 on #553 (29/10): the case above counts spawnPty as a site, so a new direct pty.spawn passed it,
+  // and would bring back node-pty 1.1.0's leak of one master per macOS terminal (core/pty-spawn.ts).
+  it('8. no module but core/pty-spawn.ts calls node-pty\'s spawn', () => {
+    const direct: string[] = [];
+    let importers = 0;
+    for (const { f, text } of files) {
+      if (f === path.join('core', 'pty-spawn.ts') || !/['"]node-pty['"]/.test(text)) continue;
+      importers += 1;
+      const source = ts.createSourceFile(f, text, ts.ScriptTarget.ES2022, true);
+      // What node-pty is called in this file: `import * as pty`, `import pty`, or a named `spawn`.
+      const names = new Set<string>();
+      const named = new Set<string>();
+      for (const st of source.statements) {
+        if (!ts.isImportDeclaration(st) || (st.moduleSpecifier as ts.StringLiteral).text !== 'node-pty' || st.importClause?.isTypeOnly) continue;
+        const clause = st.importClause;
+        if (clause?.name) names.add(clause.name.text);
+        const bindings = clause?.namedBindings;
+        if (bindings && ts.isNamespaceImport(bindings)) names.add(bindings.name.text);
+        if (bindings && ts.isNamedImports(bindings)) {
+          for (const el of bindings.elements) if ((el.propertyName ?? el.name).text === 'spawn' && !el.isTypeOnly) named.add(el.name.text);
+        }
+      }
+      const visit = (node: ts.Node): void => {
+        if (ts.isCallExpression(node)) {
+          const callee = node.expression;
+          const viaModule = ts.isPropertyAccessExpression(callee) && callee.name.text === 'spawn' && ts.isIdentifier(callee.expression) && names.has(callee.expression.text);
+          const viaName = ts.isIdentifier(callee) && named.has(callee.text);
+          if (viaModule || viaName) direct.push(`${f}:${source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1}`);
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(source);
+    }
+    expect(importers, 'the scan found no module naming node-pty').toBeGreaterThan(3);
+    expect(direct).toEqual([]);
   });
 
   it('5. every exit handler that sets an agent\'s status asks agentStatusOnExit', () => {

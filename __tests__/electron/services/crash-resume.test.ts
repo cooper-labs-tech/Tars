@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { twoZones } from '../../../electron/utils/two-zones';
 import { resumeInterrupted, resumeNote, turnCutOf, type ResumeDeps } from '../../../electron/services/crash-resume';
 import type { PreviousRun } from '../../../electron/services/run-state';
 
@@ -74,7 +75,7 @@ describe('the note', () => {
     const note = resumeNote({ stoppedAt: STOPPED, cut: { kind: 'tool', tool: 'Bash' }, tmpDir: '/Users/x/.tars/tmp/abc/t', delegations: [] });
 
     expect(note).toMatch(/^\[Tars\]/);
-    expect(note).toMatch(/stopped abruptly at 01:47/);
+    expect(note).toContain(`stopped abruptly at ${twoZones(STOPPED)}`);
     expect(note).toMatch(/Bash/);
     expect(note).toMatch(/outcome is unknown/);
     expect(note).toMatch(/background tasks/i);

@@ -31,8 +31,8 @@ export function Figure({ caption, value, sub, tone, volatile = false }: {
   );
 }
 
-export function Figures({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-4 gap-2 shrink-0">{children}</div>;
+export function Figures({ children, columns = 4 }: { children: ReactNode; columns?: 4 | 5 }) {
+  return <div className={`grid ${columns === 5 ? 'grid-cols-5' : 'grid-cols-4'} gap-2 shrink-0`}>{children}</div>;
 }
 
 /** A bordered box with its caption, a region named for what it holds. */

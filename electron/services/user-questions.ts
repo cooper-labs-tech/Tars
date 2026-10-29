@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { redactSecrets } from '../utils/redact-secrets';
+import { twoZones } from '../utils/two-zones';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { chatNameOf, namedChatOf } from '../core/chat-inbox';
 import { chatTag } from './chat-addressing';
@@ -79,6 +80,7 @@ export function openQuestionOf(agentId: string): Question | undefined {
   return load().find(q => q.agentId === agentId && q.state === 'open');
 }
 
+// The user's own zone, for what goes to the user; what is typed into an agent says both (utils/two-zones.ts, 2.0.6).
 const clock = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
 const units = (s: string) => Buffer.byteLength(s, 'utf16le') / 2;
 const oneLine = (s: string) => s.replace(/[\r\n\u2028\u2029]+/g, ' ').trim();
@@ -193,7 +195,7 @@ async function answerQuestion(reply: RelayReply, now: number): Promise<void> {
   const asleepChat = agent && agent.status === 'asleep' && !cliRunningIn(terminal) ? chatNameOf(agent) : undefined;
   if (asleepChat) {
     const { sendToChat } = await import('./chat-runners');
-    const woken = await sendToChat(asleepChat.id, `Answer to the question you asked at ${clock(q.askedAt)}:\n${answer}`, { sender: { kind: 'user', via: 'Telegram' } });
+    const woken = await sendToChat(asleepChat.id, `Answer to the question you asked at ${twoZones(q.askedAt)}:\n${answer}`, { sender: { kind: 'user', via: 'Telegram' } });
     if ('error' in woken) {
       await tell(`Not delivered: ${woken.reason} The question stays open until ${clock(q.expiresAt)}.`);
       return;
@@ -211,7 +213,7 @@ async function answerQuestion(reply: RelayReply, now: number): Promise<void> {
   // look-alike sender line included (the Audit's gate of #231). The question
   // is named by the time it was asked.
   let heldForPerson = false;
-  const outcome = writeProgrammaticInput(terminal!, `Answer to the question you asked at ${clock(q.askedAt)}:\n${answer}`, true, {
+  const outcome = writeProgrammaticInput(terminal!, `Answer to the question you asked at ${twoZones(q.askedAt)}:\n${answer}`, true, {
     agentId: agent.id,
     onHeld: () => { heldForPerson = true; },
     from: 'the user via Telegram',
@@ -247,8 +249,8 @@ export function expireUserQuestions(now: number = Date.now()): void {
     const terminal = agent?.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
     if (agent && cliRunningIn(terminal)) {
       const words = relayWasSent(`question:${q.id}`)
-        ? `The user did not answer your question asked at ${clock(q.askedAt)} within 4 hours. Carry on without their answer, or ask again.`
-        : `Your question asked at ${clock(q.askedAt)} could not reach the user: Hermes did not take it within 4 hours. Carry on without their answer, or ask again.`;
+        ? `The user did not answer your question asked at ${twoZones(q.askedAt)} within 4 hours. Carry on without their answer, or ask again.`
+        : `Your question asked at ${twoZones(q.askedAt)} could not reach the user: Hermes did not take it within 4 hours. Carry on without their answer, or ask again.`;
       writeProgrammaticInput(terminal!, words, true, { agentId: agent.id, from: 'Tars', sender: { kind: 'tars' } });
     }
   }

@@ -1,6 +1,7 @@
 import { monitorEventLoopDelay, performance } from 'perf_hooks';
 import { appendSample, type HealthSample, type SlowCall } from './samples';
 import { readAgentTrees, readMachine } from './machine';
+import { ptyWarning, type PtyPool } from '../../core/pty-pool';
 
 /**
  * The health sample Tars takes of itself every 5 minutes (2.0.3, monitoring
@@ -76,6 +77,10 @@ export interface HealthMonitorOptions {
   page: () => string | null;
   /** Each agent with a terminal: its id and the terminal's pid, whose tree is weighed (machine.ts). */
   agentTerminals?: () => Array<{ id: string; pid: number }>;
+  /** The machine's terminals (core/pty-spawn.ts readTerminals), read with each sample. */
+  terminals?: () => PtyPool | null;
+  /** Past 80 % of the machine's limit, once, and again only after it fell under 70 % (core/pty-pool.ts). */
+  onTerminalsNearFull?: (pool: PtyPool) => void;
   calls?: SlowCalls;
 }
 
@@ -103,8 +108,16 @@ export function startHealthMonitor(opts: HealthMonitorOptions): { stop(): void }
       page: opts.page(),
     };
     loop.reset();
+    if (opts.terminals) {
+      const pool = opts.terminals();
+      sample.terminals = pool;
+      const step = ptyWarning(terminalsWarned, pool);
+      terminalsWarned = step.warned;
+      if (step.tell && pool) opts.onTerminalsNearFull?.(pool);
+    }
     return sample;
   };
+  let terminalsWarned = false;
   // The previous sample's swap, for its growth per minute; and one read at a time, on a machine so loaded that a
   // read outlasts the period (a test's 200 ms).
   let previous: { at: number; swapUsedMb: number | null } | undefined;

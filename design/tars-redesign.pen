@@ -823374,7 +823374,7 @@
     },
     {
       "type": "frame",
-      "id": "S4vqx",
+      "id": "X0hLjf",
       "x": 0,
       "y": 136100,
       "name": "Brain · Projects · MEMORY.md past what Claude Code reads (2.0.6) · states",
@@ -823394,7 +823394,7 @@
       "children": [
         {
           "type": "frame",
-          "id": "yGb7c",
+          "id": "d9xtW",
           "name": "head",
           "width": "fill_container",
           "layout": "vertical",
@@ -823402,7 +823402,7 @@
           "children": [
             {
               "type": "text",
-              "id": "KmhID",
+              "id": "a7mGq7",
               "name": "title",
               "fill": "$text-primary",
               "content": "Brain · Projects · MEMORY.md past what Claude Code reads (2.0.6)",
@@ -823412,12 +823412,12 @@
             },
             {
               "type": "text",
-              "id": "sxSo9",
+              "id": "hDe3Y",
               "name": "intro",
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 664,
-              "content": "Claude Code reads only the first 24.4 KB of a project's MEMORY.md and drops the rest without a word. Past 22 KB (the Database Engineer's threshold) the project's row says how close it is; past 24.4 KB it says how much is cut, the file's row says it again, and the open file says what to do. The project's orchestrator is told once by Tars; the window only shows it.",
+              "content": "Claude Code reads a project's MEMORY.md up to two limits, measured on 2.1.312: its first 200 lines, then 24.4 KB (25,000 characters) cut at a line break; it warns only the model. Past 22 KB or 180 lines, past either limit, or past the 1 MB Tars reads of it, the project's row carries the notice Tars writes (guard.notice, #558), cut to the row and whole on hover, and the open MEMORY.md shows it whole. The window adds no words of its own. The folder's total stays as main gives it. The project's orchestrator is told by Tars once, and again when either limit grows or the state gets worse.",
               "lineHeight": 1.45,
               "fontFamily": "$font-ui",
               "fontSize": 13,
@@ -823427,25 +823427,25 @@
         },
         {
           "type": "frame",
-          "id": "ypPnC",
-          "name": "state UNDER 22 KB · AS TODAY",
+          "id": "JC7jS",
+          "name": "state UNDER 22 KB AND 180 LINES · AS TODAY (NO NOTICE)",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
             {
               "type": "text",
-              "id": "K0BM9g",
+              "id": "K6pMa",
               "name": "caption",
               "fill": "$text-secondary",
-              "content": "UNDER 22 KB · AS TODAY",
+              "content": "UNDER 22 KB AND 180 LINES · AS TODAY (NO NOTICE)",
               "fontFamily": "$font-ui",
               "fontSize": 10,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "l1ZaE",
+              "id": "Yx9zV",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -823457,7 +823457,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "OyzrD",
+                  "id": "EdM1V",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -823467,14 +823467,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "asFos",
+                  "id": "WZfSt",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "g32Cqv",
+                      "id": "Lp44c",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -823486,7 +823486,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "WaDpi",
+                          "id": "K7ht3",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -823496,7 +823496,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "mpWSI",
+                          "id": "JYUAF",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "13 files · 18 KB · 5m ago",
@@ -823514,25 +823514,25 @@
         },
         {
           "type": "frame",
-          "id": "U9i9d",
-          "name": "state PAST 22 KB · CLOSE TO WHAT CLAUDE CODE READS",
+          "id": "Q1kBr9",
+          "name": "state PAST 22 KB OR 180 LINES · CLOSE TO WHAT CLAUDE CODE READS",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
             {
               "type": "text",
-              "id": "fDXEb",
+              "id": "jYgQW",
               "name": "caption",
               "fill": "$text-secondary",
-              "content": "PAST 22 KB · CLOSE TO WHAT CLAUDE CODE READS",
+              "content": "PAST 22 KB OR 180 LINES · CLOSE TO WHAT CLAUDE CODE READS",
               "fontFamily": "$font-ui",
               "fontSize": 10,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "B2y3G3",
+              "id": "Yn39u",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -823544,7 +823544,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "sj20D",
+                  "id": "s4vwwK",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -823554,14 +823554,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "LsDI6",
+                  "id": "BKQpC",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "yFoKq",
+                      "id": "GoiL4",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -823573,7 +823573,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "g0ONvr",
+                          "id": "T4tFRh",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -823583,7 +823583,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "RgIIT",
+                          "id": "akeeg",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "13 files · 25 KB · 5m ago",
@@ -823593,14 +823593,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "kj4om",
+                          "id": "rhLYv",
                           "name": "memory line",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "UO7z3",
+                              "id": "v0g5v",
                               "name": "square",
                               "fill": "$status-waiting",
                               "width": 6,
@@ -823608,12 +823608,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "MelXm",
+                              "id": "sF72f",
                               "name": "l",
                               "fill": "$status-waiting",
                               "textGrowth": "fixed-width",
-                              "width": 196,
-                              "content": "MEMORY.md 23.1 KB · reads 24.4",
+                              "width": 200,
+                              "content": "MEMORY.md is 23.1 KB in 96 lin…",
                               "lineHeight": 1.45,
                               "fontFamily": "$font-mono",
                               "fontSize": 10,
@@ -823626,12 +823626,25 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "fTndv",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 23.1 KB in 96 lines, close to what Claude Code reads of it (24.4 KB and 200 lines): past that, the rest never reaches an agent. Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
             }
           ]
         },
         {
           "type": "frame",
-          "id": "EI3mT",
+          "id": "mLo6N",
           "name": "state PAST 24.4 KB · THE REST IS CUT",
           "width": "fill_container",
           "layout": "vertical",
@@ -823639,7 +823652,7 @@
           "children": [
             {
               "type": "text",
-              "id": "woQpY",
+              "id": "P9ZsQ",
               "name": "caption",
               "fill": "$text-secondary",
               "content": "PAST 24.4 KB · THE REST IS CUT",
@@ -823649,7 +823662,7 @@
             },
             {
               "type": "frame",
-              "id": "vnDZk",
+              "id": "aqHgZ",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -823661,7 +823674,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "rV2Kh",
+                  "id": "j2CNN",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -823671,14 +823684,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "AyQiZ",
+                  "id": "qCQp2",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "E37jX3",
+                      "id": "I42GFr",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -823690,7 +823703,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "S3iNC",
+                          "id": "R1qmVN",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -823700,7 +823713,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "wOqRo",
+                          "id": "Je0E5",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "13 files · 33 KB · 5m ago",
@@ -823710,14 +823723,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "aO1xX",
+                          "id": "yYA5Q",
                           "name": "memory line",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "PHG8j",
+                              "id": "n8ss72",
                               "name": "square",
                               "fill": "$status-error",
                               "width": 6,
@@ -823725,12 +823738,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "ekpgZ",
+                              "id": "Yk2v0",
                               "name": "l",
                               "fill": "$status-error",
                               "textGrowth": "fixed-width",
-                              "width": 196,
-                              "content": "MEMORY.md 31.2 KB · past 24.4",
+                              "width": 200,
+                              "content": "MEMORY.md is 29.6 KB in 150 li…",
                               "lineHeight": 1.45,
                               "fontFamily": "$font-mono",
                               "fontSize": 10,
@@ -823742,7 +823755,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "KZd5Q",
+                      "id": "Cad1P",
                       "name": "row acme_web",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -823751,7 +823764,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "j1cXS",
+                          "id": "df1c2",
                           "name": "name",
                           "fill": "$text-secondary",
                           "content": "acme_web",
@@ -823761,7 +823774,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "BxHjM",
+                          "id": "tCzLZ",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "2 files · 4 KB · 3d ago",
@@ -823774,36 +823787,309 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "N64MfV",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 29.6 KB in 150 lines. Claude Code reads only its first 24.4 KB: 27 of its 150 lines, from line 124, never reach an agent (5.3 KB). Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
             }
           ]
         },
         {
           "type": "frame",
-          "id": "a60I6G",
-          "name": "state THE PROJECT OPEN · ITS FILE AND WHAT TO DO",
+          "id": "m7JDe",
+          "name": "state PAST 200 LINES · THE REST IS CUT, WHATEVER ITS SIZE",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
             {
               "type": "text",
-              "id": "vQma7",
+              "id": "YJzjk",
               "name": "caption",
               "fill": "$text-secondary",
-              "content": "THE PROJECT OPEN · ITS FILE AND WHAT TO DO",
+              "content": "PAST 200 LINES · THE REST IS CUT, WHATEVER ITS SIZE",
               "fontFamily": "$font-ui",
               "fontSize": 10,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "skh7P",
+              "id": "oVtEl",
+              "name": "Projects panel",
+              "width": 256,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "wRyQn",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "content": "PROJECTS WITH MEMORY",
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "RRmd6",
+                  "name": "rows",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "BL5G0",
+                      "name": "row tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border-strong",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "HjxHJ",
+                          "name": "name",
+                          "fill": "$text-primary",
+                          "content": "tars",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y4ig8o",
+                          "name": "counts",
+                          "fill": "$text-secondary",
+                          "content": "13 files · 21 KB · 5m ago",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Ara6i",
+                          "name": "memory line",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "K61epJ",
+                              "name": "square",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "jkQfR",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "MEMORY.md is 18.0 KB in 240 li…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "uCpxd",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 18.0 KB in 240 lines. Claude Code reads only its first 200 lines: 40 of its 240 lines, from line 201, never reach an agent (3.0 KB). Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "pnvrM",
+          "name": "state PAST 1 MB · TOO LARGE FOR TARS TO READ, CUT WITH NO FIGURES",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "text",
+              "id": "BdSLl",
+              "name": "caption",
+              "fill": "$text-secondary",
+              "content": "PAST 1 MB · TOO LARGE FOR TARS TO READ, CUT WITH NO FIGURES",
+              "fontFamily": "$font-ui",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "C8Jo6s",
+              "name": "Projects panel",
+              "width": 256,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SDqvn",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "content": "PROJECTS WITH MEMORY",
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Itzb6",
+                  "name": "rows",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "RTTd1",
+                      "name": "row tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border-strong",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "p5yY4V",
+                          "name": "name",
+                          "fill": "$text-primary",
+                          "content": "tars",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "tBvxg",
+                          "name": "counts",
+                          "fill": "$text-secondary",
+                          "content": "13 files · 2.0 MB · 5m ago",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "SZQ5S",
+                          "name": "memory line",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "vBxRl",
+                              "name": "square",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "V8Hla",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "MEMORY.md is 2.0 MB, more than…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "lDTRs",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 2.0 MB, more than Tars reads of it (1 MB). Claude Code reads only its first 24.4 KB: everything after that never reaches an agent. Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "y7VqdC",
+          "name": "state THE PROJECT OPEN · THE NOTICE WHOLE OVER ITS FILE",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "text",
+              "id": "qxGLB",
+              "name": "caption",
+              "fill": "$text-secondary",
+              "content": "THE PROJECT OPEN · THE NOTICE WHOLE OVER ITS FILE",
+              "fontFamily": "$font-ui",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "eC683",
               "name": "panels",
               "gap": 8,
               "children": [
                 {
                   "type": "frame",
-                  "id": "rUGhP",
+                  "id": "PPtl4",
                   "name": "Files panel",
                   "width": 208,
                   "fill": "$surface",
@@ -823815,7 +824101,7 @@
                   "children": [
                     {
                       "type": "text",
-                      "id": "ibtjD",
+                      "id": "dpRve",
                       "name": "caption",
                       "fill": "$text-secondary",
                       "content": "13 FILES",
@@ -823825,7 +824111,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "Q6Ksx5",
+                      "id": "E8HW3",
                       "name": "file MEMORY.md",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -823840,7 +824126,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "TOwEx",
+                          "id": "Pkm0b",
                           "name": "n",
                           "fill": "$text-primary",
                           "content": "MEMORY.md",
@@ -823849,25 +824135,15 @@
                           "fontWeight": "normal"
                         },
                         {
-                          "type": "text",
-                          "id": "nL9r7",
-                          "name": "e",
-                          "fill": "$text-muted",
-                          "content": "entrypoint",
-                          "fontFamily": "$font-ui",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
                           "type": "frame",
-                          "id": "pzSC4",
-                          "name": "memory line",
+                          "id": "Pd8UW",
+                          "name": "e",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "tomef",
+                              "id": "jLTG1",
                               "name": "square",
                               "fill": "$status-error",
                               "width": 6,
@@ -823875,14 +824151,11 @@
                             },
                             {
                               "type": "text",
-                              "id": "UQ9T6",
-                              "name": "l",
-                              "fill": "$status-error",
-                              "textGrowth": "fixed-width",
-                              "width": 150,
-                              "content": "31.2 KB · 6.8 KB cut",
-                              "lineHeight": 1.45,
-                              "fontFamily": "$font-mono",
+                              "id": "yAvtd",
+                              "name": "e",
+                              "fill": "$text-muted",
+                              "content": "entrypoint",
+                              "fontFamily": "$font-ui",
                               "fontSize": 10,
                               "fontWeight": "normal"
                             }
@@ -823892,7 +824165,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "N8qCd5",
+                      "id": "u2Mo1s",
                       "name": "file architecture.md",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -823903,7 +824176,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "brEb7",
+                          "id": "LVoO5",
                           "name": "n",
                           "fill": "$text-secondary",
                           "content": "architecture.md",
@@ -823915,7 +824188,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "o7PMZ",
+                      "id": "KHm1h",
                       "name": "file debugging.md",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -823926,7 +824199,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "XJMo7",
+                          "id": "ebwnS",
                           "name": "n",
                           "fill": "$text-secondary",
                           "content": "debugging.md",
@@ -823940,7 +824213,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "xQyC5",
+                  "id": "ub4W9",
                   "name": "File pane",
                   "width": 440,
                   "fill": "$surface",
@@ -823957,7 +824230,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "q566m",
+                      "id": "kR8hV",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 8,
@@ -823969,7 +824242,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "aTa5s",
+                          "id": "iFLfR",
                           "name": "n",
                           "fill": "$text-primary",
                           "content": "MEMORY.md",
@@ -823979,14 +824252,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "u7ZdN",
+                          "id": "wzi75",
                           "name": "spacer",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "h05Ke9",
+                          "id": "s6f8q",
                           "name": "b save",
                           "height": 26,
                           "fill": "$surface",
@@ -824000,7 +824273,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "Mk7Ic",
+                              "id": "TvQIN",
                               "name": "l",
                               "fill": "$text-secondary",
                               "content": "save",
@@ -824014,7 +824287,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "EmCna",
+                      "id": "PI1eU",
                       "name": "notice",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824029,7 +824302,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "JwVCq",
+                          "id": "aovr0",
                           "name": "square",
                           "fill": "$status-error",
                           "width": 6,
@@ -824037,12 +824310,12 @@
                         },
                         {
                           "type": "text",
-                          "id": "k2kmdO",
+                          "id": "qosWQ",
                           "name": "m",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "MEMORY.md is 31.2 KB. Claude Code reads only its first 24.4 KB: the last 6.8 KB never reach an agent. Keep it an index, one line per memory, and move the details into topic files.",
+                          "content": "MEMORY.md is 29.6 KB in 150 lines. Claude Code reads only its first 24.4 KB: 27 of its 150 lines, from line 124, never reach an agent (5.3 KB). Keep it an index, one line per memory, and move the details into topic files.",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 11.5,
@@ -824052,7 +824325,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "W4KeSQ",
+                      "id": "ugLqz",
                       "name": "editor",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -824061,7 +824334,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "aLqGp",
+                          "id": "KDlwq",
                           "name": "l",
                           "fill": "$text-secondary",
                           "content": "- [Portes de PR](index_gates.md) : une ligne par porte",
@@ -824071,7 +824344,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "DrtUO",
+                          "id": "CNEAT",
                           "name": "l",
                           "fill": "$text-secondary",
                           "content": "- [Suite e2e](index_e2e.md) : profil Chromium, seuils",
@@ -824089,7 +824362,7 @@
         },
         {
           "type": "frame",
-          "id": "QSGHd",
+          "id": "IBLiO",
           "name": "state THE SIZE CANNOT BE READ",
           "width": "fill_container",
           "layout": "vertical",
@@ -824097,7 +824370,7 @@
           "children": [
             {
               "type": "text",
-              "id": "z7cwW",
+              "id": "Nb5iX",
               "name": "caption",
               "fill": "$text-secondary",
               "content": "THE SIZE CANNOT BE READ",
@@ -824107,7 +824380,7 @@
             },
             {
               "type": "frame",
-              "id": "hrzcj",
+              "id": "ZAvqm",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -824119,7 +824392,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "PhNHL",
+                  "id": "imMLz",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -824129,14 +824402,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "GmDnk",
+                  "id": "K6d8Gw",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "zZQBa",
+                      "id": "NI6Jk",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824148,7 +824421,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "G1m2Ag",
+                          "id": "OGYLW",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -824158,19 +824431,62 @@
                         },
                         {
                           "type": "text",
-                          "id": "cGP6I",
+                          "id": "n5ENDu",
                           "name": "counts",
                           "fill": "$text-secondary",
-                          "content": "13 files · size not read · 5m ago",
+                          "content": "13 files · 25 KB · 5m ago",
                           "fontFamily": "$font-mono",
                           "fontSize": 10,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "S9y8i",
+                          "name": "memory line",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "pafbn",
+                              "name": "square",
+                              "fill": "$status-idle",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "mOSYd",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "The size of MEMORY.md could no…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
                         }
                       ]
                     }
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "ZdnyT",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · The size of MEMORY.md could not be read.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
             }
           ]
         }
@@ -824178,7 +824494,7 @@
     },
     {
       "type": "frame",
-      "id": "X6m5bm",
+      "id": "to87s",
       "x": 900,
       "y": 136100,
       "name": "Brain · Projects · MEMORY.md past what Claude Code reads (2.0.6) · states · light",
@@ -824198,7 +824514,7 @@
       "children": [
         {
           "type": "frame",
-          "id": "T1TWa",
+          "id": "GNfLk",
           "name": "head",
           "width": "fill_container",
           "layout": "vertical",
@@ -824206,7 +824522,7 @@
           "children": [
             {
               "type": "text",
-              "id": "VUcEZ",
+              "id": "Ecfp1",
               "name": "title",
               "fill": "$text-primary",
               "content": "Brain · Projects · MEMORY.md past what Claude Code reads (2.0.6)",
@@ -824216,12 +824532,12 @@
             },
             {
               "type": "text",
-              "id": "FfrTd",
+              "id": "Uy420",
               "name": "intro",
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 664,
-              "content": "Claude Code reads only the first 24.4 KB of a project's MEMORY.md and drops the rest without a word. Past 22 KB (the Database Engineer's threshold) the project's row says how close it is; past 24.4 KB it says how much is cut, the file's row says it again, and the open file says what to do. The project's orchestrator is told once by Tars; the window only shows it.",
+              "content": "Claude Code reads a project's MEMORY.md up to two limits, measured on 2.1.312: its first 200 lines, then 24.4 KB (25,000 characters) cut at a line break; it warns only the model. Past 22 KB or 180 lines, past either limit, or past the 1 MB Tars reads of it, the project's row carries the notice Tars writes (guard.notice, #558), cut to the row and whole on hover, and the open MEMORY.md shows it whole. The window adds no words of its own. The folder's total stays as main gives it. The project's orchestrator is told by Tars once, and again when either limit grows or the state gets worse.",
               "lineHeight": 1.45,
               "fontFamily": "$font-ui",
               "fontSize": 13,
@@ -824231,25 +824547,25 @@
         },
         {
           "type": "frame",
-          "id": "lLRNP",
-          "name": "state UNDER 22 KB · AS TODAY",
+          "id": "DD2Cf",
+          "name": "state UNDER 22 KB AND 180 LINES · AS TODAY (NO NOTICE)",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
             {
               "type": "text",
-              "id": "hBdsz",
+              "id": "WeRfv",
               "name": "caption",
               "fill": "$text-secondary",
-              "content": "UNDER 22 KB · AS TODAY",
+              "content": "UNDER 22 KB AND 180 LINES · AS TODAY (NO NOTICE)",
               "fontFamily": "$font-ui",
               "fontSize": 10,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "z3iNn",
+              "id": "ejBz8",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -824261,7 +824577,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "np8cl",
+                  "id": "JCiKt",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -824271,14 +824587,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "NFVAd",
+                  "id": "D1NsOT",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "KrTTW",
+                      "id": "VfMtk",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824290,7 +824606,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "e80ou",
+                          "id": "dVVF5",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -824300,7 +824616,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "nj10c",
+                          "id": "ecb6q",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "13 files · 18 KB · 5m ago",
@@ -824318,25 +824634,25 @@
         },
         {
           "type": "frame",
-          "id": "ckKPA",
-          "name": "state PAST 22 KB · CLOSE TO WHAT CLAUDE CODE READS",
+          "id": "IeE86",
+          "name": "state PAST 22 KB OR 180 LINES · CLOSE TO WHAT CLAUDE CODE READS",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
             {
               "type": "text",
-              "id": "STdqK",
+              "id": "VylCg",
               "name": "caption",
               "fill": "$text-secondary",
-              "content": "PAST 22 KB · CLOSE TO WHAT CLAUDE CODE READS",
+              "content": "PAST 22 KB OR 180 LINES · CLOSE TO WHAT CLAUDE CODE READS",
               "fontFamily": "$font-ui",
               "fontSize": 10,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "jhjaw",
+              "id": "XOuqW",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -824348,7 +824664,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "TnyEl",
+                  "id": "oLl0q",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -824358,14 +824674,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "CQQHt",
+                  "id": "g2lS2O",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "d3ZWy",
+                      "id": "SzCI7",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824377,7 +824693,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "aHfqb",
+                          "id": "T1LAR",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -824387,7 +824703,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "BT9n0",
+                          "id": "WutXe",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "13 files · 25 KB · 5m ago",
@@ -824397,14 +824713,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "BAxd5",
+                          "id": "anLff",
                           "name": "memory line",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "wFj00",
+                              "id": "Qvaom",
                               "name": "square",
                               "fill": "$status-waiting",
                               "width": 6,
@@ -824412,12 +824728,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "NqFpd",
+                              "id": "V2pMp6",
                               "name": "l",
                               "fill": "$status-waiting",
                               "textGrowth": "fixed-width",
-                              "width": 196,
-                              "content": "MEMORY.md 23.1 KB · reads 24.4",
+                              "width": 200,
+                              "content": "MEMORY.md is 23.1 KB in 96 lin…",
                               "lineHeight": 1.45,
                               "fontFamily": "$font-mono",
                               "fontSize": 10,
@@ -824430,12 +824746,25 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "dbLVs",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 23.1 KB in 96 lines, close to what Claude Code reads of it (24.4 KB and 200 lines): past that, the rest never reaches an agent. Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
             }
           ]
         },
         {
           "type": "frame",
-          "id": "mvg5b",
+          "id": "hakcb",
           "name": "state PAST 24.4 KB · THE REST IS CUT",
           "width": "fill_container",
           "layout": "vertical",
@@ -824443,7 +824772,7 @@
           "children": [
             {
               "type": "text",
-              "id": "WMWOW",
+              "id": "r5MwqG",
               "name": "caption",
               "fill": "$text-secondary",
               "content": "PAST 24.4 KB · THE REST IS CUT",
@@ -824453,7 +824782,7 @@
             },
             {
               "type": "frame",
-              "id": "C1Wh3J",
+              "id": "f2gr0",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -824465,7 +824794,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "EXNiQ",
+                  "id": "t5ifU",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -824475,14 +824804,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "JxbVD",
+                  "id": "nzxPG",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "LGHfX",
+                      "id": "xXjDy",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824494,7 +824823,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "ukBko",
+                          "id": "sU0EX",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -824504,7 +824833,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "N6q2C",
+                          "id": "pbwqX",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "13 files · 33 KB · 5m ago",
@@ -824514,14 +824843,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "dDLC9",
+                          "id": "DyoeK",
                           "name": "memory line",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "f9AInN",
+                              "id": "mIui8",
                               "name": "square",
                               "fill": "$status-error",
                               "width": 6,
@@ -824529,12 +824858,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "nP2UU",
+                              "id": "Fc5ls",
                               "name": "l",
                               "fill": "$status-error",
                               "textGrowth": "fixed-width",
-                              "width": 196,
-                              "content": "MEMORY.md 31.2 KB · past 24.4",
+                              "width": 200,
+                              "content": "MEMORY.md is 29.6 KB in 150 li…",
                               "lineHeight": 1.45,
                               "fontFamily": "$font-mono",
                               "fontSize": 10,
@@ -824546,7 +824875,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "xbHjk",
+                      "id": "gHbGf",
                       "name": "row acme_web",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -824555,7 +824884,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "H16RtM",
+                          "id": "YTg4n",
                           "name": "name",
                           "fill": "$text-secondary",
                           "content": "acme_web",
@@ -824565,7 +824894,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "nRjyt",
+                          "id": "LSh68",
                           "name": "counts",
                           "fill": "$text-secondary",
                           "content": "2 files · 4 KB · 3d ago",
@@ -824578,36 +824907,309 @@
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "dCGTP",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 29.6 KB in 150 lines. Claude Code reads only its first 24.4 KB: 27 of its 150 lines, from line 124, never reach an agent (5.3 KB). Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
             }
           ]
         },
         {
           "type": "frame",
-          "id": "nCiog",
-          "name": "state THE PROJECT OPEN · ITS FILE AND WHAT TO DO",
+          "id": "g9P9P",
+          "name": "state PAST 200 LINES · THE REST IS CUT, WHATEVER ITS SIZE",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
             {
               "type": "text",
-              "id": "orr6R",
+              "id": "VVbdi",
               "name": "caption",
               "fill": "$text-secondary",
-              "content": "THE PROJECT OPEN · ITS FILE AND WHAT TO DO",
+              "content": "PAST 200 LINES · THE REST IS CUT, WHATEVER ITS SIZE",
               "fontFamily": "$font-ui",
               "fontSize": 10,
               "fontWeight": "normal"
             },
             {
               "type": "frame",
-              "id": "z43ArM",
+              "id": "SEYC1",
+              "name": "Projects panel",
+              "width": 256,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "eBpGF",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "content": "PROJECTS WITH MEMORY",
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "gcghA",
+                  "name": "rows",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Yh6ye",
+                      "name": "row tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border-strong",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "EXm9D",
+                          "name": "name",
+                          "fill": "$text-primary",
+                          "content": "tars",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "hMXBi",
+                          "name": "counts",
+                          "fill": "$text-secondary",
+                          "content": "13 files · 21 KB · 5m ago",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "QvRfE",
+                          "name": "memory line",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Q0G40n",
+                              "name": "square",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "UNwl0",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "MEMORY.md is 18.0 KB in 240 li…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "YnMCQ",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 18.0 KB in 240 lines. Claude Code reads only its first 200 lines: 40 of its 240 lines, from line 201, never reach an agent (3.0 KB). Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ipJ7W",
+          "name": "state PAST 1 MB · TOO LARGE FOR TARS TO READ, CUT WITH NO FIGURES",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "text",
+              "id": "Cthxb",
+              "name": "caption",
+              "fill": "$text-secondary",
+              "content": "PAST 1 MB · TOO LARGE FOR TARS TO READ, CUT WITH NO FIGURES",
+              "fontFamily": "$font-ui",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "H1g07R",
+              "name": "Projects panel",
+              "width": 256,
+              "fill": "$surface",
+              "stroke": "$border",
+              "strokeWidth": 1,
+              "layout": "vertical",
+              "gap": 8,
+              "padding": 12,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "W6uo5",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "content": "PROJECTS WITH MEMORY",
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Q29Q31",
+                  "name": "rows",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Ku0RI",
+                      "name": "row tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border-strong",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "g0GQj",
+                          "name": "name",
+                          "fill": "$text-primary",
+                          "content": "tars",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "C0uz6",
+                          "name": "counts",
+                          "fill": "$text-secondary",
+                          "content": "13 files · 2.0 MB · 5m ago",
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "fqDnm",
+                          "name": "memory line",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "wKGE2",
+                              "name": "square",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "AYIC7",
+                              "name": "l",
+                              "fill": "$status-error",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "MEMORY.md is 2.0 MB, more than…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "kyv53",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · MEMORY.md is 2.0 MB, more than Tars reads of it (1 MB). Claude Code reads only its first 24.4 KB: everything after that never reaches an agent. Keep it an index, one line per memory, and move the details into topic files.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "GNfzc",
+          "name": "state THE PROJECT OPEN · THE NOTICE WHOLE OVER ITS FILE",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 10,
+          "children": [
+            {
+              "type": "text",
+              "id": "HuT07",
+              "name": "caption",
+              "fill": "$text-secondary",
+              "content": "THE PROJECT OPEN · THE NOTICE WHOLE OVER ITS FILE",
+              "fontFamily": "$font-ui",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "sSyCl",
               "name": "panels",
               "gap": 8,
               "children": [
                 {
                   "type": "frame",
-                  "id": "KJBB2",
+                  "id": "L44oW",
                   "name": "Files panel",
                   "width": 208,
                   "fill": "$surface",
@@ -824619,7 +825221,7 @@
                   "children": [
                     {
                       "type": "text",
-                      "id": "w874TM",
+                      "id": "U8x2b",
                       "name": "caption",
                       "fill": "$text-secondary",
                       "content": "13 FILES",
@@ -824629,7 +825231,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "iRmGS",
+                      "id": "SkS7M",
                       "name": "file MEMORY.md",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824644,7 +825246,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "UqhVQ",
+                          "id": "kQfBr",
                           "name": "n",
                           "fill": "$text-primary",
                           "content": "MEMORY.md",
@@ -824653,25 +825255,15 @@
                           "fontWeight": "normal"
                         },
                         {
-                          "type": "text",
-                          "id": "t9nwXB",
-                          "name": "e",
-                          "fill": "$text-muted",
-                          "content": "entrypoint",
-                          "fontFamily": "$font-ui",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        },
-                        {
                           "type": "frame",
-                          "id": "p9Gk75",
-                          "name": "memory line",
+                          "id": "Ga1fo",
+                          "name": "e",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "ebN89",
+                              "id": "RJ3Mu",
                               "name": "square",
                               "fill": "$status-error",
                               "width": 6,
@@ -824679,14 +825271,11 @@
                             },
                             {
                               "type": "text",
-                              "id": "NsenF",
-                              "name": "l",
-                              "fill": "$status-error",
-                              "textGrowth": "fixed-width",
-                              "width": 150,
-                              "content": "31.2 KB · 6.8 KB cut",
-                              "lineHeight": 1.45,
-                              "fontFamily": "$font-mono",
+                              "id": "fzuy6",
+                              "name": "e",
+                              "fill": "$text-muted",
+                              "content": "entrypoint",
+                              "fontFamily": "$font-ui",
                               "fontSize": 10,
                               "fontWeight": "normal"
                             }
@@ -824696,7 +825285,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "b4GUQ",
+                      "id": "lAydc",
                       "name": "file architecture.md",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -824707,7 +825296,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "SE37I",
+                          "id": "VG8Io",
                           "name": "n",
                           "fill": "$text-secondary",
                           "content": "architecture.md",
@@ -824719,7 +825308,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "dUFuh",
+                      "id": "NcV9Y",
                       "name": "file debugging.md",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -824730,7 +825319,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "b7SLJw",
+                          "id": "N68bQ4",
                           "name": "n",
                           "fill": "$text-secondary",
                           "content": "debugging.md",
@@ -824744,7 +825333,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "mwugG",
+                  "id": "OgZ1l",
                   "name": "File pane",
                   "width": 440,
                   "fill": "$surface",
@@ -824761,7 +825350,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "gcDWv",
+                      "id": "dq26g",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 8,
@@ -824773,7 +825362,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "i8XVmJ",
+                          "id": "DPdFA",
                           "name": "n",
                           "fill": "$text-primary",
                           "content": "MEMORY.md",
@@ -824783,14 +825372,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "gzd65",
+                          "id": "vvdm6",
                           "name": "spacer",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "fLKfu",
+                          "id": "S3ZSF",
                           "name": "b save",
                           "height": 26,
                           "fill": "$surface",
@@ -824804,7 +825393,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "XZBvo",
+                              "id": "mham4",
                               "name": "l",
                               "fill": "$text-secondary",
                               "content": "save",
@@ -824818,7 +825407,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "HmEgU",
+                      "id": "DjUCR",
                       "name": "notice",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824833,7 +825422,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "vFicj",
+                          "id": "KxWSO",
                           "name": "square",
                           "fill": "$status-error",
                           "width": 6,
@@ -824841,12 +825430,12 @@
                         },
                         {
                           "type": "text",
-                          "id": "Bus9W",
+                          "id": "p3Oquu",
                           "name": "m",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "MEMORY.md is 31.2 KB. Claude Code reads only its first 24.4 KB: the last 6.8 KB never reach an agent. Keep it an index, one line per memory, and move the details into topic files.",
+                          "content": "MEMORY.md is 29.6 KB in 150 lines. Claude Code reads only its first 24.4 KB: 27 of its 150 lines, from line 124, never reach an agent (5.3 KB). Keep it an index, one line per memory, and move the details into topic files.",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 11.5,
@@ -824856,7 +825445,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "I8FO5",
+                      "id": "k9DeQx",
                       "name": "editor",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -824865,7 +825454,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "mb8wH",
+                          "id": "EJk33",
                           "name": "l",
                           "fill": "$text-secondary",
                           "content": "- [Portes de PR](index_gates.md) : une ligne par porte",
@@ -824875,7 +825464,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "zFqIV",
+                          "id": "YFEQL",
                           "name": "l",
                           "fill": "$text-secondary",
                           "content": "- [Suite e2e](index_e2e.md) : profil Chromium, seuils",
@@ -824893,7 +825482,7 @@
         },
         {
           "type": "frame",
-          "id": "EVm6J",
+          "id": "YXHKH",
           "name": "state THE SIZE CANNOT BE READ",
           "width": "fill_container",
           "layout": "vertical",
@@ -824901,7 +825490,7 @@
           "children": [
             {
               "type": "text",
-              "id": "kbfjF",
+              "id": "asexE",
               "name": "caption",
               "fill": "$text-secondary",
               "content": "THE SIZE CANNOT BE READ",
@@ -824911,7 +825500,7 @@
             },
             {
               "type": "frame",
-              "id": "r6D1vH",
+              "id": "AFTkc",
               "name": "Projects panel",
               "width": 256,
               "fill": "$surface",
@@ -824923,7 +825512,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "l4Sd1",
+                  "id": "iUiwh",
                   "name": "caption",
                   "fill": "$text-secondary",
                   "content": "PROJECTS WITH MEMORY",
@@ -824933,14 +825522,14 @@
                 },
                 {
                   "type": "frame",
-                  "id": "P2dTh",
+                  "id": "CHQ72",
                   "name": "rows",
                   "width": "fill_container",
                   "layout": "vertical",
                   "children": [
                     {
                       "type": "frame",
-                      "id": "LFPsw",
+                      "id": "f6L7fU",
                       "name": "row tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -824952,7 +825541,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "O0YCO",
+                          "id": "CHFQv",
                           "name": "name",
                           "fill": "$text-primary",
                           "content": "tars",
@@ -824962,19 +825551,62 @@
                         },
                         {
                           "type": "text",
-                          "id": "kW1OR",
+                          "id": "FfvKF",
                           "name": "counts",
                           "fill": "$text-secondary",
-                          "content": "13 files · size not read · 5m ago",
+                          "content": "13 files · 25 KB · 5m ago",
                           "fontFamily": "$font-mono",
                           "fontSize": 10,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "hOWjT",
+                          "name": "memory line",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "WHLec",
+                              "name": "square",
+                              "fill": "$status-idle",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "l7w5pR",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "The size of MEMORY.md could no…",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            }
+                          ]
                         }
                       ]
                     }
                   ]
                 }
               ]
+            },
+            {
+              "type": "text",
+              "id": "H3vJEo",
+              "name": "hover",
+              "fill": "$text-muted",
+              "textGrowth": "fixed-width",
+              "width": 664,
+              "content": "hover · The size of MEMORY.md could not be read.",
+              "lineHeight": 1.45,
+              "fontFamily": "$font-mono",
+              "fontSize": 10.5,
+              "fontWeight": "normal"
             }
           ]
         }
@@ -825012,7 +825644,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "Four of the 2.0.6 options change what agents read; one changes the window: a note says note. The rest is said here so nobody draws it twice.",
+          "content": "The 2.0.6 options change what agents read, not the window: a note, the waiting digest, both zones and the owner's words are said here so nobody draws them.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -825040,78 +825672,11 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "a · a note waiting in an agent's panel: it says note, and is no task",
+                  "content": "a · a note waiting in an agent's panel reads as any message: PR 561 gives the window no mark of a note",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
-                },
-                {
-                  "type": "frame",
-                  "id": "NpU5r",
-                  "name": "bar",
-                  "width": "fill_container",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "ZQozP",
-                      "name": "notice",
-                      "width": "fill_container",
-                      "height": 26,
-                      "fill": "$surface-raised",
-                      "stroke": "$border",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 8,
-                      "padding": [
-                        0,
-                        12
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "KAkiA",
-                          "name": "square",
-                          "fill": "$status-waiting",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
-                          "type": "frame",
-                          "id": "rEL3d",
-                          "name": "line",
-                          "gap": 5,
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "e5pea",
-                              "name": "who",
-                              "fill": "$text-primary",
-                              "content": "A note from Tars-Backend",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "w8tZBG",
-                              "name": "rest",
-                              "fill": "$text-secondary",
-                              "content": "is waiting for this field. Send what you are typing, or clear…",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
                 },
                 {
                   "type": "frame",
@@ -825207,7 +825772,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "A note is delivered and labelled so; it opens no task, so no task line, no queue entry and no end notice follow it. In the panel the waiting line names it a note instead of a message (above); in the Chat it carries a note chip (Chat · A · Room (2.0.6) · a note, in chat-redesign-a.pen).",
+                  "content": "A note is typed into the receiver's terminal under its own label (\"[Note for information from ...]\"); it opens no task, so no task line, no queue entry and no end notice follow it. The window is told nothing that marks it: held behind a draft, it waits under the panel's usual line, \"A message from\" (above), and it never goes through a Chat room, which carries room posts, not send_message. Nothing to build.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -825320,7 +825885,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "Four of the 2.0.6 options change what agents read; one changes the window: a note says note. The rest is said here so nobody draws it twice.",
+          "content": "The 2.0.6 options change what agents read, not the window: a note, the waiting digest, both zones and the owner's words are said here so nobody draws them.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -825348,78 +825913,11 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "a · a note waiting in an agent's panel: it says note, and is no task",
+                  "content": "a · a note waiting in an agent's panel reads as any message: PR 561 gives the window no mark of a note",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
-                },
-                {
-                  "type": "frame",
-                  "id": "Z7wRdb",
-                  "name": "bar",
-                  "width": "fill_container",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "B9HKl0",
-                      "name": "notice",
-                      "width": "fill_container",
-                      "height": 26,
-                      "fill": "$surface-raised",
-                      "stroke": "$border",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 8,
-                      "padding": [
-                        0,
-                        12
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "LXN8x",
-                          "name": "square",
-                          "fill": "$status-waiting",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
-                          "type": "frame",
-                          "id": "XKVIv",
-                          "name": "line",
-                          "gap": 5,
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "C3gmE",
-                              "name": "who",
-                              "fill": "$text-primary",
-                              "content": "A note from Tars-Backend",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "dpxoU",
-                              "name": "rest",
-                              "fill": "$text-secondary",
-                              "content": "is waiting for this field. Send what you are typing, or clear…",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
                 },
                 {
                   "type": "frame",
@@ -825515,7 +826013,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "A note is delivered and labelled so; it opens no task, so no task line, no queue entry and no end notice follow it. In the panel the waiting line names it a note instead of a message (above); in the Chat it carries a note chip (Chat · A · Room (2.0.6) · a note, in chat-redesign-a.pen).",
+                  "content": "A note is typed into the receiver's terminal under its own label (\"[Note for information from ...]\"); it opens no task, so no task line, no queue entry and no end notice follow it. The window is told nothing that marks it: held behind a draft, it waits under the panel's usual line, \"A message from\" (above), and it never goes through a Chat room, which carries room posts, not send_message. Nothing to build.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
