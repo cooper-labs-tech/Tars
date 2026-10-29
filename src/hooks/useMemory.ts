@@ -30,13 +30,14 @@ export function useMemory() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchProjects = useCallback(async () => {
+  /** `quiet`: read again behind a list already shown, without its loading state (after a save). */
+  const fetchProjects = useCallback(async (quiet = false) => {
     if (!isElectron() || !window.electronAPI?.memory) {
       setLoading(false);
       return;
     }
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       setError(null);
       // Agents first: their project folders are part of what Brain must show,
       // even when Claude Code never wrote memory for them yet.
@@ -97,6 +98,9 @@ export function useMemory() {
           ...p,
           files: p.files.map(f => f.path === filePath ? { ...f, content } : f),
         })));
+        // Main's guard of MEMORY.md (PR 558) is computed when the projects are listed: read them again, or the
+        // row and the open file keep saying what the file no longer is (the Audit's M1 on PR 560).
+        await fetchProjects(true);
         return true;
       }
       setError(result.error ?? 'Failed to save file');
@@ -107,7 +111,7 @@ export function useMemory() {
     } finally {
       setSaving(false);
     }
-  }, []);
+  }, [fetchProjects]);
 
   const createFile = useCallback(async (memoryDir: string, fileName: string): Promise<boolean> => {
     if (!isElectron() || !window.electronAPI?.memory) return false;
@@ -188,7 +192,7 @@ export function useMemory() {
     saveFile,
     createFile,
     deleteFile,
-    refresh: fetchProjects,
+    refresh: () => fetchProjects(),
   };
 }
 

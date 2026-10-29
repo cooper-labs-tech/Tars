@@ -159,7 +159,6 @@ function ProjectRow({
           ? `${project.files.length} files · ${formatBytes(project.totalSize)} · ${timeAgo(project.lastModified)}`
           : 'no memory yet'}
       </p>
-      {/* The folder an older Tars kept this memory in, under a name Claude never reads (PR 375): kept as it was. */}
       {/* Close to or past what Claude Code reads of MEMORY.md: main's notice, cut to the row, whole in its title. */}
       {notice && (
         <p className={`mt-1 flex items-center gap-1.5 font-mono text-[10px] ${notice.ink}`}>
@@ -167,6 +166,7 @@ function ProjectRow({
           <span data-memory-notice={notice.state} title={notice.text} className="min-w-0 truncate">{notice.text}</span>
         </p>
       )}
+      {/* The folder an older Tars kept this memory in, under a name Claude never reads (PR 375): kept as it was. */}
       {olderFolder && (
         <p title={project.olderCopy} className="mt-1 font-mono text-[10px] text-text-muted truncate">
           older copy in {olderFolder}
