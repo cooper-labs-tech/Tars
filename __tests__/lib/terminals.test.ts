@@ -14,7 +14,8 @@ import { wakeRefusedReason } from '@/app/agents/constants';
  * 3. near full (nearFull) or full does not take the waiting or the error tone, or full is not main's rule: one free
  *    on macOS, where a start opens two, none on Linux;
  * 4. the notice is not main's own text (terminals.notice) as it comes, or shows when main gives none;
- * 5. Windows (null, no pool) reads as not read, or a machine whose pool cannot be read reads as "not counted";
+ * 5. Windows (null, no pool) reads as not read, or a machine whose pool cannot be read reads as "not counted" or in
+ *    words no frame draws (the Audit's L2 on #555: it is the drawn "not read");
  * 6. before the first reading (undefined) a figure shows, or a notice;
  * 7. an asleep agent whose wake was refused (asleep, with `error`, PR 553's second round) shows no reason, or an
  *    agent at work shows an old one.
@@ -45,7 +46,7 @@ describe('the terminals figure', () => {
 
   it('reads not counted on Windows and not read where the pool cannot be read (5, 6)', () => {
     expect(terminalsFigure(null, 'win32')).toEqual({ value: 'not counted', sub: 'No shared pool on Windows: each terminal is its own', tone: undefined });
-    expect(terminalsFigure(null, 'darwin')).toEqual({ value: 'not read', sub: 'cannot be read on this machine', tone: undefined });
+    expect(terminalsFigure(null, 'darwin')).toEqual({ value: 'not read', sub: 'with the health samples', tone: undefined });
     expect(terminalsFigure(undefined, 'darwin')).toEqual({ value: 'not read', sub: 'with the health samples', tone: undefined });
   });
 });

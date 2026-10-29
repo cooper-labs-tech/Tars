@@ -16,14 +16,13 @@ const isFull = (t: Terminals, platform: string) => t.max - t.inUse < (platform =
 
 const tone = (t: Terminals, platform: string): Tone | undefined => (isFull(t, platform) ? 'error' : t.nearFull ? 'waiting' : undefined);
 
-/** The figure, its line and its tone. Undefined: not read yet; null: Windows' ConPTY has no pool, or it cannot be read. */
+/**
+ * The figure, its line and its tone. Null on Windows: ConPTY has no pool. Undefined before a reading, or null where
+ * the pool cannot be read: the drawn "not read" (the Audit's L2 on PR 555).
+ */
 export function terminalsFigure(t: Terminals | null | undefined, platform: string): { value: string; sub: string; tone: Tone | undefined } {
-  if (t === undefined) return { value: 'not read', sub: 'with the health samples', tone: undefined };
-  if (t === null) {
-    return platform === 'win32'
-      ? { value: 'not counted', sub: 'No shared pool on Windows: each terminal is its own', tone: undefined }
-      : { value: 'not read', sub: 'cannot be read on this machine', tone: undefined };
-  }
+  if (t === null && platform === 'win32') return { value: 'not counted', sub: 'No shared pool on Windows: each terminal is its own', tone: undefined };
+  if (!t) return { value: 'not read', sub: 'with the health samples', tone: undefined };
   const base = `of ${t.max} on this machine`;
   if (t.tars === null) return { value: String(t.inUse), sub: base, tone: tone(t, platform) };
   const held = t.open === undefined ? `Tars holds ${t.tars}` : t.tars > t.open ? `Tars holds ${t.tars}, ${t.open} open` : `Tars holds ${t.tars} for ${t.open} open`;
