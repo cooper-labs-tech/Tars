@@ -11,7 +11,7 @@ import { twoZones } from '../../../electron/utils/two-zones';
  * How it can fail, written before the code:
  * W1. Two messages from one sender, both due inside the same 30 minutes, are told in two notices, not one with a line
  *     each.
- * W2. A message that went in (or was dropped) before it was due is still told, or still listed.
+ * W2. A message that went in (or was dropped) before it was due is still told.
  * W3. A sender told at T is told again before T + 30 min; or what fell due inside that window is lost instead of told
  *     at T + 30 min.
  * W4. A digest is sent whose every line was told before: the sender is woken with nothing new.
@@ -20,7 +20,7 @@ import { twoZones } from '../../../electron/utils/two-zones';
  * W6. A held message whose target is in a turn (somebody may be typing at it) is told; or it is never told once the
  *     target rests.
  * W7. One sender's messages are told to another sender.
- * W8. The window's list misses a waiting message, keeps one that went in, or the window is not told it changed.
+ * W8. (gone with the window's list, which nothing reads: the QA's F2 on #562)
  * W9. A target's name goes in raw: a line separator in it would put a line of its own in Tars's voice.
  * W10. (the Audit's H1 on #562, written before the fix) The pending reviews multiply: with k held messages of one
  *      sender whose targets stay in a turn, each review schedules k more, every 3 minutes (2^n and 3^n timers measured,
@@ -34,7 +34,6 @@ const MIN = 60_000;
 const clock = (ms: number) => twoZones(ms);
 
 let told: Array<{ senderId: string; text: string }>;
-let changes: number;
 let digest: ReturnType<typeof createWaitsDigest>;
 
 const behind = (over: Partial<WaitInput> = {}): WaitInput => ({
@@ -50,8 +49,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-10-29T15:00:00Z'));
   told = [];
-  changes = 0;
-  digest = createWaitsDigest({ tell: (senderId, text) => told.push({ senderId, text }), changed: () => { changes++; } });
+  digest = createWaitsDigest({ tell: (senderId, text) => told.push({ senderId, text }) });
 });
 afterEach(() => {
   vi.useRealTimers();
@@ -108,6 +106,18 @@ describe('one digest per sender', () => {
     expect(toldTo('orch')).toHaveLength(1);
   });
 
+  it('W4. a review with nothing new wakes nobody, then or at the end of the period (the QA\'s F1 on #562)', () => {
+    digest.track(behind());
+    vi.advanceTimersByTime(10 * MIN + 1000);
+    expect(toldTo('orch')).toHaveLength(1);
+    // A second message whose review comes while the first, told, still waits; it goes in before that review.
+    const second = digest.track(behind({ targetId: 'be', targetName: 'Backend', sentAt: Date.now() }));
+    vi.advanceTimersByTime(5 * MIN);
+    second();
+    vi.advanceTimersByTime(3 * DIGEST_EVERY_MS);
+    expect(toldTo('orch'), 'the first line again, with nothing new').toHaveLength(1);
+  });
+
   it('W7. each sender hears of its own messages only', () => {
     digest.track(behind());
     digest.track(behind({ senderId: 'chat2', targetId: 'be', targetName: 'Backend' }));
@@ -120,11 +130,10 @@ describe('one digest per sender', () => {
 });
 
 describe('what no longer waits, and what may not be told yet', () => {
-  it('W2. a message that went in before it was due is neither told nor listed', () => {
+  it('W2. a message that went in before it was due is not told', () => {
     const cancel = digest.track(behind());
     vi.advanceTimersByTime(5 * MIN);
     cancel();
-    expect(digest.list()).toEqual([]);
     vi.advanceTimersByTime(DIGEST_EVERY_MS);
     expect(told).toEqual([]);
   });
@@ -183,26 +192,5 @@ describe('what no longer waits, and what may not be told yet', () => {
     expect(text.includes(LS)).toBe(false);
     expect(text).toContain('\\u2028');
     expect(text.split(/[\n\r]/).filter((l) => l.startsWith('[Tars] merge'))).toEqual([]);
-  });
-});
-
-describe("the window's list", () => {
-  it('W8. lists every waiting message with who, since when, why and whether it was told, and says when it changes', () => {
-    const at = Date.now();
-    const cancel = digest.track(behind());
-    digest.track(held());
-    expect(changes).toBeGreaterThanOrEqual(2);
-    expect(digest.list()).toEqual([
-      expect.objectContaining({ senderId: 'orch', targetId: 'qa', targetName: 'QA', sentAt: new Date(at).toISOString(), why: 'behind-work', told: false }),
-      expect.objectContaining({ senderId: 'orch', targetId: 'be', why: 'held', reason: 'Its field is being edited.', told: false }),
-    ]);
-    const before = changes;
-    vi.advanceTimersByTime(3 * MIN + 1000);
-    expect(changes, 'told').toBeGreaterThan(before);
-    expect(digest.list().find((w) => w.targetId === 'be')?.told).toBe(true);
-    const beforeCancel = changes;
-    cancel();
-    expect(changes, 'went in').toBeGreaterThan(beforeCancel);
-    expect(digest.list().map((w) => w.targetId)).toEqual(['be']);
   });
 });

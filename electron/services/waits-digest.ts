@@ -40,29 +40,15 @@ export interface WaitInput {
   ready?: () => boolean;
 }
 
-/** One waiting message, as the window reads it. */
-export interface WaitView {
-  id: string;
-  senderId: string;
-  targetId: string;
-  targetName: string;
-  sentAt: string;
-  why: WaitWhy;
-  reason?: string;
-  /** Whether a digest has told its sender of it yet. */
-  told: boolean;
-}
-
 interface Wait extends WaitInput {
   id: string;
+  /** Whether a digest has told its sender of it yet. */
   told: boolean;
 }
 
 export interface WaitsDigestDeps {
   /** Types the digest into the sender's terminal. */
   tell: (senderId: string, text: string) => void;
-  /** The list changed: the window is told. */
-  changed?: () => void;
 }
 
 /** UTC first, then the machine's own, as every notice Tars types into an agent (utils/two-zones.ts, 2.0.6). */
@@ -129,7 +115,6 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
       `[Tars] Your messages not yet in their terminal, as of ${clockOf(now)} (Tars tells you at most every ${DIGEST_EVERY_MS / WAITS_MINUTE_MS} minutes):`,
       ...due.map((w) => lineOf(w, now)),
     ].join('\n'));
-    deps.changed?.();
   }
 
   return {
@@ -137,10 +122,9 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
     track(input: WaitInput): () => void {
       const wait: Wait = { ...input, id: `w${++nextId}`, told: false };
       waits.set(wait.id, wait);
-      deps.changed?.();
       reviewAt(wait.senderId, wait.sentAt + wait.dueAfterMs);
       return () => {
-        if (waits.delete(wait.id)) deps.changed?.();
+        waits.delete(wait.id);
       };
     },
     /** Test seam: the digest is process memory, and a test that drives several fleets through one module needs it empty. */
@@ -149,15 +133,6 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
       toldAt.clear();
       for (const { timer } of pending.values()) clearTimeout(timer);
       pending.clear();
-    },
-    list(): WaitView[] {
-      return [...waits.values()].map((w) => {
-        const reason = reasonOf(w);
-        return {
-          id: w.id, senderId: w.senderId, targetId: w.targetId, targetName: w.targetName, sentAt: new Date(w.sentAt).toISOString(),
-          why: w.why, ...(reason ? { reason } : {}), told: w.told,
-        };
-      });
     },
   };
 }
