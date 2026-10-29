@@ -39,6 +39,7 @@ vi.mock('../../../../electron/utils/broadcast', () => ({
 }));
 
 vi.mock('../../../../electron/core/pty-manager', () => ({
+  launchPrompt: (_sender: unknown, data: string) => data,
   ptyProcesses: new Map(),
   writeProgrammaticInput: vi.fn(),
   rememberTerminalOwner: vi.fn(),

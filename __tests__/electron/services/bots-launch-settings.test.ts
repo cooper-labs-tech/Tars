@@ -60,6 +60,7 @@ import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { handleSlackCommand, sendToSuperAgentFromSlack } from '../../../electron/services/slack-bot';
 import { getSuperAgentInstructionsPath } from '../../../electron/utils';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
+import { withLaunchScripts } from '../../setup/launch-script';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -94,7 +95,7 @@ async function typedAfter(launch: () => Promise<unknown>): Promise<string> {
   await new Promise(resolve => setTimeout(resolve, 450));
   const terminal = spawned[before];
   expect(terminal, 'the launch opened no terminal').toBeDefined();
-  return terminal.write.mock.calls.map(call => String(call[0])).join('');
+  return withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
 }
 
 beforeEach(() => {
@@ -210,7 +211,7 @@ describe('an agent whose CLI is already up', () => {
   };
   const settle = () => new Promise(resolve => setTimeout(resolve, 450));
   // What the field shows: every piece goes in bracket paste markers since 22/10.
-  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('').replace(/\x1b\[20[01]~/g, '');
+  const typed = (terminal: FakePty) => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join('')).replace(/\x1b\[20[01]~/g, '');
 
   it('gets a Slack `start` task typed in as a message, not a launch command', async () => {
     const terminal = live();
@@ -250,7 +251,7 @@ describe('a super agent whose status still says it works, over a bare shell', ()
     return terminal;
   };
   const settle = () => new Promise(resolve => setTimeout(resolve, 450));
-  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+  const typed = (terminal: FakePty) => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
   /** The message went in as the task of a launch, never as a line of its own. */
   const onlyAsTheTaskOfALaunch = (text: string, marker: string) => {
     expect(text).toContain(`cd '${project}' && '`);
@@ -298,7 +299,7 @@ describe('a launch on its way, and the bots (#134)', () => {
   const record = (superAgent: boolean, fields: Partial<AgentStatus> = {}) => agent(superAgent
     ? { id: 'agent-s', name: 'Super Agent (Orchestrator)', role: 'orchestrator', ...fields }
     : { ...fields });
-  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+  const typed = (terminal: FakePty) => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
 
   it.each(entryPoints)('%s waits for a launch on its way, then types into the session it brought up', async (_name, superAgent, send) => {
     const terminal = spawnAgentPty({
@@ -345,7 +346,7 @@ describe('QA #158: a launch slower than the API senders wait, and the bots', () 
     ['Slack `start`', false, () => handleSlackCommand('start worker Rebase onto main', 'C1', async () => undefined, settings)],
     ['Slack message to the super agent', true, () => sendToSuperAgentFromSlack('C1', 'Rebase onto main', async () => undefined, settings)],
   ];
-  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+  const typed = (terminal: FakePty) => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
 
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
@@ -425,7 +426,8 @@ describe('the launch command a bot types into a cold terminal', () => {
     const [command] = writes;
     expect(command, 'a bracketed paste, which the bash 3.2 of the terminal runs as "00~cd"').not.toContain(PASTE_START);
     expect(command).not.toContain(PASTE_END);
-    expect(command.startsWith(`cd '${project}' && `), command.slice(0, 120)).toBe(true);
+    // A launch whose prompt holds a line break (its sender line, the Audit's M3 on #569) sources a script: its command.
+    expect(withLaunchScripts(command).startsWith(`cd '${project}' && `), command.slice(0, 120)).toBe(true);
     expect(command.endsWith('\r'), 'typed and never submitted').toBe(true);
   });
 
@@ -476,7 +478,7 @@ describe('a launch typed into a terminal the bot has just opened (gate of #155)'
     await vi.advanceTimersByTimeAsync(700);
     const terminal = spawned[before];
     expect(terminal, 'the launch opened no terminal').toBeDefined();
-    const typed = () => terminal.write.mock.calls.map(call => String(call[0])).join('');
+    const typed = () => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
     expect(typed(), 'typed before the shell had printed anything').toBe('');
 
     // The prompt comes at 800 ms; 100 ms later the shell is not yet quiet long enough.
@@ -499,7 +501,7 @@ describe('a launch typed into a terminal the bot has just opened (gate of #155)'
     await vi.advanceTimersByTimeAsync(6_000);
     await sent;
 
-    const typed = spawned[before].write.mock.calls.map(call => String(call[0])).join('');
+    const typed = withLaunchScripts(spawned[before].write.mock.calls.map(call => String(call[0])).join(''));
     expect(typed).toContain(`cd '${project}' && `);
   }, 20_000);
 });
@@ -521,7 +523,7 @@ describe('QA #166: the quiet counts from the last thing the shell printed', () =
     const sent = sendToSuperAgentFromSlack('C1', 'Rebase onto main', async () => undefined, settings);
     await vi.advanceTimersByTimeAsync(900);
     const terminal = spawned[before];
-    const typed = () => terminal.write.mock.calls.map(call => String(call[0])).join('');
+    const typed = () => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
     expect(typed(), 'typed 100 ms after the first output').toBe('');
     // The shell spoke at 800 ms, and speaks again at 900 ms.
     terminal.say('bash-3.2$ ');
@@ -552,7 +554,7 @@ describe('an agent whose CLI shows a dialog (the Audit\'s census, 2026-09-24)', 
     return terminal;
   };
   const settle = () => new Promise(resolve => setTimeout(resolve, 1500));
-  const typed = (terminal: FakePty) => terminal.write.mock.calls.map(call => String(call[0])).join('');
+  const typed = (terminal: FakePty) => withLaunchScripts(terminal.write.mock.calls.map(call => String(call[0])).join(''));
   const SUPER = { id: 'agent-s', name: 'Super Agent (Orchestrator)', role: 'orchestrator' } as const;
 
   it('Slack `start` types nothing into it', async () => {

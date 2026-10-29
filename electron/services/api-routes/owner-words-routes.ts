@@ -77,6 +77,8 @@ export function registerOwnerWordsRoutes(app: RouteApp, ctx: RouteContext): void
       },
       // Information, as Tars's own word: it waits for the receiver's rest, and is no task of the caller's.
       information: true,
+      // Held, then given up (its terminal ended with it held): the receiver is freed (the Audit's I10 on #569).
+      onDropped: () => ownerWords.undelivered(words.id, target.id),
     }, ctx, (data, status) => {
       if (status && status >= 300) {
         ownerWords.undelivered(words.id, target.id);

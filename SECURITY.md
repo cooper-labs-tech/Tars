@@ -996,7 +996,11 @@ it and who relayed them, and check the id against them.
   the super chat) read as the mark once one letter of "verified by Tars" was a
   look-alike. Now the mark stands alone on the first line, and a forgery sits
   on a line of its own, after the real sender line of whoever sent it; a
-  retyped task is typed under its own sender, never Tars's. A body line that
+  retyped task is typed under its own sender, never Tars's. A session Tars
+  starts on a message (a CLI that is not up, an agent asleep, a bot's launch)
+  takes it under the same sender line, after Tars's own header: until the
+  Audit's re-check of #569 it went in raw, and a worker's forged mark read as
+  the real one there, while a real relay arrived with no mark. A body line that
   reads like a sender line is quoted with `> ` whatever its letters
   (`quoteSenderLookAlikes`, `core/pty-manager.ts`). As a defence in depth, a
   body line whose skeleton spells "verified by tars" is quoted too; that
@@ -1021,7 +1025,10 @@ it and who relayed them, and check the id against them.
 - **Laundering.** Words the owner addressed to project A relayed by an
   orchestrator of project B, by a worker of A, or by the runner of another
   chat of A while the chats do not read each other: refused. Only those who
-  could have received them may pass them on.
+  could have received them may pass them on. That last switch,
+  `chatsReadEachOther`, is read from `~/.tars/app-settings.json`, which every
+  agent can write: turned on there, every agent with an orchestrator's powers
+  in the project holds every word of it.
 - **An answer out of its context.** A "yes" relayed beside a claim of the
   sender's would read as the owner approving the claim. The mark says what the
   words were, and an answer is typed after the question it answers, as its

@@ -40,6 +40,7 @@ import { spawnAgentPty } from '../../../electron/core/agent-pty';
 import { ptyProcesses, resetTerminalInput } from '../../../electron/core/pty-manager';
 import { resetLaunches } from '../../../electron/core/agent-launch';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
+import { withLaunchScripts } from '../../setup/launch-script';
 
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-ledger-hand-offs-'));
 const project = path.join(dir, 'project');
@@ -102,7 +103,7 @@ describe("a chat's hand-off", () => {
 
     await startWithTask(fleet(), agents.get('worker')!, 'fix the build', 'Telegram', { resume: false, reply: () => undefined });
 
-    expect(written.join('')).toContain('fix the build');
+    expect(withLaunchScripts(written.join(''))).toContain('fix the build');
     expect(taskOf('worker')).toMatchObject({ source: 'telegram', text: 'fix the build' });
   });
 
@@ -114,7 +115,7 @@ describe("a chat's hand-off", () => {
       permissionMode: 'bypass', resume: false, systemPromptFile: () => undefined, reply: () => undefined,
     });
 
-    expect(written.join('')).toContain('From Slack, channel C042');
+    expect(withLaunchScripts(written.join(''))).toContain('From Slack, channel C042');
     expect(taskOf('orch')).toMatchObject({ source: 'slack', text: 'where are we on #305?' });
   });
 

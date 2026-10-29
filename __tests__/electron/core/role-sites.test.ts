@@ -145,7 +145,7 @@ const SITES: Site[] = [
   { file: 'electron/services/bot-core.ts', line: 'isSuperAgent: …,', is: 'powers', why: 'a start from a bot: the skills prefix' },
   { file: 'electron/services/bot-core.ts', line: 'orchestratorMode: …,', is: 'powers', why: 'a start from a bot: the denied tools' },
   { file: 'electron/services/bot-core.ts', line: 'const mcpConfigPath = mcpConfigPathFor(provider, …);', is: 'powers', why: 'a start from a bot: the MCP servers of its role' },
-  { file: 'electron/services/bot-core.ts', line: 'typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, task), skills: [...new Set(agent.skills || [])], isSuperAgent: … });', is: 'powers', why: 'a start from a bot on amp: the skills prefix of the task typed in' },
+  { file: 'electron/services/bot-core.ts', line: 'typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, launchPrompt({ kind: \'channel\', channel: from }, task)), skills: [...new Set(agent.skills || [])], isSuperAgent: … });', is: 'powers', why: 'a start from a bot on amp: the skills prefix of the task typed in' },
   { file: 'electron/core/typed-task.ts', line: "params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>,", is: 'definition', why: 'handed on to the provider, for the skills prefix of a typed task' },
   { file: 'electron/providers/amp-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into amp' },
   { file: 'electron/providers/cli-provider.ts', line: "typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;", is: 'type', why: 'the task a launch types in' },

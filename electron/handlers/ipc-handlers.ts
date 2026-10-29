@@ -886,7 +886,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // the one path with no check on whether the task actually landed. Armed
     // on the terminal the CLI runs in: here on darwin and linux, the shell the
     // line is typed into; on win32 below, once the CLI's terminal is open.
-    if (start.platform !== 'win32') armTaskStartWatch(agent, agent.ptyId, promptWithMemory);
+    if (start.platform !== 'win32') armTaskStartWatch(agent, agent.ptyId, promptWithMemory, options?.sender);
     broadcastToAllWindows('agent:status', {
       type: 'status',
       agentId: id,
@@ -921,7 +921,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     oweToFirstMessage(cliProcess, promptWithMemory ? '' : preamble);
     // amp takes its task typed in, once it runs (core/typed-task.ts).
     typeLaunchTask(cliProvider, cliProcess, { prompt: promptWithMemory, skills: allAgentSkills, isSuperAgent: isSuperAgentCheck });
-    if (start.platform === 'win32') armTaskStartWatch(agent, agent.ptyId, promptWithMemory);
+    if (start.platform === 'win32') armTaskStartWatch(agent, agent.ptyId, promptWithMemory, options?.sender);
 
     // Save updated status
     saveAgents();

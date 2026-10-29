@@ -9,7 +9,7 @@ import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
-import { noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
+import { launchPrompt, noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { killPty } from '../../core/pty-kill';
 import { removeAgent } from '../../core/agent-remove';
@@ -327,7 +327,8 @@ async function spawnAgentSessionInSlot(
   // Its own header says who the agent is: the guide without the line.
   const guide = guideForPrompt(agent, cliProvider.configDir, { identity: false });
   const guideBlock = guide ? `\n\n${guide}` : '';
-  const taskPrompt = `${identityHeader}${guideBlock}${memoryBlock}\n\n${prompt}`;
+  // The message under its sender's line, its mark for a relay (the Audit's M3 on #569).
+  const taskPrompt = `${identityHeader}${guideBlock}${memoryBlock}\n\n${launchPrompt(opts.sender, prompt)}`;
 
   // The conversation to continue: the last session, once per run or after a
   // sleep. The agent's own session is a tombstone once this launch ends its

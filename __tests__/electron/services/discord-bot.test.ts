@@ -131,6 +131,7 @@ import {
 import { registerDiscordHandlers } from '../../../electron/handlers/discord-handlers';
 import { registerDiscordRoutes } from '../../../electron/services/api-routes/discord-routes';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
+import { withLaunchScripts } from '../../setup/launch-script';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -189,7 +190,7 @@ function liveCli(agentId: string): FakePty {
 const QUIET_MS = 450;
 /** Under the test's own 5 s, so a reply that never comes fails with the count. */
 const REPLY_WAIT_MS = 4000;
-const typed = () => spawned.map(t => t.write.mock.calls.map(c => String(c[0])).join('')).join('');
+const typed = () => withLaunchScripts(spawned.map(t => t.write.mock.calls.map(c => String(c[0])).join('')).join(''));
 const said = (channel?: string) => dc.sent.filter(s => !channel || s.channel === channel).map(s => s.content);
 
 /**
@@ -338,7 +339,8 @@ describe('what the Discord bot says', () => {
     await discord({ content: mention('start rest Measure the Usage page'), replies: 1 });
     expect(said()).toEqual(['🚀 Started **Rest**\n\n🐸 Task: Measure the Usage page']);
     expect(typed()).toContain(`--resume '0b7f3c1e-5d2a-4e8b-9c6f-1a2b3c4d5e6f'`);
-    expect(typed()).toContain(`-- 'Measure the Usage page'`);
+    // Under Discord's line (the Audit's M3 on #569).
+    expect(typed()).toContain(`-- 'Message from Discord: \nMeasure the Usage page'`);
     expect(rest.status).toBe('running');
   });
 

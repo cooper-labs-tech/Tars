@@ -317,6 +317,13 @@ async function createAgent(): Promise<AgentStatus> {
 
 const TASK = 'the task';
 /** The claude command a worker in `project` is started with from a window, default permission mode. */
+/** What a bot types as its launch: its task under the channel's line (the Audit's M3 on #569). */
+const BOT_TASK = `Message from Telegram: \n${TASK}`;
+/** The line typed, or the command of the launch script it sources (pty-manager.ts, shellLine). */
+const launchedLine = (typedLine: string): string => {
+  const script = /^\. '([^']+)'\r$/.exec(typedLine)?.[1];
+  return script ? fs.readFileSync(script, 'utf8').split('\n').slice(1).join('\n').replace(/\n$/, '') : typedLine.replace(/\r$/, '');
+};
 const claudeCommand = (prompt: string) => `'claude' --permission-mode default --add-dir ${q(DATA_DIR)} -- ${q(prompt)}`;
 
 beforeEach(() => {
@@ -409,7 +416,8 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     const fleet: BotFleet = { agents, ptyProcesses, settings: () => settings, saveAgents: vi.fn(), initAgentPty: (a) => initAgentPty(a, null, vi.fn(), vi.fn()) };
     await startWithTask(fleet, agent, TASK, 'Telegram', { resume: false, reply: vi.fn() });
     expect(spawned).toHaveLength(1);
-    expect(typed(spawned[0])).toBe(`cd ${q(project)} && ${claudeCommand(TASK)}\r`);
+    // Under Telegram's line (the Audit's M3 on #569): a line with a line break goes in through a launch script.
+    expect(launchedLine(typed(spawned[0]))).toBe(`cd ${q(project)} && ${claudeCommand(BOT_TASK)}`);
     // The QA's F5 on #569: its task keeps its channel, for a retype to type it under (the Audit's M1).
     expect((agent.pendingDelivery as { sender?: unknown } | undefined)?.sender).toEqual({ kind: 'channel', channel: 'Telegram' });
   });
@@ -692,7 +700,7 @@ describe('2-6. on win32', () => {
     expect(reply).toHaveBeenCalledWith('started');
     expect(spawned.every(t => typed(t) === '')).toBe(true);
     const cli = spawned.at(-1)!;
-    expect([cli.file, cli.args, cli.opts.cwd]).toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', '--add-dir', DATA_DIR, '--', TASK), project]);
+    expect([cli.file, cli.args, cli.opts.cwd]).toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', '--add-dir', DATA_DIR, '--', BOT_TASK), project]);
     expect(ptyProcesses.get(agent.ptyId!)).toBe(cli);
   });
 
