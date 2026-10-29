@@ -241,6 +241,12 @@ describe('the user\'s reply', () => {
 
     expect(all('a1')).toContain('Message from the user via Telegram: ');
     expect(all('a1')).toContain('Use the staging database.');
+    // 2.0.6, option e (the QA's F1 and the Audit's L1 on #569): the owner's words, recorded with the question they answer.
+    const { ownerWords } = await import('../../../electron/services/owner-words');
+    expect(ownerWords.listFor({ id: 'a1', projectPath: PROJECT, orchestrator: true, projectOrchestrator: true })
+      .filter((w) => w.text === 'Use the staging database.')).toEqual([expect.objectContaining({
+      via: 'Telegram', about: 'an answer to a question', question: { text: 'Which database?', by: 'Asker', at: T0 },
+    })]);
     expect(all('a2')).toBe('');
     expect(notices().at(-1), "JeanBrasse's answer 24: one short line").toBe('Passed to Asker.');
     // Answered: a second reply to the same message is told the question is closed.
