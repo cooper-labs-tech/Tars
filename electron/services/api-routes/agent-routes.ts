@@ -54,7 +54,7 @@ import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel }
 import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
-import { createWaitsDigest, WAITS_MINUTE_MS, type WaitView } from '../waits-digest';
+import { createWaitsDigest, WAITS_MINUTE_MS } from '../waits-digest';
 import { scheduleTick } from '../../utils/agents-tick';
 import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
@@ -685,7 +685,8 @@ export const HELD_RETELL_MS = 3 * WAITS_MINUTE_MS;
 /**
  * What the agents sent that still waits, told each sender in one digest at
  * most every 30 minutes (services/waits-digest.ts, 2.0.6), typed into its
- * terminal as Tars's; the window reads the same list (`waits:list`).
+ * terminal as Tars's. The window shows held messages per agent and queued
+ * tasks in the agent's queue already: it reads nothing of the digest.
  */
 const waitsDigest = createWaitsDigest({
   tell: (senderId, text) => {
@@ -694,13 +695,7 @@ const waitsDigest = createWaitsDigest({
     if (!pty) return;
     writeProgrammaticInput(pty, text, true, { agentId: senderId, from: 'Tars', sender: { kind: 'tars' } });
   },
-  changed: () => broadcastToAllWindows('waits:changed', waitsDigest.list()),
 });
-
-/** Every message an agent sent that still waits, for the window. */
-export function waitingMessages(): WaitView[] {
-  return waitsDigest.list();
-}
 
 /** Test seam: the digest is process memory (services/waits-digest.ts). */
 export function resetWaitsDigest(): void {

@@ -6,7 +6,7 @@
  * orchestrator that sent ten messages to busy workers was woken ten times. Each such message is tracked here instead,
  * and its sender is told at most once per DIGEST_EVERY_MS, one line per message still waiting: to whom, since when,
  * why. A notice goes only when one of its lines is new, so a sender is never woken with nothing new. The window reads
- * the same list (`waits:list`) and is told when it changes (`waits:changed`), which wakes nobody.
+ * none of it: it shows held messages per agent, and queued tasks in the agent's queue, already.
  */
 import { envelopeValue } from '../utils/envelope-value';
 

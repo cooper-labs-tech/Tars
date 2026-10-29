@@ -284,22 +284,6 @@ interface HeavySlotTicket {
   untilTurnEnds?: true;
   alerts: string[];
 }
-/** A message an agent sent that is not yet in its target's terminal (electron/services/waits-digest.ts, WaitView). */
-interface WaitingMessage {
-  id: string;
-  /** The agent that sent it, and is told in its digest. */
-  senderId: string;
-  targetId: string;
-  targetName: string;
-  /** ISO time it was sent. */
-  sentAt: string;
-  /** 'held': its terminal holds it (a field in use, a dialog); 'behind-work': it goes in at the target's next rest. */
-  why: 'held' | 'behind-work';
-  /** Held: why, as its sender is told. */
-  reason?: string;
-  /** Whether a digest has told its sender of it yet. */
-  told: boolean;
-}
 interface HeavySlotStatus {
   /** The setting: how many runs at once. */
   slots: number;
@@ -2396,17 +2380,6 @@ export interface ElectronAPI {
     onChanged: (callback: (status: HeavySlotStatus) => void) => () => void;
     /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth; and a lease given back without its holder. Tars never stops the run. */
     onAlert: (callback: (alert: HeavySlotStatus['alerts'][number]) => void) => () => void;
-  };
-
-  /**
-   * The messages agents sent that are not yet in their terminal (electron/services/waits-digest.ts, 2.0.6): held
-   * there (its field in use, a dialog open) or waiting behind the target's work. Each sender hears of them in one
-   * digest at most every 30 minutes; the window reads the same list and wakes nobody.
-   */
-  waits?: {
-    list: () => Promise<WaitingMessage[]>;
-    /** The whole list again, on each change: a message tracked, told its sender, gone in or dropped. */
-    onChanged: (callback: (waits: WaitingMessage[]) => void) => () => void;
   };
   // Vault
   vault?: {

@@ -11,7 +11,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * The defect: each message that waited behind an agent's work told its sender on its own, ten minutes on: a sender
  * with ten messages waiting was woken ten times. Now a sender hears of them in one digest at most every 30 minutes, a
- * line each (to whom, since when, why), and the window reads the same list (`waits:list`, `waits:changed`).
+ * line each (to whom, since when, why).
  *
  * The real app on a sandbox HOME, its waits' minute shortened to MINUTE_MS (DOROTHY_WAITS_MINUTE_MS, under DOROTHY_E2E):
  * a wait behind work is due after 10 of them, the digest's period is 30. The real orchestrator MCP server
@@ -24,13 +24,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    end;
  * b. 10 minutes on, dev hears of both in one notice, a line each, naming w1 and w2;
  * c. dev's note to w3, sent after that notice, falls due 10 minutes later, inside the 30: dev hears nothing until the
- *    30 are over, then one notice with the three lines;
- * d. the window's list names the three notes, sent by dev, waiting behind work, told; and the window heard it change.
+ *    30 are over, then one notice with the three lines.
  * Red on 51e902884 (main, 2.0.5): each note tells dev on its own, 10 real minutes on, so nothing comes in the run and b
  * fails. Red on the mutant that drops the digest's period (a sender told whenever a line is new): w3's line comes alone,
  * inside the 30, and c fails.
- * The artefact: values.json (the tool answers, every notice dev received with its time, the window's list), a
- * screenshot, the app's trace with E2E_TRACE=on.
+ * The artefact: values.json (the tool answers, every notice dev received with its time), a screenshot, the app's trace
+ * with E2E_TRACE=on.
  */
 
 const MINUTE_MS = 1000;
@@ -93,10 +92,8 @@ const RECORDER = (file: string) => [
   '',
 ].join('\n');
 
-type Wait = { id: string; senderId: string; targetId: string; targetName: string; sentAt: string; why: string; told: boolean };
 type Api = { electronAPI: {
   agent: { start(p: { id: string; prompt: string }): Promise<unknown>; list(): Promise<Array<{ id: string; cliRunning?: boolean }>> };
-  waits: { list(): Promise<Wait[]>; onChanged(cb: (w: Wait[]) => void): () => void };
 } };
 type ToolAnswer = { text: string; isError: boolean };
 
@@ -189,11 +186,6 @@ for (const newInterface of [false, true]) {
       await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
       await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-      await page.evaluate(() => {
-        const w = window as unknown as Api & { waitsSeen?: number };
-        w.waitsSeen = 0;
-        w.electronAPI.waits.onChanged(() => { w.waitsSeen = (w.waitsSeen ?? 0) + 1; });
-      });
 
       const running = async (id: string) => (await page.evaluate(() => (window as unknown as Api).electronAPI.agent.list())).find((a) => a.id === id)?.cliRunning ?? false;
       for (const id of ['dev', 'w1', 'w2', 'w3']) {
@@ -234,10 +226,7 @@ for (const newInterface of [false, true]) {
       await expect.poll(() => digests().length, { timeout: 15 * MINUTE_MS }).toBe(2);
       const second = digests()[1];
 
-      // d. The window's list.
-      const listed = await page.evaluate(() => (window as unknown as Api).electronAPI.waits.list());
-      const seen = await page.evaluate(() => (window as unknown as { waitsSeen?: number }).waitsSeen ?? 0);
-      keep({ tasks, note1, note2, note3, sentAt, digests: digests(), singles: singles(), digestsInWindow, listed, seen, steps: steps() });
+      keep({ tasks, note1, note2, note3, sentAt, digests: digests(), singles: singles(), digestsInWindow, steps: steps() });
       await stepShot(page, newInterface ? 'agents-new-interface' : 'agents');
 
       expect.soft(note1.text).toContain('as a note for information');
@@ -253,11 +242,6 @@ for (const newInterface of [false, true]) {
       expect.soft(second.at - first.at, 'the second digest came once the thirty were over').toBeGreaterThanOrEqual(30 * MINUTE_MS - 1000);
       for (const name of ['"Worker One"', '"Worker Two"', '"Worker Three"']) expect.soft(second.data).toContain(name);
       expect.soft(singles(), 'a notice of its own for a message').toBe(0);
-      // d.
-      expect.soft(listed.map((w) => [w.senderId, w.targetId, w.why, w.told]).sort()).toEqual([
-        ['dev', 'w1', 'behind-work', true], ['dev', 'w2', 'behind-work', true], ['dev', 'w3', 'behind-work', true],
-      ]);
-      expect.soft(seen, 'the window heard the list change').toBeGreaterThanOrEqual(3);
     } finally {
       for (const s of servers) s.kill();
       await app.close().catch(() => undefined);
