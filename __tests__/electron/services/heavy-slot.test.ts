@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   HeavySlot, type SlotWorld, type SlotMachine,
-  SETTLE_MS, SLOTS_DEFAULT, DISK_RESERVE_GB_PER_RUN, SWAPOUTS_10S_MAX, MACHINE_READ_TIMEOUT_MS,
+  SETTLE_MS, SLOTS_DEFAULT, DISK_RESERVE_GB_PER_RUN, SWAPOUT_MB_10S_MAX, MACHINE_READ_TIMEOUT_MS,
 } from '../../../electron/services/heavy-slot';
 
 /**
@@ -73,6 +73,11 @@ import {
  *      the second one's boot.
  * H29. (F3) The run alerts break when the machine cannot be read (a reading that throws, or never comes): nothing is
  *      said, and nothing throws.
+ * And from the Audit's gate of #573 (M1, 29/10):
+ * H30. Two passes run at once (an ask's own pass beside the timer's, a give-back's, a turn's end): each reads the
+ *      machine, then grants its own head, so two runs start together, past the ceiling (1 included) and inside the
+ *      settle window. Passes run one at a time, a pass asked for while one runs joins the next, and the head is the
+ *      queue's after the reading (a gate that came during it goes first).
  */
 
 type World = SlotWorld & { set: (m: Partial<SlotMachine>) => void; dead: Set<number>; t: number; alerts: Array<{ ticket: string; text: string }>; table: Array<{ pid: number; ppid: number }> | undefined };
@@ -444,10 +449,11 @@ describe('admitted by the machine\'s room (2.0.6)', () => {
     const { w, slot } = await oneHolding();
     const b = await slot.ask(ask(202, 'b'));
     w.t += SETTLE_MS;
-    w.set({ swapOutsPer10s: SWAPOUTS_10S_MAX + 1 });
+    w.set({ swapOutMbPer10s: SWAPOUT_MB_10S_MAX + 1 });
     await slot.pump();
-    expect(slot.get(b.id)?.why).toBe(`waiting for the machine to stop swapping: ${SWAPOUTS_10S_MAX + 1} pages swapped out in 10 s (at most ${SWAPOUTS_10S_MAX})`);
-    w.set({ swapOutsPer10s: SWAPOUTS_10S_MAX });
+    expect(slot.get(b.id)?.why).toBe(`waiting for the machine to stop swapping: ${SWAPOUT_MB_10S_MAX + 1} MB swapped out in 10 s (at most ${SWAPOUT_MB_10S_MAX} MB)`);
+    expect(SWAPOUT_MB_10S_MAX).toBe(16);
+    w.set({ swapOutMbPer10s: SWAPOUT_MB_10S_MAX });
     await slot.pump();
     expect(slot.get(b.id)?.grantedAt).toBeDefined();
   });
@@ -476,7 +482,7 @@ describe('admitted by the machine\'s room (2.0.6)', () => {
 
   it('H26. with nothing holding, the floors alone decide: not the reserve, the settle time or the swapouts', async () => {
     const w = world({ slots: 3 });
-    w.set({ diskFreeGb: 16, swapOutsPer10s: 50_000 });
+    w.set({ diskFreeGb: 16, swapOutMbPer10s: 800 });
     const slot = new HeavySlot(w);
     const a = await slot.ask(ask(102, 'a'));
     await slot.pump();
@@ -539,5 +545,51 @@ describe('the QA\'s gaps on #573', () => {
       await expect(watching).resolves.toBeUndefined();
       expect(w.alerts).toEqual([]);
     } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('one pass at a time (the Audit\'s M1 on #573)', () => {
+  /** A world whose readings come only when released: the passes asked meanwhile are all in flight. */
+  function heldReadings(slots: number) {
+    const w = world({ slots });
+    const pending: Array<() => void> = [];
+    const real = w.machine;
+    w.machine = () => new Promise(resolve => { pending.push(() => { void real().then(resolve); }); });
+    const release = async () => { while (pending.length) { pending.shift()!(); await new Promise(r => setTimeout(r, 0)); } };
+    return { w, release };
+  }
+
+  for (const slots of [1, 3]) {
+    it(`H30. ceiling ${slots}: a gate ask during a normal ask's reading gives one run, the gate`, async () => {
+      const { w, release } = heldReadings(slots);
+      const slot = new HeavySlot(w);
+      const a = await slot.ask(ask(102, 'a'));
+      const first = slot.pump();
+      const g = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+      const second = slot.pump();
+      const third = slot.pump();
+      for (let i = 0; i < 5; i++) await release();
+      await Promise.all([first, second, third]);
+      const holders = slot.snapshot().holders.map(h => h.id);
+      expect(holders).toEqual([g.id]);
+      expect(slot.get(a.id)?.grantedAt).toBeUndefined();
+    });
+  }
+
+  it('H30. with one run holding past its settle time, two asks in flight start one run, not two', async () => {
+    const { w, release } = heldReadings(3);
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    const boot = slot.pump();
+    for (let i = 0; i < 5; i++) await release();
+    await boot;
+    w.t += SETTLE_MS;
+    await slot.ask(ask(202, 'b'));
+    const one = slot.pump();
+    await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    const two = slot.pump();
+    for (let i = 0; i < 5; i++) await release();
+    await Promise.all([one, two]);
+    expect(slot.snapshot().holders).toHaveLength(2);
   });
 });

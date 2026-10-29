@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
 import {
   parseVmStat, parseSwapUsage, parseMemoryPressure, parseMeminfo, swapGrowthPerMin, treeMemory,
-  readMachine, readAgentTrees, parseProcVmstat, swapOutsPer10s,
+  readMachine, readAgentTrees, parseProcVmstat, swapOutMbPer10s, parsePageSize,
 } from '../../../electron/services/health/machine';
 import { cleanSample, onlyKnown, type HealthSample } from '../../../electron/services/health/samples';
 
@@ -34,8 +34,11 @@ import { cleanSample, onlyKnown, type HealthSample } from '../../../electron/ser
  * And for the heavy-run slot's admission by the machine's room (2.0.6, 29/10), as room-check.sh reads it:
  * 8. The pages swapped out are not read (macOS vm_stat's Swapouts counter, Linux /proc/vmstat's pswpout), or a
  *    figure is made up on Windows, where no command line gives them.
- * 9. Two readings' swapouts are not turned into pages per 10 s, or are given for the first reading, a clock set back,
+ * 9. Two readings' swapouts are not turned into MB per 10 s, or are given for the first reading, a clock set back,
  *    a counter that went down (a reboot), or a counter unknown on either side.
+ * 10. (The Audit's I3 on #573, parity.) Swapouts compared in pages: 1,000 pages is 16 MB on Apple silicon (16 KB
+ *     pages) and 4 MB on Linux (4 KB), 4 times stricter there. They are bytes, from each system's own page size
+ *     (vm_stat's header; Linux's `getconf PAGESIZE`, 4 KB when it cannot be read).
  */
 
 const VM_STAT = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
@@ -91,11 +94,24 @@ describe('what the system says, read', () => {
   });
 
   it('9. swapouts per 10 s from two readings, none for the first, a clock or a counter going back, or an unknown', () => {
-    expect(swapOutsPer10s({ at: 0, swapOutPages: 1_000 }, { at: 20_000, swapOutPages: 3_000 })).toBe(1_000);
-    expect(swapOutsPer10s(undefined, { at: 20_000, swapOutPages: 3_000 })).toBeNull();
-    expect(swapOutsPer10s({ at: 20_000, swapOutPages: 1_000 }, { at: 10_000, swapOutPages: 3_000 })).toBeNull();
-    expect(swapOutsPer10s({ at: 0, swapOutPages: 5_000 }, { at: 10_000, swapOutPages: 3_000 })).toBeNull();
-    expect(swapOutsPer10s({ at: 0, swapOutPages: null }, { at: 10_000, swapOutPages: 3_000 })).toBeNull();
+    const MiB = 1024 * 1024;
+    expect(swapOutMbPer10s({ at: 0, swapOutBytes: 8 * MiB }, { at: 20_000, swapOutBytes: 40 * MiB })).toBe(16);
+    expect(swapOutMbPer10s(undefined, { at: 20_000, swapOutBytes: 40 * MiB })).toBeNull();
+    expect(swapOutMbPer10s({ at: 20_000, swapOutBytes: 8 * MiB }, { at: 10_000, swapOutBytes: 40 * MiB })).toBeNull();
+    expect(swapOutMbPer10s({ at: 0, swapOutBytes: 50 * MiB }, { at: 10_000, swapOutBytes: 40 * MiB })).toBeNull();
+    expect(swapOutMbPer10s({ at: 0, swapOutBytes: null }, { at: 10_000, swapOutBytes: 40 * MiB })).toBeNull();
+  });
+
+  it('10. the swapouts in bytes on every system: 1,000 pages is 16 MB on macOS\'s 16 KB pages, 4 MB on Linux\'s 4 KB', () => {
+    expect(parsePageSize('16384\n')).toBe(16384);
+    expect(parsePageSize('4096')).toBe(4096);
+    expect(parsePageSize('')).toBeNull();
+    expect(parsePageSize('undefined\n')).toBeNull();
+    const MiB = 1024 * 1024;
+    // The same 1,000 pages a 10 s on each system, as bytes: 15.6 MB on macOS, 3.9 MB on Linux.
+    expect(swapOutMbPer10s({ at: 0, swapOutBytes: 0 }, { at: 10_000, swapOutBytes: 1_000 * 16384 })).toBe(15.6);
+    expect(swapOutMbPer10s({ at: 0, swapOutBytes: 0 }, { at: 10_000, swapOutBytes: 1_000 * 4096 })).toBe(3.9);
+    expect(MiB).toBe(1_048_576);
   });
 
   it('1. Linux: /proc/meminfo\'s available memory and the swap used', () => {
