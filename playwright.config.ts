@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test';
+import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { DEV_PORT } from './e2e/ports.mjs';
 
@@ -21,6 +22,20 @@ function readWorkers(): number {
   if (raw === undefined || raw === '') return 1;
   if (!/^[1-4]$/.test(raw)) throw new Error(`E2E_WORKERS must be a whole number from 1 to 4, not ${JSON.stringify(raw)}`);
   return Number(raw);
+}
+
+/** What the default project leaves out: the benches, the CLI matrix, and the teardown that reads the whole run. */
+const NOT_DEFAULT = /(known-errors|\.bench|cli-matrix(\.live)?)\.spec\.ts$/;
+
+/**
+ * The default specs that name no interface: the new-interface project runs them again with the new one
+ * (e2e/fixture.mjs seedNewInterface). Those that name it loop both themselves, or choose by E2E_NEW_INTERFACE.
+ */
+function specsNamingNoInterface(): RegExp[] {
+  const dir = path.join(__dirname, 'e2e');
+  return fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.spec.ts') && !NOT_DEFAULT.test(f) && !fs.readFileSync(path.join(dir, f), 'utf8').includes('newInterface'))
+    .map((f) => new RegExp(`[\\\\/]${f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
 }
 
 export default defineConfig({
@@ -51,9 +66,19 @@ export default defineConfig({
       // process's heap for minutes, and the replica clones the runner's own
       // ~/.claude/projects. Run only on purpose, below. Nor is the CLI matrix
       // here: its own project, below.
-      testIgnore: /(known-errors|\.bench|cli-matrix(\.live)?)\.spec\.ts$/,
+      testIgnore: NOT_DEFAULT,
       teardown: 'known-errors',
     },
+    // Both interfaces in one run (E2E_BOTH_INTERFACES=1, the owner's rule of 16/10): the default specs that name no
+    // interface, again with the new one. Until 2.0.6 a throwaway patch of the QA's at each release gate (pass B). No
+    // reference is drawn in the new interface: its pictures are compared nowhere, its page errors are counted as
+    // everywhere else.
+    ...(process.env.E2E_BOTH_INTERFACES === '1' ? [{
+      name: 'new-interface',
+      testMatch: specsNamingNoInterface(),
+      ignoreSnapshots: true,
+      teardown: 'known-errors',
+    }] : []),
     // The check that no tolerated page error has outlived its defect. As a
     // teardown it starts once everything above has finished, even after a
     // failure and whatever order the files ran in, which is what it needs to
