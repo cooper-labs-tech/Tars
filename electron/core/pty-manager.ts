@@ -1002,8 +1002,11 @@ function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): v
     } catch (err) {
       console.error('[pty] a message reached its terminal but its caller threw:', err);
     }
-    // Work handed over, for the task the turn it starts opens (task-ledger.ts).
-    if (item.origin && !item.origin.note) noteHandOff(item.origin.agentId, { ...handOffFrom(item.origin.sender), text: item.origin.task ?? item.data, ref: taskRef });
+    // Work handed over, for the task the turn it starts opens (task-ledger.ts). A note hands none over: never its
+    // sender's task. The turn it opens at rest is Tars's delivery, with no asker, not one the user typed (the Audit's
+    // L1 on #561); typed into a turn under way, it leaves nothing for the next turn to take.
+    const handOff = !item.origin ? undefined : !item.origin.note ? handOffFrom(item.origin.sender) : opensTurn ? { source: 'tars' as const } : undefined;
+    if (item.origin && handOff) noteHandOff(item.origin.agentId, { ...handOff, text: item.origin.task ?? item.data, ref: taskRef });
   }
   const enter = () => {
     // A dialog that opened after the paste would take this Enter as its answer
