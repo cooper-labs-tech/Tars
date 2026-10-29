@@ -127,6 +127,16 @@ export function canSave(panel: { loading: boolean; refused: string | null; conte
   return !panel.loading && !panel.refused && panel.draft !== panel.content;
 }
 
+/**
+ * The panel's opens, numbered: an answer to an open that is no longer the latest is dropped, or a slow read of one
+ * file would fill the panel of the next with its text, and save write it to that file's path (the Audit's FIX FIRST
+ * on PR 572).
+ */
+export function openSequence(): { begin: () => number; isLatest: (open: number) => boolean } {
+  let latest = 0;
+  return { begin: () => ++latest, isLatest: open => open === latest };
+}
+
 type ClaudeDataType = {
   plugins: Array<{ name?: string; displayName?: string; enabled?: boolean }>;
   skills: Array<{ name: string; source: string; path: string; description?: string }>;
@@ -345,6 +355,7 @@ export default function AgentKnowledgeGraph() {
   const [panelDraft, setPanelDraft] = useState('');
   // Why the file opened is not read (openedFile): then it is no draft, and nothing is saved over it.
   const [panelRefused, setPanelRefused] = useState<string | null>(null);
+  const opens = useRef(openSequence());
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelTab, setPanelTab] = useState<'write' | 'preview'>('write');
 
@@ -493,17 +504,15 @@ export default function AgentKnowledgeGraph() {
     // The previous file's draft goes with it: it never lands on this one (canSave).
     setPanelContent('');
     setPanelDraft('');
+    const open = opens.current.begin();
     try {
       let content = '';
+      let refused: string | null = null;
       if (node.kind === 'memory' && node.meta?.filePath) {
-        const opened = openedFile(await window.electronAPI?.memory?.readFile(node.meta.filePath));
-        content = opened.content;
-        setPanelRefused(opened.refused);
+        ({ content, refused } = openedFile(await window.electronAPI?.memory?.readFile(node.meta.filePath)));
       } else if (node.kind === 'instructions' && node.meta?.filePath) {
         const fp = node.meta.filePath.replace(/^~/, '');
-        const opened = openedFile(await window.electronAPI?.fs?.readTextFile(fp));
-        content = opened.content;
-        setPanelRefused(opened.refused);
+        ({ content, refused } = openedFile(await window.electronAPI?.fs?.readTextFile(fp)));
       } else if (node.kind === 'skill' && node.meta?.skillPath) {
         const p = node.meta.skillPath;
         const docs = await window.electronAPI?.fs?.readProjectFiles({
@@ -522,10 +531,13 @@ export default function AgentKnowledgeGraph() {
         content = `# ${node.label}\n\n**Command:** \`${cmd}\`\n\n**Args:** \`${args || 'none'}\``;
         setPanelTab('preview');
       }
+      // Another file was opened since: this answer is not its.
+      if (!opens.current.isLatest(open)) return;
+      setPanelRefused(refused);
       setPanelContent(content);
       setPanelDraft(content);
     } finally {
-      setPanelLoading(false);
+      if (opens.current.isLatest(open)) setPanelLoading(false);
     }
   }, []);
 
