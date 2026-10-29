@@ -238,8 +238,10 @@ export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   }
   for (const { folder, file } of files) {
     const guard = await guardMemoryFile(file);
-    const step = memoryNoteDue(told[file], guard);
-    if (step.told === undefined && told[file] !== undefined) forget.add(file);
+    // Its entry as it stands: a note held at an earlier pass may have been typed while this one waited (the Audit's L1).
+    const entry = readStore(opts.store)[file];
+    const step = memoryNoteDue(entry, guard);
+    if (step.told === undefined && entry !== undefined) forget.add(file);
     const project = opts.owners.get(folder);
     if (!step.tell || !project || held.has(file)) continue;
     held.add(file);

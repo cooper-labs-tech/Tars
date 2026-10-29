@@ -80,6 +80,9 @@ import { execFileSync } from 'node:child_process';
  * M16. That record lands while a pass is between its read of what was told and its write: a pass that writes back
  *     what it read erases the note just typed, which is then told a second time. Each writes what it changed into
  *     the store as it is when it writes.
+ * M17. (The Audit's L1 at c79e8089f.) That note typed while a later pass waits on a file before its own: the pass,
+ *     deciding from what it read at its start, finds it still owed and tells it twice. A pass decides each file
+ *     against its entry as it stands.
  * And from the QA's F1 on #565 at ea7da32d0 (29/10):
  * S6b. The buffer takes the file's own size, so without the open file's size checked first, a file past the ceiling
  *     gets a buffer of its whole size before it is refused (3 MiB for 3 MiB; a MEMORY.md of a few GB, that much in
@@ -588,5 +591,29 @@ describe('a note held behind a draft', () => {
     fs.writeFileSync(path.join(dir('-c'), 'MEMORY.md'), probeFile(150, 200));
     await pass();
     expect(Object.keys(JSON.parse(fs.readFileSync(store, 'utf8'))), 'the note typed during the pass, erased by its write').toEqual([path.join(dir('-a'), 'MEMORY.md')]);
+  });
+
+  it('M17. a note typed while a later pass waits on a file before its own is not told again by that pass', async () => {
+    const { runMemoryGuardPass } = await import('../../../electron/services/memory-guard');
+    const home = path.join(tmp, 'mid-home');
+    const dir = (folder: string) => path.join(home, '.claude', 'projects', folder, 'memory');
+    for (const f of ['-a', '-z']) fs.mkdirSync(dir(f), { recursive: true });
+    fs.writeFileSync(path.join(dir('-z'), 'MEMORY.md'), probeFile(150, 200));
+    const store = path.join(tmp, 'mid-store.json');
+    const asked: string[] = [];
+    let typeZ: ((d: string) => void) | undefined;
+    // Z waits behind a draft; A's delivery lets Z's go, then waits behind a draft of its own.
+    const tell = (project: string) => {
+      asked.push(project);
+      if (project === '/p/z') return new Promise<string>(resolve => { typeZ = resolve; });
+      typeZ!('typed');
+      return new Promise<string>(() => {});
+    };
+    const pass = () => runMemoryGuardPass({ home, store, owners: new Map([['-a', '/p/a'], ['-z', '/p/z']]), tell, tellWaitMs: 50 });
+    await pass();
+    // A is read before Z: Z's note is typed while this pass waits on A, before it reaches Z.
+    fs.writeFileSync(path.join(dir('-a'), 'MEMORY.md'), probeFile(150, 200));
+    await pass();
+    expect(asked, 'the note typed mid-pass told a second time').toEqual(['/p/z', '/p/a']);
   });
 });
