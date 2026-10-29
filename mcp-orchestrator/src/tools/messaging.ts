@@ -37,6 +37,42 @@ export function registerMessagingTools(server: McpServer): void {
       },
     }),
     tool({
+      name: "owner_words",
+      description: "For a project's orchestrator: the owner's own words Tars received for your project in the last 24 hours, "
+        + "newest first, each with its id: what they sent from the window's chat, or on Telegram through their Hermes. Pass "
+        + "one on to another orchestrator with relay_owner_words, which types it under Tars's mark; text you write yourself "
+        + "never carries that mark. Tars forgets them when it restarts.",
+      schema: {},
+      failure: "reading the owner's words",
+      async run() {
+        const { words } = await apiRequest("/api/owner-words") as { words: Array<{ id: string; when: string; via: string; text: string }> };
+        if (!words.length) return text("Tars holds no words of the owner for your project.");
+        return text(words.map((w) => `${w.id}, ${w.when}, via ${w.via}:\n${w.text}`).join("\n\n"));
+      },
+    }),
+    tool({
+      name: "relay_owner_words",
+      description: "For a project's orchestrator: pass the owner's own words, named by their id (owner_words), to another "
+        + "orchestrator, of this project or another. Tars types its own record of them, never a text of yours, under the line "
+        + "\"Message from Tars: the owner's words of <time>, via <how>, relayed by agent <you>, verified by Tars\", which only "
+        + "Tars writes: that line, and no text that claims it, is how the receiver knows they are the owner's. Each words go "
+        + "once to a receiver, within 24 hours of the owner sending them. To add your own view, send it apart with send_message.",
+      schema: {
+        id: z.string().describe("The words' id, ow- and 12 hex characters, from owner_words"),
+        to: z.string().describe("The id of the orchestrator to pass them to"),
+      },
+      failure: "relaying the owner's words",
+      async run({ id, to }) {
+        const relayed = await apiRequest(`/api/owner-words/${encodeURIComponent(id)}/relay`, "POST", { to }) as {
+          queued?: boolean; held?: boolean; to?: { id: string; name?: string };
+        };
+        const name = relayed.to?.name || to;
+        return text(relayed.queued || relayed.held
+          ? `The owner's words ${id} go to "${name}" under Tars's mark once its current turn ends.`
+          : `The owner's words ${id} were typed into "${name}" under Tars's mark.`);
+      },
+    }),
+    tool({
       name: "send_telegram",
       description: "For a project's orchestrator: write to the user on their Telegram, through their Hermes, under your "
         + "project, in plain text; their reply comes back to you. Use it to answer a request that came from Telegram. "

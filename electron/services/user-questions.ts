@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { redactSecrets } from '../utils/redact-secrets';
+import { ownerWords } from './owner-words';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { chatNameOf, namedChatOf } from '../core/chat-inbox';
 import { chatTag } from './chat-addressing';
@@ -187,6 +188,8 @@ async function answerQuestion(reply: RelayReply, now: number): Promise<void> {
     await tell('Only a text reply is typed into the agent\'s terminal.');
     return;
   }
+  // The owner's own words, for the project that asked: what its orchestrator may relay under Tars's mark (SECURITY.md §8).
+  ownerWords.record({ text: answer, via: 'Telegram', projectPath: q.projectPath });
   const agent = agents.get(q.agentId);
   const terminal = agent?.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   // A chat asked, and its runner sleeps: woken with the answer, within the chats' limit (PR F).
