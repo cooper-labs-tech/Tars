@@ -1299,6 +1299,12 @@ export interface FleetResources {
   measuring?: { done: number; total: number } | null;
   error?: string | null;
   projects: ProjectResources[];
+  /**
+   * The machine's terminals: in use out of the limit, the PTY masters Tars holds and the terminals it has open (more
+   * masters than terminals is a leak, which only a restart of Tars frees), and whether past 80 % of the limit. Null
+   * where there is no such pool (Windows) or it cannot be read.
+   */
+  terminals?: { inUse: number; max: number; tars: number | null; open?: number; nearFull: boolean } | null;
 }
 
 export interface OrphanListing {

@@ -8,6 +8,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * How it fails, written before the code (28/10):
  * R1. Each read runs `ps`: two reads within 2 s must share one table.
  * R2. A table is served past 2 s: a read 2 s after the last `ps` runs it again.
+ * And from the PTY leak of 28-29/10 (2.0.6, item 1):
+ * R3. The read does not carry the machine's terminals (in use, limit, Tars's masters, its open terminals), or does
+ *     not say when they are past 80 % of the limit; where there is no such pool (Windows) it makes one up.
  */
 
 const { ps } = vi.hoisted(() => ({ ps: vi.fn() }));
@@ -22,6 +25,8 @@ vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] }, app: { 
 vi.mock('../../../electron/core/agent-manager', () => ({ agents: new Map() }));
 vi.mock('../../../electron/core/pty-manager', () => ({ ptyProcesses: new Map() }));
 vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.fn() }));
+const { pool } = vi.hoisted(() => ({ pool: { now: null as null | { inUse: number; max: number; tars: number | null; open?: number } } }));
+vi.mock('../../../electron/core/pty-spawn', () => ({ readTerminals: () => pool.now }));
 
 beforeEach(() => {
   vi.resetModules();
@@ -49,5 +54,17 @@ describe.skipIf(process.platform === 'win32')('the process table', () => {
     vi.advanceTimersByTime(2_000);
     await readFleetResources();
     expect(ps).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the machine\'s terminals', () => {
+  it('R3. the read carries them, says when they are past 80 %, and null where there is no pool', async () => {
+    const { readFleetResources } = await import('../../../electron/services/fleet-resources-runtime');
+    pool.now = { inUse: 51, max: 511, tars: 22, open: 18 };
+    expect((await readFleetResources()).terminals).toEqual({ inUse: 51, max: 511, tars: 22, open: 18, nearFull: false });
+    pool.now = { inUse: 409, max: 511, tars: 400, open: 400 };
+    expect((await readFleetResources()).terminals).toEqual({ inUse: 409, max: 511, tars: 400, open: 400, nearFull: true });
+    pool.now = null;
+    expect((await readFleetResources()).terminals).toBeNull();
   });
 });
