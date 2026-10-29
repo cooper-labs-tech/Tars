@@ -237,6 +237,7 @@ describe('a message still held a few minutes on', () => {
     vi.advanceTimersByTime(2000 + PROGRAMMATIC_SUBMIT_DELAY_MS);
 
     expect(told()).toMatch(/1212-Backend/);
+    expect(told(), 'its time in both zones (2.0.6, option d)').toMatch(/of \d\d:\d\d UTC/);
     expect(told()).toMatch(/still not/);
     expect(told()).toMatch(/typing|field/);
     expect(told()).toMatch(/only a person/i);

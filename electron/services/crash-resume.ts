@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import type { PreviousRun } from './run-state';
 import { envelopeValue } from '../utils/envelope-value';
+import { twoZones } from '../utils/two-zones';
 
 /**
  * After Tars stopped abruptly, the agents that were working are resumed with a
@@ -63,10 +64,8 @@ export function turnCutOf(file: string | undefined): TurnCut {
   return { kind: 'unknown' };
 }
 
-function clock(at: number): string {
-  const d = new Date(at);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
+/** UTC first, then the machine's own (utils/two-zones.ts, 2.0.6). */
+const clock = (at: number): string => twoZones(at);
 
 /** One line, in Tars's words: never the task's own. */
 export function resumeNote(input: {
