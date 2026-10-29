@@ -54,6 +54,7 @@ import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel }
 import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
+import { createWaitsDigest, type WaitView } from '../waits-digest';
 import { scheduleTick } from '../../utils/agents-tick';
 import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
@@ -681,66 +682,60 @@ function heldReasonFor(agent: AgentStatus): string {
  */
 export const HELD_RETELL_MS = 3 * 60_000;
 
-const clockOf = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+/**
+ * What the agents sent that still waits, told each sender in one digest at
+ * most every 30 minutes (services/waits-digest.ts, 2.0.6), typed into its
+ * terminal as Tars's; the window reads the same list (`waits:list`).
+ */
+const waitsDigest = createWaitsDigest({
+  tell: (senderId, text) => {
+    const from = agents.get(senderId);
+    const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
+    if (!pty) return;
+    writeProgrammaticInput(pty, text, true, { agentId: senderId, from: 'Tars', sender: { kind: 'tars' } });
+  },
+  changed: () => broadcastToAllWindows('waits:changed', waitsDigest.list()),
+});
+
+/** Every message an agent sent that still waits, for the window. */
+export function waitingMessages(): WaitView[] {
+  return waitsDigest.list();
+}
+
+/** Test seam: the digest is process memory (services/waits-digest.ts). */
+export function resetWaitsDigest(): void {
+  waitsDigest.reset();
+}
 
 /**
- * Tells the agent that sent a message, once, when it is still held
- * HELD_RETELL_MS on: why, and that only a person at the terminal ends the
- * wait. A target in a turn may have somebody typing at it: it is looked at
- * again later. Returns what cancels it, for when the message goes in or is
- * dropped.
+ * A message still held HELD_RETELL_MS on, put in its sender's digest: why,
+ * and that only a person at the terminal ends the wait. A target in a turn
+ * may have somebody typing at it: it is looked at again later. Returns what
+ * ends it, for when the message goes in or is dropped.
  */
 function retellWhileHeld(target: AgentStatus, sender: MessageSender | undefined, sentAt: number): () => void {
   if (sender?.kind !== 'agent' || sender.id === target.id) return () => undefined;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const arm = () => {
-    timer = setTimeout(() => {
-      if (target.status === 'running') { arm(); return; }
-      const from = agents.get(sender.id);
-      const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
-      if (!pty) return;
-      // Quoted as data, as every value a note of Tars's carries outside a fence
-      // (utils/envelope-value.ts): a name with a line separator in it would
-      // otherwise put a line of its own in Tars's voice (the Audit's gate of #314).
-      const name = envelopeValue(target.name || target.id);
-      const minutes = Math.max(1, Math.round((Date.now() - sentAt) / 60_000));
-      writeProgrammaticInput(pty,
-        `[Tars] Your message to ${name} of ${clockOf(sentAt)} is still not in its terminal, ${minutes} minutes on. `
-        + `${heldReasonFor(target)} Only a person at that terminal can end this wait: if nobody is there, tell the user, `
-        + `or stop ${name} and start it again, which drops the message, and send it again then.`,
-        true, { agentId: sender.id, from: 'Tars', sender: { kind: 'tars' } });
-    }, HELD_RETELL_MS);
-    timer.unref?.();
-  };
-  arm();
-  return () => { if (timer) clearTimeout(timer); };
+  return waitsDigest.track({
+    senderId: sender.id, targetId: target.id, targetName: target.name || target.id, sentAt, why: 'held',
+    reason: () => heldReasonFor(target), dueAfterMs: HELD_RETELL_MS, ready: () => target.status !== 'running',
+  });
 }
 
 /** How long a message waits behind an agent's work before its sender hears it still waits. */
 export const BEHIND_WORK_RETELL_MS = 10 * 60_000;
 
 /**
- * Tells the agent that sent a message held behind the target's work (a run,
- * or a turn) once, BEHIND_WORK_RETELL_MS on, that it still waits and goes in
- * at the target's next rest: under steady work it heard only `queued` at the
- * start (the Audit's L-D on 9d9a7ad9). Nothing to resend. Returns what cancels
- * it, for when the message goes in or is dropped.
+ * A message held behind the target's work (a run, or a turn)
+ * BEHIND_WORK_RETELL_MS on, put in its sender's digest: it still waits and
+ * goes in at the target's next rest (the Audit's L-D on 9d9a7ad9). Nothing to
+ * resend. Returns what ends it, for when the message goes in or is dropped.
  */
 function retellBehindWork(target: AgentStatus, sender: MessageSender | undefined, sentAt: number): () => void {
   if (sender?.kind !== 'agent' || sender.id === target.id) return () => undefined;
-  const timer = setTimeout(() => {
-    const from = agents.get(sender.id);
-    const pty = from?.ptyId ? ptyProcesses.get(from.ptyId) : undefined;
-    if (!pty) return;
-    const name = envelopeValue(target.name || target.id);
-    const minutes = Math.max(1, Math.round((Date.now() - sentAt) / 60_000));
-    writeProgrammaticInput(pty,
-      `[Tars] Your message to ${name} of ${clockOf(sentAt)} still waits for ${name}'s work to end, ${minutes} minutes on: `
-      + 'it goes in at its next rest. Nothing needs resending.',
-      true, { agentId: sender.id, from: 'Tars', sender: { kind: 'tars' } });
-  }, BEHIND_WORK_RETELL_MS);
-  timer.unref?.();
-  return () => clearTimeout(timer);
+  return waitsDigest.track({
+    senderId: sender.id, targetId: target.id, targetName: target.name || target.id, sentAt, why: 'behind-work',
+    dueAfterMs: BEHIND_WORK_RETELL_MS,
+  });
 }
 
 /** Who a message into an agent's terminal is from, as verified: the agent whose

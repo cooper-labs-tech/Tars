@@ -130,7 +130,7 @@ import { startAgentWatch, watchInterruptedTurns, tellQueuesKept } from './servic
 import { endRequestsAtLaunch, endUnresumed } from './core/task-requests';
 import { keepQueue, keptQueueRefs, restoreQueues } from './services/agent-queues';
 import { oneTaskQueue } from './core/one-task';
-import { replayQueuedItem } from './services/api-routes/agent-routes';
+import { replayQueuedItem, waitingMessages } from './services/api-routes/agent-routes';
 import { startTaskWatch, turnInterrupted } from './services/task-watch';
 import { cliRunningIn } from './core/agent-pty';
 import { beginRun, type PreviousRun } from './services/run-state';
@@ -788,6 +788,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('heavySlot:status', () => slotStatus());
   // The owner gives a lease back from the window (the Audit's M2 on #537); its holder and orchestrator are told.
   ipcMain.handle('heavySlot:giveBack', (_e, id: unknown) => typeof id === 'string' && giveSlotBackForOwner(id));
+  // What agents sent that is not yet in its terminal, as each sender's digest tells it (services/waits-digest.ts).
+  ipcMain.handle('waits:list', () => waitingMessages());
   // codex's turns, read from its session log and posted as its terminal's hooks
   // would post them, with that terminal's own token (services/codex-sessions.ts).
   // What a CLI without Tars's hooks would have posted, posted as its terminal,

@@ -768,6 +768,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  // The messages agents sent that are not yet in their terminal (services/waits-digest.ts): what each sender's digest
+  // tells it, read by the window without waking anyone.
+  waits: {
+    list: () => ipcRenderer.invoke('waits:list'),
+    onChanged: (callback: (waits: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, waits: unknown) => callback(waits);
+      ipcRenderer.on('waits:changed', listener);
+      return () => ipcRenderer.removeListener('waits:changed', listener);
+    },
+  },
+
   // Vault
   vault: {
     // Each project's folder, every folder of it (services/vault-project-files.ts): by key, place and name, never a path.
