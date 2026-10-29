@@ -151,6 +151,7 @@ import * as mcpNode from '../../electron/utils/mcp-node';
 import { mcpNodeCommand } from '../../electron/utils/mcp-node';
 import { delegateOverAcp } from '../../electron/services/acp/delegate';
 import { setupMcpOrchestrator, setupOrchestratorSetupHandler } from '../../electron/services/mcp-orchestrator';
+import { stopSharedMcp } from '../../electron/services/mcp-shared';
 import { ipcMain } from 'electron';
 
 const launcher = () => path.join(home(), '.tars', 'bin', 'tars-mcp-node');
@@ -177,6 +178,9 @@ afterAll(() => fs.promises.rm(scratch, { recursive: true, force: true, maxRetrie
 // Ended by its id in the test's own teardown, stopped or not, whatever the run's own stop got to (leftover-processes.ts).
 const leftovers = new Leftovers();
 afterEach(() => { leftovers.push(...takePidsRecordedIn(scratch)); leftovers.end(); });
+// The shared servers a setup started end with the test that started them, as the app's quit ends them: none restarts
+// or gives up later, under whatever HOME is set by then (22).
+afterEach(() => stopSharedMcp());
 
 // 30 s, not vitest's 5: these cases run the launcher through a real shell, and under a
 // gate's load (load average 100 to 180 on 2026-10-01) case 13 took 6.8 s and case 3
