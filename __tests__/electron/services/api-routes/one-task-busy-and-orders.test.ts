@@ -821,6 +821,14 @@ describe('after the Audit\'s gate of 6fb17592 on #453', () => {
   });
 });
 
+/*
+ * And from the Audit's gate of #561, written before the fix:
+ * N5. (L2) The note's hand-off is recorded with its sender as requester: the turn it opens is that sender's task. No
+ *     unit began that turn, so the mutant passed all 34.
+ * N6. (L1) The turn a note opens at rest is a task with no source of its own: the ledger counts it as one the user
+ *     typed in that terminal, with its tokens and cost.
+ * N7. A note typed into a turn under way leaves a hand-off behind, and the next turn the user types takes it.
+ */
 describe('a note, from whoever sends it (2.0.6, option a)', () => {
   /** The tasks the ledger holds that name `requester` as their asker. */
   const askedBy = (requester: string) => (liveTaskLedger()?.tasks() ?? []).filter((t) => t.requesterAgentId === requester);
@@ -849,6 +857,11 @@ describe('a note, from whoever sends it (2.0.6, option a)', () => {
     expect(agent.workHandedAt).toBe(handedBefore);
     expect(askedBy('orch')).toEqual([]);
     expect(oneTaskQueue.queued('cl')).toEqual([]);
+    // N5, N6 (the Audit's L2 and L1 on #561): the turn the note opens, begun as its CLI reports it.
+    begin(agent, `Message from agent "ORCH" ("orch"): [Note for information from "ORCH", your project's orchestrator: it is not a task, and asks nothing of you unless your own work needs it.] NOTE-OPT the release is cut`);
+    expect(askedBy('orch'), 'N5. the note is no task of its sender').toEqual([]);
+    const noteTask = (liveTaskLedger()?.tasks() ?? []).find((t) => t.text.includes('NOTE-OPT'));
+    expect(noteTask, 'N6. its turn is Tars\'s delivery, not a task the user typed').toMatchObject({ source: 'tars', requesterAgentId: null });
   });
 
   it('N2. mode note-now: typed into the turn under way, and that turn stays the task it runs, for its asker', async () => {
@@ -867,6 +880,12 @@ describe('a note, from whoever sends it (2.0.6, option a)', () => {
     expect(agent.requestedBy).toEqual(link);
     expect(agent.workHandedAt).toBe(handed);
     expect(askedBy('orch')).toEqual([]);
+    // N7: typed into the turn under way, it leaves nothing for the next turn to take: what the user types next is theirs.
+    runs[0].end();
+    await later(1500);
+    begin(agent, 'USER-TURN look at the logs');
+    const next = (liveTaskLedger()?.tasks() ?? []).find((t) => t.text.includes('USER-TURN'));
+    expect(next, 'N7. the next turn is the user\'s').toMatchObject({ source: 'terminal', requesterAgentId: null });
   });
 
   it('N3. a note to an agent with no session open starts none, and says why, to the orchestrator too', async () => {
