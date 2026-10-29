@@ -1926,6 +1926,21 @@ Six sources sit behind one interface (`electron/services/memory-hub.ts`):
 | `gbrain` | remote streamable-HTTP MCP server |
 | `honcho` | remote streamable-HTTP MCP server |
 
+**A project's MEMORY.md past what Claude Code loads** (2.0.6, `services/memory-guard.ts`). Measured on Claude Code
+2.1.312 with the real CLI (29/10): it loads the first 200 lines of the trimmed file, then cuts at the last line break
+before 25,000 characters (the "24.4 KB" it names; UTF-16 units, so an accented letter counts one), and says so only to
+the model, in a `> WARNING: MEMORY.md is ...` line after what it kept. No line is cut on its own: a 320-character line
+reaches the model whole (the ` …` some indexes show are in the files). Every 5 minutes Tars reads each project's
+MEMORY.md under `~/.claude/projects` and each Claude account's folder (`~/.claude-accounts/<id>/projects`); past 22 KB
+or 180 lines it types a note into the project's orchestrator, once, and again only when its size or its lines grew past
+what was told, or it went from near to cut (what was told is kept in `~/.tars/memory-guard.json`, so a restart does
+not repeat it; a note not typed is owed to a later pass). Only a regular file is read, its link not followed (a FIFO
+or a link named MEMORY.md is neither watched nor read), without blocking the main process, and at most 1 MiB of it:
+a larger one is said too large to read whole.
+A folder belongs to the project of an agent working in it, through its project or its worktree. The Memory page's
+rows carry the same (`guard` on `memory:list-projects`: state, size, lines, what is cut from which line, and the
+words). To see it by hand: `wc -lc` the file, against 200 lines and 25,000 characters.
+
 Both remote backends are spoken to directly over MCP (`electron/services/mcp-http-client.ts`,
 protocol `2025-06-18`, `Accept: application/json, text/event-stream`, 15 s timeout), so
 "Connected" in the UI means a real `initialize` + `tools/list` round trip, not "a URL is filled

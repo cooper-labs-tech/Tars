@@ -5,6 +5,7 @@ import { projectFolders } from './project-index';
 import { memoryProjectDirName, knownProjectsByFolder, claudeProjectDirNames } from '../platform/claude-project-dir';
 import { unlinkRetryingSync } from '../platform/rename-replacing';
 import { spellingsOf } from '../utils/resume-session';
+import { guardMemoryFile, type MemoryGuard } from './memory-guard';
 
 export interface MemoryFile {
   name: string;
@@ -32,6 +33,11 @@ export interface ProjectMemory {
    * no MEMORY.md, and are kept where they were.
    */
   olderCopy?: string;
+  /**
+   * What Claude Code loads of this row's MEMORY.md, and what it does not (services/memory-guard.ts, 2.0.6): on a
+   * Claude row whose folder holds one; `unread` when it could not be read.
+   */
+  guard?: MemoryGuard;
 }
 
 const CLAUDE_PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
@@ -204,6 +210,11 @@ async function readProjectRow(provider: string, folderName: string, memoryDir: s
       project.hasMemory = files.length > 0;
     } catch {
       // Skip unreadable directories
+    }
+    const entrypoint = path.join(memoryDir, 'MEMORY.md');
+    // Read as the guard reads it: a regular file only, its link not followed, at most 1 MiB (memory-guard.ts).
+    if (provider === 'claude' && await fs.promises.lstat(entrypoint).then(() => true, () => false)) {
+      project.guard = await guardMemoryFile(entrypoint);
     }
   }
   return project;
