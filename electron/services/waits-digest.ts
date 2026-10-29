@@ -9,6 +9,7 @@
  * none of it: it shows held messages per agent, and queued tasks in the agent's queue, already.
  */
 import { envelopeValue } from '../utils/envelope-value';
+import { twoZones } from '../utils/two-zones';
 
 const askedMinute = Number(process.env.DOROTHY_WAITS_MINUTE_MS);
 /**
@@ -64,7 +65,8 @@ export interface WaitsDigestDeps {
   changed?: () => void;
 }
 
-const clockOf = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+/** UTC first, then the machine's own, as every notice Tars types into an agent (utils/two-zones.ts, 2.0.6). */
+const clockOf = (ms: number) => twoZones(ms);
 const reasonOf = (wait: WaitInput) => (typeof wait.reason === 'function' ? wait.reason() : wait.reason);
 
 function lineOf(wait: Wait, now: number): string {
@@ -85,9 +87,21 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
   const toldAt = new Map<string, number>();
   let nextId = 0;
 
-  const later = (fn: () => void, ms: number) => {
-    const timer = setTimeout(fn, Math.max(0, ms));
+  /**
+   * One pending review per sender, at the earliest moment any of its messages needs looking at: each review asked for
+   * one more per held message whose target was in a turn, and they multiplied every 3 minutes (the Audit's H1 on #562).
+   */
+  const pending = new Map<string, { at: number; timer: ReturnType<typeof setTimeout> }>();
+  const reviewAt = (senderId: string, at: number) => {
+    const held = pending.get(senderId);
+    if (held && held.at <= at) return;
+    if (held) clearTimeout(held.timer);
+    const timer = setTimeout(() => {
+      pending.delete(senderId);
+      review(senderId);
+    }, Math.max(0, at - Date.now()));
     timer.unref?.();
+    pending.set(senderId, { at, timer });
   };
   const isDue = (wait: Wait, now: number) => now - wait.sentAt >= wait.dueAfterMs && (wait.ready?.() ?? true);
 
@@ -95,13 +109,18 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
   function review(senderId: string): void {
     const now = Date.now();
     const mine = [...waits.values()].filter((w) => w.senderId === senderId);
-    // Not yet tellable (a target in a turn): looked at again after the same wait.
-    for (const w of mine) if (!w.told && now - w.sentAt >= w.dueAfterMs && !(w.ready?.() ?? true)) later(() => review(senderId), w.dueAfterMs);
+    for (const w of mine) {
+      if (w.told) continue;
+      // Not due yet: looked at when it is (its own time may have been taken by an earlier one's).
+      if (now - w.sentAt < w.dueAfterMs) reviewAt(senderId, w.sentAt + w.dueAfterMs);
+      // Not yet tellable (a target in a turn): looked at again after the same wait.
+      else if (!(w.ready?.() ?? true)) reviewAt(senderId, now + w.dueAfterMs);
+    }
     const due = mine.filter((w) => isDue(w, now));
     if (!due.some((w) => !w.told)) return;
     const last = toldAt.get(senderId);
     if (last !== undefined && now - last < DIGEST_EVERY_MS) {
-      later(() => review(senderId), last + DIGEST_EVERY_MS - now);
+      reviewAt(senderId, last + DIGEST_EVERY_MS);
       return;
     }
     for (const w of due) w.told = true;
@@ -119,7 +138,7 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
       const wait: Wait = { ...input, id: `w${++nextId}`, told: false };
       waits.set(wait.id, wait);
       deps.changed?.();
-      later(() => review(wait.senderId), wait.sentAt + wait.dueAfterMs - Date.now());
+      reviewAt(wait.senderId, wait.sentAt + wait.dueAfterMs);
       return () => {
         if (waits.delete(wait.id)) deps.changed?.();
       };
@@ -128,6 +147,8 @@ export function createWaitsDigest(deps: WaitsDigestDeps) {
     reset(): void {
       waits.clear();
       toldAt.clear();
+      for (const { timer } of pending.values()) clearTimeout(timer);
+      pending.clear();
     },
     list(): WaitView[] {
       return [...waits.values()].map((w) => {
