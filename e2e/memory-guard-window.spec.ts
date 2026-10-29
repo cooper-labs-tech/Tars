@@ -16,6 +16,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    row, or words other than guard.notice, or not the notice whole in the row's title;
  * 2. a project close to a limit (185 short lines: past 180) shows nothing, or the same tone as a cut one;
  * 3. a project well under both limits shows a notice;
+ * 3b. a MEMORY.md larger than Tars reads of it (over 1 MB: PR 558's second round, a 'cut' with no figures) shows
+ *    anything but its notice on its row, in the cut tone;
  * 4. the open MEMORY.md of the cut project does not carry the notice whole above it;
  * 5. an uncaught error in the page.
  * Once with the classic shell and once with the new interface (Brain from More). The artefact: values.json (the
@@ -41,7 +43,7 @@ for (const newInterface of [false, true]) {
       fs.writeFileSync(path.join(memoryDir, 'MEMORY.md'), text);
       return project;
     };
-    const projects = [seed('harbor', lines(150, 200)), seed('meridian', lines(185, 24)), seed('quay', lines(10, 24))];
+    const projects = [seed('harbor', lines(150, 200)), seed('meridian', lines(185, 24)), seed('quay', lines(10, 24)), seed('dock', 'y'.repeat(2_200_000))];
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify(projects));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
@@ -81,6 +83,7 @@ for (const newInterface of [false, true]) {
       const guardOf = (name: string) => rows.find((r) => r.projectName === name)?.guard;
       expect(guardOf('harbor')?.state).toBe('cut');
       expect(guardOf('meridian')?.state).toBe('near');
+      expect(guardOf('dock')?.state).toBe('cut');
       const cut = guardOf('harbor')!.notice!;
       const near = guardOf('meridian')!.notice!;
 
@@ -97,6 +100,10 @@ for (const newInterface of [false, true]) {
       await expect(meridianLine).toHaveAttribute('data-memory-notice', 'near');
       // 3. Well under: nothing.
       await expect(where.locator('[data-memory-row="quay"] [data-memory-notice]')).toHaveCount(0);
+      // 3b. Too large to read: its notice, as a cut, no figure of the window's own.
+      const dockLine = where.locator('[data-memory-row="dock"] [data-memory-notice]');
+      await expect(dockLine).toHaveAttribute('title', guardOf('dock')!.notice!);
+      await expect(dockLine).toHaveAttribute('data-memory-notice', 'cut');
       seen.rows = { harbor: (await harbor.innerText()).replace(/\s+/g, ' '), meridian: await meridianLine.getAttribute('title') };
       await stepShot(page, `${tag}1-rows`);
 
