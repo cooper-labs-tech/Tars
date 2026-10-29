@@ -311,8 +311,9 @@ For 2.0.6:
 - An agent that cannot start for lack of a terminal, said on its pane and its card as main's sentence, its pane's menu
   offering start, and an asleep agent whose wake was refused, asleep with the same sentence: Agent cannot start · no
   terminal left (2.0.6) (and its light copy).
-- A project's MEMORY.md past what Claude Code reads, on Brain's Projects: Brain · Projects · MEMORY.md past what Claude
-  Code reads (2.0.6) · states (and its light copy).
+- A project's MEMORY.md close to or past what Claude Code reads (its first 200 lines, then 24.4 KB), on Brain's
+  Projects, in the words Tars writes (guard.notice, PR 558): Brain · Projects · MEMORY.md past what Claude Code reads
+  (2.0.6) · states (and its light copy).
 - A note among messages, and what the window shows of the other options: Messages (2.0.6) · a note, the waiting digest,
   both zones · what the window shows (and its light copy); in `chat-redesign-a.pen`, Chat · A · Room (2.0.6) · a note
   (and its light copy).
