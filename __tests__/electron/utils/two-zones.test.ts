@@ -14,6 +14,8 @@ import { twoZones } from '../../../electron/utils/two-zones';
  * Z5. An hour or a minute under ten loses its leading zero.
  * Z6. A machine on UTC prints its time twice ("19:03 UTC (19:03 +00)").
  * Z7. Without an offset given, it is not the machine's own (the one the notice is typed on).
+ * Z8. (the Audit's L1 on #563) The default offset is the one of now, not of the instant: across a change of summer
+ *     time, a time from before it, typed after it, carries the wrong offset.
  */
 
 const at = (iso: string) => Date.parse(iso);
@@ -42,6 +44,19 @@ describe('twoZones', () => {
 
   it('Z6. a machine on UTC says it once', () => {
     expect(twoZones(at('2026-10-29T19:03:00Z'), 0)).toBe('19:03 UTC');
+  });
+
+  it("Z8. the default offset is the instant's own, on either side of a change of summer time", () => {
+    // Node reads TZ again when it changes; Paris left summer time on 25/10/2026 at 01:00 UTC.
+    const before = process.env.TZ;
+    process.env.TZ = 'Europe/Paris';
+    try {
+      expect(twoZones(Date.UTC(2026, 9, 25, 0, 59))).toBe('00:59 UTC (02:59 +02)');
+      expect(twoZones(Date.UTC(2026, 9, 25, 1, 1))).toBe('01:01 UTC (02:01 +01)');
+    } finally {
+      if (before === undefined) delete process.env.TZ;
+      else process.env.TZ = before;
+    }
   });
 
   it("Z7. with no offset given, the machine's own at that instant", () => {
