@@ -72,8 +72,8 @@ import { lastLocalCommandAt } from './services/agent-truth';
 import { runShutdownSteps } from './core/shutdown';
 import { initTray, destroyTray } from './core/tray-manager';
 import { broadcastToAllWindows } from './utils/broadcast';
-import { readTerminals } from './core/pty-spawn';
-import { terminalsNearFullNote } from './core/pty-pool';
+import { readTerminals, useTestPtyMax } from './core/pty-spawn';
+import { ptyTestMax, terminalsNearFullNote } from './core/pty-pool';
 import { readFleetResources } from './services/fleet-resources-runtime';
 
 // Services
@@ -566,6 +566,10 @@ app.whenReady().then(async () => {
     console.log(`[data-dir] ${DATA_DIR_MOVE.did}: ${DATA_DIR}${DATA_DIR_MOVE.why ? ` (${DATA_DIR_MOVE.why})` : ''}`);
   }
   if (DATA_DIR_REWRITTEN.length) console.log(`[data-dir] ~/.dorothy rewritten to ~/.tars in ${DATA_DIR_REWRITTEN.length} file(s)`);
+
+  // An E2E spec's full pool of terminals, before any agent starts: under DOROTHY_E2E only, never in a packaged build
+  // (core/pty-pool.ts ptyTestMax).
+  useTestPtyMax(ptyTestMax(process.env, app.isPackaged));
 
   // Load agents from disk
   loadAgents();

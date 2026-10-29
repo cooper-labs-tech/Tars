@@ -69,6 +69,16 @@ const count = (text: string): number | null => {
 };
 
 /** The pool as it stands, or null where there is none (Windows) or it cannot be read. */
+/**
+ * An E2E spec's pool limit (DOROTHY_E2E_PTY_MAX, core/pty-spawn.ts useTestPtyMax): read under DOROTHY_E2E only, as
+ * DOROTHY_HEALTH_EVERY_MS is, never by a packaged build, and only as a whole count of at least 1; else null.
+ */
+export function ptyTestMax(env: NodeJS.ProcessEnv, packaged: boolean): number | null {
+  if (packaged || env.DOROTHY_E2E !== '1') return null;
+  const text = env.DOROTHY_E2E_PTY_MAX ?? '';
+  return /^[1-9]\d*$/.test(text) ? Number(text) : null;
+}
+
 export function readPtyPool(io: PtyPoolIo = defaultIo): PtyPool | null {
   try {
     if (io.platform === 'darwin') {

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as pty from 'node-pty';
-import { explainSpawnFailure, readPtyPool, PtyPool } from './pty-pool';
+import { explainSpawnFailure, readPtyPool, NoTerminalLeft, PtyPool } from './pty-pool';
 
 /**
  * The one way Tars opens a terminal (2.0.6, item 1; its failures: __tests__/electron/core/pty-spawn.test.ts).
@@ -19,6 +19,11 @@ import { explainSpawnFailure, readPtyPool, PtyPool } from './pty-pool';
  * node-pty leaves nothing, nothing is closed. Linux (forkpty) and Windows (ConPTY) leave nothing: not read there.
  */
 export function spawnPty(file: string, args: string[] | string, options: pty.IPtyForkOptions | pty.IWindowsPtyForkOptions): pty.IPty {
+  // An E2E spec's full pool (useTestPtyMax): refused as a full machine refuses, before node-pty is asked.
+  if (testMax !== null) {
+    const refused = explainSpawnFailure(new Error('the test pool is full'), readTerminals());
+    if (refused instanceof NoTerminalLeft) throw refused;
+  }
   const before = process.platform === 'darwin' ? charDevices() : null;
   let term: pty.IPty;
   try {
@@ -40,8 +45,17 @@ export function spawnPty(file: string, args: string[] | string, options: pty.IPt
 let open = 0;
 export const openTerminals = (): number => open;
 
+/**
+ * The limit of an E2E spec's pool (DOROTHY_E2E_PTY_MAX, read by main through ptyTestMax, never by a packaged build),
+ * or null. Set, the pool is Tars's own open terminals out of it: the same on every platform, and moved by nothing
+ * else on a shared machine, so a spec makes it full with a few terminals and starts an agent through the real path.
+ */
+let testMax: number | null = null;
+export function useTestPtyMax(max: number | null): void { testMax = max; }
+
 /** The machine's pool with the terminals Tars has open: Tars holding more masters than that is a leak. */
 export function readTerminals(): PtyPool | null {
+  if (testMax !== null) return { inUse: open, max: testMax, tars: open, open };
   const pool = readPtyPool();
   return pool && { ...pool, open };
 }
