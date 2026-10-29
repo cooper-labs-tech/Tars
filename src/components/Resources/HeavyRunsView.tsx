@@ -7,7 +7,9 @@ import type { StatusTone } from '@/components/ui';
 import { Box, Empty, Figure, Figures, Notice, Row, Unread } from './bits';
 import type { HeavySlotAlert, HeavySlotHolder, HeavySlotStatus, HeavySlotTicket } from './contract';
 import { NOT_READ, clock, diskGb, freeMemory, gb, mb, pct, since } from './format';
-import { useDiskSpace, useHeavyRuns } from './hooks';
+import { useDiskSpace, useHeavyRuns, useTerminals } from './hooks';
+import { rendererPlatform } from '@/lib/display-path';
+import { terminalsFigure, terminalsNotice, type Terminals } from '@/lib/terminals';
 
 const PRIORITY: Record<HeavySlotTicket['priority'], string> = { gate: 'release gate', normal: 'ordinary', background: 'background' };
 const ms = (iso: string) => Date.parse(iso);
@@ -102,8 +104,12 @@ function FloorLine({ k, v }: { k: string; v: string }) {
   );
 }
 
-/** The four figures of the machine: the slot's last reading, and the free disk system.disk gives before it. */
-function Machine({ state }: { state: HeavySlotStatus | null }) {
+/**
+ * The five figures of the machine: the slot's last reading, the free disk system.disk gives before it, and the
+ * machine's terminals (PR 553), in use of the limit with the ones Tars holds. Frame: `Resources (2.0.6) · heavy runs,
+ * terminals left`.
+ */
+function Machine({ state, terminals }: { state: HeavySlotStatus | null; terminals: Terminals | null | undefined }) {
   const disk = useDiskSpace();
   const m = state?.machine ?? null;
   // The disk as the window reads it now (system.disk); the slot's last sample only when that cannot be read.
@@ -114,8 +120,9 @@ function Machine({ state }: { state: HeavySlotStatus | null }) {
   const later = state ? 'not read yet' : 'with the heavy-run slot';
   // One measure, as the frame draws it: the share's free memory over its share of the total (the QA's F2 on PR 539).
   const memory = freeMemory(m, state?.floors.memFreePct);
+  const pool = terminalsFigure(terminals, rendererPlatform());
   return (
-    <Figures>
+    <Figures columns={5}>
       <Figure volatile caption="FREE MEMORY" value={memory?.value ?? NOT_READ} tone={memTone} sub={memory?.sub ?? later} />
       <Figure volatile caption="SWAP" value={m ? mb(m.swapUsedMb) : NOT_READ}
         sub={m?.swapGrowthMbPerMin != null ? `${m.swapGrowthMbPerMin >= 0 ? '+' : ''}${mb(m.swapGrowthMbPerMin)} a minute` : m ? 'its growth not read yet' : later} />
@@ -123,6 +130,7 @@ function Machine({ state }: { state: HeavySlotStatus | null }) {
         sub={diskFree == null ? 'cannot be read' : `${disk ? `of ${gb(diskGb(disk.totalBytes))}` : 'free'}${floorGb != null ? ` · floor ${Math.round(floorGb)} GB` : ''}`} />
       <Figure volatile caption="LOAD" value={m?.load1 != null ? m.load1.toFixed(1) : NOT_READ}
         sub={m ? (m.load1 != null ? '1 min average' : 'not given on this system') : later} />
+      <Figure volatile caption="TERMINALS" value={pool.value} tone={pool.tone} sub={pool.sub} />
     </Figures>
   );
 }
@@ -138,10 +146,14 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
   const taken = state?.holders.length ?? 0;
   const head = !state ? 'THE SLOT' : taken === 0 ? (state.slots > 1 ? 'THE SLOTS · FREE' : 'THE SLOT · FREE') : `${state.slots > 1 ? 'THE SLOTS' : 'THE SLOT'} · ${taken} OF ${state.slots} TAKEN`;
   const firstWaits = state && taken < state.slots ? state.waiting.find((w) => w.why) : undefined;
+  const terminals = useTerminals();
+  // Full or near full, said at the top in main's own words (frame `Resources (2.0.6) · terminals left · states`).
+  const poolNotice = terminalsNotice(terminals);
 
   return (
     <section role="region" aria-label="Heavy runs" className="flex flex-col gap-3 min-h-0">
-      <Machine state={state} />
+      {poolNotice && <div data-terminals-notice={poolNotice.tone}><Notice tone={poolNotice.tone}>{poolNotice.text}</Notice></div>}
+      <Machine state={state} terminals={terminals} />
       {firstWaits && (
         <Notice tone="waiting">
           {`The slot is free, but ${firstWaits.agentName} waits: ${firstWaits.why}. It starts as soon as the floor is met; nothing is stopped to make room.`}
