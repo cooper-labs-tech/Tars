@@ -97,13 +97,14 @@ const stopToFree = (platform: NodeJS.Platform) => (perStart(platform) === 2
   ? ' A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.'
   : ' Stop an agent that does not need its terminal, or close terminals in other apps, to free one.');
 
+/** How a NoTerminalLeft's words begin: what tells its reason from any other (core/no-terminal.ts clearNoTerminal). */
+export const NO_TERMINAL_HEAD = 'No terminal can be opened on this machine:';
+
 /**
  * A terminal the machine refused because its pool is full. Stopping an agent gives its terminal back; a restart of
  * Tars stops every agent and no orchestrator can do it, so it is offered only when Tars holds masters it has no
  * terminal open for, which nothing but a restart frees.
  */
-export const NO_TERMINAL_HEAD = 'No terminal can be opened on this machine:';
-
 export class NoTerminalLeft extends Error {
   readonly code = 'no_terminal';
   constructor(readonly pool: PtyPool, platform: NodeJS.Platform = process.platform) {

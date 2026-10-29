@@ -13,7 +13,8 @@ import { EventEmitter } from 'node:events';
  * C1. initAgentPty (the window's start, a wake, the bots) lets NoTerminalLeft through and leaves the agent as it was
  *     (L3: a mutant without the mark passed every test).
  * C2. Nobody waiting on the agent hears of it (L2): no `status:<id>` (what wait_for_agent listens to) and no
- *     `fleet-change` (what agent-watch reads), so a waiter runs to its timeout and the requester is not told.
+ *     `fleet-change` (what agent-watch reads), so a waiter runs to its timeout and the requester is not told; or
+ *     hears it before the mark, and reads the agent idle with no reason (the Audit's L1 on #557).
  * C3. The next start through initAgentPty opens a terminal and the reason stays beside a working agent (L1).
  * C4. spawnAgentSession (the API's start, dispatch, message and delegate) leaves the agent as it was (L3).
  * C5. The window's agent:start rejects instead of answering { success: false, error, code: 'no_terminal' } (L3).
@@ -158,9 +159,11 @@ afterEach(() => { refuse.on = false; });
 describe('a start the machine has no terminal for, through each path', () => {
   it('C1, C2. initAgentPty marks the agent and tells whoever waits on it', async () => {
     const agent = restingAgent();
+    // What a listener reads when it hears: a wait_for_agent answers from the record at that moment (the Audit's L1
+    // on #557: an emit before the mark passed, and the wait answered idle with no reason).
     const heard: string[] = [];
-    const onStatus = () => heard.push('status');
-    const onFleet = (id: string) => heard.push(`fleet:${id}`);
+    const onStatus = () => heard.push(`status:${agent.status}:${agent.error ?? ''}`);
+    const onFleet = (id: string) => heard.push(`fleet:${id}:${agent.status}:${agent.error ?? ''}`);
     agentStatusEmitter.on(`status:${agent.id}`, onStatus);
     agentStatusEmitter.on('fleet-change', onFleet);
     try {
@@ -171,7 +174,7 @@ describe('a start the machine has no terminal for, through each path', () => {
     }
     expect(agent.status).toBe('error');
     expect(agent.error).toMatch(/^No terminal can be opened on this machine: 510 of 511 are in use/);
-    expect(heard).toEqual(expect.arrayContaining(['status', `fleet:${agent.id}`]));
+    expect(heard).toEqual(expect.arrayContaining([`status:error:${agent.error}`, `fleet:${agent.id}:error:${agent.error}`]));
   });
 
   it('C3. the next start through initAgentPty that opens a terminal takes the reason away', async () => {
