@@ -57,6 +57,10 @@ import { execFileSync } from 'node:child_process';
  *     way, and lists only regular files.
  * S4 (its I9, the orchestrator's decision). A near file gaining a line at each pass is told at each pass (10 notes in
  *     10 passes): told again only when near turns to cut, or it grew by at least 2 KB or 20 lines since the last note.
+ * And from the QA's F1 on #558 (29/10):
+ * M14. A MEMORY.md deleted keeps what was told of it: written again past the limit, but smaller than what was told,
+ *     it is never told (the QA measured a new file losing 14 lines with no note). A file no longer found is forgotten
+ *     in the same pass.
  */
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-memory-guard-')));
@@ -392,5 +396,29 @@ describe('the follow-up of #558: the open file\'s size, the race, the listing, t
     expect(memoryNoteDue({ size: 23_000, lines: 100, state: 'near' }, { state: 'near', size: 25_000 - 1, lines: 100 }).tell).toBe(false);
     expect(memoryNoteDue({ size: 22_600, lines: 100, state: 'near' }, { state: 'near', size: 22_600 + 2_048, lines: 100 }).tell).toBe(true);
     expect(memoryNoteDue({ size: 24_900, lines: 100, state: 'near' }, { state: 'cut', size: 25_001, lines: 100 }).tell).toBe(true);
+  });
+});
+
+describe('a MEMORY.md deleted, then written again', () => {
+  it('M14. is forgotten in the pass that no longer finds it, and told again once back past the limit', async () => {
+    const { runMemoryGuardPass } = await import('../../../electron/services/memory-guard');
+    const home = path.join(tmp, 'deleted-home');
+    const dir = path.join(home, '.claude', 'projects', '-owned', 'memory');
+    const file = path.join(dir, 'MEMORY.md');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(file, probeFile(150, 200));
+    const store = path.join(tmp, 'deleted-store.json');
+    const notes: string[] = [];
+    const pass = () => runMemoryGuardPass({ home, store, owners: new Map([['-owned', '/p/harbor']]), tell: async (_p, text) => { notes.push(text); return 'typed'; } });
+    await pass();
+    expect(notes).toHaveLength(1);
+    fs.rmSync(file);
+    await pass();
+    expect(JSON.parse(fs.readFileSync(store, 'utf8'))).toEqual({});
+    // Written again: cut, 137 lines of 200 characters, so 14 never reach an agent, smaller than what was told.
+    fs.writeFileSync(file, probeFile(137, 200));
+    await pass();
+    expect(notes).toHaveLength(2);
+    expect(notes[1]).toContain('14 of its 137 lines, from line 124, never reach an agent');
   });
 });

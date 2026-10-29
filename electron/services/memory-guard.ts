@@ -206,7 +206,12 @@ export interface MemoryGuardPass {
 export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   const told = readStore(opts.store);
   let changed = false;
-  for (const { folder, file } of findMemoryFiles(opts.home)) {
+  const files = findMemoryFiles(opts.home);
+  // A file no longer found is forgotten, in this pass: written again past the limit, smaller than what was told, it
+  // would never be told (the QA's F1 on #558: a new file losing 14 lines with no note).
+  const found = new Set(files.map(f => f.file));
+  for (const file of Object.keys(told)) if (!found.has(file)) { delete told[file]; changed = true; }
+  for (const { folder, file } of files) {
     const guard = await guardMemoryFile(file);
     const step = memoryNoteDue(told[file], guard);
     if (step.told === undefined && told[file] !== undefined) { delete told[file]; changed = true; }
