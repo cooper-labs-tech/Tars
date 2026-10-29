@@ -1244,9 +1244,10 @@ stat -f '%Sp %N' ~/.tars-private/api-token      # expect -rw-------
 
 ## The heavy-run slot
 
-One slot for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and
-simulators of every project's agents take it in turn. A dev server started on its own does not (it would hold the
-only slot for hours); one a test run starts is inside that run. The plan's item A; the three projects'
+One queue for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and
+simulators of every project's agents wait in it, and since 2.0.6 each further run starts when the machine has room
+for it, up to a ceiling (below). A dev server started on its own does not take a place (it would hold one for
+hours); one a test run starts is inside that run. The plan's item A; the three projects'
 orchestrators each had a lock of their own, which coordinated nothing between projects and stayed taken when its
 agent died.
 
@@ -1273,12 +1274,20 @@ agent died.
   process or one of its parents, on every system.
 - **The label** is masked (`utils/redact-secrets.ts`) before it is recorded: a token or a URL's password in a command
   line does not reach the queue every agent reads.
-- **The machine.** Before a grant, as the health samples read it (`services/health/machine.ts`): under the floor of
-  free disk (`heavySlotMinDiskGb`, 15) or free memory (`heavySlotMinFreeMemPct`, 20 %), the grant waits and the waiter
-  reads why. A figure the system cannot give does not block. During a run, every 30 s: alerts at 10, 6 and 3 GB of
+- **Admitted by the machine's room (2.0.6).** With nothing holding, the floors alone decide: free disk
+  (`heavySlotMinDiskGb`, 15) and free memory (`heavySlotMinFreeMemPct`, 20 %), and a figure the system cannot give
+  does not block. With runs holding, the head of the queue is admitted, one a pass, when all of these hold: fewer
+  runs than the ceiling (`heavySlots`, default 3); the last run granted has run 90 s (its boot is its spike, 2 to 3 GB
+  of swap a minute measured), or ended; free disk at least the floor plus 10 GB for each run holding; free memory at
+  least its floor; and at most 16 MB swapped out per 10 s (room-check.sh's 1,000 pages on Apple silicon's 16 KB
+  pages, in bytes on every system: macOS `vm_stat` Swapouts at its page size, Linux `/proc/vmstat` pswpout at
+  `getconf PAGESIZE`; unknown on Windows, where it does not block). A reading that throws or does not come in 15 s
+  holds a further run back. Passes run one at a time: one asked for while another runs joins the next, which reads
+  the queue as it is then. Each waiter reads why: the holders and the ceiling, the settle
+  time, the disk with its reserve, the memory, the swapping, or no reading. During a run, every 30 s: alerts at 10, 6 and 3 GB of
   free disk and when the swap grows by 1,000 MB a minute or more, to the holder (`tars-slot run` prints them), its
   project's orchestrator (typed as Tars) and the window (`heavySlot:alert`). **Tars never stops a run itself.**
-- **Settings.** `heavySlots` (1 to 8; default 1), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
+- **Settings.** `heavySlots`, the ceiling (1 to 8; default 3 since 2.0.6, 1 before), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
   `~/.tars/app-settings.json`.
 - **The window.** `window.electronAPI.heavySlot.status()`, `giveBack(ticketId)` (the owner gives any lease or ask
   back; its holder and its orchestrator are told, and it is among the day's alerts), and the events `onChanged` (the
@@ -1291,7 +1300,10 @@ agent died.
 |---|---|---|
 | `tars-slot: run it from an agent's terminal started by Tars` | no `TARS_SLOT_SCRIPT` or no token: not an agent's terminal, or one started before 2.0.5 | restart the agent |
 | `process N is not under your terminal` | the lease was asked for a process that is not the agent's | ask from the agent's own terminal; `take` holds it for its caller |
-| waits with `waiting for free disk` / `free memory` | under the floor | free disk or memory, or lower the floor in the settings |
+| waits with `waiting for free disk` / `free memory` | under the floor (with runs holding, the disk floor plus 10 GB each) | free disk or memory, or lower the floor in the settings |
+| waits with `waiting for the last run to settle` | a run was granted less than 90 s ago and still holds | nothing: the next pass after 90 s reads the machine again |
+| waits with `waiting for the machine to stop swapping` | over 16 MB swapped out per 10 s | wait, or end a heavy run of your own |
+| waits with `at most N runs at once` | the ceiling (`heavySlots`) is reached | wait, or raise the ceiling in the settings |
 
 ---
 

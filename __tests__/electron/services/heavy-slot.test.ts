@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
-import { HeavySlot, type SlotWorld, type SlotMachine } from '../../../electron/services/heavy-slot';
+import { describe, it, expect, vi } from 'vitest';
+import {
+  HeavySlot, type SlotWorld, type SlotMachine,
+  SETTLE_MS, SLOTS_DEFAULT, DISK_RESERVE_GB_PER_RUN, SWAPOUT_MB_10S_MAX, MACHINE_READ_TIMEOUT_MS,
+} from '../../../electron/services/heavy-slot';
 
 /**
  * One heavy-run slot for the whole machine (2.0.5, lot 2 item A of ressources-agents-proposition-2810.md, the
@@ -45,6 +48,36 @@ import { HeavySlot, type SlotWorld, type SlotMachine } from '../../../electron/s
  * And from the orchestrator's note on #539's row (28/10):
  * H18. A waiter's reason names when the holder took the slot in UTC, while the window shows local time: it says the
  *      time in the machine's own zone, the window's.
+ * And from the owner's decision of 29/10 (2.0.6): runs are admitted by the machine's room, not by a fixed count. With
+ * one slot every project's runs queued behind a 3-hour run; with two fixed, two runs started together on a full
+ * machine and the swap grew 3 GB a minute. Written before the code (29/10):
+ * H19. A second run is admitted on a full disk: with runs holding, the disk must keep the floor plus a reserve for
+ *      each of them (their swap files and artefacts live on it).
+ * H20. Two runs are admitted in the same settle window: a run's boot is its spike (2 to 3 GB of swap a minute
+ *      measured), so after a grant no other is admitted until the settle time has passed, the reading that admits
+ *      the next one then including the last one's climb.
+ * H21. A run that ends during the settle time still holds the next one back, though its climb is over.
+ * H22. A reading that never comes hangs every pass, and one that throws breaks it: either is an unknown machine,
+ *      which never blocks a first run (as H8) and holds back a further one, saying it waits for a reading.
+ * H23. A further run is admitted while the machine swaps out (the swapouts of the last 10 s, as room-check.sh reads
+ *      them).
+ * H24. The ceiling is not one: a ceiling of 1 admits a second run when there is room. A setting out of range, or
+ *      none, is not the default ceiling (3).
+ * H25. The room decides out of order: the head of the queue (gate, then normal, then background, then arrival) is
+ *      the one admitted when room comes, one a pass.
+ * H26. No run can hold above the floors: with nothing holding, the floors alone decide, never the reserve, the
+ *      settle time or the swapouts.
+ * And from the QA's gate of #573 (29/10), the gaps it found:
+ * H27. (F1) With a run holding, a further run is admitted under the memory floor.
+ * H28. (F2) The settle time counts from the first grant, not the last: with a ceiling of 3, a third run starts during
+ *      the second one's boot.
+ * H29. (F3) The run alerts break when the machine cannot be read (a reading that throws, or never comes): nothing is
+ *      said, and nothing throws.
+ * And from the Audit's gate of #573 (M1, 29/10):
+ * H30. Two passes run at once (an ask's own pass beside the timer's, a give-back's, a turn's end): each reads the
+ *      machine, then grants its own head, so two runs start together, past the ceiling (1 included) and inside the
+ *      settle window. Passes run one at a time, a pass asked for while one runs joins the next, and the head is the
+ *      queue's after the reading (a gate that came during it goes first).
  */
 
 type World = SlotWorld & { set: (m: Partial<SlotMachine>) => void; dead: Set<number>; t: number; alerts: Array<{ ticket: string; text: string }>; table: Array<{ pid: number; ppid: number }> | undefined };
@@ -128,21 +161,23 @@ describe('the queue', () => {
     expect(o.clamped).toBeUndefined();
   });
 
-  it('H12. two slots grant two asks; a setting out of range is one slot', async () => {
+  it('H12. a ceiling of two lets two hold, one a settle time after the other; a setting out of range is the default', async () => {
     const w = world({ slots: 2 });
     const slot = new HeavySlot(w);
     await slot.ask(ask(102, 'a'));
     await slot.ask(ask(202, 'b'));
     await slot.ask(ask(302, 'o'));
     await slot.pump();
+    expect(slot.snapshot().holders).toHaveLength(1);
+    w.t += SETTLE_MS;
+    await slot.pump();
+    w.t += SETTLE_MS;
+    await slot.pump();
     expect(slot.snapshot().holders).toHaveLength(2);
     for (const bad of [0, -1, 1.5, Number.NaN, 99]) {
-      const one = new HeavySlot({ ...world(), slots: () => bad });
-      await one.ask(ask(102, 'a'));
-      await one.ask(ask(202, 'b'));
-      await one.pump();
-      expect(one.snapshot().holders, String(bad)).toHaveLength(1);
+      expect(new HeavySlot({ ...world(), slots: () => bad }).snapshot().slots, String(bad)).toBe(SLOTS_DEFAULT);
     }
+    expect(SLOTS_DEFAULT).toBe(3);
   });
 });
 
@@ -288,6 +323,9 @@ describe('the Audit\'s gate of #537', () => {
     const tool = await slot.ask(ask(101, 'a', 'normal', { untilTurnEnds: true }));
     const run = await slot.ask(ask(102, 'a'));
     await slot.pump();
+    // One a pass, and a further run once the last one settled (H20, 2.0.6).
+    w.t += SETTLE_MS;
+    await slot.pump();
     const waiting = await slot.ask(ask(101, 'a', 'normal', { untilTurnEnds: true }));
     const other = await slot.ask(ask(201, 'b', 'normal', { untilTurnEnds: true }));
     await slot.pump();
@@ -297,6 +335,7 @@ describe('the Audit\'s gate of #537', () => {
     expect(slot.get(tool.id)).toBeUndefined();
     expect(slot.get(waiting.id)).toBeUndefined();
     expect(slot.get(run.id)?.grantedAt).toBeDefined();
+    w.t += SETTLE_MS;
     await slot.pump();
     expect(slot.get(other.id)?.grantedAt).toBeDefined();
     expect(slot.endTurn('a')).toEqual([]);
@@ -338,5 +377,219 @@ describe('the reason a waiter reads', () => {
     } finally {
       if (zone === undefined) delete process.env.TZ; else process.env.TZ = zone;
     }
+  });
+});
+
+describe('admitted by the machine\'s room (2.0.6)', () => {
+  /** One run holding (a's), granted now; the next asks wait for room. */
+  async function oneHolding(over: Parameters<typeof world>[0] = {}) {
+    const w = world({ slots: 3, ...over });
+    const slot = new HeavySlot(w);
+    const first = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    expect(slot.get(first.id)?.grantedAt).toBeDefined();
+    return { w, slot, first };
+  }
+
+  it('H19. a further run needs the floor plus a reserve for each run holding', async () => {
+    const { w, slot } = await oneHolding();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS;
+    w.set({ diskFreeGb: 15 + DISK_RESERVE_GB_PER_RUN - 1 });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(b.id)?.why).toBe(`waiting for free disk: 24 GB free, a further run needs 25 GB (the floor of 15 GB and ${DISK_RESERVE_GB_PER_RUN} GB for each of the 1 run holding)`);
+    w.set({ diskFreeGb: 15 + DISK_RESERVE_GB_PER_RUN });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H20. never two in the same settle window: the next one waits for the last one\'s climb to be read', async () => {
+    const { w, slot } = await oneHolding();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS - 1_000;
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(b.id)?.why).toMatch(/^waiting for the last run to settle: A's run started \d+ s ago, a further run is read for after \d+ s$/);
+    w.t += 1_000;
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H21. a run that ends during the settle time no longer holds the next one back', async () => {
+    const { w, slot } = await oneHolding();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += 5_000;
+    w.dead.add(102);
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H22. a reading that never comes, or throws, is unknown: a first run goes, a further one waits for a reading', async () => {
+    vi.useFakeTimers();
+    try {
+      const w = world({ slots: 3 });
+      w.machine = () => new Promise(() => {});
+      const slot = new HeavySlot(w);
+      const a = await slot.ask(ask(102, 'a'));
+      const first = slot.pump();
+      await vi.advanceTimersByTimeAsync(MACHINE_READ_TIMEOUT_MS);
+      await first;
+      expect(slot.get(a.id)?.grantedAt).toBeDefined();
+      const b = await slot.ask(ask(202, 'b'));
+      w.t += SETTLE_MS;
+      w.machine = async () => { throw new Error('vm_stat failed'); };
+      await slot.pump();
+      expect(slot.get(b.id)?.grantedAt).toBeUndefined();
+      expect(slot.get(b.id)?.why).toBe('waiting for a reading of the machine: its free disk or memory could not be read');
+    } finally { vi.useRealTimers(); }
+  });
+
+  it('H23. a further run waits while the machine swaps out, as room-check.sh reads it', async () => {
+    const { w, slot } = await oneHolding();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS;
+    w.set({ swapOutMbPer10s: SWAPOUT_MB_10S_MAX + 1 });
+    await slot.pump();
+    expect(slot.get(b.id)?.why).toBe(`waiting for the machine to stop swapping: ${SWAPOUT_MB_10S_MAX + 1} MB swapped out in 10 s (at most ${SWAPOUT_MB_10S_MAX} MB)`);
+    expect(SWAPOUT_MB_10S_MAX).toBe(16);
+    w.set({ swapOutMbPer10s: SWAPOUT_MB_10S_MAX });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H24. a ceiling of 1 never admits a second run, whatever the room', async () => {
+    const w = world({ slots: 1 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += 10 * SETTLE_MS;
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(b.id)?.why).toMatch(/^held by A \(a's run\) since \d\d:\d\d; at most 1 run at once$/);
+  });
+
+  it('H25. the head of the queue is the one admitted when room comes, one a pass', async () => {
+    const { w, slot } = await oneHolding();
+    const bg = await slot.ask(ask(202, 'b', 'background'));
+    const gate = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    w.t += SETTLE_MS;
+    await slot.pump();
+    expect(slot.get(gate.id)?.grantedAt).toBeDefined();
+    expect(slot.get(bg.id)?.grantedAt).toBeUndefined();
+  });
+
+  it('H26. with nothing holding, the floors alone decide: not the reserve, the settle time or the swapouts', async () => {
+    const w = world({ slots: 3 });
+    w.set({ diskFreeGb: 16, swapOutMbPer10s: 800 });
+    const slot = new HeavySlot(w);
+    const a = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    expect(slot.get(a.id)?.grantedAt).toBeDefined();
+    w.dead.add(102);
+    const b = await slot.ask(ask(202, 'b'));
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+});
+
+describe('the QA\'s gaps on #573', () => {
+  it('H27. with a run holding, a further run waits under the memory floor', async () => {
+    const w = world({ slots: 3 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS;
+    w.set({ memFreePct: 19 });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(b.id)?.why).toBe('waiting for free memory: 19 % free, the floor is 20 %');
+    w.set({ memFreePct: 20 });
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H28. the settle time counts from the last grant: a third run waits for the second one\'s boot', async () => {
+    const w = world({ slots: 3 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += SETTLE_MS;
+    await slot.pump();
+    expect(slot.get(b.id)?.grantedAt).toBeDefined();
+    const c = await slot.ask(ask(302, 'o'));
+    w.t += SETTLE_MS - 1_000;
+    await slot.pump();
+    expect(slot.get(c.id)?.grantedAt).toBeUndefined();
+    expect(slot.get(c.id)?.why).toMatch(/^waiting for the last run to settle: B's run started 89 s ago/);
+    w.t += 1_000;
+    await slot.pump();
+    expect(slot.get(c.id)?.grantedAt).toBeDefined();
+  });
+
+  it('H29. a machine that cannot be read during a run says nothing and breaks nothing', async () => {
+    vi.useFakeTimers();
+    try {
+      const w = world({ slots: 3 });
+      const slot = new HeavySlot(w);
+      await slot.ask(ask(102, 'a'));
+      await slot.pump();
+      w.machine = async () => { throw new Error('vm_stat failed'); };
+      await expect(slot.watch()).resolves.toBeUndefined();
+      w.machine = () => new Promise(() => {});
+      const watching = slot.watch();
+      await vi.advanceTimersByTimeAsync(MACHINE_READ_TIMEOUT_MS);
+      await expect(watching).resolves.toBeUndefined();
+      expect(w.alerts).toEqual([]);
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+describe('one pass at a time (the Audit\'s M1 on #573)', () => {
+  /** A world whose readings come only when released: the passes asked meanwhile are all in flight. */
+  function heldReadings(slots: number) {
+    const w = world({ slots });
+    const pending: Array<() => void> = [];
+    const real = w.machine;
+    w.machine = () => new Promise(resolve => { pending.push(() => { void real().then(resolve); }); });
+    const release = async () => { while (pending.length) { pending.shift()!(); await new Promise(r => setTimeout(r, 0)); } };
+    return { w, release };
+  }
+
+  for (const slots of [1, 3]) {
+    it(`H30. ceiling ${slots}: a gate ask during a normal ask's reading gives one run, the gate`, async () => {
+      const { w, release } = heldReadings(slots);
+      const slot = new HeavySlot(w);
+      const a = await slot.ask(ask(102, 'a'));
+      const first = slot.pump();
+      const g = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+      const second = slot.pump();
+      const third = slot.pump();
+      for (let i = 0; i < 5; i++) await release();
+      await Promise.all([first, second, third]);
+      const holders = slot.snapshot().holders.map(h => h.id);
+      expect(holders).toEqual([g.id]);
+      expect(slot.get(a.id)?.grantedAt).toBeUndefined();
+    });
+  }
+
+  it('H30. with one run holding past its settle time, two asks in flight start one run, not two', async () => {
+    const { w, release } = heldReadings(3);
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    const boot = slot.pump();
+    for (let i = 0; i < 5; i++) await release();
+    await boot;
+    w.t += SETTLE_MS;
+    await slot.ask(ask(202, 'b'));
+    const one = slot.pump();
+    await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    const two = slot.pump();
+    for (let i = 0; i < 5; i++) await release();
+    await Promise.all([one, two]);
+    expect(slot.snapshot().holders).toHaveLength(2);
   });
 });

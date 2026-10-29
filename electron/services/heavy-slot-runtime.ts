@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import * as os from 'os';
-import { HeavySlot, type SlotAsk, type SlotMachine, type SlotSnapshot, type SlotTicket } from './heavy-slot';
-import { readMachine } from './health/machine';
+import { HeavySlot, SLOTS_DEFAULT, type SlotAsk, type SlotMachine, type SlotSnapshot, type SlotTicket } from './heavy-slot';
+import { readMachine, swapOutMbPer10s } from './health/machine';
 import { readProcesses } from './stall-watch';
 import type { AppSettings } from '../types';
 
@@ -10,8 +10,10 @@ import type { AppSettings } from '../types';
  * settings, a pass every second while anything is held or waited for (the leases whose process ended go, the free
  * slots go to the queue), and a read of the machine every 30 seconds during a run for the alerts.
  *
- * Settings: `heavySlots` (default 1), `heavySlotMinDiskGb` (15), `heavySlotMinFreeMemPct` (20). The machine is read
- * as the health samples read it (health/machine.ts): about 0.2 s on macOS, at most every 5 seconds.
+ * Settings: `heavySlots`, the ceiling of runs at once since 2.0.6 (default 3; the machine's room decides below it,
+ * services/heavy-slot.ts), `heavySlotMinDiskGb` (15), `heavySlotMinFreeMemPct` (20). The machine is read as the
+ * health samples read it (health/machine.ts), with the pages swapped out per 10 s since the last reading: about 0.2 s
+ * on macOS, at most every 5 seconds.
  *
  * What the window's Resources page reads (the Frontend's notes of #535), in one call (`heavySlot:status`) and in the
  * event sent on each change (`heavySlot:changed`): the settings and floors, the machine's last reading, the holders
@@ -93,6 +95,7 @@ let timer: ReturnType<typeof setInterval> | undefined;
 let settings: () => AppSettings = () => ({}) as AppSettings;
 let lastMachine: SlotStatus['machine'] = null;
 let previousSwap: { at: number; swapUsedMb: number | null } | undefined;
+let previousSwapOuts: { at: number; swapOutBytes: number | null } | undefined;
 let trees: { at: number; rows: Array<{ pid: number; ppid: number; kb: number; cpu: number }> } | undefined;
 const alerts: SlotAlert[] = [];
 
@@ -107,10 +110,14 @@ async function machineNow(): Promise<SlotMachine> {
   const m = await readMachine({ previous: previousSwap, now });
   const total = os.totalmem() > 0 ? Math.round(os.totalmem() / (1024 * 1024)) : null;
   previousSwap = { at: now, swapUsedMb: m.swapUsedMb };
+  // MB swapped out per 10 s since the last reading: during a run the alerts read the machine every 30 s, so a
+  // further run is admitted on a recent rate (health/machine.ts swapOutMbPer10s).
+  const outs = swapOutMbPer10s(previousSwapOuts, { at: now, swapOutBytes: m.swapOutBytes ?? null });
+  previousSwapOuts = { at: now, swapOutBytes: m.swapOutBytes ?? null };
   lastMachine = {
     at: new Date(now).toISOString(), diskFreeGb: m.diskFreeGb, memFreePct: m.memFreePct, memFreeMb: m.memFreeMb,
     memTotalMb: total, memFreeShareMb: total !== null && m.memFreePct !== null ? Math.round((m.memFreePct / 100) * total) : null,
-    swapUsedMb: m.swapUsedMb, swapGrowthMbPerMin: m.swapGrowthMbPerMin, load1: m.load1,
+    swapUsedMb: m.swapUsedMb, swapGrowthMbPerMin: m.swapGrowthMbPerMin, swapOutMbPer10s: outs, load1: m.load1,
   };
   return lastMachine;
 }
@@ -169,7 +176,7 @@ function todaysAlerts(): SlotAlert[] {
 
 export async function slotStatus(): Promise<SlotStatus> {
   if (!lastMachine) await machineNow().catch(() => undefined);
-  if (!slot) return { slots: 1, floors: floors(), machine: lastMachine, holders: [], waiting: [], alerts: todaysAlerts() };
+  if (!slot) return { slots: SLOTS_DEFAULT, floors: floors(), machine: lastMachine, holders: [], waiting: [], alerts: todaysAlerts() };
   const snap = slot.snapshot();
   const holders = await Promise.all(snap.holders.map(async t => {
     const tree = await treeOf(t.pid).catch(() => undefined);
@@ -190,7 +197,7 @@ export function startHeavySlot(deps: SlotRuntimeDeps): void {
   };
   const announce = () => { void slotStatus().then(s => deps.broadcast('heavySlot:changed', s)).catch(() => undefined); };
   slot = new HeavySlot({
-    slots: () => Number(settings().heavySlots ?? 1),
+    slots: () => Number(settings().heavySlots ?? SLOTS_DEFAULT),
     floors,
     machine: machineNow,
     processes: async () => (await readProcesses())?.map(p => ({ pid: p.pid, ppid: p.ppid })),
