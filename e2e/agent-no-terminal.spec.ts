@@ -18,8 +18,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    `error`), or only after the page is read again;
  * 3. the Dashboard pane's header line is not the sentence, whole in its title;
  * 4. an uncaught error in the page.
- * Main refuses for real: DOROTHY_E2E_PTY_MAX=1 (PR 567) makes the pool Tars's own terminals out of one, so every start
- * is refused by spawnPty before node-pty is asked, and markNoTerminal marks the agent. The window's own start and wake
+ * Main refuses for real: DOROTHY_E2E_PTY_MAX=0 (PR 567) makes the pool Tars's own terminals out of none, one rule on
+ * every system, so every start is refused by spawnPty before node-pty is asked, and markNoTerminal marks the agent. The window's own start and wake
  * (agent:start, agent:wake) are asked once the cards show, so the cards must take the reason live. An agent seeded in
  * 'error' cannot stand in for this: main's load turns it idle (core/agent-manager.ts). Once with the classic shell and
  * once with the new interface (the Dashboard pane in the classic shell, whose home it is). Red on #555's tile commit,
@@ -55,7 +55,7 @@ for (const newInterface of [false, true]) {
     const app = await launchSandboxed(electron, home, {
       env: {
         NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31582 : 31581), DOROTHY_E2E: '1',
-        DOROTHY_E2E_PTY_MAX: '1',
+        DOROTHY_E2E_PTY_MAX: '0',
       },
     });
     try {
