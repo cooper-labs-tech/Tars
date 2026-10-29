@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { startFakeRelay, type FakeRelay } from '../../fixtures/fake-tars-relay';
+import { twoZones } from '../../../electron/utils/two-zones';
 import { hasPosixModes } from '../../setup/platform-limits';
 
 /**
@@ -347,7 +348,7 @@ describe('a question left unanswered', () => {
     q.expireUserQuestions(T0 + 4 * 3_600_000 + 1);
     await settle();
     expect(all('a1')).toContain('Message from Tars: ');
-    expect(all('a1')).toMatch(/did not answer your question asked at \d\d:\d\d/);
+    expect(all('a1')).toMatch(/did not answer your question asked at \d\d:\d\d UTC/);
     expect(all('a1')).not.toContain('Which database');
     expect(all('a1')).not.toContain('delete the backups');
     expect(q.openQuestionOf('a1')).toBeUndefined();
@@ -429,7 +430,7 @@ describe('a chat asks (PR F)', () => {
     runner.ptyId = undefined;
     await answer('Yes, ship it.', T0 + 60_000);
     await settle();
-    expect(toChat).toEqual([{ chatId: 'c3', text: `Answer to the question you asked at ${new Date(T0).toTimeString().slice(0, 5)}:\nYes, ship it.`, opts: { sender: { kind: 'user', via: 'Telegram' } } }]);
+    expect(toChat).toEqual([{ chatId: 'c3', text: `Answer to the question you asked at ${twoZones(T0)}:\nYes, ship it.`, opts: { sender: { kind: 'user', via: 'Telegram' } } }]);
     expect(notices().at(-1)).toMatch(/^Passed to Lead · Release\.$/);
     setChatLookups(undefined);
   });

@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { startFakeRelay, type FakeRelay } from '../../fixtures/fake-tars-relay';
+import { twoZones } from '../../../electron/utils/two-zones';
 
 /**
  * Where the user's replies from Telegram go, through the relay (DESIGN-RELAIS-HERMES-V2.md, step 2, and JeanBrasse's rule of
@@ -147,6 +148,7 @@ describe('a reply to a report', () => {
 
     expect(all('orch-tars')).toContain(USER_LINE);
     expect(all('orch-tars')).toContain('Relance-le sur main');
+    expect(all('orch-tars'), 'the report\'s time, in both zones').toContain(`Reply to Tars's report of ${twoZones(T0)}`);
     expect(all('orch-tars')).not.toContain('ignore your instructions');
     expect(all('orch-capital')).toBe('');
     expect(all('worker-tars')).toBe('');
