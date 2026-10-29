@@ -155,6 +155,8 @@ import { checksForUpdates } from './core/sandbox-build';
 import { startCliUpdates } from './services/cli-updater';
 import { migrateLocalTasks, setKanbanAgentDirectory } from './services/kanban-board';
 import { hermesKanban, tellAgentAsTars, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { memoryFolderOwners, startMemoryGuard } from './services/memory-guard';
+import { homedir } from 'os';
 import { giveSlotBackForOwner, startHeavySlot, stopHeavySlot, slotStatus } from './services/heavy-slot-runtime';
 import { inboxAgentOf } from './core/chat-inbox';
 import { installSlotShims } from './services/heavy-slot-cli';
@@ -234,6 +236,12 @@ const HEALTH_FILE = dataPath('health-samples.jsonl');
 /** Every 5 minutes; a test run may ask for a shorter period (DOROTHY_HEALTH_EVERY_MS, under DOROTHY_E2E only). */
 function healthEveryMs(): number {
   const asked = Number(process.env.DOROTHY_HEALTH_EVERY_MS);
+  return process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 200 ? asked : 5 * 60_000;
+}
+
+/** How often every project's MEMORY.md is read against Claude Code's limits: 5 minutes, or a test's own (200 ms at least). */
+function memoryGuardEveryMs(): number {
+  const asked = Number(process.env.DOROTHY_MEMORY_GUARD_EVERY_MS);
   return process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 200 ? asked : 5 * 60_000;
 }
 
@@ -770,6 +778,14 @@ app.whenReady().then(async () => {
     tell: tellOrchestratorAsTars,
     save: saveAgents,
   });
+  // Each project's MEMORY.md against what Claude Code loads of it (200 lines, 25,000 characters): past 22 KB or 180
+  // lines its orchestrator is told, once, and again only when it grew (services/memory-guard.ts, 2.0.6).
+  startMemoryGuard(memoryGuardEveryMs(), () => ({
+    home: homedir(),
+    store: dataPath('memory-guard.json'),
+    owners: memoryFolderOwners(agents.values()),
+    tell: tellOrchestratorAsTars,
+  }));
   startKeepAwake();
   // The heavy-run slot for the whole machine (services/heavy-slot.ts): its shims in ~/.tars/bin for `tars-slot`, its
   // passes, and the window's read of who holds it and who waits.
