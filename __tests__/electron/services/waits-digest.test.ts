@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWaitsDigest, DIGEST_EVERY_MS, type WaitInput } from '../../../electron/services/waits-digest';
+import { twoZones } from '../../../electron/utils/two-zones';
 
 /**
  * One digest instead of the "still waits ... minutes on" notices (2.0.6, option b). Until 2.0.5 each message that
@@ -21,10 +22,16 @@ import { createWaitsDigest, DIGEST_EVERY_MS, type WaitInput } from '../../../ele
  * W7. One sender's messages are told to another sender.
  * W8. The window's list misses a waiting message, keeps one that went in, or the window is not told it changed.
  * W9. A target's name goes in raw: a line separator in it would put a line of its own in Tars's voice.
+ * W10. (the Audit's H1 on #562, written before the fix) The pending reviews multiply: with k held messages of one
+ *      sender whose targets stay in a turn, each review schedules k more, every 3 minutes (2^n and 3^n timers measured,
+ *      millions within an hour, in the main process).
+ * W11. (2.0.6, option d, #563 merging first) A time in the digest says the machine's time alone, where every other
+ *      notice Tars types into an agent says UTC first, then the machine's own.
  */
 
 const MIN = 60_000;
-const clock = (ms: number) => new Date(ms).toTimeString().slice(0, 5);
+// W11: UTC first, then the machine's own (utils/two-zones.ts).
+const clock = (ms: number) => twoZones(ms);
 
 let told: Array<{ senderId: string; text: string }>;
 let changes: number;
@@ -140,6 +147,32 @@ describe('what no longer waits, and what may not be told yet', () => {
     resting = true;
     vi.advanceTimersByTime(3 * MIN + 1000);
     expect(toldTo('orch')).toHaveLength(1);
+  });
+
+  it('W10. k held messages on targets in a turn for an hour: one pending review per sender, and one notice at their rest', () => {
+    let resting = false;
+    for (const id of ['a', 'b', 'c']) digest.track(held({ targetId: id, targetName: id.toUpperCase(), ready: () => resting }));
+    // Counted every 3 minutes, and stopped at the first excess: the multiplying timers would make the hour itself
+    // take forever (3^20 of them).
+    const counts: number[] = [];
+    for (let m = 3; m <= 60; m += 3) {
+      vi.advanceTimersByTime(3 * MIN);
+      counts.push(vi.getTimerCount());
+      if (counts[counts.length - 1] > 3 + 1) break;
+    }
+    expect(Math.max(...counts), JSON.stringify(counts)).toBeLessThanOrEqual(3 + 1);
+    expect(told).toEqual([]);
+    resting = true;
+    vi.advanceTimersByTime(3 * MIN + 1000);
+    expect(toldTo('orch')).toHaveLength(1);
+    expect(toldTo('orch')[0].text.split('\n').filter((l) => l.startsWith('- '))).toHaveLength(3);
+    expect(vi.getTimerCount(), 'nothing left pending once told').toBeLessThanOrEqual(1);
+  });
+
+  it('W11. the notice gives its own time UTC first', () => {
+    digest.track(behind());
+    vi.advanceTimersByTime(10 * MIN + 1000);
+    expect(toldTo('orch')[0].text).toContain(`, as of ${twoZones(Date.now())} (`);
   });
 
   it('W9. a name is quoted as data: no line separator goes in raw', () => {
