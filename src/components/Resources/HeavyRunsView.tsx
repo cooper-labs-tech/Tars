@@ -146,7 +146,7 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
       <Machine state={state} />
       {firstWaits && (
         <Notice tone="waiting">
-          {`${firstWaits.agentName} waits: ${firstWaits.why}. It starts as soon as the machine has room; nothing is stopped to make room.`}
+          {`${firstWaits.agentName}: ${firstWaits.why}. It starts as soon as the machine has room; nothing is stopped to make room.`}
         </Notice>
       )}
       <div className="flex gap-3 items-start min-w-0">
