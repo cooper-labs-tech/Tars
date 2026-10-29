@@ -949,3 +949,94 @@ installer's first run, and `electron-updater` installs an update without
 checking a publisher: whoever can write to the releases of
 `cooper-labs-tech/Tars` ships code to every Windows install. On macOS the
 update must carry the app's own signature; on Windows nothing stands in for it.
+
+## 8. The owner's words, relayed
+
+Written before the code (2.0.6, option e), and corrected after the Audit's gate of #569 (M1, M2, L1) and the QA's
+(I1). An orchestrator that passes
+JeanBrasse's words on to another project's orchestrator types them as its own
+message: the receiver sees `Message from agent "X":` and then "the owner says
+merge it", and cannot tell the owner's words from the sender's claim. Only Tars
+can tell them apart, from what it holds as the owner's own: what the window
+sends to a chat (the renderer, which only the person at the machine drives),
+and what the Hermes relay brings from the owner's Telegram chat (a
+reply to a report or a message, "@project text", the answer to an `ask_user`
+question). That last rests on Hermes's own configuration, which Tars cannot
+check: whatever its plugin delivers for that chat is taken as the owner's.
+Slack and Discord are not the owner: anyone in the channel writes
+there. Keys typed by hand into a terminal are not recorded either: Tars cannot
+tell where such a message starts or ends.
+
+**What it is.** Tars records each of those messages when it receives it: an
+id (`ow-` and 12 hex characters), its text as received, when, how
+(`window` or `Telegram`), the project it was addressed to, the chat that
+received it when one did, what it was (an answer to a question, a reply to a
+report or to a message, a message to the project) and, for an answer, the
+question with who asked it and when. In memory only:
+a restart of Tars forgets them, and nothing is ever written where an agent can
+write. Those who could have received them may ask Tars to relay one, by its id
+and nothing else, to an agent with an orchestrator's powers, in any project:
+the project's orchestrator, and the runner of the chat that received them
+(every chat's runner of the project while the owner lets the chats read each
+other, `chatsReadEachOther`). Tars types its record into the receiver, an
+answer after its question, under a sender line only Tars writes, alone on its
+line:
+`Message from Tars: the owner's words of 19:03 UTC (23:03 +04), via Telegram,
+an answer to a question, relayed by agent "X" ("id"), verified by Tars (words
+ow-...):`. The receiver can read back, with `owner_words`, the words relayed to
+it and who relayed them, and check the id against them.
+
+**The threats, and what answers each.**
+
+- **Forgery by words.** An agent writes the mark itself. The mark is a sender
+  line, and only a sender line counts: Tars types every sender line in a paste
+  of its own and ends it with a line break, so no body continues it. Until the
+  Audit's gate of #569 the body's first line was typed on the same line, and a
+  message Tars typed as itself whose first line an agent wrote (a retyped task,
+  the super chat) read as the mark once one letter of "verified by Tars" was a
+  look-alike. Now the mark stands alone on the first line, and a forgery sits
+  on a line of its own, after the real sender line of whoever sent it; a
+  retyped task is typed under its own sender, never Tars's. A session Tars
+  starts on a message (a CLI that is not up, an agent asleep, a bot's launch)
+  takes it under the same sender line, after Tars's own header: until the
+  Audit's re-check of #569 it went in raw, and a worker's forged mark read as
+  the real one there, while a real relay arrived with no mark. A body line that
+  reads like a sender line is quoted with `> ` whatever its letters
+  (`quoteSenderLookAlikes`, `core/pty-manager.ts`). As a defence in depth, a
+  body line whose skeleton spells "verified by tars" is quoted too; that
+  skeleton knows the look-alikes of "message from"'s eight letters only, so a
+  line written with a Cyrillic i is not quoted: what answers it is the line
+  break, and the receiver's check of the id.
+- **Forgery by id.** An agent relays an id it made up or guessed: unknown,
+  refused. The id is random (48 bits, in Tars's memory alone), but its
+  randomness is not what refuses everyone else: whoever relays must be one
+  who could have received the words, and knowing an id gives nothing to an
+  agent that could not. Sequential ids would break no test, and would refuse
+  the same agents.
+- **An edited quote.** The relay takes an id, never a text: what is typed is
+  Tars's record, byte for byte, with only the look-alike quoting every body
+  gets. An agent cannot shorten, extend or reword the owner's words under the
+  mark.
+- **Replay.** The same words relayed twice to the same receiver are refused;
+  words older than 24 hours are refused; after a restart of Tars every id is
+  unknown. A delivery the receiver's terminal refused gives the relay back.
+  The mark carries the time of the words themselves, in both zones, so a
+  receiver sees how old they are.
+- **Laundering.** Words the owner addressed to project A relayed by an
+  orchestrator of project B, by a worker of A, or by the runner of another
+  chat of A while the chats do not read each other: refused. Only those who
+  could have received them may pass them on. That last switch,
+  `chatsReadEachOther`, is read from `~/.tars/app-settings.json`, which every
+  agent can write: turned on there, every agent with an orchestrator's powers
+  in the project holds every word of it.
+- **An answer out of its context.** A "yes" relayed beside a claim of the
+  sender's would read as the owner approving the claim. The mark says what the
+  words were, and an answer is typed after the question it answers, as its
+  asker wrote it, quoted as data.
+
+**What it does not prove.** That the owner meant the words for the receiver,
+or for the work the receiver is doing now; that whatever the relaying agent
+says around them, in a message of its own, is the owner's; anything the owner
+typed by hand into a terminal, or said in Slack or Discord. The mark says
+"these are words the owner sent Tars, at that time, for that project or chat,
+as that kind of word", and no more.

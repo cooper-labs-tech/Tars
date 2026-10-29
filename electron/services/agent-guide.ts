@@ -115,6 +115,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       'An orchestrator asks the user with `ask_user`, from its terminal: Tars sends the question to their Telegram through their Hermes, which takes the relay to Hermes on (Settings, Hermes), and the tool returns at once. Their answer is typed into your terminal later, after the line "Message from the user via Telegram:". Do not wait for it in a loop: go on with other work, or end your turn.',
       'A request that came from Telegram, Slack or Discord is answered there: `send_telegram`, `send_slack`, `send_discord`. `send_telegram` is an orchestrator\'s, and goes to the user through their Hermes, text only; with the relay to Hermes off it sends nothing and says where to turn it on (Settings, Hermes).',
       'Ask only what you cannot decide: otherwise decide, say what you assumed, and go on.',
+      'The user\'s own words, from the window\'s chat or their Telegram, can be passed to another orchestrator with `relay_owner_words`, by the id `owner_words` gives: Tars types its own record of them on a line of their own, after "Message from Tars: the owner\'s words of ..., verified by Tars (words ow-...):". Only that sender line carries the mark; `owner_words` also lists the words relayed to you, to check an id against.',
     ].join('\n'),
   },
   {
@@ -187,6 +188,8 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   room_read: 'messages',
   chat_list: 'messages',
   ask_user: 'asking-the-user',
+  owner_words: 'asking-the-user',
+  relay_owner_words: 'asking-the-user',
   send_telegram: 'asking-the-user',
   send_slack: 'asking-the-user',
   send_discord: 'asking-the-user',

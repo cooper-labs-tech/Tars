@@ -1,6 +1,6 @@
 import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
-import { ptyProcesses } from './pty-manager';
+import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
 import { dialogOnScreen } from './terminal-mirror';
 import { lastInterruptAt } from '../services/agent-truth';
@@ -38,6 +38,8 @@ export interface AgentLaunchOptions {
    * bootstrap.
    */
   message?: boolean;
+  /** Who sent that message: a retype of the launch's task types it under them, never as Tars (the Audit's L2 on #569). */
+  sender?: MessageSender;
 }
 
 export type AgentLaunchResult =

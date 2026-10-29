@@ -56,8 +56,10 @@ exports[`Files, launches and replies that fail, recorded before D1 > Slack: a re
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Measure the Usage page'
-cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Measure the Usage page'
+      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+Measure the Usage page'
+cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+Measure the Usage page'
 ",
     },
   ],
@@ -131,12 +133,14 @@ exports[`Files, launches and replies that fail, recorded before D1 > Slack: a te
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Measure the Usage page'
+      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+Measure the Usage page'
 ",
     },
     {
       "terminal": 1,
-      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --dangerously-skip-permissions --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- '[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?'
+      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --dangerously-skip-permissions --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?'
 ",
     },
   ],
@@ -200,8 +204,10 @@ exports[`Slack, as recorded before D1 > a mention and a direct message go to the
   "typed": [
     {
       "terminal": 0,
-      "text": "[200~Message from Slack: [201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?[201~
-[200~Message from Slack: [201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] plan tomorrow please[201~
+      "text": "[200~Message from Slack: 
+[201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?[201~
+[200~Message from Slack: 
+[201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] plan tomorrow please[201~
 ",
     },
   ],
@@ -258,7 +264,8 @@ exports[`Slack, as recorded before D1 > a message cold-starts the orchestrator w
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --dangerously-skip-permissions --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- '[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?'
+      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --dangerously-skip-permissions --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?'
 ",
     },
   ],
@@ -440,7 +447,8 @@ exports[`Slack, as recorded before D1 > start: a cold start types the launch com
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Measure the Usage page'
+      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+Measure the Usage page'
 ",
     },
   ],
@@ -499,7 +507,8 @@ Task: Measure the Usage page",
   "typed": [
     {
       "terminal": 0,
-      "text": "[200~Message from Slack: [201~[200~Measure the Usage page[201~
+      "text": "[200~Message from Slack: 
+[201~[200~Measure the Usage page[201~
 ",
     },
   ],
@@ -1061,7 +1070,8 @@ exports[`What sets the two bots apart, recorded before D1 > Slack: a worker cold
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/o'\\''rion-wt' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --permission-mode auto --effort medium --add-dir '<HOME>/.tars' -- 'Measure the Usage page'
+      "text": "cd '<HOME>/projects/o'\\''rion-wt' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --permission-mode auto --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+Measure the Usage page'
 ",
     },
   ],
@@ -1120,7 +1130,8 @@ exports[`What sets the two bots apart, recorded before D1 > Slack: start on the 
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --dangerously-skip-permissions --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- 'Plan the release'
+      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --dangerously-skip-permissions --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+Plan the release'
 ",
     },
   ],
@@ -1177,7 +1188,8 @@ exports[`What sets the two bots apart, recorded before D1 > Slack: the orchestra
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --permission-mode default --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- '[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?'
+      "text": "cd '<HOME>/projects/atlas' && '/opt/tars-contract/bin/claude' --append-system-prompt-file '<REPO>/electron/resources/super-agent-instructions.md' --model 'claude-opus-5-5' --permission-mode default --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?'
 ",
     },
   ],

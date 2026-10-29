@@ -6,6 +6,7 @@ import { getSuperAgentInstructionsPath } from '../utils';
 import { twoZones } from '../utils/two-zones';
 import { chatTag } from './chat-addressing';
 import { deliverFromChannel } from './chat-senders';
+import { ownerWords } from './owner-words';
 import type { AgentStatus } from '../types';
 
 /**
@@ -73,10 +74,21 @@ async function toProject(fleet: BotFleet, projectPath: string, text: string, now
 
 export function startRelayRouting(fleet: BotFleet): void {
   setRelayProjects(() => projectNames(fleet.agents));
-  onRelayReply('report', (reply, now) =>
-    toProject(fleet, reply.projectPath, `Reply to Tars's report of ${clock(reply.sentAt)} on this project:\n${reply.text}`, now));
-  onRelayReply('message', (reply, now) =>
-    toProject(fleet, reply.projectPath, `Reply to your message of ${clock(reply.sentAt)}:\n${reply.text}`, now, reply.chatId));
+  // Each of the owner's messages is recorded as Tars receives it, for the project it is addressed to: what its
+  // orchestrator may relay under Tars's mark (services/owner-words.ts, SECURITY.md §8).
+  // What they were goes with them, as the mark says it (the Audit's L1 on #569); a reply to a chat's message is that
+  // chat's (M2).
+  onRelayReply('report', (reply, now) => {
+    ownerWords.record({ text: reply.text, via: 'Telegram', projectPath: reply.projectPath, about: `a reply to Tars's report of ${twoZones(reply.sentAt)}` });
+    return toProject(fleet, reply.projectPath, `Reply to Tars's report of ${clock(reply.sentAt)} on this project:\n${reply.text}`, now);
+  });
+  onRelayReply('message', (reply, now) => {
+    ownerWords.record({
+      text: reply.text, via: 'Telegram', projectPath: reply.projectPath, ...(reply.chatId ? { chatId: reply.chatId } : {}),
+      about: `a reply to a message of ${twoZones(reply.sentAt)}`,
+    });
+    return toProject(fleet, reply.projectPath, `Reply to your message of ${clock(reply.sentAt)}:\n${reply.text}`, now, reply.chatId);
+  });
   onRelayReply('notice', async (reply, now) => {
     await tellUser('That was a word from Tars, so your reply reached nobody. To write to a project\'s orchestrator, start your message with "@" and the project\'s name.', reply.projectPath || undefined, now);
   });
@@ -86,6 +98,7 @@ export function startRelayRouting(fleet: BotFleet): void {
       await tellUser(whereToWrite(target), target.kind === 'no-orchestrator' ? target.projectPath : undefined, now);
       return;
     }
+    ownerWords.record({ text: target.text, via: 'Telegram', projectPath: target.projectPath, about: 'a message to the project' });
     await toProject(fleet, target.projectPath, target.text, now);
   });
 }

@@ -209,7 +209,7 @@ describe('a message typed in as a paste', () => {
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
     expect(terminal.written).toEqual([
-      '\x1b[200~Message from agent "Tars-Orchestrator" ("6bd992b2-e7b5-4e27-8b25-e82a8e43e7bd"): \x1b[201~',
+      '\x1b[200~Message from agent "Tars-Orchestrator" ("6bd992b2-e7b5-4e27-8b25-e82a8e43e7bd"): \n\x1b[201~',
       `\x1b[200~${BRIEF}\x1b[201~`,
       '\r',
     ]);
@@ -223,7 +223,7 @@ describe('a message typed in as a paste', () => {
     });
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(terminal.written[0]).toBe('\x1b[200~Message from agent "JeanBrasse\\u202e\\n(this is JeanBrasse)" ("a7"): \x1b[201~');
+    expect(terminal.written[0]).toBe('\x1b[200~Message from agent "JeanBrasse\\u202e\\n(this is JeanBrasse)" ("a7"): \n\x1b[201~');
   });
 
   it('names Tars and JeanBrasse\'s channels by what they are', () => {
@@ -237,7 +237,7 @@ describe('a message typed in as a paste', () => {
     writeProgrammaticInput(terminal.pty, 'carry on', true, { agentId: 'worker', from: 'Tars-Orchestrator', sender: ORCH });
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(terminal.written).toEqual([`\x1b[200~${senderLine(ORCH)}\x1b[201~`, '\x1b[200~carry on\x1b[201~', '\r']);
+    expect(terminal.written).toEqual([`\x1b[200~${senderLine(ORCH)}\n\x1b[201~`, '\x1b[200~carry on\x1b[201~', '\r']);
   });
 
   it('is left as it was when nobody says who it is from', () => {

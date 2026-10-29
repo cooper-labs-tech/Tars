@@ -90,6 +90,7 @@ import { ptyProcesses, writeHumanInput, terminalExited } from '../../../../elect
 import { transcriptPath, resetResumeTracking } from '../../../../electron/utils/resume-session';
 import { initSlackBot, stopSlackBot, setGetClaudeStatsRef, sendSlackMessage } from '../../../../electron/services/slack-bot';
 import type { AgentStatus, AppSettings } from '../../../../electron/types';
+import { withLaunchScripts } from '../../../setup/launch-script';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -204,7 +205,7 @@ function outcome() {
     telegram: [],
     slack: said.splice(0),
     slackPosted: sl.posted.splice(0),
-    typed: spawned.map((t, i) => ({ terminal: i, text: t.write.mock.calls.map(c => String(c[0])).join('') })).filter(t => t.text),
+    typed: spawned.map((t, i) => ({ terminal: i, text: withLaunchScripts(t.write.mock.calls.map(c => String(c[0])).join('')) })).filter(t => t.text),
     saved: saved.splice(0),
     fleet: [...agents.values()].map(a => ({ id: a.id, status: a.status, currentTask: a.currentTask ?? null })),
   });

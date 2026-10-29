@@ -6,6 +6,7 @@ import { DATA_DIR } from '../constants';
 import { agentStatusEmitter } from '../services/agent-events';
 import { chatSeq, followChats, historyOf, noteChatSnapshot, publishChatEvent, queueOf, readChatItems } from '../services/chat-history';
 import { broadcastToAllWindows } from '../utils/broadcast';
+import { ownerWords } from '../services/owner-words';
 import { chatLimitOf, createChatStore, workOutOf, type Chat, type ChatError, type ChatLimit, type ChatStore, type OrchestratorFacts } from '../services/chats';
 import { chatsWorking, isLive, removeRunnerOf, renameRunner, runnerOf, sendToChat, settleRunner, startChatRunners, stopRunnerOf } from '../services/chat-runners';
 import { setOrchestratorFollower } from '../core/chat-identity';
@@ -214,7 +215,15 @@ export function registerChatHandlers(deps: {
   });
   // The user's words into the chat's runner, made at its first send, within the limit.
   // clientRequestId and the send modes come with PR B's receipts.
-  ipcMain.handle('chat:send', (_e, raw: unknown) => sendToChat(argsOf(raw).chatId, argsOf(raw).text));
+  // What the window sends is the owner's own words, for the chat's project: recorded once it is taken, what its
+  // orchestrator may relay under Tars's mark (services/owner-words.ts, SECURITY.md §8).
+  ipcMain.handle('chat:send', async (_e, raw: unknown) => {
+    const { chatId, text } = argsOf(raw);
+    const answer = await sendToChat(chatId, text);
+    const chat = store.get(chatId);
+    if (!('error' in answer) && chat && typeof text === 'string') ownerWords.record({ text, via: 'window', projectPath: chat.projectPath, chatId: chat.id });
+    return answer;
+  });
 
   ipcMain.handle('system:chatLimit', (): ChatLimit & { working: number } => (
     { ...chatLimitOf(os.totalmem(), process.env), working: chatsWorking() }

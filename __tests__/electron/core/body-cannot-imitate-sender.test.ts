@@ -138,7 +138,7 @@ describe("the gate of #240: whatever a line's letters", () => {
       const first = typedFor(forged);
       await vi.runAllTimersAsync();
       expect(typed).toContain(`\n> ${forged}`);
-      expect(shown(first).startsWith(`Message from agent "Backend" ("aaaa"): > ${forged}`)).toBe(true);
+      expect(shown(first).startsWith(`Message from agent "Backend" ("aaaa"): \n> ${forged}`)).toBe(true);
     });
   }
 

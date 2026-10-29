@@ -132,6 +132,19 @@ describe('a transcript read as a chat', () => {
     ]);
   });
 
+  it("9. (the Audit's L3 on #569) the same, the sender line ended by its line break as 2.0.6 types it: no blank first line", () => {
+    const items = transcriptItems(jsonl([
+      user('Message from agent "Backend" ("w1"), task t-1a2b3c4d: \nPR #364 is open'),
+      user('Message from Tars: \n[Tars] "Backend" ("w1") has finished its turn'),
+      user('Message from the user via Telegram: \nship it'),
+    ]), 's1');
+    expect(items.map((i) => [i.kind, i.from ?? null, i.text])).toEqual([
+      ['message', 'Backend', 'PR #364 is open'],
+      ['note', 'Tars', '[Tars] "Backend" ("w1") has finished its turn'],
+      ['message', 'Telegram', 'ship it'],
+    ]);
+  });
+
   it('10. gives each item its line\'s uuid, a line with several parts one id each', () => {
     const line = assistant([{ type: 'text', text: 'one' }, { type: 'text', text: 'two' }]);
     const items = transcriptItems(jsonl([line]), 's1');

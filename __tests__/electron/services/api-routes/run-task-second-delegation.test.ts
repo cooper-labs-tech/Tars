@@ -244,10 +244,10 @@ describe('two tasks delegated in a row into one claude agent, from two other age
     asker('x-grok', 'Grok Agent');
 
     const first = await delegate(dev, 'x-amp', 'first job', 'first answer');
-    expect(first.prompt).toContain(`Message from agent "Amp Agent" ("x-amp"), task ${first.ref}: first job`);
+    expect(first.prompt).toContain(`Message from agent "Amp Agent" ("x-amp"), task ${first.ref}: \nfirst job`);
     expect(first.ended.data.task).toMatchObject({ outcome: 'completed', requesterAgentId: 'x-amp', result: 'first answer' });
     const second = await delegate(dev, 'x-grok', 'second job', 'second answer');
-    expect(second.prompt).toContain(`Message from agent "Grok Agent" ("x-grok"), task ${second.ref}: second job`);
+    expect(second.prompt).toContain(`Message from agent "Grok Agent" ("x-grok"), task ${second.ref}: \nsecond job`);
     expect(second.ended.data.task).toMatchObject({ outcome: 'completed', requesterAgentId: 'x-grok', result: 'second answer' });
   });
 

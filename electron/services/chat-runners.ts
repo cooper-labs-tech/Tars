@@ -438,7 +438,7 @@ export async function sendToChat(chatId: unknown, text: unknown, opts: { sender?
     // under a new id, as a restart does (core/agent-restart.ts).
     resumeOnNextStart(runner.id);
     const conversation = runner.status === 'asleep' ? null : resolveResumeSessionId(runner);
-    const options = { message: true, ...(conversation && conversation === runner.lastKilledSessionId ? { resumeSessionId: conversation } : {}) };
+    const options = { message: true, ...(opts.sender ? { sender: opts.sender } : {}), ...(conversation && conversation === runner.lastKilledSessionId ? { resumeSessionId: conversation } : {}) };
     const note = notesForNextLaunch.get(runner.id);
     notesForNextLaunch.delete(runner.id);
     reserved.add(runner.id);
