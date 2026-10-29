@@ -49,7 +49,7 @@
 | `src/components/ClientLayout.tsx` | The shell: sidebar + header, and the theme boot (`tars-theme` in `localStorage`, dark unless explicitly `light`) |
 | `src/components/TerminalsView/` | The xterm grid that is the Dashboard, including the scroll-lock and multi-terminal hooks |
 | `src/lib/providers.ts` | Frontend provider registry: icon, badge, models, default model. One entry per provider; NewChatModal and Settings both read it |
-| `design/tars-redesign.pen` | Pencil source of truth, 348 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
+| `design/tars-redesign.pen` | Pencil source of truth, 359 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
 | `design/chat-design.pen` | 72 of the same frames (71 with the same ids; `Agent error · reason` was drawn into both after the fork, so its ids differ), the two panel history frames `tars-redesign.pen` dropped with the history view, plus the 11 frames of the Chat room, which exist nowhere else: 85 in all. A fork, not a companion. Its room frames describe the Chat before its redesign: draw anything for the Chat in `chat-redesign-a.pen`, and anything else in `tars-redesign.pen` |
 | `design/chat-redesign-a.pen` | The Chat page's redesign, direction A (chosen by JeanBrasse on 2026-09-17), with its composer: the room and Hermes pages in every state a user can meet, and sheets for the team, the thread, Hermes, the composer and the room head, dark and light. What the Chat implements since #165 (merged 2026-09-24) |
 | `design/landing.pen` | The site in `landing/`: its page, its 404, its privacy and terms pages, and the picture link previews show. Forked from `tars-redesign.pen` on 2026-09-23, which no longer carries the landing |
@@ -204,7 +204,8 @@ pen > exit()
 Verified: that session reads the 72 Tars frames while the desktop app sits on another
 document, and `save()` writes the `.pen` to disk unattended. Installed with
 `npm install -g @pen.dev/cli` (`@pencil.dev/cli` is deprecated), authenticated per user in
-`~/.pencil/session-cli.json`, separate from the desktop app's session.
+`~/.pencil/session-cli.json`, separate from the desktop app's session. It takes the CLI 0.3.9 or later
+(`pen version`): an older one opens a format 2.19 document as an empty canvas, and `save()` would then write it empty.
 
 Pencil traps that will cost you an afternoon:
 - `save()` is explicit. An agent that forgets it loses the whole session's work with no error
