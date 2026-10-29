@@ -22,6 +22,8 @@ import { createOwnerWords, OWNER_WORDS_TTL_MS, OWNER_WORDS_MAX } from '../../../
  * O8. An id is guessable: not random, not of its shape, or given twice.
  * O9. The store grows without end; or drops the newest instead of the oldest.
  * O10. A project's orchestrator lists words addressed to another project.
+ * O11. A relay Tars could not deliver (the receiver's terminal refused it) still counts as made, and the words can
+ *      never reach that receiver.
  */
 
 const A = '/projects/alpha';
@@ -99,6 +101,14 @@ describe('the words themselves', () => {
     expect(words.listFor(A)).toHaveLength(OWNER_WORDS_MAX);
     expect(words.relay(first, { by: orchA, to: orchB })).toMatchObject({ code: 'owner_words_unknown' });
     expect(words.listFor(A)[0].text).toBe(`w${OWNER_WORDS_MAX - 1}`);
+  });
+
+  it('O11. a relay that was not delivered can be made again, once', () => {
+    const { id } = words.record({ text: 'merge it', via: 'Telegram', projectPath: A });
+    expect(words.relay(id, { by: orchA, to: orchB })).toMatchObject({ ok: true });
+    words.undelivered(id, orchB.id);
+    expect(words.relay(id, { by: orchA, to: orchB })).toMatchObject({ ok: true });
+    expect(words.relay(id, { by: orchA, to: orchB })).toMatchObject({ code: 'owner_words_already_relayed' });
   });
 
   it("O10. a project's list holds its own words only, newest first", () => {
