@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useCallback, useLayoutEffect } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { isAbsolutePath, pathName, rendererPlatform, tildePath, toSlashes } from '@/lib/display-path';
 import { BOX_H, BOX_W, fitZoom, keepAnchor, layoutRings, ringOrder, stageBox, zoomBounds } from '@/lib/graph-layout';
 import type { Point, StageBox } from '@/lib/graph-layout';
@@ -105,6 +106,37 @@ export function globalMcpServers(result: { content?: string; error?: string } | 
     return undefined;
   }
 }
+
+/**
+ * A file the panel opens, from memory:read-file or fs:read-text-file's answer: `{ content }`, or `{ content: '', error }`
+ * for a file Tars does not read (a FIFO, a link, past 1 MiB, missing, out of the allowed roots). Refused, it is no
+ * draft: save would write the empty text over the real file (the Audit's finding on PR 565). The refusal is main's
+ * own words; no answer at all is no file read either.
+ */
+export function openedFile(result: { content?: string; error?: string } | null | undefined): { content: string; refused: string | null } {
+  if (!result) return { content: '', refused: 'The file was not read.' };
+  if (result.error) return { content: '', refused: result.error };
+  return { content: result.content ?? '', refused: null };
+}
+
+/**
+ * Whether the panel may save its draft: never while a file loads, when the draft is still the previous file's and
+ * would land on the one being opened (the Audit's Low on PR 572), never for a refused file, and only for a change.
+ */
+export function canSave(panel: { loading: boolean; refused: string | null; content: string; draft: string }): boolean {
+  return !panel.loading && !panel.refused && panel.draft !== panel.content;
+}
+
+/**
+ * The panel's opens, numbered: an answer to an open that is no longer the latest is dropped, or a slow read of one
+ * file would fill the panel of the next with its text, and save write it to that file's path (the Audit's FIX FIRST
+ * on PR 572).
+ */
+export function openSequence(): { begin: () => number; isLatest: (open: number) => boolean } {
+  let latest = 0;
+  return { begin: () => ++latest, isLatest: open => open === latest };
+}
+
 type ClaudeDataType = {
   plugins: Array<{ name?: string; displayName?: string; enabled?: boolean }>;
   skills: Array<{ name: string; source: string; path: string; description?: string }>;
@@ -321,6 +353,9 @@ export default function AgentKnowledgeGraph() {
   const [panelProject, setPanelProject] = useState<GraphNode | null>(null);
   const [panelContent, setPanelContent] = useState('');
   const [panelDraft, setPanelDraft] = useState('');
+  // Why the file opened is not read (openedFile): then it is no draft, and nothing is saved over it.
+  const [panelRefused, setPanelRefused] = useState<string | null>(null);
+  const opens = useRef(openSequence());
   const [panelLoading, setPanelLoading] = useState(false);
   const [panelTab, setPanelTab] = useState<'write' | 'preview'>('write');
 
@@ -465,15 +500,19 @@ export default function AgentKnowledgeGraph() {
     setPanelNode(node);
     setPanelLoading(true);
     setPanelTab('preview');
+    setPanelRefused(null);
+    // The previous file's draft goes with it: it never lands on this one (canSave).
+    setPanelContent('');
+    setPanelDraft('');
+    const open = opens.current.begin();
     try {
       let content = '';
+      let refused: string | null = null;
       if (node.kind === 'memory' && node.meta?.filePath) {
-        const res = await window.electronAPI?.memory?.readFile(node.meta.filePath);
-        content = res?.content ?? '';
+        ({ content, refused } = openedFile(await window.electronAPI?.memory?.readFile(node.meta.filePath)));
       } else if (node.kind === 'instructions' && node.meta?.filePath) {
         const fp = node.meta.filePath.replace(/^~/, '');
-        const res = await window.electronAPI?.fs?.readTextFile(fp);
-        content = res?.content ?? '';
+        ({ content, refused } = openedFile(await window.electronAPI?.fs?.readTextFile(fp)));
       } else if (node.kind === 'skill' && node.meta?.skillPath) {
         const p = node.meta.skillPath;
         const docs = await window.electronAPI?.fs?.readProjectFiles({
@@ -492,15 +531,18 @@ export default function AgentKnowledgeGraph() {
         content = `# ${node.label}\n\n**Command:** \`${cmd}\`\n\n**Args:** \`${args || 'none'}\``;
         setPanelTab('preview');
       }
+      // Another file was opened since: this answer is not its.
+      if (!opens.current.isLatest(open)) return;
+      setPanelRefused(refused);
       setPanelContent(content);
       setPanelDraft(content);
     } finally {
-      setPanelLoading(false);
+      if (opens.current.isLatest(open)) setPanelLoading(false);
     }
   }, []);
 
   const savePanel = useCallback(async () => {
-    if (!panelNode?.meta?.filePath) return;
+    if (!panelNode?.meta?.filePath || !canSave({ loading: panelLoading, refused: panelRefused, content: panelContent, draft: panelDraft })) return;
     const fp = panelNode.meta.filePath;
     if (panelNode.kind === 'memory') {
       await window.electronAPI?.memory?.writeFile(fp, panelDraft);
@@ -509,7 +551,8 @@ export default function AgentKnowledgeGraph() {
       await window.electronAPI?.fs?.writeTextFile({ filePath: fp, content: panelDraft });
     }
     setPanelContent(panelDraft);
-  }, [panelNode, panelDraft]);
+  }, [panelNode, panelDraft, panelRefused, panelLoading, panelContent]);
+  const saveable = canSave({ loading: panelLoading, refused: panelRefused, content: panelContent, draft: panelDraft });
 
   const handleNodeClick = useCallback((node: GraphNode) => {
     if (node.kind === 'agent') {
@@ -780,7 +823,7 @@ export default function AgentKnowledgeGraph() {
           {/* Header */}
           <div className="flex items-center gap-2 px-4 py-3 border-b border-border shrink-0">
             <span className="flex-1 text-sm font-medium text-foreground truncate">{panelNode.label}</span>
-            {panelNode.meta?.editable && (
+            {panelNode.meta?.editable && !panelRefused && (
               <>
                 <Button
                   size="sm"
@@ -826,6 +869,12 @@ export default function AgentKnowledgeGraph() {
               <div className="flex items-center justify-center h-full">
                 <BrandSpinner size={30} label="Loading content" />
               </div>
+            ) : panelRefused ? (
+              // As the Memory page says its own errors.
+              <div className="m-4 p-3 bg-danger/10 border border-danger/30 text-danger text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                {panelRefused}
+              </div>
             ) : panelNode.meta?.editable && panelTab === 'write' ? (
               <textarea
                 value={panelDraft}
@@ -841,9 +890,9 @@ export default function AgentKnowledgeGraph() {
           </div>
 
           {/* Footer - save button for editable files */}
-          {panelNode.meta?.editable && (
+          {panelNode.meta?.editable && !panelRefused && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border shrink-0">
-              {panelDraft !== panelContent && (
+              {saveable && (
                 <span className="text-[10px] text-muted-foreground">Unsaved changes</span>
               )}
               <Button
@@ -851,7 +900,7 @@ export default function AgentKnowledgeGraph() {
                 variant="primary"
                 className="ml-auto font-mono"
                 onClick={savePanel}
-                disabled={panelDraft === panelContent}
+                disabled={!saveable}
               >
                 save
               </Button>
