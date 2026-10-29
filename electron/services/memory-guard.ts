@@ -207,12 +207,23 @@ export interface MemoryGuardPass {
   owners: Map<string, string>;
   /** Tars's note to that project's orchestrator; only one typed is told (kanban-routes.ts tellOrchestratorAsTars). */
   tell: (projectPath: string, text: string) => Promise<string>;
+  /** How long a pass waits for a delivery before going on (TELL_WAIT_MS); a test's own. */
+  tellWaitMs?: number;
 }
+
+/**
+ * How long a pass waits for a note's delivery. A note Tars holds behind a draft in the orchestrator's field settles
+ * only when the terminal takes it or gives it up (kanban-routes.ts tellAgentAsTars): awaited, it stopped the pass,
+ * and the guard with it (#558's E2E, 29/10). Past this, the pass goes on; the note held is not told again while it
+ * is, and is recorded the moment it is typed.
+ */
+export const TELL_WAIT_MS = 5_000;
+const held = new Set<string>();
 
 /** One pass over every project's MEMORY.md: the notes owed, told, and what was told kept. Never throws. */
 export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   const told = readStore(opts.store);
-  let changed = false;
+  const forget = new Set<string>();
   const files = findMemoryFiles(opts.home);
   // A file gone is forgotten, in this pass: written again past the limit, smaller than what was told, it would never
   // be told (the QA's F1 on #558: a new file losing 14 lines with no note). Gone means ENOENT, never a listing that
@@ -222,22 +233,36 @@ export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   for (const file of Object.keys(told)) {
     if (found.has(file)) continue;
     try { fs.lstatSync(file); } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === 'ENOENT') { delete told[file]; changed = true; }
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') forget.add(file);
     }
   }
   for (const { folder, file } of files) {
     const guard = await guardMemoryFile(file);
     const step = memoryNoteDue(told[file], guard);
-    if (step.told === undefined && told[file] !== undefined) { delete told[file]; changed = true; }
+    if (step.told === undefined && told[file] !== undefined) forget.add(file);
     const project = opts.owners.get(folder);
-    if (!step.tell || !project) continue;
+    if (!step.tell || !project || held.has(file)) continue;
+    held.add(file);
+    const record = step.told!;
     // The path holds an account folder's name, any name under ~/.claude-accounts: quoted and escaped, as every value
     // a note from Tars interpolates (utils/envelope-value.ts; the Audit's L3 on #558).
-    const delivery = await opts.tell(project, `${guard.notice} The file: ${envelopeValue(file)}`).catch(() => 'failed');
-    // Not typed (the orchestrator busy, or none running): owed, and given at a later pass.
-    if (delivery === 'typed') { told[file] = step.told!; changed = true; }
+    const delivery = opts.tell(project, `${guard.notice} The file: ${envelopeValue(file)}`).catch(() => 'failed').then(d => {
+      held.delete(file);
+      // Not typed (the orchestrator busy, or none running): owed, and given at a later pass.
+      if (d === 'typed') editStore(opts.store, s => { s[file] = record; });
+    });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([delivery, new Promise<void>(resolve => { timer = setTimeout(resolve, opts.tellWaitMs ?? TELL_WAIT_MS); })]);
+    if (timer) clearTimeout(timer);
   }
-  if (changed) writeStore(opts.store, told);
+  if (forget.size) editStore(opts.store, s => { for (const file of forget) delete s[file]; });
+}
+
+/** What was told, read, edited and written in one step: a pass and a delivery held past it each keep their own. */
+function editStore(file: string, edit: (told: Record<string, MemoryTold>) => void): void {
+  const told = readStore(file);
+  edit(told);
+  writeStore(file, told);
 }
 
 function readStore(file: string): Record<string, MemoryTold> {

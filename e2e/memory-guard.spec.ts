@@ -64,7 +64,9 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     'process.stdin.on(\'data\', b => {',
     `  fs.appendFileSync(${JSON.stringify(typed)}, JSON.stringify(b.toString('utf8')) + '\\n');`,
     "  if (!b.toString('utf8').includes('\\r')) return;",
-    "  void post({ hook: 'UserPromptSubmit', status: 'running' }).then(() => setTimeout(() => void post({ hook: 'Stop', status: 'idle' }), 300));",
+    // `event` as the real hook sends it: the server reads a turn start from it, and with it that the field emptied
+    // (hooks/user-prompt-submit.sh); without it, the next note is held behind the first as a draft.
+    "  void post({ hook: 'UserPromptSubmit', event: 'UserPromptSubmit', status: 'running' }).then(() => setTimeout(() => void post({ hook: 'Stop', status: 'idle' }), 300));",
     '});',
     "void post({ status: 'idle', source: 'startup' });",
     "process.stdout.write('stand-in ready\\r\\n');",
