@@ -37,7 +37,7 @@ export function registerHeavySlotTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "heavy_slot_take",
-      description: "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the holder, or free disk or memory under the floor), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
+      description: "Take the machine's heavy-run slot before a test suite, a build, a dev server, Docker or a simulator: every project's agents share it, and a further run starts only when the machine has room for it. Waits up to wait_seconds; if not granted by then, returns the ticket and why it waits (the runs holding and the ceiling, the last run still settling, free disk or memory, or the machine swapping), to wait again with it. The slot is yours until you give it back or your turn ends: Tars gives it back then. For one command, or one that outlives your turn, `tars-slot run -- <command>` in your terminal holds it for that command alone. A dev server started on its own does not take the slot.",
       schema: {
         label: z.string().max(120).optional().describe("What the run is, as others will see it in the queue: e.g. 'e2e suite' or 'next build'."),
         priority: z.enum(["gate", "normal", "background"]).optional().describe("gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."),
@@ -84,7 +84,7 @@ export function registerHeavySlotTools(server: McpServer): void {
         if (s.error) return problem(s.error);
         const line = (t: Ticket) => `${t.agentName} (${t.project}): ${t.label}, ${t.priority}`;
         return text([
-          `Slots: ${s.slots}.`,
+          `At most ${s.slots} runs at once, each started when the machine has room.`,
           ...(s.holders.length ? s.holders.map(t => `Holds: ${line(t)} since ${t.grantedAt}.`) : ["Nobody holds it."]),
           ...s.waiting.map(t => `Waits ${t.position}: ${line(t)}${t.why ? `: ${t.why}` : ""}.`),
         ].join("\n"));

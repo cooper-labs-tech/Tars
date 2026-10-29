@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import * as os from 'os';
 import { HeavySlot, SLOTS_DEFAULT, type SlotAsk, type SlotMachine, type SlotSnapshot, type SlotTicket } from './heavy-slot';
-import { readMachine, swapOutsPer10s } from './health/machine';
+import { readMachine, swapOutMbPer10s } from './health/machine';
 import { readProcesses } from './stall-watch';
 import type { AppSettings } from '../types';
 
@@ -95,7 +95,7 @@ let timer: ReturnType<typeof setInterval> | undefined;
 let settings: () => AppSettings = () => ({}) as AppSettings;
 let lastMachine: SlotStatus['machine'] = null;
 let previousSwap: { at: number; swapUsedMb: number | null } | undefined;
-let previousSwapOuts: { at: number; swapOutPages: number | null } | undefined;
+let previousSwapOuts: { at: number; swapOutBytes: number | null } | undefined;
 let trees: { at: number; rows: Array<{ pid: number; ppid: number; kb: number; cpu: number }> } | undefined;
 const alerts: SlotAlert[] = [];
 
@@ -110,14 +110,14 @@ async function machineNow(): Promise<SlotMachine> {
   const m = await readMachine({ previous: previousSwap, now });
   const total = os.totalmem() > 0 ? Math.round(os.totalmem() / (1024 * 1024)) : null;
   previousSwap = { at: now, swapUsedMb: m.swapUsedMb };
-  // Pages swapped out per 10 s since the last reading: during a run the alerts read the machine every 30 s, so a
-  // further run is admitted on a recent rate (health/machine.ts swapOutsPer10s).
-  const outs = swapOutsPer10s(previousSwapOuts, { at: now, swapOutPages: m.swapOutPages ?? null });
-  previousSwapOuts = { at: now, swapOutPages: m.swapOutPages ?? null };
+  // MB swapped out per 10 s since the last reading: during a run the alerts read the machine every 30 s, so a
+  // further run is admitted on a recent rate (health/machine.ts swapOutMbPer10s).
+  const outs = swapOutMbPer10s(previousSwapOuts, { at: now, swapOutBytes: m.swapOutBytes ?? null });
+  previousSwapOuts = { at: now, swapOutBytes: m.swapOutBytes ?? null };
   lastMachine = {
     at: new Date(now).toISOString(), diskFreeGb: m.diskFreeGb, memFreePct: m.memFreePct, memFreeMb: m.memFreeMb,
     memTotalMb: total, memFreeShareMb: total !== null && m.memFreePct !== null ? Math.round((m.memFreePct / 100) * total) : null,
-    swapUsedMb: m.swapUsedMb, swapGrowthMbPerMin: m.swapGrowthMbPerMin, swapOutsPer10s: outs, load1: m.load1,
+    swapUsedMb: m.swapUsedMb, swapGrowthMbPerMin: m.swapGrowthMbPerMin, swapOutMbPer10s: outs, load1: m.load1,
   };
   return lastMachine;
 }

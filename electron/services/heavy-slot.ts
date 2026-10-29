@@ -3,8 +3,9 @@ import * as path from 'path';
 import { redactSecrets } from '../utils/redact-secrets';
 
 /**
- * One heavy-run slot for the whole machine (2.0.5, lot 2 item A of the resources plan the owner approved on 28/10):
- * the test suites, builds, dev servers, Docker and simulators of every project's agents take it in turn.
+ * One heavy-run queue for the whole machine (2.0.5, lot 2 item A of the resources plan the owner approved on 28/10):
+ * the test suites, builds, dev servers, Docker and simulators of every project's agents wait in it, and since 2.0.6
+ * each further run is admitted by the machine's room, up to a ceiling (below).
  *
  * Measured before: a `next dev` takes 6 to 7 GB of swap, the load reached 300, and each project's orchestrator built
  * its own lock (kotsna's mkdir, parallel's heavy-run.lock, 1212's rule 198), which coordinated nothing between
@@ -50,21 +51,22 @@ export const SLOTS_MAX = 8;
  *   for only once the last one granted has run this long, the reading then including its climb.
  * - DISK_RESERVE_GB_PER_RUN: what each run holding may still take of the disk (swap files, artefacts; a `next dev`
  *   took 6 to 7 GB of swap).
- * - SWAPOUTS_10S_MAX: the pages swapped out in 10 s past which the machine swaps now, room-check.sh's figure.
+ * - SWAPOUT_MB_10S_MAX: the MB swapped out in 10 s past which the machine swaps now: room-check.sh's 1,000 pages on
+ *   Apple silicon's 16 KB pages, in bytes so that every system is held to the same figure (Linux's pages are 4 KB).
  * - MACHINE_READ_TIMEOUT_MS: a reading that does not come by then is an unknown machine.
  */
 export const SLOTS_DEFAULT = 3;
 export const SETTLE_MS = 90_000;
 export const DISK_RESERVE_GB_PER_RUN = 10;
-export const SWAPOUTS_10S_MAX = 1000;
+export const SWAPOUT_MB_10S_MAX = 16;
 export const MACHINE_READ_TIMEOUT_MS = 15_000;
 
 export interface SlotMachine {
   diskFreeGb: number | null;
   memFreePct: number | null;
   swapGrowthMbPerMin: number | null;
-  /** Pages swapped out in the last 10 s (macOS vm_stat Swapouts, Linux /proc/vmstat pswpout); null where unknown. */
-  swapOutsPer10s?: number | null;
+  /** MB swapped out in the last 10 s (macOS vm_stat Swapouts, Linux /proc/vmstat pswpout, at their page size); null where unknown. */
+  swapOutMbPer10s?: number | null;
 }
 
 export interface SlotWorld {
@@ -186,8 +188,8 @@ export class HeavySlot {
       return `waiting for free disk: ${m.diskFreeGb} GB free, a further run needs ${need} GB (the floor of ${f.diskGb} GB and ${DISK_RESERVE_GB_PER_RUN} GB for each of the ${holders.length} run${holders.length === 1 ? '' : 's'} holding)`;
     }
     if (m.memFreePct < f.memFreePct) return `waiting for free memory: ${m.memFreePct} % free, the floor is ${f.memFreePct} %`;
-    if (m.swapOutsPer10s != null && m.swapOutsPer10s > SWAPOUTS_10S_MAX) {
-      return `waiting for the machine to stop swapping: ${m.swapOutsPer10s} pages swapped out in 10 s (at most ${SWAPOUTS_10S_MAX})`;
+    if (m.swapOutMbPer10s != null && m.swapOutMbPer10s > SWAPOUT_MB_10S_MAX) {
+      return `waiting for the machine to stop swapping: ${m.swapOutMbPer10s} MB swapped out in 10 s (at most ${SWAPOUT_MB_10S_MAX} MB)`;
     }
     return undefined;
   }
@@ -296,17 +298,35 @@ export class HeavySlot {
     return `held by ${holders.map(h => `${h.agentName} (${h.label})${at(h.grantedAt)}`).join(', ')}`;
   }
 
-  async pump(): Promise<void> {
+  /**
+   * A pass, one at a time (the Audit's M1 on #573): an ask's own pass, a give-back's and a turn's end ran beside the
+   * timer's, each read the machine and granted its own head after the reading, and two runs started together, past
+   * the ceiling and inside the settle window. A pass asked for while one runs joins the next one, which starts when
+   * that one ends and reads the queue as it is then.
+   */
+  pump(): Promise<void> {
+    if (this.nextPass) return this.nextPass;
+    const run = this.passing.then(() => { this.nextPass = undefined; return this.pass(); });
+    this.nextPass = run;
+    this.passing = run.catch(() => undefined);
+    return run;
+  }
+
+  private passing: Promise<void> = Promise.resolve();
+  private nextPass?: Promise<void>;
+
+  private async pass(): Promise<void> {
     let changed = false;
     for (const t of [...this.tickets.values()]) {
       if (this.tickets.has(t.id) && !this.world.alive(t.pid)) { this.drop(t); changed = true; }
     }
     const say = (t: SlotTicket, why: string) => { if (t.why !== why) { t.why = why; changed = true; } };
-    const waiting = this.waiting();
-    if (waiting.length) {
+    if (this.waiting().length) {
       // One a pass, the head of the queue: the next one is read for once this one has settled (H20, H25).
       const refused = await this.refusal(this.holders());
-      if (!refused) {
+      // The queue as it is after the reading: an ask that came during it may now be the head (H30).
+      const waiting = this.waiting();
+      if (!refused && waiting.length) {
         const head = waiting.shift()!;
         head.grantedAt = this.world.now();
         delete head.why;

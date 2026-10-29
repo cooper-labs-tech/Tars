@@ -150,7 +150,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
   },
   {
     id: 'heavy-runs',
-    title: 'Heavy runs: one slot for the whole machine',
+    title: 'Heavy runs: one queue for the whole machine, admitted by its room',
     roles: ['orchestrator', 'worker'],
     text: [
       'Test suites, builds, Docker and simulators take the machine\'s heavy-run slot first: every project\'s agents share it, and a further run starts only when the machine has room for it (free disk and memory, no swapping, the last run settled), up to a ceiling the user sets. A dev server started on its own does not take it (it would hold a place for hours); one a test run starts is inside that run.',

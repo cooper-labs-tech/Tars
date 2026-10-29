@@ -30,10 +30,10 @@ export interface MachineSample {
   /** What this read cost, in ms. */
   readMs: number;
   /**
-   * The pages swapped out since boot (macOS vm_stat Swapouts, Linux /proc/vmstat pswpout; null on Windows, where no
-   * command line gives it): read by the heavy-run slot, not kept in the samples.
+   * The bytes swapped out since boot (macOS vm_stat Swapouts, Linux /proc/vmstat pswpout, each at its system's page
+   * size; null on Windows, where no command line gives it): read by the heavy-run slot, not kept in the samples.
    */
-  swapOutPages?: number | null;
+  swapOutBytes?: number | null;
 }
 
 export interface AgentTree {
@@ -75,16 +75,30 @@ export function parseProcVmstat(text: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-type SwapOutPoint = { at: number; swapOutPages: number | null };
+/** `getconf PAGESIZE`: the page size in bytes; null when it does not say. */
+export function parsePageSize(text: string): number | null {
+  const n = Number(text.trim());
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+type SwapOutPoint = { at: number; swapOutBytes: number | null };
 
 /**
- * Pages swapped out per 10 s between two readings, as room-check.sh counts them over 10 s (the heavy-run slot's
- * admission, 2.0.6); null for the first reading, a clock set back, a counter that went down (a reboot) or unknown.
+ * MB swapped out per 10 s between two readings, as room-check.sh counts them over 10 s (the heavy-run slot's
+ * admission, 2.0.6), in bytes so that every system is held to the same figure whatever its page size (the Audit's
+ * I3 on #573); null for the first reading, a clock set back, a counter that went down (a reboot) or unknown.
  */
-export function swapOutsPer10s(previous: SwapOutPoint | undefined, now: SwapOutPoint): number | null {
-  if (!previous || previous.swapOutPages === null || now.swapOutPages === null) return null;
-  if (now.at <= previous.at || now.swapOutPages < previous.swapOutPages) return null;
-  return Math.round(((now.swapOutPages - previous.swapOutPages) / (now.at - previous.at)) * 10_000);
+export function swapOutMbPer10s(previous: SwapOutPoint | undefined, now: SwapOutPoint): number | null {
+  if (!previous || previous.swapOutBytes === null || now.swapOutBytes === null) return null;
+  if (now.at <= previous.at || now.swapOutBytes < previous.swapOutBytes) return null;
+  return tenth((((now.swapOutBytes - previous.swapOutBytes) / (now.at - previous.at)) * 10_000) / MB);
+}
+
+/** Linux's page size, read once (`getconf PAGESIZE`), 4 KB when it cannot be read. */
+let linuxPageBytes: Promise<number> | undefined;
+function pageBytesOnLinux(): Promise<number> {
+  linuxPageBytes ??= run('getconf', ['PAGESIZE']).then(out => (out === null ? null : parsePageSize(out)) ?? 4096);
+  return linuxPageBytes;
 }
 
 /** `sysctl -n vm.swapusage`: `total = 14336.00M  used = 13281.00M  free = ...`. */
@@ -169,7 +183,7 @@ export async function readMachine(opts: { platform?: NodeJS.Platform; home?: str
   let memFreeMb: number | null = null;
   let compressedMb: number | null = null;
   let swapUsedMb: number | null = null;
-  let swapOutPages: number | null = null;
+  let swapOutBytes: number | null = null;
   if (platform === 'darwin') {
     const [vm, swap, pressure] = await Promise.all([run('vm_stat', []), run('sysctl', ['-n', 'vm.swapusage']), run('memory_pressure', ['-Q'])]);
     const pages = vm === null ? null : parseVmStat(vm);
@@ -177,7 +191,7 @@ export async function readMachine(opts: { platform?: NodeJS.Platform; home?: str
     compressedMb = pages?.compressedMb ?? null;
     swapUsedMb = swap === null ? null : parseSwapUsage(swap);
     memFreePct = pressure === null ? null : parseMemoryPressure(pressure);
-    swapOutPages = pages?.swapOutPages ?? null;
+    swapOutBytes = pages && pages.swapOutPages !== null ? pages.swapOutPages * pages.pageBytes : null;
   } else if (platform === 'linux') {
     let info: ReturnType<typeof parseMeminfo> = null;
     try { info = parseMeminfo(fs.readFileSync('/proc/meminfo', 'utf8')); } catch { /* unknown */ }
@@ -186,7 +200,9 @@ export async function readMachine(opts: { platform?: NodeJS.Platform; home?: str
       memFreePct = info.totalMb > 0 ? Math.round((info.availableMb / info.totalMb) * 100) : null;
       swapUsedMb = info.swapUsedMb;
     }
-    try { swapOutPages = parseProcVmstat(fs.readFileSync('/proc/vmstat', 'utf8')); } catch { /* unknown */ }
+    let pagesOut: number | null = null;
+    try { pagesOut = parseProcVmstat(fs.readFileSync('/proc/vmstat', 'utf8')); } catch { /* unknown */ }
+    swapOutBytes = pagesOut === null ? null : pagesOut * (await pageBytesOnLinux());
   } else {
     memFreeMb = tenth(os.freemem() / MB);
     memFreePct = os.totalmem() > 0 ? tenth((os.freemem() / os.totalmem()) * 100) : null;
@@ -200,7 +216,7 @@ export async function readMachine(opts: { platform?: NodeJS.Platform; home?: str
     diskFreeGb: diskFreeGb(opts.home ?? os.homedir()),
     load1: platform === 'win32' ? null : tenth(os.loadavg()[0]),
     readMs: Math.max(1, Math.round(performance.now() - started)),
-    swapOutPages,
+    swapOutBytes,
   };
 }
 
