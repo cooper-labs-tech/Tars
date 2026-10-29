@@ -18,6 +18,7 @@ export const CHANGELOG: Release[] = [
       'Agents can send each other a note: information that is not a task, typed at the end of the receiver\'s turn or at once, and no end notice comes back for it.',
       'An orchestrator is no longer woken once per waiting message: Tars tells it, at most every 30 minutes, which of its messages still wait, to whom, since when and why.',
       'Every time in a notice Tars types into an agent reads UTC first, then the machine\'s own with its offset, as "19:03 UTC (23:03 +04)".',
+      'An orchestrator can pass the owner\'s words to another project\'s orchestrator under a mark only Tars writes, so the receiver knows they are the owner\'s own and not the sender\'s claim.',
       'Tars runs on Electron 44.10.0, whose Node 24.22.1 carries the Node security fixes of 20 October, and takes body-parser 2.4.0 for a security advisory, in the app and in the bundled MCP servers\' locks. The bundled MCP servers are built with esbuild 0.28 (from 0.24). Nothing changes in what they do.',
     ],
   },
