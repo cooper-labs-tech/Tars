@@ -416,10 +416,10 @@ describe('a delegation note, whatever the agent it names is called', () => {
 
     const text = received(terminal);
     expect(text, 'the orchestrator was told nothing').toContain('completed');
-    const raw = [...text].filter(ch => planted.includes(ch.codePointAt(0)!)).map(ch => ch.codePointAt(0)!.toString(16));
+    const raw = [...text.replace(/(Message from [^\n]*: )\n/g, "$1")].filter(ch => planted.includes(ch.codePointAt(0)!)).map(ch => ch.codePointAt(0)!.toString(16));
     expect(raw, "the name or the id broke or hid part of Tars's line").toEqual([]);
     // Typed first, outside the paste: Tars, which wrote the note, never the name.
-    expect(text.startsWith('Message from Tars: [Tars] "Worker\\n\\u2028')).toBe(true);
+    expect(text.startsWith('Message from Tars: \n[Tars] "Worker\\n\\u2028')).toBe(true);
     expect(text).toContain('("w\\u2028")');
   });
 });

@@ -275,7 +275,7 @@ async function typeLaunch(
   noteLaunch(cli, launchSettings(agent));
   fleet.saveAgents();
   // Started from a chat, and just as able to come up with no task.
-  armTaskStartWatch(agent, agent.ptyId, task);
+  armTaskStartWatch(agent, agent.ptyId, task, { kind: 'channel', channel: from });
   return cli;
 }
 

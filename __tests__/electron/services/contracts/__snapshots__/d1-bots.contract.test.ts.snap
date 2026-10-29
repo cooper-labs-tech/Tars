@@ -200,8 +200,10 @@ exports[`Slack, as recorded before D1 > a mention and a direct message go to the
   "typed": [
     {
       "terminal": 0,
-      "text": "[200~Message from Slack: [201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?[201~
-[200~Message from Slack: [201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] plan tomorrow please[201~
+      "text": "[200~Message from Slack: 
+[201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] what is everyone doing?[201~
+[200~Message from Slack: 
+[201~[200~[FROM SLACK - Use send_slack MCP tool to respond!] plan tomorrow please[201~
 ",
     },
   ],
@@ -499,7 +501,8 @@ Task: Measure the Usage page",
   "typed": [
     {
       "terminal": 0,
-      "text": "[200~Message from Slack: [201~[200~Measure the Usage page[201~
+      "text": "[200~Message from Slack: 
+[201~[200~Measure the Usage page[201~
 ",
     },
   ],

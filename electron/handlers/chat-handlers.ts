@@ -221,7 +221,7 @@ export function registerChatHandlers(deps: {
     const { chatId, text } = argsOf(raw);
     const answer = await sendToChat(chatId, text);
     const chat = store.get(chatId);
-    if (!('error' in answer) && chat && typeof text === 'string') ownerWords.record({ text, via: 'window', projectPath: chat.projectPath });
+    if (!('error' in answer) && chat && typeof text === 'string') ownerWords.record({ text, via: 'window', projectPath: chat.projectPath, chatId: chat.id });
     return answer;
   });
 

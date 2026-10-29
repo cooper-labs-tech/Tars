@@ -219,7 +219,7 @@ describe('an agent whose CLI is already up', () => {
     await settle();
 
     expect(typed(terminal)).toContain('Rebase onto main');
-    expect(typed(terminal)).toContain('Message from Slack: Rebase onto main');
+    expect(typed(terminal)).toContain('Message from Slack: \nRebase onto main');
     expect(typed(terminal)).not.toContain("&& '");
     expect(spawned).toHaveLength(1);
   });

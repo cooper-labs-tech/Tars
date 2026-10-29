@@ -212,7 +212,7 @@ describe('who a dispatch is from', () => {
 
     expect(answer?.data.mode).toBe('message');
     // With the id of the request it hands over (PR A, core/task-requests.ts).
-    expect(written[0]).toMatch(/^\x1b\[200~Message from agent "Orchestrator" \("orch"\), task t-[0-9a-f]{8}: \x1b\[201~$/);
+    expect(written[0]).toMatch(/^\x1b\[200~Message from agent "Orchestrator" \("orch"\), task t-[0-9a-f]{8}: \n\x1b\[201~$/);
     expect(written[1]).toBe(`\x1b[200~${BRIEF}\x1b[201~`);
   });
 
@@ -222,13 +222,13 @@ describe('who a dispatch is from', () => {
     await call('POST', '/api/agents/worker/message', { message: BRIEF }, 'orch');
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(written[0]).toMatch(/^\x1b\[200~Message from agent "JeanBrasse" \("orch"\), task t-[0-9a-f]{8}: \x1b\[201~$/);
+    expect(written[0]).toMatch(/^\x1b\[200~Message from agent "JeanBrasse" \("orch"\), task t-[0-9a-f]{8}: \n\x1b\[201~$/);
   });
 
   it('is Tars when Tars makes the call itself (the super chat)', async () => {
     await call('POST', '/api/agents/worker/dispatch', { message: BRIEF }, undefined, true);
     vi.advanceTimersByTime(PROGRAMMATIC_SUBMIT_DELAY_MS + 100);
 
-    expect(written[0]).toBe('\x1b[200~Message from Tars: \x1b[201~');
+    expect(written[0]).toBe('\x1b[200~Message from Tars: \n\x1b[201~');
   });
 });

@@ -458,7 +458,9 @@ export type MessageSender =
    * record of them, never the relaying agent's text. Made by the relay route
    * and nowhere else.
    */
-  | { kind: 'owner-relay'; wordsId: string; at: number; via: 'window' | 'Telegram'; by: { id: string; name?: string } };
+  | { kind: 'owner-relay'; wordsId: string; at: number; via: 'window' | 'Telegram'; by: { id: string; name?: string };
+    /** What the words were, in Tars's words (services/owner-words.ts): "an answer to a question", ... */
+    about?: string };
 
 /**
  * The line typed before a pasted message: who sent it, and, when Tars hands
@@ -474,7 +476,8 @@ export function senderLine(sender: MessageSender, taskRef?: string): string {
   if (sender.kind === 'channel') return `Message from ${sender.channel}${task}: `;
   if (sender.kind === 'user') return `Message from the user via ${sender.via}${task}: `;
   if (sender.kind === 'owner-relay') {
-    return `Message from Tars: the owner's words of ${twoZones(sender.at)}, via ${sender.via}, `
+    // `about` is Tars's own phrase (services/owner-words.ts), never a caller's.
+    return `Message from Tars: the owner's words of ${twoZones(sender.at)}, via ${sender.via}, ${sender.about ? `${sender.about}, ` : ''}`
       + `relayed by agent ${envelopeValue(sender.by.name || sender.by.id)} (${envelopeValue(sender.by.id)}), `
       // The id is Tars's own (ow- and 12 hex characters), never a caller's.
       + `verified by Tars (words ${sender.wordsId}): `;
@@ -1133,7 +1136,7 @@ const OWNER_MARK_SPELT = 'verifiedbytars';
  * gives a typed one (a chat's runner started by a bot's message, PR F).
  */
 export function withSenderLine(sender: MessageSender, data: string): string {
-  return senderLine(sender) + quoteSenderLookAlikes(data);
+  return senderLine(sender) + '\n' + quoteSenderLookAlikes(data);
 }
 
 /**
@@ -1172,12 +1175,16 @@ function writeBody(ptyProcess: pty.IPty, state: TerminalInput, data: string, sen
   const paste = (text: string) => type('\x1b[200~' + text + '\x1b[201~');
   if (sender) {
     // The mark is Tars's own words (permission-ceiling.ts), never the sender's.
-    paste(senderLine(sender, taskRef) + (mark && /^\([a-z ,]+\) $/.test(mark) ? mark : ''));
+    // The line ends there: a body never shares it. Typed on the same line, the
+    // body's first line read as the sender line's own, and a message Tars types
+    // as itself whose first line an agent wrote read as the owner mark, one
+    // look-alike letter aside (the Audit's M1 on #569).
+    paste(senderLine(sender, taskRef) + (mark && /^\([a-z ,]+\) $/.test(mark) ? mark : '') + '\n');
     data = quoteSenderLookAlikes(data);
   }
   paste(data);
   if (owed && sender) {
-    paste('\n\n' + senderLine({ kind: 'tars' }));
+    paste('\n\n' + senderLine({ kind: 'tars' }) + '\n');
     paste(asTypedText(owed));
   }
   return chars;

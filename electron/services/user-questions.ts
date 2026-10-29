@@ -189,7 +189,10 @@ async function answerQuestion(reply: RelayReply, now: number): Promise<void> {
     return;
   }
   // The owner's own words, for the project that asked: what its orchestrator may relay under Tars's mark (SECURITY.md §8).
-  ownerWords.record({ text: answer, via: 'Telegram', projectPath: q.projectPath });
+  ownerWords.record({
+    text: answer, via: 'Telegram', projectPath: q.projectPath, ...(q.chat ? { chatId: q.chat.id } : {}),
+    about: 'an answer to a question', question: { text: q.question, by: q.agentName, at: q.askedAt },
+  });
   const agent = agents.get(q.agentId);
   const terminal = agent?.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   // A chat asked, and its runner sleeps: woken with the answer, within the chats' limit (PR F).

@@ -18,7 +18,8 @@ import { quoted } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
 import { holdsMessages } from './one-task';
 import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
-import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput } from './pty-manager';
+import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput, type MessageSender } from './pty-manager';
+import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
@@ -820,13 +821,14 @@ const TASK_START_GRACE_MS = 600_000;
  * failure that hid behind this watch for weeks. With a task to deliver, the
  * agent now carries it until a turn actually starts. See noteSessionRegistered.
  */
-export function armTaskStartWatch(agent: AgentStatus, ptyId: string | undefined, task?: string): void {
+export function armTaskStartWatch(agent: AgentStatus, ptyId: string | undefined, task?: string, sender?: MessageSender): void {
   if (!ptyId) return;
   if (!hasClaudeHooks(agent)) return;
 
   // Only a real task is worth confirming: a start with none has nothing to lose.
+  // Its sender goes with it, for a retype to type it under (the Audit's M1 on #569).
   agent.pendingDelivery = task && task.trim()
-    ? { ptyId, task, dispatchedAt: new Date().toISOString() }
+    ? { ptyId, task, dispatchedAt: new Date().toISOString(), ...(sender ? { sender } : {}) }
     : undefined;
 
   // The question this watch asks is "has a session registered since I armed",
@@ -1052,7 +1054,9 @@ function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
       const outcome = writeProgrammaticInput(ptyProcess, pending.task, true, {
         agentId: live.id,
         from: 'Tars',
-        sender: { kind: 'tars' },
+        // Its own sender, never Tars for a requester's text (the Audit's M1 on #569); read back through keptSender,
+        // which takes only an agent, a channel or Tars, since agents.json is any agent's to write.
+        sender: keptSender(pending.sender) ?? { kind: 'tars' },
         // Armed when the task is actually typed in, not when it was handed
         // over. A write waiting behind somebody's half-written sentence would
         // otherwise be counted as delivered, and the agent accused a minute

@@ -1,7 +1,8 @@
 import { RouteApp, RouteContext, RouteRequest, SendJson } from './types';
 import { agents } from '../../core/agent-manager';
 import { hasOrchestratorPowers } from '../../core/agent-role';
-import { ownerWords } from '../owner-words';
+import { chatNameOf, leadOf } from '../../core/chat-inbox';
+import { ownerWords, relayedBody, type OwnerWords, type OwnerWordsParty } from '../owner-words';
 import { twoZones } from '../../utils/two-zones';
 import { performDispatch } from './agent-routes';
 import type { AgentStatus } from '../../types';
@@ -9,8 +10,9 @@ import type { AgentStatus } from '../../types';
 /**
  * The owner's words, relayed under Tars's mark (2.0.6, option e; services/owner-words.ts, SECURITY.md §8).
  *
- * GET /api/owner-words, what owner_words calls: the owner's words addressed to the caller's project, for an agent
- * with an orchestrator's powers there.
+ * GET /api/owner-words, what owner_words calls: the owner's words the caller could have received (the project's
+ * orchestrator: its project's; a chat's runner: its chat's, or every chat's of the project when the chats read each
+ * other), and the words relayed to the caller, which it can check a mark's id against.
  * POST /api/owner-words/:id/relay { to }, what relay_owner_words calls: Tars types its record of those words into
  * `to`, an orchestrator of any project, under the sender line only it writes. The caller names the words by id and
  * nothing else: it never hands Tars a text.
@@ -26,20 +28,29 @@ function callerOf(req: RouteRequest, sendJson: SendJson): AgentStatus | undefine
   return caller;
 }
 
-const party = (agent: AgentStatus) => ({ id: agent.id, projectPath: agent.projectPath, orchestrator: hasOrchestratorPowers(agent) });
+function partyOf(agent: AgentStatus, ctx: RouteContext): OwnerWordsParty {
+  return {
+    id: agent.id, name: agent.name, projectPath: agent.projectPath, orchestrator: hasOrchestratorPowers(agent),
+    projectOrchestrator: !!agent.projectPath && leadOf(agent.projectPath, agents.values())?.id === agent.id,
+    chatId: chatNameOf(agent)?.id, readsAllChats: ctx.getAppSettings().chatsReadEachOther === true,
+  };
+}
+
+const shown = (w: OwnerWords) => ({
+  id: w.id, at: new Date(w.at).toISOString(), when: twoZones(w.at), via: w.via, ...(w.about ? { about: w.about } : {}), text: relayedBody(w),
+});
 
 export function registerOwnerWordsRoutes(app: RouteApp, ctx: RouteContext): void {
   app.get('/api/owner-words', (req, sendJson) => {
     const caller = callerOf(req, sendJson);
     if (!caller) return;
     if (!hasOrchestratorPowers(caller) || !caller.projectPath) {
-      sendJson({ error: "Only an orchestrator of the project the owner wrote to reads the owner's words.", code: 'owner_words_not_yours' }, 403);
+      sendJson({ error: "Only an orchestrator, or a chat's runner, reads the owner's words.", code: 'owner_words_not_yours' }, 403);
       return;
     }
     sendJson({
-      words: ownerWords.listFor(caller.projectPath).map((w) => ({
-        id: w.id, at: new Date(w.at).toISOString(), when: twoZones(w.at), via: w.via, text: w.text,
-      })),
+      words: ownerWords.listFor(partyOf(caller, ctx)).map(shown),
+      relayedToYou: ownerWords.relayedTo(caller.id).map((w) => ({ ...shown(w), by: w.by, relayedAt: new Date(w.relayedAt).toISOString() })),
     });
   });
 
@@ -52,15 +63,18 @@ export function registerOwnerWordsRoutes(app: RouteApp, ctx: RouteContext): void
       sendJson({ error: 'to names no agent of the fleet.', code: 'owner_words_no_receiver' }, 404);
       return;
     }
-    const relay = ownerWords.relay(req.params.id, { by: party(caller), to: party(target) });
+    const relay = ownerWords.relay(req.params.id, { by: partyOf(caller, ctx), to: partyOf(target, ctx) });
     if (!('ok' in relay)) {
       sendJson({ error: relay.error, code: relay.code }, relay.status);
       return;
     }
     const { words } = relay;
     await performDispatch(target, {
-      message: words.text, from: 'Tars',
-      sender: { kind: 'owner-relay', wordsId: words.id, at: words.at, via: words.via, by: { id: caller.id, name: caller.name } },
+      message: relayedBody(words), from: 'Tars',
+      sender: {
+        kind: 'owner-relay', wordsId: words.id, at: words.at, via: words.via, by: { id: caller.id, name: caller.name },
+        ...(words.about ? { about: words.about } : {}),
+      },
       // Information, as Tars's own word: it waits for the receiver's rest, and is no task of the caller's.
       information: true,
     }, ctx, (data, status) => {

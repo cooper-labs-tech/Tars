@@ -526,7 +526,7 @@ async function spawnAgentSessionInSlot(
   agent.lastActivity = new Date().toISOString();
   saveAgents();
 
-  armTaskStartWatch(agent, ptyId, taskPrompt);
+  armTaskStartWatch(agent, ptyId, taskPrompt, opts.sender);
   announceAgent(agent);
 
   ptyProcess.onData((data: string) => {
