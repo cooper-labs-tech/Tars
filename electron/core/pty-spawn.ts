@@ -19,11 +19,10 @@ import { explainSpawnFailure, readPtyPool, NoTerminalLeft, PtyPool } from './pty
  * node-pty leaves nothing, nothing is closed. Linux (forkpty) and Windows (ConPTY) leave nothing: not read there.
  */
 export function spawnPty(file: string, args: string[] | string, options: pty.IPtyForkOptions | pty.IWindowsPtyForkOptions): pty.IPty {
-  // An E2E spec's full pool (useTestPtyMax): refused as a full machine refuses, before node-pty is asked.
-  if (testMax !== null) {
-    const refused = explainSpawnFailure(new Error('the test pool is full'), readTerminals());
-    if (refused instanceof NoTerminalLeft) throw refused;
-  }
+  // An E2E spec's full pool (useTestPtyMax): refused as a full machine refuses, before node-pty is asked. One rule on
+  // every system, full once Tars's open terminals reach the limit (the Audit's M1 on #567: macOS's "a start needs two
+  // free" made the same limit refuse there and not elsewhere), and 0 a limit: no terminal can open.
+  if (testMax !== null && open >= testMax) throw new NoTerminalLeft({ inUse: open, max: testMax, tars: open, open });
   const before = process.platform === 'darwin' ? charDevices() : null;
   let term: pty.IPty;
   try {

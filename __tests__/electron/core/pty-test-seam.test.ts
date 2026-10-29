@@ -16,14 +16,22 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  * E3. A start once the seam's pool is full asks node-pty anyway (and succeeds, so no no-terminal path is reached), or
  *     refuses with other words than a full machine's; a terminal that ended does not give its place back.
  * E4. Without the seam anything changes: the pool is the machine's, read as before.
+ * And from the Audit's M1 on #567 at c7efe0587 (29/10):
+ * E5. Under the seam a system's own rule decides (a macOS start needs two free): the same limit refuses the first
+ *     start on macOS and lets one through elsewhere, and no limit refuses the first start everywhere, 0 being
+ *     refused. Under the seam the rule is one on every system, full once Tars's open terminals reach the limit, and
+ *     0 is a limit: no terminal can open.
  */
 
 const spawned: Array<{ exit: () => void }> = [];
 vi.mock('node-pty', () => ({
   spawn: vi.fn(() => {
     let onExit: (() => void) | undefined;
-    const term = { pid: 1, onExit: (cb: () => void) => { onExit = cb; }, kill: () => onExit?.(), write: vi.fn(), resize: vi.fn(), onData: vi.fn() };
-    spawned.push({ exit: () => onExit?.() });
+    // Once, as node-pty's own exit: ended twice, the open count would go below zero.
+    let ended = false;
+    const exit = () => { if (!ended) { ended = true; onExit?.(); } };
+    const term = { pid: 1, onExit: (cb: () => void) => { onExit = cb; }, kill: exit, write: vi.fn(), resize: vi.fn(), onData: vi.fn() };
+    spawned.push({ exit });
     return term;
   }),
 }));
@@ -46,7 +54,8 @@ describe('the no-terminal seam for E2E specs', () => {
     expect(ptyTestMax({ DOROTHY_E2E: '1', DOROTHY_E2E_PTY_MAX: '3' }, false)).toBe(3);
     expect(ptyTestMax({ DOROTHY_E2E: '1', DOROTHY_E2E_PTY_MAX: '3' }, true)).toBeNull();
     expect(ptyTestMax({ DOROTHY_E2E_PTY_MAX: '3' }, false)).toBeNull();
-    for (const bad of ['0', '-2', '2.5', 'x', '', ' 3']) expect(ptyTestMax({ DOROTHY_E2E: '1', DOROTHY_E2E_PTY_MAX: bad }, false)).toBeNull();
+    expect(ptyTestMax({ DOROTHY_E2E: '1', DOROTHY_E2E_PTY_MAX: '0' }, false)).toBe(0);
+    for (const bad of ['-2', '2.5', 'x', '', ' 3', '01']) expect(ptyTestMax({ DOROTHY_E2E: '1', DOROTHY_E2E_PTY_MAX: bad }, false)).toBeNull();
   });
 
   it('E2. the pool is Tars\'s own open terminals out of the seam\'s limit, on every platform', async () => {
@@ -67,8 +76,8 @@ describe('the no-terminal seam for E2E specs', () => {
     for (let i = 0; i < 5 && !refused; i++) {
       try { spawnPty('/bin/sh', [], {}); started++; } catch (err) { refused = err; }
     }
-    // A start opens two PTYs on macOS (node-pty's spare master, then the terminal's), one elsewhere.
-    expect(started).toBe(process.platform === 'darwin' ? 2 : 3);
+    // Under the seam, one rule on every system: full once the open terminals reach the limit (E5).
+    expect(started).toBe(3);
     expect(refused).toBeInstanceOf(NoTerminalLeft);
     expect((refused as Error).message).toMatch(/^No terminal can be opened on this machine: \d of 3 are in use, \d of them held by Tars for its \d open terminals\./);
     expect(vi.mocked(pty.spawn)).toHaveBeenCalledTimes(started);
@@ -83,4 +92,24 @@ describe('the no-terminal seam for E2E specs', () => {
     for (let i = 0; i < 5; i++) spawnPty('/bin/sh', [], {});
     expect(spawned).toHaveLength(5);
   });
+});
+
+describe('the seam\'s one rule, system by system', () => {
+  const host = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  afterEach(() => { Object.defineProperty(process, 'platform', host); });
+
+  for (const platform of ['darwin', 'linux', 'win32'] as const) {
+    it(`E5. ${platform}: a limit of 1 lets one start through, and 0 refuses the first`, async () => {
+      Object.defineProperty(process, 'platform', { ...host, value: platform });
+      const { spawnPty, useTestPtyMax } = await import('../../../electron/core/pty-spawn');
+      const { NoTerminalLeft } = await import('../../../electron/core/pty-pool');
+      useTestPtyMax(1);
+      expect(() => spawnPty('/bin/sh', [], {})).not.toThrow();
+      expect(() => spawnPty('/bin/sh', [], {})).toThrow(NoTerminalLeft);
+      for (const t of spawned) t.exit();
+      useTestPtyMax(0);
+      expect(() => spawnPty('/bin/sh', [], {})).toThrow(NoTerminalLeft);
+      expect(spawned).toHaveLength(1);
+    });
+  }
 });
