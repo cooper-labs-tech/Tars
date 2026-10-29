@@ -41,6 +41,9 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 11. On Windows it is not: Node ignores the mode there, and a plain write keeps the list ~/.tars hands down. Named
  *    at startup with the other owner-only files, each write must be born closed (in the closed staging directory,
  *    made the user's and SYSTEM's alone before the rename), and an icacls that fails must not lose the sample.
+ * And from the PTY leak of 28-29/10 (2.0.6, item 1): the sample carries the machine's terminals.
+ * 12. The terminals in use, the limit, Tars's masters and its open terminals are not kept, or kept unchecked (a
+ *    string, a negative, a field that is not one); Windows' null (no such pool) is lost.
  */
 
 const NOW = Date.UTC(2026, 9, 15, 12, 0, 0);
@@ -103,6 +106,18 @@ describe('the health samples file', () => {
   it('5. numbers that are not numbers make no sample', () => {
     for (const bad of [{ heapUsedMb: NaN }, { rssMb: -1 }, { loopP95Ms: Infinity }, { agents: '3' as unknown as number }, { at: 'now' as unknown as number }]) {
       expect(cleanSample(sample(NOW, bad))).toBeNull();
+    }
+  });
+
+  it('12. the machine\'s terminals are kept checked, and Windows\' null stays null', () => {
+    const terminals = { inUse: 51, max: 511, tars: 22, open: 18 };
+    expect(cleanSample(sample(NOW, { terminals }))!.terminals).toEqual(terminals);
+    expect(cleanSample(sample(NOW, { terminals: { inUse: 7, max: 4096, tars: null } }))!.terminals).toEqual({ inUse: 7, max: 4096, tars: null });
+    expect(cleanSample(sample(NOW, { terminals: null }))!.terminals).toBeNull();
+    const extra = { ...terminals, path: '/Users/someone' } as unknown as HealthSample['terminals'];
+    expect(cleanSample(sample(NOW, { terminals: extra }))!.terminals).toEqual(terminals);
+    for (const bad of [{ inUse: '51', max: 511, tars: 1 }, { inUse: 51, max: -1, tars: 1 }, { inUse: 51, max: 511, tars: 'x' }, 'full']) {
+      expect(cleanSample(sample(NOW, { terminals: bad as unknown as HealthSample['terminals'] }))!).not.toHaveProperty('terminals');
     }
   });
 

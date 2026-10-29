@@ -9,6 +9,7 @@ import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
+import { markNoTerminal } from '../../core/no-terminal';
 import { noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { killPty } from '../../core/pty-kill';
@@ -472,6 +473,8 @@ async function spawnAgentSessionInSlot(
     });
   } catch (err) {
     launchAbandoned(agent.id, launch);
+    // No terminal left on the machine: the agent says why, as the 503 does (core/no-terminal.ts).
+    markNoTerminal(agent, err, saveAgents);
     throw err;
   }
 

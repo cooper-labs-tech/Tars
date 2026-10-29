@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as pty from 'node-pty';
+import { spawnPty } from './pty-spawn';
 import { managedCliEnv } from '../providers/cli-provider';
 import { mintAgentToken, revokeTerminalToken, tarsInstanceId } from './agent-tokens';
 import { API_PORT } from '../constants';
@@ -152,7 +153,7 @@ export function spawnAgentPty(opts: {
   delete env.CLAUDE_PID;
 
   const spawnedAt = Date.now();
-  const spawned = pty.spawn(opts.shell, opts.args, {
+  const spawned = spawnPty(opts.shell, opts.args, {
     name: TERMINAL_NAME,
     cols: size.cols,
     rows: size.rows,

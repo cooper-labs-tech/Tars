@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { writeSecretFileSync } from '../../utils/secret-file';
 import type { AgentTrees, MachineSample } from './machine';
+import type { PtyPool } from '../../core/pty-pool';
 
 /**
  * The health samples Tars keeps on this machine (2.0.3, monitoring option 2):
@@ -41,6 +42,8 @@ export interface HealthSample {
   machine?: MachineSample;
   /** Each agent's whole tree (machine.ts, 2.0.5); null where it cannot be read (Windows). */
   agentTrees?: AgentTrees | null;
+  /** The machine's terminals (core/pty-pool.ts, 2.0.6); null where there is no such pool (Windows). */
+  terminals?: PtyPool | null;
 }
 
 export const HEALTH_KEEP_MS = 24 * 3_600_000;
@@ -89,6 +92,17 @@ function cleanTrees(raw: unknown): AgentTrees | null | undefined {
   });
   return { measure: r.measure, trees };
 }
+function cleanTerminals(raw: unknown): PtyPool | null | undefined {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  const inUse = amount(r.inUse);
+  const max = amount(r.max);
+  const tars = r.tars === null ? null : amount(r.tars);
+  const open = r.open === undefined ? undefined : amount(r.open);
+  if (inUse === null || !max || (tars === null && r.tars !== null) || open === null) return undefined;
+  return { inUse: Math.round(inUse), max: Math.round(max), tars: tars === null ? null : Math.round(tars), ...(open !== undefined ? { open: Math.round(open) } : {}) };
+}
 const round = (v: number) => Math.round(v * 10) / 10;
 
 /** The sample as it may be kept and sent: every field checked, nothing else copied; null when a number is not one. */
@@ -113,11 +127,13 @@ export function cleanSample(raw: unknown): HealthSample | null {
   const page = typeof r.page === 'string' && r.page.length <= 64 && PAGE.test(r.page) ? r.page : null;
   const machine = cleanMachine(r.machine);
   const agentTrees = cleanTrees(r.agentTrees);
+  const terminals = cleanTerminals(r.terminals);
   return {
     at: out.at, heapUsedMb: out.heapUsedMb, heapTotalMb: out.heapTotalMb, rssMb: out.rssMb,
     loopP50Ms: out.loopP50Ms, loopP95Ms: out.loopP95Ms, slowest, agents: out.agents, running: out.running, page,
     ...(machine ? { machine } : {}),
     ...(agentTrees !== undefined ? { agentTrees } : {}),
+    ...(terminals !== undefined ? { terminals } : {}),
   };
 }
 
