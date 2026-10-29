@@ -13,7 +13,7 @@ Nothing runs in the cloud. No account, no server, no analytics. The state lives 
 ### Data Flow
 
 ```
-Electron 44.9 main process (Node 24.22, Chromium 152; electron/, ~47k LOC)
+Electron 44.10 main process (Node 24.22.1, Chromium 152; electron/, ~47k LOC)
 ├── BrowserWindow  → Next.js 16.4 static export (src/, ~44k LOC)
 │                     contextIsolation, nodeIntegration off, app:// protocol
 │                     ↕ 214 IPC channels via contextBridge (electron/preload.ts)
@@ -1175,7 +1175,7 @@ The token is kept in `~/.tars-private/sentry-token` (`0600`), not in `app-settin
 | asarUnpack | `out/`, `hooks/`, `electron/resources/`, `better-sqlite3`, `node-pty` |
 | Target | macOS dmg + zip, hardened runtime, `build/entitlements.mac.plist`, notarized via `@electron/notarize`. Windows x64: a per-user NSIS installer (`Tars-Setup-<version>.exe`, no elevation, `%LOCALAPPDATA%\Programs\tars`) and a zip, icon `build/icon.ico` drawn from `public/icon.svg` by `scripts/make-app-ico.mjs`, not signed, built on Windows by `npm run release:win` (`scripts/release-win.mjs`) |
 | Updates | `electron-updater` against `cooper-labs-tech/Tars` releases, on both platforms: one release carries `latest-mac.yml` and the macOS files, then `latest.yml` and the Windows files, added to it by `npm run release:win` |
-| Electron | 44.9 (Node 24.22, ABI 149, Chromium 152). Its `LSMinimumSystemVersion` is 13.0, so the app needs macOS 13 or later; on Windows, 10 or later |
+| Electron | 44.10 (Node 24.22.1, ABI 149, Chromium 152; 2.0.6, for the 21/10 Node security release). Its `LSMinimumSystemVersion` is 13.0, so the app needs macOS 13 or later; on Windows, 10 or later |
 | Node | ≥22.12, Electron's own floor; `.nvmrc` pins 22 |
 
 Tests: `vitest run` over `__tests__/**/*.test.ts` (node environment, `@` aliased to `src/`), with coverage scoped to `electron/{constants,utils,services,handlers,providers}` and the MCP server sources. Suites exist for the ACP client, the model catalogue, transcript usage, the memory hub, agent persistence, the PTY manager, four providers, delegation plumbing, and two dedicated security files.
