@@ -28,6 +28,7 @@ import * as os from 'os';
 import { DATA_DIR, DATA_DIR_MOVE, dataPath } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
+import { spawnPty } from '../core/pty-spawn';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
@@ -255,7 +256,7 @@ function registerPtyHandlers(deps: IpcHandlerDependencies): void {
     const id = uuidv4();
     const shell = resolveShell({ setting: deps.getAppSettings().terminalShell });
 
-    const ptyProcess = pty.spawn(shell, shellArgs(shell), {
+    const ptyProcess = spawnPty(shell, shellArgs(shell), {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -1277,7 +1278,7 @@ function registerSkillHandlers(deps: IpcHandlerDependencies): void {
 
     const fullPath = buildFullPath();
     refuseWhileQuitting('skill install');
-    const ptyProcess = spawnSkillInstallerOnWindows(npxArgs, { cols, rows }, withPath(process.env, fullPath, process.platform)) ?? pty.spawn('npx', npxArgs, {
+    const ptyProcess = spawnSkillInstallerOnWindows(npxArgs, { cols, rows }, withPath(process.env, fullPath, process.platform)) ?? spawnPty('npx', npxArgs, {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -1471,7 +1472,7 @@ function registerPluginHandlers(deps: IpcHandlerDependencies): void {
     refuseWhileQuitting('plugin install');
     const onWindows = startPluginInstallOnWindows(id, command, { cols, rows }, env, pluginPtyProcesses, getMainWindow);
     if (onWindows) return onWindows;
-    const ptyProcess = pty.spawn(shell, shellArgs, {
+    const ptyProcess = spawnPty(shell, shellArgs, {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,
@@ -2851,7 +2852,7 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     const id = uuidv4();
     const shell = resolveShell({ setting: deps.getAppSettings().terminalShell });
 
-    const ptyProcess = pty.spawn(shell, shellArgs(shell), {
+    const ptyProcess = spawnPty(shell, shellArgs(shell), {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,

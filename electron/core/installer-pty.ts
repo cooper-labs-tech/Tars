@@ -1,5 +1,6 @@
 import * as os from 'os';
 import * as pty from 'node-pty';
+import { spawnPty } from './pty-spawn';
 import type { BrowserWindow } from 'electron';
 import { toLaunch, LaunchError, type DirectLaunch, type Env } from '../platform';
 import { refuseWhileQuitting } from './quit-state';
@@ -25,7 +26,7 @@ type Size = { cols?: number; rows?: number };
 function spawnStep(step: DirectLaunch, size: Size): pty.IPty {
   // Not once the quit has begun: a chained step would outlive Tars (quit-state.ts).
   refuseWhileQuitting('installer step');
-  return pty.spawn(step.file, step.commandLine, {
+  return spawnPty(step.file, step.commandLine, {
     name: 'xterm-256color',
     cols: size.cols || 80,
     rows: size.rows || 24,

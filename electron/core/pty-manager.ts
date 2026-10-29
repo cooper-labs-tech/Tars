@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { ProcessTree, processTable, processTableNow } from '../services/acp/client';
 import { beginQuit, isQuitting, refuseWhileQuitting } from './quit-state';
 import * as pty from 'node-pty';
+import { spawnPty } from './pty-spawn';
 import { resolveShell, shellArgs, childEnv } from '../platform';
 import { holdExitUntilTerminalsExit, killPty as endTerminal, shellStillRuns } from './pty-kill';
 import { killTree } from '../platform/kill-tree';
@@ -1428,7 +1429,7 @@ export function createQuickPty(
   refuseWhileQuitting('terminal');
   const shell = resolveShell();
 
-  const ptyProcess = pty.spawn(shell, shellArgs(shell), {
+  const ptyProcess = spawnPty(shell, shellArgs(shell), {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,

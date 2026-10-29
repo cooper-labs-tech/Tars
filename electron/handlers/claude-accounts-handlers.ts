@@ -1,6 +1,7 @@
 import { ipcMain, shell } from 'electron';
 import * as os from 'os';
 import * as pty from 'node-pty';
+import { spawnPty } from '../core/pty-spawn';
 import { v4 as uuidv4 } from 'uuid';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { buildFullPath } from '../utils/path-builder';
@@ -441,7 +442,7 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
       // Not once the quit has begun: it would be in no map the quit ends. The
       // terminal lives in pluginPtyProcesses (main.ts), which the quit does end.
       refuseWhileQuitting('login terminal');
-      const term = pty.spawn(command.file, command.args, {
+      const term = spawnPty(command.file, command.args, {
         name: 'xterm-256color',
         cols: typeof cols === 'number' && cols > 0 ? cols : 100,
         rows: typeof rows === 'number' && rows > 0 ? rows : 30,

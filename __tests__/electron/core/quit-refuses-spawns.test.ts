@@ -157,11 +157,14 @@ describe('every spawn site and exit handler in electron/', () => {
       // `this.launch.command`: a file holding neither text holds no such call,
       // and only the others are parsed. Parsing all of electron/ took this test
       // past the 5 s default under load (QA, the gate of #358, 2026-10-12).
-      if (!text.includes('pty.spawn') && !text.includes('this.launch.command')) continue;
+      // Since 2.0.6 every terminal is opened through core/pty-spawn.ts's spawnPty, whose own pty.spawn is guarded by
+      // each caller of it: the callers are the sites.
+      if (f === path.join('core', 'pty-spawn.ts')) continue;
+      if (!text.includes('pty.spawn') && !text.includes('spawnPty(') && !text.includes('this.launch.command')) continue;
       const source = ts.createSourceFile(f, text, ts.ScriptTarget.ES2022, true);
       const isSpawn = (node: ts.CallExpression) => {
         const callee = node.expression.getText(source);
-        return callee === 'pty.spawn' || (callee === 'spawn' && node.arguments[0]?.getText(source) === 'this.launch.command');
+        return callee === 'pty.spawn' || callee === 'spawnPty' || (callee === 'spawn' && node.arguments[0]?.getText(source) === 'this.launch.command');
       };
       const isGuard = (node: ts.Node) => ts.isCallExpression(node) && node.expression.getText(source) === 'refuseWhileQuitting';
       // The guards of one function, its nested functions left out: theirs run when they are called.
