@@ -11,9 +11,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * labelled a note, creates no task and no end notice, and leaves the task in hand the asker's.
  *
  * The defect: a message for information had no mode of its own. Sent as a message, it was a task: a link to its
- * sender, a "has finished its turn" notice at its end, a task in the ledger under the sender's name. And typed into a
- * turn under way, it moved the agent's hand-off mark past that turn's start, so the end of the task in hand told its
- * asker nothing (agent-watch.ts, ranHandedWork).
+ * sender, a "has finished its turn" notice at its end, a task in the ledger under the sender's name.
  *
  * The real app on a sandbox HOME, and the real orchestrator MCP server (mcp-orchestrator/dist/bundle.js) run with the
  * identity of the orchestrator `lead`, spoken to over stdio as Claude Code speaks to it. `lead` has a terminal of its
@@ -31,8 +29,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * c. NOTE-OPT's own turn runs, and lead is told nothing of it: lead's terminal reads "has finished its turn" once in
  *    all, for TASK-ONE, which NOTE-NOW did not hide;
  * d. the ledger's task opened by NOTE-OPT's turn names no asker; TASK-ONE's names lead.
- * Red on 54d26ef37 (2.0.5): both notes are refused as invalid_mode. Red on the mutant that lets a note move the
- * hand-off mark (handedOver(delivered(...)) in performDispatchLocked): TASK-ONE's end tells lead nothing, c fails.
+ * Red on 54d26ef37 (2.0.5): both notes are refused as invalid_mode. Red on the mutant that gives a note its sender's
+ * link (onAccepted's requestFor in /dispatch): NOTE-OPT's end tells lead, c fails. Red on the mutant that records a
+ * note's hand-off in the ledger (WriteOrigin.note ignored in pty-manager.ts): NOTE-OPT's turn is lead's task, d fails.
+ * Green on the mutant that lets a note move the hand-off mark: the unit tests hold that one (N1, N2), and in the app
+ * TASK-ONE's end is told lead either way.
  * The artefact: values.json (every tool answer, oc's log, the bytes lead received, the ledger's tasks), a screenshot
  * of the Usage page, the app's trace with E2E_TRACE=on.
  */
