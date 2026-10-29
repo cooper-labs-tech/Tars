@@ -22,7 +22,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Asserted, once with the classic shell and once with the new interface:
  * a. lead puts w1, w2, w3 to work; dev's send_message to w1 and w2 during their turns are notes that wait for the turn's
  *    end;
- * b. 10 minutes on, dev hears of both in one notice, a line each, naming w1 and w2;
+ * b. 10 minutes on, dev hears of what is due then, w1 at least (w2, sent a moment after, may fall due a moment later and
+ *    wait for the 30, as W1 holds in the units);
  * c. dev's note to w3, sent after that notice, falls due 10 minutes later, inside the 30: dev hears nothing until the
  *    30 are over, then one notice with the three lines.
  * Red on 51e902884 (main, 2.0.5): each note tells dev on its own, 10 real minutes on, so nothing comes in the run and b
@@ -234,7 +235,7 @@ for (const newInterface of [false, true]) {
       // b.
       expect.soft(first.at - sentAt, 'the first digest came ten minutes on').toBeGreaterThanOrEqual(9 * MINUTE_MS);
       expect.soft(first.data).toContain('"Worker One"');
-      expect.soft(first.data).toContain('"Worker Two"');
+      // NOTE-2 went a moment after NOTE-1: due a moment later, it may wait for the 30, as the units' W1 holds.
       expect.soft(first.data).not.toContain('"Worker Three"');
       expect.soft(first.data).toMatch(/still waits for "Worker One"'s work to end/);
       // c.
