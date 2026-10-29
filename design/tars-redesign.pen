@@ -810343,7 +810343,7 @@
                               "id": "TEowI",
                               "name": "value",
                               "fill": "$text-primary",
-                              "content": "42",
+                              "content": "137",
                               "lineHeight": 1,
                               "fontFamily": "$font-display",
                               "fontSize": 28,
@@ -810356,7 +810356,7 @@
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "of 511 open · 8 %",
+                              "content": "of 511 on this computer · Tars holds 42",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -812731,7 +812731,7 @@
                               "id": "Y0VsvP",
                               "name": "value",
                               "fill": "$text-primary",
-                              "content": "42",
+                              "content": "137",
                               "lineHeight": 1,
                               "fontFamily": "$font-display",
                               "fontSize": 28,
@@ -812744,7 +812744,7 @@
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "of 511 open · 8 %",
+                              "content": "of 511 on this computer · Tars holds 42",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -815119,7 +815119,7 @@
                               "id": "vW2BK",
                               "name": "value",
                               "fill": "$text-primary",
-                              "content": "42",
+                              "content": "137",
                               "lineHeight": 1,
                               "fontFamily": "$font-display",
                               "fontSize": 28,
@@ -815132,7 +815132,7 @@
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "of 511 open · 8 %",
+                              "content": "of 511 on this computer · Tars holds 42",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -816492,7 +816492,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "A fifth figure beside free memory, swap, free disk and load: the terminals Tars holds open, of the machine's limit, with its share. Normal, warning past the share the Backend sets, error when none is left, and Windows, which has no such pool.",
+          "content": "A fifth figure beside free memory, swap, free disk and load: the terminals in use on this computer, of its limit, and how many of them Tars holds. Where the system gives only Tars's own count, the figure is Tars's and the line names the computer's limit. Normal, warning past the share the Backend sets, error when none is left, and Windows, which has no such pool.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -816520,7 +816520,7 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "normal · the open terminals and their share of the machine",
+                  "content": "normal · the computer's terminals in use, of its limit, and Tars's own",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816562,7 +816562,7 @@
                       "id": "s8hRgx",
                       "name": "value",
                       "fill": "$text-primary",
-                      "content": "42",
+                      "content": "137",
                       "fontFamily": "$font-display",
                       "fontSize": 28,
                       "fontWeight": "normal"
@@ -816574,7 +816574,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 open · 8 %",
+                      "content": "of 511 on this computer · Tars holds 42",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -816599,7 +816599,7 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "warning · past 80 % of the machine (the Backend's share)",
+                  "content": "warning · past 80 % of the computer's limit (the Backend's share)",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816661,7 +816661,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 open · 84 %",
+                      "content": "of 511 on this computer · 84 % · Tars holds 38",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -816728,7 +816728,7 @@
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "431 of 511 terminals open on this computer. At 511 no agent can start; restarting Tars frees them.",
+                      "content": "431 of 511 terminals in use on this computer, 38 of them Tars's. At 511 no agent can start: stop an agent or close a terminal to free one.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -816815,7 +816815,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 open · none left",
+                      "content": "of 511 on this computer · none left · Tars holds 40",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -816894,7 +816894,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Windows gives each terminal its own",
+                      "content": "No shared pool on Windows: each terminal is its own",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -816964,7 +816964,7 @@
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. No agent can start until Tars is restarted, which frees them.",
+                      "content": "No terminal is left on this computer: 511 of 511 in use, 40 of them Tars's. Stop an agent or close a terminal on this computer to free one. If Tars's own count does not fall, restart Tars as a last resort.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -817064,6 +817064,85 @@
             },
             {
               "type": "frame",
+              "id": "X447GA",
+              "name": "pane tars only",
+              "width": 340,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "MR2H0",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "only Tars's count · where the system gives no other, the line names the computer's limit",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "m9FZL",
+                  "name": "tile TERMINALS",
+                  "width": 232,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "iAGi1",
+                      "name": "cap",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "I0sLCl",
+                          "name": "caption",
+                          "fill": "$text-secondary",
+                          "content": "TERMINALS",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "O4H3T",
+                      "name": "value",
+                      "fill": "$text-primary",
+                      "content": "42",
+                      "fontFamily": "$font-display",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "hQvG9",
+                      "name": "sub",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Tars holds 42 · the computer allows 511",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "ylSGD",
               "name": "what it is",
               "width": "fill_container",
@@ -817087,7 +817166,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Every agent, quick terminal and login runs in a terminal of the machine's own pool: 511 on macOS (kern.tty.ptmx_max), the kernel's pty max on Linux. Tars counts the ones it holds open with the health samples. Past the Backend's share the tile turns to the waiting colour and the alert lands in Alerts; at the limit the notice says what to do. Tars never restarts itself.",
+                  "content": "Every agent, quick terminal and login runs in a terminal of the computer's own pool, which every other program shares: 511 on macOS (kern.tty.ptmx_max), the kernel's pty max on Linux. The line under the figure names whose count is whose: the computer's in use where the system gives it, and Tars's own. Past the Backend's share the tile turns to the waiting colour and the alert lands in Alerts; at the limit the notice says what frees one: stopping an agent or closing a terminal. Restarting Tars is the last resort, when its own count does not fall. Tars never restarts itself.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -817154,7 +817233,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "A fifth figure beside free memory, swap, free disk and load: the terminals Tars holds open, of the machine's limit, with its share. Normal, warning past the share the Backend sets, error when none is left, and Windows, which has no such pool.",
+          "content": "A fifth figure beside free memory, swap, free disk and load: the terminals in use on this computer, of its limit, and how many of them Tars holds. Where the system gives only Tars's own count, the figure is Tars's and the line names the computer's limit. Normal, warning past the share the Backend sets, error when none is left, and Windows, which has no such pool.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -817182,7 +817261,7 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "normal · the open terminals and their share of the machine",
+                  "content": "normal · the computer's terminals in use, of its limit, and Tars's own",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817224,7 +817303,7 @@
                       "id": "JvSMP",
                       "name": "value",
                       "fill": "$text-primary",
-                      "content": "42",
+                      "content": "137",
                       "fontFamily": "$font-display",
                       "fontSize": 28,
                       "fontWeight": "normal"
@@ -817236,7 +817315,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 open · 8 %",
+                      "content": "of 511 on this computer · Tars holds 42",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -817261,7 +817340,7 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "warning · past 80 % of the machine (the Backend's share)",
+                  "content": "warning · past 80 % of the computer's limit (the Backend's share)",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817323,7 +817402,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 open · 84 %",
+                      "content": "of 511 on this computer · 84 % · Tars holds 38",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -817390,7 +817469,7 @@
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "431 of 511 terminals open on this computer. At 511 no agent can start; restarting Tars frees them.",
+                      "content": "431 of 511 terminals in use on this computer, 38 of them Tars's. At 511 no agent can start: stop an agent or close a terminal to free one.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -817477,7 +817556,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 open · none left",
+                      "content": "of 511 on this computer · none left · Tars holds 40",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -817556,7 +817635,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Windows gives each terminal its own",
+                      "content": "No shared pool on Windows: each terminal is its own",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -817626,7 +817705,7 @@
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. No agent can start until Tars is restarted, which frees them.",
+                      "content": "No terminal is left on this computer: 511 of 511 in use, 40 of them Tars's. Stop an agent or close a terminal on this computer to free one. If Tars's own count does not fall, restart Tars as a last resort.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -817726,6 +817805,85 @@
             },
             {
               "type": "frame",
+              "id": "Hi5IG",
+              "name": "pane tars only",
+              "width": 340,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "hxGMq",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "only Tars's count · where the system gives no other, the line names the computer's limit",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "nzpGA",
+                  "name": "tile TERMINALS",
+                  "width": 232,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "vzgUU",
+                      "name": "cap",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GePq5",
+                          "name": "caption",
+                          "fill": "$text-secondary",
+                          "content": "TERMINALS",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "DWawH",
+                      "name": "value",
+                      "fill": "$text-primary",
+                      "content": "42",
+                      "fontFamily": "$font-display",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Zko1F",
+                      "name": "sub",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Tars holds 42 · the computer allows 511",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "HGaAX",
               "name": "what it is",
               "width": "fill_container",
@@ -817749,7 +817907,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Every agent, quick terminal and login runs in a terminal of the machine's own pool: 511 on macOS (kern.tty.ptmx_max), the kernel's pty max on Linux. Tars counts the ones it holds open with the health samples. Past the Backend's share the tile turns to the waiting colour and the alert lands in Alerts; at the limit the notice says what to do. Tars never restarts itself.",
+                  "content": "Every agent, quick terminal and login runs in a terminal of the computer's own pool, which every other program shares: 511 on macOS (kern.tty.ptmx_max), the kernel's pty max on Linux. The line under the figure names whose count is whose: the computer's in use where the system gives it, and Tars's own. Past the Backend's share the tile turns to the waiting colour and the alert lands in Alerts; at the limit the notice says what frees one: stopping an agent or closing a terminal. Restarting Tars is the last resort, when its own count does not fall. Tars never restarts itself.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -818067,7 +818225,7 @@
                               "id": "UkV1s",
                               "name": "reason",
                               "fill": "$status-error",
-                              "content": "No terminal left · 511 of 511 in use, restart Tars",
+                              "content": "No terminal left · 511 of 511 in use, stop an agent to free one",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -818103,33 +818261,6 @@
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
                               "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "m31yz",
-                              "name": "a stop",
-                              "height": 26,
-                              "stroke": "$border",
-                              "strokeWidth": 1,
-                              "padding": [
-                                4,
-                                8
-                              ],
-                              "justifyContent": "center",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "lWEEl",
-                                  "name": "l",
-                                  "fill": "$text-muted",
-                                  "content": "stop",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": 11,
-                                  "fontWeight": "normal"
-                                }
-                              ]
                             },
                             {
                               "type": "frame",
@@ -818507,33 +818638,6 @@
                             },
                             {
                               "type": "frame",
-                              "id": "gbYWZ",
-                              "name": "a stop",
-                              "height": 26,
-                              "stroke": "$border",
-                              "strokeWidth": 1,
-                              "padding": [
-                                4,
-                                8
-                              ],
-                              "justifyContent": "center",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "rBhjB",
-                                  "name": "l",
-                                  "fill": "$text-muted",
-                                  "content": "stop",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": 11,
-                                  "fontWeight": "normal"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
                               "id": "Z2Q2di",
                               "name": "a fullscreen",
                               "width": 26,
@@ -818644,7 +818748,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "start_agent, delegate_task and send_message answer the same sentence, never \"Internal server error\": \"Tars cannot start Audit Engineer: no terminal is left on this computer (511 of 511 in use). Restart Tars to free them.\" Sentry still gets it.",
+                  "content": "start_agent, delegate_task and send_message answer the same sentence, never \"Internal server error\": \"Tars cannot start Audit Engineer: no terminal is left on this computer (511 of 511 in use, 40 of them Tars's). Stop an agent or close a terminal on this computer to free one; restart Tars only if its own count does not fall.\" Sentry still gets it.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -818930,8 +819034,10 @@
                       "id": "Hn2eX",
                       "name": "reason",
                       "fill": "$status-error",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Restart Tars to free them.",
-                      "lineHeight": 1.4,
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
+                      "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -818958,7 +819064,7 @@
                           "type": "frame",
                           "id": "CypPl",
                           "name": "a open",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -818985,7 +819091,7 @@
                           "type": "frame",
                           "id": "p0liy4",
                           "name": "a start",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819012,7 +819118,7 @@
                           "type": "frame",
                           "id": "OniWh",
                           "name": "a edit",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819039,7 +819145,7 @@
                           "type": "frame",
                           "id": "t8h3dE",
                           "name": "a delete",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819353,7 +819459,7 @@
                           "type": "frame",
                           "id": "UYBvz",
                           "name": "a open",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819380,7 +819486,7 @@
                           "type": "frame",
                           "id": "vMebI",
                           "name": "a start",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819407,7 +819513,7 @@
                           "type": "frame",
                           "id": "Y9KMZU",
                           "name": "a edit",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819434,7 +819540,7 @@
                           "type": "frame",
                           "id": "veEbN",
                           "name": "a delete",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -819493,7 +819599,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Restart Tars to free them.",
+                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -819505,21 +819611,452 @@
             },
             {
               "type": "frame",
-              "id": "dBHBJ",
-              "name": "card none",
-              "width": 384,
+              "id": "mjbsL",
+              "name": "its menu",
+              "width": 420,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "sZ5bn",
+                  "id": "RqLUN",
                   "name": "caption",
                   "fill": "$text-muted",
-                  "content": "also said in Resources, Heavy runs",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "its ··· menu offers start claude, for when a terminal is free",
+                  "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Sr7tO",
+                  "name": "pane",
+                  "clip": true,
+                  "width": 420,
+                  "height": 190,
+                  "fill": "$term-bg",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "r19Ksm",
+                      "name": "ph",
+                      "width": "fill_container",
+                      "fill": "$surface",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        8,
+                        11
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "WnWby",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "A3NTR",
+                              "name": "l",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "wtYru",
+                                  "name": "agent mark",
+                                  "width": 16,
+                                  "height": 16,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "Zv9rZ",
+                                      "name": "grid",
+                                      "layout": "vertical",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "frame",
+                                          "id": "Z2o9It",
+                                          "name": "row 0",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "Pmtuu",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "r2sfy",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "Pn3CA",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "yzSA7",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "C67VDL",
+                                          "name": "row 1",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "Rpuyw",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "fxH5I",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "kOHe6",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "MeApg",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "i8X6m",
+                                          "name": "row 2",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "POHPS",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "SsRTr",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "PbLpT",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "m847ku",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "RsIQz",
+                                          "name": "row 3",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "jzTBU",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "JkxdT",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "Q7iRS",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "XPe0y",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Pmf0G",
+                                  "name": "n",
+                                  "fill": "$text-primary",
+                                  "content": "Audit Engineer",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "mZa9g",
+                                  "name": "b",
+                                  "fill": "$text-muted",
+                                  "content": "main",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "M8wZab",
+                              "name": "r",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "qPQH8",
+                                  "name": "status",
+                                  "fill": "$status-error",
+                                  "content": "error",
+                                  "lineHeight": 1.35,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "L6ykpj",
+                                  "name": "m",
+                                  "fill": "$text-muted",
+                                  "content": "claude · opus 5",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "yCK5M",
+                                  "name": "a fullscreen",
+                                  "width": 26,
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "NxkfE",
+                                      "name": "maximize-2",
+                                      "width": 12,
+                                      "height": 12,
+                                      "icon": "maximize-2",
+                                      "library": "lucide",
+                                      "fill": "$text-muted"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Gkl50",
+                                  "name": "more",
+                                  "fill": "$text-primary",
+                                  "content": "···",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YayBA",
+                      "name": "pb",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "$term-bg",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        6,
+                        9,
+                        11
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "fx8KS",
+                          "name": "menu",
+                          "width": 190,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ZIpJK",
+                              "name": "i start claude",
+                              "width": "fill_container",
+                              "padding": [
+                                6,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "KFCFv",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "start claude",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "MO2So",
+                              "name": "sep",
+                              "width": "fill_container",
+                              "height": 1,
+                              "fill": "$border"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "QjgFT",
+                              "name": "i clear",
+                              "width": "fill_container",
+                              "padding": [
+                                6,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "z6DyS",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "clear",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Avj0J",
+                              "name": "i hide from this board",
+                              "width": "fill_container",
+                              "padding": [
+                                6,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "txiWZ",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "hide from this board",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }
@@ -819810,7 +820347,7 @@
                               "id": "zRBkc",
                               "name": "reason",
                               "fill": "$status-error",
-                              "content": "No terminal left · 511 of 511 in use, restart Tars",
+                              "content": "No terminal left · 511 of 511 in use, stop an agent to free one",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -819846,33 +820383,6 @@
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
                               "fontWeight": "normal"
-                            },
-                            {
-                              "type": "frame",
-                              "id": "PoOoj",
-                              "name": "a stop",
-                              "height": 26,
-                              "stroke": "$border",
-                              "strokeWidth": 1,
-                              "padding": [
-                                4,
-                                8
-                              ],
-                              "justifyContent": "center",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "sgonS",
-                                  "name": "l",
-                                  "fill": "$text-muted",
-                                  "content": "stop",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": 11,
-                                  "fontWeight": "normal"
-                                }
-                              ]
                             },
                             {
                               "type": "frame",
@@ -820250,33 +820760,6 @@
                             },
                             {
                               "type": "frame",
-                              "id": "pRyeC",
-                              "name": "a stop",
-                              "height": 26,
-                              "stroke": "$border",
-                              "strokeWidth": 1,
-                              "padding": [
-                                4,
-                                8
-                              ],
-                              "justifyContent": "center",
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "l0IMmC",
-                                  "name": "l",
-                                  "fill": "$text-muted",
-                                  "content": "stop",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": 11,
-                                  "fontWeight": "normal"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
                               "id": "pjvxn",
                               "name": "a fullscreen",
                               "width": 26,
@@ -820387,7 +820870,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "start_agent, delegate_task and send_message answer the same sentence, never \"Internal server error\": \"Tars cannot start Audit Engineer: no terminal is left on this computer (511 of 511 in use). Restart Tars to free them.\" Sentry still gets it.",
+                  "content": "start_agent, delegate_task and send_message answer the same sentence, never \"Internal server error\": \"Tars cannot start Audit Engineer: no terminal is left on this computer (511 of 511 in use, 40 of them Tars's). Stop an agent or close a terminal on this computer to free one; restart Tars only if its own count does not fall.\" Sentry still gets it.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -820673,8 +821156,10 @@
                       "id": "wiYCa",
                       "name": "reason",
                       "fill": "$status-error",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Restart Tars to free them.",
-                      "lineHeight": 1.4,
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
+                      "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -820701,7 +821186,7 @@
                           "type": "frame",
                           "id": "I6JTfT",
                           "name": "a open",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -820728,7 +821213,7 @@
                           "type": "frame",
                           "id": "dR6kP",
                           "name": "a start",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -820755,7 +821240,7 @@
                           "type": "frame",
                           "id": "IEgrT",
                           "name": "a edit",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -820782,7 +821267,7 @@
                           "type": "frame",
                           "id": "O09pH",
                           "name": "a delete",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -821096,7 +821581,7 @@
                           "type": "frame",
                           "id": "ylpWd",
                           "name": "a open",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -821123,7 +821608,7 @@
                           "type": "frame",
                           "id": "sZyyz",
                           "name": "a start",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -821150,7 +821635,7 @@
                           "type": "frame",
                           "id": "JSS9v",
                           "name": "a edit",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -821177,7 +821662,7 @@
                           "type": "frame",
                           "id": "xxZeN",
                           "name": "a delete",
-                          "height": 25,
+                          "height": 26,
                           "stroke": "$border",
                           "strokeWidth": 1,
                           "padding": [
@@ -821236,7 +821721,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Restart Tars to free them.",
+                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -821248,21 +821733,452 @@
             },
             {
               "type": "frame",
-              "id": "ViWDO",
-              "name": "card none",
-              "width": 384,
+              "id": "brFdl",
+              "name": "its menu",
+              "width": 420,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "yRSmD",
+                  "id": "Ir5lQ",
                   "name": "caption",
                   "fill": "$text-muted",
-                  "content": "also said in Resources, Heavy runs",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "its ··· menu offers start claude, for when a terminal is free",
+                  "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "YAqlr",
+                  "name": "pane",
+                  "clip": true,
+                  "width": 420,
+                  "height": 190,
+                  "fill": "$term-bg",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "qH3Or",
+                      "name": "ph",
+                      "width": "fill_container",
+                      "fill": "$surface",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        8,
+                        11
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "x0SLgV",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "c8eo3",
+                              "name": "l",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "y9seOs",
+                                  "name": "agent mark",
+                                  "width": 16,
+                                  "height": 16,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "dLGvp",
+                                      "name": "grid",
+                                      "layout": "vertical",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "frame",
+                                          "id": "i284y",
+                                          "name": "row 0",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "h25MI6",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "kuoS4",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "rLPBv",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "l5pti",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "p8Pka",
+                                          "name": "row 1",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "NzzFP",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "z5MYc2",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "mLcml",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "bMVa7",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "NxM03",
+                                          "name": "row 2",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "O5wJYy",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "YWRlo",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "boOxH",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "R1kSto",
+                                              "name": "off",
+                                              "fill": "$surface-raised",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "wtriI",
+                                          "name": "row 3",
+                                          "gap": 1,
+                                          "children": [
+                                            {
+                                              "type": "rectangle",
+                                              "id": "Rztj3",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "I6LKL",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "j44cPC",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            },
+                                            {
+                                              "type": "rectangle",
+                                              "id": "QhSUI",
+                                              "name": "on",
+                                              "fill": "$accent",
+                                              "width": 3,
+                                              "height": 3
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "bO9bS",
+                                  "name": "n",
+                                  "fill": "$text-primary",
+                                  "content": "Audit Engineer",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "500"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "AFfkX",
+                                  "name": "b",
+                                  "fill": "$text-muted",
+                                  "content": "main",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "EwQ5O",
+                              "name": "r",
+                              "gap": 8,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "i7cYNG",
+                                  "name": "status",
+                                  "fill": "$status-error",
+                                  "content": "error",
+                                  "lineHeight": 1.35,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "BVByw",
+                                  "name": "m",
+                                  "fill": "$text-muted",
+                                  "content": "claude · opus 5",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "hyvuK",
+                                  "name": "a fullscreen",
+                                  "width": 26,
+                                  "height": 26,
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "justifyContent": "center",
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "icon",
+                                      "id": "Y3kJz",
+                                      "name": "maximize-2",
+                                      "width": 12,
+                                      "height": 12,
+                                      "icon": "maximize-2",
+                                      "library": "lucide",
+                                      "fill": "$text-muted"
+                                    }
+                                  ]
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "I1d1b1",
+                                  "name": "more",
+                                  "fill": "$text-primary",
+                                  "content": "···",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "k4PHC",
+                      "name": "pb",
+                      "width": "fill_container",
+                      "height": "fill_container",
+                      "fill": "$term-bg",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        6,
+                        9,
+                        11
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "beoi9",
+                          "name": "menu",
+                          "width": 190,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "FTQKR",
+                              "name": "i start claude",
+                              "width": "fill_container",
+                              "padding": [
+                                6,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "eVHgV",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "start claude",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "IPLdP",
+                              "name": "sep",
+                              "width": "fill_container",
+                              "height": 1,
+                              "fill": "$border"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "g0AJ4t",
+                              "name": "i clear",
+                              "width": "fill_container",
+                              "padding": [
+                                6,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "mWoMs",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "clear",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "QJIiz",
+                              "name": "i hide from this board",
+                              "width": "fill_container",
+                              "padding": [
+                                6,
+                                10
+                              ],
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "LJMzB",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "hide from this board",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 12,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             }

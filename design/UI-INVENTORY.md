@@ -4,8 +4,8 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 348 root frames, 81 of them drawn and not built yet: the 70 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
-`design/chat-design.pen` holds 72 of those, the other two hundred and seventy-six being newer than the
+rather than a companion to it. `design/tars-redesign.pen` holds 359 root frames, 92 of them drawn and not built yet: the 81 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+`design/chat-design.pen` holds 72 of those, the other two hundred and eighty-seven being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
 room listed on the `/chat` line below: 85 in all. 71 share their ids
@@ -302,3 +302,15 @@ For 2.0.5:
   window), · quick open and a file dropped into a prompt (and its light copy).
 - Terminal splits and a search through the scrollback: Terminal splits (2.0.5) · free splits and a search through the
   scrollback (its light copy, the narrowest window).
+
+For 2.0.6:
+- The terminals left on this computer, a fifth figure of Heavy runs naming the computer's count in use and Tars's own:
+  Resources (2.0.6) · heavy runs, terminals left (its light copy, the narrowest window), · terminals left · states (and
+  its light copy).
+- An agent that cannot start for lack of a terminal, said on its pane and its card, its pane's menu offering start:
+  Agent cannot start · no terminal left (2.0.6) (and its light copy).
+- A project's MEMORY.md past what Claude Code reads, on Brain's Projects: Brain · Projects · MEMORY.md past what Claude
+  Code reads (2.0.6) · states (and its light copy).
+- A note among messages, and what the window shows of the other options: Messages (2.0.6) · a note, the waiting digest,
+  both zones · what the window shows (and its light copy); in `chat-redesign-a.pen`, Chat · A · Room (2.0.6) · a note
+  (and its light copy).

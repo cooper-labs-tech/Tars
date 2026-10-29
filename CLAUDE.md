@@ -204,7 +204,8 @@ pen > exit()
 Verified: that session reads the 72 Tars frames while the desktop app sits on another
 document, and `save()` writes the `.pen` to disk unattended. Installed with
 `npm install -g @pen.dev/cli` (`@pencil.dev/cli` is deprecated), authenticated per user in
-`~/.pencil/session-cli.json`, separate from the desktop app's session.
+`~/.pencil/session-cli.json`, separate from the desktop app's session. It takes the CLI 0.3.9 or later
+(`pen version`): an older one opens a format 2.19 document as an empty canvas, and `save()` would then write it empty.
 
 Pencil traps that will cost you an afternoon:
 - `save()` is explicit. An agent that forgets it loses the whole session's work with no error
