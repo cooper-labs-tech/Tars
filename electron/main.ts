@@ -72,6 +72,9 @@ import { lastLocalCommandAt } from './services/agent-truth';
 import { runShutdownSteps } from './core/shutdown';
 import { initTray, destroyTray } from './core/tray-manager';
 import { broadcastToAllWindows } from './utils/broadcast';
+import { readTerminals, useTestPtyMax } from './core/pty-spawn';
+import { ptyTestMax, terminalsNearFullNote } from './core/pty-pool';
+import { readFleetResources } from './services/fleet-resources-runtime';
 
 // Services
 import { startApiServer } from './services/api-server';
@@ -564,6 +567,10 @@ app.whenReady().then(async () => {
   }
   if (DATA_DIR_REWRITTEN.length) console.log(`[data-dir] ~/.dorothy rewritten to ~/.tars in ${DATA_DIR_REWRITTEN.length} file(s)`);
 
+  // An E2E spec's full pool of terminals, before any agent starts: under DOROTHY_E2E only, never in a packaged build
+  // (core/pty-pool.ts ptyTestMax).
+  useTestPtyMax(ptyTestMax(process.env, app.isPackaged));
+
   // Load agents from disk
   loadAgents();
   // And the run token folders a delegated run or a crash left behind (services/acp/run-token-file.ts).
@@ -588,6 +595,14 @@ app.whenReady().then(async () => {
       const terminal = a.ptyId ? ptyProcesses.get(a.ptyId) : undefined;
       return terminal ? [{ id: a.id, pid: terminal.pid }] : [];
     }),
+    // The machine's terminals on the same sample; past 80 % of its limit the window and every project's
+    // orchestrator are told, once (core/pty-pool.ts, 2.0.6: the leak that filled macOS's 511 on 28-29/10).
+    terminals: readTerminals,
+    onTerminalsNearFull: (pool) => {
+      void readFleetResources().then((r) => broadcastToAllWindows('resources:changed', r)).catch(() => undefined);
+      const note = terminalsNearFullNote(pool);
+      for (const project of new Set([...agents.values()].map((a) => a.projectPath))) void tellOrchestratorAsTars(project, note);
+    },
   });
   registerDiagnosticHandlers({ reports: errorReports, samplesFile: HEALTH_FILE, known: healthWords });
   // Bound how much a crash can lose: PTY-driven fields reach disk on a timer.

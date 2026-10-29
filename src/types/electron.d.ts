@@ -1299,6 +1299,13 @@ export interface FleetResources {
   measuring?: { done: number; total: number } | null;
   error?: string | null;
   projects: ProjectResources[];
+  /**
+   * The machine's terminals: in use out of the limit, the PTY masters Tars holds and the terminals it has open (more
+   * masters than terminals is a leak, which only a restart of Tars frees), and whether past 80 % of the limit. Null
+   * where there is no such pool (Windows) or it cannot be read. `notice` is the text to show as it is: the refusal
+   * once full, the warning past 80 %, else null.
+   */
+  terminals?: { inUse: number; max: number; tars: number | null; open?: number; nearFull: boolean; notice: string | null } | null;
 }
 
 export interface OrphanListing {
@@ -1584,7 +1591,8 @@ export interface ElectronAPI {
       cliPath?: string | null;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     /** `{ success: false, cliRunning: true }` when a CLI still runs in the agent's terminal: nothing was typed. */
-    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string } }) => Promise<{ success: boolean; cliRunning?: boolean; error?: string }>;
+    /** `code: 'no_terminal'` when the machine had no terminal left: `error` says how many of how many and what frees one, and the agent reads 'error' with it (asleep, it stays asleep with it). */
+    start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: AgentProvider; localModel?: string } }) => Promise<{ success: boolean; cliRunning?: boolean; error?: string; code?: 'no_terminal' }>;
     get: (id: string) => Promise<AgentStatus | null>;
     list: () => Promise<AgentStatus[]>;
     /** Ends the agent's terminal and everything its CLI started; the agent reads `stopped`, by "you". */

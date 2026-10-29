@@ -19,7 +19,7 @@ import { buildWindowsCommandLine, quoteWindowsArg, WindowsCommandLineError } fro
  * Windows command line built by us (windows-command-line.ts) for node-pty,
  * which starts the CLI itself in `cwd` through ConPTY. A prompt's newlines
  * therefore stay inside one argument and never reach a shell as lines. The
- * caller spawns `pty.spawn(file, commandLine, { cwd, env })`.
+ * caller spawns `spawnPty(file, commandLine, { cwd, env })` (core/pty-spawn.ts).
  */
 
 export interface PosixLaunch {

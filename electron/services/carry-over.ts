@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
+import { twoZones } from '../utils/two-zones';
 
 /**
  * What Tars owes its agents, carried across a restart (RD-REDEMARRAGE.md, 2.3;
@@ -117,7 +118,6 @@ export function startCarryOver(
 export function carriedSince(at: string): string {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return 'owed from before Tars restarted';
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return `owed since ${hh}:${mm}, before Tars restarted`;
+  // UTC first, then the machine's own (utils/two-zones.ts, 2.0.6).
+  return `owed since ${twoZones(d.getTime())}, before Tars restarted`;
 }
