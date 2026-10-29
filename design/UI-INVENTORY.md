@@ -304,7 +304,8 @@ For 2.0.5:
   scrollback (its light copy, the narrowest window).
 
 For 2.0.6:
-- The terminals left on this computer, a fifth figure of Heavy runs naming the computer's count in use and Tars's own:
+- The terminals left on this machine, a fifth figure of Heavy runs naming the machine's count in use, the ones Tars holds
+  and the ones it has open, in the words of #553's answer and warning:
   Resources (2.0.6) · heavy runs, terminals left (its light copy, the narrowest window), · terminals left · states (and
   its light copy).
 - An agent that cannot start for lack of a terminal, said on its pane and its card, its pane's menu offering start:
