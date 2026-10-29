@@ -11,7 +11,9 @@ export type SharedJsonOutcome =
   /** The file exists and is not JSON: it is left exactly as it is. */
   | 'unreadable'
   /** The file changed under every attempt: left as the other writer made it. */
-  | 'busy';
+  | 'busy'
+  /** What would be written does not parse, or did not once written: the previous file is left, or put back. */
+  | 'refused';
 
 const ATTEMPTS = 3;
 
@@ -47,6 +49,11 @@ const ATTEMPTS = 3;
  * On Windows that rename fails while a reader holds the file open, and these
  * files are read all the time; it is retried for about a second
  * (platform/rename-replacing.ts).
+ *
+ * Every file written here ends with a newline, and is parsed again once
+ * written: one that does not parse is replaced by what it held before (28/10:
+ * ~/.codex/config.toml was left without its final newline, codex added its own
+ * [tui] table on the last line, and refused its whole config).
  */
 export function updateSharedJsonSync<T>(
   filePath: string,
@@ -71,25 +78,45 @@ export function updateSharedJsonSync<T>(
     const next = update(current);
     if (next === undefined) return 'unchanged';
     const contents = JSON.stringify(next, null, 2);
-    return contents === unchanged ? 'unchanged' : { write: contents };
-  }, createMode);
+    return contents === unchanged ? 'unchanged' : { write: `${contents}\n` };
+  }, createMode, parsesAsJson);
 }
+
+const parsesAsJson = (text: string) => { JSON.parse(text); };
+const withNewline = (text: string) => (text === '' || text.endsWith('\n') ? text : `${text}\n`);
 
 /**
  * updateSharedJsonSync for a file that is not JSON: codex's config.toml, which every codex reads at its start and
- * rewrites when its user trusts a folder (providers/codex-cli.ts). The same care, and `update` says what the file
- * becomes from what it holds (undefined: there is none), or undefined to leave it. A read that fails for any reason
- * but the file's absence throws, and nothing is written: a config that could not be read was never one to replace.
+ * rewrites when its user trusts a folder (providers/codex-cli.ts), grok's. The same care, and `update` says what the
+ * file becomes from what it holds (undefined: there is none), or undefined to leave it. A read that fails for any
+ * reason but the file's absence throws, and nothing is written: a config that could not be read was never one to
+ * replace. `parse` throws on what is not the file's language: a text that would not parse is never written
+ * ('refused'), and the previous file stays.
  */
 export function updateSharedTextSync(
   filePath: string,
   update: (current: string | undefined) => string | undefined,
-  { createMode = 0o600 }: { createMode?: number } = {},
+  { createMode = 0o600, parse }: { createMode?: number; parse?: (text: string) => unknown } = {},
 ): Exclude<SharedJsonOutcome, 'unreadable'> {
   return replaceShared(filePath, before => {
     const next = update(before);
-    return next === undefined || next === before ? 'unchanged' : { write: next };
-  }, createMode) as Exclude<SharedJsonOutcome, 'unreadable'>;
+    if (next === undefined) return 'unchanged';
+    const text = withNewline(next);
+    if (text === before) return 'unchanged';
+    if (parse) {
+      try { parse(text); } catch { return 'refused'; }
+    }
+    return { write: text };
+  }, createMode, parse) as Exclude<SharedJsonOutcome, 'unreadable'>;
+}
+
+/**
+ * A CLI's JSON config written whole from what Tars computed (gemini's and amp's settings, the MCP page's files,
+ * Qwen Code's per-agent settings): as updateSharedJsonSync writes, whatever the file held.
+ */
+export function writeSharedJsonSync(filePath: string, value: unknown, { createMode = 0o600 }: { createMode?: number } = {}): SharedJsonOutcome {
+  const text = `${JSON.stringify(value, null, 2)}\n`;
+  return replaceShared(filePath, before => (before === text ? 'unchanged' : { write: text }), createMode, parsesAsJson);
 }
 
 /**
@@ -98,8 +125,9 @@ export function updateSharedTextSync(
  */
 function replaceShared(
   filePath: string,
-  next: (before: string | undefined) => { write: string } | 'unchanged' | 'unreadable',
+  next: (before: string | undefined) => { write: string } | 'unchanged' | 'unreadable' | 'refused',
   createMode: number,
+  parse?: (text: string) => unknown,
 ): SharedJsonOutcome {
   // The file a link points at, so the rename replaces it and not the link.
   const target = fs.existsSync(filePath) ? fs.realpathSync(filePath) : filePath;
@@ -107,7 +135,7 @@ function replaceShared(
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const before = readIfPresent(target);
     const outcome = next(before);
-    if (outcome === 'unchanged' || outcome === 'unreadable') return outcome;
+    if (outcome === 'unchanged' || outcome === 'unreadable' || outcome === 'refused') return outcome;
 
     // The file's own mode, given at creation: the umask can only narrow it.
     const mode = before !== undefined ? fs.statSync(target).mode & 0o777 : createMode;
@@ -122,6 +150,15 @@ function replaceShared(
         continue;
       }
       renameReplacingSync(tmp, target);
+      // Read again and parsed: a file that does not parse once written is replaced by what it held before.
+      if (parse && !parsesNow(target, parse)) {
+        if (before === undefined) fs.rmSync(target, { force: true });
+        else {
+          fs.writeFileSync(tmp, before, { mode });
+          renameReplacingSync(tmp, target);
+        }
+        return 'refused';
+      }
       return 'written';
     } catch (err) {
       removeTemp(tmp);
@@ -129,6 +166,15 @@ function replaceShared(
     }
   }
   return 'busy';
+}
+
+function parsesNow(filePath: string, parse: (text: string) => unknown): boolean {
+  try {
+    parse(fs.readFileSync(filePath, 'utf-8'));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Cleanup that can neither fail nor hide the error that made it necessary. */

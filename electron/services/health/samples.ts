@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import { writeSecretFileSync } from '../../utils/secret-file';
+import type { AgentTrees, MachineSample } from './machine';
 
 /**
  * The health samples Tars keeps on this machine (2.0.3, monitoring option 2):
@@ -36,6 +37,10 @@ export interface HealthSample {
   running: number;
   /** The path of the page the window showed, `/usage`; null when unknown or not a bare path. */
   page: string | null;
+  /** The machine's memory, swap, disk and load (machine.ts, 2.0.5); absent from a sample taken before. */
+  machine?: MachineSample;
+  /** Each agent's whole tree (machine.ts, 2.0.5); null where it cannot be read (Windows). */
+  agentTrees?: AgentTrees | null;
 }
 
 export const HEALTH_KEEP_MS = 24 * 3_600_000;
@@ -50,6 +55,40 @@ const CHANNEL = /^[A-Za-z][A-Za-z0-9:._-]{0,63}$/;
 const PAGE = /^\/(?:[a-z0-9-]+\/?){0,6}$/;
 
 const amount = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null);
+/** A number that may be negative (the swap's growth), or null. */
+const signed = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+/** An agent's id: what Tars's agents are named by, and nothing a path or a sentence fits in. */
+const AGENT_ID = /^[A-Za-z0-9_-][A-Za-z0-9._-]{0,63}$/;
+
+function cleanMachine(raw: unknown): MachineSample | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  const readMs = amount(r.readMs);
+  if (readMs === null) return undefined;
+  const n = (v: number | null) => (v === null ? null : round(v));
+  return {
+    memFreePct: n(amount(r.memFreePct)), memFreeMb: n(amount(r.memFreeMb)), compressedMb: n(amount(r.compressedMb)),
+    swapUsedMb: n(amount(r.swapUsedMb)), swapGrowthMbPerMin: n(signed(r.swapGrowthMbPerMin)), diskFreeGb: n(amount(r.diskFreeGb)),
+    load1: n(amount(r.load1)), readMs: Math.round(readMs),
+  };
+}
+
+function cleanTrees(raw: unknown): AgentTrees | null | undefined {
+  if (raw === null) return null;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const r = raw as Record<string, unknown>;
+  if (r.measure !== 'rss' && r.measure !== 'pss') return undefined;
+  const trees = (Array.isArray(r.trees) ? r.trees : []).flatMap((t) => {
+    const tree = t as Record<string, unknown> | null;
+    const processes = amount(tree?.processes);
+    const mb = amount(tree?.mb);
+    const id = tree?.id;
+    if (processes === null || mb === null) return [];
+    if (id !== undefined && !(typeof id === 'string' && AGENT_ID.test(id))) return [];
+    return [{ ...(typeof id === 'string' ? { id } : {}), processes: Math.round(processes), mb: round(mb) }];
+  });
+  return { measure: r.measure, trees };
+}
 const round = (v: number) => Math.round(v * 10) / 10;
 
 /** The sample as it may be kept and sent: every field checked, nothing else copied; null when a number is not one. */
@@ -72,9 +111,13 @@ export function cleanSample(raw: unknown): HealthSample | null {
     }
   }
   const page = typeof r.page === 'string' && r.page.length <= 64 && PAGE.test(r.page) ? r.page : null;
+  const machine = cleanMachine(r.machine);
+  const agentTrees = cleanTrees(r.agentTrees);
   return {
     at: out.at, heapUsedMb: out.heapUsedMb, heapTotalMb: out.heapTotalMb, rssMb: out.rssMb,
     loopP50Ms: out.loopP50Ms, loopP95Ms: out.loopP95Ms, slowest, agents: out.agents, running: out.running, page,
+    ...(machine ? { machine } : {}),
+    ...(agentTrees !== undefined ? { agentTrees } : {}),
   };
 }
 
@@ -98,6 +141,8 @@ export function onlyKnown(sample: HealthSample, known: Vocabulary): HealthSample
     ...sample,
     slowest: sample.slowest.filter((c) => known.channels.has(c.channel)),
     page: sample.page !== null && known.pages.has(sample.page) ? sample.page : null,
+    // The weights leave, and no agent's id: an abrupt end's report or a diagnostic names nobody.
+    ...(sample.agentTrees ? { agentTrees: { measure: sample.agentTrees.measure, trees: sample.agentTrees.trees.map(({ processes, mb }) => ({ processes, mb })) } } : {}),
   };
 }
 

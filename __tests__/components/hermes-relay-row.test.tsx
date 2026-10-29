@@ -16,8 +16,10 @@ vi.mock('react', async (importOriginal) => ({
  * `hermesRelayEnabled`, `hermes.relayStatus()` and `onRelayStatus`). Frames:
  * `Settings · Connection`, and `Settings · Connection · Telegram through
  * Hermes` with its light copy. Written before the code. How it can fail:
- * 1. a click on the switch turns the relay on at once, and erases the bot's
- *    token with no warning first;
+ * 1. a click on the switch turns the relay on at once, with no warning first
+ *    (until 2.0.5 the warning said the bot's token was erased; Tars's own bot
+ *    went with #545, and the warning says what turning it on does, in the
+ *    words e2e/hermes-relay-switch.spec.ts reads in the app, #547);
  * 2. cancel saves anyway, or leaves the warning up;
  * 3. turn on saves something other than hermesRelayEnabled on, or twice;
  * 4. turning it off asks first (nothing is erased then), or saves nothing;
@@ -68,7 +70,9 @@ const settingsRow = (r: Mount<Row>) => ofType(r.result, SettingsRow)[0].props as
 const buttons = (r: Mount<Row>) => ofType(r.result, Button).map(b => ({ text: textOf(b.props.children as never), click: b.props.onClick as () => void }));
 const button = (r: Mount<Row>, text: string) => buttons(r).find(b => b.text === text);
 const notice = (r: Mount<Row>) => elements(r.result).filter(el => typeof el.props.children !== 'undefined')
-  .map(el => (typeof el.props.children === 'string' ? el.props.children : '')).find(t => t.startsWith('Turning it on erases'));
+  .map(el => (typeof el.props.children === 'string' ? el.props.children : '')).find(t => t.startsWith('Turning it on'));
+/** The row's sentence while the switch is off: what it does, and no bot left to speak of. */
+const OFF_LINE = 'Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers.';
 const word = (r: Mount<Row>) => ofType(settingsRow(r).control, StatusBadge).map(b => textOf(b.props.children as never)).join('').trim();
 
 describe('the Telegram through Hermes switch', () => {
@@ -76,7 +80,7 @@ describe('the Telegram through Hermes switch', () => {
     const r = await open(false);
     toggle(r).onChange();
     expect(onSave).not.toHaveBeenCalled();
-    expect(notice(r)).toContain("Turning it on erases the Tars bot's token and switches the bot off");
+    expect(notice(r)).toBe('Turning it on makes Hermes the only voice on your Telegram. Tars needs the tars-relay plugin on your Hermes.');
     expect(button(r, 'turn on')).toBeDefined();
     expect(button(r, 'cancel')).toBeDefined();
     expect(toggle(r).enabled).toBe(false);
@@ -106,16 +110,16 @@ describe('the Telegram through Hermes switch', () => {
     expect(notice(r)).toBeUndefined();
   });
 
-  it('says no state while off, and the warning (5)', async () => {
+  it('says no state while off, only what it does (5)', async () => {
     const r = await open(false);
     expect(word(r)).toBe('');
-    expect(settingsRow(r).description).toContain("Turning it on erases the Tars bot's token and switches the bot off.");
+    expect(settingsRow(r).description).toBe(OFF_LINE);
   });
 
   it('says no state once the switch is off, while main\'s last report still says ready (5)', async () => {
     const r = await open(false, { enabled: true, state: 'ready', waiting: 0 });
     expect(word(r)).toBe('');
-    expect(settingsRow(r).description).toContain("Turning it on erases the Tars bot's token and switches the bot off.");
+    expect(settingsRow(r).description).toBe(OFF_LINE);
   });
 
   it('says the state main reports, at once and as it changes, and stops listening when it goes (5)', async () => {

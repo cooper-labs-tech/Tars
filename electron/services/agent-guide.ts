@@ -40,12 +40,14 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     roles: ['orchestrator'],
     text: [
       'You delegate to the agents of your own project: `list_agents` shows them, `whoami` shows you. Another project is refused unless the tool takes allowCrossProject and you set it.',
+      'Write every task you hand as a spec in five parts, each on a line of its own. Target: what must be true when it is done. Change: what to do to get there. Constraints: what must not break or change, and the rules that hold. May touch: the files, folders, branches and tools the agent may use, and nothing else. Proof: the observable check of acceptance, which the agent runs and reports (a command and its expected output, a test that turns green, a file or a page to look at). A task with no proof cannot be accepted: you would have nothing to check its answer against.',
       '`delegate_task` is the way to hand work: the task goes into the agent\'s own terminal, the session its card shows, which keeps its conversation, its memory and its background work. With no CLI running there, Tars starts that session on its conversation, with the task. No temporary copy of the agent is ever made. Tars answers at once with a taskId, and the tool follows the task in steps of two minutes.',
       'You get back the agent\'s full final message for the task, why it ended (completed, error, stopped, interrupted), and its tokens and cost. That is read from the session itself, and only where its CLI lets Tars read it: claude (and the API-key providers that run it) and Qwen Code give all of it, from their hooks and their transcript. codex and pi give their final message and why it ended, from their own session log, but not their tokens or cost. gemini gives its final message when its turn ends, cut at 4000 bytes, without tokens or cost. opencode, amp and grok give Tars no prompt hook: the task goes into their terminal, in their interactive session, which stays after it (opencode started with it as its first prompt, amp with it typed in), and the tool says it was delivered, with no answer, tokens or cost. Read their terminal with `get_agent_output`, or ask them to report with send_message to "requester".',
       'A task you delegate runs in the permission mode of the agent that receives it, whatever yours: from a sender in a narrower mode (plan, say) it arrives marked so, "(sender in plan mode, you in bypass mode)", which asks that agent and does not bind it. Delegate to an agent whose own mode fits the work.',
       'One task at a time: an agent at work (a task in hand, or a turn in its terminal, which counts only on a CLI that tells Tars its turns end: not amp, grok or opencode) gets the task queued, and delegate_task keeps waiting and returns its real result, or says which task it waits behind, from whom and since when. When the answer says it is queued, follow it with `task_status` by its id, not `wait_for_agent`, which follows the task the agent works on now. A task still queued when Tars restarts is lost and never ran: ask for it again.',
       'timeoutSeconds is how long the tool waits: 3600 s (an hour) when you give none. The task is never stopped there: it goes on in the agent\'s terminal, and `task_status` reads its end later.',
       'If delegate_task says the task may still be working (Tars was out of reach for a while), do not send it again: read it with `task_status`, by its taskId or its clientRequestId. A task still waiting its turn can be taken back with `task_cancel`.',
+      'What waits for an agent is its queue: `agent_queue` reads it in order and pauses or resumes it, `task_move` puts an item first or before another, `task_cancel` takes one back. A stop keeps the queue, paused (`stop_agent` with dropQueue drops it), and so does a restart of Tars: resume it when it should go in.',
       'A `model` given to delegate_task applies only when Tars starts the agent\'s session for the task; an open session keeps its own, and the answer says so.',
       '`start_agent` is deprecated: it hands the task the same way and answers with its taskId without waiting. Use delegate_task. `wait_for_agent` waits on an agent\'s status, `get_agent_output` reads its terminal, `get_agent` gives its whole record.',
       '`create_agent` adds an agent to your project, on any provider; `stop_agent` stops one with a reason the user reads; `remove_agent` deletes one for good.',
@@ -58,6 +60,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     title: 'Messages and their modes',
     roles: ['orchestrator', 'worker'],
     text: [
+      '`checkpoint` writes one line about yourself, 120 characters at most: where you stand in the task in hand (tests written, 3 of 5 green). Tars keeps it with you and shows it on your card, and whoever follows your task reads it in task_status, list_agents and get_agent. A new line replaces the last: write one at a step worth knowing, not at every action.',
       '`send_message` writes to an agent by id. To answer whoever asked you for your current task, send it to "requester": a chat of the project may have asked, not only the orchestrator.',
       'A task handed to you with delegate_task is typed into your own terminal, after a line naming who gave it and its task id. Your final message when your turn ends is the answer they get back, in full: put the result there.',
       'Its mode says how it goes in: auto (the default, typed at once, into a running turn too), queue (typed once the agent\'s turn ends), steer (its turn interrupted first; claude agents only), restart (the agent stopped and started again with the message). steer and restart are refused while the agent works on a task another agent asked for.',
@@ -110,7 +113,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     text: [
       'A worker asks its requester, not the user: end your turn with the question in your report, or `send_message` to "requester".',
       'An orchestrator asks the user with `ask_user`, from its terminal: Tars sends the question to their Telegram through their Hermes, which takes the relay to Hermes on (Settings, Hermes), and the tool returns at once. Their answer is typed into your terminal later, after the line "Message from the user via Telegram:". Do not wait for it in a loop: go on with other work, or end your turn.',
-      'A request that came from Telegram, Slack or Discord is answered there: `send_telegram`, `send_slack`, `send_discord`. With the relay on, `send_telegram` goes to the user through Hermes and the file tools are gone; with it off, files go with `send_telegram_document`, `send_telegram_photo`, `send_telegram_video`.',
+      'A request that came from Telegram, Slack or Discord is answered there: `send_telegram`, `send_slack`, `send_discord`. `send_telegram` is an orchestrator\'s, and goes to the user through their Hermes, text only; with the relay to Hermes off it sends nothing and says where to turn it on (Settings, Hermes).',
       'Ask only what you cannot decide: otherwise decide, say what you assumed, and go on.',
     ].join('\n'),
   },
@@ -140,7 +143,21 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       'Your identity, your team and your project come from Tars and are current as of your session\'s start: `whoami` reads them again.',
       'You act in your own project. Tools that act on another project refuse unless they take allowCrossProject.',
       'An agent sleeps after 30 minutes without a turn; a message or a task wakes it.',
+      'What you start carries your agent id in its environment (CLAUDE_AGENT_ID), detached or not. When you are stopped, Tars ends all of it by its PID, an ansible run and a `fly ssh` session excepted; a sleep waits while any of it runs outside your terminal. Label each Docker container you start, `docker run --label tars.agent=$CLAUDE_AGENT_ID` (`labels: [tars.agent=...]` in a compose file), so that it is stopped with you. What runs on with no session of yours is reported to your orchestrator after an hour, never ended.',
+      'A disk short of space: `disk_scan` lists what Tars\'s disk janitor would propose to delete, by rule. Only the user approves a deletion, in Tars\'s window: never delete those yourself.',
       '`tars_guide` with no topic lists the topics; with one, returns it. The guide is the one of the Tars that runs you.',
+    ].join('\n'),
+  },
+  {
+    id: 'heavy-runs',
+    title: 'Heavy runs: one slot for the whole machine',
+    roles: ['orchestrator', 'worker'],
+    text: [
+      'Test suites, builds, Docker and simulators take the machine\'s heavy-run slot first: every project\'s agents share it, one run at a time unless the user set more. A dev server started on its own does not take it (it would hold the only slot for hours); one a test run starts is inside that run.',
+      'For one command: `tars-slot run --label "<what>" -- <command>` in your terminal waits for the slot, runs the command, gives it back and exits with its code; git hooks and scripts use it too, as `"$TARS_SLOT" run ...`, which needs no PATH (a login shell may set PATH anew). `tars-slot take`, from a script that runs the steps itself, holds it across them (until the script ends or `tars-slot give-back <ticket>`); from your own Bash tool its lease ends with that one command. `tars-slot status` shows the queue.',
+      'From a tool: `heavy_slot_take` (then `heavy_slot_give_back` when the run is over; Tars gives it back when your turn ends, and the owner can from the window), `heavy_slot_status` for who holds it and who waits.',
+      'The queue: gate (a release gate, orchestrators only), then normal, then background, then arrival. A run started from inside your own run (a pre-push hook) is granted at once. A grant waits while free disk or memory is under the floor, and says so.',
+      'During a run Tars tells you, your orchestrator and the window when the disk fills or the swap grows fast. Tars never stops a run itself: you decide.',
     ].join('\n'),
   },
 ];
@@ -148,6 +165,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
 /** The topic that explains each tool an agent can see. */
 export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   // mcp-orchestrator
+  disk_scan: 'limits',
   whoami: 'limits',
   list_agents: 'delegation',
   get_agent: 'delegation',
@@ -161,7 +179,10 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   delegate_task: 'delegation',
   task_status: 'delegation',
   task_cancel: 'delegation',
+  agent_queue: 'delegation',
+  task_move: 'delegation',
   send_message: 'messages',
+  checkpoint: 'messages',
   room_post: 'messages',
   room_read: 'messages',
   chat_list: 'messages',
@@ -170,10 +191,9 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   send_slack: 'asking-the-user',
   send_discord: 'asking-the-user',
   tars_guide: 'limits',
-  // mcp-telegram
-  send_telegram_document: 'asking-the-user',
-  send_telegram_photo: 'asking-the-user',
-  send_telegram_video: 'asking-the-user',
+  heavy_slot_take: 'heavy-runs',
+  heavy_slot_give_back: 'heavy-runs',
+  heavy_slot_status: 'heavy-runs',
   // mcp-kanban
   list_tasks: 'kanban',
   get_task: 'kanban',
@@ -248,6 +268,7 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
   const lines = [`## How Tars works`];
   if (role === 'orchestrator') {
     lines.push(
+      `- Write each task as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance. tars_guide delegation says more.`,
       `- delegate_task hands a task to the agent's own terminal and returns its full final answer, tokens and cost (claude, Qwen Code; codex, pi, gemini: the answer only; opencode, amp, grok: delivered only). timeoutSeconds is how long it waits: 3600 s when you give none; the task is never stopped there. If it says the task may still be working, read it with task_status: never send it twice. start_agent is deprecated.`,
       `- send_message modes: auto, queue, steer, restart. HELD means it waits for the terminal and goes in by itself.`,
       `- The kanban is the project's Hermes board (one lane per agent): file the work you split with create_task, so the user sees it.`,

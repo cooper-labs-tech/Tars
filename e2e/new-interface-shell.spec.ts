@@ -17,7 +17,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Projects, Dashboard, Kanban, Schedules) with Chat current, New chat
  * disabled, "Tars, all projects" first, and "No chats yet" where the chats
  * will be, none of them made up; the pages of More are not in it. More opens
- * its nine pages. Settings opens as a card above the app, the chats page
+ * its ten pages, Resources between Usage and Brain since 2.0.5 (#539, frame
+ * `Shell · chats · More open`). Settings opens as a card above the app, the chats page
  * still under it, with the switch on; Escape closes it and the page has not
  * moved. Usage opens the same way and its cross closes it. "Tars, all
  * projects" opens today's room, /chat, and is the current entry, Chat no
@@ -34,7 +35,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 /** The launch splash, over the page on every document load until its checks answer (4 s at most). */
 const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
 const MAIN = ['Chat', 'Projects', 'Dashboard', 'Kanban', 'Schedules'];
-const MORE = ['Agents', 'Review', 'Logs', 'Vault', 'Extensions', 'Usage', 'Brain', 'Settings', "What's New"];
+const MORE = ['Agents', 'Review', 'Logs', 'Vault', 'Extensions', 'Usage', 'Resources', 'Brain', 'Settings', "What's New"];
 
 test('with the new interface on, the shell of the frames: the main menu, Tars first, no made-up chats, More and its pages as cards; turned off, the shell before', async () => {
   test.setTimeout(300_000);
@@ -79,7 +80,7 @@ test('with the new interface on, the shell of the frames: the main menu, Tars fi
     seen.chatsEmpty = (await main.innerText()).replace(/\s+/g, ' ').trim();
     await stepShot(page, '01-chats-empty');
 
-    // More and its nine pages.
+    // More and its ten pages.
     const moreButton = sidebar.getByRole('button', { name: 'More' });
     await moreButton.click();
     const more = page.getByRole('menu', { name: 'More' });
@@ -153,7 +154,7 @@ test('with the new interface on, the shell of the frames: the main menu, Tars fi
     await page.goto(`${DEV_URL}/settings`, { waitUntil: 'domcontentloaded' });
     await expect(page.locator(SPLASH)).toHaveCount(0, { timeout: 30_000 });
     const rowsOff = page.locator('[data-settings-row]');
-    await expect(rowsOff.filter({ hasText: 'Default provider' })).toBeVisible({ timeout: 60_000 });
+    await expect(rowsOff.filter({ hasText: 'Start agents when Tars opens' })).toBeVisible({ timeout: 60_000 });
     const rowOff = rowsOff.filter({ hasText: 'New interface' });
     await expect(rowOff).toHaveCount(1);
     await expect(rowsOff.last()).toContainText('New interface');

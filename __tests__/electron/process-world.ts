@@ -1,8 +1,10 @@
 /**
  * A process table and the signals its processes get, in memory, for the tests of how Tars ends a tree of processes
  * (acp-tree-late-child.test.ts, terminal-tree-late-child.test.ts). Each read prints the table as
- * `ps -A -o pid=,ppid=,pgid=,stat=,etime=` does, then runs what was scheduled for after that read: a process started
- * while ps ran, after its snapshot. So a race is the same at every run and on every host.
+ * `ps -A -o pid=,ppid=,pgid=,stat=,etime=` does, with the session after the group when it is asked for (`sid=`, as
+ * Tars asks on Linux), then runs what was scheduled for after that read: a process started while ps ran, after its
+ * snapshot. So a race is the same at every run and on every host. Every process is in init's session (1): none of
+ * these worlds' roots leads one, so what they test is the freeze, not the session (acp-process-tree.test.ts is).
  *
  * What a signal does, as the kernel does it: SIGKILL ends a process, stopped or not; SIGSTOP stops it; SIGCONT lets it
  * go on, and it then takes what it was sent meanwhile; SIGTERM and SIGHUP end it unless it ignores them, and a shell
@@ -50,9 +52,10 @@ export class World {
     this.deaths.set(pid, [...(this.deaths.get(pid) ?? []), then]);
   }
 
-  print(): string {
+  print(args?: unknown): string {
+    const session = Array.isArray(args) && args.some(a => typeof a === 'string' && a.includes('sid='));
     const out = [...this.procs.values()].filter(p => p.state !== 'dead')
-      .map(p => `${p.pid} ${p.ppid} ${p.pgid} ${p.state === 'stopped' ? 'T' : 'S'} 00:01`).join('\n');
+      .map(p => `${p.pid} ${p.ppid} ${p.pgid}${session ? ' 1' : ''} ${p.state === 'stopped' ? 'T' : 'S'} 00:01`).join('\n');
     this.reads += 1;
     this.afterRead.get(this.reads)?.();
     this.everyRead?.();

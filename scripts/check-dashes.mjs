@@ -28,7 +28,7 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ROOTS = [
   'src', 'landing/src', 'electron',
   'mcp-memory/src', 'mcp-orchestrator/src', 'mcp-kanban/src',
-  'mcp-vault/src', 'mcp-telegram/src', 'mcp-x/src', 'mcp-socialdata/src', 'mcp-shared/src',
+  'mcp-vault/src', 'mcp-x/src', 'mcp-socialdata/src', 'mcp-shared/src',
 ];
 const FILES = ['README.md', 'DESIGN.md', 'SPECS.md', 'OPERATIONS.md', 'ETHOS.md', 'design/UI-INVENTORY.md'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.next', 'out', 'release', '.git']);

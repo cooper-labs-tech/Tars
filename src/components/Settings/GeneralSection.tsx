@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Select, Dropdown } from '@/components/ui';
+import { Select, SegmentedControl } from '@/components/ui';
 import { Toggle } from './Toggle';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
 import type { ClaudeInfo, AppSettings } from './types';
 import { PRIVACY_POLICY_URL } from './constants';
-import { PROVIDER_REGISTRY, computeProviderAvailability } from '@/lib/providers';
 import { errorReportsOffered } from '@/lib/error-reports';
 import { lastReportLine } from '@/lib/error-report-line';
 
@@ -16,7 +15,6 @@ interface GeneralSectionProps {
 }
 
 export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectionProps) => {
-  const [installedProviders, setInstalledProviders] = useState<Record<string, boolean>>({ claude: true, codex: true, gemini: true });
   // Not on a Windows build (lib/error-reports.ts): read after hydration, as the bridge is.
   const [reportsOffered, setReportsOffered] = useState(true);
   useEffect(() => setReportsOffered(errorReportsOffered()), []);
@@ -30,21 +28,19 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
     return () => { live = false; };
   }, []);
 
+  // Whether Tars keeps the computer awake right now (#511's keepAwake:state), read as the page opens, after each
+  // change, and every five seconds while it is open, since a turn starting or ending changes it.
+  const keepAwakeMode = appSettings.keepAwake ?? 'while-working';
+  const [awake, setAwake] = useState<{ active: boolean; working: number; refused?: true } | null>(null);
   useEffect(() => {
-    Promise.all([
-      window.electronAPI?.cliPaths?.detect(),
-      window.electronAPI?.appSettings?.get(),
-      window.electronAPI?.ollama?.test(),
-    ]).then(([paths, settings, ollama]) => {
-      if (paths || settings) {
-        setInstalledProviders(computeProviderAvailability(
-          paths as Record<string, string | undefined> | undefined,
-          settings,
-          ollama?.reachable,
-        ));
-      }
-    });
-  }, []);
+    let live = true;
+    const read = () => window.electronAPI?.keepAwake?.state()
+      .then((s) => { if (live) setAwake({ active: s.active, working: s.working, refused: s.refused }); })
+      .catch(() => { /* an older main without the channel: no line */ });
+    read();
+    const every = setInterval(read, 5_000);
+    return () => { live = false; clearInterval(every); };
+  }, [keepAwakeMode]);
 
   // The Tars identity card and the whole update checker (check button, release
   // notes, download progress, restart-to-apply) now live in SystemSection - the
@@ -102,46 +98,30 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
         }
       />
 
+      {/* Frame: `Keep awake (2.0.5) · Settings, General, Preferences` and its states. */}
       <SettingsRow
-        label="Default provider"
-        description="Used for Telegram-spawned agents and webhook dispatches."
+        label="Keep this computer awake"
+        wrap
+        description={
+          <>
+            While an agent works, Tars keeps this computer from going to sleep, so a long task is not cut when you step away. The screen may still turn off.
+            {awake && (
+              <span data-keep-awake-line className={`block mt-0.5 font-mono text-[10.5px] ${awake.refused ? 'text-status-waiting' : awake.active ? 'text-status-running' : 'text-text-muted'}`}>
+                {keepAwakeLine(keepAwakeMode, awake)}
+              </span>
+            )}
+          </>
+        }
         control={
-          <Dropdown
-            className="w-[300px]"
-            ariaLabel="Default provider"
-            searchable
-            value={appSettings.defaultProvider || 'claude'}
-            onChange={(v) => onSaveAppSettings({ defaultProvider: v })}
-            options={PROVIDER_REGISTRY
-              // Why these two and not the others: the answer is that nobody
-              // knows, and the list is kept rather than guessed at. It arrived
-              // in eac841a (2026-04-12) as "Remove OpenCode/Pi from provider
-              // picker (CLI-only tools)", and that reason does not pick them
-              // out: `requiresCli` is true for eight providers here, and amp
-              // has the same single "default" model row as opencode without
-              // being excluded. Nothing in the main process separates them
-              // either, neither `supportsNativeHooks` (false for five) nor the
-              // one-shot builders (both implement them).
-              //
-              // It matters less than it looks, and that is the real finding:
-              // `defaultProvider` is written here and read nowhere. Not in
-              // electron/, not in mcp-*/, not in hooks/. A programmatic spawn
-              // takes `agent.provider` and falls back to a hardcoded 'claude'
-              // (ipc-handlers.ts:437 and :554), so this control changes
-              // nothing and the row's description above it is not true today.
-              // Wiring it or removing it is a decision, not a cleanup.
-              .filter(p => p.id !== 'opencode' && p.id !== 'pi')
-              .map(({ id, label, requiresCli }) => {
-                const notAvailable = installedProviders[id] !== true;
-                return {
-                  value: id,
-                  label,
-                  hint: notAvailable
-                    ? requiresCli ? 'not installed' : 'add an API key first'
-                    : undefined,
-                  disabled: notAvailable,
-                };
-              })}
+          <SegmentedControl
+            ariaLabel="Keep this computer awake"
+            value={keepAwakeMode}
+            onChange={(keepAwake) => onSaveAppSettings({ keepAwake })}
+            options={[
+              { value: 'while-working', label: 'while working' },
+              { value: 'always', label: 'always' },
+              { value: 'never', label: 'never' },
+            ]}
           />
         }
       />
@@ -163,3 +143,14 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
     </SettingsCard>
   );
 };
+
+/** What the keep awake row says it does now, under its hint (frame `Keep awake (2.0.5) · states`). */
+function keepAwakeLine(mode: 'while-working' | 'always' | 'never', state: { active: boolean; working: number; refused?: true }): string {
+  // Wanted, but the system would not hold its sleep off (#511's `refused`): the setting stays as chosen.
+  if (state.refused) return 'cannot keep this computer awake here: the system refused';
+  if (state.active) {
+    if (mode === 'always') return 'awake while Tars is open';
+    return `awake now · ${state.working} ${state.working === 1 ? 'agent' : 'agents'} working`;
+  }
+  return mode === 'never' ? 'sleeps as usual, even during a turn' : 'sleeps as usual · no agent is working';
+}

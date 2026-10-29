@@ -1,13 +1,7 @@
-import * as path from 'path';
-import * as os from 'os';
 import * as http from 'http';
 import { agents } from '../../core/agent-manager';
 import { AgentStatus } from '../../types';
 import { RouteRequest } from './types';
-import { DATA_DIR_NAME, PRIVATE_DIR_NAME } from '../../constants';
-import { isHardLinkInto, isWithinDir } from '../../utils/path-identity';
-import { credentialStoreDirs } from '../../platform/credential-stores';
-import { isUnder, samePath } from '../../platform/path-compare';
 
 /** Project path or id of the calling agent, injected as a header by the MCP
  *  client from its PTY environment. Read only by the server's door, which
@@ -62,66 +56,6 @@ export function callerProject(req: RouteRequest): string | undefined {
   return req.callerAgentId ? agents.get(req.callerAgentId)?.projectPath : undefined;
 }
 
-/**
- * Check if a file path is safe to send via Telegram.
- * Blocks sensitive directories that could exfiltrate secrets.
- */
-export function isSafeTelegramPath(filePath: string): boolean {
-  const resolved = path.resolve(filePath);
-  const home = os.homedir();
-
-  // By name and by identity: a case variant or the Data volume's firmlink
-  // names a file in the home directory without the home's spelling, and one in
-  // a blocked directory without its spelling (the audit's lead #21, the vault's
-  // side of the same test). An existing file is judged by what it is.
-  if (!resolved.startsWith(home + path.sep) && resolved !== home && !isWithinDir(resolved, home)) {
-    return false;
-  }
-
-  const blockedDirs = [
-    path.join(home, '.ssh'),
-    path.join(home, '.gnupg'),
-    path.join(home, '.aws'),
-    path.join(home, '.claude'),
-    path.join(home, '.env'),
-    // Our own store. It holds app-settings.json - every provider API key, the
-    // Hermes gateway token, the memory-backend credentials - plus api-token.
-    // Blocking ~/.ssh while leaving this open was guarding the front door and
-    // not the safe.
-    path.join(home, DATA_DIR_NAME),
-    // And what Tars keeps out of the agents' reach: JeanBrasse's conversation with
-    // the super chat and the Hermes webhook secret. Both left the store above
-    // so that no agent would be handed them, and the move took them off this
-    // list with it: the conversation could be sent from where it had landed.
-    // Found by the audit of lot 4.
-    path.join(home, PRIVATE_DIR_NAME),
-    path.join(home, '.config'),
-    path.join(home, '.kube'),
-    path.join(home, '.docker'),
-    path.join(home, '.netrc'),
-    path.join(home, '.git-credentials'),
-    // Windows keeps credentials under %APPDATA% and %LOCALAPPDATA% instead
-    // (gh, gcloud, browsers, DPAPI, Tars's own profile): none elsewhere.
-    ...credentialStoreDirs({ home }),
-  ];
-
-  // Compared as the platform compares paths: on Windows without case, so
-  // `.SSH` and `github cli` are refused as their own spelling is.
-  for (const blocked of blockedDirs) {
-    if (samePath(resolved, blocked) || isUnder(resolved, blocked) || isWithinDir(resolved, blocked)) {
-      return false;
-    }
-  }
-
-  // A hard link has no path back to the file it names, so it is looked for by
-  // inode, in the two small directories whose files are secrets whole (the
-  // audit's gate of #137).
-  for (const dir of [path.join(home, PRIVATE_DIR_NAME), path.join(home, '.ssh')]) {
-    if (isHardLinkInto(resolved, dir)) return false;
-  }
-
-  return true;
-}
 
 /**
  * Find an agent by ID first, then fall back to session ID lookup.

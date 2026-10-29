@@ -18,7 +18,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. A branch name Tars's guard lets through and git refuses (`feat/.hidden`, a component starting with a dot):
  *    the answer must name it as git does ("is not a valid branch name").
  * 3. A branch that exists and is checked out in the project (`main`): the answer must be git's reason for that
- *    branch (already checked out), not the retry's.
+ *    branch (already checked out, or already used by worktree since git 2.5x), not the retry's.
  * 4. Over-correction: a branch git takes still makes the worktree and saves it.
  * And from the Audit's MEDIUM on #403 (its probe audit-probe-403-refusal.spec.ts), written before the fix: the
  * name, model, provider, skills and CLI were written onto the live record before git ran, and a new provider or CLI
@@ -53,6 +53,12 @@ type Answer = { success: boolean; error?: string };
 type Listed = { id: string; name?: string; cliPath?: string; cliRunning?: boolean; ptyId?: string };
 
 /** git as a translated one answers (8.): in the language of LC_ALL, else LC_MESSAGES, else LANG. */
+/**
+ * Git's own reason for a branch checked out in another worktree: "is already checked out at" until git 2.5x, "is
+ * already used by worktree at" since (git 2.54 on macOS, 28/10/2026). Either is git's reason; the retry's is not.
+ */
+const CHECKED_OUT = "'main' is already (?:checked out|used by worktree) at";
+
 const frenchGit = (real: string) => [
   '#!/bin/sh',
   'case "${LC_ALL:-${LC_MESSAGES:-$LANG}}" in fr*) ;; *) exec "' + real + '" "$@" ;; esac',
@@ -60,6 +66,7 @@ const frenchGit = (real: string) => [
   '"' + real + '" "$@" 2>"$err"',
   'code=$?',
   "sed -e 's/^fatal: /fatal : /' -e 's/^error: /erreur : /' -e 's/is already checked out at/est déjà extraite dans/'"
+    + " -e \"s/is already used by worktree at/est déjà utilisée par l'arbre de travail/\""
     + " -e 's/a branch named \\(.*\\) already exists/une branche nommée \\1 existe déjà/'"
     + " -e \"s/is not a valid branch name/n'est pas un nom de branche valide/\""
     + " -e \"s/not a git repository (or any of the parent directories)/ni ceci ni aucun de ses répertoires parents n'est un dépôt git/\""
@@ -211,7 +218,7 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
 
     expect.soft(values.notGit, '1. not a git repository').toEqual({ success: false, error: expect.stringMatching(/not a git repository/) });
     expect.soft(values.refusedName, '2. a name git refuses').toEqual({ success: false, error: expect.stringContaining("'feat/.hidden' is not a valid branch name") });
-    expect.soft(values.checkedOut, '3. checked out in the project').toEqual({ success: false, error: expect.stringMatching(/'main' is already checked out/) });
+    expect.soft(values.checkedOut, '3. checked out in the project').toEqual({ success: false, error: expect.stringMatching(new RegExp(CHECKED_OUT)) });
     for (const answer of [values.notGit, values.refusedName, values.checkedOut] as Answer[]) {
       expect.soft(answer.error ?? '').not.toMatch(/Failed to create git worktree|fatal:|Preparing worktree/);
     }
@@ -231,15 +238,15 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     expect.soft(values.r5, '9. a refused save renamed the agent').toBe('r5');
     expect.soft((byId.r5 as unknown as { name?: string }).name, '9. agents.json took the refused name').toBe('r5');
     const notGitsReason = /[Ff]ailed to create git worktree|Command failed|fatal|a branch named|refused it without saying why|déjà|dépôt/;
-    expect.soft(values.createCheckedOut, '7. checked out in the project').toEqual({ error: expect.stringMatching(/'main' is already checked out at/) });
+    expect.soft(values.createCheckedOut, '7. checked out in the project').toEqual({ error: expect.stringMatching(new RegExp(CHECKED_OUT)) });
     expect.soft(values.createNotGit, '7, 8. not a git repository').toEqual({ error: expect.stringMatching(/The worktree could not be made: not a git repository/) });
     for (const made of [values.createCheckedOut, values.createNotGit] as Made[]) expect.soft(made.error ?? '').not.toMatch(notGitsReason);
     expect.soft(values.createdByRefusals, '7. a refused create made an agent').toBe(0);
-    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(/^Builder: The worktree could not be made: 'main' is already checked out at /);
+    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(new RegExp(`^Builder: The worktree could not be made: ${CHECKED_OUT} `));
     expect.soft(values.teamLine).not.toMatch(notGitsReason);
     expect(values.createTaken, '7. a branch git takes').toMatchObject({ worktreePath: path.join(repo, '.worktrees', 'feat', 'new') });
     expect(fs.existsSync(path.join(repo, '.worktrees', 'feat', 'new', 'README.md'))).toBe(true);
-    expect(values.agentLine, '10. New agent says why it did not create').toMatch(/^Not created: The worktree could not be made: 'main' is already checked out at .+\. Your choices are still here\.$/);
+    expect(values.agentLine, '10. New agent says why it did not create').toMatch(new RegExp(`^Not created: The worktree could not be made: ${CHECKED_OUT} .+\\. Your choices are still here\\.$`));
     expect(values.agentLine).not.toMatch(notGitsReason);
     expect(values.agentLine).not.toMatch(/Error invoking remote method/);
     expect(values.agentDialogOpen, '10. the dialog stays open').toBe(1);

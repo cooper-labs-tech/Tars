@@ -15,13 +15,16 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *   view switch is left;
  * - no word names its one view: neither `live` nor `session`, which offered
  *   nothing to choose and took room (JeanBrasse, 13/10);
- * - fullscreen is a 26 px button in the header, after start or stop and out
- *   of the menu: a press fills the window, the button turns to exit
- *   fullscreen, and a second press takes the panel back;
- * - the panel's menu offers clear and hide from this board, and fullscreen no
- *   longer; in fullscreen, clear alone;
+ * - fullscreen is a 26 px button in the header, before its menu and out of
+ *   it: a press fills the window, the button turns to exit fullscreen, and a
+ *   second press takes the panel back;
+ * - start and stop are no longer buttons of the header but the first item of
+ *   its menu (2.0.5, #515, frame `Dashboard header (2.0.5) · start, wake and
+ *   stop in the ··· menu`);
+ * - the panel's menu offers start or stop, clear and hide from this board, and
+ *   fullscreen no longer; in fullscreen, clear without hide from this board;
  * - on a narrow card, at 1024 px, the header keeps one line, its name shown and
- *   its start or stop, fullscreen and menu inside it.
+ *   its fullscreen and menu inside it.
  */
 
 let app: ElectronApplication;
@@ -68,23 +71,24 @@ test("an agent's panel header: its session, no history, and fullscreen in one pr
   await expect(h.getByText('session', { exact: true })).toHaveCount(0);
   await expect(h.locator('[title*="session" i]')).toHaveCount(0);
 
-  // Fullscreen is a button of its own, 26 px, after start or stop.
+  // Fullscreen is a button of its own, 26 px, before the menu; start and stop are the menu's, no longer the header's.
   const fs1 = h.getByRole('button', { name: 'Fullscreen', exact: true });
   await expect(fs1).toBeVisible();
   const box = await fs1.boundingBox();
   expect(box && Math.round(box.height)).toBe(26);
   expect(box && Math.round(box.width)).toBe(26);
-  const startStop = h.getByRole('button', { name: /^(start|stop)$/ });
-  const ssBox = await startStop.boundingBox();
-  expect(ssBox && box && box.x > ssBox.x).toBe(true);
+  await expect(h.getByRole('button', { name: /^(start|stop|wake)\b/ })).toHaveCount(0);
+  const menuBox = await h.getByRole('button', { name: 'Panel actions' }).boundingBox();
+  expect(menuBox && box && menuBox.x > box.x).toBe(true);
   const restWidth = (await h.boundingBox())!.width;
   expect(restWidth).toBeLessThan(1200);
   await stepShot(page, '01-header-at-rest');
 
-  // Its menu: clear and hide from this board, no fullscreen.
+  // Its menu: start or stop first, clear and hide from this board, no fullscreen.
   // The menu opens inside the header, so the header's own button is the one
   // fullscreen control it may hold.
   await h.getByRole('button', { name: 'Panel actions' }).click();
+  await expect(h.getByRole('button', { name: /^(start|stop)\b/ })).toHaveCount(1);
   await expect(h.getByRole('button', { name: 'clear', exact: true })).toBeVisible();
   await expect(h.getByRole('button', { name: 'hide from this board', exact: true })).toBeVisible();
   await expect(h.getByRole('button', { name: /fullscreen/i })).toHaveCount(1);
@@ -124,7 +128,7 @@ test("an agent's panel header: its session, no history, and fullscreen in one pr
   };
   expect(Math.round(nBox.height)).toBeLessThanOrEqual(33);
   expect(((await narrow.getByText('Orchestrator', { exact: true }).boundingBox())?.width ?? 0) > 20).toBe(true);
-  for (const l of [narrow.getByRole('button', { name: /^(start|stop)$/ }), narrow.getByRole('button', { name: 'Fullscreen', exact: true }), narrow.getByRole('button', { name: 'Panel actions' })]) {
+  for (const l of [narrow.getByRole('button', { name: 'Fullscreen', exact: true }), narrow.getByRole('button', { name: 'Panel actions' })]) {
     await expect(l).toBeVisible();
     expect(await inside(l)).toBe(true);
   }

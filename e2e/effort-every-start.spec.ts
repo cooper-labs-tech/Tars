@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
-import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
+import { startFakeRelay } from '../__tests__/fixtures/fake-tars-relay';
 
 /**
  * Every start of an agent's CLI runs at that agent's own effort (JeanBrasse, 2026-10-13: "la moitié du temps les agents se
@@ -18,7 +18,8 @@ import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fa
  * 2. a restart (agent:restart), which continues the conversation under a new id;
  * 3. an effort changed in the agent's settings (agent:update), which restarts it at the new level;
  * 4. a wake from sleep (#322);
- * 5. the bot's launch of the orchestrator for a Telegram message, the orchestrator not running;
+ * 5. the launch of the orchestrator for the user's Telegram message through Hermes (the relay), the orchestrator not
+ *    running (until 2.0.5, Tars's own bot made it);
  * 6. a chat's runner, at its orchestrator's effort (#379's rule);
  * 7. a delegated task (run-task) to an agent whose CLI is not running: its permanent session is started with the
  *    task (2.0.4). Until 2.0.4 this read the effort a run over ACP set on its adapter; no task is run over ACP now;
@@ -132,12 +133,12 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  const telegram = await startFakeTelegram();
+  // The relay to the user's Hermes: the tars-relay plugin's stand-in.
+  const hermes = await startFakeRelay('e2e-hermes-token');
   // The stand-in first on every launch's PATH (the bots take the binary from it).
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { additionalPaths: [bin] },
-    telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
-    telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID),
+    hermesRelayEnabled: true,
     // E2E_NEW_INTERFACE=1: the same run in the new interface's shell.
     newInterface: process.env.E2E_NEW_INTERFACE === '1',
   }));
@@ -156,7 +157,7 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
   };
 
   const launch = () => launchSandboxed(electron, home, {
-    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', TARS_CHAT_RAM_GB: '20', DOROTHY_TELEGRAM_API_URL: telegram.url },
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', TARS_CHAT_RAM_GB: '20' },
   });
   const open = async (app: ElectronApplication) => {
     const page: Page = await app.firstWindow();
@@ -218,14 +219,18 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
     expect(await call('agent', 'wake', 'low')).toMatchObject({ success: true });
     check('wake from sleep', 'low', (await nextLaunch('low', 1, agentOf)).effort);
 
-    // ── 5. The bot starts the orchestrator for a Telegram message ──
+    // ── 5. The user's Telegram message, through Hermes, starts the orchestrator ──
     await atRest('lead');
     await call('agent', 'stop', 'lead');
     await expect.poll(async () => (await agentOf('lead'))?.cliRunning ?? false, { timeout: 30_000 }).toBe(false);
     const leadLaunches = launchesOf('lead').length;
-    telegram.write('TG>> what is left for the release?');
-    await expect.poll(() => launchesOf('lead').length, { timeout: 60_000, message: 'the bot started the orchestrator' }).toBeGreaterThan(leadLaunches);
-    check('Telegram bot', 'lead', launchesOf('lead')[leadLaunches].effort);
+    await app.evaluate((_e, { dist, port, token }) => {
+      const req = process.mainModule!.require;
+      req(`${dist}/services/hermes-config.js`).writeHermesConnection({ mode: 'local', localPort: port, authMode: 'token', token });
+    }, { dist, port: hermes.port, token: hermes.token });
+    hermes.projectMessage('demo', 'TG>> what is left for the release?');
+    await expect.poll(() => launchesOf('lead').length, { timeout: 60_000, message: 'the relay started the orchestrator' }).toBeGreaterThan(leadLaunches);
+    check('Telegram through Hermes', 'lead', launchesOf('lead')[leadLaunches].effort);
     await atRest('lead');
 
     // ── 6. A chat's runner, at its orchestrator's effort ──
@@ -261,7 +266,7 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
   } catch (err) {
     keep();
     await app.close().catch(() => undefined);
-    await telegram.close();
+    await hermes.close();
     throw err;
   }
 
@@ -277,6 +282,6 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
   } finally {
     keep();
     await app.close();
-    await telegram.close();
+    await hermes.close();
   }
 });

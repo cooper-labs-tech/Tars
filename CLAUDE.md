@@ -13,7 +13,7 @@
 - **Terminals**: `node-pty` + `xterm` 5 / `xterm-addon-fit`
 - **State**: React hooks over IPC (`src/hooks/`), plus a small `zustand` store (`src/store/`) for sidebar/vault UI state
 - **Local API**: a plain `node:http` server on **31415**, bearer-token authenticated, so the CLIs' hooks and the bundled MCP servers can call back into the app
-- **MCP**: seven servers in `mcp-*/`, each bundled to `dist/bundle.js` and shipped in `extraResources`: orchestrator, memory, telegram, kanban, vault, socialdata, x
+- **MCP**: six servers in `mcp-*/`, each bundled to `dist/bundle.js` and shipped in `extraResources`: orchestrator, memory, kanban, vault, socialdata, x. `mcp-telegram` went with Tars's own Telegram bot in 2.0.5: Telegram goes through the Hermes relay only
 - **Delegation**: into the agent's own permanent terminal, always (2.0.4, the maintainer's decision of 2026-10-18: permanent agents, never temporary copies). `/run-task` types the task into the session the agent's card shows, or starts that session on its conversation, one task at a time, and `GET /api/tasks/:id` reads its end back from that session: the final answer from the transcript (`services/terminal-answer.ts`), tokens and cost (`services/task-cost.ts`), for claude, the API-key providers that run it, and Qwen Code (its hooks are Claude Code's, its transcript under `~/.qwen`); codex's and pi's final answer and why the turn ended from their own session log (`services/codex-sessions.ts`, `services/pi-sessions.ts`), no tokens; gemini's final answer from its AfterAgent hook (cut at 4000 bytes), no tokens; opencode, amp and grok are `delivered`. `electron/services/acp/` is no longer called to delegate
 - **Storage**: JSON + SQLite under `~/.tars/` (`better-sqlite3` for the vault). No server, no cloud, no database migrations. One exception: `~/.tars-private/` holds what the agents are not handed, which today is every secret of the settings (`settings-secrets.json`, since 2.0.4: `app-settings.json` keeps none), the local API's shared token (`api-token`), the Hermes connection and its session cookies, JeanBrasse's conversation with the super chat, the Hermes gateways' webhook secrets with the projects each may reach, and the Claude accounts' registry (`claude-accounts.json`: ids, names, thresholds, never a credential). `~/.tars` is in every agent's `--add-dir`; nothing under `~/.tars-private` is ever passed to a CLI. Each Claude account after the first is a Claude Code folder of its own, `~/.claude-accounts/<id>`, which the agents started on it run in
 - **Tests**: E2E first: `@playwright/test` drives the real Electron app (`e2e/`), and every run leaves an artefact. `vitest` (`__tests__/`) is the regression net and the home of units tested in isolation, written failures first. The rules are in Workflow Rule 3
@@ -23,7 +23,7 @@
 
 | Path | What lives there |
 |---|---|
-| `electron/main.ts` | Entry point. Wires window, agent state, IPC, Telegram/Slack bots, the HTTP API, the tray, the MCP orchestrator, and the model catalogue |
+| `electron/main.ts` | Entry point. Wires window, agent state, IPC, the Slack and Discord bots, the Hermes relay, the HTTP API, the tray, the MCP orchestrator, and the model catalogue |
 | `electron/preload.ts` | The only bridge to the renderer: `contextBridge.exposeInMainWorld('electronAPI', …)`. Every new IPC channel is declared here first |
 | `electron/constants/index.ts` | `DATA_DIR` = `~/.tars`, `PRIVATE_DIR` = `~/.tars-private` (what agents are not handed), `API_PORT` = 31415, the file paths for agents/settings/kanban/vault/token, `GITHUB_REPO`, the MIME map used by the `app://` handler |
 | `electron/types/index.ts` | `AgentStatus`, `AppSettings`, `CLIPaths`, `AgentProvider`, `AgentPermissionMode`, `AgentEffort`. A new setting or provider starts here |
@@ -37,7 +37,7 @@
 | `electron/services/api-routes/agent-routes.ts` | `spawnAgentSession()`, the **single** path for API-driven sessions, plus `/start`, `/dispatch`, `/message`, `/delegate`, `/update` (update_agent, through `core/agent-update.ts`, the window's own `agent:update` path), `/bootstrap`, `/health`, and the cross-project guard |
 | `electron/services/api-routes/hooks-routes.ts` | The session-ownership contract: SessionStart registers via the `source` field; posts from any other session, or from the `lastKilledSessionId` tombstone, are rejected as `stale` |
 | `electron/services/acp/` | `client.ts`, `delegate.ts`, `registry.ts`, `run-token-file.ts`. Delegation over ACP, which nothing calls to delegate since 2.0.4 (Delegation, above): what is left in use is stopping the runs on stop, removal and quit, and `client.ts`'s process table, which `pty-manager.ts` reads |
-| `electron/services/mcp-orchestrator.ts` | Resolves the seven bundled servers under `process.resourcesPath` and writes them into each CLI's MCP config |
+| `electron/services/mcp-orchestrator.ts` | Resolves the six bundled servers under `process.resourcesPath` and writes them into each CLI's MCP config |
 | `electron/services/model-catalog.ts` | Live model list and per-million-token prices from models.dev, cached at `~/.tars/model-catalog.json`, with a compiled-in floor. Never let a network failure zero a price |
 | `electron/services/usage-ledger.ts`, `transcript-usage.ts` | The two token sources: ACP turns as they were recorded until 2.0.4 (no delegation goes over ACP since, so nothing new is added), and `~/.claude/projects/**/*.jsonl` reconstructed after the fact (Claude only); a terminal task's own tokens and cost are `task-cost.ts`'s |
 | `electron/services/memory-hub.ts` | The Brain page's backends (Hermes, gbrain, Honcho) over MCP HTTP |
@@ -49,12 +49,12 @@
 | `src/components/ClientLayout.tsx` | The shell: sidebar + header, and the theme boot (`tars-theme` in `localStorage`, dark unless explicitly `light`) |
 | `src/components/TerminalsView/` | The xterm grid that is the Dashboard, including the scroll-lock and multi-terminal hooks |
 | `src/lib/providers.ts` | Frontend provider registry: icon, badge, models, default model. One entry per provider; NewChatModal and Settings both read it |
-| `design/tars-redesign.pen` | Pencil source of truth, 299 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
+| `design/tars-redesign.pen` | Pencil source of truth, 348 root frames. Written by the `pen` CLI as plain JSON: draw through the CLI (Workflow Rule 1), never the `pencil` MCP tools |
 | `design/chat-design.pen` | 72 of the same frames (71 with the same ids; `Agent error · reason` was drawn into both after the fork, so its ids differ), the two panel history frames `tars-redesign.pen` dropped with the history view, plus the 11 frames of the Chat room, which exist nowhere else: 85 in all. A fork, not a companion. Its room frames describe the Chat before its redesign: draw anything for the Chat in `chat-redesign-a.pen`, and anything else in `tars-redesign.pen` |
 | `design/chat-redesign-a.pen` | The Chat page's redesign, direction A (chosen by JeanBrasse on 2026-09-17), with its composer: the room and Hermes pages in every state a user can meet, and sheets for the team, the thread, Hermes, the composer and the room head, dark and light. What the Chat implements since #165 (merged 2026-09-24) |
 | `design/landing.pen` | The site in `landing/`: its page, its 404, its privacy and terms pages, and the picture link previews show. Forked from `tars-redesign.pen` on 2026-09-23, which no longer carries the landing |
 | `design/UI-INVENTORY.md` | Every surface the app can render. The E2E guard reads it. Its header names both Pencil documents and says which one owns what |
-| `e2e/surfaces.mjs` | Executable manifest: 20 pages, 19 settings sections, 3 overlays = 42 surfaces |
+| `e2e/surfaces.mjs` | Executable manifest: 21 pages, 19 settings sections, 3 overlays = 43 surfaces |
 | `scripts/design-lint.mjs` | The design guardrail. Bans inline `borderRadius`, `shadow-*`, `bg-gradient`, `animate-ping`, the raw Tailwind palette and hardcoded hex colours outside `src/components/ui/`, in the `.ts`, `.tsx` and `.css` files under `src/`. A file it could not read or a pattern it could not parse fails it |
 | `scripts/sandbox.sh` | A second Tars beside your real one: `HOME=~/Tars-sandbox`, API port 31499 |
 | `mods/tars-state/` | The state mod: a Claude Code hooks module that reports an agent's sessions, turns, failures and a heartbeat to Tars from inside the CLI (`electron/services/state-mod.ts`), and asks Tars instead of showing a permission dialog, the window deciding it (`electron/services/permission-asks.ts`); a session without it keeps the shell hooks and the dialog |
@@ -71,8 +71,10 @@ NODE_ENV              # 'development' → load DOROTHY_DEV_URL + open DevTools; 
 DOROTHY_DEV_URL       # override the dev renderer URL (default http://localhost:3000; e2e uses :3100)
 DOROTHY_API_PORT      # override the local API port (default 31415; sandbox 31499, e2e 31498)
 DOROTHY_E2E           # '1' suppresses DevTools so screenshots are clean
-DOROTHY_TELEGRAM_API_URL # under DOROTHY_E2E only: a stand-in of Telegram's Bot API, http://127.0.0.1:<port> and nothing else
+DOROTHY_TELEGRAM_API_URL # read by nothing since 2.0.5 (2.0.4's bot read it under DOROTHY_E2E); e2e/telegram-through-hermes.spec.ts still sets it, to show nothing asks its stand-in of Telegram's Bot API
 DOROTHY_HEALTH_EVERY_MS  # under DOROTHY_E2E only: how often the health samples are taken (200 ms at least; else every 5 minutes)
+DOROTHY_STATUS_EVERY_MS  # under DOROTHY_E2E only: how often a status is set against its CLI's own record (200 ms at least; else every 30 s, services/status-truth.ts)
+DOROTHY_SLEEP_AFTER_MS   # under DOROTHY_E2E only: an agent's rest before it is put to sleep (2 s at least; else 30 minutes, services/agent-sleep.ts)
 DOROTHY_HERMES_SESSION_EVERY_MS # under DOROTHY_E2E only: how often Tars asks its Hermes session (200 ms at least; else every 30 minutes)
 DOROTHY_E2E_PASSWD_HOME # under DOROTHY_E2E only: the home a test build takes for the account's own (core/sandbox-build.ts); else the password database's
 DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a stand-in of Sentry); a packaged Tars never reads it (app.isPackaged, services/error-reports/index.ts)
@@ -126,7 +128,7 @@ Four roles work this tree. They map to the long-lived branches `feat/frontend`, 
 - **Owns**: `electron/`, `mcp-*/`, `hooks/`, `scripts/`
 - **Never touches**: `src/components/`, `src/app/`, `design/`
 - **Owns the contract**: `electron/preload.ts` and `src/types/electron.d.ts` change together, in one commit, or the renderer breaks silently
-- **Spawn rule**: `spawnAgentSession()` in `electron/services/api-routes/agent-routes.ts` is the only place an API-driven session is started: the skills prefix, MCP config, model flag, `--disallowed-tools`, workspace trust, identity header and `--add-dir ~/.tars` all live there. Underneath it, `initAgentPty()` in `electron/core/agent-manager.ts` is the one function that spawns a PTY; `main.ts`, `ipc-handlers.ts` and the Telegram/Slack bots already call it directly. Route new work through one of those two. Do not add a third way in
+- **Spawn rule**: `spawnAgentSession()` in `electron/services/api-routes/agent-routes.ts` is the only place an API-driven session is started: the skills prefix, MCP config, model flag, `--disallowed-tools`, workspace trust, identity header and `--add-dir ~/.tars` all live there. Underneath it, `initAgentPty()` in `electron/core/agent-manager.ts` is the one function that spawns a PTY; `main.ts`, `ipc-handlers.ts`, the Slack and Discord bots and the Hermes relay's routing already call it directly. Route new work through one of those two. Do not add a third way in
 - **Session rule**: status, output and task-completed posts are authoritative only from `agent.currentSessionId`. Anything from another session, or matching `lastKilledSessionId`, is `stale` and must be dropped. Never clear `currentSessionId` on idle
 - **Shell rule**: no `exec`/`execSync` with an interpolated string. `execFile` with an argv array, as in `git-review.ts`. Paths derived from user input go through the guards in `electron/utils/worktree-path.ts`
 - **Auth rule**: exactly two routes are exempt from the bearer token: `/api/local-file` and `/api/health`. Anything you add under `/api/` is authenticated. `/api/hooks/*` was exempt until 2026-09-23 and now takes the agent's own token (`CLAUDE_MGR_API_TOKEN`, which the hooks inherit from the CLI they run in), for the `agent_id` it names and no other: the shared token is refused there, and so is a delegated ACP run's token (`isTerminalToken`), and a terminal's token dies with its terminal. It was four until `/api/kanban/complete` was removed: unauthenticated, uncalled, and it deleted agents
@@ -249,7 +251,7 @@ npm run lint                             # eslint
 npm run lint:design                      # radius / shadows / gradients / raw palette / hex
 npm run check:names                      # no private name; its list lives outside the repo, and without it the check passes
 npm run e2e:guard                        # every inventory page is covered by the manifest
-npm run e2e                              # Playwright drives the real Electron app, 42 surfaces
+npm run e2e                              # Playwright drives the real Electron app, 43 surfaces
 ```
 
 `npm run e2e` boots Electron in a sandbox through `launchSandboxed` (`e2e/fixture.mjs`). `HOME` pointed at a temp dir moves `~/.tars` and `~/.claude` and nothing else: Electron finds its profile through macOS, so until 2026-09-16 every run opened `~/Library/Application Support/tars`, the installed Tars's own profile. `--user-data-dir` and `CFFIXED_USER_HOME` move it now, and the launch fails if the app reports any of its folders outside the sandbox. It asserts zero uncaught page errors per surface as well as the screenshot. Re-run `tsc -p electron/tsconfig.json` before it or you test a stale main process. `npm test` runs in a throwaway `HOME` too (`__tests__/setup/home-isolation.ts`), and fails a file that writes into the real one.

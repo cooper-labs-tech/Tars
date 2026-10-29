@@ -110,7 +110,8 @@ describe('an agent spawned by a Tars whose HOME is a sandbox', () => {
     expect(sendJson.mock.calls.at(-1)?.[1] ?? 200, JSON.stringify(sendJson.mock.calls)).toBe(200);
     expect(spawned, 'no agent process was spawned').toHaveLength(1);
     const command = spawned[0].join(' ');
-    expect(command).toContain(`--mcp-config '${sandboxConfig}'`);
+    // A worker's file, by its role (services/mcp-roles.ts), written beside the sandbox's own.
+    expect(command).toContain(`--mcp-config '${path.join(path.dirname(sandboxConfig), 'mcp-worker.json')}'`);
     expect(command, "the agent was handed the account's MCP config").not.toContain(dirs.electronHome);
   });
 });

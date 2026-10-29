@@ -145,9 +145,11 @@ test('a message to an idle agent whose panel is mounted goes in, whatever the pa
       await sleep(1500);
     };
 
-    // The panel, and the agent started from it.
+    // The panel, and the agent started from it: from its ··· menu, where start is since 2.0.5 (#515).
+    const menu = page.getByRole('button', { name: 'Panel actions' }).first();
+    await waitFor(async () => (await menu.count()) > 0, 180_000, 'the panel and its menu');
+    await menu.click();
     const startButton = page.locator('button[title^="Start "]').first();
-    await waitFor(async () => (await startButton.count()) > 0, 180_000, 'the panel and its start button');
     await startButton.click();
     await waitFor(async () => (await status()).session, 120_000, 'the session registered');
     await waitFor(async () => (await status()).status !== 'running', 60_000, 'at rest');

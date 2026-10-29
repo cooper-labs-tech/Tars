@@ -6,6 +6,8 @@ import type { AgentStatus } from '@/types/electron';
 import MessageWaitingNotice from '@/components/MessageWaitingNotice';
 import PermissionAskNotice from '@/components/PermissionAskNotice';
 import LeftFullscreenNotice from './LeftFullscreenNotice';
+import BlockedNotice from './BlockedNotice';
+import { blockedReason } from '@/lib/blocked-reason';
 import RestartPendingNotice from './RestartPendingNotice';
 import { useMessageWaiting } from '@/hooks/useMessagesWaiting';
 import { useRestartPending } from '@/hooks/useRestartPending';
@@ -107,6 +109,7 @@ function TerminalPanel({
   const waiting = useMessageWaiting(agent.id);
   const restartPending = useRestartPending(agent.id);
   const hint = asleepHint(agent);
+  const blocked = blockedReason(agent);
 
   const handleClick = useCallback(() => {
     onFocus(agent.id);
@@ -171,6 +174,10 @@ function TerminalPanel({
           (useMultiTerminal has stopped sending it). Restarting gives a session
           on the same conversation that opens fullscreen. */}
       {agent.leftFullscreen && <LeftFullscreenNotice onRestart={handleRestart} />}
+
+      {/* Its CLI says it is blocked, and on what (OSC 7501): the message and the
+          way to its terminal. Frame: `Blocked (2.0.5) · an agent blocked, its reason`. */}
+      {blocked && <BlockedNotice blocked={blocked} onOpen={handleFullscreen} />}
 
       {/* Terminal body */}
       <div className="flex-1 min-h-0 overflow-hidden relative bg-background">

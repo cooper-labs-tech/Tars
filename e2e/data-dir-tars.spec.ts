@@ -86,7 +86,7 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(old, 'tmp', 'a1b2c3d4e5', 't', 'scratch.txt'), 'scratch');
     // What the agents are not handed, beside the folder they are.
     fs.mkdirSync(path.join(home, '.tars-private'), { mode: 0o700 });
-    fs.writeFileSync(path.join(home, '.tars-private', 'settings-secrets.json'), '{"telegramBotToken":"e2e-secret"}', { mode: 0o600 });
+    fs.writeFileSync(path.join(home, '.tars-private', 'settings-secrets.json'), '{"discordBotToken":"e2e-secret"}', { mode: 0o600 });
     // A file Tars never writes at a start (agents.json is saved again as it loads): moved, it keeps its inode.
     const report = path.join('project-files', 'atlas-0123456789', 'reports', 'release.md');
     const inode = fs.statSync(path.join(old, report)).ino;

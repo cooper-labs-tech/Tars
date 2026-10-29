@@ -223,6 +223,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // Skills management
+  // An agent's queue (2.0.5, lot 2): read it in order, pause and resume it, move or cancel an item.
+  agentQueue: {
+    get: (agentId: string) => ipcRenderer.invoke('agentQueue:get', agentId),
+    pause: (agentId: string, reason?: string) => ipcRenderer.invoke('agentQueue:pause', agentId, reason),
+    resume: (agentId: string) => ipcRenderer.invoke('agentQueue:resume', agentId),
+    move: (ref: string, before?: string) => ipcRenderer.invoke('agentQueue:move', ref, before),
+    cancel: (ref: string) => ipcRenderer.invoke('agentQueue:cancel', ref),
+    drop: (agentId: string) => ipcRenderer.invoke('agentQueue:drop', agentId),
+    onChanged: (callback: (view: unknown) => void) => {
+      const listener = (_: unknown, view: unknown) => callback(view);
+      ipcRenderer.on('agentQueue:changed', listener);
+      return () => ipcRenderer.removeListener('agentQueue:changed', listener);
+    },
+  },
+
   skill: {
     install: (repo: string) =>
       ipcRenderer.invoke('skill:install', repo),
@@ -461,21 +476,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('settings:updated', listener);
       return () => ipcRenderer.removeListener('settings:updated', listener);
     },
-  },
-
-  // Telegram bot
-  telegram: {
-    test: () =>
-      ipcRenderer.invoke('telegram:test'),
-    sendTest: () =>
-      ipcRenderer.invoke('telegram:sendTest'),
-    // Mints a token the main process shows the user once; the page is told it is set (secret-handoff.ts).
-    generateAuthToken: () =>
-      ipcRenderer.invoke('telegram:generateAuthToken'),
-    copyAuthToken: () =>
-      ipcRenderer.invoke('telegram:authToken:copy'),
-    removeAuthorizedChatId: (chatId: string) =>
-      ipcRenderer.invoke('telegram:removeAuthorizedChatId', chatId),
   },
 
   // Slack bot
@@ -750,21 +750,42 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('teamTemplate:delete', id),
   },
 
+  // The heavy-run slot for the whole machine (services/heavy-slot.ts): who holds it, who waits and why, and the
+  // alerts during a run (the disk filling, the swap growing fast).
+  heavySlot: {
+    status: () => ipcRenderer.invoke('heavySlot:status'),
+    // The owner gives a lease (or an ask) back; its holder and its orchestrator are told.
+    giveBack: (ticketId: string) => ipcRenderer.invoke('heavySlot:giveBack', ticketId),
+    onChanged: (callback: (status: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: unknown) => callback(status);
+      ipcRenderer.on('heavySlot:changed', listener);
+      return () => ipcRenderer.removeListener('heavySlot:changed', listener);
+    },
+    onAlert: (callback: (alert: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, alert: unknown) => callback(alert);
+      ipcRenderer.on('heavySlot:alert', listener);
+      return () => ipcRenderer.removeListener('heavySlot:alert', listener);
+    },
+  },
+
   // Vault
   vault: {
-    // Each project's folder, reports/ and tools/ (services/vault-project-files.ts): by key, subfolder and name, never a path.
+    // Each project's folder, every folder of it (services/vault-project-files.ts): by key, place and name, never a path.
+    // A place is a list of folder names; `sub` (reports or tools) is the form of 2.0.4.
     projectFolders: () =>
       ipcRenderer.invoke('vault:project-folders'),
     projectFiles: (params: { key: string; sub: 'reports' | 'tools' }) =>
       ipcRenderer.invoke('vault:project-files', params),
-    readProjectFile: (params: { key: string; sub: 'reports' | 'tools'; name: string }) =>
+    projectPlace: (params: { key: string; place: string[]; offset?: number; limit?: number }) =>
+      ipcRenderer.invoke('vault:project-place', params),
+    readProjectFile: (params: ({ key: string; sub: 'reports' | 'tools' } | { key: string; place: string[] }) & { name: string }) =>
       ipcRenderer.invoke('vault:project-file:read', params),
-    writeProjectFile: (params: { key: string; sub: 'reports' | 'tools'; name: string; text: string; mtimeSeen: number | null }) =>
+    writeProjectFile: (params: ({ key: string; sub: 'reports' | 'tools' } | { key: string; place: string[] }) & { name: string; text: string; mtimeSeen: number | null }) =>
       ipcRenderer.invoke('vault:project-file:write', params),
-    showProjectFile: (params: { key: string; sub: 'reports' | 'tools'; name?: string }) =>
+    showProjectFile: (params: ({ key: string; sub: 'reports' | 'tools' } | { key: string; place: string[] }) & { name?: string }) =>
       ipcRenderer.invoke('vault:project-file:show', params),
-    onProjectFilesChanged: (callback: (event: { key: string; sub: 'reports' | 'tools' }) => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { key: string; sub: 'reports' | 'tools' }) => callback(data);
+    onProjectFilesChanged: (callback: (event: { key: string; place: string[]; sub?: 'reports' | 'tools' }) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, data: { key: string; place: string[]; sub?: 'reports' | 'tools' }) => callback(data);
       ipcRenderer.on('vault:project-files:changed', listener);
       return () => ipcRenderer.removeListener('vault:project-files:changed', listener);
     },
@@ -903,6 +924,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     removeVault: (vaultPath: string) => ipcRenderer.invoke('obsidian:removeVault', vaultPath),
   },
 
+  // What each agent and each project costs (services/fleet-resources-runtime.ts): one read, a measure of the disk on
+  // demand, and the same read on each change.
+  resources: {
+    read: () => ipcRenderer.invoke('resources:read'),
+    measureDisk: () => ipcRenderer.invoke('resources:measureDisk'),
+    onChanged: (callback: (state: unknown) => void) => {
+      const listener = (_: unknown, state: unknown) => callback(state);
+      ipcRenderer.on('resources:changed', listener);
+      return () => ipcRenderer.removeListener('resources:changed', listener);
+    },
+  },
+
   // The disk, and the folders no agent owns (Settings · System). The removal
   // asks nothing itself: the window confirms before it calls.
   system: {
@@ -916,6 +949,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
     // How many chats may work at once: one per 5 GB of RAM, from 1 to 8.
     chatLimit: () => ipcRenderer.invoke('system:chatLimit'),
+  },
+
+  // The disk janitor (services/disk-janitor.ts): its state (the last scan with its items and outcomes, the deletions
+  // under way, the never list, the log of what was freed, the scans agents asked for), a scan, the owner's approval,
+  // and the state on each change.
+  diskJanitor: {
+    state: () => ipcRenderer.invoke('diskJanitor:state'),
+    scan: () => ipcRenderer.invoke('diskJanitor:scan'),
+    approve: (ids: string[]) => ipcRenderer.invoke('diskJanitor:approve', ids),
+    onChanged: (callback: (state: unknown) => void) => {
+      const listener = (_: unknown, state: unknown) => callback(state);
+      ipcRenderer.on('diskJanitor:changed', listener);
+      return () => ipcRenderer.removeListener('diskJanitor:changed', listener);
+    },
   },
 
   // The chats of each project (handlers/chat-handlers.ts): their records,
@@ -1007,6 +1054,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // The last error report's answer (2.0.4): for Settings' line beside the switch.
   errorReports: {
     last: () => ipcRenderer.invoke('errorReports:last'),
+  },
+
+  // Whether Tars keeps the computer awake now, and per which setting (2.0.5, services/keep-awake.ts).
+  keepAwake: {
+    state: () => ipcRenderer.invoke('keepAwake:state'),
   },
 
   // Platform info

@@ -18,7 +18,8 @@ vi.mock('react', async (importOriginal) => ({
  * click typed `cd '...' && claude ...` into the running claude. The main
  * process now says whether a CLI runs (`cliRunning`, on agent:list and every
  * agents:tick), and three things carry it to the button: the list comparison
- * and the tick patch in useElectronAgents, then the header and its menu.
+ * and the tick patch in useElectronAgents, then the header's ··· menu (since
+ * 2.0.5, #515: no longer a button of the header) and the context menu.
  * The status never moves when claude exits or starts at its prompt, so each
  * link is asserted with cliRunning as the only field that changes.
  */
@@ -150,12 +151,21 @@ describe('useElectronAgents carries cliRunning to the panes', () => {
   });
 });
 
-describe('the pane header button follows the terminal, not the status', () => {
+// Since 2.0.5 (#515) start and stop are no longer a button of the header but the first item of its ··· menu
+// ("Panel actions"), so the menu is opened as a user opens it and the one item read there. What is pinned is
+// unchanged: one control, following cliRunning, never the status; and none left in the header itself.
+describe('the pane header menu\'s start or stop follows the terminal, not the status', () => {
   const onStart = vi.fn();
   const onStop = vi.fn();
   const noop = () => {};
+  const action = /^(start|stop|wake)\b/;
+  // An open menu listens on the window for a click outside it and for Escape.
+  beforeEach(() => { g.window = { addEventListener: noop, removeEventListener: noop }; });
+  afterEach(() => { delete g.window; });
 
-  function button(a: AgentStatus) {
+  function item(a: AgentStatus) {
+    onStart.mockClear();
+    onStop.mockClear();
     const header = mount(() => TerminalPanelHeader({
       agent: a,
       isFullscreen: false,
@@ -163,33 +173,52 @@ describe('the pane header button follows the terminal, not the status', () => {
       tabType: 'project',
       onStart,
       onStop,
+      onWake: noop,
       onFullscreen: noop,
       onExitFullscreen: noop,
       onClear: noop,
       onRemove: noop,
       onContextMenu: noop,
     }));
-    const found = ofType(header.result, 'button').filter(b => /^(start|stop)$/.test(textOf(b.props.children as never)));
+    const buttons = () => ofType(header.result, 'button');
+    expect(buttons().filter(b => action.test(textOf(b.props.children as never))), 'no start, stop or wake in the header').toHaveLength(0);
+    const menu = buttons().find(b => b.props['aria-label'] === 'Panel actions');
+    expect(menu, 'the panel actions menu').toBeDefined();
+    (menu!.props.onClick as () => void)();
+    const found = buttons().filter(b => action.test(textOf(b.props.children as never)));
+    expect(found, 'exactly one start/stop item in the menu').toHaveLength(1);
+    const b = { text: textOf(found[0].props.children as never), title: found[0].props.title };
+    (found[0].props.onClick as () => void)();
     header.unmount();
-    expect(found, 'exactly one start/stop button').toHaveLength(1);
-    return { text: textOf(found[0].props.children as never), onClick: found[0].props.onClick, title: found[0].props.title };
+    return b;
   }
 
   for (const status of ['idle', 'completed', 'error', 'waiting', 'running'] as const) {
     it(`offers stop while a CLI runs, in ${status}`, () => {
-      const b = button(agent({ status, cliRunning: true, error: status === 'error' ? 'API Error: 403' : undefined }));
+      const b = item(agent({ status, cliRunning: true, error: status === 'error' ? 'API Error: 403' : undefined }));
       expect(b.text).toBe('stop');
-      expect(b.onClick).toBe(onStop);
       expect(b.title).toBe('Stop this agent');
+      expect(onStop).toHaveBeenCalledTimes(1);
+      expect(onStart).not.toHaveBeenCalled();
     });
 
     it(`offers start once only the shell is left, in ${status}`, () => {
-      const b = button(agent({ status, cliRunning: false }));
-      expect(b.text).toBe('start');
-      expect(b.onClick).toBe(onStart);
+      const b = item(agent({ status, cliRunning: false }));
+      expect(b.text).toBe('start claude');
       expect(b.title).toBe('Start claude in this terminal');
+      expect(onStart).toHaveBeenCalledTimes(1);
+      expect(onStop).not.toHaveBeenCalled();
     });
   }
+
+  // agent-stopped.test.tsx's 6, in the menu since #515: a stopped agent has nothing left to stop, and a second
+  // stop from the window would file the stop under you and replace who and why.
+  it('offers start to a stopped agent, never a second stop', () => {
+    const b = item(agent({ status: 'stopped', cliRunning: false }));
+    expect(b.text).toBe('start claude');
+    expect(onStart).toHaveBeenCalledTimes(1);
+    expect(onStop).not.toHaveBeenCalled();
+  });
 });
 
 describe('the pane context menu follows the terminal, not the status', () => {

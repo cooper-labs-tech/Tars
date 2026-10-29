@@ -185,10 +185,16 @@ export interface AgentTickItem {
   lastActivity: string;
   /** When the current status began (ISO). See AgentStatus.statusSince. */
   statusSince?: string;
+  /** Why the sleep pass last left it awake. See AgentStatus.sleepHeld. */
+  sleepHeld?: AgentStatus['sleepHeld'];
   /** What a waiting agent waits on. See AgentStatus.waitingOn. */
   waitingOn?: AgentWaitingOn;
   /** A permission question Tars holds for the window. See AgentStatus.permissionAsk. */
   permissionAsk?: AgentStatus['permissionAsk'];
+  /** What the CLI last said of itself over OSC 7501 (2.0.5). See AgentStatus.programStatus. */
+  programStatus?: AgentStatus['programStatus'];
+  /** The line the agent last wrote about itself, with when (2.0.5). See AgentStatus.checkpoint. */
+  checkpoint?: AgentStatus['checkpoint'];
   /** A launch is on its way. See AgentStatus.launching. Always set on agents:tick. */
   launching?: boolean;
   provider: string;
@@ -253,6 +259,51 @@ export interface AgentEvent {
   exitCode?: number;
 }
 
+interface HeavySlotTicket {
+  id: string;
+  state: 'granted' | 'waiting';
+  /** 1 for the next to be granted. */
+  position?: number;
+  /** Why it waits: who holds the slot, or the floor and the figure (free disk, free memory). */
+  why?: string;
+  priority: 'gate' | 'normal' | 'background';
+  /** Asked for gate without being an orchestrator: given normal. */
+  clamped?: true;
+  /** What the run is: the command `tars-slot run` runs, or the label its asker gave. */
+  label: string;
+  agentId: string;
+  agentName: string;
+  project: string;
+  /** The process that holds the lease. */
+  pid: number;
+  askedAt: string;
+  grantedAt?: string;
+  /** Granted inside this holder's lease (a git hook inside its run). */
+  nestedIn?: string;
+  /** Taken with heavy_slot_take, held by the agent's CLI: given back when its turn ends. */
+  untilTurnEnds?: true;
+  alerts: string[];
+}
+interface HeavySlotStatus {
+  /** The setting: how many runs at once. */
+  slots: number;
+  /** Under these a grant waits: free disk in GB, free memory in %. */
+  floors: { diskGb: number; memFreePct: number };
+  /** The machine's last reading (null before the first); a figure the system cannot give is null. */
+  machine: {
+    at: string; diskFreeGb: number | null; memFreePct: number | null; memFreeMb: number | null;
+    /** The machine's memory, and the free memory memFreePct speaks of (its share of it): "6.2 GB, 26 % of 24 GB". memFreeMb
+     *  is another figure (free and speculative pages on macOS). */
+    memTotalMb: number | null; memFreeShareMb: number | null;
+    swapUsedMb: number | null; swapGrowthMbPerMin: number | null; load1: number | null;
+  } | null;
+  /** With each holder's tree: its process and everything under it (none on Windows). */
+  holders: Array<HeavySlotTicket & { tree?: { processes: number; memoryMb: number; cpuPct: number } }>;
+  /** In the order they will be granted. */
+  waiting: HeavySlotTicket[];
+  /** Since midnight, oldest first, each with whom it was sent to. */
+  alerts: Array<{ at: string; ticket: string; agentName: string; project: string; label: string; text: string; sentTo: string[] }>;
+}
 type VaultSubfolder = 'reports' | 'tools';
 type VaultFailure = { error: string; code: string };
 interface VaultProjectFolder {
@@ -265,6 +316,16 @@ interface VaultProjectFolder {
   notesMoved?: string;
 }
 interface VaultProjectFileEntry { name: string; size: number; mtimeMs: number; kind: 'markdown' | 'text' | 'code' | 'other'; runnable: boolean }
+/** A folder's place in a project's folder: its folder names, [] for the project's folder; or `sub`, the form of 2.0.4. */
+type VaultPlace = { sub: VaultSubfolder } | { place: string[] };
+/** A folder: its count of entries (not a walk), or the code that kept it from being read; a heavy one is only named, never opened. */
+interface VaultPlaceFolder { name: string; type: 'folder'; entries?: number; heavy?: true; error?: string }
+/** A file; `hardlink` when it has a second name elsewhere: never read. */
+interface VaultPlaceFile extends VaultProjectFileEntry { type: 'file'; hardlink?: true }
+/** A symbolic link: where it points as written, never followed nor read. */
+interface VaultPlaceLink { name: string; type: 'link'; target: string | null; mtimeMs: number }
+/** One level: folders by name, then files and links newest first; `more` is how many come after this page. */
+interface VaultPlaceList { entries: Array<VaultPlaceFolder | VaultPlaceFile | VaultPlaceLink>; total: number; offset: number; more?: number }
 interface VaultProjectFileRead {
   name: string;
   /** Where it is, as the system writes it. */
@@ -469,7 +530,7 @@ export interface AgentStatus {
   permissionAsk?: {
     tool: string;
     askedAt: string;
-    /** When Tars hands the question back to the terminal's dialog if nobody answers. */
+    /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
     /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
     subject: string;
@@ -478,6 +539,16 @@ export interface AgentStatus {
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
+    /**
+     * A file tool asked by its path alone, its content withheld from Tars: the window shows the path, and may refuse
+     * it or hand it back to the terminal, never allow it (agent:answerPermission answers false to an allow).
+     */
+    withheld?: true;
+    /**
+     * What was withheld and why, as the state mod says it: `<field>: <why>`, joined by `; ` (for instance
+     * `command: 3,014 characters, past the 2,000 the window shows`). Set with withheld only.
+     */
+    withheldWhy?: string;
   };
   /** The last start that undid a stop: who stopped it, when and why, and who started it again and when. */
   lastRestartAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string; restartedBy: string; restartedAt: string };
@@ -485,6 +556,12 @@ export interface AgentStatus {
    *  at least) and no tool at work: it looks frozen. Cleared by a write or by any
    *  other status. */
   stalledSince?: string;
+  /** Why the sleep pass last left it awake, and when: orchestrator, not-at-rest, no-cli, starting, recent,
+   *  not-resumable, owed, owes, pending, field, no-process-table or busy. Gone once asleep. */
+  sleepHeld?: { why: string; at: string };
+  /** The last time its status was put right from its CLI's own record (an event that never reached Tars):
+   *  from, to, why (no-cli, not-taken, turn-ended, turn-on-record) and when. */
+  statusReconciled?: { from: string; to: string; why: string; at: string };
   projectPath: string;
   secondaryProjectPath?: string; // Secondary project added via --add-dir
   worktreePath?: string;
@@ -509,6 +586,38 @@ export interface AgentStatus {
    *  from the hook that reports it; gone as soon as `status` changes. Not set
    *  for the idle prompt. */
   waitingOn?: AgentWaitingOn;
+  /** What the agent started that still runs while it has no live session (services/born-watch.ts, 2.0.5): its
+   *  processes found by their birth tag and its containers labelled `tars.agent=<id>`, since when they were first
+   *  seen so, and when the project's orchestrator was told (once, an hour on). Never ended by Tars: said. Saved. */
+  leftRunning?: {
+    pids: number[];
+    /** One line each, `pid <n>: <command>`, secrets masked and cut. */
+    commands: string[];
+    /** `<name> (<id>)` of each container. */
+    containers: string[];
+    since: string;
+    reportedAt?: string;
+  };
+  /** What its last stop ended and kept outside its terminal: `pid <n>: <command>` each, the kept ones with why,
+   *  and the containers stopped. Cleared by a start. */
+  stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
+  /** What the agent's CLI last said of itself in its terminal over OSC 7501, the Program Status Protocol (2.0.5,
+   *  services/program-status): from its current terminal only, gone with a clear, a new shell prompt or a reset.
+   *  It drives `status` only for a CLI Tars follows no other way (amp, grok, opencode); on the others it adds the
+   *  reason of a blocked state. On agents:tick too. */
+  programStatus?: {
+    state: 'idle' | 'working' | 'done' | 'blocked' | 'error';
+    /** Set with `blocked` only. */
+    kind?: 'permission' | 'question' | 'auth';
+    /** One line, as the CLI wrote it (2,048 characters at most). */
+    msg?: string;
+    app?: string;
+    /** ISO: when it was read. */
+    at: string;
+  };
+  /** The line the agent last wrote about itself with the MCP tool `checkpoint`, 120 characters at most, with when
+   *  (2.0.5, core/agent-checkpoint.ts). For the agent card's line. */
+  checkpoint?: { line: string; at: string };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;
@@ -1101,6 +1210,97 @@ export interface OrphanFolder {
   /** The newest change in it (caches and .git aside), or null. */
   lastChangedAt: string | null;
 }
+/** One item the disk janitor proposes, as the window reads it (electron/services/janitor-state.ts). */
+export interface JanitorItem {
+  id: string;
+  kind: 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp';
+  /** A folder's exact absolute path; for Docker, the image or the VM by name. */
+  path: string;
+  label: string;
+  /** null for the VM's trim, whose gain is not known before. */
+  bytes: number | null;
+  /** The rule it matched, the same sentence for every item of a kind: the view groups by it. */
+  rule: string;
+  /** Why this item matched: its last change, its merged branch, its image. */
+  why: string;
+  /** A worktree's item: its branch, merged into its main branch, days nothing changed in it (caches aside), clean. */
+  details?: { branch: string | null; merged: boolean | null; idleDays: number; clean: boolean };
+  /** After an approval: deleted (and its bytes), kept (and why), failed (and the error). */
+  outcome?: { kind: 'deleted' | 'kept' | 'failed'; bytes?: number | null; why?: string | null } | null;
+}
+
+/** The disk janitor's state, sent on each change (diskJanitor:changed). */
+export interface JanitorState {
+  scan: null | {
+    at: number;
+    /** An agent's name when an agent asked for the scan; null when the window did. Only the owner approves. */
+    askedBy: string | null;
+    running: boolean;
+    /** While it runs: what is being read, how far, and how much was found so far. */
+    progress: { what: string; done: number; total: number; foundBytes: number } | null;
+    items: JanitorItem[];
+  };
+  /** While an approval runs: item n of N, the bytes freed so far, and the item at hand (checking it again, then its outcome). */
+  deleting: null | { done: number; total: number; freedBytes: number; current?: { path: string; phase: 'checking' | 'deleted' | 'kept' | 'failed' } };
+  /** What is never proposed nor deleted, in words. */
+  never: string[];
+  /** What was freed and kept, read back from ~/.tars/logs/janitor.log (and its .1), oldest first. */
+  log: Array<{ at: number; what: string; bytes: number | null }>;
+  /** The scans agents asked for (each answered with its own project's items), newest last. */
+  requests: Array<{ at: number; by: string; project: string; items: number }>;
+  error: string | null;
+}
+
+/** One process of an agent's tree. */
+export interface AgentProcess {
+  name: string;
+  pid: number;
+  memMb: number | null;
+  cpuPct: number | null;
+  /** Its command line, every secret in it masked (a password after a flag, a URL's, a key): the window's only. */
+  command: string;
+}
+/** A folder and its size as last measured: null before any measure. */
+export interface MeasuredPath { path: string; bytes: number | null }
+/** What an agent costs. */
+export interface AgentResources {
+  id: string;
+  name: string;
+  /** working, waiting, idle, asleep, stopped, error */
+  status: string;
+  /** When its status began, in ms; null when unknown. */
+  statusSince: number | null;
+  /** Its whole tree's: null when it has no terminal or the table cannot be read (Windows). */
+  memMb: number | null;
+  cpuPct: number | null;
+  processes: AgentProcess[];
+  worktrees: MeasuredPath[];
+  tmp: MeasuredPath | null;
+  /**
+   * What its ended session left running (#523's records, services/born-watch.ts): since when (ms), each process with
+   * its pid and its command line masked by the window's rule, and its containers as `<name> (<id>)`. Null when nothing
+   * was left running. On Windows, where no process is read, only an agent's labelled containers are.
+   */
+  outlived: { since: number | null; processes: Array<{ pid: number; command: string }>; containers: string[] } | null;
+}
+/** What a project costs: its agents, and their sums. */
+export interface ProjectResources {
+  path: string;
+  name: string;
+  agents: AgentResources[];
+  totals: { memMb: number | null; cpuPct: number | null; diskBytes: number | null; processes: number };
+}
+export interface FleetResources {
+  /** When memory and CPU were read; null when they could not be. */
+  readAt: number | null;
+  /** When the disk was last measured; null before any. */
+  diskMeasuredAt: number | null;
+  /** While the disk is measured. */
+  measuring?: { done: number; total: number } | null;
+  error?: string | null;
+  projects: ProjectResources[];
+}
+
 export interface OrphanListing {
   folders: OrphanFolder[];
   count: number;
@@ -1207,6 +1407,29 @@ export type ChatEvent = { seq: number; chatId: string } & (
   | { type: 'removed'; itemIds: string[] }
   | { type: 'state'; runner: { id: string; status: AgentStatus['status']; live: boolean } | null }
 );
+
+/** agentQueue (2.0.5, lot 2): an item waiting in an agent's queue, in its order. */
+export interface AgentQueueItem {
+  ref: string;
+  /** 1 for the next to go in. */
+  position: number;
+  requesterId?: string;
+  /** Who sent it, as the panel names them. */
+  from?: string;
+  how?: 'task' | 'message' | 'note';
+  /** Its first line. */
+  title: string;
+  queuedAt: string;
+}
+
+/** agentQueue: an agent's queue, and whether nothing goes in (paused, since when, why). */
+export interface AgentQueue {
+  agentId: string;
+  paused?: { since: string; why: string };
+  items: AgentQueueItem[];
+}
+
+type AgentQueueAnswer = { success: true; view: AgentQueue } | { success: false; error: string; code?: 'already_started' | 'not_found' };
 
 /** agent:queue: a worker's work in hand and the requests waiting behind it. */
 export interface AgentQueueEntry {
@@ -1366,8 +1589,8 @@ export interface ElectronAPI {
     list: () => Promise<AgentStatus[]>;
     /** Ends the agent's terminal and everything its CLI started; the agent reads `stopped`, by "you". */
     stop: (id: string, reason?: string) => Promise<{ success: boolean }>;
-    /** savedTo: the wip/ branch its uncommitted work was saved on. worktreeKept: why its worktree was not removed (the save failed, or it holds what no commit keeps). */
-    remove: (id: string) => Promise<{ success: boolean; savedTo?: string; worktreeKept?: string }>;
+    /** savedTo: the wip/ branch its uncommitted work was saved on. worktreeKept: why its worktree was not removed (the save failed, or it holds what no commit keeps). processes: what it started outside its terminal, ended and kept, as a stop says it. */
+    remove: (id: string) => Promise<{ success: boolean; savedTo?: string; worktreeKept?: string; processes?: { ended: string[]; kept: string[]; containers: string[] } }>;
     /** Answers the permission question the state mod asked Tars for this agent (AgentStatus.permissionAsk): allow or deny decide the call, ask shows it in the terminal's dialog. False when there was none. */
     answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string) => Promise<{ success: boolean }>;
     /** Into the agent's terminal. Asleep, a key wakes it (`woke: true`); a lone Esc or Ctrl+C, a mouse or focus report does nothing. */
@@ -1414,6 +1637,19 @@ export interface ElectronAPI {
   };
 
   // Skills management
+  /** An agent's queue (2.0.5, lot 2): read in order, paused, resumed, an item moved (to the head, or before another) or cancelled. */
+  agentQueue: {
+    get: (agentId: string) => Promise<AgentQueue | { error: 'not_found' }>;
+    pause: (agentId: string, reason?: string) => Promise<AgentQueueAnswer>;
+    resume: (agentId: string) => Promise<AgentQueueAnswer>;
+    move: (ref: string, before?: string) => Promise<AgentQueueAnswer>;
+    /** `already_started` when its turn was taken, or it was typed in, before the cancel came. */
+    cancel: (ref: string) => Promise<AgentQueueAnswer>;
+    /** Everything that waits, taken back, each sender told; a pause stays as it was. */
+    drop: (agentId: string) => Promise<AgentQueueAnswer & { dropped?: number }>;
+    /** Each change of a queue (queued, moved, cancelled, dropped, paused, resumed, gone in), with the queue as it now reads. */
+    onChanged: (callback: (view: AgentQueue) => void) => () => void;
+  };
   skill: {
     install: (repo: string) => Promise<{ success: boolean; output?: string; message?: string }>;
     installStart: (params: { repo: string; cols?: number; rows?: number }) => Promise<{ id: string; repo: string }>;
@@ -1727,14 +1963,13 @@ export interface ElectronAPI {
       notifyOnComplete: boolean;
       notifyOnStop: boolean;
       notifyOnError: boolean;
-      telegramEnabled: boolean;
-      telegramBotToken: string;
-      telegramChatId: string;
-      telegramAuthToken: string;
-      telegramAuthorizedChatIds: string[];
-      telegramRequireMention: boolean;
-      /** The relay to the user's Telegram through their Hermes. On, the Tars bot's token is erased and the bot off. */
+      /** The relay to the user's Telegram through their Hermes: the only way to their Telegram since 2.0.5. */
       hermesRelayEnabled?: boolean;
+      /**
+       * Set once by the first launch of 2.0.5 that found Tars's own Telegram bot set up: its settings and token are
+       * gone. `hadToken`: the owner may revoke that token with BotFather (/revoke). Never cleared.
+       */
+      telegramBotRetired?: { at: string; hadToken: boolean };
       slackEnabled: boolean;
       slackBotToken: string;
       slackAppToken: string;
@@ -1759,7 +1994,6 @@ export interface ElectronAPI {
       socialDataApiKey: string;
       tasmaniaEnabled: boolean;
       tasmaniaServerPath: string;
-      defaultProvider?: string;
       opencodeEnabled?: boolean;
       opencodeDefaultModel?: string;
       openRouterEnabled?: boolean;
@@ -1840,12 +2074,6 @@ export interface ElectronAPI {
       notifyOnComplete?: boolean;
       notifyOnStop?: boolean;
       notifyOnError?: boolean;
-      telegramEnabled?: boolean;
-      telegramBotToken?: string;
-      telegramChatId?: string;
-      telegramAuthToken?: string;
-      telegramAuthorizedChatIds?: string[];
-      telegramRequireMention?: boolean;
       hermesRelayEnabled?: boolean;
       slackEnabled?: boolean;
       slackBotToken?: string;
@@ -1859,6 +2087,7 @@ export interface ElectronAPI {
       discordAllowedUserIds?: string[];
       discordRequireMention?: boolean;
       errorReportsEnabled?: boolean;
+      keepAwake?: 'while-working' | 'always' | 'never';
       sentryAuthToken?: string;
       sentryTriageProject?: string;
       jiraEnabled?: boolean;
@@ -1869,7 +2098,6 @@ export interface ElectronAPI {
       socialDataApiKey?: string;
       tasmaniaEnabled?: boolean;
       tasmaniaServerPath?: string;
-      defaultProvider?: string;
       notificationSounds?: {
         waiting?: string;
         complete?: string;
@@ -1930,20 +2158,6 @@ export interface ElectronAPI {
   // its native Anthropic-compatible endpoint (Ollama v0.14+).
   ollama?: {
     test: () => Promise<{ reachable: boolean }>;
-  };
-
-  // Telegram bot
-  telegram?: {
-    test: () => Promise<{ success: boolean; botName?: string; error?: string }>;
-    sendTest: () => Promise<{ success: boolean; error?: string }>;
-    /**
-     * A new token, shown to the user once by the main process (a dialog the
-     * page cannot read) and never answered: `token` is gone since 2.0.4 (the
-     * Audit's L2 on PR 466). copyAuthToken copies the current one again.
-     */
-    generateAuthToken: () => Promise<{ success: boolean; set?: boolean; token?: never; error?: string }>;
-    copyAuthToken: () => Promise<{ copied: boolean }>;
-    removeAuthorizedChatId: (chatId: string) => Promise<{ success: boolean; error?: string }>;
   };
 
   // Slack bot
@@ -2150,24 +2364,46 @@ export interface ElectronAPI {
     }) => Promise<{ success: boolean; error?: string }>;
   };
 
+  /**
+   * The heavy-run slot for the whole machine (electron/services/heavy-slot.ts): test suites, builds, dev servers,
+   * Docker and simulators of every project's agents take it in turn. A lease is held by a live process and goes when
+   * it ends; the queue is a release gate, then ordinary work, then background work, then arrival.
+   */
+  heavySlot?: {
+    status: () => Promise<HeavySlotStatus>;
+    /**
+     * The owner gives a lease or an ask back, by its ticket's id: false when there is none. Its holder and its
+     * project's orchestrator are told, and the give-back is among the day's alerts. A lease taken with heavy_slot_take
+     * goes back by itself when its agent's turn ends.
+     */
+    giveBack: (ticketId: string) => Promise<boolean>;
+    onChanged: (callback: (status: HeavySlotStatus) => void) => () => void;
+    /** Said during a run: free disk at 10, 6 and 3 GB, fast swap growth; and a lease given back without its holder. Tars never stops the run. */
+    onAlert: (callback: (alert: HeavySlotStatus['alerts'][number]) => void) => () => void;
+  };
   // Vault
   vault?: {
     /**
      * Each project's folder, ~/.tars/project-files/<key>: what its agents
-     * produce, in reports/ and tools/ (electron/services/vault-project-files.ts).
-     * A file is named by its folder's key, a subfolder and a name, never a
-     * path; every failure is `{ error, code }`.
+     * produce, every folder of it (electron/services/vault-project-files.ts).
+     * A file is named by its folder's key, a place and a name, never a path;
+     * every failure is `{ error, code }`, with `errno` when the system said
+     * why. Codes of a place: invalid_place, heavy, link, not_folder,
+     * no_folder, unreadable.
      */
     projectFolders: () => Promise<{ folders: VaultProjectFolder[] }>;
     projectFiles: (params: { key: string; sub: VaultSubfolder }) => Promise<{ files: VaultProjectFileEntry[]; more?: number } | VaultFailure>;
+    /** One level of a folder, 200 entries from `offset` unless `limit` says (1,000 at most). */
+    projectPlace: (params: { key: string; place: string[]; offset?: number; limit?: number }) => Promise<VaultPlaceList | VaultFailure>;
     /** The text whole up to 1 MB (editable), its first 200 KB past that (truncated, read only), none for a file that is not text. */
-    readProjectFile: (params: { key: string; sub: VaultSubfolder; name: string }) => Promise<VaultProjectFileRead | VaultFailure>;
+    readProjectFile: (params: VaultPlace & { key: string; name: string }) => Promise<VaultProjectFileRead | VaultFailure>;
     /** Written unless it changed on disk since `mtimeSeen` (null for a new file): then `changed`, with its time, and nothing written. */
-    writeProjectFile: (params: { key: string; sub: VaultSubfolder; name: string; text: string; mtimeSeen: number | null }) =>
+    writeProjectFile: (params: VaultPlace & { key: string; name: string; text: string; mtimeSeen: number | null }) =>
       Promise<{ ok: true; mtimeMs: number } | { changed: true; mtimeMs: number | null } | VaultFailure>;
-    /** With a name, shows the file in its folder; without, opens the subfolder. */
-    showProjectFile: (params: { key: string; sub: VaultSubfolder; name?: string }) => Promise<{ success: true } | VaultFailure>;
-    onProjectFilesChanged: (callback: (event: { key: string; sub: VaultSubfolder }) => void) => () => void;
+    /** With a name, shows the file in its folder; without, opens the folder. */
+    showProjectFile: (params: VaultPlace & { key: string; name?: string }) => Promise<{ success: true } | VaultFailure>;
+    /** The folder something changed in (its parent's counts may have moved too); `sub` when it is in reports/ or tools/. */
+    onProjectFilesChanged: (callback: (event: { key: string; place: string[]; sub?: VaultSubfolder }) => void) => () => void;
     listDocuments: (params?: { folder_id?: string; tags?: string[] }) => Promise<{ documents: VaultDocumentElectron[]; error?: string }>;
     getDocument: (id: string) => Promise<{ document?: VaultDocumentElectron; attachments?: VaultAttachmentElectron[]; error?: string }>;
     createDocument: (params: {
@@ -2467,6 +2703,18 @@ export interface ElectronAPI {
     onUpdateError: (callback: (error: string) => void) => () => void;
   };
 
+  /**
+   * What each agent and each project costs (electron/services/fleet-resources.ts): per agent the memory and CPU of its
+   * whole process tree, its processes (command lines masked), the disk of its worktree and temporary folder as last
+   * measured, its status and since when; per project the same summed. `measureDisk` starts a measure and answers at
+   * once; the window follows it through `onChanged` (`measuring`, then `diskMeasuredAt`).
+   */
+  resources: {
+    read: () => Promise<FleetResources>;
+    measureDisk: () => Promise<{ success: boolean; error?: string }>;
+    onChanged: (callback: (state: FleetResources) => void) => () => void;
+  };
+
   // The disk and the folders no agent owns (Settings · System)
   system: {
     disk: () => Promise<DiskSpace | null>;
@@ -2476,6 +2724,18 @@ export interface ElectronAPI {
     onOrphanRemovalProgress: (callback: (progress: OrphanRemovalProgress) => void) => () => void;
     /** How many chats may work at once, and where that figure came from. */
     chatLimit: () => Promise<ChatLimit>;
+  };
+
+  /**
+   * The disk janitor (electron/services/disk-janitor.ts). `scan` starts a scan and `approve` the owner's approval of
+   * the ids the last scan showed; both answer at once, and the window follows each through `onChanged`. Each approved
+   * item is checked again just before it goes, deleted by its exact path, and logged.
+   */
+  diskJanitor: {
+    state: () => Promise<JanitorState>;
+    scan: () => Promise<{ success: boolean; error?: string }>;
+    approve: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
+    onChanged: (callback: (state: JanitorState) => void) => () => void;
   };
 
   /** The chats of each project. Mirror of the `chat` namespace in electron/preload.ts. */
@@ -2550,6 +2810,15 @@ export interface ElectronAPI {
   diagnostic: {
     /** Sends the last 24 hours of health samples (numbers, with the names of Tars's own calls and pages) once; refused with the reason, a sentence shown as is. */
     send: () => Promise<DiagnosticAnswer>;
+  };
+
+  keepAwake: {
+    /**
+     * The setting keepAwake as Tars reads it, whether it keeps the computer awake now, and since when (2.0.5);
+     * how many agents are working (`running`) now, whatever the mode; and `refused` while the blocker is wanted but
+     * the system refused it, so the computer may sleep (asked again at each change of the fleet, and every 30 s).
+     */
+    state: () => Promise<{ mode: 'while-working' | 'always' | 'never'; active: boolean; since?: string; working: number; refused?: true }>;
   };
 
   errorReports: {

@@ -14,8 +14,10 @@ import { flat, when } from '@/lib/stop-line';
 export interface PermissionAskLine {
   /** "Asks to use Bash:", or "Asks to use <tool>" with nothing more to name. */
   who: string;
-  /** The command, the file, the address or the search; '' when there is none. */
+  /** The command, the file, the address or the search; '' when there is none. Each line break marked ⏎. */
   subject: string;
+  /** The same, line by line, for a window that shows each on its own; [] when there is none. */
+  lines: string[];
   /** "asked at 14:02", "asked on 4 Oct at 23:58", '' for a time that does not parse. */
   at: string;
   /** The whole sentence, for a title. */
@@ -37,20 +39,45 @@ export interface PermissionAskLine {
  * whole: in bypass, an ask rule is the only reason a call comes to Tars. Each
  * is flattened like the rest, since the agent's own shell can ask with any.
  */
+/** A line break in what is asked: \r\n, \r, \n, U+0085, U+2028 and U+2029, each one. */
+const BREAKS = /\r\n|[\n\r\u0085\u2028\u2029]/;
+export const BREAK_MARK = '⏎';
+
+export const TAB_MARK = '⇥';
+/** Any space but U+0020 (no-break, thin, narrow no-break, ideographic...): a shell reads it as part of a word. */
+export const OTHER_SPACE_MARK = '⍽';
+const OTHER_SPACE = /(?! )\p{Zs}/gu;
+/** What hides, turns or reorders text within a line: shown as U+FFFD, never as a space or nothing. */
+const HIDDEN = /[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu;
+
+/**
+ * The subject's lines, none blank at either end. A break is never read as a space: "echo safe" then "rm -rf
+ * important" are two commands, and an allow covers both (the Audit's M1 on PR 544). Within a line every space is
+ * kept, a tab shows as ⇥, any other space as ⍽ and a hidden character as U+FFFD: "a  b" is not "a b" (its Lows at
+ * the re-checks).
+ */
+function linesOf(text: string | undefined): string[] {
+  const lines = (text ?? '').split(BREAKS).map((l) => l.replace(/\t/g, TAB_MARK).replace(OTHER_SPACE, OTHER_SPACE_MARK).replace(HIDDEN, '\uFFFD'));
+  while (lines.length && !lines[0].trim()) lines.shift();
+  while (lines.length && !lines[lines.length - 1].trim()) lines.pop();
+  return lines;
+}
+
 export function permissionAskLine(
   agent: Pick<AgentStatus, 'status' | 'permissionAsk'>,
   now = new Date(),
 ): PermissionAskLine | null {
   if (agent.status !== 'waiting' || !agent.permissionAsk) return null;
   const tool = flat(agent.permissionAsk.tool);
-  let subject = flat(agent.permissionAsk.subject);
+  const lines = linesOf(agent.permissionAsk.subject);
   // A file is named "Read /path", and a tool with nothing to name by itself.
-  if (subject.startsWith(`${tool} `)) subject = subject.slice(tool.length + 1).trim();
-  if (subject === tool) subject = '';
+  if (lines.length && lines[0].startsWith(`${tool} `)) lines[0] = lines[0].slice(tool.length + 1);
+  if (lines.length === 1 && lines[0] === tool) lines.length = 0;
+  const subject = lines.join(` ${BREAK_MARK} `);
   const who = subject ? `Asks to use ${tool}:` : `Asks to use ${tool}`;
   const time = when(agent.permissionAsk.askedAt, now);
   return {
-    who, subject, at: time && `asked ${time}`, title: subject ? `${who} ${subject}` : who,
+    who, subject, lines, at: time && `asked ${time}`, title: subject ? `${who} ${subject}` : who,
     reason: flat(agent.permissionAsk.reason), rule: flat(agent.permissionAsk.rule),
   };
 }

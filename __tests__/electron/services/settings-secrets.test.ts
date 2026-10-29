@@ -48,6 +48,9 @@ import * as path from 'node:path';
  *      held is lost (the Audit's mutant S1).
  * P13. (The Audit's probe PB, its mutant S2) A save over a private file that
  *      cannot be read writes over it, instead of setting it aside.
+ * (The Telegram bot's token, its switch and its authorized chats, which these
+ * cases used as samples, went with Tars's own Telegram bot in 2.0.5: Discord's
+ * token and Slack's switch stand in for them.)
  */
 
 import {
@@ -57,7 +60,7 @@ import {
 import { DATA_DIR, PRIVATE_DIR, APP_SETTINGS_FILE } from '../../../electron/constants';
 import type { AppSettings } from '../../../electron/types';
 
-const KEYS = { deepSeekApiKey: 'ds-secret-111', telegramBotToken: '123:tg-secret-222', memoryHonchoApiKey: 'honcho-333', xApiSecret: 'x-444' };
+const KEYS = { deepSeekApiKey: 'ds-secret-111', discordBotToken: '123:dc-secret-222', memoryHonchoApiKey: 'honcho-333', xApiSecret: 'x-444' };
 const settingsJson = () => JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf8'));
 const mode = (p: string) => fs.statSync(p).mode & 0o777;
 const holding = (dir: string, needle: string): string[] => {
@@ -85,14 +88,13 @@ describe('the secrets, in ~/.tars-private', () => {
     const credentialLike = fields.filter((f) => /(Key|Token|Secret|Password)$|cliApiKeys/.test(f));
     // The Sentry token keeps its own private file (services/sentry-token.ts).
     expect(credentialLike.filter((f) => f !== 'sentryAuthToken' && !SECRET_FIELDS.includes(f as never))).toEqual([]);
-    expect(SECRET_FIELDS).not.toContain('telegramAuthorizedChatIds');
   });
 
   it('P1. a save keeps no secret in app-settings.json, every other setting, and the private file 0600 in 0700', () => {
-    saveSettingsSplit({ ...KEYS, telegramEnabled: true, terminalFontSize: 14, cliApiKeys: { codex: { key: 'cx-555' } } } as unknown as AppSettings);
+    saveSettingsSplit({ ...KEYS, slackEnabled: true, terminalFontSize: 14, cliApiKeys: { codex: { key: 'cx-555' } } } as unknown as AppSettings);
     const plain = settingsJson();
     for (const k of [...Object.keys(KEYS), 'cliApiKeys']) expect(plain, k).not.toHaveProperty(k);
-    expect(plain).toMatchObject({ telegramEnabled: true, terminalFontSize: 14 });
+    expect(plain).toMatchObject({ slackEnabled: true, terminalFontSize: 14 });
     expect(readSecrets()).toMatchObject({ ...KEYS, cliApiKeys: { codex: { key: 'cx-555' } } });
     if (process.platform !== 'win32') {
       expect(mode(SECRETS_FILE)).toBe(0o600);
@@ -102,12 +104,12 @@ describe('the secrets, in ~/.tars-private', () => {
   });
 
   it('P2. a load finds every key again; a key set since wins over an older file\'s', () => {
-    saveSettingsSplit({ ...KEYS, telegramEnabled: true } as unknown as AppSettings);
-    expect(loadSettingsWithSecrets()).toMatchObject({ ...KEYS, telegramEnabled: true });
+    saveSettingsSplit({ ...KEYS, slackEnabled: true } as unknown as AppSettings);
+    expect(loadSettingsWithSecrets()).toMatchObject({ ...KEYS, slackEnabled: true });
   });
 
   it('P3, P4. the migration moves every key, the backups\' too, and leaves no copy holding one', () => {
-    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify({ ...KEYS, telegramEnabled: true, ampApiKey: 'amp-666' }));
+    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify({ ...KEYS, slackEnabled: true, ampApiKey: 'amp-666' }));
     fs.writeFileSync(`${APP_SETTINGS_FILE}.avant-node-22.bak`, JSON.stringify({ openRouterApiKey: 'or-777', deepSeekApiKey: 'ds-old-000' }));
     fs.writeFileSync(`${APP_SETTINGS_FILE}.tmp`, '{"slackBotToken": "xoxb-888", "half');
     fs.writeFileSync(path.join(DATA_DIR, 'notes.txt'), 'mine');
@@ -117,7 +119,7 @@ describe('the secrets, in ~/.tars-private', () => {
     // The live file's key wins over a backup's older one.
     expect(readSecrets().deepSeekApiKey).toBe('ds-secret-111');
     for (const v of [...Object.values(KEYS), 'amp-666', 'or-777', 'ds-old-000', 'xoxb-888']) expect(holding(DATA_DIR, v), v).toEqual([]);
-    expect(settingsJson()).toMatchObject({ telegramEnabled: true });
+    expect(settingsJson()).toMatchObject({ slackEnabled: true });
     expect(fs.readFileSync(path.join(DATA_DIR, 'notes.txt'), 'utf8')).toBe('mine');
   });
 
@@ -160,19 +162,19 @@ describe('the secrets, in ~/.tars-private', () => {
   });
 
   it('P8. the window gets no secret, only whether each is set; its save neither erases nor clears one', () => {
-    const current = { ...KEYS, telegramEnabled: true } as unknown as AppSettings;
-    expect(JSON.stringify(withoutSecrets(current))).not.toMatch(/secret|tg-secret|honcho-333|x-444/);
-    expect(secretStates(current)).toMatchObject({ deepSeekApiKey: true, telegramBotToken: true, slackBotToken: false });
-    const saved = keepSecrets(current, { ...withoutSecrets(current), deepSeekApiKey: '', telegramEnabled: false } as Partial<AppSettings>);
-    expect(saved).toMatchObject({ ...KEYS, telegramEnabled: false });
+    const current = { ...KEYS, slackEnabled: true } as unknown as AppSettings;
+    expect(JSON.stringify(withoutSecrets(current))).not.toMatch(/secret|dc-secret|honcho-333|x-444/);
+    expect(secretStates(current)).toMatchObject({ deepSeekApiKey: true, discordBotToken: true, slackBotToken: false });
+    const saved = keepSecrets(current, { ...withoutSecrets(current), deepSeekApiKey: '', slackEnabled: false } as Partial<AppSettings>);
+    expect(saved).toMatchObject({ ...KEYS, slackEnabled: false });
     // A new key typed in a page still reaches it.
     expect(keepSecrets(current, { openRouterApiKey: 'or-new' } as Partial<AppSettings>).openRouterApiKey).toBe('or-new');
   });
 
   it('P10. the window gets a mask for a set secret, its save of the mask keeps the key, secrets:set clears one', () => {
-    const current = { ...KEYS, telegramEnabled: true, cliApiKeys: { codex: { key: 'cx-1' } } } as unknown as AppSettings;
+    const current = { ...KEYS, slackEnabled: true, cliApiKeys: { codex: { key: 'cx-1' } } } as unknown as AppSettings;
     const shown = settingsForWindow(current) as unknown as Record<string, unknown>;
-    expect(JSON.stringify(shown)).not.toMatch(/ds-secret-111|tg-secret-222|honcho-333|x-444|cx-1/);
+    expect(JSON.stringify(shown)).not.toMatch(/ds-secret-111|dc-secret-222|honcho-333|x-444|cx-1/);
     expect(shown.deepSeekApiKey).toBe(SECRET_MASK);
     expect(shown.slackBotToken).toBe('');
     expect(shown).not.toHaveProperty('cliApiKeys');
@@ -181,7 +183,7 @@ describe('the secrets, in ~/.tars-private', () => {
     const cleared = setSecret(current, 'deepSeekApiKey', null);
     expect(cleared.ok && cleared.settings.deepSeekApiKey).toBe('');
     expect(setSecret(current, 'cliApiKeys', 'x').ok).toBe(false);
-    expect(setSecret(current, 'telegramEnabled', 'x').ok).toBe(false);
+    expect(setSecret(current, 'slackEnabled', 'x').ok).toBe(false);
     const sentry = { ...current, sentryAuthToken: 'sntrys-e2e-1' } as AppSettings;
     const sentryShown = settingsForWindow(sentry) as unknown as Record<string, unknown>;
     expect(sentryShown.sentryAuthToken).toBe(SECRET_MASK);
@@ -194,10 +196,10 @@ describe('the secrets, in ~/.tars-private', () => {
 
 describe('after the Audit\'s gate of 06a46bcb', () => {
   it('P11. moves an old anthropicApiKey out of app-settings.json too', () => {
-    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify({ anthropicApiKey: 'sk-ant-old-111', telegramEnabled: true }));
+    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify({ anthropicApiKey: 'sk-ant-old-111', slackEnabled: true }));
     migrateSecrets();
     expect(settingsJson()).not.toHaveProperty('anthropicApiKey');
-    expect(settingsJson().telegramEnabled).toBe(true);
+    expect(settingsJson().slackEnabled).toBe(true);
     expect(readSecrets().anthropicApiKey).toBe('sk-ant-old-111');
     // Loaded back with the others, it never reaches the window, and a save keeps it where it is.
     expect(JSON.stringify(settingsForWindow(loadSettingsWithSecrets()))).not.toContain('sk-ant-old-111');
@@ -208,7 +210,7 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
 
   it('P12. a private folder it cannot write: nothing thrown, nothing lost, the key a backup alone holds kept', () => {
     if (process.platform === 'win32') return;
-    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify({ telegramEnabled: true }));
+    fs.writeFileSync(APP_SETTINGS_FILE, JSON.stringify({ slackEnabled: true }));
     fs.writeFileSync(`${APP_SETTINGS_FILE}.bak`, JSON.stringify({ deepSeekApiKey: 'ds-only-in-bak' }));
     fs.mkdirSync(PRIVATE_DIR, { recursive: true, mode: 0o700 });
     fs.chmodSync(PRIVATE_DIR, 0o500);
@@ -225,7 +227,7 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
   it('P13. a save over a private file that cannot be read sets it aside, never writes over it', () => {
     fs.mkdirSync(PRIVATE_DIR, { recursive: true, mode: 0o700 });
     fs.writeFileSync(path.join(PRIVATE_DIR, 'settings-secrets.json'), '{ broken', { mode: 0o600 });
-    saveSettingsSplit({ telegramEnabled: true } as unknown as AppSettings);
+    saveSettingsSplit({ slackEnabled: true } as unknown as AppSettings);
     const aside = fs.readdirSync(PRIVATE_DIR).filter(n => n.startsWith('settings-secrets.json.unreadable-'));
     expect(aside.length).toBe(1);
     expect(fs.readFileSync(path.join(PRIVATE_DIR, aside[0]), 'utf8')).toBe('{ broken');

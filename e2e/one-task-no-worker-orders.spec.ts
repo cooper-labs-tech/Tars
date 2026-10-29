@@ -40,9 +40,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    turns (nh, an opencode stand-in with no hook) given a task does not hold its agent: lead's next task to nh goes in
  *    too (H1). dev's kanban claim of a task for qa is refused, with the code of an order (M2). Until 2.0.4 the task in
  *    hand was a run over ACP and the queued one went into a terminal open beside it.
- * f. A task waiting its turn is in Tars's memory only: lead delegates to oc while a run of Tars's holds it, Tars quits
- *    and starts again on the same home, and lead's delegate_task says that Tars restarted and that the task never
- *    started and must be asked again; task_status asked of the new Tars says the same; the task never runs.
+ * f. A task waiting its turn is kept across a restart, its queue paused (#536; until 2.0.5 it was in Tars's memory
+ *    only): lead delegates to oc while a run of Tars's holds it, Tars quits and starts again on the same home, and
+ *    lead's delegate_task says that Tars restarted and that the task is kept, paused, and goes in once the queue is
+ *    resumed, never to ask for it again; task_status asked of the new Tars says it is queued; it does not run while
+ *    the queue is paused, and runs once, once lead resumes oc's queue (the QA's F1 on the 2.0.5 train: the answer
+ *    said "must be asked again", and an asker that followed it ran the task twice).
  * Red on f9966e6e for g (as #449 wrote it, over ACP): the task is typed into oc's terminal beside the run, the next
  * delegate_task waits behind "a turn in its terminal" until its timeout, and dev's claim is answered by the board.
  * Red on 9df7c099 (2.0.4 before #449): the two runs overlap, the worker's calls go through, the message is
@@ -408,19 +411,30 @@ for (const newInterface of [false, true]) {
       servers.push(leadAgain);
       const lostStatus = await leadAgain.call('task_status', { taskId: lostRef });
       const holdAnswer = await hold;
+      // Paused: nothing goes in, the kept task included, until the queue is resumed.
+      await new Promise((r) => setTimeout(r, 3_000));
+      const whilePaused = ocTurns().filter((e) => e.prompt === 'TASK-LOST').length;
+      const resumed = await leadAgain.call('agent_queue', { id: 'oc', action: 'resume' });
+      await expect.poll(() => ocTurns().filter((e) => e.prompt === 'TASK-LOST').length, { timeout: 90_000, message: 'the kept task went in once resumed' }).toBe(1);
+      await new Promise((r) => setTimeout(r, (RUN_S + 4) * 1000));
       keep({
-        restart: { lostRef, lostAnswer, lostStatus, hold: { status: holdAnswer.status }, closedAt, relaunchedAt, answeredAt: lostAt, ocTurns: ocTurns() },
+        restart: { lostRef, lostAnswer, lostStatus, hold: { status: holdAnswer.status }, closedAt, relaunchedAt, answeredAt: lostAt, whilePaused, resumed, ocTurns: ocTurns() },
       });
       expect.soft(lostAnswer.isError, lostAnswer.text).toBe(true);
       expect.soft(lostAnswer.text).toContain('Tars restarted');
       expect.soft(lostAnswer.text).toContain(lostRef);
-      expect.soft(lostAnswer.text).toContain('never started');
-      expect.soft(lostAnswer.text).toContain('asked again');
+      expect.soft(lostAnswer.text).toContain('kept');
+      expect.soft(lostAnswer.text).toContain('paused');
+      expect.soft(lostAnswer.text).toContain('resumed');
+      expect.soft(lostAnswer.text).not.toMatch(/never started|asked again|ask for it again/);
       expect.soft(lostAnswer.text).not.toMatch(/may still be working|could not be reached/);
-      expect.soft(lostStatus.isError, lostStatus.text).toBe(true);
-      expect.soft(lostStatus.text).toContain('never started');
-      expect.soft(lostStatus.text).toContain('asked again');
-      expect.soft(ocTurns().filter((e) => e.prompt === 'TASK-LOST'), 'the lost task ran').toEqual([]);
+      expect.soft(lostStatus.isError, lostStatus.text).toBe(false);
+      expect.soft(lostStatus.text).toContain(lostRef);
+      expect.soft(lostStatus.text).toContain('queued');
+      expect.soft(lostStatus.text).not.toMatch(/never started|asked again/);
+      expect.soft(whilePaused, 'the kept task ran while its queue was paused').toBe(0);
+      expect.soft(resumed.isError, resumed.text).toBe(false);
+      expect.soft(ocTurns().filter((e) => e.prompt === 'TASK-LOST').length, 'the kept task ran once, never twice').toBe(1);
     } finally {
       for (const s of servers) s.kill();
       await app.close().catch(() => undefined);

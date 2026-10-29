@@ -93,9 +93,11 @@ test("a message to an idle agent goes in after its panel answered the terminal's
     });
     const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
 
-    // Its panel on the Dashboard, and the agent started from it.
+    // Its panel on the Dashboard, and the agent started from it: from its ··· menu, where start is since 2.0.5 (#515).
+    const menu = page.getByRole('button', { name: 'Panel actions' }).first();
+    await expect.poll(() => menu.count(), { timeout: 120_000 }).toBeGreaterThan(0);
+    await menu.click();
     const start = page.locator('button[title^="Start "]').first();
-    await expect.poll(() => start.count(), { timeout: 120_000 }).toBeGreaterThan(0);
     await start.click();
     await expect.poll(async () => (await list()).find((a) => a.id === 'worker')?.cliRunning, { timeout: 60_000 }).toBe(true);
     await expect.poll(async () => !!(await list()).find((a) => a.id === 'worker' && (a as { currentSessionId?: string }).currentSessionId), { timeout: 60_000 }).toBe(true);

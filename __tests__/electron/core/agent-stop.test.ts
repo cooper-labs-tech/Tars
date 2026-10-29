@@ -27,6 +27,11 @@ import * as fs from 'node:fs';
  *    not who stopped it.
  * 8. A pid that is not a child of Tars (a process that took the number
  *    since, or a stand-in a test gave as 4242) is SIGKILLed with its tree.
+ * 10. (the Audit's M2 on #523) A start while the stop ends the old terminal
+ *    (the window shows Start once `stopped` is announced) gives the agent a
+ *    new terminal with the same birth tag, and the same stop then ends it.
+ * 11. (the Audit's L2) What the stop ended and kept outside the terminal is
+ *    only logged: not on the record, not in what whoever asked is told.
  *
  * Each "terminal" here is a real process group where node-pty's shell would
  * be: a bash leader that relays SIGHUP to its job, a job that ignores SIGHUP
@@ -38,6 +43,7 @@ vi.mock('electron', () => ({ BrowserWindow: Object.assign(vi.fn(), { getAllWindo
 vi.setConfig({ testTimeout: 20_000 });
 
 import { stopAgent } from '../../../electron/core/agent-stop';
+import { tarsAddress } from '../../../electron/core/born-processes';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { agentStatusEmitter } from '../../../electron/services/agent-events';
 import type { IPty } from 'node-pty';
@@ -55,6 +61,13 @@ const alive = (pid: number) => {
   try { process.kill(pid, 0); } catch { return false; }
   try { return !execFileSync('ps', ['-o', 'stat=', '-p', String(pid)]).toString().trim().startsWith('Z'); } catch { return false; }
 };
+
+/** A node process the agent left running, nohup'd and orphaned, its tag inherited; `label` ends its command. */
+function orphanNode(env: NodeJS.ProcessEnv, label: string): number {
+  const pid = Number(execFileSync('/bin/sh', ['-c', `nohup "$0" -e 'setInterval(() => {}, 1 << 30)' ${label} >/dev/null 2>&1 & echo $!`, process.execPath], { env }).toString().trim());
+  leftovers.push(pid);
+  return pid;
+}
 
 /** A terminal whose job and grandchild ignore the hangup. */
 async function deafTerminal(): Promise<{ pty: IPty; job: number; child: number; exits: Array<(e: { exitCode: number }) => void> }> {
@@ -185,6 +198,45 @@ describe('stopping an agent', () => {
     expect({ stoppedBy: agent.stoppedBy, stoppedAt: agent.stoppedAt, stopReason: agent.stopReason }).toEqual(first);
     expect(save).not.toHaveBeenCalled();
     expect(announce).not.toHaveBeenCalled();
+  });
+
+  posixGroups('10. leaves alone the terminal the agent was started in while the stop ran', async () => {
+    const agent = { ...runningAgent(), id: 'agent-stop-10' };
+    const tag = { ...process.env, CLAUDE_AGENT_ID: agent.id, CLAUDE_MGR_API_URL: tarsAddress() };
+    let fresh: ChildProcess | undefined;
+    // Start from the window the moment `stopped` is announced: a new terminal, its shell and its CLI tagged
+    // (node for both: macOS shows no environment of a platform binary such as /bin/sh).
+    const announce = vi.fn(() => {
+      fresh = spawn(process.execPath, ['-e', `require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' }); setInterval(() => {}, 1 << 30);`],
+        { detached: true, stdio: 'ignore', env: tag });
+      started.push(fresh);
+      ptyProcesses.set('pty-new', { pid: fresh.pid!, kill: () => {}, onExit: () => ({ dispose() {} }) } as unknown as IPty);
+      agent.ptyId = 'pty-new';
+    });
+    // And something it started before, detached, which the stop is for.
+    const old = orphanNode(tag, 'stop-10');
+    await new Promise(r => setTimeout(r, 300));
+
+    await stopAgent(agent, { by: 'you' }, { save: vi.fn(), announce });
+
+    expect(alive(old), 'what it started before the stop outlived it').toBe(false);
+    expect(alive(fresh!.pid!), 'the new terminal was ended by the stop').toBe(true);
+  });
+
+  posixGroups('11. says what it ended and kept outside the terminal, on the record and to whoever asked', async () => {
+    const agent = { ...runningAgent(), id: 'agent-stop-11' };
+    const tag = { ...process.env, CLAUDE_AGENT_ID: agent.id, CLAUDE_MGR_API_URL: tarsAddress() };
+    const server = orphanNode(tag, 'stop-11');
+    await new Promise(r => setTimeout(r, 300));
+    const save = vi.fn();
+
+    await stopAgent(agent, { by: 'Tars-Orchestrator', reason: 'done' }, { save, announce: vi.fn() });
+
+    expect(alive(server)).toBe(false);
+    expect(agent.stopProcesses?.ended).toHaveLength(1);
+    expect(agent.stopProcesses?.ended[0]).toMatch(new RegExp(`^pid ${server}: .* stop-11$`));
+    expect(agent.stopProcesses?.kept).toEqual([]);
+    expect(save).toHaveBeenCalledTimes(2);
   });
 
   it('7. stops an agent that has no terminal, only a delegated run', async () => {

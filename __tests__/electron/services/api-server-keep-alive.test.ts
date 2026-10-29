@@ -82,7 +82,6 @@ function bind(): Promise<string> {
     null,
     { notificationsEnabled: false } as never,
     () => null,
-    () => null,
     null,
     null,
     () => {},

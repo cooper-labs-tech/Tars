@@ -14,6 +14,19 @@ import * as path from 'path';
  * process, so a Tars launched while the previous one was still shutting down
  * came up looking perfectly healthy with every path back into the app dead.
  *
+ * And from the Audit's gate of #541 (H1), written before the code: claude's
+ * MCP calls to Tars's shared servers carry its token to whatever holds the
+ * port, with no proof it is this Tars, and agents started while Tars retried
+ * its port (about 90 s at launch) handed their token to the process holding it.
+ * No agent CLI starts until this Tars listens (apiListening):
+ * G1. it waits while the port is retried, and goes on once Tars binds;
+ * G2. it refuses (false) once Tars gave the port up;
+ * G3. a process that never started an API (the unit tests) is not held.
+ * And from the Audit's re-check of #541 (L3): `stopped` reads as "may start", and the app is `stopped` from its boot
+ * until initApiServer, the window and the IPC already up; only the order of main.ts kept an agent from starting there.
+ * G4. The app does not mark its API starting before it creates the window and registers the IPC: "not started yet"
+ *     must wait as a retry does, and a quit's stop never answer true to a start begun before it.
+ *
  * These assert the whole chain rather than that a retry was scheduled: the
  * server is raced against a real socket holding the port, and recovery is
  * proved by a real request that comes back 200.
@@ -73,7 +86,6 @@ function start(): void {
   api.startApiServer(
     null,
     { notificationsEnabled: true } as never,
-    () => null,
     () => null,
     null,
     null,
@@ -274,4 +286,56 @@ describe('the local API when it has given up', () => {
     expect(health.status).toBe(200);
     vi.restoreAllMocks();
   }, 25000);
+
+  it('G1. no agent starts while Tars retries its port: apiListening waits, then answers true once it binds', async () => {
+    await occupyPort();
+    start();
+    await waitForPhase(['retrying'], 5_000);
+    let answered: boolean | undefined;
+    void api.apiListening().then(v => { answered = v; });
+    await new Promise(r => setTimeout(r, 300));
+    expect(answered, 'answered while another process held the port').toBeUndefined();
+    await releasePort();
+    await waitForPhase(['listening'], 10_000);
+    await vi.waitFor(() => expect(answered).toBe(true));
+    expect(await api.apiListening()).toBe(true);
+  }, 20_000);
+
+  it('G2. once Tars gave its port up, apiListening answers false', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      await occupyPort();
+      start();
+      const pending = api.apiListening();
+      for (let i = 0; i < 10 && api.getApiServerState().phase !== 'failed'; i++) await vi.advanceTimersByTimeAsync(60_000);
+      expect(api.getApiServerState().phase).toBe('failed');
+      expect(await pending).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('G4. the app marks its API starting before its window and its IPC, so no start runs before Tars listens', async () => {
+    const main = fs.readFileSync(path.resolve('electron/main.ts'), 'utf8');
+    const ready = main.indexOf('app.whenReady().then(');
+    const starting = main.indexOf("noteApiPhase('starting')", ready);
+    expect(starting).toBeGreaterThan(ready);
+    expect(starting).toBeLessThan(main.indexOf('createWindow();', ready));
+    expect(starting).toBeLessThan(main.indexOf('registerIpcHandlers(deps)', ready));
+    const { noteApiPhase } = await import('../../../electron/core/api-listening');
+    noteApiPhase('starting');
+    let answered: boolean | undefined;
+    void api.apiListening().then(v => { answered = v; });
+    await new Promise(r => setTimeout(r, 20));
+    expect(answered).toBeUndefined();
+    noteApiPhase('listening');
+    await new Promise(r => setTimeout(r, 0));
+    expect(answered).toBe(true);
+  });
+
+  it('G3. a process that never started an API is not held', async () => {
+    expect(api.getApiServerState().phase).toBe('stopped');
+    expect(await api.apiListening()).toBe(true);
+  });
 });
+

@@ -40,10 +40,18 @@ vi.mock('../../../electron/services/git-review', () => ({ repoSummary: async () 
 vi.mock('../../../electron/services/hermes-config', () => ({
   usableHermesConnection: () => ({ url: 'http://gateway.test', token: 't' }),
 }));
+// The live conversation, a fake answering every turn with nextReply: an
+// automatic check-in never runs the cron job, each of whose runs is a Hermes
+// session of its own (hermes-one-session.test.ts).
 vi.mock('../../../electron/services/hermes-session', () => ({
-  liveTransportAvailable: () => false,
-  createLiveSession: async () => { throw new Error('no live transport in tests'); },
-  askLiveSession: async () => ({ ok: false, error: 'unavailable' }),
+  liveTransportAvailable: () => true,
+  conversationRefused: () => false,
+  openConversation: async () => ({
+    session: { sessionId: 'live-1', storedSessionId: 'stored-1' },
+    closed: false,
+    ask: async (prompt: string) => { promptsSent.push(prompt); return { ok: true, text: nextReply }; },
+    close: () => {},
+  }),
 }));
 
 /** The sentence JeanBrasse watched for a day. It is the example composeTurn used. */

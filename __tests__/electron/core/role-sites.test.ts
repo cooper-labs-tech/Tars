@@ -45,6 +45,8 @@ import * as path from 'node:path';
  *    reading one of the two.
  * 9. The scan reads nothing, or not the MCP servers, or electron/dist besides,
  *    and every check passes on a list that is empty or wrong.
+ * (The sites of the Telegram reply, the Telegram buffer and the Telegram bot's
+ * listings went with Tars's own Telegram bot in 2.0.5.)
  *
  * Comments are read too: one that says what the role is equal to is part of
  * the role's contract, and a reader takes its word for it.
@@ -83,9 +85,10 @@ interface Site {
 const SITES: Site[] = [
   // core/
   { file: 'electron/core/agent-manager.ts', line: 'const conversing = …;', is: 'powers', why: 'no desktop notification for the turns of the user\'s own conversations' },
-  { file: 'electron/core/agent-manager.ts', line: 'const isSuper = …;', is: 'identity', why: 'the reply sent back to Telegram: the bots\' target' },
-  { file: 'electron/core/agent-manager.ts', line: 'if (superAgentTelegramTask && …) {', is: 'identity', why: 'the output kept for the Telegram reply' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
+  { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
+  { file: 'electron/services/api-routes/mcp-routes.ts', line: 'if (ORCHESTRATOR_ONLY_MCP.includes(name) && !…) {', is: 'powers', why: 'the door to a shared server only the orchestrator\'s powers may call (x), a chat\'s runner included (QA-PR541 F1)' },
+  { file: 'electron/services/api-routes/hooks-routes.ts', line: "if (levelOf(agent) === 'bypass' && !…) {", is: 'powers', why: 'an AskUserQuestion a bypass worker is refused, to ask its orchestrator; one with the powers (a chat\'s runner too) asks the user (QA-PR538 F1)' },
   { file: 'electron/core/agent-update.ts', line: 'const demoted = assignRole(agent, role ?? (… ? \'orchestrator\' : \'worker\'), agents.values());', is: 'identity', why: 'agent:update and update_agent keep the role, and one orchestrator per project' },
   { file: 'electron/core/agent-role.ts', line: 'if (… || params.role === \'worker\') return params.role;', is: 'identity', why: 'requestedRole: the role a create or an update names' },
   { file: 'electron/core/agent-role.ts', line: 'agent.orchestratorMode = …;', is: 'identity', why: 'the toggle\'s old field follows the role' },
@@ -102,19 +105,17 @@ const SITES: Site[] = [
   { file: 'electron/core/reply-target.ts', line: 'if (asker && asker.projectPath === caller.projectPath && (toRequester || …)) {', is: 'powers', why: 'R5: an asker with the orchestrator\'s powers takes a reply to "orchestrator", a chat\'s runner included' },
   { file: 'electron/core/one-task.ts', line: "return caller.kind === 'tars' || caller.agent.id === target.id || …;", is: 'powers', why: 'a worker never orders work from another agent, nor stops one: who hands an agent work and stops it' },
   { file: 'electron/core/one-task.ts', line: 'return caller.requestedBy?.agentId === target.id || (… && target.projectPath === caller.projectPath);', is: 'powers', why: 'a worker writing to whoever leads it reports: not a note' },
+  { file: 'electron/services/agent-queues.ts', line: "if (… && agent.kind !== 'chat') return { ok: true, all: true };", is: 'identity', why: "2.0.5, lot 2: the project's persistent orchestrator acts on its agents' queues, as it cancels any chat's task (task-cancel.ts); a chat's runner only on what it sent" },
   { file: 'electron/core/task-cancel.ts', line: 'if (caller && … && caller.kind !== \'chat\' && caller.projectPath === workerProject) {', is: 'identity', why: 'R6: the project\'s persistent orchestrator may cancel any chat\'s task, with a reason: a request and a task waiting its turn alike (the Audit\'s L2 on #449)' },
 
   // handlers/
   { file: 'electron/handlers/chat-handlers.ts', line: 'const orchestrators = (): OrchestratorFacts[] => [...agents.values()].filter((a) => … && a.kind !== \'chat\').map((a) => ({', is: 'identity', why: 'the orchestrators whose conversation is their project\'s chat #1, Main' },
-  { file: 'electron/handlers/ipc-handlers.ts', line: 'isSuperAgent,', is: 'definition', why: 'handed in by main.ts, for the Telegram buffer' },
-  { file: 'electron/handlers/ipc-handlers.ts', line: 'if (getSuperAgentTelegramTask() && …) {', is: 'identity', why: 'the output kept for the Telegram reply', times: 2 },
   { file: 'electron/handlers/ipc-handlers.ts', line: 'const isSuperAgentCheck = …;', is: 'powers', why: 'agent:start: the instructions, the skills prefix, the denied tools' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'if (… || member.role === \'worker\') return member;', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'return { ...member, role, orchestratorMode: … || undefined };', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'orchestratorMode: … || undefined,', is: 'identity', why: 'a template\'s orchestrator member' },
 
   // main.ts
-  { file: 'electron/main.ts', line: '() => getSuperAgent(agents),', is: 'identity', why: 'the Telegram bot\'s orchestrator' },
   { file: 'electron/main.ts', line: 'isSuperAgent,', is: 'definition', why: 'handed to the IPC handlers' },
 
   // services/
@@ -125,7 +126,7 @@ const SITES: Site[] = [
   { file: 'electron/services/agent-guide.ts', line: 'const role: GuideRole = … ? \'orchestrator\' : \'worker\';', is: 'powers', why: 'the identity\'s How Tars works section: what an orchestrator uses, a chat\'s runner included' },
   { file: 'electron/services/agent-guide.ts', line: 'if (…) {', is: 'definition', why: 'identitySection: the role handed in by agentGuideSection, read from hasOrchestratorPowers' },
   { file: 'electron/services/agent-sleep.ts', line: 'orchestrator: …,', is: 'identity', why: 'the sleep rule: the orchestrator never sleeps' },
-  { file: 'electron/services/agent-sleep.ts', line: '.filter((a) => atRest(a) && !… && a.ptyId);', is: 'identity', why: 'who may be put to sleep' },
+  { file: 'electron/services/agent-sleep.ts', line: "if (…) held(agent, 'orchestrator');", is: 'identity', why: 'who may be put to sleep, and why an orchestrator is not (sleepHeld)' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const isSuperAgentApi = …;', is: 'powers', why: 'spawnAgentSession: the instructions, the denied tools' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: '|| (… && agent.projectPath === caller.projectPath))) return undefined;', is: 'powers', why: 'a worker writing to it reports, and asks nothing' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (!caller || … || isReportTo(caller, agent)) return undefined;', is: 'powers', why: 'what a worker sends another worker is a note, typed once its turn ends' },
@@ -134,12 +135,14 @@ const SITES: Site[] = [
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (…) {', is: 'identity', why: 'POST /api/agents never makes an orchestrator' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (driver.kind === \'agent\' && !…) {', is: 'powers', why: 'update_agent: who changes an agent\'s settings, as who hands it work' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const withPowers = …;', is: 'powers', why: 'update_agent: an agent with the orchestrator\'s powers is changed in the window only' },
+  { file: 'electron/services/api-routes/agent-routes.ts', line: 'return !!caller && … && caller.projectPath === agent.projectPath;', is: 'powers', why: "an agent's answers: its project's orchestrator reads them (#550)" },
   { file: 'electron/services/api-routes/telegram-routes.ts', line: 'if (!caller || !…) {', is: 'powers', why: 'who writes to the user through the relay' },
   { file: 'electron/services/bot-core.ts', line: 'group = [...group].sort((a, b) => (… ? 1 : 0) - (… ? 1 : 0));', is: 'team-list', why: 'the orchestrator first in each group of the status' },
   { file: 'electron/services/bot-core.ts', line: 'if (…) continue;', is: 'team-list', why: 'the orchestrators left out of each project\'s agents' },
   { file: 'electron/services/bot-core.ts', line: 'systemPromptFile: … && fs.existsSync(getSuperAgentInstructionsPath())', is: 'powers', why: 'a start from a bot: the instructions' },
   { file: 'electron/services/bot-core.ts', line: 'isSuperAgent: …,', is: 'powers', why: 'a start from a bot: the skills prefix' },
   { file: 'electron/services/bot-core.ts', line: 'orchestratorMode: …,', is: 'powers', why: 'a start from a bot: the denied tools' },
+  { file: 'electron/services/bot-core.ts', line: 'const mcpConfigPath = mcpConfigPathFor(provider, …);', is: 'powers', why: 'a start from a bot: the MCP servers of its role' },
   { file: 'electron/services/bot-core.ts', line: 'typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, task), skills: [...new Set(agent.skills || [])], isSuperAgent: … });', is: 'powers', why: 'a start from a bot on amp: the skills prefix of the task typed in' },
   { file: 'electron/core/typed-task.ts', line: "params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>,", is: 'definition', why: 'handed on to the provider, for the skills prefix of a typed task' },
   { file: 'electron/providers/amp-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into amp' },
@@ -151,8 +154,6 @@ const SITES: Site[] = [
   { file: 'electron/services/orchestrator-routing.ts', line: 'const orchestrators = [...agents.values()].filter(…);', is: 'identity', why: 'a message that names no project goes to the only orchestrator' },
   { file: 'electron/services/slack-bot.ts', line: 'const emoji = … ? \':crown:\' : face(agent);', is: 'identity', why: 'the crown on the answer to a start' },
   { file: 'electron/services/task-watch.ts', line: '|| (… && receiver.projectPath === sender.projectPath);', is: 'powers', why: 'the task ledger: a message to it is a report' },
-  { file: 'electron/services/telegram-bot.ts', line: 'const faceOrCrown = (a: AgentStatus) => … ?', is: 'team-list', why: 'the crown' },
-  { file: 'electron/services/telegram-bot.ts', line: 'const isSuper = …;', is: 'team-list', why: 'the status line: the crown, and no project' },
   { file: 'electron/services/user-questions.ts', line: 'if (!…) {', is: 'powers', why: 'who asks the user' },
 
   // types/
@@ -165,7 +166,7 @@ const SITES: Site[] = [
   { file: 'electron/utils/index.ts', line: 'return agent.role === \'orchestrator\';', is: 'definition', why: 'the project\'s orchestrator: the role and nothing else' },
   { file: 'electron/utils/index.ts', line: 'export function getSuperAgent(agents: Map<string, AgentStatus>, projectPath?: string): AgentStatus | undefined {', is: 'definition', why: 'an orchestrator, first found' },
   { file: 'electron/utils/index.ts', line: 'const orchestrators = Array.from(agents.values()).filter(a => isSuperAgent(a) && a.kind !== \'chat\');', is: 'definition', why: 'an orchestrator, never a chat\'s runner' },
-  { file: 'electron/utils/index.ts', line: 'const isSuper = …;', is: 'team-list', why: 'the crown and the project line of Telegram\'s /agents and Slack\'s lists', times: 2 },
+  { file: 'electron/utils/index.ts', line: 'const isSuper = …;', is: 'team-list', why: 'the crown and the project line of Slack\'s lists' },
 ];
 
 // ── The scan ───────────────────────────────────────────────────────────────

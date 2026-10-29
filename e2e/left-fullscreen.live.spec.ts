@@ -218,8 +218,7 @@ test('a panel whose claude left fullscreen', async () => {
     const panels = () => page.evaluate(names => {
       const out = {};
       for (const b of document.querySelectorAll('button')) {
-        const t = b.getAttribute('title') || '';
-        if (t !== 'Stop this agent' && !/^Start .* in this terminal$/.test(t)) continue;
+        if (b.getAttribute('aria-label') !== 'Panel actions') continue;
         let root = b.parentElement;
         while (root && root.querySelectorAll('.xterm').length === 0) root = root.parentElement;
         if (!root || root.querySelectorAll('.xterm').length !== 1) continue;
@@ -275,10 +274,15 @@ test('a panel whose claude left fullscreen', async () => {
     await sleep(1500);
     await shot('0-dashboard-idle');
 
-    // Start each from its panel's own start button.
+    // Start and stop from the panel's menu, where they live since 2.0.5.
+    const startStop = async (name) => {
+      await page.locator(`[data-sb="${name}"]`).click();
+      await page.locator(`[data-panel="${name}"]`).getByRole('button', { name: /^(start|stop)\b/ }).click();
+    };
+    // Start each from its panel's menu.
     for (const name of Object.values(NAMES)) {
       await panels();
-      await page.locator(`[data-sb="${name}"]`).click();
+      await startStop(name);
       await sleep(1200);
     }
     await waitFor(async () => { const a = await byId(); return IDS.every(id => a[id].session); }, 120_000, 'three sessions registered');
@@ -372,12 +376,12 @@ test('a panel whose claude left fullscreen', async () => {
     await sleep(800);
     const forced = await pty('full');
     await panels();
-    await page.locator('[data-sb="Full agent"]').click();
+    await startStop('Full agent');
     await waitFor(async () => !(await byId()).full.ptyId, 20_000, 'Full stopped');
     await sleep(1000);
     const startAt = Date.now();
     await panels();
-    await page.locator('[data-sb="Full agent"]').click();
+    await startStop('Full agent');
     await waitFor(async () => { const a = (await byId()).full; return a.ptyId && a.ptyId !== fullBefore.ptyId; }, 30_000, 'Full has a new terminal');
     await sleep(5000);
     const fullAfter = await pty('full');

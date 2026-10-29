@@ -73,8 +73,8 @@ vi.mock('../../../electron/services/hermes-client', () => ({
 }));
 vi.mock('../../../electron/services/hermes-session', () => ({
   liveTransportAvailable: () => false,
-  createLiveSession: async () => null,
-  askLiveSession: async () => ({ success: false }),
+  conversationRefused: () => false,
+  openConversation: async () => { throw new Error('no live transport in tests'); },
 }));
 
 type Overseer = typeof import('../../../electron/services/overseer');

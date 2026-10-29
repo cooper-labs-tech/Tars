@@ -59,6 +59,19 @@ import type { IPty } from 'node-pty';
  * 12. The hangup waits for the event loop: a quit that runs something
  *    synchronous next (the delegated runs' own grace) starts the terminals'
  *    grace only after it, and the two add up.
+ *
+ * And from Nexarion434's ubuntu CI (case 8 red there since 17/10, green on
+ * macOS; reproduced in a node:22 container, 2026-10-23):
+ * 13. A CLI that starts something in a group of its own on the hangup and
+ *    exits at once leaves it to init: (pid, ppid, pgid) no longer tie it to the
+ *    terminal, and the quit, with every exit in and no known group left,
+ *    returned with it running. Case 8's job does just that under bash 5 (it
+ *    takes two hangups, the quit's and its shell's, each ending one of its
+ *    `wait`s), and does not under macOS's bash 3.2, which is why case 8 was
+ *    red on Linux only. It keeps the terminal's session, which Linux's ps
+ *    gives; macOS's ps gives none, so this case runs on Linux only, and on
+ *    macOS such a process is caught only when a read sees it before its
+ *    parent ends.
  */
 
 const started: ChildProcess[] = [];
@@ -79,7 +92,7 @@ const alive = (pid: number) => {
   try { return !execFileSync('ps', ['-o', 'stat=', '-p', String(pid)]).toString().trim().startsWith('Z'); } catch { return false; }
 };
 
-type Job = 'polite' | 'stubborn' | 'slow' | 'late';
+type Job = 'polite' | 'stubborn' | 'slow' | 'late' | 'orphaning';
 
 /**
  * A terminal: a shell-like leader and its job, the job in a group of its own
@@ -89,6 +102,7 @@ type Job = 'polite' | 'stubborn' | 'slow' | 'late';
  * - stubborn: it and its child ignore SIGHUP and SIGTERM;
  * - slow: takes 0.5 s to end on the hangup, then writes `<T>.done`;
  * - late: stubborn, and on the hangup starts another child in a group of its own.
+ * - orphaning: on the hangup starts another child in a group of its own, and exits at once.
  * `deafShell`: the leader ignores SIGHUP and SIGTERM, and relays nothing.
  * `exitDelayMs`: how long after the leader's end its exit is delivered, as
  * node-pty's comes about 200 ms after the process.
@@ -101,6 +115,7 @@ function terminal(kind: Job, opts: { disowned?: boolean; deafShell?: boolean; ex
     stubborn: 'trap "" HUP TERM;',
     slow: 'trap "sleep 0.5; echo done > \\"$0.done\\"; exit 0" HUP;',
     late: 'set -m; trap "sleep 300 & echo \\$! > \\"$0.late\\"" HUP; trap "" TERM;',
+    orphaning: 'set -m; trap "sleep 300 & echo \\$! > \\"$0.late\\"; exit 0" HUP; trap "" TERM;',
   };
   // deafShell: a shell that ignores the hangup itself, as one running a
   // foreground job that traps it does; node-pty's waitpid would hold the quit.
@@ -258,6 +273,21 @@ posixGroups('the quit, after the Audit\'s gate', () => {
     expect(alive(t.job())).toBe(false);
   });
 
+  // Linux only: macOS's ps gives no session, the one tie such a process keeps (13, in the header).
+  it.skipIf(process.platform !== 'linux')('13. ends what the CLI started on the hangup in a group of its own when the CLI exited right after', async () => {
+    for (let round = 0; round < 5; round++) {
+      const t = terminal('orphaning');
+      ptyProcesses.set(`pty-orphaning-${round}`, t.pty);
+      await settle(t);
+
+      await endAllTerminals(800);
+
+      expect(t.late(), 'the late child was never started').toBeGreaterThan(0);
+      expect(alive(t.job()), 'the CLI did not exit on the hangup').toBe(false);
+      expect(alive(t.late()), `round ${round}: what the CLI left to init outlived the quit`).toBe(false);
+    }
+  });
+
   it('9. waits for an exit node-pty delivers 200 ms after the process ended', async () => {
     const t = terminal('polite', { exitDelayMs: 200 });
     ptyProcesses.set('pty-delayed', t.pty);
@@ -334,7 +364,10 @@ posixGroups('the quit, after the Audit\'s gate', () => {
 
 describe('main.ts, at quit', () => {
   const main = fs.readFileSync(path.join(__dirname, '../../../electron/main.ts'), 'utf-8');
-  const quit = main.slice(main.indexOf("app.on('before-quit'"), main.indexOf("app.on('before-quit'") + 3000);
+  // The whole handler, to its closing line: a fixed 3000 characters stopped short of its app.quit() once 2.0.5's
+  // shutdown steps (shared servers, born watch, heavy slot, status watch, permission asks) were added to it.
+  const start = main.indexOf("app.on('before-quit'");
+  const quit = main.slice(start, main.indexOf('\n});\n', start) + 4);
 
   it('4. holds the quit until the terminals have ended, then quits again', () => {
     expect(quit).toMatch(/preventDefault\(\)/);

@@ -173,10 +173,12 @@ export function requestDropped(worker: RequestWorker, ref: string): string | und
  * it is stopped, deleted, or found after Tars stopped. The linked one is told
  * by the end of its own work (agent-watch).
  */
-export function takeAllRequests(worker: RequestWorker): TaskRequest[] {
+export function takeAllRequests(worker: RequestWorker, keep?: ReadonlySet<string>): TaskRequest[] {
   const linked = worker.requestedBy?.taskRef;
-  const out = (worker.taskQueue ?? []).filter(r => r.ref !== linked);
-  worker.taskQueue = (worker.taskQueue ?? []).filter(r => r.ref === linked);
+  // What the agent's queue keeps across a stop or a restart (2.0.5, services/agent-queues.ts) is not ended: it goes in later.
+  const stays = (r: TaskRequest) => r.ref === linked || !!keep?.has(r.ref);
+  const out = (worker.taskQueue ?? []).filter(r => !stays(r));
+  worker.taskQueue = (worker.taskQueue ?? []).filter(stays);
   return out;
 }
 
@@ -186,8 +188,8 @@ export function takeAllRequests(worker: RequestWorker): TaskRequest[] {
  * that worker (an abrupt stop's `working`). After a clean quit nothing is
  * resumed, and a link to a terminal that is gone was never spent.
  */
-export function endRequestsAtLaunch(workers: Iterable<RequestWorker>, resumed: ReadonlySet<string>): void {
-  for (const worker of workers) endWorkerRequests(worker, 'restart', { withLinked: !resumed.has(worker.id) });
+export function endRequestsAtLaunch(workers: Iterable<RequestWorker>, resumed: ReadonlySet<string>, keep?: ReadonlySet<string>): void {
+  for (const worker of workers) endWorkerRequests(worker, 'restart', { withLinked: !resumed.has(worker.id), keep });
 }
 
 /**
@@ -273,12 +275,13 @@ export function setRequestsEndedHook(hook: RequestsEndedHook | undefined): void 
  * and its requesters are told. With `withLinked`, the one in hand too (a
  * deleted worker has no end of its own to tell it).
  */
-export function endWorkerRequests(worker: RequestWorker, why: RequestsEndedWhy, opts: { withLinked?: boolean } = {}): TaskRequest[] {
-  const ended = takeAllRequests(worker);
+export function endWorkerRequests(worker: RequestWorker, why: RequestsEndedWhy, opts: { withLinked?: boolean; keep?: ReadonlySet<string> } = {}): TaskRequest[] {
+  const ended = takeAllRequests(worker, opts.keep);
   if (ended.length) requestsEnded?.(worker, ended, why);
   if (opts.withLinked && worker.requestedBy?.taskRef) {
-    const linked = worker.taskQueue?.find(r => r.ref === worker.requestedBy!.taskRef);
-    worker.taskQueue = [];
+    const linkedRef = worker.requestedBy.taskRef;
+    const linked = worker.taskQueue?.find(r => r.ref === linkedRef);
+    worker.taskQueue = (worker.taskQueue ?? []).filter(r => r.ref !== linkedRef && !!opts.keep?.has(r.ref));
     worker.requestedBy = undefined;
     // The work in hand was cut, not left undone: told as such. A stop clears
     // the worker's terminal first, so its own end never reaches its asker.

@@ -80,6 +80,28 @@ import { EventEmitter } from 'node:events';
  *  G3. (the Audit's L2 on #478) A gemini whose hooks never post (a version
  *      older than them, or an install that failed) is followed to a turn that
  *      never begins, for ever, and every task behind it waits for ever too.
+ *
+ * Added with the re-check of #536 at 8dab4d39 (2.0.5, lot 2), before the code:
+ *  K1. A run-task kept across a restart of Tars (services/agent-queues.ts) goes
+ *      back in under Tars's line, or its requester's as it is named today, not
+ *      under the sender line it was queued with.
+ *  K2. A kept item whose sender reads "the user" (a line only
+ *      services/user-questions.ts may produce) is typed after that line.
+ *  K3. (the Audit's Low at d50fd606) The same, for a kept dispatch (a message
+ *      queued behind a busy agent): typed after "the user", or under another
+ *      line than the one it was queued with.
+ *
+ * Added with the Audit's gate of #550 (M1, L1) and the orchestrator's decision on
+ * who reads an agent's answers, before the code:
+ *  R1. A caller who is neither the task's asker, the agent itself, its
+ *      project's orchestrator (or a chat's runner, which has its powers), nor
+ *      Tars reads the agent's last answer (lastAnswer), or the hooks' copy of
+ *      it (lastCleanOutput), on GET /api/agents/:id or its /wait; or one of
+ *      those readers is refused it; or the refused caller is not told why.
+ *  R2. The project's orchestrator that did not ask a task cannot read it by
+ *      its id (GET /api/tasks/:id).
+ *  R3. (the Audit's L3 on the train) Another project's orchestrator reads it
+ *      by its id: the orchestrator's powers are its own project's only.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-run-task-terminal-'));
@@ -129,7 +151,7 @@ vi.mock('../../../../electron/services/memory-hub', () => ({
   wrapDigestForPrompt: (d: string) => d,
 }));
 
-import { registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
+import { registerAgentRoutes, replayQueuedItem } from '../../../../electron/services/api-routes/agent-routes';
 import { agents } from '../../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../../electron/core/pty-manager';
 import { noteTurn, liveTaskLedger } from '../../../../electron/services/task-ledger';
@@ -183,7 +205,7 @@ afterEach(async () => {
 });
 
 type Answer = { data: Record<string, unknown>; status: number };
-function call(method: 'GET' | 'POST', url: string, callerAgentId: string, body?: Record<string, unknown>) {
+function call(method: 'GET' | 'POST', url: string, callerAgentId: string | undefined, body?: Record<string, unknown>, opts: { internal?: boolean } = {}) {
   const u = new URL(`http://localhost${url}`);
   const route = routes.routes.find(r => r.method === method && typeof r.pattern !== 'string' && r.pattern.test(u.pathname))!;
   const match = (route.pattern as RegExp).exec(u.pathname)!;
@@ -192,7 +214,7 @@ function call(method: 'GET' | 'POST', url: string, callerAgentId: string, body?:
   const answer = new Promise<Answer>((resolve) => { settle = resolve; });
   const req = {
     method, pathname: u.pathname, url: u, body: body ?? {},
-    raw: { headers: {}, on: () => {} }, res: {}, params: { id: match[1] }, callerAgentId,
+    raw: { headers: {}, on: () => {} }, res: {}, params: { id: match[1] }, callerAgentId, ...(opts.internal ? { internal: true } : {}),
   } as unknown as RouteRequest;
   void route.handler(req, (data, status = 200) => {
     if (got) return;
@@ -632,3 +654,112 @@ describe('a delegated task and the background work of a turn (the Audit\'s gate 
   });
 });
 
+
+describe('a run-task kept across a restart of Tars (the re-check of #536 at 8dab4d39)', () => {
+  const kept = (ref: string, sender: unknown) => ({
+    ref, agentId: 'dev', title: 'kept', queuedAt: Date.now(), how: 'task' as const,
+    replay: { kind: 'run-task', task: `kept task ${ref}`, from: 'Slack', sender },
+  });
+  async function replayed(item: ReturnType<typeof kept>) {
+    const [restored] = oneTaskQueue.restore({ items: [item as never], paused: {} });
+    replayQueuedItem(restored);
+    await until(() => typed.some((t) => t.data === item.replay.task));
+    return typed.find((t) => t.data === item.replay.task)!;
+  }
+
+  it('(K1) goes back in under the sender line it was queued with', async () => {
+    const dev = liveAgent('dev');
+    const t = await replayed(kept('t-0000000e', { kind: 'channel', channel: 'Slack' }));
+    // A channel's line, as Tars's, carries no task id (only an agent's does).
+    expect(t).toMatchObject({ ptyId: 'pty-dev', sender: { kind: 'channel', channel: 'Slack' } });
+    turnBegins(dev, `Message from Slack: ${t.data}`);
+    rests(dev);
+  });
+
+  it('(K2) never after "the user": a kept sender Tars does not write gives the default line', async () => {
+    const dev = liveAgent('dev');
+    const t = await replayed(kept('t-0000000f', { kind: 'user', via: 'Telegram' }));
+    expect(t.sender).toEqual({ kind: 'tars' });
+    turnBegins(dev, `Message from Tars: ${t.data}`);
+    rests(dev);
+  });
+
+  it('(K3) a kept dispatch: its own sender line, and never "the user"', async () => {
+    const dev = liveAgent('dev');
+    const message = (ref: string, sender: unknown) => ({
+      ref, agentId: 'dev', title: 'kept', queuedAt: Date.now(), how: 'message' as const,
+      replay: { kind: 'dispatch', opts: { message: `kept message ${ref}`, from: 'Slack', sender } },
+    });
+    const sent = async (item: ReturnType<typeof message>) => {
+      const [restored] = oneTaskQueue.restore({ items: [item as never], paused: {} });
+      replayQueuedItem(restored);
+      await until(() => typed.some((t) => t.data.includes(item.replay.opts.message)));
+      return typed.find((t) => t.data.includes(item.replay.opts.message))!;
+    };
+    const slack = await sent(message('t-0000001a', { kind: 'channel', channel: 'Slack' }));
+    expect(slack.sender).toEqual({ kind: 'channel', channel: 'Slack' });
+    turnBegins(dev, `Message from Slack: ${slack.data}`);
+    rests(dev);
+    await until(() => !oneTaskQueue.busyRun('dev'));
+    const user = await sent(message('t-0000001b', { kind: 'user', via: 'Telegram' }));
+    expect(user.sender).toEqual({ kind: 'tars' });
+    turnBegins(dev, `Message from Tars: ${user.data}`);
+    rests(dev);
+  });
+});
+
+describe('who reads an agent\'s answers (the Audit\'s M1 and L1 on #550, the orchestrator\'s decision)', () => {
+  it('(R1, R2) its asker, the agent, its project\'s orchestrator powers and Tars read them; another of the project, or the shared token, neither', async () => {
+    orchestrator();
+    const dev = liveAgent('dev');
+    agents.set('oc', { id: 'oc', name: 'Other Worker', status: 'idle', role: 'worker', provider: 'claude', projectPath: dev.projectPath, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus);
+    agents.set('runner', { id: 'runner', name: 'Lead · Release', status: 'idle', role: 'worker', kind: 'chat', provider: 'claude', projectPath: dev.projectPath, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus);
+    const { data } = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'write the report', answer: 'started' }).answer;
+    await until(() => typed.length === 1);
+    turnBegins(dev, promptOf(typed[0]));
+    await new Promise((r) => setTimeout(r, 30));
+    reply(dev, 'THE REPORT, whole.');
+    dev.lastCleanOutput = 'THE REPORT, whole.';
+    rests(dev);
+    const ended = (await call('GET', `/api/tasks/${String(data.taskId)}?wait=10`, 'lead').answer).data.task as Record<string, unknown>;
+    expect(ended).toMatchObject({ outcome: 'completed', result: 'THE REPORT, whole.' });
+
+    const view = async (who: string | undefined, internal = false) => (await call('GET', '/api/agents/dev', who, undefined, { internal }).answer).data.agent as Record<string, unknown>;
+    for (const [who, internal] of [['lead', false], ['dev', false], ['runner', false], [undefined, true]] as const) {
+      const agent = await view(who, internal);
+      expect((agent.lastAnswer as { result?: string } | undefined)?.result, String(who ?? 'tars')).toBe('THE REPORT, whole.');
+      expect(agent.lastCleanOutput, String(who ?? 'tars')).toBe('THE REPORT, whole.');
+    }
+    for (const who of ['oc', undefined]) {
+      const agent = await view(who);
+      expect(agent.lastAnswer, String(who ?? 'shared token')).toBeUndefined();
+      expect(agent.lastCleanOutput, String(who ?? 'shared token')).toBeUndefined();
+      expect(agent.answersWithheld, String(who ?? 'shared token')).toMatchObject({ reason: expect.stringContaining('asker') });
+      const waited = (await call('GET', '/api/agents/dev/wait?timeout=1', who).answer).data;
+      expect(waited.lastCleanOutput, `wait, ${String(who ?? 'shared token')}`).toBeUndefined();
+    }
+    expect((await call('GET', '/api/agents/dev/wait?timeout=1', 'runner').answer).data.lastCleanOutput).toBe('THE REPORT, whole.');
+
+    // By its id: the project's orchestrator powers read it too, though they did not ask it; another of the project does not.
+    expect(((await call('GET', `/api/tasks/${String(data.taskId)}`, 'runner').answer).data.task as Record<string, unknown> | undefined)?.result).toBe('THE REPORT, whole.');
+    expect((await call('GET', `/api/tasks/${String(data.taskId)}`, 'oc').answer).status).toBe(404);
+  });
+
+  it('(R3) another project\'s orchestrator does not read a task by its id', async () => {
+    orchestrator();
+    const dev = liveAgent('dev');
+    const elsewhere = path.join(tmp, 'elsewhere');
+    fs.mkdirSync(elsewhere, { recursive: true });
+    agents.set('far', { id: 'far', name: 'Far Lead', status: 'idle', role: 'orchestrator', provider: 'claude', projectPath: elsewhere, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus);
+    const { data } = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'write the report', answer: 'started' }).answer;
+    await until(() => typed.length === 1);
+    turnBegins(dev, promptOf(typed[0]));
+    await new Promise((r) => setTimeout(r, 30));
+    reply(dev, 'THE REPORT, whole.');
+    rests(dev);
+    expect(((await call('GET', `/api/tasks/${String(data.taskId)}?wait=10`, 'lead').answer).data.task as Record<string, unknown>).result).toBe('THE REPORT, whole.');
+    const far = await call('GET', `/api/tasks/${String(data.taskId)}`, 'far').answer;
+    expect(far.status).toBe(404);
+    expect(JSON.stringify(far.data)).not.toContain('THE REPORT');
+  });
+});

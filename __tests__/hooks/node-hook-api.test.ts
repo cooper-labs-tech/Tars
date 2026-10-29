@@ -103,7 +103,7 @@ beforeAll(async () => {
   ({ agents } = await import('../../electron/core/agent-manager'));
   ({ mintAgentToken, tarsInstanceId } = await import('../../electron/core/agent-tokens'));
   api.startApiServer(
-    null, { notificationsEnabled: false } as never, () => null, () => null, null, null,
+    null, { notificationsEnabled: false } as never, () => null, null, null,
     () => {}, () => {}, async () => 'pty', () => ({ notificationsEnabled: false } as never),
   );
   await new Promise<void>((resolve, reject) => {

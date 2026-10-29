@@ -12,6 +12,7 @@ import type {
 } from './cli-provider';
 import { safeEffort } from './cli-provider';
 import { dataPath } from '../constants';
+import { writeSharedJsonSync } from '../utils/shared-file';
 
 /**
  * Amp's own agent modes, from `amp --help`:
@@ -100,7 +101,7 @@ export class AmpProvider implements CLIProvider {
 
     try {
       settings['amp.updates.mode'] = 'disabled';
-      fs.writeFileSync(this.managedSettingsFile, JSON.stringify(settings, null, 2));
+      writeSharedJsonSync(this.managedSettingsFile, settings);
       return this.managedSettingsFile;
     } catch (err) {
       console.warn('[amp] could not write the managed settings file:', err);
@@ -227,7 +228,7 @@ export class AmpProvider implements CLIProvider {
     mutate(servers);
     settings['amp.mcpServers'] = servers;
 
-    fs.writeFileSync(this.userSettingsFile, JSON.stringify(settings, null, 2));
+    writeSharedJsonSync(this.userSettingsFile, settings);
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {

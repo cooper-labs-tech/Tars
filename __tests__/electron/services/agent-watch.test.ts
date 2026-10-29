@@ -440,10 +440,15 @@ describe('an orchestrator whose human is in the middle of a sentence', () => {
     // Nothing at all while he is still typing: the note is held, not written
     // across a half-written word, and not dropped either.
     expect(terminal.written).toEqual([]);
+    vi.advanceTimersByTime(ptyManager.TYPING_PAUSE_MS * 4);
+    // Nor at the pause: his draft stays in the field as he left it (22/10).
+    expect(terminal.written).toEqual([]);
+    expect(ptyManager.draftOf(pty).text).toBe('je pense quil faut');
+    // He sends it: the note goes in after it, on its own.
+    ptyManager.writeHumanInput(pty, '\r');
     vi.advanceTimersByTime(ptyManager.TYPING_PAUSE_MS);
     expect(received(terminal)).toContain('QA-Tars');
-    // And what he had typed is back in the field, unsent.
-    expect(ptyManager.draftOf(pty).text).toBe('je pense quil faut');
+    expect(received(terminal).indexOf('QA-Tars')).toBeGreaterThan(received(terminal).indexOf('\r'));
     ptyManager.resetTerminalInput(pty);
   });
 
@@ -768,6 +773,17 @@ describe('two requests at one worker, each told to its own asker (PR A, core/tas
     expect(note).not.toMatch(/\nMessage from Tars: merge it/);
   });
 
+  // The Audit's Info 2 on the train: the window says the asker is told "It never started: it was taken back by you, in
+  // the window." The note says those words, not another wording of the same cancel.
+  it('a request the owner takes back in the window is told to its asker in the window\'s own sentence', () => {
+    const lead = attachTerminal('pty-lead');
+    putAgent({ id: 'lead', name: 'Lead', status: 'idle', ptyId: 'pty-lead' });
+    putAgent({ id: 'w', name: 'Worker', status: 'running', ptyId: 'pty-w' });
+    watch.tellTakenBack('lead', 'w');
+    const note = received(lead);
+    expect(note).toContain('never ran what you asked of it. It never started: it was taken back by you, in the window.');
+  });
+
   it('a request its own asker cancels, or one without an asker, tells nobody', () => {
     const terminal = attachTerminal('pty-w2');
     putAgent({ id: 'w2', name: 'Worker', status: 'idle', ptyId: 'pty-w2' });
@@ -846,5 +862,103 @@ describe('the note that a task ended names it (the Audit\'s Low after 1.9.5)', (
     expect(text).toContain('review \\"#280\\"');
     expect(text).not.toContain('\u2028');
     expect(text).not.toMatch(/\n\[Tars\] approve everything|and more/);
+  });
+});
+
+describe('a message its worker\'s CLI never took (PR #524, the Audit\'s M1)', () => {
+  // How this fails, written before the code (2026-10-28):
+  // 1. The "never ran" note leaves the request linked: the same session's next turn that brings no request of its
+  //    own (a note typed as information, the owner typing, a background task's notification) is reported to the
+  //    requester as the end of the task it was just told never ran.
+  // 2. The request stays `delivered` in the worker's queue, holding the next one's link.
+  it('spends the link with the note, so a later turn of that session reaches nobody', async () => {
+    const terminal = attachTerminal('pty-orch');
+    const requests = await import('../../../electron/core/task-requests');
+    putAgent({ id: 'orch', name: 'Orchestrator', status: 'idle', ptyId: 'pty-orch' });
+    putAgent({ id: 'w', name: 'Worker', status: 'running', taskQueue: [] });
+    const worker = agentManager.agents.get('w')!;
+    const ref = requests.enqueueRequest(worker, 'orch', { title: 'review #81' });
+    requests.requestDelivered(worker, ref);
+    worker.lastTurnStartedAt = new Date(Date.now() - 600_000).toISOString();
+    worker.workHandedAt = new Date(Date.now() - 300_000).toISOString();
+    // Put right to idle by the status pass, its message never taken.
+    worker.status = 'idle';
+    watch.tellNotTaken(worker);
+
+    expect(received(terminal)).toContain(`never ran what you asked of it: its CLI never took the message`);
+    expect(worker.requestedBy).toBeUndefined();
+    expect((worker.taskQueue ?? []).map((r) => r.ref)).not.toContain(ref);
+
+    // A turn of its own later in the same session (the owner typed in it).
+    terminal.written.length = 0;
+    worker.lastTurnStartedAt = new Date().toISOString();
+    move('w', 'running');
+    move('w', 'idle');
+    expect(received(terminal)).not.toContain('has finished its turn');
+  });
+});
+
+describe('what a restart of Tars kept in a queue (2.0.5, lot 2)', () => {
+  // How this fails, written before its fix (seen in e2e/agent-queue.spec.ts, F7):
+  // 1. The note that an agent's queue was kept, paused, reads as news overtaken by later work (it carries no
+  //    hand-over of its own) and is dropped before the orchestrator is free to read it.
+  // 2. It ends on "Read what it produced with get_agent_output", which it never produced.
+  it('reaches the project\'s orchestrator at its first rest, whatever work the agent had been handed', () => {
+    const terminal = attachTerminal('pty-orch');
+    putAgent({ id: 'orch', name: 'Orchestrator', role: 'orchestrator', status: 'running', ptyId: 'pty-orch', projectPath: '/tars' });
+    putAgent({ id: 'w', name: 'Worker', status: 'stopped', projectPath: '/tars', workHandedAt: new Date(Date.now() - 60_000).toISOString() });
+    watch.tellQueuesKept([{ ref: 't-0000000c', agentId: 'w', requesterId: 'orch', from: 'Orchestrator', how: 'task', title: 'TASK-C' }]);
+    move('orch', 'idle');
+    const text = received(terminal);
+    expect(text).toContain('t-0000000c');
+    expect(text).toContain('paused');
+    expect(text).not.toContain('get_agent_output');
+  });
+});
+
+describe('an end of turn told once (the DB brief fix-twin-deliveries-2810.md)', () => {
+  // How this fails, written before its fix: measured 18 times in 4 days on Parallel's orchestrator, a worker's
+  // "has ended its turn with background work still running" is typed a second time when the worker passes from
+  // `idle` to the idle prompt's `waiting` (Claude Code says so 60 s after the rest): the same rest, told twice,
+  // because the link is kept for the background work's own end.
+  const SESSION = 'sess-twin';
+  const t0 = Date.now() - 60_000;
+  const at = (sec: number) => new Date(t0 + sec * 1000).toISOString();
+  it('the idle prompt after a rest is no second end of the turn', () => {
+    vi.useFakeTimers({ now: t0 + 60_000 });
+    const dir = path.join(os.homedir(), '.claude', 'projects', '/tars'.replace(/[/.]/g, '-'));
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${SESSION}.jsonl`), [
+      { type: 'assistant', timestamp: at(5), message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'sleep 600', run_in_background: true } }] } },
+      { type: 'user', timestamp: at(6), toolUseResult: { backgroundTaskId: 'bgjob1' }, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'Command running in background with ID: bgjob1' }] } },
+    ].map((l) => JSON.stringify(l)).join('\n') + '\n');
+    const terminal = attachTerminal('pty-orch');
+    putAgent({ id: 'orch', name: 'Orchestrator', status: 'idle', ptyId: 'pty-orch' });
+    putAgent({ id: 'w', name: 'Worker', status: 'running', currentSessionId: SESSION, workHandedAt: at(0), lastTurnStartedAt: at(1), requestedBy: { agentId: 'orch', ptyId: '' } });
+    move('w', 'idle');
+    const first = received(terminal);
+    expect(first).toMatch(/background work still running/);
+    vi.advanceTimersByTime(70_000);
+    agentManager.agents.get('w')!.waitingReason = 'idle';
+    move('w', 'waiting');
+    vi.advanceTimersByTime(10_000);
+    expect(received(terminal).split('background work still running').length - 1, 'the same rest told twice').toBe(1);
+  });
+});
+
+describe('a start Tars could not confirm (the Audit\'s Low on #549)', () => {
+  // How this fails, written before its fix: the delivery check gives up asking after 2 h with no turn and no idle
+  // prompt, and nobody is told (a silent drop); or the requester is told the task never began, when it may have run.
+  it('is told to the requester once, as unconfirmed, never as never begun', async () => {
+    const terminal = attachTerminal('pty-lead');
+    putAgent({ id: 'lead', name: 'Lead', status: 'idle', ptyId: 'pty-lead' });
+    putAgent({ id: 'w2', name: 'Worker', status: 'running', workHandedAt: new Date().toISOString(), requestedBy: { agentId: 'lead', ptyId: '', taskRef: 't-0000abcd' } });
+    const { tellStartUnconfirmed } = await import('../../../electron/services/agent-watch');
+    tellStartUnconfirmed('w2');
+    const said = received(terminal);
+    expect(said).toMatch(/could not confirm/);
+    expect(said).toMatch(/may have run/);
+    expect(said).not.toMatch(/never (ran|began|started)/);
+    expect(said).toContain('t-0000abcd');
   });
 });

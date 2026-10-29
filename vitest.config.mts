@@ -18,7 +18,9 @@ export default defineConfig({
     // built-in modules, it fails every file with the reason before any fails
     // without one. tmpdir-isolation.ts next, so that the throwaway HOME
     // home-isolation.ts makes is inside the file's own temporary folder too.
-    setupFiles: ['./__tests__/setup/worktree-name.ts', './__tests__/setup/tmpdir-isolation.ts', './__tests__/setup/env-isolation.ts', './__tests__/setup/home-isolation.ts'],
+    // repo-config-guard.ts last: it fails a file that changed the git
+    // configuration of the repository the suite runs in.
+    setupFiles: ['./__tests__/setup/worktree-name.ts', './__tests__/setup/tmpdir-isolation.ts', './__tests__/setup/env-isolation.ts', './__tests__/setup/home-isolation.ts', './__tests__/setup/repo-config-guard.ts'],
     // The run's own temporary folder, which must be empty at the end of the
     // run: see __tests__/setup/tmpdir-run.ts.
     globalSetup: ['./__tests__/setup/tmpdir-run.ts'],

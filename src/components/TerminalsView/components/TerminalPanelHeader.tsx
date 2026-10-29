@@ -58,6 +58,8 @@ export default function TerminalPanelHeader({
   // Frame: `Agent asleep · and how it wakes`.
   const waking = wakingLine(agent);
   const sleep = waking ?? asleepLine(agent);
+  // The line the agent last wrote about itself (#513): under the header's row, on the Dashboard only.
+  const checkpoint = agent.checkpoint;
 
   const showDragHandle = tabType === 'custom';
   // Neither kind of tab deletes anything from here any more. A custom tab
@@ -94,9 +96,12 @@ export default function TerminalPanelHeader({
 
   return (
     <div
-      className={`${showDragHandle ? 'terminal-drag-handle' : ''} window-no-drag flex items-center gap-2 h-8 px-3 bg-card border-b border-border select-none`}
+      className={`${showDragHandle ? 'terminal-drag-handle' : ''} window-no-drag bg-card border-b border-border select-none`}
       onContextMenu={onContextMenu}
     >
+    {/* 31 and the border below it: the header stays 32 high, as before its checkpoint line, or the terminal under it
+        loses a row in a 349-high card (the QA's F2 on the 2.0.5 train). */}
+    <div className="flex items-center gap-2 h-[31px] px-3">
       {/* Drag handle grip - custom tabs only */}
       {showDragHandle && (
         <GripVertical className="w-3 h-3 text-muted-foreground/50 flex-shrink-0" />
@@ -193,42 +198,6 @@ export default function TerminalPanelHeader({
           session, so the boxed `session` that followed here named nothing to
           choose (JeanBrasse, 13/10). Frame: `Panel header · fullscreen`. */}
 
-      {/* Start / stop. The panel's primary action, so it is a button you can
-          see and hit - not a row inside the overflow menu. A grid of terminals
-          with no visible way to launch the CLI is a grid of empty shells. */}
-      {agent.status === 'asleep' || waking ? (
-        // Asleep, the panel's action wakes it on its conversation; off while
-        // it comes back. Frame: `Agent asleep · and how it wakes`.
-        <button
-          type="button"
-          onMouseDown={e => e.stopPropagation()}
-          onClick={onWake}
-          disabled={!!waking}
-          className="h-[26px] px-2 text-[11px] font-mono lowercase border border-border-accent text-foreground hover:border-primary hover:text-primary transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default disabled:hover:border-border-accent disabled:hover:text-foreground"
-          title={waking ? 'Coming back on its conversation' : 'Wake it on its own conversation'}
-        >
-          wake
-        </button>
-      ) : (
-        <button
-          type="button"
-          onMouseDown={e => e.stopPropagation()}
-          onClick={isLive ? onStop : onStart}
-          // A bordered 26px row action, like every other action in the app. The
-          // first version was accent-filled, which put a solid orange block in
-          // every pane header at once - the accent is for one primary action on
-          // a screen, not for six of them in a row.
-          className={`h-[26px] px-2 text-[11px] font-mono lowercase border transition-colors cursor-pointer ${
-            isLive
-              ? 'border-border text-muted-foreground hover:text-foreground hover:bg-secondary'
-              : 'border-border-accent text-foreground hover:border-primary hover:text-primary'
-          }`}
-          title={isLive ? 'Stop this agent' : `Start ${agent.provider ?? 'the CLI'} in this terminal`}
-        >
-          {isLive ? 'stop' : 'start'}
-        </button>
-      )}
-
       {/* Fullscreen in one press, out of the menu: the arrows point out at
           rest and turn inward while the panel fills the window. */}
       <button
@@ -242,7 +211,7 @@ export default function TerminalPanelHeader({
         {isFullscreen ? <Minimize2 className="w-3 h-3" aria-hidden /> : <Maximize2 className="w-3 h-3" aria-hidden />}
       </button>
 
-      {/* Overflow menu: clear and remove */}
+      {/* Overflow menu: start, wake or stop, then clear and remove */}
       <div
         ref={menuRef}
         className="relative [&_button]:cursor-pointer"
@@ -268,7 +237,32 @@ export default function TerminalPanelHeader({
 
         {menuOpen && (
           <div className="absolute right-0 top-full mt-1 z-[90] min-w-[190px] bg-card border border-border">
-            <button type="button" onClick={run(onClear)} className={menuItemClass}>clear</button>
+            {/* Start, wake and stop, first in the menu and no longer a button of
+                the header: rarely used, and a stop one slip away from fullscreen
+                in every panel at once (JeanBrasse, 22/10). Asleep, it wakes the
+                agent on its conversation, off while it comes back. Frame:
+                `Dashboard header (2.0.5) · start, wake and stop in the ··· menu`. */}
+            {agent.status === 'asleep' || waking ? (
+              <button
+                type="button"
+                onClick={run(onWake)}
+                disabled={!!waking}
+                className={`${menuItemClass} disabled:opacity-40 disabled:cursor-default disabled:hover:bg-transparent disabled:hover:text-text-secondary`}
+                title={waking ? 'Coming back on its conversation' : 'Wake it on its own conversation'}
+              >
+                {waking ? 'wake · coming back' : 'wake'}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={run(isLive ? onStop : onStart)}
+                className={menuItemClass}
+                title={isLive ? 'Stop this agent' : `Start ${agent.provider ?? 'the CLI'} in this terminal`}
+              >
+                {isLive ? 'stop' : `start ${agent.provider ?? 'claude'}`}
+              </button>
+            )}
+            <button type="button" onClick={run(onClear)} className={`${menuItemClass} border-t border-border`}>clear</button>
 
             {/* Taking a panel off a board and destroying an agent are two
                 different intentions, so they are two different items. */}
@@ -281,6 +275,41 @@ export default function TerminalPanelHeader({
           </div>
         )}
       </div>
+    </div>
+    {checkpoint && <CheckpointLine checkpoint={checkpoint} />}
+    </div>
+  );
+}
+
+/** Past this, a checkpoint reads muted: it may no longer be where the agent stands. */
+const STALE_MS = 15 * 60_000;
+
+/** How long ago, as the frame writes it: now, 2 min, 23 min, then the hour. */
+function ago(at: string, now: number): string {
+  const minutes = Math.floor((now - Date.parse(at)) / 60_000);
+  if (!(minutes >= 1)) return 'now';
+  if (minutes < 60) return `${minutes} min`;
+  return `${Math.floor(minutes / 60)} h`;
+}
+
+/**
+ * The line the agent last wrote about where it stands (the orchestrator's checkpoint tool, #513), a second line of
+ * its header on the Dashboard only, never on its card (JeanBrasse, 22/10). Cut to the panel, whole in its title; the
+ * dot in the accent while fresh, the line muted past fifteen minutes. Frame: `Checkpoint (2.0.5) · the line in the
+ * Dashboard terminal header`.
+ */
+function CheckpointLine({ checkpoint }: { checkpoint: { line: string; at: string } }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const every = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(every);
+  }, []);
+  const stale = now - Date.parse(checkpoint.at) > STALE_MS;
+  return (
+    <div data-checkpoint className="flex items-center gap-1.5 pl-9 pr-3 pb-1.5 -mt-1 min-w-0">
+      <span aria-hidden className={`shrink-0 w-[5px] h-[5px] ${stale ? 'bg-text-muted' : 'bg-primary'}`} />
+      <span className={`flex-1 min-w-0 truncate text-[11px] ${stale ? 'text-text-muted' : 'text-text-secondary'}`} title={checkpoint.line}>{checkpoint.line}</span>
+      <span className="shrink-0 font-mono text-[10px] text-text-muted">{ago(checkpoint.at, now)}</span>
     </div>
   );
 }

@@ -49,17 +49,10 @@ export interface AppSettings {
   notifyOnComplete: boolean;
   notifyOnStop: boolean;
   notifyOnError: boolean;
-  telegramEnabled: boolean;
-  telegramBotToken: string;
-  /**
-   * Telegram through Hermes (#285): on, main erases the bot's token and turns
-   * the bot off.
-   */
+  /** Telegram through Hermes (PR 285), the one way to Telegram since 2.0.5. */
   hermesRelayEnabled?: boolean;
-  telegramChatId: string; // Legacy - kept for backwards compatibility
-  telegramAuthToken: string; // Secret token for authentication
-  telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
-  telegramRequireMention: boolean; // Only respond when bot is @mentioned in groups
+  /** Set once by the first 2.0.5 launch that found the old bot's settings; hadToken when a bot token was among them. */
+  telegramBotRetired?: { at: string; hadToken: boolean };
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;
@@ -97,10 +90,11 @@ export interface AppSettings {
   errorReportsEnabled: boolean;
   /** Resume idle agents once at launch (not on navigation). */
   autoStartAgentsOnLaunch?: boolean;
+  /** When Tars keeps the computer awake (2.0.5, main's services/keep-awake.ts): missing reads as 'while-working'. */
+  keepAwake?: 'while-working' | 'always' | 'never';
   /** Settings, Preferences, "New interface": the new shell and chats per project, a preview (plan 2.0.0). Main answers it always, false unless chosen (the contract of PR 360). */
   newInterface: boolean;
   cliPaths: CLIPaths;
-  defaultProvider?: string;
   obsidianVaultPaths?: string[];
   opencodeEnabled: boolean;
   opencodeDefaultModel: string;

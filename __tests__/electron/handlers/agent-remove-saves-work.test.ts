@@ -49,6 +49,13 @@
  * 14. Over-correction: a worktree already gone (removed outside Tars, or moved
  *     then pruned), which git answers "is not a working tree", is announced as
  *     kept at a path where nothing is.
+ * And from the Audit's gate of #533 (M1 and L1, written before the fix, 2026-10-28):
+ * 15. Two agents share one worktree (the window reuses a folder that exists): deleting one removes it under the
+ *     other, still running, and saves the other's work on a branch named after the agent deleted. The worktree
+ *     must stay, the answer must say which agent works in it, and nothing is saved in the deleted one's name.
+ * 16. While the terminal's tree ends (the grace, about 1.5 s), the agent is still in the fleet: a start arriving
+ *     then gives it a new terminal, which the removal leaves with no agent. The agent must be out of the fleet
+ *     before anything is awaited.
  *
  * The handler and git are the real ones, on a repository in a throwaway folder.
  */
@@ -164,6 +171,36 @@ describe('the window\'s Delete', { timeout: 30_000 }, () => {
     expect(fs.existsSync(wt)).toBe(false);
     expect(git(repo, 'show', 'wip/backend-engineer:a.txt')).toBe('one\ntwo');
     expect(git(repo, 'show', 'wip/backend-engineer:new.txt')).toBe('fresh');
+    expect(agents.has('w1')).toBe(false);
+  });
+
+  it('15. keeps a worktree another agent of the fleet works in, says which, and saves nothing in the deleted one\'s name', async () => {
+    agents.set('w2', {
+      id: 'w2', name: 'Frontend Engineer', status: 'running', projectPath: repo, worktreePath: wt, branchName: 'feat/x',
+      skills: [], output: [], lastActivity: '',
+    } as unknown as AgentStatus);
+    fs.writeFileSync(path.join(wt, 'w2-work.txt'), 'in progress\n');
+
+    const result = await handlers.get('agent:remove')!({}, 'w1') as { success: boolean; savedTo?: string; worktreeKept?: string };
+
+    expect(result.success).toBe(true);
+    expect(result.savedTo).toBeUndefined();
+    expect(result.worktreeKept).toContain('Frontend Engineer');
+    expect(fs.readFileSync(path.join(wt, 'w2-work.txt'), 'utf8')).toBe('in progress\n');
+    expect(git(repo, 'branch', '--list', 'wip/*')).toBe('');
+    expect(agents.has('w1')).toBe(false);
+    expect(agents.get('w2')?.worktreePath).toBe(wt);
+  });
+
+  it('16. takes the agent out of the fleet before its terminal is ended, so no start can give it a new one', async () => {
+    let inFleetWhileEnded: boolean | undefined;
+    // A terminal whose pid is no child of Tars: it gets its hangup and nothing more, which is the moment looked at.
+    ptyProcesses.set('pty-w1', { pid: 999_999, kill: () => { inFleetWhileEnded = agents.has('w1'); }, onExit: () => ({ dispose() {} }) } as never);
+    agents.get('w1')!.ptyId = 'pty-w1';
+
+    await handlers.get('agent:remove')!({}, 'w1');
+
+    expect(inFleetWhileEnded).toBe(false);
     expect(agents.has('w1')).toBe(false);
   });
 

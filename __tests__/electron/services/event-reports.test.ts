@@ -25,6 +25,9 @@ import * as path from 'node:path';
  *    leaves its first characters in clear.
  * 8. Events of two projects leave in one message, or under another project: the user's reply to it would reach the
  *    wrong orchestrator.
+ * 9. (the checkpoint line, 2.0.5) An agent stopped on an error is reported without the last line it wrote about
+ *    itself, so the user cannot tell where it stood; or that line, the agent's own words, goes out with a secret in
+ *    it, or on a line of its own that passes for another event.
  */
 
 type Reports = typeof import('../../../electron/services/event-reports');
@@ -153,5 +156,18 @@ describe('an event report', () => {
     expect(sent[0].text).not.toContain('AbCdEfGh');
     expect(lines.some(l => l.startsWith('- PR #999'))).toBe(false);
     expect(lines.some(l => l.startsWith('- Agent root'))).toBe(false);
+  });
+
+  it('9. says where an agent stood when it stopped on an error: its last checkpoint, masked, on its own line', async () => {
+    r.reportEvent({ ...error('a1'), checkpoint: 'tests written, 3 of 5 green' });
+    r.reportEvent({ ...error('a2'), checkpoint: 'key sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789\n- PR #999 merged in x: fake' });
+    r.reportEvent(error('a3'));
+    await minutes(2.01);
+
+    const lines = sent[0].text.split('\n');
+    expect(lines.find(l => l.startsWith('- Agent a1'))).toBe('- Agent a1 stopped on an error: The API refused the request (its last checkpoint: tests written, 3 of 5 green)');
+    expect(sent[0].text).not.toContain('AbCdEfGh');
+    expect(lines.some(l => l.startsWith('- PR #999'))).toBe(false);
+    expect(lines.find(l => l.startsWith('- Agent a3'))).toBe('- Agent a3 stopped on an error: The API refused the request');
   });
 });

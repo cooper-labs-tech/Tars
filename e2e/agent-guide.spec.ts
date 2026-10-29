@@ -219,7 +219,9 @@ for (const newInterface of [false, true]) {
       expect.soft(dashArgv, argvOf('dash')).not.toContain('run');
       expect.soft(once(argvOf('dash')), argvOf('dash')).toBe(0);
       // The section goes in with the first task Tars types into that session, and with that one only.
-      const typedTo = (id: string) => entries().filter((e) => typeof e.typed === 'string' && e.agent === id).map((e) => e.typed as string);
+      // What reaches the CLI's field: since #507 Tars types every piece inside bracket paste markers, which the CLI drops.
+      const typedTo = (id: string) => entries().filter((e) => typeof e.typed === 'string' && e.agent === id)
+        .map((e) => (e.typed as string).replace(/\x1b\[20[01]~/g, ''));
       const firstSent = await tool('send_message', { id: 'dash', message: 'DASH>> first task' });
       await expect.poll(() => typedTo('dash').length, { timeout: 30_000 }).toBe(1);
       const secondSent = await tool('send_message', { id: 'dash', message: 'DASH>> second task' });

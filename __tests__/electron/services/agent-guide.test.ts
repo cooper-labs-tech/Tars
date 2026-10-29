@@ -41,6 +41,8 @@ import {
  *     is refused) or without the relay, offers the Telegram file tools the relay
  *     takes away (L1), and says memory_read reads one note (it returns the
  *     project's whole digest) (L2);
+ *     (13's Telegram file tools went with Tars's own Telegram bot in 2.0.5: no
+ *     server has them, which 2 already holds against the guide.)
  * 14. the guide lets an agent make folders at the top of the home folder, or keep
  *     durable files anywhere but the project folder (the maintainer, 2026-10-18).
  *
@@ -192,7 +194,6 @@ describe('what the guide says is what the code does (the Audit of #448)', () => 
     // A delegated task runs in the agent's own terminal since 2.0.4: it may ask.
     expect(asking).not.toMatch(/delegated run cannot ask/);
     expect(asking).toMatch(/relay/);
-    expect(asking).toMatch(/[Ww]ith the relay on, .*send_telegram_document/s);
     expect(lead).toMatch(/ask_user.*returns at once/);
     const memory = topic('memory-and-vault');
     expect(memory).not.toMatch(/memory_read` reads one note/);

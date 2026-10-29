@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { HookPost } from './codex-sessions';
+import { reportOf } from './terminal-answer';
 
 export type { HookPost };
 
@@ -85,6 +86,8 @@ interface Followed {
   registered: boolean;
   turnOpen: boolean;
   pendingError?: { at: number; message: string };
+  /** What pi wrote in the open turn, in order: the turn's answer is its report (reportOf), not its last line alone. */
+  said?: string[];
 }
 
 interface Launch {
@@ -220,14 +223,18 @@ export class PiSessionWatch {
           await this.post(agentId, f, { status: 'error', error_kind: 'pi_turn_failed', error_message: message });
         }
         f.turnOpen = true;
+        f.said = [];
         await this.post(agentId, f, { status: 'running', event: 'UserPromptSubmit', current_task: event.text });
       } else if (f.turnOpen) {
+        if (event.text) (f.said ??= []).push(event.text);
         if (event.stop === 'error') {
           f.pendingError = { at: this.deps.now(), message: event.error || 'the turn failed' };
         } else if (event.stop === 'stop' || event.stop === 'length') {
           f.pendingError = undefined;
           f.turnOpen = false;
-          if (event.text) await this.postTo(agentId, f, '/api/hooks/output', { hook: 'Stop', output: event.text });
+          const answer = reportOf(f.said ?? []) ?? (event.text || null);
+          f.said = [];
+          if (answer) await this.postTo(agentId, f, '/api/hooks/output', { hook: 'Stop', output: answer });
           await this.postTo(agentId, f, '/api/hooks/status', { hook: 'Stop', status: 'idle' });
           await this.postTo(agentId, f, '/api/hooks/agent-stopped', { hook: 'Stop' });
         } else if (event.stop === 'aborted') {

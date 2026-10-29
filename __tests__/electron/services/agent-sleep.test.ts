@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { factsOf, restPendingOf, sleepRefusal, waitsOnItself, SLEEP_AFTER_MS, type SleepFacts } from '../../../electron/services/agent-sleep';
+import { checkSleep, factsOf, restPendingOf, sleepRefusal, sleepTiming, waitsOnItself, SLEEP_AFTER_MS, type SleepFacts } from '../../../electron/services/agent-sleep';
 import { agents } from '../../../electron/core/agent-manager';
 import { enqueueRequest } from '../../../electron/core/task-requests';
 import type { AgentStatus } from '../../../electron/types';
@@ -51,6 +51,17 @@ import type { Proc } from '../../../electron/services/stall-watch';
  * 20. (2.0.4, before its code, seen in the e2e of the resume) A codex agent's CLI never found under its terminal:
  *     only a claude process was looked for, so every pass said `no-process-table`. Or a claude agent's terminal
  *     taken to run a claude because a codex runs there.
+ * 21. (the DB brief of 28/10, before its code) Why the pass left an agent awake is computed and thrown away: nothing
+ *     the window or the Audit can read says why an agent at rest for an hour never slept. checkSleep keeps the last
+ *     reason on each agent that has a terminal (`sleepHeld`: the reason and when it was read), orchestrators and
+ *     agents at work included, and an agent put to sleep keeps none.
+ * 22. (the same, before its code) The delay cannot be shortened for an E2E run, so no E2E can watch the real pass put
+ *     an agent to sleep: DOROTHY_SLEEP_AFTER_MS, under DOROTHY_E2E only and 2 s at least, or 30 minutes; the pass
+ *     then runs four times per delay, never less than every 500 ms and never more than every minute.
+ * 23. (2.0.5, before its code) An agent is put to sleep while something it started runs outside its terminal's
+ *     tree, found by its birth tag (core/born-processes.ts): a dev server started with nohup, its parent gone. The
+ *     sleep ends the tree only, and that one would outlive it with no session to answer for it. Or one inside
+ *     the tree (its MCP servers, which carry the tag too) counts as outside.
  */
 
 const NOW = Date.parse('2026-10-05T12:00:00.000Z');
@@ -236,3 +247,58 @@ describe('a codex agent (2.0.4)', () => {
   });
 });
 
+
+describe('why an agent stays awake (the DB brief of 28/10)', () => {
+  it('21. keeps the last reason on every agent with a terminal, and none once asleep', async () => {
+    const base = { character: 'robot', projectPath: '/p', skills: [], output: [], lastActivity: '', provider: 'claude' };
+    const fleet = {
+      lead: { ...base, id: 'lead', name: 'Lead', role: 'orchestrator', status: 'idle', ptyId: 'p-lead' },
+      busy: { ...base, id: 'busy', name: 'Busy', role: 'worker', status: 'running', ptyId: 'p-busy' },
+      gone: { ...base, id: 'gone', name: 'Gone', role: 'worker', status: 'idle', ptyId: 'p-gone' },
+      none: { ...base, id: 'none', name: 'None', role: 'worker', status: 'idle' },
+    } as unknown as Record<string, AgentStatus>;
+    for (const a of Object.values(fleet)) agents.set(a.id, a);
+    try {
+      const outcomes = await checkSleep(NOW, { procs: async () => [] });
+      expect(Object.fromEntries(outcomes.map((o) => [o.agentId, o.why]))).toEqual({ lead: 'orchestrator', busy: 'not-at-rest', gone: 'no-cli' });
+      expect(agents.get('lead')!.sleepHeld).toEqual({ why: 'orchestrator', at: new Date(NOW).toISOString() });
+      expect(agents.get('busy')!.sleepHeld?.why).toBe('not-at-rest');
+      expect(agents.get('gone')!.sleepHeld?.why).toBe('no-cli');
+      // No terminal: the pass has nothing to say of it.
+      expect(agents.get('none')!.sleepHeld).toBeUndefined();
+    } finally {
+      for (const id of Object.keys(fleet)) agents.delete(id);
+    }
+  });
+
+  it('22. the delay and the pass shortened under DOROTHY_E2E only', () => {
+    expect(sleepTiming({})).toEqual({ afterMs: 30 * 60_000, everyMs: 60_000 });
+    expect(sleepTiming({ DOROTHY_SLEEP_AFTER_MS: '6000' })).toEqual({ afterMs: 30 * 60_000, everyMs: 60_000 });
+    expect(sleepTiming({ DOROTHY_E2E: '1', DOROTHY_SLEEP_AFTER_MS: '6000' })).toEqual({ afterMs: 6_000, everyMs: 1_500 });
+    expect(sleepTiming({ DOROTHY_E2E: '1', DOROTHY_SLEEP_AFTER_MS: '2000' })).toEqual({ afterMs: 2_000, everyMs: 500 });
+    for (const bad of ['1999', 'soon', '', '-5']) {
+      expect(sleepTiming({ DOROTHY_E2E: '1', DOROTHY_SLEEP_AFTER_MS: bad }), bad).toEqual({ afterMs: 30 * 60_000, everyMs: 60_000 });
+    }
+  });
+});
+
+describe('what it started outside its terminal (2.0.5)', () => {
+  it('23. leaves alone an agent with a tagged process outside its terminal\'s tree, and counts none inside it', () => {
+    expect(sleepRefusal(facts({ bornOutside: [7001] }))).toBe('detached');
+    expect(sleepRefusal(facts({ bornOutside: [] }))).toBeNull();
+    // Unknown (Windows): the other rules decide, as before.
+    expect(sleepRefusal(facts({ bornOutside: undefined }))).toBeNull();
+  });
+
+  it('23. outside means not under its terminal: its CLI and MCP servers are inside, an orphan is not', async () => {
+    const { bornOutsideOf } = await import('../../../electron/services/agent-sleep');
+    const born = [
+      { pid: CLI, ppid: 1, agentId: 'a', command: 'claude' },
+      { pid: 4101, ppid: CLI, agentId: 'a', command: 'node bundle.js' },
+      { pid: 7001, ppid: 1, agentId: 'a', command: 'node next dev' },
+      { pid: 7002, ppid: 1, agentId: 'b', command: 'node next dev' },
+    ];
+    expect(bornOutsideOf('a', CLI, procs(), born)).toEqual([7001]);
+    expect(bornOutsideOf('a', CLI, procs(), undefined)).toBeUndefined();
+  });
+});

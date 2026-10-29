@@ -1,8 +1,7 @@
 import type { MessageSender } from '../core/pty-manager';
 import { agents } from '../core/agent-manager';
-import { privatePath } from '../constants';
 import { allChats, chatById, namedChatRunBy, sendToChat } from './chat-runners';
-import { chatTag, createChatSentLog, routeChannelMessage, type ChatSentLog } from './chat-addressing';
+import { chatTag, routeChannelMessage } from './chat-addressing';
 import type { Chat } from './chats';
 
 /**
@@ -23,17 +22,6 @@ export function chatHeadOf(agentId: string | undefined): string {
   const agent = agentId ? agents.get(agentId) : undefined;
   const chat = agent ? namedChatRunBy(agent) : undefined;
   return chat ? `${chatTag(chat)} ` : '';
-}
-
-let sentLog: ChatSentLog | null = null;
-
-/**
- * What Tars's own Telegram bot sent for a chat, so that a reply to it reaches
- * that chat: in ~/.tars-private, 7 days, ids only.
- */
-export function telegramSentLog(): ChatSentLog {
-  sentLog ??= createChatSentLog(privatePath('telegram-sent.json'));
-  return sentLog;
 }
 
 /** What the sender is told once a message is in a chat. */

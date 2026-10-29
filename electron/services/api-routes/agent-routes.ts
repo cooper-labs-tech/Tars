@@ -1,22 +1,25 @@
+import { apiListening, NOT_LISTENING } from '../../core/api-listening';
+import { agentResources } from '../fleet-resources-runtime';
+import type { AgentProcess } from '../fleet-resources';
 import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
-import { stopAcpRuns } from '../acp/delegate';
-import { dropPermissionAsks } from '../permission-asks';
+import { maskedAsk } from '../permission-asks';
+import { redactSecrets } from '../../utils/redact-secrets';
 import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
-import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
 import { noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { killPty } from '../../core/pty-kill';
+import { removeAgent } from '../../core/agent-remove';
 import { hasEndOfTurn } from '../../core/end-of-turn';
 import { agentStatusOnExit, isQuitting } from '../../core/quit-state';
 import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../core/agent-stop';
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogOpen, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -44,23 +47,26 @@ import { readFinalAnswer } from '../terminal-answer';
 import { typeLaunchTask } from '../../core/typed-task';
 import { accountDir } from '../claude-accounts/registry';
 import { announceTask, firstLineOf } from '../task-banner';
-import { taskOfPrompt, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
+import { keptSender, queueRight, queueView, replayJobOf, type RunTaskReplay } from '../agent-queues';
+import { taskOfPrompt, requestTitle, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
 import { clientRequestIdOf, liveReceipts, payloadHash, type ReceiptOutcome } from '../request-receipts';
 import { isPermissionLevel, levelOf, modeGapMark, raises, type PermissionLevel } from '../../core/permission-ceiling';
 import { canInterrupt } from '../bus-store';
 import { interruptTurn } from '../bus-delivery';
 import { broadcastToAllWindows } from '../../utils/broadcast';
 import { scheduleTick } from '../../utils/agents-tick';
+import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
 import { lastInterruptAt, pendingBackgroundWork, withSessionTruth } from '../agent-truth';
 import { turnInterruptedAt } from '../task-watch';
-import { noteLaunch, launchSettings, restartForSettings, forgetRestart, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
+import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
 import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-update';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
+import { mcpConfigPathFor } from '../mcp-roles';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
-import { oneTaskQueue, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy } from '../../core/one-task';
+import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
 
 /**
@@ -119,9 +125,9 @@ type SpawnOpts = {
  * The payload is the one the IPC paths send.
  */
 /** The stop, for the callers that read an agent's state: who, when, why. Nothing once it is not stopped. */
-function stopOf(agent: AgentStatus): { stoppedBy?: string; stoppedAt?: string; stopReason?: string } {
+function stopOf(agent: AgentStatus): { stoppedBy?: string; stoppedAt?: string; stopReason?: string; stopProcesses?: AgentStatus['stopProcesses'] } {
   return agent.status === 'stopped'
-    ? { stoppedBy: agent.stoppedBy, stoppedAt: agent.stoppedAt, stopReason: agent.stopReason }
+    ? { stoppedBy: agent.stoppedBy, stoppedAt: agent.stoppedAt, stopReason: agent.stopReason, ...(agent.stopProcesses ? { stopProcesses: agent.stopProcesses } : {}) }
     : {};
 }
 
@@ -171,6 +177,8 @@ async function spawnAgentSession(
   ctx: RouteContext,
   sendJson: SendJson
 ): Promise<boolean> {
+  // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+  if (!(await apiListening())) throw new Error(NOT_LISTENING);
   // Never wider than the agent's own mode, whoever asked (modeRefusal): the one
   // place a session starts says it last, before anything is ended or spawned.
   const wider = modeRefusal(agent, opts.permissionMode);
@@ -280,14 +288,11 @@ async function spawnAgentSessionInSlot(
     (isSuperAgentApi ? '' : ': an orchestrator reads your final message') +
     `.` + (chatIdentityOf(agent) ? ` ${chatIdentityOf(agent)}` : '') + `]`;
 
-  // MCP config for flag-strategy providers (all claude-based ones).
-  let mcpConfigPath: string | undefined;
-  if (cliProvider.getMcpConfigStrategy() === 'flag') {
-    // os.homedir(), which follows HOME, and never Electron's home path, which
-    // on macOS does not: a sandboxed Tars handed its agents the real one.
-    const candidate = path.join(os.homedir(), '.claude', 'mcp.json');
-    if (fs.existsSync(candidate)) mcpConfigPath = candidate;
-  }
+  // MCP config for flag-strategy providers (all claude-based ones), by role
+  // (services/mcp-roles.ts): a worker's lacks Telegram and X. os.homedir(),
+  // which follows HOME, and never Electron's home path, which on macOS does
+  // not: a sandboxed Tars handed its agents the real one.
+  const mcpConfigPath = mcpConfigPathFor(cliProvider, isSuperAgentApi);
 
   // An explicit model on this call wins, otherwise the model the agent is set
   // to. Not the model its last session answered on: that is the session this
@@ -597,7 +602,33 @@ async function spawnAgentSessionInSlot(
  *  when returned to MCP callers. Use /output or ?full=true when needed. */
 function projectAgent(agent: AgentStatus) {
   const { output, ...rest } = agent;
-  return { ...rest, outputChunks: output.length };
+  return { ...withoutCommandLines(rest), outputChunks: output.length };
+}
+
+/**
+ * The record without a command line (the Audit's M1 on the train, A6's rule): what an ended session left running and
+ * what a stop ended or kept, by pid and container. The window reads the lines through IPC; an agent reads none.
+ */
+function withoutCommandLines<T extends Pick<AgentStatus, 'leftRunning' | 'stopProcesses'>>(record: T): T {
+  // `pid <n>: <command> (why)` becomes `pid <n>`.
+  const pids = (lines: string[]) => lines.map(l => /^pid \d+/.exec(l)?.[0]).filter((p): p is string => !!p);
+  const { leftRunning, stopProcesses } = record;
+  return {
+    ...record,
+    ...(leftRunning ? { leftRunning: { ...leftRunning, commands: pids(leftRunning.commands) } } : {}),
+    ...(stopProcesses ? { stopProcesses: { ...stopProcesses, ended: pids(stopProcesses.ended), kept: pids(stopProcesses.kept) } } : {}),
+  };
+}
+
+/**
+ * The agent a route names by its id, for its own project's callers only: another project's reads as unknown, naming
+ * nothing (the Audit's H1 on #546, the orchestrator's decision): its output, its last answer, its roster, its health
+ * and its processes are its project's. A caller with no project (the owner's own token) reads any; the window has IPC.
+ */
+function visibleAgent(req: RouteRequest): AgentStatus | undefined {
+  const agent = agents.get(req.params.id);
+  const caller = callerProject(req);
+  return agent && (!caller || agent.projectPath === caller) ? agent : undefined;
 }
 
 // callerId and callerProject live in ./utils: the bus routes ask the same two
@@ -761,6 +792,9 @@ function requestFor(agent: AgentStatus, req: RouteRequest, title?: string, ref?:
  */
 function delivered(agent: AgentStatus, ref: string | undefined): boolean {
   if (!ref) return true;
+  const request = agent.taskQueue?.find((r) => r.ref === ref);
+  // Known to task_status from now, by the id its sender line named (2.0.5: "No such task" for t-9aa78b94, 27/10).
+  if (request) oneTaskQueue.noteDelivered({ ref, agentId: agent.id, requesterId: request.requesterAgentId, title: requestTitle(ref) ?? '', queuedAt: Date.parse(request.queuedAt) || Date.now() }, 'typed');
   requestDelivered(agent, ref);
   saveAgents();
   return agent.requestedBy?.taskRef === ref;
@@ -1126,7 +1160,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * final answer from the transcript. The answer the route gives at the end.
  */
 async function runInTerminal(
-  agent: AgentStatus, req: RouteRequest, ctx: RouteContext, job: { task: string; ref: string; model?: string },
+  agent: AgentStatus, req: RouteRequest, ctx: RouteContext, job: { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } },
   onHanded: (start: Record<string, unknown>) => void,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const ledger = liveTaskLedger();
@@ -1166,7 +1200,8 @@ async function runInTerminal(
     // opens its own (the Audit's H1 on #453).
     ledger?.endedForDelegation(agent.id);
     await performDispatch(agent, {
-      message: job.task, model: job.model, from: senderName(agent, req), sender: senderOf(agent, req), mark: markFor(agent, req),
+      // Its sender line as it was queued, for a task kept across a restart (the Audit's Info 1 on #536).
+      message: job.task, model: job.model, from: job.asSent?.from ?? senderName(agent, req), sender: job.asSent?.sender ?? senderOf(agent, req), mark: job.asSent?.mark ?? markFor(agent, req),
       turnTaken: true,
       onAccepted: () => requestFor(agent, req, job.task, job.ref),
       // An agent's task carries its id on its line, a request queued for it
@@ -1497,17 +1532,11 @@ async function performDispatchLocked(
 
   const previousStatus = agent.status;
   const livePty = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
-  if (livePty && dialogOpen(agent)) {
-    // A blocking permission dialog expects arrow keys/enter, not text: a
-    // typed message is useless and the delayed \r could ACCEPT the pending
-    // permission. Refuse and surface the reason instead.
-    dropped(agent, taskRef);
-    sendJson({
-      error: `Agent "${agent.name || agent.id}" is blocked on a permission dialog; a typed message cannot answer it. Resolve it in the Tars UI, or stop the agent and re-dispatch.`,
-      waitingReason: 'permission',
-    }, 409);
-    return;
-  }
+  // A dialog in its terminal (a permission, a question) holds the message: the
+  // terminal's writer keeps it while the dialog is open, never typing into it,
+  // and types it once the dialog closes (pty-manager.ts pump). It was refused
+  // (409) until 2.0.5, and a worker's report to an orchestrator at a dialog was
+  // lost (1212 counted 17 on the night of 27/10).
   // Typed into the session only where a CLI runs, read from the terminal and
   // never from the status. Every turn ends on `idle` (the Stop hook posts it)
   // and a failed one on `error`, both with the CLI at its prompt: /dispatch
@@ -1526,6 +1555,16 @@ async function performDispatchLocked(
   // run's end in the terminal's writer instead, and is no task.
   const behindWork = !opts.turnTaken && oneTaskQueue.mustQueue(agent.id, undefined);
   if (livePty && cliRunningIn(livePty) && behindWork && opts.task) {
+    queueDispatch(agent, opts, ctx, sendJson, taskRef, previousStatus);
+    return;
+  }
+  // The agent's queue (2.0.5, lot 2): a message sent to wait for the agent's rest (mode 'queue') waits in its queue
+  // with the tasks, where it is seen, paused, moved, cancelled and kept across a stop and a restart of Tars, no longer
+  // in the terminal's writer, which a stop emptied. And while the queue is paused, whatever is sent waits there. A
+  // worker's note and Tars's own word are information, never a place in the line (the Audit's H-A and M1 on #449):
+  // they keep waiting for the rest in the writer, as before.
+  const queueable = !opts.turnTaken && !opts.information && !opts.noteOnly;
+  if (queueable && (oneTaskQueue.pausedOf(agent.id) || (livePty && cliRunningIn(livePty) && !!opts.untilRest && holdsMessages(agent)))) {
     queueDispatch(agent, opts, ctx, sendJson, taskRef, previousStatus);
     return;
   }
@@ -1629,14 +1668,81 @@ async function performDispatchLocked(
  */
 function queueDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: RouteContext, sendJson: SendJson, taskRef: string | undefined, previousStatus: AgentStatus['status']): void {
   const behind = busyText(agent);
+  // Under the request's own id, the one its sender line names: task_status and task_cancel find it by that id.
   const queued = oneTaskQueue.enqueue(agent.id, {
-    ...(opts.sender?.kind === 'agent' ? { requesterId: opts.sender.id } : {}), title: opts.message.slice(0, 100),
-  });
+    ...(opts.sender?.kind === 'agent' ? { requesterId: opts.sender.id } : {}), title: firstLineOf(opts.message).slice(0, 100),
+    how: opts.task ? 'task' : opts.noteOnly ? 'note' : 'message', from: opts.from ?? 'Tars',
+    replay: { kind: 'dispatch', ...(taskRef ? { taskRef } : {}), opts: replayableOpts(opts) } satisfies DispatchReplay,
+  }, undefined, taskRef && !oneTaskQueue.find(taskRef) ? taskRef : undefined);
+  const paused = oneTaskQueue.pausedOf(agent.id);
   sendJson({
-    success: true, mode: 'queued', queued: true, queuedBehind: behind, queuedTask: queued.ref, previousStatus,
+    success: true, mode: 'queued', queued: true, queuedBehind: paused ? `its queue, paused: ${paused.why}` : behind, queuedTask: queued.ref, previousStatus,
+    ...(paused ? { paused: { since: new Date(paused.since).toISOString(), why: paused.why } } : {}),
     ...(taskRef ? { taskRef } : {}), agent: { id: agent.id, name: agent.name, status: agent.status },
   });
+  announceTask(agent.id);
+  awaitTurnAndDispatch(agent, opts, ctx, queued.ref, taskRef);
+}
+
+/** What a queued dispatch keeps, to be handed over again after a restart of Tars (services/agent-queues.ts). */
+interface DispatchReplay {
+  kind: 'dispatch';
+  taskRef?: string;
+  opts: Pick<DispatchOpts, 'message' | 'model' | 'permissionMode' | 'from' | 'sender' | 'mark' | 'noteOnly' | 'information' | 'task' | 'untilRest' | 'taskId'>;
+}
+
+function replayableOpts(opts: DispatchOpts): DispatchReplay['opts'] {
+  const { message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId } = opts;
+  return JSON.parse(JSON.stringify({ message, model, permissionMode, from, sender, mark, noteOnly, information, task, untilRest, taskId })) as DispatchReplay['opts'];
+}
+
+/** A request made by Tars for an item it hands over again: its requester's identity, and nothing else. */
+function replayRequest(requesterId: string | undefined): RouteRequest {
+  return { method: 'POST', pathname: '/replay', url: new URL('http://127.0.0.1/replay'), body: {}, params: {}, callerAgentId: requesterId, internal: !requesterId } as unknown as RouteRequest;
+}
+
+let replayContext: RouteContext | undefined;
+
+/**
+ * An item of a queue kept across a restart of Tars (services/agent-queues.ts), handed over again as the route that
+ * queued it would have: it waits for its turn (its queue is paused until someone resumes it), then goes in.
+ */
+export function replayQueuedItem(item: QueuedTask): void {
+  const ctx = replayContext;
+  const agent = agents.get(item.agentId);
+  if (!ctx || !agent) {
+    oneTaskQueue.cancel(item.ref, agent ? 'Tars could not hand it over again' : 'its agent was removed');
+    return;
+  }
+  const replay = item.replay as DispatchReplay | RunTaskReplay | undefined;
+  if (replay?.kind === 'dispatch') {
+    // Its sender, as one Tars writes, or Tars's own line (agent-queues.ts keptSender).
+    awaitTurnAndDispatch(agent, { ...replay.opts, sender: keptSender(replay.opts.sender) ?? { kind: 'tars' } }, ctx, item.ref, replay.taskRef);
+    return;
+  }
+  if (replay?.kind === 'run-task') {
+    void (async () => {
+      if (!(await waitTurn(agent, item.ref))) { announceTask(agent.id); return; }
+      announceTask(agent.id);
+      try {
+        await runInTerminal(agent, replayRequest(replay.requesterId), ctx, replayJobOf(item)!, () => undefined);
+      } catch (err) {
+        console.warn(`[queue] ${item.ref} for ${agent.name || agent.id} did not go in:`, err);
+      } finally {
+        oneTaskQueue.runEnded(agent.id);
+        announceTask(agent.id);
+      }
+    })();
+    return;
+  }
+  oneTaskQueue.cancel(item.ref, 'Tars could not hand it over again');
+}
+
+/** Waits for a queued dispatch's turn, then hands it over, its turn kept until it is in the terminal or given up. */
+function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: RouteContext, ref: string, taskRef: string | undefined): void {
+  const queued = { ref };
   void waitTurn(agent, queued.ref).then(async (taken) => {
+    announceTask(agent.id);
     if (!taken) { dropped(agent, taskRef); return; }
     // The turn stays taken until the task is in its terminal (or given up):
     // ended when performDispatch returned, a task held behind another message
@@ -1933,10 +2039,44 @@ function whenItApplies(
   return { applies: 'now', session: 'kept', text: 'Its CLI already runs on these settings: its session goes on as it is.' };
 }
 
+/** What a caller Tars withholds an agent's answers from is told: whose they are. */
+const ANSWERS_ARE = "its answers are read by its task's asker, the agent itself, its project's orchestrator and Tars";
+
+/**
+ * Who reads an agent's answers, its tasks' reports and the hooks' copy of the last one (`lastCleanOutput`): the task's
+ * asker, the agent itself, its project's orchestrator (or a chat's runner, which has its powers), and Tars; the owner's
+ * window reads them through IPC. Nobody else, neither the report nor the hooks' copy, which would leak what the rule
+ * keeps (the orchestrator's decision on the Audit's L1 on #550). `asker`: the task's, when the answer is one task's.
+ */
+function readsAnswersOf(agent: AgentStatus, req: RouteRequest, asker?: string | null): boolean {
+  if (req.internal) return true;
+  const callerId = resolveCallerId(req);
+  if (!callerId) return false;
+  if (callerId === agent.id || callerId === asker) return true;
+  const caller = agents.get(callerId);
+  return !!caller && hasOrchestratorPowers(caller) && caller.projectPath === agent.projectPath;
+}
+
+/**
+ * The agent's last task's answer, kept in the ledger whatever the agent did next and across a restart: what
+ * get_agent_output gives without a task id (the DB brief fix-answer-per-task-2810.md), and the hooks' copy beside it,
+ * for those who read its answers (readsAnswersOf); anyone else is told whose they are, and gets neither.
+ */
+function answersFor(agent: AgentStatus, req: RouteRequest):
+  | { reads: true; lastAnswer?: { taskId: string; result: string; endedAt: number | null } }
+  | { reads: false; withheld: { taskId?: string; reason: string } } {
+  const ledger = liveTaskLedger();
+  const last = ledger?.lastAnswerOf(agent.id);
+  const asker = last ? ledger?.task(last.taskId)?.requesterAgentId : agent.requestedBy?.agentId;
+  if (readsAnswersOf(agent, req, asker ?? agent.requestedBy?.agentId)) return { reads: true, ...(last ? { lastAnswer: last } : {}) };
+  return { reads: false, withheld: { ...(last ? { taskId: last.taskId } : {}), reason: ANSWERS_ARE } };
+}
+
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
+  replayContext = ctx;
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -1951,7 +2091,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         status: agent.status,
         // Asleep: a message wakes it on its conversation (core/agent-asleep.ts).
         asleepSince: agent.asleepSince,
-        lastCleanOutput: agent.lastCleanOutput,
+        lastCleanOutput: readsAnswersOf(agent, req, agent.requestedBy?.agentId) ? agent.lastCleanOutput : undefined,
         error: agent.error,
         waitingReason: agent.waitingReason,
         ...stopOf(agent),
@@ -1985,7 +2125,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const a = agents.get(agentId);
       sendJson({
         status: a?.status || 'idle',
-        lastCleanOutput: a?.lastCleanOutput,
+        lastCleanOutput: a && readsAnswersOf(a, req, a.requestedBy?.agentId) ? a.lastCleanOutput : undefined,
         error: a?.error,
         waitingReason: a?.waitingReason,
         ...(a ? stopOf(a) : {}),
@@ -2004,7 +2144,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         const a = agents.get(agentId);
         sendJson({
           status: a?.status || 'running',
-          lastCleanOutput: a?.lastCleanOutput,
+          lastCleanOutput: a && readsAnswersOf(a, req, a.requestedBy?.agentId) ? a.lastCleanOutput : undefined,
           timeout: true,
         });
       }
@@ -2022,7 +2162,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents: scoped to the caller's project by default (?all=true
   // for the global view). An orchestrator that only ever SEES its own team
   // cannot pick another project's agent ID by mistake.
-  app_.get('/api/agents', (req, sendJson) => {
+  app_.get('/api/agents', async (req, sendJson) => {
     const caller = callerProject(req);
     const showAll = req.url.searchParams.get('all') === 'true';
     // The team: a chat's runner is a conversation with the orchestrator, listed
@@ -2031,11 +2171,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (caller && !showAll) {
       agentValues = agentValues.filter(a => a.projectPath === caller);
     }
+    // Another project's agents, with `all`: who they are and nothing more, no task, figure or asker (the Audit's H1 on
+    // #546, the orchestrator's decision). A caller with no project (the owner's own token) reads everything.
+    const elsewhere = (a: AgentStatus) => !!caller && a.projectPath !== caller;
     const askerOf = (a: AgentStatus) => {
       const asker = a.requestedBy ? agents.get(a.requestedBy.agentId) : undefined;
       return asker ? { id: asker.id, name: asker.name || asker.id, ...(asker.kind === 'chat' ? { chat: true } : {}) } : undefined;
     };
-    const agentList = agentValues.map(withSessionTruth).map(a => ({
+    // Each agent's memory and since when it is in its status (lot 3 item D): null when it cannot be read.
+    const resources = await agentResources().catch(() => new Map());
+    const agentList = agentValues.map(withSessionTruth).map(a => (elsewhere(a) ? {
+      id: a.id, name: a.name, status: a.status, projectPath: a.projectPath, role: a.role,
+    } : {
       id: a.id,
       name: a.name,
       status: a.status,
@@ -2049,19 +2196,61 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       role: a.role,
       error: a.error,
       askedBy: askerOf(a),
+      ...(a.checkpoint ? { checkpoint: a.checkpoint } : {}),
+      // A permission question Tars holds for the owner (services/permission-asks.ts): what it runs, and why.
+      ...(a.waitingReason ? { waitingReason: a.waitingReason } : {}),
+      ...(a.permissionAsk ? { permissionAsk: {
+        tool: a.permissionAsk.tool, subject: maskedAsk(a.permissionAsk).subject,
+        ...(a.permissionAsk.reason ? { reason: a.permissionAsk.reason } : {}),
+        askedAt: a.permissionAsk.askedAt, until: a.permissionAsk.until,
+      } } : {}),
+      memMb: resources.get(a.id)?.memMb ?? null,
+      statusSince: a.statusSince,
+      // What its ended session left running (#523's records): how many processes and containers, 0 when none.
+      outlived: (a.leftRunning?.pids.length ?? 0) + (a.leftRunning?.containers.length ?? 0),
     }));
     sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
   });
 
   // GET /api/agents/:id
-  app_.get(/^\/api\/agents\/([^/]+)$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+  app_.get(/^\/api\/agents\/([^/]+)$/, async (req, sendJson) => {
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
     const full = req.url.searchParams.get('full') === 'true';
-    sendJson({ agent: full ? { ...agent, waitingOn: publishedWaitingOn(agent) } : projectAgent(agent) });
+    // Its queue (2.0.5, lot 2): what the caller may see of it, as GET /api/agents/:id/queue answers.
+    const caller = req.internal ? { kind: 'tars' as const } : req.callerAgentId && agents.get(req.callerAgentId) ? { kind: 'agent' as const, agent: agents.get(req.callerAgentId)! } : undefined;
+    const right = caller ? queueRight(caller, agent, 'list') : undefined;
+    const listed = right?.ok ? queueView(oneTaskQueue, agent.id, right.all || caller?.kind !== 'agent' ? undefined : caller.agent.id) : undefined;
+    // Only when something waits or the queue is paused: an agent with nothing queued reads as it did.
+    const queue = listed && (listed.items.length || listed.paused) ? listed : undefined;
+    const view = full ? withoutCommandLines({ ...agent, waitingOn: publishedWaitingOn(agent) }) : projectAgent(agent);
+    // The question masked for an agent (the Audit's L3 on #538): the window keeps it whole.
+    // Its tree's memory and CPU, and each process as its program, pid, memory and CPU (lot 3 item D): no arguments,
+    // which carry what no masking can know (the Audit's M1 on #546). The window, through IPC, has the command lines.
+    const r = (await agentResources().catch(() => new Map())).get(agent.id);
+    const resources = {
+      memMb: r?.memMb ?? null, cpuPct: r?.cpuPct ?? null,
+      processes: (r?.processes ?? []).map(({ name, pid, memMb, cpuPct }: AgentProcess) => ({ name, pid, memMb, cpuPct })),
+      // What its ended session left running (#523's records): pids and containers, never a command line.
+      outlived: agent.leftRunning && (agent.leftRunning.pids.length || agent.leftRunning.containers.length)
+        ? { since: agent.leftRunning.since, pids: [...agent.leftRunning.pids], containers: [...agent.leftRunning.containers] }
+        : null,
+    };
+    // Its last answer and the hooks' copy, for those who read its answers (#550, readsAnswersOf); anyone else is told whose.
+    const answers = answersFor(agent, req);
+    const { lastCleanOutput, ...shown } = view;
+    sendJson({ agent: {
+      ...(agent.permissionAsk ? {
+        ...shown, permissionAsk: maskedAsk(agent.permissionAsk),
+        ...(shown.waitingOn ? { waitingOn: { ...shown.waitingOn, text: redactSecrets(shown.waitingOn.text) } } : {}),
+      } : shown),
+      ...(answers.reads ? { ...(lastCleanOutput !== undefined ? { lastCleanOutput } : {}), ...(answers.lastAnswer ? { lastAnswer: answers.lastAnswer } : {}) } : { answersWithheld: answers.withheld }),
+      ...(queue ? { queue } : {}),
+      resources,
+    } });
   });
 
   // GET /api/agents/:id/bootstrap: identity + team roster context, injected
@@ -2069,7 +2258,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // the "who am I / who is my team" handshake automatic instead of a manual
   // ritual at the start of every working session.
   app_.get(/^\/api\/agents\/([^/]+)\/bootstrap$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2148,7 +2337,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   // GET /api/agents/:id/health: liveness of the agent's PTY and session,
   // so orchestrators/tools can distinguish "working" from "ghost status".
   app_.get(/^\/api\/agents\/([^/]+)\/health$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2167,7 +2356,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
   // GET /api/agents/:id/output
   app_.get(/^\/api\/agents\/([^/]+)\/output$/, (req, sendJson) => {
-    const agent = agents.get(req.params.id);
+    const agent = visibleAgent(req);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
@@ -2352,12 +2541,40 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const newCli = result.changed.includes('provider') || result.changed.includes('cliPath');
       const newBinary = getProvider(result.agent.provider).binaryName !== binaryBefore;
       if (newBinary) newConversationOnNextStart(agent.id);
+      const { lastCleanOutput, ...updated } = projectAgent(result.agent);
       sendJson({
-        agent: projectAgent(result.agent),
+        agent: { ...updated, ...(readsAnswersOf(result.agent, req, result.agent.requestedBy?.agentId) && lastCleanOutput !== undefined ? { lastCleanOutput } : {}) },
         changed: result.changed,
         ...whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart }),
       });
     });
+  });
+
+  // POST /api/agents/:id/checkpoint, `{ line }`: the line an agent writes
+  // about itself (the MCP tool checkpoint, core/agent-checkpoint.ts). Only the
+  // agent itself, by its own token: nobody writes another's line.
+  app_.post(/^\/api\/agents\/([^/]+)\/checkpoint$/, (req, sendJson) => {
+    const driver = resolveDriver(req, sendJson);
+    if (!driver) return;
+    const agent = agents.get(req.params.id);
+    if (!agent) {
+      sendJson({ error: 'Agent not found' }, 404);
+      return;
+    }
+    if (driver.kind !== 'agent' || driver.agent.id !== agent.id) {
+      sendJson({ error: 'An agent writes its own checkpoint, and no other.' }, 403);
+      return;
+    }
+    const line = (req.body as { line?: unknown } | undefined)?.line;
+    const problem = checkpointProblem(line);
+    if (problem) {
+      sendJson({ error: `Not kept: ${problem}.` }, 400);
+      return;
+    }
+    writeCheckpoint(agent, line as string);
+    saveAgents();
+    scheduleTick();
+    sendJson({ checkpoint: agent.checkpoint });
   });
 
   // POST /api/agents/:id/start
@@ -2551,7 +2768,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // id from now, and takes its turn below.
       const waits = oneTaskQueue.mustQueue(agent.id, terminalTurn(agent));
       const behind = waits ? busyText(agent) : undefined;
-      const queued = oneTaskQueue.enqueue(agent.id, { ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task) });
+      const queued = oneTaskQueue.enqueue(agent.id, {
+        ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task), how: 'task', from: senderName(agent, req),
+        replay: {
+          kind: 'run-task', task, ...(typeof model === 'string' ? { model } : {}), ...(requester ? { requesterId: requester } : {}),
+          from: senderName(agent, req), sender: senderOf(agent, req), ...(markFor(agent, req) ? { mark: markFor(agent, req) } : {}),
+        } satisfies RunTaskReplay,
+      });
       const startBody = {
         ok: true, started: false, queued: waits, outcome: waits ? 'queued' : 'starting', taskId: queued.ref,
         ...(waits ? { queuedBehind: behind, queuedAt: new Date(queued.queuedAt).toISOString() } : {}),
@@ -2569,7 +2792,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       announceTask(agent.id);
       if (!(await waitTurn(agent, queued.ref))) {
         announceTask(agent.id);
-        if (!answered) sendJson({ error: `Task ${queued.ref} was cancelled while it waited${behind ? ` behind ${behind}` : ''}: it never started.`, code: 'cancelled', taskId: queued.ref }, 409);
+        // In the words task_status gives (and the window, for one the owner took back: the Audit's Info 2 on the train).
+        const was = oneTaskQueue.lookup(queued.ref);
+        if (!answered) sendJson({ error: neverStarted(was?.state === 'failed' ? was.error : 'it was cancelled while it waited'), code: 'cancelled', taskId: queued.ref }, 409);
         return;
       }
       announceTask(agent.id);
@@ -2612,7 +2837,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const waitS = Math.min(Math.max(Number(req.url.searchParams.get('wait')) || 0, 0), TASK_WAIT_MAX_S);
     const until = Date.now() + waitS * 1000;
     let queued = id ? oneTaskQueue.lookup(id) : undefined;
-    if (queued && callerId && callerId !== queued.task.requesterId && callerId !== queued.task.agentId) queued = undefined;
+    // Its asker, the agent that runs it, its project's orchestrator (readsAnswersOf), or Tars.
+    const readsTask = (agentId: string, requesterId: string | null | undefined) => {
+      const worker = agents.get(agentId);
+      return !callerId || callerId === agentId || callerId === requesterId || (!!worker && readsAnswersOf(worker, req, requesterId));
+    };
+    if (queued && !readsTask(queued.task.agentId, queued.task.requesterId)) queued = undefined;
     // Its asker waits on it here: its end is this answer, and is not typed
     // into the asker's terminal as well (agent-watch.ts, isWaitingOn).
     const followed = queued && waitS > 0 && callerId && callerId === queued.task.requesterId ? followTask(queued.task.agentId, callerId) : undefined;
@@ -2631,7 +2861,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
             queuedAt: new Date(q.queuedAt).toISOString(),
             ...(model ? { model } : {}),
             ...(queued.state === 'failed'
-              ? { outcome: 'error', error: `It never started: ${queued.error}.` }
+              ? { outcome: 'error', error: neverStarted(queued.error) }
               : queued.state === 'delivered'
                 ? { outcome: 'delivered', how: queued.how, deliveredAt: new Date(queued.at).toISOString(), ...(queued.note ? { error: queued.note } : {}) }
                 : { outcome: queued.state, ...(queued.state === 'queued' ? { queuedBehind: busyText(agents.get(q.agentId) ?? ({ id: q.agentId } as AgentStatus), q.ref) } : {}) }),
@@ -2640,7 +2870,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         return;
       }
       let found = id ? liveTaskLedger()?.task(queued?.state === 'started' ? queued.taskId : id) : undefined;
-      if (!found || (callerId && callerId !== found.requesterAgentId && callerId !== found.agentId)) {
+      if (!found || !readsTask(found.agentId, found.requesterAgentId)) {
         // An id of the queue's shape: a task that waited its turn in another run of Tars.
         sendJson({ error: /^t-[0-9a-f]{8}$/.test(id) ? unknownTaskText(oneTaskQueue.since) : 'No such task.' }, 404);
         return;
@@ -2659,6 +2889,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // What the turn used and cost, read from the session (transcripts, the
       // state mod's turns) once it ended; a run over ACP reported its own.
       const usage = found.acp ?? (found.outcome !== 'running' && !answering.has(found.id) ? await terminalUsage(found) : undefined);
+      // The line the agent last wrote about itself, while this task runs (core/agent-checkpoint.ts).
+      const checkpoint = checkpointOfTask(agents.get(found.agentId), found);
       sendJson({
         ...(timedOut ? { timeout: true } : {}),
         task: {
@@ -2670,6 +2902,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
           ...(usage ? { usage } : {}),
           ...((model ?? taskModels.get(found.id)) ? { model: model ?? taskModels.get(found.id) } : {}),
           ...(taskRestarts.get(found.id) ? { restartedAfterStop: taskRestarts.get(found.id) } : {}),
+          ...(checkpoint ? { checkpoint } : {}),
         },
       });
     } finally {
@@ -2698,8 +2931,15 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
 
     const by = driver.kind === 'tars' ? 'Tars' : (driver.agent.name || driver.agent.id);
-    const stoppedNow = await stopAgent(agent, { by, reason }, { save: saveAgents, announce: announceAgent });
-    sendJson({ success: true, ...(stoppedNow ? {} : { alreadyStopped: true }), ...stopOf(agent) });
+    const dropQueue = (req.body as { dropQueue?: unknown } | undefined)?.dropQueue === true;
+    const queue = { kept: 0, dropped: 0 };
+    const stoppedNow = await stopAgent(agent, { by, reason }, { save: saveAgents, announce: announceAgent }, { dropQueue, outcome: queue });
+    announceTask(agent.id);
+    sendJson({
+      success: true, ...(stoppedNow ? {} : { alreadyStopped: true }), ...stopOf(agent),
+      // Its queue (2.0.5): kept, paused, or dropped when asked.
+      ...(stoppedNow ? { queueKept: queue.kept, queueDropped: queue.dropped } : {}),
+    });
   });
 
   // POST /api/agents/:id/message
@@ -2735,15 +2975,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // reconnect path below spawns fresh with the correct working directory.
       killStalePty(agent);
 
-      if (agent.ptyId && ptyProcesses.has(agent.ptyId) &&
-          dialogOpen(agent)) {
-        // Same guard as /dispatch: never type into a blocking permission dialog.
-        sendJson({
-          error: `Agent "${agent.name || agent.id}" is blocked on a permission dialog; a typed message cannot answer it. Resolve it in the Tars UI, or stop the agent and re-dispatch.`,
-          waitingReason: 'permission',
-        }, 409);
-        return;
-      }
+      // A dialog holds the message in the terminal's writer, as in /dispatch.
       const noCli = !cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined);
       if (noCli && noteBy) {
         sendJson(noteNeedsSession(agent), 409);
@@ -2838,22 +3070,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayStop(req, agent, sendJson)) return;
-    await stopAcpRuns(agent.id, 'the agent was deleted');
-    dropPermissionAsks(agent.id);
-
-    if (agent.ptyId) {
-      const ptyProcess = ptyProcesses.get(agent.ptyId);
-      if (ptyProcess) {
-        killPty(ptyProcess);
-        ptyProcesses.delete(agent.ptyId);
-      }
-    }
-    endWorkerRequests(agent, 'deleted', { withLinked: true });
-    agents.delete(req.params.id);
-    forgetRestart(req.params.id);
-    saveAgents();
+    // The window's removal, the one path (core/agent-remove.ts): its runs and questions ended, its terminal's whole
+    // tree ended as a stop ends it, its uncommitted work saved, its worktree removed or kept with why, its requesters
+    // told (the Audit's L4 on #523: this route sent the hangup alone, and a deaf CLI outlived the agent).
+    const removed = await removeAgent(agent.id);
     // Gone from the next tick, and the rail reloads a fleet without it.
     announceAgent(agent);
-    sendJson({ success: true });
+    sendJson(removed);
   });
 }

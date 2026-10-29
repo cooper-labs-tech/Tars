@@ -17,11 +17,14 @@ import * as path from 'node:path';
  *   allowed users, answered and refused.
  *
  * The bots, the provider builders, initAgentPty, spawnAgentPty and the writer
- * are the real ones. Faked: node-pty, the two chat SDKs (dispatching an update
- * the way node-telegram-bot-api's processUpdate does: `message`, then the
- * message's type, then every onText that matches, none awaited), the window, and
- * Claude's usage stats. Paths are written relative to the sandbox HOME and the
+ * are the real ones. Faked: node-pty, Slack's SDK, the window, and Claude's
+ * usage stats. Paths are written relative to the sandbox HOME and the
  * repo, and numbers in en-US, so the snapshot is the same on every machine.
+ *
+ * (Telegram's cases went with Tars's own Telegram bot in 2.0.5, and their
+ * snapshots with them; the three that set the two bots side by side keep their
+ * Slack half. Slack's snapshots are byte-identical to the ones recorded before
+ * D1: each still records an empty `telegram`.)
  */
 
 const { tmpHome } = vi.hoisted(() => ({
@@ -34,14 +37,8 @@ type FakePty = {
 };
 const spawned = vi.hoisted(() => [] as FakePty[]);
 type Handler = (...args: unknown[]) => unknown;
-const tg = vi.hoisted(() => ({
-  texts: [] as Array<{ pattern: RegExp; handler: Handler }>,
-  on: new Map<string, Handler[]>(),
-  sent: [] as Array<{ to: string; text: string; opts?: unknown }>,
-  downloads: [] as string[],
-}));
-/** Faults a scenario can switch on: terminals that fail to open, and Telegram files that download. */
-const faults = vi.hoisted(() => ({ spawn: 0, files: false }));
+/** Faults a scenario can switch on: terminals that fail to open. */
+const faults = vi.hoisted(() => ({ spawn: 0 }));
 const sl = vi.hoisted(() => ({
   events: new Map<string, Handler>(),
   message: null as Handler | null,
@@ -86,43 +83,12 @@ vi.mock('@slack/bolt', () => ({
     stop() { return Promise.resolve(); }
   },
 }));
-vi.mock('https', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('https')>();
-  const { PassThrough } = await import('node:stream');
-  const get = (url: string, callback: (response: unknown) => void) => {
-    tg.downloads.push(String(url));
-    const response = Object.assign(new PassThrough(), { statusCode: 200 });
-    setImmediate(() => { callback(response); response.end('contract bytes'); });
-    return { on() { return this; } };
-  };
-  return { ...actual, get, default: { ...actual, get } };
-});
-vi.mock('node-telegram-bot-api', () => ({
-  default: class {
-    on(event: string, handler: Handler) { tg.on.set(event, [...(tg.on.get(event) ?? []), handler]); }
-    onText(pattern: RegExp, handler: Handler) { tg.texts.push({ pattern, handler }); }
-    getMe() { return Promise.resolve({ username: 'tars_test_bot' }); }
-    getFile(fileId: string) {
-      return faults.files
-        ? Promise.resolve({ file_id: fileId, file_path: `files/${fileId}.bin` })
-        : Promise.reject(new Error('no file in the contract'));
-    }
-    sendMessage(chatId: unknown, text: string, opts?: unknown) {
-      tg.sent.push({ to: String(chatId), text, ...(opts === undefined ? {} : { opts }) });
-      return Promise.resolve({});
-    }
-    stopPolling() { return Promise.resolve(); }
-  },
-}));
-
-import { agents, initAgentPty } from '../../../../electron/core/agent-manager';
+import { agents } from '../../../../electron/core/agent-manager';
 import { spawnAgentPty } from '../../../../electron/core/agent-pty';
 import { resetLaunches } from '../../../../electron/core/agent-launch';
 import { ptyProcesses, writeHumanInput, terminalExited } from '../../../../electron/core/pty-manager';
 import { transcriptPath, resetResumeTracking } from '../../../../electron/utils/resume-session';
-import { initTelegramBotService, initTelegramBot, stopTelegramBot, sendTelegramMessage, sendSuperAgentResponseToTelegram } from '../../../../electron/services/telegram-bot';
 import { initSlackBot, stopSlackBot, setGetClaudeStatsRef, sendSlackMessage } from '../../../../electron/services/slack-bot';
-import { getSuperAgent } from '../../../../electron/utils';
 import type { AgentStatus, AppSettings } from '../../../../electron/types';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
@@ -146,8 +112,6 @@ const P2 = path.posix.join(tmpHome, 'projects', 'orion');
 
 function baseSettings(): AppSettings {
   return {
-    telegramEnabled: true, telegramBotToken: 'tg-bot-token', telegramAuthToken: 'tg-auth-token',
-    telegramAuthorizedChatIds: ['42'], telegramChatId: '42', telegramRequireMention: true,
     slackEnabled: true, slackBotToken: 'xoxb-test', slackAppToken: 'xapp-test', slackAllowedUserIds: ['U1'], slackChannelId: 'C0',
     cliPaths: { claude: '/opt/tars-contract/bin/claude' },
   } as unknown as AppSettings;
@@ -201,27 +165,6 @@ function liveCli(agentId: string): FakePty {
 
 const settle = () => new Promise(resolve => setTimeout(resolve, 450));
 
-/** The order of node-telegram-bot-api's messageTypes, for the types these bots listen to. */
-const MESSAGE_TYPES = ['text', 'audio', 'document', 'photo', 'video', 'voice'];
-
-async function telegram(msg: Record<string, unknown>): Promise<void> {
-  const pending: unknown[] = [];
-  const type = MESSAGE_TYPES.find(t => msg[t] !== undefined);
-  for (const h of tg.on.get('message') ?? []) pending.push(h(msg, { type }));
-  if (type) for (const h of tg.on.get(type) ?? []) pending.push(h(msg, { type }));
-  if (typeof msg.text === 'string') {
-    for (const r of tg.texts) {
-      const m = r.pattern.exec(msg.text);
-      if (!m) continue;
-      r.pattern.lastIndex = 0;
-      pending.push(r.handler(msg, m));
-    }
-  }
-  await Promise.all(pending);
-  await settle();
-}
-const dm = (text: string, chat = 42) => ({ message_id: 7, chat: { id: chat, type: 'private' }, text });
-
 const said: Array<{ in: string; text: string }> = [];
 const say = (where: string) => async (text: string) => { said.push({ in: where, text }); };
 async function slackMention(user: string, text: string, channel = 'C1'): Promise<void> {
@@ -257,7 +200,8 @@ function posixUnder(text: string, root: string): string {
 
 function outcome() {
   return normalize({
-    telegram: tg.sent.splice(0),
+    // Tars's own Telegram bot is gone (2.0.5): kept empty, as every Slack case recorded it.
+    telegram: [],
     slack: said.splice(0),
     slackPosted: sl.posted.splice(0),
     typed: spawned.map((t, i) => ({ terminal: i, text: t.write.mock.calls.map(c => String(c[0])).join('') })).filter(t => t.text),
@@ -287,30 +231,19 @@ beforeEach(() => {
   agents.clear();
   ptyProcesses.clear();
   spawned.length = 0;
-  tg.texts.length = 0; tg.on.clear(); tg.sent.length = 0; tg.downloads.length = 0;
-  faults.spawn = 0; faults.files = false;
+  faults.spawn = 0;
   sl.events.clear(); sl.message = null; sl.posted.length = 0;
   said.length = 0; saved.length = 0;
   settings = baseSettings();
   stats = STATS;
   seedFleet();
-  initTelegramBotService(
-    agents, ptyProcesses, () => settings, null,
-    () => getSuperAgent(agents), () => {}, async () => stats,
-    (a: AgentStatus) => initAgentPty(a, null, vi.fn(), vi.fn()),
-    (s: AppSettings) => { saved.push({ telegramAuthorizedChatIds: s.telegramAuthorizedChatIds, telegramChatId: s.telegramChatId }); },
-  );
-  initTelegramBot();
   setGetClaudeStatsRef(async () => stats ?? undefined);
   initSlackBot(() => settings, s => { saved.push({ slackChannelId: s.slackChannelId }); }, null);
 });
 
 afterEach(() => {
-  stopTelegramBot();
   stopSlackBot();
 });
-
-// ── Telegram ──────────────────────────────────────────────────────────────
 
 /**
  * The cases that resume a conversation read its transcript under Claude's
@@ -321,129 +254,6 @@ afterEach(() => {
  * on macOS and Linux; the Windows name is held by resume-session.test.ts.
  */
 const NO_POSIX_TRANSCRIPT_FOLDER = process.platform === 'win32';
-
-describe('Telegram, as recorded before D1', () => {
-  it('/start and /help', async () => {
-    await telegram(dm('/start'));
-    await telegram(dm('/help'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/status, /agents and /projects on a fleet of six', async () => {
-    await telegram(dm('/status'));
-    await telegram(dm('/agents'));
-    await telegram(dm('/projects'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/status, /agents and /projects on an empty fleet', async () => {
-    agents.clear();
-    await telegram(dm('/status'));
-    await telegram(dm('/agents'));
-    await telegram(dm('/projects'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/usage, with stats and without', async () => {
-    await telegram(dm('/usage'));
-    stats = null;
-    await telegram(dm('/usage'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/start_agent: no task, unknown, already running', async () => {
-    await telegram(dm('/start_agent rest'));
-    await telegram(dm('/start_agent nobody Do something'));
-    await telegram(dm('/start_agent dune Do something'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/start_agent: an agent whose CLI is up gets the task as a message', async () => {
-    liveCli('agent-rest');
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/start_agent: a cold start types the launch command', async () => {
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('/stop_agent: running, not running, unknown', async () => {
-    liveCli('agent-dune');
-    await telegram(dm('/stop_agent dune'));
-    await telegram(dm('/stop_agent rest'));
-    await telegram(dm('/stop_agent nobody'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('a message and /ask go to the orchestrator whose CLI is up', async () => {
-    liveCli('agent-orch');
-    await telegram(dm('what is everyone doing?'));
-    await telegram(dm('/ask plan tomorrow'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('a message cold-starts the orchestrator when its CLI is not up', async () => {
-    await telegram(dm('what is everyone doing?'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('a message with no orchestrator in the fleet', async () => {
-    agents.delete('agent-orch');
-    await telegram(dm('anyone there?'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('in a group: without a mention nothing, with one the message without it', async () => {
-    liveCli('agent-orch');
-    await telegram({ message_id: 8, chat: { id: 42, type: 'group' }, text: 'just chatting' });
-    await telegram({ message_id: 9, chat: { id: 42, type: 'group' }, text: '@tars_test_bot status of the release?' });
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('files: a photo, a document, a video, an audio and a voice message', async () => {
-    await telegram({ message_id: 10, chat: { id: 42, type: 'private' }, photo: [{ file_id: 'p-small' }, { file_id: 'p-large' }], caption: 'what is this?' });
-    await telegram({ message_id: 11, chat: { id: 42, type: 'private' }, document: { file_id: 'd1', file_name: 'report.pdf', mime_type: 'application/pdf' } });
-    await telegram({ message_id: 12, chat: { id: 42, type: 'private' }, video: { file_id: 'v1' } });
-    await telegram({ message_id: 13, chat: { id: 42, type: 'private' }, audio: { file_id: 'a1' } });
-    await telegram({ message_id: 14, chat: { id: 42, type: 'private' }, voice: { file_id: 'o1' } });
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('who may command: an unknown chat, then /auth wrong and right', async () => {
-    await telegram(dm('/status', 99));
-    await telegram(dm('hello', 99));
-    await telegram(dm('/auth wrong-token', 99));
-    await telegram(dm('/auth tg-auth-token', 99));
-    await telegram(dm('/status', 99));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it("the orchestrator's answer, sent back to the chat that asked, with every way it is read", async () => {
-    liveCli('agent-orch');
-    await telegram(dm('what is everyone doing?'));
-    const orch = agents.get('agent-orch')!;
-    // After a tool result: the lines that follow it, without the TUI's own.
-    orch.output = ['\x1b[1m● \x1b[0mcalling list_agents\n', '  ⎿  (MCP) 6 agents\n', 'Dune is rebasing onto main.\n', 'ANTHROPIC_API_KEY=sk-ant-api03-abcdefghijklmnopqrstuvwxyz0123456789\n', 'Dove waits on a question from you.\n'];
-    sendSuperAgentResponseToTelegram(orch);
-    // No tool result: the last long lines.
-    orch.output = ['● thinking\n', 'Nothing is running right now, everyone is idle.\n'];
-    sendSuperAgentResponseToTelegram(orch);
-    // Nothing worth reading.
-    orch.output = ['● \n', 'ok\n'];
-    sendSuperAgentResponseToTelegram(orch);
-    await settle();
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('what Tars sends on its own: to the authorized chats, cut at 4000 characters', async () => {
-    sendTelegramMessage('A notice from Tars.');
-    sendTelegramMessage('x'.repeat(4100));
-    await settle();
-    expect(outcome()).toMatchSnapshot();
-  });
-});
 
 // ── Slack ─────────────────────────────────────────────────────────────────
 
@@ -581,67 +391,29 @@ function goneCli(agentId: string): void {
 }
 
 describe('What sets the two bots apart, recorded before D1', () => {
-  it('the orchestrator last in the fleet: Telegram lists it first in its group, Slack in fleet order', async () => {
+  it('the orchestrator last in the fleet: Slack lists it in fleet order', async () => {
     const orch = agents.get('agent-orch')!;
     agents.delete('agent-orch');
     agents.set('agent-orch', orch);
-    await telegram(dm('/status'));
     await slackMention('U1', 'status');
     expect(outcome()).toMatchSnapshot();
   });
 
-  it.skipIf(NO_POSIX_TRANSCRIPT_FOLDER)('Telegram: a worker cold-started resumes its conversation, in its own mode, from its worktree', async () => {
-    workerWithHistory();
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it.skipIf(NO_POSIX_TRANSCRIPT_FOLDER)('Slack: a worker cold-started begins a new conversation, in its own mode, from its worktree, and leaves the old one to resume', async () => {
+  it.skipIf(NO_POSIX_TRANSCRIPT_FOLDER)('Slack: a worker cold-started begins a new conversation, in its own mode, from its worktree', async () => {
     workerWithHistory();
     await slackMention('U1', 'start rest Measure the Usage page');
-    // Slack did not take the conversation: the next start, from Telegram, still resumes it.
-    agents.get('agent-rest')!.status = 'idle';
-    resetLaunches();
-    await telegram(dm('/start_agent rest Measure the Usage page'));
     expect(outcome()).toMatchSnapshot();
   });
 
-  it.skipIf(NO_POSIX_TRANSCRIPT_FOLDER)('Telegram: the orchestrator cold-started by a message resumes its conversation, in bypass', async () => {
-    orchestratorWithHistory();
-    await telegram(dm('what is everyone doing?'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it.skipIf(NO_POSIX_TRANSCRIPT_FOLDER)('Slack: the orchestrator cold-started by a message begins a new conversation, in its own mode, and leaves the old one to resume', async () => {
+  it.skipIf(NO_POSIX_TRANSCRIPT_FOLDER)('Slack: the orchestrator cold-started by a message begins a new conversation, in its own mode', async () => {
     orchestratorWithHistory();
     await slackMessage('U1', 'what is everyone doing?');
-    // No CLI came up in its terminal: the next message, from Telegram, starts it again and resumes.
-    resetLaunches();
-    await telegram(dm('what is everyone doing?'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('Telegram: /start_agent on the orchestrator itself starts it with its instructions', async () => {
-    agents.get('agent-orch')!.status = 'idle';
-    await telegram(dm('/start_agent lead Plan the release'));
     expect(outcome()).toMatchSnapshot();
   });
 
   it('Slack: start on the orchestrator itself starts it with its instructions', async () => {
     agents.get('agent-orch')!.status = 'idle';
     await slackMention('U1', 'start lead Plan the release');
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('Telegram: a task held while somebody types, and one refused by a terminal that exited', async () => {
-    const terminal = liveCli('agent-rest');
-    writeHumanInput(terminal as never, 'a');
-    goneCli('agent-err');
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    await telegram(dm('/start_agent err Read the logs'));
-    // The held task would go in once the typing pauses: dropped here, so that
-    // nothing of this scenario is written after it.
-    terminalExited(terminal as never);
     expect(outcome()).toMatchSnapshot();
   });
 
@@ -658,44 +430,7 @@ describe('What sets the two bots apart, recorded before D1', () => {
 
 // ── Files, launches that fail, and replies that fail ──────────────────────
 
-/** A downloaded file is named after the time it came in: the same on every run once that is taken out. */
-const untimed = (value: unknown) => JSON.parse(JSON.stringify(value).replace(/\/\d{13}-/g, '/<TIME>-'));
-
-/** Telegram's service again, with another way to open a terminal. */
-function telegramService(open: (a: AgentStatus) => Promise<string>): void {
-  initTelegramBotService(
-    agents, ptyProcesses, () => settings, null,
-    () => getSuperAgent(agents), () => {}, async () => stats, open,
-    (s: AppSettings) => { saved.push({ telegramAuthorizedChatIds: s.telegramAuthorizedChatIds, telegramChatId: s.telegramChatId }); },
-  );
-}
-
 describe('Files, launches and replies that fail, recorded before D1', () => {
-  it('Telegram: files downloaded, each handed to the orchestrator with what it is', async () => {
-    faults.files = true;
-    liveCli('agent-orch');
-    await telegram({ message_id: 20, chat: { id: 42, type: 'private' }, photo: [{ file_id: 'p-small' }, { file_id: 'p-large' }], caption: '@tars_test_bot what is this?' });
-    await telegram({ message_id: 21, chat: { id: 42, type: 'private' }, document: { file_id: 'd1', file_name: 'report.pdf', mime_type: 'application/pdf' } });
-    await telegram({ message_id: 22, chat: { id: 42, type: 'private' }, video: { file_id: 'v1' }, caption: 'the demo' });
-    await telegram({ message_id: 23, chat: { id: 42, type: 'private' }, audio: { file_id: 'a1', file_name: 'memo.m4a' } });
-    await telegram({ message_id: 24, chat: { id: 42, type: 'private' }, voice: { file_id: 'o1' } });
-    const seen = untimed({ ...outcome(), downloads: tg.downloads.splice(0) });
-    // The orchestrator's task is its message cut at 100 characters, and where the
-    // cut falls in the file's path depends on the machine's temporary folder.
-    seen.fleet = seen.fleet.map((a: { currentTask: string | null }) => ({ ...a, currentTask: a.currentTask?.split(' saved to: ')[0] ?? null }));
-    expect(seen).toMatchSnapshot();
-  });
-
-  it('Telegram: a terminal that fails to open is said, and the launch given up, so the next try starts at once', async () => {
-    faults.spawn = 1;
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    faults.spawn = 1;
-    await telegram(dm('what is everyone doing?'));
-    await telegram(dm('what is everyone doing?'));
-    expect(outcome()).toMatchSnapshot();
-  });
-
   it('Slack: a terminal that fails to open is said, and the launch given up, so the next try starts at once', async () => {
     faults.spawn = 1;
     await slackMention('U1', 'start rest Measure the Usage page');
@@ -703,16 +438,6 @@ describe('Files, launches and replies that fail, recorded before D1', () => {
     faults.spawn = 1;
     await slackMessage('U1', 'what is everyone doing?');
     await slackMessage('U1', 'what is everyone doing?');
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('Telegram: an agent given no terminal is told so, and the launch given up', async () => {
-    telegramService(async () => 'pty-nowhere');
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    await telegram(dm('what is everyone doing?'));
-    telegramService((a: AgentStatus) => initAgentPty(a, null, vi.fn(), vi.fn()));
-    await telegram(dm('/start_agent rest Measure the Usage page'));
-    await telegram(dm('what is everyone doing?'));
     expect(outcome()).toMatchSnapshot();
   });
 
@@ -730,38 +455,6 @@ describe('Files, launches and replies that fail, recorded before D1', () => {
     // Given up: the next start does not wait for a launch that told nobody it began.
     agents.get('agent-rest')!.status = 'idle';
     await slackMention('U1', 'start rest Measure the Usage page');
-    expect(outcome()).toMatchSnapshot();
-  });
-});
-
-// ── A chat removed mid-flight, and /auth again and again ─────────────────
-//
-// Asked by the Audit's gate of #176 before part 3 moves the adapters: two
-// guards the contract did not hold, recorded on main's bots like the rest.
-
-describe('Chats removed and /auth repeated, recorded before D1 part 3', () => {
-  it('Telegram: a chat removed while the orchestrator works on its message is forgotten, and the answer goes where a notice goes', async () => {
-    settings.telegramAuthorizedChatIds = ['42', '77'];
-    liveCli('agent-orch');
-    await telegram(dm('what is everyone doing?', 77));
-    // JeanBrasse removes chat 77 in Settings while the orchestrator works.
-    settings.telegramAuthorizedChatIds = ['42'];
-    const orch = agents.get('agent-orch')!;
-    orch.output = ['  ⎿  (MCP) 6 agents\n', 'Dune is rebasing onto main, Dove waits on you.\n'];
-    sendSuperAgentResponseToTelegram(orch);
-    sendTelegramMessage('A notice from Tars.');
-    await telegram(dm('and now?', 77));
-    await settle();
-    expect(outcome()).toMatchSnapshot();
-  });
-
-  it('Telegram: /auth tried again and again: each wrong token refused, the right one saves the chat once', async () => {
-    for (const token of ['wrong-1', 'wrong-2', 'wrong-3']) await telegram(dm(`/auth ${token}`, 99));
-    await telegram(dm('/auth', 99));
-    await telegram(dm('/auth tg-auth-token', 99));
-    await telegram(dm('/auth tg-auth-token', 99));
-    await telegram(dm('/auth wrong-4', 99));
-    await telegram(dm('/status', 99));
     expect(outcome()).toMatchSnapshot();
   });
 });

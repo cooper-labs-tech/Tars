@@ -10,11 +10,12 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
+import { servedPathMatches, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
+import { isTarsBundleEntry } from '../services/mcp-roles';
 import { usesNodeHooks, mergeNodeHooks, legacyShCommand } from '../utils/hook-command';
 
 export class ClaudeProvider implements CLIProvider {
@@ -239,31 +240,51 @@ export class ClaudeProvider implements CLIProvider {
     }
   }
 
+  /**
+   * Into Tars's own file only, `~/.claude/mcp.json`, which an agent gets through --mcp-config by its role
+   * (services/mcp-roles.ts, 2.0.5): Claude Code loads its user scope (`~/.claude.json`) for every session
+   * whatever --mcp-config says, so a server registered there (`claude mcp add -s user`, until 2.0.5) reached
+   * every worker. One Tars left there (isTarsBundleEntry: one of the seven, running its Tars bundle) is taken
+   * out, through the CLI, which owns that file and rewrites it all the time. Nothing else in it is touched: a
+   * server of the owner's under a name Tars registers stays, and that is said once.
+   */
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
-    // Try claude mcp add -s user first
-    try {
-      // execFileSync passes argv as a structured array, so name/command/args are
-      // never seen by a shell. The previous form wrapped each arg in double
-      // quotes and handed the whole line to execSync (/bin/sh -c), where
-      // $(...) and backticks inside an argument are still expanded - and one of
-      // those args is `tasmaniaServerPath` straight out of app-settings.json.
-      // execCliSync resolves the name first: on Windows claude is an npm
-      // claude.cmd or a claude.exe, and a bare name finds only the latter.
-      execCliSync('claude', ['mcp', 'add', '-s', 'user', name, command, ...args], {
-        encoding: 'utf-8',
-        stdio: 'pipe',
-      });
-      console.log(`[claude] Registered MCP server ${name} via claude mcp add`);
-      return;
-    } catch (err) {
-      // Fallback: write to mcp.json, and say why rather than swallow it.
-      console.warn(`[claude] claude mcp add failed (${cliFailureText(err)}), writing mcp.json instead`);
+    const theirs = this.userScopeEntry(name);
+    if (theirs !== undefined && !isTarsBundleEntry(name, theirs) && !this.ownersSaid.has(name)) {
+      this.ownersSaid.add(name);
+      console.log(`[claude] ${name} in Claude Code's user scope is not Tars's own (it runs something else): left there, and Tars's copy goes in ${path.join(this.configDir, 'mcp.json')}`);
     }
-
+    if (this.tarsInUserScope(name)) {
+      try {
+        // argv, never a shell (execCliSync): a name never reaches one.
+        execCliSync('claude', ['mcp', 'remove', '-s', 'user', name], { encoding: 'utf-8', stdio: 'pipe' });
+        console.log(`[claude] ${name} taken out of Claude Code's user scope: agents get it by their role`);
+      } catch (err) {
+        console.warn(`[claude] ${name} could not be taken out of Claude Code's user scope (${cliFailureText(err)}): every session still loads it there`);
+      }
+    }
     // Through addMcpServerToJson, which every writer of this file shares: it
     // fails on a file that is not JSON rather than replacing it.
     addMcpServerToJson(path.join(this.configDir, 'mcp.json'), name, { command, args });
-    console.log(`[claude] Registered MCP server ${name} via mcp.json fallback`);
+    console.log(`[claude] Registered MCP server ${name} in ${path.join(this.configDir, 'mcp.json')}`);
+  }
+
+  /** The servers of the owner's under a name Tars registers, said once each. */
+  private readonly ownersSaid = new Set<string>();
+
+  /** This server's entry in Claude Code's user scope (`~/.claude.json`), or undefined. */
+  private userScopeEntry(name: string): unknown {
+    try {
+      const servers = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude.json'), 'utf-8'))?.mcpServers;
+      return servers && typeof servers === 'object' && Object.prototype.hasOwnProperty.call(servers, name) ? servers[name] : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Whether Claude Code's user scope holds Tars's own entry for this server (isTarsBundleEntry). */
+  private tarsInUserScope(name: string): boolean {
+    return isTarsBundleEntry(name, this.userScopeEntry(name));
   }
 
   async removeMcpServer(name: string): Promise<void> {
@@ -291,28 +312,19 @@ export class ClaudeProvider implements CLIProvider {
     }
   }
 
+  /**
+   * In Tars's own file with this path, and Tars's own entry no longer in Claude Code's user scope: one still there
+   * reaches every session, and registering again takes it out (registerMcpServer). A server of the owner's there
+   * under the same name does not count: it is never taken out, so it must not keep Tars registering.
+   */
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
-    // The happy path writes through `claude mcp add -s user`, which lands in
-    // ~/.claude.json - checking only ~/.claude/mcp.json meant this always
-    // answered false and every server was re-registered, by spawning the CLI,
-    // once per claude-family provider on every single boot.
-    const candidates = [
-      path.join(os.homedir(), '.claude.json'),
-      path.join(this.configDir, 'mcp.json'),
-    ];
-
-    for (const configPath of candidates) {
-      if (!fs.existsSync(configPath)) continue;
-      try {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        const existing = config?.mcpServers?.[name];
-        if (!existing?.args?.length) continue;
-        if (existing.args[existing.args.length - 1] === expectedServerPath) return true;
-      } catch {
-        // try the next candidate
-      }
+    if (this.tarsInUserScope(name)) return false;
+    try {
+      const existing = JSON.parse(fs.readFileSync(path.join(this.configDir, 'mcp.json'), 'utf-8'))?.mcpServers?.[name];
+      return !!existing?.args?.length && servedPathMatches(existing.args[existing.args.length - 1], expectedServerPath);
+    } catch {
+      return false;
     }
-    return false;
   }
 
   getMcpConfigStrategy(): 'flag' | 'config-file' {

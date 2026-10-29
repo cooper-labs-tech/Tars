@@ -72,6 +72,13 @@ import type { AddressInfo } from 'node:net';
  *      asking again could run it twice.
  *  F20. Over-correction: a 401 from the Tars that started the CLI, while the
  *      task was queued, is said to be a restart.
+ *
+ * Added with the QA's F1 on the 2.0.5 train (#536 keeps the queue across a
+ * restart, paused), before the code:
+ *  F21. The task was queued when Tars restarted: said never started and to be
+ *      asked again, while the new Tars keeps it, paused, and gives it once the
+ *      queue is resumed: the asker that follows the answer sends it twice, and
+ *      it runs twice. Or Tars out of reach is said to drop a queued task.
  */
 
 vi.mock('../../mcp-orchestrator/src/utils/api.js', () => ({
@@ -363,7 +370,7 @@ describe('delegate_task on a task waiting its turn, when Tars restarts', () => {
     return done ?? 'still waiting';
   }
 
-  it('12. (F15) the task was queued: says at once that Tars restarted, that it never started and must be asked again', async () => {
+  it('12. (F15, F21) the task was queued: says at once that Tars restarted, that the task is kept, paused, and goes in once resumed: never to ask it again', async () => {
     vi.useFakeTimers();
     queuedThen(
       () => ({ task: view('queued'), timeout: true }),
@@ -379,8 +386,11 @@ describe('delegate_task on a task waiting its turn, when Tars restarts', () => {
     expect((result as Result).isError).toBe(true);
     expect(said).toContain('Tars restarted');
     expect(said).toContain('t-0000abcd');
-    expect(said).toContain('never started');
-    expect(said).toContain('asked again');
+    expect(said).toContain('kept');
+    expect(said).toContain('paused');
+    expect(said).toContain('resumed');
+    expect(said).toContain('task_status');
+    expect(said).not.toMatch(/never started|asked again|ask for it again/);
     expect(said).not.toMatch(/may still be working|rather than delegating the task again|could not be reached/);
     expect(calls('/dispatch')).toHaveLength(0);
   });
@@ -431,6 +441,9 @@ describe('delegate_task on a task waiting its turn, when Tars restarts', () => {
     expect(said).toContain('had not started');
     expect(said).toContain('restart');
     expect(said).toContain('task_status');
+    // F21: a restart keeps it, paused (#536).
+    expect(said).toContain('kept');
+    expect(said).not.toContain('not kept');
     expect(said).not.toMatch(/ran on agent|may still be working/);
     expect(calls('/dispatch')).toHaveLength(0);
   });

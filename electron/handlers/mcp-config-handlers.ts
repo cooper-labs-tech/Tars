@@ -3,11 +3,13 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
+import { updateSharedTextSync, writeSharedJsonSync } from '../utils/shared-file';
+import { removeTomlTable } from '../utils/toml-tables';
+import { parse as parseToml } from 'smol-toml';
 
 // Tars-managed MCP servers, hidden from the Custom MCP UI
 const DOROTHY_MANAGED_MCPS = new Set([
   'claude-mgr-orchestrator',
-  'claude-mgr-telegram',
   'claude-mgr-kanban',
   'claude-mgr-vault',
   'dorothy-socialdata',
@@ -134,9 +136,8 @@ function writeGeminiMcp(action: 'update' | 'delete', server?: McpServer, deleteN
     delete servers[deleteName];
   }
 
-  const dir = path.dirname(configPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(configPath, JSON.stringify(data, null, 2));
+  // Written whole beside it, with its final newline, and parsed again (utils/shared-file.ts).
+  writeSharedJsonSync(configPath, data);
 }
 
 // ── Generic JSON MCP: { mcpServers: { name: { command, args, env } } }
@@ -256,49 +257,37 @@ function extractTomlTable(section: string, key: string): Record<string, string> 
   return result;
 }
 
+/** A TOML basic string: JSON's escapes are TOML's, DEL aside (as codex-provider.ts writes them). */
+function tomlString(value: string): string {
+  return JSON.stringify(value).replace(/\u007f/g, '\\u007F');
+}
+
 function escapeTomlKey(key: string): string {
-  if (/[^a-zA-Z0-9_-]/.test(key)) return `"${key}"`;
+  if (/[^a-zA-Z0-9_-]/.test(key)) return tomlString(key);
   return key;
 }
 
+/**
+ * Codex's and grok's config.toml from the page: the server's table taken out (utils/toml-tables.ts), the new one
+ * added at the end, every value escaped (a quote or a Windows path written raw broke the file), and the whole file
+ * written beside itself and parsed again: one that would not parse is not written, and the save says so.
+ */
 function writeCodexMcp(action: 'update' | 'delete', server?: McpServer, deleteName?: string, provider: string = 'codex'): void {
   const configPath = getConfigPath(provider);
-  let content = '';
-  if (fs.existsSync(configPath)) {
-    content = fs.readFileSync(configPath, 'utf-8');
-  }
-
   const targetName = action === 'delete' ? deleteName! : server!.name;
-  // Remove existing section for this name
-  content = removeTomlSection(content, targetName);
-
-  if (action === 'update' && server) {
-    // Append new section
-    const sectionKey = escapeTomlKey(server.name);
-    const argsToml = server.args.map(a => `"${a}"`).join(', ');
-
-    let section = `\n[mcp_servers.${sectionKey}]\ncommand = "${server.command}"\nargs = [${argsToml}]\n`;
-
-    if (Object.keys(server.env).length > 0) {
-      const envPairs = Object.entries(server.env)
-        .map(([k, v]) => `${k} = "${v}"`)
-        .join(', ');
-      section += `env = { ${envPairs} }\n`;
+  const outcome = updateSharedTextSync(configPath, current => {
+    let content = removeTomlTable(current ?? '', `mcp_servers.${escapeTomlKey(targetName)}`);
+    if (action === 'update' && server) {
+      let section = `\n[mcp_servers.${escapeTomlKey(server.name)}]\ncommand = ${tomlString(server.command)}\nargs = [${server.args.map(tomlString).join(', ')}]\n`;
+      if (Object.keys(server.env).length > 0) {
+        section += `env = { ${Object.entries(server.env).map(([k, v]) => `${escapeTomlKey(k)} = ${tomlString(v)}`).join(', ')} }\n`;
+      }
+      content = content.trimEnd() + '\n' + section;
     }
-
-    content = content.trimEnd() + '\n' + section;
-  }
-
-  const dir = path.dirname(configPath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(configPath, content);
-}
-
-function removeTomlSection(content: string, name: string): string {
-  const sectionKey = escapeTomlKey(name);
-  const escapedKey = sectionKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const regex = new RegExp(`\\n?\\[mcp_servers\\.${escapedKey}\\]\\n(?:(?!\\[)[^\\n]*\\n?)*`, 'g');
-  return content.replace(regex, '');
+    return current === undefined && action === 'delete' ? undefined : content;
+  }, { parse: parseToml });
+  if (outcome === 'refused') throw new Error(`${configPath} would not parse with this change (or did not already): left as it was`);
+  if (outcome === 'busy') throw new Error(`${configPath} kept changing while saving: nothing written`);
 }
 
 // ── Dispatch by provider ────────────────────────────────────────────

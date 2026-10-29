@@ -37,8 +37,10 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * A permission question the state mod asked Tars instead of Claude Code's
  * dialog (the state mod, PR 318), and its three answers: allow runs the call, deny refuses it
  * with a reason the agent reads if one is given, ask in terminal puts it to
- * the terminal's dialog, as before the mod. Nothing is typed into the
- * terminal. Frame: `Permission asked of Tars`.
+ * Claude Code's own dialog, which has no delay: answer it there. Nothing is
+ * typed into the terminal. Tars never answers allow by itself (PR 538): a
+ * question waits for the owner, and at the delay Tars refuses it, with its
+ * reason. Frame: `Permission asked of Tars`.
  *
  * `panel`: the row of MessageWaitingNotice, 26 high under a panel's header,
  * the sentence cut first and the answers kept. It offers allow only once its
@@ -52,12 +54,20 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  *
  * The state belongs to one question: the next call's (another askedAt) starts
  * afresh, whatever the last one left open, its line measured again.
+ *
+ * A file tool asked by an agent in bypass, its content withheld from Tars (`withheld`, PR 538):
+ * the path alone, said withheld, and deny and ask in terminal, never allow nor
+ * show all. Tars cannot see what would be written, and refuses an allow anyway
+ * (frame `Permission asked of Tars`, its withheld row).
  */
 export default function PermissionAskNotice({ agent, layout }: {
   agent: Pick<AgentStatus, 'id' | 'status' | 'permissionAsk'>;
   layout: 'panel' | 'window';
 }) {
   const askedAt = agent.permissionAsk?.askedAt;
+  const withheld = agent.permissionAsk?.withheld === true;
+  /** What was withheld and why, as the state mod says it (\`command: 3,014 characters, past the 2,000 the window shows\`). */
+  const withheldWhy = withheld ? agent.permissionAsk?.withheldWhy : undefined;
   const [kept, setKept] = useState<State>(() => fresh(askedAt));
   const state: State = kept.of === askedAt ? kept : fresh(askedAt);
   const update = useCallback(
@@ -134,11 +144,13 @@ export default function PermissionAskNotice({ agent, layout }: {
   );
 
   if (layout === 'panel' && !state.shown) {
+    // A withheld question's why, on a line under it (frame `Permission asked of Tars`, its withheld row at 420).
+    const why = withheldWhy && !late && state.phase !== 'reason' ? (
+      <p data-withheld-why className="truncate pl-[26px] pr-3 pt-[3px] pb-1 bg-secondary border-b border-border font-mono text-[10.5px] text-muted-foreground" title={withheldWhy}>{withheldWhy}</p>
+    ) : null;
     return (
+      <div role="status" data-permission-ask={agent.id} title={late ? `${LATE_WHO} ${LATE_REST}` : line.title} className="shrink-0 flex flex-col">
       <div
-        role="status"
-        data-permission-ask={agent.id}
-        title={late ? `${LATE_WHO} ${LATE_REST}` : line.title}
         className={`shrink-0 flex items-center gap-2 pl-3 pr-1 bg-secondary border-b border-border select-none ${state.phase === 'reason' ? 'py-1' : 'h-[26px]'}`}
       >
         <StatusSquare tone="waiting" />
@@ -154,65 +166,79 @@ export default function PermissionAskNotice({ agent, layout }: {
           <>
             <p className="min-w-0 flex-1 flex items-baseline gap-1 text-[11px] leading-tight text-muted-foreground">
               <span className="shrink-0 text-foreground">{line.who}</span>
-              <span ref={measure} data-subject className="min-w-0 truncate font-mono">{line.subject}</span>
+              <span ref={measure} data-subject className="min-w-0 truncate whitespace-pre font-mono">{withheld ? `${line.subject} · ${withheldWhy ? 'withheld' : 'content withheld'}` : line.subject}</span>
             </p>
             <div className="shrink-0 flex items-center">
-              {state.fits ? (
+              {withheld ? null : state.fits ? (
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>
               ) : (
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ shown: true })} title="Read the whole call before allowing it">show all</Button>
               )}
               <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
-              <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Put it to the terminal's dialog, as before">ask in terminal</Button>
+              <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Claude Code's own dialog, which has no delay: answer it there">ask in terminal</Button>
             </div>
           </>
         )}
       </div>
+      {why}
+      </div>
     );
   }
 
-  // The window, and a panel that opened the call whole: the same block.
+  // The window, and a panel that opened the call whole: the same block. Where
+  // its column is too short for it (a panel in the board's smallest cell, a
+  // low window), it shrinks to what the column holds: its head and its
+  // answers keep their place, and the call, why and the rule scroll between
+  // them, inside the block only (JeanBrasse's report of 2026-10-22:
+  // the block overflowed the panel, which clips, and allow and deny were out
+  // of reach outside full screen). Frame: `Permission asked of Tars`, its
+  // `smallest cell` row.
   return (
-    <div role="status" data-permission-ask={agent.id} className="shrink-0 flex flex-col gap-2 px-3 py-2.5 bg-secondary border-b border-border">
-      <div className="flex items-center justify-between gap-3">
+    <div role="status" data-permission-ask={agent.id} className="min-h-0 flex flex-col gap-2 px-3 py-2.5 bg-secondary border-b border-border">
+      <div className="shrink-0 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2">
           <StatusSquare tone="waiting" />
           <span className="text-xs text-foreground truncate" title={line.title}>{line.who.replace(/:$/, '')}</span>
         </div>
         {line.at && <span className="shrink-0 font-mono text-[11px] text-text-muted">{line.at}</span>}
       </div>
-      {line.subject && (
-        <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
-          {line.subject}
-        </p>
-      )}
-      {(line.reason || line.rule) && (
-        <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
-          {line.reason && (
-            <>
-              <dt className="font-mono text-text-muted">why</dt>
-              <dd className="text-muted-foreground break-words">{line.reason}</dd>
-            </>
-          )}
-          {line.rule && (
-            <>
-              <dt className="font-mono text-text-muted">rule</dt>
-              <dd className="font-mono text-muted-foreground break-all">{line.rule}</dd>
-            </>
-          )}
-        </dl>
-      )}
+      <div data-ask-details className="min-h-0 flex flex-col gap-2 overflow-y-auto">
+        {line.subject && (
+          <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
+            {/* Each line on its own: a break is never read as a space (the Audit's M1 on PR 544). */}
+            {line.lines.map((l, i) => <span key={i} data-subject-line className="block whitespace-pre-wrap">{l}</span>)}
+            {withheld && <span className="text-muted-foreground">{` · ${withheldWhy ? 'withheld' : 'content withheld'}`}</span>}
+          </p>
+        )}
+        {withheldWhy && <p data-withheld-why className="font-mono text-[11px] leading-[15px] text-muted-foreground break-words">{withheldWhy}</p>}
+        {(line.reason || line.rule) && (
+          <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
+            {line.reason && (
+              <>
+                <dt className="font-mono text-text-muted">why</dt>
+                <dd className="text-muted-foreground break-words">{line.reason}</dd>
+              </>
+            )}
+            {line.rule && (
+              <>
+                <dt className="font-mono text-text-muted">rule</dt>
+                <dd className="font-mono text-muted-foreground break-all">{line.rule}</dd>
+              </>
+            )}
+          </dl>
+        )}
+      </div>
       {state.phase === 'reason' ? (
-        <div className="flex items-center gap-1.5">
+        <div className="shrink-0 flex items-center gap-1.5">
           {reasonField}
           <Button size="sm" className={`shrink-0 ${ACTION}`} onClick={deny}>deny</Button>
           <Button size="sm" className={`shrink-0 ${ACTION}`} onClick={back}>back</Button>
         </div>
       ) : late ? lateLine : (
-        <div className="flex items-center gap-1.5">
-          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>
+        <div className="shrink-0 flex items-center gap-1.5">
+          {!withheld && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
-          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Put it to the terminal's dialog, as before">ask in terminal</Button>
+          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Claude Code's own dialog, which has no delay: answer it there">ask in terminal</Button>
         </div>
       )}
     </div>

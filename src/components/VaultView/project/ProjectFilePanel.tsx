@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrandSpinner, Button, StatusSquare } from '@/components/ui';
 import { SimpleMarkdown } from '../components/MarkdownRenderer';
 import { changedAt, clockOf, extensionOf, runnerOf, sizeWords } from './file-words';
-import type { VaultSub } from './useProjectFolders';
 
 type Read = Awaited<ReturnType<NonNullable<NonNullable<Window['electronAPI']>['vault']>['readProjectFile']>>;
 type FileRead = Extract<Read, { path: string }>;
@@ -29,9 +28,10 @@ function NumberedLines({ text }: { text: string }) {
  * editing`, `· a tool`, `· states`). A save carries the time the file was opened, so a file an agent changed
  * meanwhile is never written over without the user knowing it.
  */
-export function ProjectFilePanel({ projectKey, sub, name, names, changes, onOpenFile }: {
+export function ProjectFilePanel({ projectKey, place, name, names, changes, onOpenFile }: {
   projectKey: string;
-  sub: VaultSub;
+  /** Its folder's names from the project's folder (2.0.5, the places of PR 530). */
+  place: string[];
   name: string;
   /** The files of the folder: a report's links to them open them here. */
   names: readonly string[];
@@ -53,10 +53,10 @@ export function ProjectFilePanel({ projectKey, sub, name, names, changes, onOpen
   const load = useCallback(async () => {
     const vault = window.electronAPI?.vault;
     if (!vault?.readProjectFile) return;
-    const answer = await vault.readProjectFile({ key: projectKey, sub, name });
+    const answer = await vault.readProjectFile({ key: projectKey, place, name });
     setRead(answer);
     if ('path' in answer) setMtimeSeen(answer.mtimeMs);
-  }, [projectKey, sub, name]);
+  }, [projectKey, place, name]);
 
   useEffect(() => {
     setRead(null);
@@ -88,7 +88,7 @@ export function ProjectFilePanel({ projectKey, sub, name, names, changes, onOpen
     setSaving(true);
     setSaveError(null);
     try {
-      const answer = await vault.writeProjectFile({ key: projectKey, sub, name, text: draft, mtimeSeen });
+      const answer = await vault.writeProjectFile({ key: projectKey, place, name, text: draft, mtimeSeen });
       if ('ok' in answer) {
         setEditing(false);
         setChangedBy(null);
@@ -153,7 +153,7 @@ export function ProjectFilePanel({ projectKey, sub, name, names, changes, onOpen
             <Button size="sm" className="font-mono" onClick={() => { void navigator.clipboard?.writeText(file.path); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
               {copied ? 'copied' : 'copy path'}
             </Button>
-            <Button size="sm" className="font-mono" onClick={() => void window.electronAPI?.vault?.showProjectFile({ key: projectKey, sub, name })}>show in folder</Button>
+            <Button size="sm" className="font-mono" onClick={() => void window.electronAPI?.vault?.showProjectFile({ key: projectKey, place, name })}>show in folder</Button>
           </>
         )}
       </div>

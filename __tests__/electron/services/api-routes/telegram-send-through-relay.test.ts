@@ -18,6 +18,11 @@ import { startFakeRelay, type FakeRelay } from '../../../fixtures/fake-tars-rela
  * 5. With the relay on, a photo, a video or a document goes out: the relay carries text only.
  * 6. (ORCHESTRATOR-PER-CHAT.md 4.2, PR D, written before the code on 2026-10-12) A chat's runner, a worker with
  *    `kind: 'chat'` and the orchestrator's powers, is refused as a worker.
+ *
+ * Added with the bot's removal (2.0.5, the DB brief remove-telegram-bot-2810.md), before the code:
+ * 7. With the relay off, a send goes out some other way (Tars's own bot, a fallback), or fails without saying that
+ *    Telegram goes through Hermes and where to turn it on.
+ * 8. A photo, a video or a document still has a route: the relay carries text, and nothing else sends a file.
  */
 
 vi.mock('electron', () => ({
@@ -34,6 +39,7 @@ let relay: typeof import('../../../../electron/services/hermes-relay');
 let agents: Map<string, AgentStatus>;
 const TARS = '/Users/someone/projects/tars';
 const settings = { hermesRelayEnabled: true } as AppSettings;
+const relayOff = { hermesRelayEnabled: false } as AppSettings;
 let botSends = 0;
 
 function routeApp(): RouteApp {
@@ -47,11 +53,11 @@ function routeApp(): RouteApp {
   };
 }
 
-function context(): RouteContext {
+function context(over: AppSettings = settings): RouteContext {
   return {
     mainWindow: null,
-    appSettings: settings,
-    getAppSettings: () => settings,
+    appSettings: over,
+    getAppSettings: () => over,
     getTelegramBot: () => ({ sendMessage: async () => { botSends += 1; return { message_id: 1 }; } }) as never,
     getSlackApp: () => null,
     slackResponseChannel: null,
@@ -63,14 +69,15 @@ function context(): RouteContext {
   } as never;
 }
 
-async function post(route: string, body: unknown, caller?: string) {
+async function post(route: string, body: unknown, caller?: string, over: AppSettings = settings) {
   const app = routeApp();
   const { registerTelegramRoutes } = await import('../../../../electron/services/api-routes/telegram-routes');
-  registerTelegramRoutes(app, context());
-  const r = app.routes.find((x) => x.method === 'POST' && x.pattern === route)!;
+  registerTelegramRoutes(app, context(over));
+  const r = app.routes.find((x) => x.method === 'POST' && x.pattern === route);
+  if (!r) return undefined;
   const answers: Array<{ body: unknown; status?: number }> = [];
   const req = { method: 'POST', pathname: route, url: new URL(`http://x${route}`), body, callerAgentId: caller } as unknown as RouteRequest;
-  await r.handler(req, (b: unknown, status?: number) => { answers.push({ body: b, status }); }, context());
+  await r.handler(req, (b: unknown, status?: number) => { answers.push({ body: b, status }); }, context(over));
   return answers[0];
 }
 
@@ -101,7 +108,7 @@ beforeEach(async () => {
 
 describe('send_telegram with the relay on', () => {
   it('1, 3, 4. goes through the relay, under the orchestrator\'s project, masked, and never through the bot', async () => {
-    const answer = await post('/api/telegram/send', { message: 'Done: #271 merged. key sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789', chat_id: '-100999' }, 'orch');
+    const answer = (await post('/api/telegram/send', { message: 'Done: #271 merged. key sk-ant-api03-AbCdEfGhIjKlMnOpQrStUvWxYz0123456789', chat_id: '-100999' }, 'orch'))!;
 
     expect(answer.status ?? 200).toBe(200);
     expect(fake.sends).toEqual([expect.objectContaining({ kind: 'report', project: 'tars', text: expect.stringContaining('Done: #271 merged.') })]);
@@ -111,7 +118,7 @@ describe('send_telegram with the relay on', () => {
 
   it('2. is refused to a worker, and to a caller no token names', async () => {
     for (const caller of ['worker', undefined]) {
-      const answer = await post('/api/telegram/send', { message: 'hi' }, caller);
+      const answer = (await post('/api/telegram/send', { message: 'hi' }, caller))!;
       expect(answer.status, String(caller)).toBe(403);
     }
     expect(fake.sends).toEqual([]);
@@ -121,18 +128,27 @@ describe('send_telegram with the relay on', () => {
   it("6. is open to a chat's runner, under its project: it has the orchestrator's powers", async () => {
     agents.set('runner', { id: 'runner', name: 'Tars-Orchestrator · Release 1.9.4', role: 'worker', kind: 'chat', chatId: 'c-2', teamOrchestratorId: 'orch', projectPath: TARS, status: 'running', provider: 'claude' } as unknown as AgentStatus);
 
-    const answer = await post('/api/telegram/send', { message: 'Release 1.9.4 is out' }, 'runner');
+    const answer = (await post('/api/telegram/send', { message: 'Release 1.9.4 is out' }, 'runner'))!;
 
     expect(answer.status ?? 200).toBe(200);
     expect(fake.sends).toEqual([expect.objectContaining({ kind: 'report', project: 'tars', text: expect.stringContaining('Release 1.9.4 is out') })]);
     expect(botSends).toBe(0);
   });
 
-  it('5. a photo, a video or a document is refused: the relay carries text only', async () => {
+  it('5, 8. a photo, a video or a document has no route: the relay carries text only, and nothing else sends a file', async () => {
     for (const route of ['/api/telegram/send-photo', '/api/telegram/send-video', '/api/telegram/send-document']) {
-      const answer = await post(route, { photo_path: '/tmp/x.png', video_path: '/tmp/x.mp4', document_path: '/tmp/x.pdf' }, 'orch');
-      expect(answer.status, route).toBe(410);
+      expect(await post(route, { photo_path: '/tmp/x.png', video_path: '/tmp/x.mp4', document_path: '/tmp/x.pdf' }, 'orch'), route).toBeUndefined();
     }
+    expect(fake.sends).toEqual([]);
+    expect(botSends).toBe(0);
+  });
+});
+
+describe('send_telegram with the relay off (2.0.5: no bot, no fallback)', () => {
+  it('7. goes nowhere, and says that Telegram goes through Hermes and where to turn it on', async () => {
+    const answer = (await post('/api/telegram/send', { message: 'hi', chat_id: '42' }, 'orch', relayOff))!;
+    expect(answer.status).toBe(409);
+    expect(answer.body).toEqual({ error: 'telegram_through_hermes', reason: 'Telegram goes through Hermes: turn on Telegram through Hermes in Settings, Hermes, Connection.' });
     expect(fake.sends).toEqual([]);
     expect(botSends).toBe(0);
   });

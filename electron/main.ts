@@ -5,7 +5,7 @@
  * - Window management and protocol handling
  * - Agent state and PTY management
  * - IPC handlers for renderer communication
- * - External services (Telegram, Slack, HTTP API)
+ * - External services (Slack, Discord, the HTTP API, the relay to Hermes)
  * - MCP orchestrator integration
  */
 
@@ -20,10 +20,10 @@ import { uncaught } from './uncaught';
 import { startGithubWatch } from './services/github-watch';
 import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, startHermesRelay, tellUser } from './services/hermes-relay';
 import { startRelayRouting } from './services/hermes-relay-routing';
-import { settingsForRelay } from './services/hermes-relay-switch';
 import { reportsOn } from './services/event-reports';
-import { app, dialog, ipcMain, Notification } from 'electron';
+import { app, dialog, ipcMain, Notification, powerSaveBlocker } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
+import { stopSharedMcp } from './services/mcp-shared';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -56,9 +56,6 @@ import {
   saveAgents,
   initAgentPty,
   handleStatusChangeNotification,
-  getSuperAgentOutputBuffer,
-  clearSuperAgentOutputBuffer,
-  superAgentTelegramTask,
 } from './core/agent-manager';
 
 import {
@@ -80,13 +77,6 @@ import { broadcastToAllWindows } from './utils/broadcast';
 import { startApiServer } from './services/api-server';
 import { startOpenAIBridgeServer, stopOpenAIBridgeServer } from './services/openai-bridge';
 import {
-  initTelegramBotService,
-  initTelegramBot as initTelegramBotHandlers,
-  getTelegramBot,
-  sendTelegramMessage,
-  sendSuperAgentResponseToTelegram,
-} from './services/telegram-bot';
-import {
   initSlackBot,
   getSlackApp,
   getSlackResponseChannel,
@@ -102,7 +92,6 @@ import { readAccountsSettings } from './services/claude-accounts/registry';
 import { restartForSettings } from './core/agent-restart';
 import {
   getClaudeSettings,
-  getClaudeStats,
   getClaudeStatsNow,
   prewarmClaudeStats,
   getClaudeProjects,
@@ -122,6 +111,7 @@ import {
 
 // Handlers
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
+import { noteApiPhase } from './core/api-listening';
 import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
 import { registerBusHandlers } from './handlers/bus-handlers';
 import { registerChatHandlers } from './handlers/chat-handlers';
@@ -129,14 +119,18 @@ import { flushBus } from './services/bus-store';
 import { registerVaultHandlers } from './handlers/vault-handlers';
 import { registerVaultProjectFilesHandlers } from './handlers/vault-project-files-handlers';
 import { registerReviewHandlers } from './handlers/review-handlers';
+import { registerAgentQueueHandlers } from './handlers/agent-queue-handlers';
 import { registerTemplateHandlers } from './handlers/template-handlers';
 import { registerTeamTemplateHandlers } from './handlers/team-template-handlers';
 import { registerHermesHandlers } from './handlers/hermes-handlers';
 import { registerOverseerHandlers } from './handlers/overseer-handlers';
 import { startOverseerWatch, stopOverseerWatch, migrateOverseerOutOfAgentReach } from './services/overseer';
 import { migrateWebhookSecretOutOfAgentReach } from './services/hermes-webhook-secret';
-import { startAgentWatch, watchInterruptedTurns } from './services/agent-watch';
+import { startAgentWatch, watchInterruptedTurns, tellQueuesKept } from './services/agent-watch';
 import { endRequestsAtLaunch, endUnresumed } from './core/task-requests';
+import { keepQueue, keptQueueRefs, restoreQueues } from './services/agent-queues';
+import { oneTaskQueue } from './core/one-task';
+import { replayQueuedItem } from './services/api-routes/agent-routes';
 import { startTaskWatch, turnInterrupted } from './services/task-watch';
 import { cliRunningIn } from './core/agent-pty';
 import { beginRun, type PreviousRun } from './services/run-state';
@@ -152,17 +146,24 @@ import { scheduleTick } from './utils/agents-tick';
 import { terminalTokenOf } from './core/agent-tokens';
 import { codexDialogOnScreen } from './core/terminal-mirror';
 import { startSleepWatch, stopSleepWatch } from './services/agent-sleep';
+import { startStatusWatch, stopStatusWatch } from './services/status-truth';
+import { startBornWatch, stopBornWatch } from './services/born-watch';
 import { endUsageProbes } from './services/claude-accounts/usage-probe';
 import { initVaultDb, closeVaultDb } from './services/vault-db';
 import { initAutoUpdater, checkForUpdates, setMainWindowGetter } from './services/update-checker';
 import { checksForUpdates } from './core/sandbox-build';
 import { startCliUpdates } from './services/cli-updater';
 import { migrateLocalTasks, setKanbanAgentDirectory } from './services/kanban-board';
-import { hermesKanban, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { hermesKanban, tellAgentAsTars, tellOrchestratorAsTars } from './services/api-routes/kanban-routes';
+import { giveSlotBackForOwner, startHeavySlot, stopHeavySlot, slotStatus } from './services/heavy-slot-runtime';
+import { inboxAgentOf } from './core/chat-inbox';
+import { installSlotShims } from './services/heavy-slot-cli';
 import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
+import { retireTelegramBot, withoutRetiredSettings } from './services/telegram-retired';
 import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
+import { createKeepAwake } from './services/keep-awake';
 import { endAcpRunsOnQuit, agentsRunningOverAcp } from './services/acp/delegate';
 import { retentionLog, startTmpRetention } from './services/agent-tmp';
 import { sweepRunTokenFolders } from './services/acp/run-token-file';
@@ -177,7 +178,6 @@ import {
   setMainWindow as setUtilsMainWindow,
   sendNotification,
   isSuperAgent,
-  getSuperAgent,
   ensureDataDir,
   ensureAgentInstructions,
   migrateFromClaudeManager,
@@ -203,6 +203,17 @@ for (const stream of [process.stdout, process.stderr]) {
 Object.assign(process.env, currentFolderLookupsOff());
 
 let appSettings: AppSettings = loadAppSettings();
+
+/** The computer kept awake while an agent works, per keepAwake (services/keep-awake.ts). */
+const keepAwake = createKeepAwake({ blocker: powerSaveBlocker, settings: () => appSettings, agents: () => agents.values() });
+
+function startKeepAwake(): void {
+  // Every status change the fleet announces, and every 30 s for a path that announces none.
+  agentStatusEmitter.on('fleet-change', () => keepAwake.sync());
+  setInterval(() => keepAwake.sync(), 30_000).unref?.();
+  ipcMain.handle('keepAwake:state', () => keepAwake.state());
+  keepAwake.sync();
+}
 let stopTmpRetention: () => void = () => undefined;
 let previousRun: PreviousRun | null = null;
 let recovery: { flush: () => void } | null = null;
@@ -233,12 +244,6 @@ function loadAppSettings(): AppSettings {
     notifyOnComplete: true,
     notifyOnStop: true,
     notifyOnError: true,
-    telegramEnabled: false,
-    telegramBotToken: '',
-    telegramChatId: '',
-    telegramAuthToken: '',
-    telegramAuthorizedChatIds: [],
-    telegramRequireMention: false,
     hermesRelayEnabled: false,
     slackEnabled: false,
     slackBotToken: '',
@@ -285,7 +290,6 @@ function loadAppSettings(): AppSettings {
     opencodeDefaultModel: '',
     ampEnabled: false,
     ampDefaultModel: '',
-    defaultProvider: 'claude',
     cliPaths: {
       amp: '',
       claude: '',
@@ -303,8 +307,10 @@ function loadAppSettings(): AppSettings {
       additionalPaths: [],
     },
   };
-  // Every key out of ~/.tars before anything reads one (services/settings-secrets.ts).
+  // Every key out of ~/.tars before anything reads one (services/settings-secrets.ts),
+  // then what a 2.0.4 left of Tars's own Telegram bot (services/telegram-retired.ts).
   migrateSecrets();
+  retireTelegramBot();
   try {
     if (fs.existsSync(APP_SETTINGS_FILE)) {
       const saved = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf-8'));
@@ -326,36 +332,10 @@ function saveAppSettingsToFile(settings: AppSettings) {
     ensureDataDir();
     // 0600 and atomic. The secrets go to ~/.tars-private (settings-secrets.json,
     // and the Sentry token's own file), the rest to app-settings.json.
-    saveSettingsSplit(settingsToSave(settings) as AppSettings);
+    saveSettingsSplit(withoutRetiredSettings(settingsToSave(settings)) as AppSettings);
   } catch (err) {
     console.error('Failed to save app settings:', err);
   }
-}
-
-// ============== Telegram Bot Initialization ==============
-
-function initTelegramBot() {
-  // First inject dependencies into the Telegram bot service
-  initTelegramBotService(
-    agents,
-    ptyProcesses,
-    // Live: a save replaces this object, and the bot must see the new one.
-    () => appSettings,
-    getMainWindow(),
-    () => getSuperAgent(agents),
-    saveAgents,
-    getClaudeStats,
-    (agent: AgentStatus) => initAgentPty(
-      agent,
-      getMainWindow(),
-      handleStatusChangeNotificationWrapper,
-      saveAgents
-    ),
-    saveAppSettingsToFile
-  );
-
-  // Then initialize the bot with handlers
-  initTelegramBotHandlers();
 }
 
 // ============== Notification Handler Wrapper ==============
@@ -366,8 +346,6 @@ function handleStatusChangeNotificationWrapper(agent: AgentStatus, newStatus: st
     newStatus,
     appSettings,
     sendNotification,
-    (text: string) => sendTelegramMessage(text),
-    sendSuperAgentResponseToTelegram
   );
 }
 
@@ -385,7 +363,7 @@ function createIpcDependencies(): IpcHandlerDependencies {
     // Functions
     getMainWindow,
     getAppSettings: () => appSettings,
-    setAppSettings: (settings: AppSettings) => { appSettings = settings; void errorReports.sync(); },
+    setAppSettings: (settings: AppSettings) => { appSettings = settings; void errorReports.sync(); keepAwake.sync(); },
     saveAppSettings: saveAppSettingsToFile,
     saveAgents,
     initAgentPty: (agent: AgentStatus) => initAgentPty(
@@ -397,30 +375,15 @@ function createIpcDependencies(): IpcHandlerDependencies {
     handleStatusChangeNotification: handleStatusChangeNotificationWrapper,
     isSuperAgent,
     getMcpOrchestratorPath,
-    initTelegramBot,
     initSlackBot: () => initSlackBot(() => appSettings, (settings) => {
       appSettings = settings;
       saveAppSettingsToFile(settings);
     }, getMainWindow()),
     initDiscordBot: startDiscordBot,
-    getTelegramBot,
     getSlackApp,
-    getSuperAgentTelegramTask: () => {
-      // Read at call time, not at wire-up time: this is a mutable module
-      // binding, and TypeScript's CommonJS output dereferences it on each
-      // access, so the import gives the current value the require gave.
-      return superAgentTelegramTask;
-    },
-    getSuperAgentOutputBuffer,
-    setSuperAgentOutputBuffer: (buffer: string[]) => {
-      // This is handled internally by agent-manager
-      clearSuperAgentOutputBuffer();
-      buffer.forEach(item => getSuperAgentOutputBuffer().push(item));
-    },
 
     // Claude data functions. The page's stats come at once, as last computed,
-    // and are computed again behind it once a minute old; the bots keep
-    // getClaudeStats, which waits for numbers no older than that.
+    // and are computed again behind it once a minute old.
     getClaudeSettings,
     getClaudeStats: getClaudeStatsNow,
     getClaudeProjects,
@@ -444,7 +407,6 @@ function initApiServer() {
   startApiServer(
     getMainWindow(),
     appSettings,
-    getTelegramBot,
     getSlackApp,
     getSlackResponseChannel(),
     getSlackResponseThreadTs(),
@@ -539,6 +501,10 @@ const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 app.whenReady().then(async () => {
   if (!isPrimaryInstance) return;
   console.log('App ready, initializing...');
+  // No agent's CLI starts until this Tars listens on its port (core/api-listening.ts): "stopped" lets a start through,
+  // and the window and the IPC come up before initApiServer, so the API reads "starting" from here (the Audit's L3 on
+  // #541).
+  noteApiPhase('starting');
 
   // Ensure data directory exists
   ensureDataDir();
@@ -617,6 +583,11 @@ app.whenReady().then(async () => {
     everyMs: healthEveryMs(),
     agents: () => ({ total: agents.size, running: [...agents.values()].filter((a) => a.status === 'running').length }),
     page: () => pageOf(getMainWindow()?.webContents.getURL()),
+    // Each agent's whole tree, weighed on the same sample (services/health/machine.ts, 2.0.5).
+    agentTerminals: () => [...agents.values()].flatMap((a) => {
+      const terminal = a.ptyId ? ptyProcesses.get(a.ptyId) : undefined;
+      return terminal ? [{ id: a.id, pid: terminal.pid }] : [];
+    }),
   });
   registerDiagnosticHandlers({ reports: errorReports, samplesFile: HEALTH_FILE, known: healthWords });
   // Bound how much a crash can lose: PTY-driven fields reach disk on a timer.
@@ -663,7 +634,7 @@ app.whenReady().then(async () => {
   registerMcpOrchestratorHandlers();
   registerCLIPathsHandlers({
     getAppSettings: () => appSettings,
-    setAppSettings: (settings) => { appSettings = settings; void errorReports.sync(); },
+    setAppSettings: (settings) => { appSettings = settings; void errorReports.sync(); keepAwake.sync(); },
     saveAppSettings: saveAppSettingsToFile,
   });
 
@@ -721,16 +692,12 @@ app.whenReady().then(async () => {
   registerVaultProjectFilesHandlers();
   // Review: every repository of every project, scanned and searched (services/review-repositories.ts).
   registerReviewHandlers();
+  registerAgentQueueHandlers();
 
 
   // The relay to the user's Telegram through their Hermes, following its switch
-  // live (services/hermes-relay.ts). On, it is the only voice there: the Tars
-  // bot's token is gone and the bot stays off (hermes-relay-switch.ts).
-  const forRelay = settingsForRelay(appSettings);
-  if (forRelay !== appSettings) {
-    appSettings = forRelay;
-    saveAppSettingsToFile(forRelay);
-  }
+  // live (services/hermes-relay.ts): the only way to their Telegram since 2.0.5,
+  // when Tars's own bot went (services/telegram-retired.ts).
   startHermesRelay({ enabled: () => appSettings.hermesRelayEnabled === true });
   startRelayRouting({
     agents, ptyProcesses, settings: () => appSettings, saveAgents,
@@ -740,7 +707,6 @@ app.whenReady().then(async () => {
   startHermesSessionWatch();
 
   // Initialize services
-  initTelegramBot();
   initSlackBot(() => appSettings, (settings) => {
     appSettings = settings;
     saveAppSettingsToFile(settings);
@@ -768,9 +734,15 @@ app.whenReady().then(async () => {
   // terminal that is gone never ran, and each requester is told (the Audit's
   // R3). The one in hand stays only for a worker the resume restarts (after an
   // abrupt stop); after a clean quit it is ended too (the Audit's M1).
+  // What the agents' queues kept from the run before is not ended: it waits, paused (2.0.5, services/agent-queues.ts).
   endRequestsAtLaunch(agents.values(), new Set(previousRun && !previousRun.resumedAndCrashedAgain
-    ? previousRun.working.map((w) => w.agentId) : []));
+    ? previousRun.working.map((w) => w.agentId) : []), keptQueueRefs());
   saveAgents();
+  // The agents' queues back, paused, each item waiting to be handed over again, and each project's orchestrator
+  // told what waits; kept from now on at each change.
+  const restoredQueues = restoreQueues(oneTaskQueue, replayQueuedItem);
+  keepQueue(oneTaskQueue);
+  tellQueuesKept(restoredQueues);
   // And once the resume has run, the work in hand of each worker it did not
   // relaunch (deleted, stopped or whose folder is gone since, a launch that
   // failed) is ended and told: kept until then, it waited on an end that
@@ -787,6 +759,35 @@ app.whenReady().then(async () => {
   startStallWatch();
   // Agents with no turn for 30 minutes sleep, orchestrators never (services/agent-sleep.ts).
   startSleepWatch();
+  // What an agent started that outlives its session: recorded, and said to its orchestrator an hour on, never
+  // ended by Tars (services/born-watch.ts, 2.0.5).
+  startBornWatch({
+    fleet: () => agents.values(),
+    hasSession: (agent) => {
+      const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+      return !!terminal && cliRunningIn(terminal);
+    },
+    tell: tellOrchestratorAsTars,
+    save: saveAgents,
+  });
+  startKeepAwake();
+  // The heavy-run slot for the whole machine (services/heavy-slot.ts): its shims in ~/.tars/bin for `tars-slot`, its
+  // passes, and the window's read of who holds it and who waits.
+  installSlotShims();
+  startHeavySlot({
+    getAppSettings: () => appSettings,
+    // Told once when the holder is its project's orchestrator: as the holder.
+    tellOrchestrator: (projectPath, text, unless) => (unless && inboxAgentOf(projectPath, agents.values())?.id === unless
+      ? Promise.resolve('self') : tellOrchestratorAsTars(projectPath, text)),
+    tellAgent: (agentId, text) => {
+      const agent = agents.get(agentId);
+      return agent ? tellAgentAsTars(agent, text) : Promise.resolve('gone');
+    },
+    broadcast: (channel, payload) => broadcastToAllWindows(channel, payload),
+  });
+  ipcMain.handle('heavySlot:status', () => slotStatus());
+  // The owner gives a lease back from the window (the Audit's M2 on #537); its holder and orchestrator are told.
+  ipcMain.handle('heavySlot:giveBack', (_e, id: unknown) => typeof id === 'string' && giveSlotBackForOwner(id));
   // codex's turns, read from its session log and posted as its terminal's hooks
   // would post them, with that terminal's own token (services/codex-sessions.ts).
   // What a CLI without Tars's hooks would have posted, posted as its terminal,
@@ -804,6 +805,21 @@ app.whenReady().then(async () => {
       console.warn(`[${watch}] ${route} for ${agentId} not posted:`, err instanceof Error ? err.message : err);
     }
   };
+  // A status its CLI's own record and its terminal contradict, an event having
+  // never reached Tars, posted as that terminal's hook would have (services/status-truth.ts).
+  const postStatus = postAsTerminal('status');
+  startStatusWatch({
+    post: async (agentId, post) => {
+      if (!terminalTokenOf(agentId)) return false;
+      await postStatus(agentId, post);
+      return true;
+    },
+    announce: (agent) => {
+      emitAgentStatus(agent.id);
+      broadcastToAllWindows('agent:status', { type: 'status', agentId: agent.id, status: agent.status, timestamp: new Date().toISOString() });
+      scheduleTick();
+    },
+  });
   // pi's turns, read from its session file (services/pi-sessions.ts).
   startPiSessionWatch({
     dirOf: (agentId) => piSessionDir(DATA_DIR, agentId),
@@ -1026,6 +1042,8 @@ app.on('before-quit', (event) => {
       ['endAcpRunsOnQuit', endAcpRunsOnQuit],
       // A permission question held for the window: the mod's request is answered, back to its dialog.
       ['endPermissionAsks', endPermissionAsks],
+      // The MCP servers shared between agents: their stdin closed, then each stopped by its own process.
+      ['stopSharedMcp', stopSharedMcp],
       ['destroyTray', destroyTray],
       ['stopAgentAutosave', stopAgentAutosave],
       ['stopOverseerWatch', stopOverseerWatch],
@@ -1036,6 +1054,9 @@ app.on('before-quit', (event) => {
       ['stopStatusNotifications', () => stopStatusNotifications()],
       ['stopErrorTriage', stopErrorTriage],
       ['stopSleepWatch', stopSleepWatch],
+      ['stopStatusWatch', stopStatusWatch],
+      ['stopBornWatch', stopBornWatch],
+      ['stopHeavySlot', stopHeavySlot],
       ['stopTmpRetention', () => stopTmpRetention()],
       // A claude asked for an account's usage (get_usage) just before the quit.
       ['endUsageProbes', endUsageProbes],
@@ -1104,4 +1125,4 @@ app.on('certificate-error', (event, webContents, url, error, certificate, callba
   }
 });
 
-export { appSettings, getTelegramBot };
+export { appSettings };

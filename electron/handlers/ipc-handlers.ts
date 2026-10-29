@@ -1,3 +1,5 @@
+import { apiListening, NOT_LISTENING } from '../core/api-listening';
+import { measureFleetDisk, readFleetResources } from '../services/fleet-resources-runtime';
 import { safeGit, safeGitSync } from '../utils/safe-git';
 import { ipcMain, dialog, shell, app } from 'electron';
 import { stopTask, taskBannerOf } from '../services/task-banner';
@@ -7,6 +9,7 @@ import { removeAgent } from '../core/agent-remove';
 import { gitRefusal } from '../core/chat-slots';
 import { restartRunnersOf } from '../services/chat-runners';
 import { diskSpace, listOrphanFolders, removeOrphanFolders } from '../services/orphan-folders';
+import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '../services/disk-janitor';
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
 import { answerPermission, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
@@ -25,7 +28,6 @@ import * as os from 'os';
 import { DATA_DIR, DATA_DIR_MOVE, dataPath } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import * as pty from 'node-pty';
-import TelegramBot from 'node-telegram-bot-api';
 import { App as SlackApp, LogLevel } from '@slack/bolt';
 
 // Import types
@@ -42,7 +44,7 @@ import { landsUnderSafeRoot } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
-import { retireTelegramMcp, settingsForRelay } from '../services/hermes-relay-switch';
+import { withoutRetiredSettings } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
 import { agentStatusOnExit, refuseWhileQuitting } from '../core/quit-state';
@@ -83,7 +85,7 @@ import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
-import { copySecret, showSecretOnce } from '../services/secret-handoff';
+import { mcpConfigPathFor } from '../services/mcp-roles';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -118,14 +120,9 @@ export interface IpcHandlerDependencies {
   handleStatusChangeNotification: (agent: AgentStatus, newStatus: string) => void;
   isSuperAgent: (agent: AgentStatus) => boolean;
   getMcpOrchestratorPath: () => string;
-  initTelegramBot: () => void;
   initSlackBot: () => void;
   initDiscordBot: () => void;
-  getTelegramBot: () => TelegramBot | null;
   getSlackApp: () => SlackApp | null;
-  getSuperAgentTelegramTask: () => boolean;
-  getSuperAgentOutputBuffer: () => string[];
-  setSuperAgentOutputBuffer: (buffer: string[]) => void;
 
   // Claude data functions. The real shapes live in claude-service.ts, which is
   // what actually provides these: this used to restate them as `any`, so a
@@ -325,10 +322,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     saveAgents,
     initAgentPty,
     handleStatusChangeNotification,
-    isSuperAgent,
-    getSuperAgentTelegramTask,
-    getSuperAgentOutputBuffer,
-    setSuperAgentOutputBuffer
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
@@ -399,6 +392,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     }
 
     console.log(`Creating PTY for agent ${id} with shell ${shell} in ${cwd}`);
+    // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+    if (!(await apiListening())) throw new Error(NOT_LISTENING);
 
     // Build PATH that includes user-configured paths, nvm, and other common locations for claude
     const currentSettings = getAppSettings();
@@ -504,15 +499,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       appendAgentOutput(agent, data);
       agent.lastActivity = new Date().toISOString();
       agent.statusLine = extractStatusLine(agent.output);
-
-      // Capture Super Agent output for Telegram
-      if (getSuperAgentTelegramTask() && isSuperAgent(agent)) {
-        const buffer = getSuperAgentOutputBuffer();
-        buffer.push(data);
-        if (buffer.length > 200) {
-          setSuperAgentOutputBuffer(buffer.slice(-100));
-        }
-      }
 
       broadcastToAllWindows('agent:output', {
         type: 'output',
@@ -646,6 +632,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       // Writing `export ...` to an already-running shell is racy: the shell may not
       // process the export before the claude command runs. Baking vars into pty.spawn()
       // guarantees they're in the process environment from the start.
+      // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+      if (!(await apiListening())) throw new Error(NOT_LISTENING);
       refuseWhileQuitting('agent terminal');
       const oldPty = ptyProcesses.get(agent.ptyId!);
       if (oldPty) {
@@ -709,13 +697,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
           appendAgentOutput(agentData, data);
           agentData.lastActivity = new Date().toISOString();
           agentData.statusLine = extractStatusLine(agentData.output);
-          if (getSuperAgentTelegramTask() && isSuperAgent(agentData)) {
-            const buffer = getSuperAgentOutputBuffer();
-            buffer.push(data);
-            if (buffer.length > 200) {
-              setSuperAgentOutputBuffer(buffer.slice(-100));
-            }
-          }
         }
         broadcastToAllWindows('agent:output', {
           type: 'output',
@@ -767,15 +748,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // the name) or a chat's runner (core/agent-role.ts).
     const isSuperAgentCheck = hasOrchestratorPowers(agent);
 
-    // Resolve MCP config path: pass for ALL agents using flag strategy (Claude)
-    let mcpConfigPath: string | undefined;
+    // The MCP config for a flag-strategy CLI (Claude Code and its kin), by role
+    // (services/mcp-roles.ts): a worker's lacks Telegram and X.
+    const mcpConfigPath = mcpConfigPathFor(cliProvider, isSuperAgentCheck);
     let systemPromptFile: string | undefined;
-    if (cliProvider.getMcpConfigStrategy() === 'flag') {
-      const possibleMcpPath = path.join(os.homedir(), '.claude', 'mcp.json');
-      if (fs.existsSync(possibleMcpPath)) {
-        mcpConfigPath = possibleMcpPath;
-      }
-    }
 
     // Super Agent-specific: system prompt file
     if (isSuperAgentCheck) {
@@ -1132,6 +1108,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     owned: [...agents.values()].flatMap(a => [a.worktreePath, a.projectPath, a.secondaryProjectPath]).filter((p): p is string => !!p),
   });
   ipcMain.handle('system:disk', async () => diskSpace());
+  // What each agent and each project costs (services/fleet-resources-runtime.ts): the disk is measured only when asked,
+  // and the window follows it through resources:changed.
+  ipcMain.handle('resources:read', async () => readFleetResources());
+  ipcMain.handle('resources:measureDisk', () => {
+    void measureFleetDisk().catch(err => console.warn('[resources] the disk could not be measured:', err));
+    return { success: true };
+  });
   ipcMain.handle('system:orphanFolders', async () => listOrphanFolders(orphanScope()));
   // The rows the window showed and the person confirmed: nothing else goes.
   ipcMain.handle('system:removeOrphanFolders', async (_event, paths: unknown) => {
@@ -1147,6 +1130,22 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) };
     }
+  });
+
+  // The disk janitor (services/disk-janitor.ts): a scan that proposes, and the owner's approval of the items it
+  // showed, each checked again just before it goes. The projects are the ones the folders above are read in.
+  setJanitorProjects(() => orphanScope().projects);
+  ipcMain.handle('diskJanitor:state', () => janitorState());
+  // Started, not awaited: the window follows it through diskJanitor:changed.
+  ipcMain.handle('diskJanitor:scan', () => {
+    void janitorScan(null).catch(err => console.warn('[janitor] the scan failed:', err));
+    return { success: true };
+  });
+  ipcMain.handle('diskJanitor:approve', (_event, ids: unknown) => {
+    if (!Array.isArray(ids) || !ids.every(i => typeof i === 'string')) return { success: false, error: 'the items to delete must be the ids the window showed' };
+    if (janitorState().deleting) return { success: false, error: 'an approval is already under way' };
+    void janitorApprove(ids).catch(err => console.warn('[janitor] the approval failed:', err));
+    return { success: true };
   });
 
   // Delete an agent with its worktree, its work saved first (core/agent-remove.ts).
@@ -1798,14 +1797,11 @@ function registerSettingsHandlers(deps: IpcHandlerDependencies): void {
 
 function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
   const {
-    getMainWindow,
     getAppSettings,
     setAppSettings,
     saveAppSettings,
-    initTelegramBot,
     initSlackBot,
     initDiscordBot,
-    getTelegramBot,
     getSlackApp
   } = deps;
 
@@ -1995,9 +1991,6 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
 
   async function applySettings(newSettings: Partial<AppSettings>, merge: (current: AppSettings) => AppSettings): Promise<{ success: boolean; error?: string }> {
     try {
-      const telegramChanged = newSettings.telegramEnabled !== undefined ||
-                              newSettings.telegramBotToken !== undefined;
-
       const slackChanged = newSettings.slackEnabled !== undefined ||
                            newSettings.slackBotToken !== undefined ||
                            newSettings.slackAppToken !== undefined;
@@ -2008,22 +2001,10 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
                              newSettings.discordBotToken !== undefined;
 
       const currentSettings = getAppSettings();
-      // With the relay on, Hermes is the only voice on the user's Telegram: the
-      // Tars bot's token is erased and the bot off, whatever else was saved
-      // (hermes-relay-switch.ts).
-      const updatedSettings = settingsForRelay(merge(currentSettings));
-      const relayTurnedOn = updatedSettings.hermesRelayEnabled === true && currentSettings.hermesRelayEnabled !== true;
+      // Settings nothing reads any more (Tars's own Telegram bot's, defaultProvider) are dropped (telegram-retired.ts).
+      const updatedSettings = withoutRetiredSettings(merge(currentSettings));
       setAppSettings(updatedSettings);
       saveAppSettings(updatedSettings);
-
-      // Reinitialize Telegram bot if settings changed
-      if (telegramChanged || relayTurnedOn) {
-        initTelegramBot();
-      }
-      // mcp-telegram sends with the bot's token past the relay: out of every CLI.
-      if (relayTurnedOn) {
-        void retireTelegramMcp(getAllProviders());
-      }
 
       // Reinitialize Slack bot if settings changed
       if (slackChanged) {
@@ -2058,88 +2039,6 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
     }
   }
 
-  // Test Telegram connection
-  ipcMain.handle('telegram:test', async () => {
-    const appSettings = getAppSettings();
-    if (!appSettings.telegramBotToken) {
-      return { success: false, error: 'No bot token configured' };
-    }
-
-    try {
-      const testBot = new TelegramBot(appSettings.telegramBotToken);
-      const me = await testBot.getMe();
-      return { success: true, botName: me.username };
-    } catch (err) {
-      console.error('Telegram test failed:', err);
-      return { success: false, error: String(err) };
-    }
-  });
-
-  // Send test message to Telegram
-  ipcMain.handle('telegram:sendTest', async () => {
-    const appSettings = getAppSettings();
-    const telegramBot = getTelegramBot();
-
-    // Use the first authorized chat ID, or fall back to legacy chatId
-    const chatId = appSettings.telegramAuthorizedChatIds?.[0] || appSettings.telegramChatId;
-
-    if (!telegramBot || !chatId) {
-      return { success: false, error: 'Bot not connected or no authorized users. Authenticate with /auth <token> first.' };
-    }
-
-    try {
-      await telegramBot.sendMessage(chatId, '✅ Test message from Tars!');
-      return { success: true };
-    } catch (err) {
-      console.error('Telegram send test failed:', err);
-      return { success: false, error: String(err) };
-    }
-  });
-
-  // Generate or regenerate the Telegram auth token. The page is told it is
-  // set, never the token: the main process shows it once (secret-handoff.ts),
-  // and telegram:authToken:copy copies it again.
-  ipcMain.handle('telegram:generateAuthToken', async () => {
-    const appSettings = getAppSettings();
-    const newToken = crypto.randomBytes(16).toString('hex');
-
-    appSettings.telegramAuthToken = newToken;
-    saveAppSettings(appSettings);
-    setAppSettings(appSettings);
-
-    void showSecretOnce('Telegram authorization token', newToken,
-      'Send /auth followed by this token to your bot from each Telegram account that may use it. Tars shows it only here: Copy puts it on the clipboard, and Copy token in Settings does again.');
-    return { success: true, set: true };
-  });
-
-  ipcMain.handle('telegram:authToken:copy', async () => ({ copied: copySecret(getAppSettings().telegramAuthToken) }));
-
-  // Remove an authorized Telegram chat ID
-  ipcMain.handle('telegram:removeAuthorizedChatId', async (_event, chatId: string) => {
-    const appSettings = getAppSettings();
-
-    if (!appSettings.telegramAuthorizedChatIds) {
-      return { success: false, error: 'No authorized chat IDs' };
-    }
-
-    appSettings.telegramAuthorizedChatIds = appSettings.telegramAuthorizedChatIds.filter(
-      (id: string) => id !== chatId
-    );
-
-    // If removing the legacy chatId, clear it too
-    if (appSettings.telegramChatId === chatId) {
-      appSettings.telegramChatId = appSettings.telegramAuthorizedChatIds[0] || '';
-    }
-
-    saveAppSettings(appSettings);
-    setAppSettings(appSettings);
-
-    // Notify frontend of settings change
-    const mainWindow = getMainWindow();
-    mainWindow?.webContents.send('settings:updated', settingsForWindow(appSettings));
-
-    return { success: true };
-  });
 
   // Test X API credentials (OAuth 1.0a)
   ipcMain.handle('xapi:test', async () => {

@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { neverStarted, TAKEN_BACK_IN_THE_WINDOW } from '../core/one-task';
 import { liveTaskLedger } from './task-ledger';
 import { AgentStatus, BusMessageAuthorKind } from '../types';
 import { agents, saveAgents } from '../core/agent-manager';
@@ -64,11 +65,13 @@ type News = {
    *  while (stall-watch.ts); `reason` holds the minutes of silence.
    *  `not_delivered`: a request never ran, its message given up or its worker
    *  stopped, deleted or cut by a restart (core/task-requests.ts); `reason` says which. */
-  kind: 'outcome' | 'wait' | 'ended' | 'stopped' | 'stalled' | 'not_delivered';
+  kind: 'outcome' | 'wait' | 'ended' | 'stopped' | 'stalled' | 'not_delivered' | 'kept';
   status: AgentStatus['status'];
   reason?: string;
   /** For a `not_delivered` request `cancelled` by another agent: who, and why, already quoted as data. */
   detail?: string;
+  /** For one the owner took back in the window: the sentence the window says its asker is told, as it is. */
+  said?: string;
   /** The work this is about, so that news overtaken by new work is not handed over. */
   handedAt?: string;
   /**
@@ -121,7 +124,11 @@ const lastSeen = new Map<string, string>();
  * never reached the orchestrator. The reason and the turn tell them apart.
  */
 function stateOf(agent: AgentStatus): string {
-  return [agent.status, agent.waitingReason ?? '', agent.lastTurnStartedAt ?? ''].join('|');
+  // The idle prompt's `waiting` is the same rest as the `idle` before it: Claude Code says so 60 s on. Read as a
+  // second transition, an end of turn with background work (its link kept) was told twice, 18 times in 4 days on
+  // Parallel's orchestrator (the DB brief fix-twin-deliveries-2810.md).
+  const resting = agent.status === 'waiting' && agent.waitingReason === 'idle';
+  return [resting ? 'idle' : agent.status, resting ? '' : agent.waitingReason ?? '', agent.lastTurnStartedAt ?? ''].join('|');
 }
 
 function isAtRest(agent: AgentStatus): boolean {
@@ -336,6 +343,64 @@ export function tellCancelled(requesterId: string, workerId: string, by: string,
     detail: `from ${by}: ${envelopeValue(reason.replace(/\s+/g, ' ').trim().slice(0, 300))}`,
     handedAt: worker.workHandedAt,
   });
+}
+
+/**
+ * A request the owner took back from the queue in the window, told to its asker in the window's own sentence:
+ * task_status's, `It never started: <why>.` (the one take-back by default, or a whole queue dropped).
+ */
+export function tellTakenBack(requesterId: string, workerId: string, why: string = TAKEN_BACK_IN_THE_WINDOW): void {
+  const worker = agents.get(workerId);
+  if (!worker || requesterId === workerId) return;
+  handToRequester(requesterId, worker, {
+    kind: 'not_delivered', status: worker.status, reason: 'cancelled', said: neverStarted(why),
+    handedAt: worker.workHandedAt,
+  });
+}
+
+/**
+ * A message typed into a worker's field that its CLI never took: no turn began
+ * on it, and the worker is back at its prompt (services/status-truth.ts,
+ * `not-taken`). Whoever handed it is told it never ran, since no turn means no
+ * end of turn and no other note: Kotsna-QA's six queued tasks of 28/10 waited
+ * 42 minutes for one.
+ */
+export function tellNotTaken(worker: AgentStatus): void {
+  const link = worker.requestedBy;
+  if (!link?.agentId) return;
+  // The request is over: its link spent, and the next request already typed in
+  // takes it (core/task-requests.ts). Kept, the session's next turn of its own
+  // (a note, the owner typing, a notification) was reported to this requester
+  // as the end of the task it had just been told never ran (the Audit's M1 on #524).
+  linkSpent(worker);
+  saveAgents();
+  if (link.agentId === worker.id) return;
+  handToRequester(link.agentId, worker, {
+    kind: 'not_delivered', status: worker.status, reason: 'not-taken', handedAt: worker.workHandedAt,
+    ...(link.taskRef ? { taskRef: link.taskRef } : {}),
+  });
+}
+
+/**
+ * What the agents' queues kept across a restart of Tars (2.0.5, services/agent-queues.ts): each project's
+ * orchestrator is told, per agent, what waits there, paused, and how to resume it. Its own queue tells nobody: the
+ * owner sees it in the window.
+ */
+export function tellQueuesKept(items: Array<{ ref: string; agentId: string; requesterId?: string; from?: string; how?: string; title: string }>): void {
+  const byAgent = new Map<string, typeof items>();
+  for (const item of items) byAgent.set(item.agentId, [...(byAgent.get(item.agentId) ?? []), item]);
+  for (const [agentId, kept] of byAgent) {
+    const worker = agents.get(agentId);
+    if (!worker) continue;
+    const lead = inboxAgentOf(worker.projectPath, agents.values());
+    if (!lead || lead.id === worker.id) continue;
+    const listed = kept.map((i) => `${i.ref} (${i.how ?? 'task'} from ${envelopeValue(i.from || i.requesterId || 'Tars')}: ${envelopeValue(i.title)})`).join(', ');
+    handToRequester(lead.id, worker, {
+      kind: 'kept', status: worker.status,
+      detail: `has ${kept.length} item${kept.length === 1 ? '' : 's'} kept in its queue across the restart of Tars, paused: ${listed}. `
+        + `Nothing goes in until it is resumed: agent_queue({ id: "${agentId}", action: "resume" }), or take back what is no longer needed with task_cancel`,
+    });
+  }
 }
 
 /** Each request a worker will never run, told to whoever asked (the Audit's R2, R3). */
@@ -581,6 +646,18 @@ export function tellDelegationCut(requesterId: string, workerId: string, firstLi
   handToRequester(requesterId, child, { kind: 'not_delivered', status: child.status, reason: 'interrupted', ...(title ? { title } : {}) });
 }
 
+/**
+ * A task handed at a launch that Tars could not confirm began: in 2 hours its CLI neither started a turn on it nor said
+ * it was idle at its prompt (core/agent-manager.ts, the delivery check). Its requester is told, once, in words that do
+ * not say it never began, since it may have run (the Audit's Low on #549).
+ */
+export function tellStartUnconfirmed(workerId: string): void {
+  const child = agents.get(workerId);
+  const link = child?.requestedBy;
+  if (!child || !link || link.agentId === workerId) return;
+  handToRequester(link.agentId, child, { kind: 'not_delivered', status: child.status, reason: 'unconfirmed', handedAt: child.workHandedAt, ...(link.taskRef ? { taskRef: link.taskRef } : {}) });
+}
+
 /** What a requester is owed about a child: held for it, and typed in when it is free. */
 function handToRequester(requesterId: string, child: AgentStatus, news: News): void {
   const link = { agentId: requesterId };
@@ -668,8 +745,9 @@ function stillNews(childId: string, news: News, requesterId: string): boolean {
   const child = agents.get(childId);
   // Gone since: what it did is still what it did.
   if (!child) return true;
-  // A request that never ran stays news whatever the worker does next.
-  if (news.kind === 'not_delivered') return true;
+  // A request that never ran stays news whatever the worker does next, and so
+  // does what a restart of Tars kept in its queue (2.0.5): no hand-over of its own.
+  if (news.kind === 'not_delivered' || news.kind === 'kept') return true;
   // Work handed since overtakes this news only when this requester handed
   // it: another's request is another task (core/task-requests.ts).
   if (child.workHandedAt !== news.handedAt && (!child.requestedBy || child.requestedBy.agentId === requesterId)) return false;
@@ -880,15 +958,19 @@ function describeNews(news: News): string {
       + 'Read get_agent_output; if nothing moves, stop it and start it again with a brief of what is already done';
   }
   if (news.kind === 'not_delivered') {
+    if (news.reason === 'cancelled' && news.said) return `never ran what you asked of it. ${news.said} Nothing was retried; ask again if it is still needed`;
     if (news.reason === 'cancelled') return `never ran what you asked of it: it was cancelled before it went in, ${news.detail ?? 'by another agent'}. Nothing was retried; ask again if it is still needed`;
     if (news.reason === 'deleted') return 'was deleted before it finished what you asked of it. Nothing was retried; ask again if it is still needed';
+    if (news.reason === 'unconfirmed') return 'was handed your task at its launch, and Tars could not confirm it began: in 2 hours it neither started a turn on it nor said it was idle at its prompt. It may have run: read its output with get_agent_output before asking again'
     if (news.reason === 'interrupted') return 'was running a task you delegated to it when Tars stopped: the run was cut, and nothing was retried; ask again if it is still needed';
     if (news.reason === 'cut') return 'was stopped while working on what you asked of it, and did not finish. Nothing was retried; ask again if it is still needed';
+    if (news.reason === 'not-taken') return 'never ran what you asked of it: its CLI never took the message Tars typed in, no turn began on it, and it is back at its prompt. Nothing was retried; ask again if it is still needed';
     const why = news.reason === 'stopped' ? 'it was stopped before it ran it'
       : news.reason === 'restart' ? 'Tars stopped before it ran it'
       : 'it was waiting behind text typed in its field, and its terminal ended before it could go in';
     return `never ran what you asked of it: ${why}. Nothing was retried; ask again if it is still needed`;
   }
+  if (news.kind === 'kept') return news.detail ?? 'has items waiting in its queue';
   if (news.kind === 'ended') return 'has finished its turn';
   if (news.kind === 'wait' && news.reason === 'permission') return 'is now waiting for a permission answer';
   return `is now ${news.status}`;
@@ -917,6 +999,10 @@ function composeNote(finished: Map<string, News>): string {
     return `- ${envelopeValue(name)} (${envelopeValue(id)}) ${describeOwed(news)}`;
   });
 
+  // What a restart of Tars kept in a queue is no result to read (2.0.5): its own line says what to do.
+  if ([...finished.values()].every((news) => news.kind === 'kept')) {
+    return lines.length === 1 ? `[Tars] ${lines[0].slice(2)}` : ['[Tars] What waits in your agents\' queues since Tars restarted:', ...lines].join('\n');
+  }
   if (lines.length === 1) {
     return `[Tars] ${lines[0].slice(2)}. Read what it produced with get_agent_output, then carry on.`;
   }

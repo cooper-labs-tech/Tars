@@ -34,7 +34,7 @@ test('the new interface switch reads off from an older file, which still loads, 
     notificationsEnabled: false,
     autoStartAgentsOnLaunch: false,
     terminalFontSize: 17,
-    defaultProvider: 'codex',
+    discordRequireMention: false,
   };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.writeFileSync(file, JSON.stringify(older, null, 2));

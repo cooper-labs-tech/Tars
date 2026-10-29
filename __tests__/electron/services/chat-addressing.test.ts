@@ -1,9 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+import { describe, it, expect } from 'vitest';
 import {
-  CHAT_SENT_KEPT_MS, CHAT_SENT_MAX, chatTag, chatListFor, createChatSentLog, parseChatAddress, pickChat, routeChannelMessage, chatsReadable, namesItsChats,
+  chatTag, chatListFor, parseChatAddress, pickChat, routeChannelMessage, chatsReadable, namesItsChats,
 } from '../../../electron/services/chat-addressing';
 import type { Chat } from '../../../electron/services/chats';
 
@@ -25,7 +22,7 @@ import type { Chat } from '../../../electron/services/chats';
  *    nobody and get the numbered list; or the list names another project's chats, or is out of order.
  * 5. The prefix of an outgoing message does not name the project, the number and the title, in that form, or carries a
  *    title's line break or bidi control into the channel.
- * 6. The sent log: a reply to a message of one Telegram chat is matched with the same message id in another (Telegram
+ * 6. (Gone with Tars's own Telegram bot in 2.0.5, and its tests with it.) The sent log: a reply to a message of one Telegram chat is matched with the same message id in another (Telegram
  *    numbers messages per chat); an entry older than 7 days still routes; an unreadable or foreign file throws or routes;
  *    the file grows without bound; it is written readable by others; it holds the message's text.
  * 7. A channel's message for Main, or for a project with no chats, leaves today's path to the orchestrator (the bots'
@@ -113,59 +110,6 @@ describe('5. the prefix of what a chat sends', () => {
 
   it('carries no break and no bidi control from a title', () => {
     expect(chatTag(chat({ title: 'a\nb\u202Ec' }))).toBe('[tars #1 a bc]');
-  });
-});
-
-describe('6. the log of what Tars\'s own bot sent for a chat', () => {
-  let dir: string;
-  let file: string;
-  beforeEach(() => {
-    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-chat-sent-'));
-    file = path.join(dir, 'telegram-sent.json');
-  });
-  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
-  const NOW = Date.parse(at);
-
-  it('finds the chat of a message by its Telegram chat and message id, and no other chat\'s', () => {
-    const log = createChatSentLog(file);
-    log.record({ telegramChatId: '100', messageId: 7, chatId: 'rel' }, NOW);
-    log.record({ telegramChatId: '200', messageId: 7, chatId: 'main' }, NOW);
-    expect(log.chatOf('100', 7, NOW)).toBe('rel');
-    expect(log.chatOf('200', 7, NOW)).toBe('main');
-    expect(log.chatOf('100', 8, NOW)).toBeUndefined();
-    expect(log.chatOf('300', 7, NOW)).toBeUndefined();
-  });
-
-  it('forgets after 7 days', () => {
-    const log = createChatSentLog(file);
-    log.record({ telegramChatId: '100', messageId: 7, chatId: 'rel' }, NOW);
-    expect(log.chatOf('100', 7, NOW + CHAT_SENT_KEPT_MS - 1)).toBe('rel');
-    expect(log.chatOf('100', 7, NOW + CHAT_SENT_KEPT_MS + 1)).toBeUndefined();
-  });
-
-  it('survives a restart, written to the owner alone, without any text', () => {
-    createChatSentLog(file).record({ telegramChatId: '100', messageId: 7, chatId: 'rel' }, NOW);
-    expect(createChatSentLog(file).chatOf('100', 7, NOW)).toBe('rel');
-    if (process.platform !== 'win32') expect(fs.statSync(file).mode & 0o077).toBe(0);
-    expect(Object.keys(JSON.parse(fs.readFileSync(file, 'utf-8')).entries[0]).sort()).toEqual(['at', 'chatId', 'messageId', 'telegramChatId']);
-  });
-
-  it('reads an unreadable or foreign file as empty, and does not throw', () => {
-    for (const body of ['{', '[]', '{"entries":"x"}', '{"entries":[{"telegramChatId":1,"messageId":"x","chatId":2,"at":"y"}]}']) {
-      fs.writeFileSync(file, body);
-      expect(createChatSentLog(file).chatOf('1', 1, NOW)).toBeUndefined();
-    }
-  });
-
-  it('keeps the newest entries when it is full', () => {
-    // Full already, as a long run of sends leaves it; then five more.
-    const full = Array.from({ length: CHAT_SENT_MAX }, (_, k) => ({ telegramChatId: '100', messageId: k + 1, chatId: `c${k + 1}`, at: NOW + k + 1 }));
-    fs.writeFileSync(file, JSON.stringify({ entries: full }));
-    const log = createChatSentLog(file);
-    for (let i = CHAT_SENT_MAX + 1; i <= CHAT_SENT_MAX + 5; i += 1) log.record({ telegramChatId: '100', messageId: i, chatId: `c${i}` }, NOW + i);
-    expect(JSON.parse(fs.readFileSync(file, 'utf-8')).entries.length).toBe(CHAT_SENT_MAX);
-    expect(log.chatOf('100', 1, NOW + CHAT_SENT_MAX + 5)).toBeUndefined();
-    expect(log.chatOf('100', CHAT_SENT_MAX + 5, NOW + CHAT_SENT_MAX + 5)).toBe(`c${CHAT_SENT_MAX + 5}`);
   });
 });
 

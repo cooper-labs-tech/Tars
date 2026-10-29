@@ -56,8 +56,8 @@ npm ci
 Since Electron 44 the `electron` package has no install script: its binary is downloaded the first time
 something asks for it (`require('electron')`, `npx electron`, Playwright's launch), into
 `node_modules/electron/dist`. `npx install-electron` fetches it ahead of time, which a first E2E run wants.
-The seven MCP servers under `mcp-*/` have **their own** `package.json` and are installed
-separately by the build scripts (`cd mcp-memory && npm install && npm run build`, ×7). You do
+The six MCP servers under `mcp-*/` have **their own** `package.json` and are installed
+separately by the build scripts (`cd mcp-memory && npm install && npm run build`, ×6). You do
 not need them installed to run `npm run dev` or `npm test`.
 
 ---
@@ -232,10 +232,12 @@ Two E2E runs share the machine when each takes its own `E2E_PORT_OFFSET` (`e2e/p
 moves `next dev` (3100) and every suite's API port together. Unset, nothing moves.
 
 Stand-ins a spec may point the app at, read only under `DOROTHY_E2E=1`: `TARS_CHAT_RAM_GB` (the RAM the
-chats' limit is computed from) and `DOROTHY_TELEGRAM_API_URL` (`http://127.0.0.1:<port>` and nothing
-else: a stand-in of Telegram's Bot API, which the bot's token travels to in every request's path;
-`e2e/chat-senders.spec.ts`), and `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
-200 ms at least; `e2e/health-reports.spec.ts` takes one a second). And one read by any development run,
+chats' limit is computed from), `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
+200 ms at least; `e2e/health-reports.spec.ts` takes one a second), `DOROTHY_STATUS_EVERY_MS` (how often a status is
+set against its CLI's record, 200 ms at least) and `DOROTHY_SLEEP_AFTER_MS` (the sleep's delay, 2 s at least;
+both in `e2e/status-from-events.spec.ts`). `DOROTHY_TELEGRAM_API_URL`, a stand-in of Telegram's Bot API that 2.0.4's
+bot read, is read by nothing since the bot went in 2.0.5: `e2e/telegram-through-hermes.spec.ts` still sets it, to show
+that nothing asks the stand-in anything. And one read by any development run,
 never by a packaged Tars (`app.isPackaged`): `DOROTHY_ERROR_REPORTS_DSN`, where error reports go, a
 stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 `e2e/error-reports-coverage.spec.ts`).
@@ -243,7 +245,10 @@ stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 **Tars's health, on this machine.** Every 5 minutes Tars appends a sample to
 `~/.tars/health-samples.jsonl` (`0600`): the main process's heap and RSS, its event loop delay
 (p50, p95), the three slowest IPC handlers of the 5 minutes, the agents and how many run, the page
-open. 24 hours rolling, 256 KB at most: numbers, with the names of Tars's own calls and pages, no
+open, and since 2.0.5 the machine (`machine`: free memory, compressor, swap and its growth per minute,
+disk free, load) and each agent's tree (`agentTrees`, MB and processes; `null` on Windows). To see
+the swap climb during a run: `jq -c '[.at, .machine.swapUsedMb, .machine.swapGrowthMbPerMin]'
+~/.tars/health-samples.jsonl`. 24 hours rolling, 256 KB at most: numbers, with the names of Tars's own calls and pages, no
 content, no file path, no name (`services/health/`). To see how a session
 went before a crash, read that file; nothing in it leaves unless error reports are on (SPECS.md,
 Error reports).
@@ -290,7 +295,7 @@ agents run the suite; the suite's own opt-ins (`TARS_STRESS`, `TARS_REAL_CLAUDE`
 
 Coverage (`v8`) is scoped to what is actually worth guarding: `electron/constants`,
 `electron/utils`, `electron/services`, `electron/handlers`, `electron/providers`, plus
-`mcp-orchestrator/src/{utils,tools}`, `mcp-telegram/src`, `mcp-kanban/src`.
+`mcp-orchestrator/src/{utils,tools}`, `mcp-kanban/src`.
 
 Layout mirrors the source tree: `__tests__/electron/services/api-routes/*.test.ts`,
 `__tests__/electron/providers/*.test.ts`, `__tests__/mcp/*.test.ts`. Two suites deliberately
@@ -360,7 +365,7 @@ over `e2e/__screenshots__/win32/<name>.png` for the surfaces the change was mean
 on a Windows machine, run `npm run e2e:update` (with `npx tsc -p electron/tsconfig.json` first)
 and review `git diff --stat e2e/__screenshots__/win32/` as below.
 
-The manifest is `e2e/surfaces.mjs`: **20 pages + 19 settings sections + 3 overlays = 42
+The manifest is `e2e/surfaces.mjs`: **21 pages + 19 settings sections + 3 overlays = 43
 surfaces**. `e2e/__screenshots__/` holds one PNG per surface, plus the six Chat rooms that
 their own spec photographs.
 
@@ -540,7 +545,7 @@ passes on your Mac and fails there is a finding, not noise.
 npm run electron:pack
 ```
 
-`tsc -p electron/tsconfig.json`, then build all seven MCP bundles, then
+`tsc -p electron/tsconfig.json`, then build all six MCP bundles, then
 `electron-builder --dir --mac` as **Tars Sandbox**: its own name, bundle id
 (`xyz.cooperlabs.tars.sandbox`, so macOS keeps its settings, notifications and Application
 Support folder apart from Tars's) and icon (`build/sandbox-icon.icns`, the mark's grid in grey
@@ -600,7 +605,7 @@ git status src/app
 npm run electron:build
 ```
 
-`build:renderer` + `tsc` + all seven MCP bundles + `electron-builder --mac`
+`build:renderer` + `tsc` + all six MCP bundles + `electron-builder --mac`
 (targets `dmg` and `zip`), then `scripts/prune-releases.mjs`. Output: `release/` of the checkout
 it runs in. To publish, do not stop here: `npm run release` runs this build itself, see
 *Cut a release*.
@@ -776,7 +781,7 @@ npm run release:win                # build, check, and add the Windows files to 
    files yet. A GitHub it cannot ask is a refusal, not a pass;
 2. builds, without `CI`, `GH_TOKEN` or `GITHUB_TOKEN`: the app icon (`scripts/make-app-ico.mjs`
    writes `build/icon.ico` from `public/icon.svg`), `npm run build:renderer`, the main process,
-   the seven MCP bundles, then `electron-builder --win --x64 --config
+   the six MCP bundles, then `electron-builder --win --x64 --config
    build/electron-builder-win.json --publish never`. That file is `package.json` `build` plus
    the exclusion of what the packaged app never loads (`next`, `@next/*`, `sharp`, `@img/*`,
    better-sqlite3's `deps/` and non-win32 prebuilds, node-pty's darwin prebuilds), written at
@@ -932,7 +937,7 @@ work.
 |---|---|---|
 | `~/.tars/agents.json` | `electron/core/agent-manager.ts` | the fleet: schema `version: 2`, `savedAt`, `agents[]` |
 | `~/.tars/agents.backup.json` | same | last good copy, taken from content just parsed successfully |
-| `~/.tars/app-settings.json` | `electron/main.ts` (`saveAppSettingsToFile`) | every setting but the secrets: Telegram/Slack/X/Jira switches, CLI paths, memory backends' addresses |
+| `~/.tars/app-settings.json` | `electron/main.ts` (`saveAppSettingsToFile`) | every setting but the secrets: Slack/X/Jira switches, CLI paths, memory backends' addresses. At each launch, before it is read, `electron/services/telegram-retired.ts` takes out the six fields of Tars's own Telegram bot (gone since 2.0.5) and, if the bot had been set up, writes `telegramBotRetired: { at, hadToken }` once |
 | `~/.tars-private/settings-secrets.json` | `electron/services/settings-secrets.ts` (`saveSettingsSplit`) | every secret of the settings: the bots' tokens, provider and CLI keys, SocialData's, X's, Jira's, Hermes's gateway token, gbrain's and Honcho's, mode `0600` (in `app-settings.json` until 2.0.4, moved at the first start with every copy of it erased) |
 | `~/.tars-private/api-token` | `electron/services/api-server.ts` | 32 random bytes hex, mode `0600` (in `~/.dorothy` until 2.0.4) |
 | `~/.tars-private/hermes-connection.json` | `electron/services/hermes-config.ts` | gateway mode/url/ssh (in `~/.dorothy` until 2.0.4); its token is in `~/.tars-private/hermes-token` |
@@ -957,7 +962,7 @@ work.
 | `~/.tars/acp-registry.json` | `electron/services/acp/registry.ts` | ACP launch commands, 24 h TTL |
 | `~/.tars/vault.db` | `electron/services/vault-db.ts` | SQLite, WAL, `foreign_keys=ON` |
 | `~/.tars/vault/` + `vault/attachments/` | same | vault file bodies |
-| `~/.tars/telegram-downloads/` | `electron/services/telegram-bot.ts` | inbound media |
+| `~/.tars/telegram-downloads/` | nothing since 2.0.5 (`telegram-bot.ts` until then) | the media Tars's own Telegram bot received; left in place when the bot went: your files, to keep or delete by hand |
 | `~/.tars/CLAUDE.md` | `electron/utils/index.ts` | copied from the repo at every boot, loaded by agents via `--add-dir` |
 | `~/.tars/statusline.sh` | `electron/utils/statusline.ts` | installed only when the statusline is enabled |
 | `~/.tars/rate-limits.d/<account>.json` | the `statusline.sh` it installs | each Claude account's last 5 h and weekly counters, `default` for account 1; what Tars chooses an agent's account from when several are on, and what the Usage page shows per account (`accountRateLimits` of `claude:getData`). With several accounts on, Tars also asks Claude Code itself every 10 minutes (`get_usage`, `usage-probe.ts`), so an account no agent ran on, or one used on claude.ai, is still read; a failed probe is a `[claude-accounts] the usage of <id> was not read` line in the main process's log, and the account keeps its status line's figures. An account whose own `projects/` is a real folder holding something gets no agent (they start on account 1, and Settings says why): move its contents into `~/.claude/projects` and delete it; an empty one is made the link at the next launch |
@@ -974,6 +979,7 @@ to a CLI, and Tars makes it `0700` whichever write creates it:
 | `~/.tars-private/hermes-webhook-<id>.secret` | `electron/services/hermes-gateways.ts` (`rotateGatewaySecret`) | another gateway's bearer for `POST /api/webhooks/hermes/<id>`, 32 random bytes hex, mode `0600`, removed with its gateway (2.0.4) |
 | `~/.tars-private/hermes-webhook-secret` | `electron/services/hermes-webhook-secret.ts` (`provisionWebhookSecret`) | the default gateway's bearer for `POST /api/webhooks/hermes` and the only credential that opens it: 32 random bytes hex, mode `0600`, minted the first time Settings > Hermes asks for it. Moved out of `~/.tars/hermes-webhook-secret` at the first startup that finds it there, value unchanged, so Hermes keeps working; read back before the old file is deleted, and while it cannot be moved the webhook opens to nobody. An old file found beside the private one opens nothing and is deleted |
 | `~/.tars-private/overseer-hermes-sessions.json` | `electron/services/overseer-store.ts` (`rememberHermesSessions`) | the ids of the Hermes sessions the super chat's turns ran in, the last 5000, mode `0600`: `memory_search` leaves them out, so no agent is handed the super chat through Hermes |
+| `~/.tars-private/overseer-hermes-session.json` | `electron/services/overseer-store.ts` (`keepHermesSession`) | the one Hermes session the super chat talks in, its stored id per gateway URL, mode `0600`: every turn resumes it, after a restart or a sleep too; removed when the conversation is cleared, so the next turn starts a new session. A gateway that no longer has it is given a new one (0.21.5 answers 4007), or makes it again under the same id (0.22) |
 | `~/.tars-private/claude-accounts.json` | `electron/handlers/claude-accounts-handlers.ts` | several Claude subscriptions: the option (off by default), each account's id and label, the thresholds. No credential and no folder: each account is the Claude Code folder `~/.claude-accounts/<id>`, derived from its id and signed in by `claude auth login`. `CLAUDE_CONFIG_DIR=<folder> claude auth status` says what Claude Code sees there. A file that does not parse freezes the list (every change refused, Settings says so) until it is fixed or removed; removing it leaves the folders signed in, so sign each out first with `CLAUDE_CONFIG_DIR=<folder> claude auth logout`. With the option on, Tars moves an unpinned agent to the account with most room when a limit cuts its turn (then types "Continue where you left off..." into the new session) or when a turn ends past a threshold, once per agent every ten minutes at most; each move is a `[claude-accounts] <agent>: moving from <id> to <id>` line in the main process log, and the blocks it sets are in memory only, gone at a restart of Tars |
 | `~/.tars-private/run-state.json` | `electron/services/run-state.ts` | this run's record, mode `0600`: `cleanExit: false` while it runs, `true` after a quit. Open at a launch means the last run stopped abruptly, and the agents in `working` are resumed with a note, unless the Tars that wrote it still runs (its pid is a live process of yours that started when the record's `processStart` says, and the machine has not rebooted since; `ps -o lstart= -p <pid>` on macOS shows that start): a second Tars on the same home reads nothing from it and writes nothing to it. Here because it says whom Tars starts: in `~/.tars`, any agent could have had any agent started at the next launch |
 | `~/.tars-private/task-texts.jsonl` | `electron/services/task-ledger.ts` | what each task of the task ledger said, `{ id, text }`, its first line, 200 characters at most, mode `0600`: JeanBrasse's typed prompts and the chat messages handed to orchestrators, which no agent is handed. Moved out of `~/.tars/task-ledger.jsonl` at the first start that finds texts there |
@@ -1154,34 +1160,38 @@ curl -s -H "Authorization: Bearer $TOKEN" $API/api/memory/status | jq
 | GET | `/api/tasks/:id` · `/api/tasks?clientRequestId=` (a delegated task as the ledger keeps it; `?wait=<s>` holds the request until the task ends, 120 s at most, and answers `timeout: true` if it has not: what `delegate_task` waits on, segment after segment, since run-task answers once the run has started, with `answer: 'started'`) |
 | POST | `/api/tasks/:ref/cancel` (`{ reason? }`: a request still queued at a worker, taken back by its requester, or by the project's orchestrator with a reason; `not_your_task` 403, `reason_required` 400, `already_delivered` 409) |
 | DELETE | `/api/agents/:id` |
+| POST | `/api/heavy-slot/ask` (`{ pid, priority?, label?, untilTurnEnds? }`: the heavy-run slot, `electron/services/heavy-slot.ts`; an agent's own token; `pid` under the agent's terminal) · `/api/heavy-slot/tickets/:id/give-back` |
+| GET | `/api/heavy-slot` (who holds the slot, who waits and why) · `/api/heavy-slot/tickets/:id` (the asking agent's own ticket) |
 | POST | `/api/hooks/{output,status,task-completed,agent-stopped,notification}` |
 | GET | `/api/memory/{context,search,status}` · POST `/api/memory/{write,remember}` |
 | GET/POST/PUT/DELETE | `/api/vault/documents[/:id]` · `/api/vault/folders[/:id]` · `/api/vault/search` · `/:id/attach` |
 | GET | `/api/local-file` |
 | POST | `/api/kanban/generate` |
 | POST/GET | `/api/bus/post` · `/api/bus/read` (what `room_post` and `room_read` call; authenticated, and the caller is the agent its token names; a call on the shared token has no agent behind it and is refused `403`, before any room is looked at) |
-| POST | `/api/telegram/{send,send-photo,send-video,send-document}` (only to the chats authorized in Settings, read live) · `/api/slack/send` · `/api/discord/send` (only to the channel Settings > Discord detected, or one an allowed member wrote from) |
+| POST | `/api/telegram/send` (through the Hermes relay only, from a project's orchestrator or a chat's runner, text only; `409 telegram_through_hermes` with the relay off; `send-photo`, `send-video` and `send-document` went with the bot in 2.0.5) · `/api/slack/send` · `/api/discord/send` (only to the channel Settings > Discord detected, or one an allowed member wrote from) |
 | GET | `/api/chats/list` (`chat_list`: with `chatsReadEachOther` on, the other chats of the caller's project; `403 chats_read_off` off, `403 not_a_chat` for an agent that runs no chat) |
 | POST | `/api/webhooks/hermes` · `/api/webhooks/hermes/<gateway id>` |
 
 The Slack bot answers only the member ids in Settings > Slack (`slackAllowedUserIds`): with
 none, it answers nobody, and tells whoever mentions it or writes to it directly their own id,
-which is how to find yours. The Telegram bot answers the chats enrolled with `/auth`, which takes
-five wrong tokens from a chat and twenty from all chats in any fifteen minutes, then says "Too many
-attempts" without comparing, with the time it lifts; both read the settings as they are, so a change
-there counts without a restart (SECURITY §6). A lock-out from the count of all chats keeps your own
-new chat out too: turn Telegram off and on in Settings, which restarts the bot and clears the count.
+which is how to find yours. It reads the settings as they are, so a change there counts without a restart
+(SECURITY §6).
 
-`ask_user` (the orchestrator MCP server's tool, `POST /api/user/ask`) and the event reports go through the relay
-to your Hermes, not through this bot: see "The relay (Tars's side)" under Hermes gateway below.
+Tars has no Telegram bot of its own since 2.0.5 (JeanBrasse's decision of 2026-10-01: Hermes is the only voice on
+Telegram, with no fallback). Its `/auth`, `/start_agent` and `/status`, its downloads and its settings went with it,
+and nothing polls Telegram. `send_telegram`, `ask_user` (the orchestrator MCP server's tools, `POST /api/telegram/send`
+and `POST /api/user/ask`) and the event reports go through the relay to your Hermes: see "The relay (Tars's side)"
+under Hermes gateway below. At the first launch of 2.0.5, Tars removes the bot's token and fields from
+`~/.tars-private/settings-secrets.json` and `~/.tars/app-settings.json`, and its sent log; revoke the token with
+BotFather (`/revoke`) if you had set the bot up. `~/.tars/telegram-downloads/` stays.
 
-**Which chat a message reaches** (2.0.0, the chats; SPECS §4, The senders). A message from Telegram, Slack or
-Discord, or through the relay, that names no chat goes to the project's inbox chat: Main, the orchestrator, unless
+**Which chat a message reaches** (2.0.0, the chats; SPECS §4, The senders). A message from Slack or
+Discord, or from Telegram through the relay, that names no chat goes to the project's inbox chat: Main, the orchestrator, unless
 you made another chat the inbox. Start it with `#3 ` (or `@project #3 `) to write to chat 3; an `#N` the project has
 no chat for answers with the numbered list. On Telegram, reply to a chat's message (each starts
 `[<project> #N <title>]`) and it goes to that chat, whatever the text says. A reply that went to the wrong place: the
-bot's log of what it sent for a chat is `~/.tars-private/telegram-sent.json` (Telegram's chat and message ids, the
-chat's id, 7 days), the relay's is `~/.tars-private/relay-sent.json` (each entry's `chatId`); an entry older than its
+relay's log of what it sent is `~/.tars-private/relay-sent.json` (each entry's `chatId`; the bot's
+`telegram-sent.json` went with it in 2.0.5); an entry older than its
 keep reaches nobody, and the sender is told. The kanban's and the error triage's notes, and the stall reports, go
 to the inbox chat too, only while its CLI runs.
 
@@ -1227,6 +1237,59 @@ stat -f '%Sp %N' ~/.tars-private/api-token      # expect -rw-------
 | every call `ECONNREFUSED` | port taken at boot, API never started | `lsof -nP -iTCP:31415`, kill the squatter, restart Tars |
 | `413 Request body too large` | >4 MiB payload | it is a hard cap; chunk the prompt |
 | An agent stuck in its last status, and its Logs say `[Tars] Refused a session (...): its CLI (pid N) is not this terminal's` | Tars takes a session only from the CLI it launched in the agent's terminal: the terminal's own process, or, when the terminal runs a shell the CLI was typed into, that shell's child (`core/terminal-cli.ts`). A `claude -p` run from inside the agent is refused, as meant. So is a CLI further down: a `cliPath` wrapper script that does not `exec` the CLI, or a shell rc that starts tmux (its shells are children of the tmux server) | `exec` the CLI in the wrapper; no tmux in the agent's shell rc. On Linux the parent is read from `/proc/<pid>/stat`, so `ps` is not needed |
+
+---
+
+## The heavy-run slot
+
+One slot for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and
+simulators of every project's agents take it in turn. A dev server started on its own does not (it would hold the
+only slot for hours); one a test run starts is inside that run. The plan's item A; the three projects'
+orchestrators each had a lock of their own, which coordinated nothing between projects and stayed taken when its
+agent died.
+
+- **How an agent asks.**
+  - `tars-slot run --label "<what>" -- <command>` in its terminal waits, runs the command as its child, gives the
+    slot back when it ends and exits with its code (128 + the signal when a signal ended it; 75 when
+    `--wait-seconds` ran out). Git hooks and scripts use it: they cannot call an MCP tool. `"$TARS_SLOT" run ...` is
+    the same command without the PATH, which a login shell may set anew (Debian's and Ubuntu's `/etc/profile`).
+  - `tars-slot take`, from a script that runs the steps itself, holds it for that script (its parent process) and
+    prints the ticket; `tars-slot give-back <ticket>`; `tars-slot status`.
+  - The MCP tools `heavy_slot_take`, `heavy_slot_give_back`, `heavy_slot_status`: the lease is then the agent's CLI's,
+    for the turn. Tars gives it back when the agent's turn ends (its Stop, or `idle` on record), granted or still
+    waiting, and tells the holder and its orchestrator. A `tars-slot run` lease is its own process's and stays.
+- **Where `tars-slot` comes from.** `~/.tars/bin/tars-slot` (and `tars-slot.cmd` on Windows), a shim that names no app
+  path: it runs `$TARS_NODE $TARS_SLOT_SCRIPT`, which every agent terminal is given, with `TARS_SLOT` naming the shim
+  and `~/.tars/bin` **last** on its PATH (`services/heavy-slot-cli.ts`): first, a file any agent put there would run
+  instead of the command it is named after. The script is `electron/resources/tars-slot.cjs`.
+- **The queue.** `gate` (a release gate: orchestrators only; anyone else asking gets `normal`, and is told), then
+  `normal`, then `background`, then arrival. An ask from under a holder's process (a pre-push hook inside its own
+  run) is granted at once, inside that lease: a lease of the same agent only.
+- **A lease is a live process.** A pass every second while anything is held or waited for drops the leases and asks
+  whose process ended, killed or crashed, and grants the free slots. The lease's process must be under the asking
+  agent's terminal, where `ps` can be read. An agent with no terminal is refused, and so is a lease on Tars's own
+  process or one of its parents, on every system.
+- **The label** is masked (`utils/redact-secrets.ts`) before it is recorded: a token or a URL's password in a command
+  line does not reach the queue every agent reads.
+- **The machine.** Before a grant, as the health samples read it (`services/health/machine.ts`): under the floor of
+  free disk (`heavySlotMinDiskGb`, 15) or free memory (`heavySlotMinFreeMemPct`, 20 %), the grant waits and the waiter
+  reads why. A figure the system cannot give does not block. During a run, every 30 s: alerts at 10, 6 and 3 GB of
+  free disk and when the swap grows by 1,000 MB a minute or more, to the holder (`tars-slot run` prints them), its
+  project's orchestrator (typed as Tars) and the window (`heavySlot:alert`). **Tars never stops a run itself.**
+- **Settings.** `heavySlots` (1 to 8; default 1), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in
+  `~/.tars/app-settings.json`.
+- **The window.** `window.electronAPI.heavySlot.status()`, `giveBack(ticketId)` (the owner gives any lease or ask
+  back; its holder and its orchestrator are told, and it is among the day's alerts), and the events `onChanged` (the
+  same status) and `onAlert`.
+  One read gives the settings and floors, the machine's last reading, each holder with its pid and its tree's memory
+  and CPU (one `ps` at most every 2 s; none on Windows), the waiters in order with why, and the day's alerts with whom
+  each was sent to.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| `tars-slot: run it from an agent's terminal started by Tars` | no `TARS_SLOT_SCRIPT` or no token: not an agent's terminal, or one started before 2.0.5 | restart the agent |
+| `process N is not under your terminal` | the lease was asked for a process that is not the agent's | ask from the agent's own terminal; `take` holds it for its caller |
+| waits with `waiting for free disk` / `free memory` | under the floor | free disk or memory, or lower the floor in the settings |
 
 ---
 
@@ -1288,11 +1351,12 @@ both behave identically. It:
 1. calls `killStalePty(agent)`: if the PTY's recorded `ptyCwd` no longer matches
    `worktreePath || projectPath`, the PTY is killed so the spawn path restarts it in the right
    directory;
-2. **refuses with `409`** if the agent is `waiting` on a permission dialog: a typed message
-   cannot answer arrow-key UI, and the trailing `\r` could *accept* the pending permission:
-   `Agent "X" is blocked on a permission dialog; a typed message cannot answer it.`
-   Every other writer (the bus, delegation notes, "send held", Telegram, Slack) is held by the
-   writer itself while a dialog is up, and its message goes in after the answer (SPECS §5).
+2. while the agent is `waiting` on a permission dialog, hands the message to the terminal's
+   writer, which holds it while the dialog is up (a typed `\r` would *answer* the dialog) and types
+   it once the dialog closes, as for every other writer (the bus, delegation notes, "send held",
+   the Hermes relay, Slack; SPECS §5). The reply says `held: true` with the dialog's reason. Until 2.0.5 it
+   was refused with `409`, and a worker's report to an orchestrator at a dialog was lost (1212
+   counted 17 on the night of 27/10).
 3. types the message into the session (`mode: "message"`) when a CLI runs in the terminal,
    whatever the status says (a turn ends on `idle`, a failed one on `error`, both with the CLI
    at its prompt). A session the API started counts from its spawn: its terminal was handed
@@ -1343,45 +1407,154 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 
 | Symptom | Cause and fix |
 |---|---|
+| An agent's queue does not move | it is paused (`agent_queue({ id })` says since when and why: a stop, a restart of Tars, or someone's pause): resume it with `agent_queue({ id, action: 'resume' })`, or from the window. Kept in `~/.tars-private/agent-queues.json` |
 | `delegate_task` says the task is queued on an agent behind another task | that agent was working: the task starts once it is free. Follow it with `task_status` on the id it names, or `task_cancel` it |
 | a worker is answered `worker_may_not_order` | a worker does not hand work to another agent: it asks its orchestrator (`send_message` to `orchestrator`) |
 | a worker is answered `worker_may_not_stop` | a worker does not stop, restart or remove another agent: it asks its orchestrator, saying why |
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
 
+## The disk janitor
+
+A scan that proposes, by rule, what may go to give the disk back space, and deletes nothing (2.0.5, lot 3 item H;
+`electron/services/janitor-rules.ts` for the rules, `disk-janitor.ts` for the app's side). The owner approves in the
+window; agents may only ask for a scan.
+
+- **What it proposes**, each item with its size and the rule that matched:
+  - `next-cache`: the `.next` of a project's worktree (under `.worktrees/`), untouched for 3 days;
+  - `test-artefacts`: a worktree's `test-results` and `playwright-report`, untouched for 3 days, that no report under
+    `~/.tars/project-files` cites by its path;
+  - `closed-worktree`: a worktree whose branch is merged into its project's main branch, clean, with no ignored file
+    but the rebuildable caches (a `.env.local`, an e2e run keep it), in no rebase or merge, unlocked, idle a day, its
+    caches aside (removed by `git worktree remove`, never `--force`, with `scripts/worktree.mjs`'s own refusals);
+  - `npx-cache`: an entry of `~/.npm/_npx` untouched for 14 days;
+  - `docker-image`: an image no container uses, a stopped one included (`docker image rm <id>`, never `-f`);
+  - `docker-vm-trim`: `colima ssh -- sudo fstrim -a`, which gives the disk back what the VM freed;
+  - `agent-tmp`: `~/.tars/tmp/<id>` of an agent no longer in the fleet.
+- **Never proposed, never deleted:**
+  - `~/.tars-private`, `~/Documents`, the uv cache, the Trash, `~/Library/Developer` (Xcode, the iOS runtimes and
+    simulators), any Docker volume, a project's own folder;
+  - anything inside a worktree a fleet agent works in, one with uncommitted work, or anything a process runs in or
+    from: by its working folder, its command line or its executable (lsof `cwd,txt` on macOS), and on Linux the files it
+    holds open too (/proc's cwd, exe and fd). Each process's paths are resolved once per scan, off the main thread
+    (`janitor-processes.ts`);
+  - when the processes cannot be read (no lsof, an lsof that fails, Windows), nothing that needs "nothing runs in
+    it".
+- **The window** reads `window.electronAPI.diskJanitor`: `state()`, `scan()`, `approve(ids)` and `onChanged`. The state
+  holds the last scan (when, who asked, running, what is being read and how much was found, its items with their path,
+  bytes, rule, why, a worktree's details and their outcomes), the deletions under way (item n of N, checking again,
+  deleted or kept), the never list in words, the log read back from `janitor.log`, and the scans agents asked for.
+- **The approval.** The window calls `diskJanitor.approve(ids)` with the ids of the items it showed.
+  - Each item is checked again against its rule just before it goes, the world read anew: the processes, the fleet,
+    git, its last change.
+  - Right before it goes, its real path must still be its path and a folder (a link planted on a parent is not
+    followed); it is deleted by its exact absolute path (`fs.rmSync`, never a glob, never a shell).
+  - What no longer matches is kept, with why.
+  - Every deletion (with the bytes it freed) and every item kept goes to `~/.tars/logs/janitor.log`.
+- **For agents.** `GET /api/janitor/scan` and the orchestrator server's `disk_scan` tool run a scan, which the window
+  shows with who asked; the agent is answered with its own project's items only, and once in five minutes. No route
+  takes an approval.
+- **Tests.** Under `DOROTHY_E2E` only, `DOROTHY_DOCKER_BIN` and `DOROTHY_COLIMA_BIN` name stand-ins, so a test never
+  reaches the machine's Docker (`e2e/disk-janitor.spec.ts`).
+
+## What each agent and each project costs
+
+2.0.5, lot 3 item D (`electron/services/fleet-resources.ts` for the rules, `fleet-resources-runtime.ts` for the app's
+side).
+- **Per agent:**
+  - the memory and CPU of its whole process tree, from its terminal down;
+  - its processes, by memory, each with its pid and its command line masked for the window by default
+    (`utils/redact-command-line.ts`): the program, the paths, the file names, the flags, the numbers and every argument
+    under eight characters stay, and any other argument is masked whole. A shorter secret is masked where its place
+    says so: after a flag or a name that says password, pass, secret, token, key, auth or credential, in a URL's
+    password, after `curl -u`, `sshpass -p`, mysql's `-p` or `docker login -p`. A word of lower-case letters and
+    hyphens stays whatever its length (a subcommand: `git checkout [redacted]`), except where its place says secret;
+  - the disk of its worktree and of its temporary folder (`~/.tars/tmp/<id>`), as last measured;
+  - its status and since when (`statusSince`, or `asleepSince` for a sleeping one);
+  - what its ended session left running (`outlived`, from #523's records, `services/born-watch.ts`): since when, each
+    process's pid and its command line under the same mask, its containers; null when nothing was left; on Windows,
+    where no process is read, only the agent's labelled Docker containers. `list_agents` counts them (`outlived`), `get_agent` gives their pids and
+    containers, never a command line.
+- **Per project:** the same, summed (`totals`).
+- **How it is read.** One `ps -A -o pid,ppid,rss,%cpu,command` at most every 2 s, on macOS and Linux. On Windows the
+  figures read null, never 0.
+- **The disk** is measured only when the window asks (`resources.measureDisk`), one folder at a time, with its progress
+  (`measuring`), and kept with when (`diskMeasuredAt`). It is never walked on a read or a tick.
+- **The window** reads `window.electronAPI.resources.read()` and is sent `resources:changed`.
+- **The orchestrators** read it through `list_agents` (each agent's `memMb` and `statusSince`) and `get_agent`
+  (`resources`: memory, CPU, and each process as its program, pid, memory and CPU, never its arguments: no masking
+  knows every secret a command line carries). Their own project's agents only: `get_agent` answers another project's
+  agent as an unknown one (404, `Agent not found`), and `list_agents` with `all` names other projects' agents with
+  their status, project and role, nothing more (the Audit's H1 on #546). So do `get_agent_output`, `wait_for_agent`,
+  `/bootstrap` and `/health`: every route that names an agent by its id answers its own project only. A caller with no
+  project, the owner's own token, reads everything, and so does the window through IPC.
+
 ## MCP servers
 
-Seven servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to
+Six servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and copied to
 `process.resourcesPath/<name>/dist/bundle.js` by `extraResources`:
 
 | directory | registered as | resolver |
 |---|---|---|
 | `mcp-orchestrator` | `claude-mgr-orchestrator` | `getMcpOrchestratorPath()` |
 | `mcp-memory` | `tars-memory` | `getMcpMemoryPath()` |
-| `mcp-telegram` | `claude-mgr-telegram` | `getMcpTelegramPath()` |
 | `mcp-kanban` | `claude-mgr-kanban` | `getMcpKanbanPath()` |
 | `mcp-vault` | `claude-mgr-vault` | `getMcpVaultPath()` |
 | `mcp-socialdata` | `dorothy-socialdata` | `getMcpSocialDataPath()` |
 | `mcp-x` | `dorothy-x` | `getMcpXPath()` |
 
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
-`tasmaniaServerPath` exists on disk.
+`tasmaniaServerPath` exists on disk. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
+2.0.5: it sent with Tars's own bot's token, and every start takes it out of each CLI a 2.0.4 registered it in
+(`retireTelegramMcp`, `electron/services/hermes-relay-switch.ts`), relay on or off.
+
+**Shared between agents** (2.0.5, `services/mcp-shared.ts`). The six run once for every agent: orchestrator, memory,
+kanban, vault, socialdata and x (mcp-telegram, which stayed per agent, is gone in 2.0.5).
+- **How they run.** `setupMcpOrchestrator` starts each with `TARS_MCP_SHARED=1` on the app's own Node, writes a
+  secret on its stdin, and reads the loopback port it says on its stdout (`listening <port>`). It is started again
+  if it ends, at most five times a minute; the quit closes its stdin and stops it by its own process
+  (`stopSharedMcp`).
+- **How a claude agent reaches them.** Tars writes each into the role files claude agents are started with
+  (`--mcp-config ~/.claude/mcp.json`, made when missing, and a worker's `mcp-worker.json` where there is one, without
+  x) as `{ type: 'http', url: 'http://127.0.0.1:<API_PORT>/api/mcp/<name>', headers:
+  { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } }`. Claude expands the variable from its own environment. Never
+  into `~/.claude.json`, which every claude session loads, the owner's own included; Tars's own stdio copies of the
+  shared servers leave it. The servers answer an event stream, so a long call's progress (wait_for_agent's keep-alive)
+  reaches claude as it comes.
+- **No agent starts before Tars listens** on its port (`core/api-listening.ts`): claude's calls carry the token
+  unproven, and at launch Tars retries a busy port for about 90 s. The starts wait, and are refused if Tars gives up.
+- **The route.** `/api/mcp/<name>` proxies the call with the agent's identity from the fleet
+  (`api-routes/mcp-routes.ts`):
+  - 403 without an agent's own token, and for x to an agent without the orchestrator's powers;
+  - 404 for a server that is not shared;
+  - 503 while it is not running.
+- **The other CLIs** (codex, gemini, Qwen Code, opencode, pi, amp, grok) keep their per-agent copies, registered as
+  before. So does claude for a shared server that did not start, or that gave up later (five ends in a minute): its
+  HTTP entries are taken out (`dropSharedMcpEntries`) and the per-agent copy is written where they were
+  (`writeClaudeCopy`): in `~/.claude/mcp.json`, and in `mcp-worker.json` only for a server workers may have. Never
+  in `~/.claude.json`, which every claude session loads.
+- **The stream.** Every shared server builds its transport from `SHARED_TRANSPORT_OPTIONS` (`mcp-shared/src/shared-host.ts`):
+  stateless, answering over an event stream, so a long tool's progress keeps claude's request alive.
+- **Before the API listens.** The app marks its API `starting` as it boots, before its window and its IPC, so no
+  agent starts until Tars listens on its port.
+- **Measured on 28/10:** 19 agents ran 133 copies, 20 to 25 MB each, 2.75 GB. Shared, that is six processes for the
+  six shared servers, for the claude agents (the report of lot 3 has the figures).
 
 Each server builds itself (`npm run build` in its folder): `tsc` checks the types, and esbuild
 bundles `src/index.ts` into `dist/bundle.js`, with `mcp-shared/` in it. That folder is what the
-seven share: the client to Tars, the tool table they register through, one request read whole,
+six share: the client to Tars, the tool table they register through, one request read whole,
 the settings file. It imports node's builtins only; a package imported from there would resolve
 from the repository's root, not from the server's own lock.
 
-What the seven answer is recorded in `__tests__/mcp/contracts/`. Before changing a server:
+What the six answer is recorded in `__tests__/mcp/contracts/`. Before changing a server:
 
 ```bash
-node __tests__/mcp/contracts/mcp-servers.contract.mjs            # builds the seven, compares
+node __tests__/mcp/contracts/mcp-servers.contract.mjs            # builds the six, compares
 node __tests__/mcp/contracts/mcp-servers.contract.mjs --only=x   # one server
 ```
 
 It starts each bundle over stdio with an agent's environment, asks `tools/list`, then calls
-every tool along each of its answers against a fake Tars (SocialData, X and Telegram are
+every tool along each of its answers against a fake Tars (SocialData and X are
 faked too), and prints `identical` or the diff. `--record` rewrites the recording: only for a
 change meant to be seen, recorded on the code before the change.
 
@@ -1397,8 +1570,8 @@ Each provider writes to its own config, CLI-first with a file fallback:
 
 | provider(s) | config dir | mechanism |
 |---|---|---|
-| `claude` (+ `openrouter`, `deepseek`, `mimo`, `moonshot`, `qwen`, `zhipu`, `minimax`, `nvidia`, `nous-portal`, all share the `claude` binary and `~/.claude`) | `~/.claude` | `claude mcp add -s user …`, fallback `~/.claude/mcp.json`; presence checked in both `~/.claude/mcp.json` and `~/.claude.json` |
-| `codex` | `$CODEX_HOME`, else `~/.codex` | Tars's seven servers: the `[mcp_servers.<name>]` section written by Tars, with `env_vars` naming what they read (`codex mcp add` cannot say it); another server: `codex mcp add`, fallback writes the section into `config.toml` |
+| `claude` (+ `openrouter`, `deepseek`, `mimo`, `moonshot`, `qwen`, `zhipu`, `minimax`, `nvidia`, `nous-portal`, all share the `claude` binary and `~/.claude`) | `~/.claude` | `~/.claude/mcp.json` itself since 2.0.5, Tars's own entry still in Claude Code's user scope (`~/.claude.json`: one of the six running its Tars bundle) taken out with `claude mcp remove -s user` (every session loads that scope), a server of the user's under the same name left there; an agent gets `mcp.json` (orchestrator) or `mcp-worker.json` (worker, no X) through `--mcp-config`, `services/mcp-roles.ts` |
+| `codex` | `$CODEX_HOME`, else `~/.codex` | Tars's six servers: the `[mcp_servers.<name>]` section written by Tars, with `env_vars` naming what they read (`codex mcp add` cannot say it); another server: `codex mcp add`, fallback writes the section into `config.toml` |
 | `gemini` | `~/.gemini` | fallback writes `settings.json` |
 | `grok` | `~/.grok` | fallback writes `[mcp_servers.<name>]` into `config.toml` with `enabled = true` |
 | `opencode` | `~/.opencode` | writes `mcp.<name>` (`type: "local"`, `command` as one array) into `opencode.json` of `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`, where opencode 1.19.3 reads it (until 2.0.4, `~/.opencode/config.json`, which it never read; what Tars left there is taken out). A file that is not plain JSON (opencode takes JSONC) is left as it is. `$XDG_CONFIG_HOME` is read in Tars's own environment: set only in a login shell's files (`.zshenv`, `.zprofile`) and Tars started from the Dock, it is unset for Tars and set for the agent's CLI, which then reads a folder Tars did not write. Export it where the desktop session gets it too (`launchctl setenv` on macOS), or leave it unset |
@@ -1537,11 +1710,33 @@ process log says `[permission] <agent> asks Tars: Bash <command>`, then the answ
 `allow (the user allowed it in Tars)`, `deny (the user refused it in Tars: <reason>)`, or
 `ask, back to its dialog`; `<agent>'s mod asks again after a failed request: <error>` when one of
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
-meanwhile (the `409` above). The window answers
-with `agent:answerPermission`; nothing else can. Unanswered for 10 minutes, or when the turn, the
-session or the agent ends, it goes back to Claude Code, which then shows its own dialog, and the
-`PermissionRequest` hook reports it as before. An agent waiting with no `permissionAsk` is at its
-terminal's dialog: the mod did not load, or the question went back.
+meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
+answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
+- **Tars allows nothing by itself.** Every question waits for the owner. A shell command is shown whole, and the
+  window may allow or refuse it. A file tool (Write, Edit, MultiEdit, NotebookEdit) is asked by its path alone,
+  `withheld` (the route marks it so whatever the request says): for an agent in bypass it is held, the window may
+  refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
+  Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field it does not show, past 2,000
+  characters, not text) is asked the same way, `withheld`, with `withheldWhy` naming each field left out and why.
+  Bash's timeout, background and sandbox fields are shown as words after the command, and stay allowable. The
+  window's line names every field an allow covers (a Grep reads `BEGIN OPENSSH in /Users/x/.ssh`). A bypass
+  worker's AskUserQuestion is refused at once, telling it to ask its orchestrator with `send_message`; an
+  orchestrator's, or an agent's not in bypass, stays with the person.
+  SECURITY.md says why. The agents are told to write files with the Write tool.
+- **Unanswered, it is refused.** At the owner's delay (`permissionAskMinutes` in
+  `~/.tars/app-settings.json`, 1 to 60, default 10), the call is denied with a reason the agent reads
+  (how long, and what to do instead: write files with the Write tool, split the command), and the agent runs on. It no longer goes back to the dialog,
+  where nobody answered until morning. The state mod asks for up to 63 minutes, past the longest delay.
+- **Every decision is logged** in `~/.tars/logs/permissions.log` (moved to `.1` past 256 KB): the
+  agent, the tool, the decision, who decided (Tars, the window's person, the delay, the end of the
+  session or turn, the quit) and what was asked, a token or a URL's password masked (`redactSecrets`).
+- **An orchestrator sees it**: `list_agents` gives a teammate's `waitingReason` and `permissionAsk`
+  (the tool, what it runs, why Claude Code asked, since and until when); `get_agent` gives it all. Both
+  mask a token or a URL's password in the command; the window, where the owner decides, shows it whole.
+When the turn, the session or the agent ends, or the window answers `ask`, it goes back to Claude
+Code, which then shows its own dialog, and the `PermissionRequest` hook reports it as before. An agent
+waiting with no `permissionAsk` is at its terminal's dialog: the mod did not load, or the question
+went back.
 
 ### The idle prompt, and what an orchestrator is told (1.7.8)
 
@@ -1581,11 +1776,14 @@ unfinished text went out with the message. Never mix and never block, so:
 
 - **While you are typing**, the message waits. Five seconds of quiet ends the wait, re-armed by
   every key, so it lasts as long as the typing does (`TYPING_PAUSE_MS`, `pty-manager.ts`).
-- **At the first pause**, Tars empties the field, writes the message, submits it, and types your
-  draft back exactly as it was, caret included, without sending it. Keys you type during that
-  window are held and replayed in order.
-- **If it cannot promise to give your draft back**, it writes nothing at all. Your field is
-  never touched by something it does not understand.
+- **While anything is in your field**, the message waits too: Tars never clears, edits or
+  submits what you typed (2.0.5). It goes in at the first pause once the field is empty, after
+  you send what you typed or clear it, and the panel says a message is waiting meanwhile. Until
+  2.0.5 it emptied the field, sent the message and typed your draft back; on Claude Code 2.1.306
+  a click in the prompt moves the caret where the keys cannot see it, and the emptying took the
+  beginning of JeanBrasse's draft and sent the rest behind Tars's message (22/10).
+- **If it cannot read what the field holds**, it writes nothing either, until the
+  `UserPromptSubmit` hook proves the field emptied. A click inside a draft is such a case.
 
 What it understands is rebuilt from the keys the interface relays (`input-draft.ts`): of the 166
 key encodings xterm sends from a Mac keyboard it follows 112 and gives up on 54, among them the
@@ -1646,7 +1844,8 @@ for a person to clear an empty field.
 saying who sent it, as Tars verified it:
 `Message from agent "<name>" ("<id>"), task t-xxxxxxxx` for the agent whose token made the call
 (the request's id: `core/task-requests.ts`), `Message from
-Tars` for Tars's own notes and pass, `Message from Telegram`, `Slack` or `Hermes`. Claude Code
+Tars` for Tars's own notes and pass, `Message from Slack` or `Hermes`, or `Message from the user via Telegram` for your own words
+through the relay (`Message from Telegram`, the bot's, is no longer written since 2.0.5). Claude Code
 2.1.280 hands a folded paste to the model as `<pasted_content>`, and a dispatch used to arrive
 with nothing outside it; the line stays outside the tag (measured once with a real account; a
 stub API with key auth never folds). Never a bare name: any agent can be named "JeanBrasse". A short
@@ -1661,7 +1860,7 @@ message used to go without the line, which let an agent type Tars's own line its
 A note is also skipped while the orchestrator is sitting in `GET /api/agents/:id/wait` on that
 same agent: the long poll's answer already says it, and typing it in again costs the
 orchestrator a whole turn to read what it has been handed. Every other way it is told, from
-`send_message` to Telegram, Slack and the webhook, has no poll behind it and still gets the note.
+`send_message` to the Hermes relay, Slack and the webhook, has no poll behind it and still gets the note.
 
 | Symptom | Where to look |
 |---|---|
@@ -1996,9 +2195,12 @@ curl -s -H "X-Hermes-Session-Token: $TOK" http://127.0.0.1:9119/api/plugins/tars
 
 `services/hermes-relay.ts`, off unless `hermesRelayEnabled` is on (Settings, Hermes, or `app-settings.json`). It needs
 the tars-relay plugin on the Hermes server (`hermes-plugins/tars-relay`, its README says how to install it) and a saved
-Hermes connection. On:
+Hermes connection. It is the only way to your Telegram since 2.0.5, when Tars's own bot went: off, nothing reaches
+Telegram, `send_telegram` answers `409` with "Telegram goes through Hermes: turn on Telegram through Hermes in
+Settings, Hermes, Connection." and sends nothing, and there is no fallback. On:
 
-- Tars's own Telegram bot is off and its token erased, and mcp-telegram is out of every CLI: Hermes is the only voice.
+- Hermes is the only voice; mcp-telegram is out of every CLI, relay on or off. Turning the relay on erases nothing
+  since 2.0.5: there is no bot token left to erase.
 - `ask_user` (a project's orchestrator only), the event reports and `send_telegram` (an orchestrator's) go through
   Hermes, as plain text. Your reply to one of them goes to that project's orchestrator (a question's, to the agent that
   asked); a message you start with `@<project name>` goes to that project's orchestrator. The plugin keeps `@name`
@@ -2230,6 +2432,8 @@ up. An orchestrator is never put to sleep. SPECS.md, "An agent asleep", has the 
 |---|---|
 | An agent at rest for hours never sleeps | something keeps it: a timer of its own (a `/loop` ScheduleWakeup, a CronCreate) or a background agent its CLI runs, as its last Stop hook counted them (`STOP hook` lines in `/tmp/dorothy-hooks.log`), a process under its CLI (a dev server, a background task: `ps -A -o pid,ppid,command \| grep -A8 claude`), a draft in its field, a message, note or question waiting for it, an agent still holding work it handed out, or a conversation Tars cannot resume (a provider other than claude, or no transcript) |
 | Woken, it started a new conversation | its transcript was not on disk any more at the wake (`~/.claude/projects/<encoded path>/<session>.jsonl`; a codex agent's rollout, `$CODEX_HOME/sessions/<y>/<m>/<d>/rollout-*-<session>.jsonl`), so there was nothing to resume |
+| Why does this agent not sleep? | `sleepHeld` on `agent:get` (or in `~/.tars/agents.json`) names the reason the last pass read, and when |
+| It reads `running` at its prompt, or `running` with no CLI | the status pass puts it right within two minutes (`[status] <name>: running -> idle (turn-ended)` or `completed (no-cli)`, `statusReconciled` on the agent), ten for a message typed at a Stop that the CLI never took (`not-taken`, and its sender is told it never ran): a Stop that never reached Tars, a CLI that exited and left its shell, or that message. Not while Claude Code holds a message in its own queue. Longer than that, its transcript's tail still shows a turn (SPECS.md, "A status its CLI's own record contradicts") |
 | Its pane is blank while it sleeps | Tars restarted since it fell asleep: the last screen is kept in memory only, by choice (SPECS.md, "An agent asleep") |
 
 ### Agent stuck in the wrong directory
@@ -2506,7 +2710,7 @@ a floor of 30 GB free, a cap of 20, `node_modules` as an APFS clone, and a clean
 every `new`. CLAUDE.md, Workflow Rule 6, says how and why (the disk filled on 2026-10-01).
 The real reason a naive `find . -name '*.test.ts' -not -path './node_modules/*'` returns 1432
 files while `vitest` collects 46 (~31×) is nested `node_modules` the top-level exclude misses:
-166 under `landing/` and 140 in each of the seven `mcp-*/` dirs; the two worktree trees add
+166 under `landing/` and 140 in each of the seven `mcp-*/` dirs of the time (six since 2.0.5); the two worktree trees add
 only 234. The top-level `-not -path './node_modules/*'` is not enough: you must exclude
 `node_modules` at every depth:
 

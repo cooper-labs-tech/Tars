@@ -9,9 +9,9 @@ import type { HermesRelayStatus } from '@/types/electron';
  * pinned, in __tests__/lib/hermes-relay-view.test.ts.
  */
 
-/** The row's sentence while the switch is off: what it does, and what turning it on erases. */
+/** The row's sentence while the switch is off: what it does. */
 export const RELAY_OFF_LINE =
-  "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers. Turning it on erases the Tars bot's token and switches the bot off.";
+  "Hermes becomes the only voice on your Telegram: Tars writes to you through it, and each reply reaches the orchestrator it answers.";
 
 const STATES: Record<Exclude<HermesRelayStatus['state'], 'off'>, { word: string; tone: StatusTone; line: string }> = {
   ready: { word: 'ready', tone: 'running', line: 'Hermes writes to you for Tars, and each reply reaches the orchestrator it answers.' },

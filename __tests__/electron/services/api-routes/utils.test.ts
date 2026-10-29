@@ -1,13 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as os from 'os';
-import * as path from 'path';
 
 vi.mock('../../../../electron/core/agent-manager', () => ({
   agents: new Map(),
   saveAgents: vi.fn(),
 }));
 
-import { isSafeTelegramPath, findAgentByIdOrSession } from '../../../../electron/services/api-routes/utils';
+import { findAgentByIdOrSession } from '../../../../electron/services/api-routes/utils';
 import { agents } from '../../../../electron/core/agent-manager';
 import { AgentStatus } from '../../../../electron/types';
 
@@ -22,38 +20,6 @@ function makeAgent(overrides: Partial<AgentStatus> = {}): AgentStatus {
     ...overrides,
   };
 }
-
-describe('isSafeTelegramPath', () => {
-  const home = os.homedir();
-
-  it('allows paths within home directory', () => {
-    expect(isSafeTelegramPath(path.join(home, 'Documents', 'file.txt'))).toBe(true);
-  });
-
-  it('blocks paths outside home directory', () => {
-    expect(isSafeTelegramPath('/etc/passwd')).toBe(false);
-  });
-
-  it('blocks .ssh directory', () => {
-    expect(isSafeTelegramPath(path.join(home, '.ssh', 'id_rsa'))).toBe(false);
-  });
-
-  it('blocks .aws directory', () => {
-    expect(isSafeTelegramPath(path.join(home, '.aws', 'credentials'))).toBe(false);
-  });
-
-  it('blocks .claude directory', () => {
-    expect(isSafeTelegramPath(path.join(home, '.claude', 'config'))).toBe(false);
-  });
-
-  it('blocks .gnupg directory', () => {
-    expect(isSafeTelegramPath(path.join(home, '.gnupg', 'secret'))).toBe(false);
-  });
-
-  it('blocks .env directory', () => {
-    expect(isSafeTelegramPath(path.join(home, '.env', 'secrets'))).toBe(false);
-  });
-});
 
 describe('findAgentByIdOrSession', () => {
   beforeEach(() => {

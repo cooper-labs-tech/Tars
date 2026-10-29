@@ -1,3 +1,4 @@
+import { apiListening, NOT_LISTENING } from './api-listening';
 import { hasClaudeHooks } from './end-of-turn';
 import { keyPrintOf } from '../services/cli-keys';
 import { readAppSettingsFromDisk } from '../providers/cli-provider';
@@ -11,11 +12,12 @@ import { AgentStatus, AppSettings } from '../types';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENTS_FILE, API_TOKEN_FILE, DATA_DIR, dataPath } from '../constants';
 import { dropRejectedTails, keysHandedToClaude, maskKeyFragments } from './key-fragments';
-import { ensureDataDir, isSuperAgent } from '../utils';
+import { ensureDataDir, sendNotification } from '../utils';
 import { isSkillName } from '../utils/skill-name';
 import { quoted } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
 import { holdsMessages } from './one-task';
+import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
 import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput } from './pty-manager';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
@@ -39,6 +41,7 @@ import { currentApiCall } from '../services/api-routes/call-context';
 import { reportAgentToolError, reportHandledError, taskNeverStarted } from '../services/error-reports/handled';
 import { UNKNOWN_TOOL } from '../services/error-reports/report';
 import { trustsTooMuch } from '../utils/trust-too-much';
+import { readProgramStatus, forgetProgramStatus } from '../services/program-status';
 
 /**
  * When each agent's current status began (`statusSince`), stamped where the
@@ -71,6 +74,8 @@ function watchStatus(agent: AgentStatus, previous: AgentStatus | undefined): voi
       if (next === value) return;
       value = next;
       agent.statusSince = new Date().toISOString();
+      // agents.json says the status the window says, within the autosave's period.
+      markAgentsDirty();
       // What it waited on belongs to that wait, whichever line ended it.
       if (next !== 'waiting') agent.waitingOn = undefined;
     },
@@ -182,20 +187,6 @@ export function ensureProjectTrusted(projectPath: string): void {
 }
 
 export let agentsLoaded = false;
-export let superAgentTelegramTask = false;
-export let superAgentOutputBuffer: string[] = [];
-
-export function setSuperAgentTelegramTask(value: boolean) {
-  superAgentTelegramTask = value;
-}
-
-export function getSuperAgentOutputBuffer(): string[] {
-  return superAgentOutputBuffer;
-}
-
-export function clearSuperAgentOutputBuffer() {
-  superAgentOutputBuffer = [];
-}
 
 /**
  * Kill the agent's PTY if its recorded cwd no longer matches the agent's
@@ -273,8 +264,6 @@ export function handleStatusChangeNotification(
   newStatus: string,
   appSettings: AppSettings,
   sendNotification: (title: string, body: string, agentId?: string, settings?: { notificationsEnabled: boolean }) => void,
-  sendTelegramMessage?: (text: string) => void,
-  sendSuperAgentResponseToTelegram?: (agent: AgentStatus) => void
 ) {
   if (statusNotificationsStopped) return;
   const prevStatus = previousAgentStatus.get(agent.id);
@@ -329,9 +318,6 @@ export function handleStatusChangeNotification(
     // Its project's orchestrator and a chat's runner converse with the user,
     // who reads their turns where they happen: no desktop notification for them.
     const conversing = hasOrchestratorPowers(currentAgent);
-    // The reply sent back to Telegram is the project's orchestrator's alone,
-    // the one the bots write to: never a runner's.
-    const isSuper = isSuperAgent(currentAgent);
 
     if (newStatus === 'waiting') {
       if (!conversing && appSettings.notifyOnWaiting) {
@@ -342,10 +328,6 @@ export function handleStatusChangeNotification(
           appSettings
         );
       }
-      if (isSuper && superAgentTelegramTask && sendSuperAgentResponseToTelegram) {
-        sendSuperAgentResponseToTelegram(currentAgent);
-        superAgentTelegramTask = false;
-      }
     } else if (newStatus === 'completed' && appSettings.notifyOnComplete) {
       if (!conversing) {
         sendNotification(
@@ -354,10 +336,6 @@ export function handleStatusChangeNotification(
           currentAgent.id,
           appSettings
         );
-      }
-      if (isSuper && superAgentTelegramTask && sendSuperAgentResponseToTelegram) {
-        sendSuperAgentResponseToTelegram(currentAgent);
-        superAgentTelegramTask = false;
       }
     }
     // To JeanBrasse's Telegram whatever the desktop switch says: that one is the
@@ -369,6 +347,7 @@ export function handleStatusChangeNotification(
         agentName,
         projectPath: currentAgent.projectPath || '',
         reason: currentAgent.error,
+        checkpoint: currentAgent.checkpoint?.line,
       });
     }
     if (newStatus === 'error' && appSettings.notifyOnError) {
@@ -379,10 +358,6 @@ export function handleStatusChangeNotification(
           currentAgent.id,
           appSettings
         );
-      }
-      if (isSuper && superAgentTelegramTask && sendTelegramMessage) {
-        sendTelegramMessage(`🔴 Super Agent error: ${currentAgent.error || 'An error occurred.'}`);
-        superAgentTelegramTask = false;
       }
     }
   }, 5000);
@@ -518,10 +493,15 @@ function persistable(agent: AgentStatus): AgentStatus {
     ptyId: undefined,
     pathMissing: undefined,
     output: agent.output.slice(-100),
-    status: agent.status === 'running' ? 'idle' : agent.status,
+    // The status as it is: a working agent written `idle`, with its running's
+    // statusSince, read as resting to every reader of the file (15 of 19 working
+    // agents on 28/10, the DB brief). A launch reads every agent at rest anyway
+    // (loadAgents), its CLI gone.
     // Runtime state, and the command a dialog asks about can carry a secret:
     // agents.json is in every agent's --add-dir (the gate of #172).
     waitingOn: undefined,
+    // The same for a question Tars holds (services/permission-asks.ts): its command, whole. It dies with the CLI.
+    permissionAsk: undefined,
     // A wake belongs to its launch, which a restart of Tars does not carry.
     waking: undefined,
   } as AgentStatus;
@@ -987,10 +967,21 @@ export function noteTurnStarted(agent: AgentStatus): void {
 }
 
 /**
+ * How long the check keeps asking, for a CLI that neither takes its task nor says it is idle: then it stops,
+ * typing nothing and accusing nothing. Two hours, well past the 36 s hooks of a loaded machine.
+ */
+const DELIVERY_ASK_FOR_MS = 2 * 60 * 60_000;
+
+/**
  * Confirm the delivery, and send it a second way before giving up.
  *
  * The second way is the one that has always worked: typing into the live
  * session, which is what /dispatch does to an agent that is already running.
+ * Only on proof that the CLI dropped it (core/delivery-proof.ts): it said it is
+ * idle at its prompt, and nothing of the task is on its record. The clock alone
+ * typed tasks a second time into CLIs still running their hooks, which ran
+ * them twice (the DB brief fix-twin-deliveries-2810.md). Until then, it asks
+ * again every TURN_START_BOUND_MS.
  */
 function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
   const timer = setTimeout(() => {
@@ -1004,16 +995,58 @@ function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
     const ptyProcess = ptyProcesses.get(ptyId);
     // The process is gone: onExit owns that outcome and knows the exit code.
     if (!ptyProcess) return;
+    const time = (iso: string | undefined) => (iso ? Date.parse(iso) : NaN);
+    const registeredAt = time(live.sessionRegisteredAt);
+    const verdict = deliveryVerdict({
+      registeredAt: Number.isFinite(registeredAt) ? registeredAt : time(pending.dispatchedAt),
+      turnStartedAt: Number.isFinite(time(live.lastTurnStartedAt)) ? time(live.lastTurnStartedAt) : undefined,
+      idlePromptAt: Number.isFinite(time(live.idlePromptAt)) ? time(live.idlePromptAt) : undefined,
+      retypedAt: Number.isFinite(time(pending.retypedAt)) ? time(pending.retypedAt) : undefined,
+      onRecord: taskOnRecord(sessionTail(live), pending.task),
+    });
+    if (verdict === 'taken') {
+      // In, late: its turn's own post had not landed, or the CLI holds it queued. Nobody is told it never began.
+      console.log(`[agent] ${live.name || live.id}'s task is on its CLI's record: taken, nothing typed again`);
+      live.pendingDelivery = undefined;
+      saveAgents();
+      return;
+    }
+    if (verdict === 'wait') {
+      // Not idle at its prompt since: its hooks still run, or it works. Asked again later; nothing typed, nobody accused.
+      if (Date.now() - time(pending.dispatchedAt) < DELIVERY_ASK_FOR_MS) {
+        pending.checkArmed = true;
+        scheduleDeliveryCheck(agentId, ptyId);
+      } else {
+        // Given up, and said: never a silent drop, and never "it never began", which it may have (the Audit's Low on #549).
+        console.warn(`[agent] ${live.name || live.id} has neither taken its task nor said it is idle in ${DELIVERY_ASK_FOR_MS / 60_000} minutes: no longer asked, nothing typed again`);
+        live.pendingDelivery = undefined;
+        saveAgents();
+        const settings = readAppSettingsFromDisk();
+        sendNotification(
+          `${live.name || 'An agent'}: its start could not be confirmed`,
+          `Tars could not confirm in ${DELIVERY_ASK_FOR_MS / 3_600_000} hours that it began its task. It may have run: look at its terminal before sending it again.`,
+          live.id, { ...settings, notificationsEnabled: settings.notificationsEnabled === true },
+        );
+        // agent-watch reads this module: imported when needed.
+        void import('../services/agent-watch').then((watch) => watch.tellStartUnconfirmed(live.id));
+      }
+      return;
+    }
     // A blocking permission dialog reads typed text as its answer, so a
     // redelivery there would accept the dialog rather than deliver anything.
-    if (dialogOpen(live)) return;
+    if (dialogOpen(live)) {
+      pending.checkArmed = true;
+      scheduleDeliveryCheck(agentId, ptyId);
+      return;
+    }
 
-    if (!pending.retried) {
+    if (verdict === 'retype' && !pending.retried) {
       console.warn(
-        `[agent] ${live.name || live.id} registered but has not started a turn after `
-        + `${Math.round(TURN_START_BOUND_MS / 1000)}s: typing the task into the live session`,
+        `[agent] ${live.name || live.id} is idle at its prompt with nothing of its task on record: `
+        + 'typing the task into the live session',
       );
       pending.retried = true;
+      pending.retypedAt = new Date().toISOString();
       live.lastActivity = new Date().toISOString();
       saveAgents();
       const outcome = writeProgrammaticInput(ptyProcess, pending.task, true, {
@@ -1039,8 +1072,8 @@ function scheduleDeliveryCheck(agentId: string, ptyId: string): void {
     }
 
     console.error(
-      `[agent] ${live.name || live.id} never started a turn: the task reached the CLI neither as an `
-      + 'argument nor typed in',
+      `[agent] ${live.name || live.id} never started a turn: idle at its prompt twice, nothing of the task on its record, `
+      + 'neither as an argument nor typed in',
     );
     live.pendingDelivery = undefined;
     live.status = 'error';
@@ -1131,6 +1164,8 @@ export async function startCliInTerminal(
 ): Promise<pty.IPty> {
   const refused = cliStartRefusal(agent, launch);
   if (refused) throw new Error(refused);
+  // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+  if (!(await apiListening())) throw new Error(NOT_LISTENING);
   const shellId = agent.ptyId;
   const shell = shellId ? deps.ptyProcesses.get(shellId) : undefined;
   if (shellId) deps.ptyProcesses.delete(shellId);
@@ -1198,6 +1233,8 @@ async function initAgentPtyLocked(
   handleStatusChangeNotificationCallback: (agent: AgentStatus, newStatus: string) => void,
   saveAgentsCallback: () => void
 ): Promise<string> {
+  // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
+  if (!(await apiListening())) throw new Error(NOT_LISTENING);
   // Re-check under the lock: the caller's check happened before it queued here,
   // and the call it was queued behind may have just created the PTY it wanted.
   if (agent.ptyId && ptyProcesses.has(agent.ptyId)) return agent.ptyId;
@@ -1328,13 +1365,13 @@ function attachAgentTerminal(
       appendAgentOutput(agentData, data);
       agentData.lastActivity = new Date().toISOString();
       agentData.statusLine = extractStatusLine(agentData.output);
-
-      if (superAgentTelegramTask && isSuperAgent(agentData)) {
-        superAgentOutputBuffer.push(data);
-        if (superAgentOutputBuffer.length > 200) {
-          superAgentOutputBuffer = superAgentOutputBuffer.slice(-100);
-        }
-      }
+    }
+    // OSC 7501: the probe answered at once, the CLI's own report kept, and the
+    // status moved only where no hook drives it (services/program-status).
+    if (readProgramStatus(agentData, ptyId, ptyProcess, data) && agentData) {
+      handleStatusChangeNotificationCallback(agentData, agentData.status);
+      emitAgentStatus(agentData.id);
+      broadcastToAllWindows('agent:status', { agentId: agentData.id, status: agentData.status, waitingReason: agentData.waitingReason });
     }
     broadcastToAllWindows('agent:output', {
       type: 'output',
@@ -1349,6 +1386,7 @@ function attachAgentTerminal(
   ptyProcess.onExit(({ exitCode }) => {
     console.log(`Agent ${agent.id} PTY exited with code ${exitCode}`);
     ptyProcesses.delete(ptyId);
+    forgetProgramStatus(ptyId);
     // Ended by the quit: neither the agent's completion nor its error, and
     // the closing window is not told it was (the Audit's gate of #235).
     const newStatus = agentStatusOnExit(exitCode);

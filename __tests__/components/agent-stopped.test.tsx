@@ -132,8 +132,13 @@ describe('the Dashboard pane header of a stopped agent', () => {
     expect(html).not.toContain('High effort');
   });
 
-  it('offers start (6)', () => {
-    expect(header(agent())).toMatch(/>start<\/button>/);
+  // Since 2.0.5 (#515) start and stop are the first item of the header's ··· menu, no longer a button of the
+  // header: the header offers neither, and the menu's start for a stopped agent is read in
+  // panel-follows-cli.test.tsx, which opens it.
+  it('offers no stop in its header, only its ··· menu, where start is (6)', () => {
+    const html = header(agent());
+    expect(html).not.toMatch(/>(start|stop|wake)[^<]*<\/button>/);
+    expect(html).toContain('aria-label="Panel actions"');
   });
 
   it('keeps the branch and says nothing of the stop once the agent works again (5)', () => {

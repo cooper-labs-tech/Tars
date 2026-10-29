@@ -6,7 +6,6 @@ import { execFileSync } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { startFakeRelay, type FakeRelay } from '../__tests__/fixtures/fake-tars-relay';
-import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
 
 /**
  * Who writes to "the project's orchestrator" reaches the project's inbox chat, Telegram names a chat by its number,
@@ -14,14 +13,11 @@ import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fa
  *
  * A sandbox HOME with one project "demo" (a git repository with origin's main), its orchestrator "Lead" and a worker.
  * The CLIs are stand-ins named `claude` that run Tars's own hook scripts and record every turn's prompt. Three chats:
- * #1 Main (the orchestrator), #2 "Inbox", made the project's inbox, and #3 "Release". Telegram is a stand-in of its
- * Bot API on the loopback (DOROTHY_TELEGRAM_API_URL, read under DOROTHY_E2E only); Hermes is a stand-in of the gateway:
- * the tars-relay plugin's routes and the two kanban routes a parked task takes.
+ * #1 Main (the orchestrator), #2 "Inbox", made the project's inbox, and #3 "Release". Hermes is a stand-in of the
+ * gateway: the tars-relay plugin's routes and the two kanban routes a parked task takes.
  *
  * Asserted, in order:
- * 1. Tars's own Telegram bot: a fresh message lands in the inbox chat (#2), not in Main; "#3 text" in chat #3;
- *    "@demo #3 text" in chat #3; an unknown "#9" gets the numbered list and reaches nobody;
- * 2. what chat #3 sends to Telegram starts "[demo #3 Release]", and a reply to it lands in chat #3;
+ * 1, 2. (Tars's own Telegram bot, gone in 2.0.5: the same ways in through Hermes are 4.)
  * 3. a kanban task a worker files is noted in the inbox chat; the error triage's note lands there too;
  * 4. through the Hermes relay: what chat #3 sends starts "[demo #3 Release]", and a reply to it lands in chat #3; a
  *    fresh "@demo #3 text" lands in chat #3, "@demo text" in the inbox, "@demo #9 text" gets the list;
@@ -122,11 +118,9 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9',
-    telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
-    telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID), hermesRelayEnabled: false,
+    hermesRelayEnabled: false,
   }));
 
-  const telegram = await startFakeTelegram();
   // Hermes: the relay plugin's routes, and the kanban's create and park of a parked task.
   const board = new Map<string, Record<string, unknown>>();
   let nextTask = 1;
@@ -155,7 +149,6 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
   const app: ElectronApplication = await launchSandboxed(electron, home, {
     env: {
       NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', TARS_CHAT_RAM_GB: '20',
-      DOROTHY_TELEGRAM_API_URL: telegram.url,
     },
   });
   try {
@@ -206,38 +199,6 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
     const releaseRunner = (await runnerOf(release.id))!.id;
     keep({ inboxRunner, releaseRunner });
     for (const id of ['o1', inboxRunner, releaseRunner]) await atRest(id);
-
-    // 1. Tars's own bot.
-    telegram.write('TG1>> fresh, for the inbox');
-    await expect.poll(() => reached('TG1>>'), { timeout: 30_000 }).toEqual([inboxRunner]);
-    await atRest(inboxRunner);
-    // After the line Tars writes for its sender, as the orchestrator gets it.
-    expect(prompts().find((l) => l.prompt.includes('TG1>>'))!.prompt.startsWith('Message from Telegram: ')).toBe(true);
-    telegram.write('#3 TG2>> named by its number');
-    await expect.poll(() => reached('TG2>>'), { timeout: 30_000 }).toEqual([releaseRunner]);
-    await atRest(releaseRunner);
-    telegram.write('@demo #3 TG3>> named with its project');
-    await expect.poll(() => reached('TG3>>'), { timeout: 30_000 }).toEqual([releaseRunner]);
-    await atRest(releaseRunner);
-    const before = telegram.sent.length;
-    telegram.write('#9 TG4>> to no chat');
-    await expect.poll(() => telegram.sent.slice(before).map((m) => m.text).join('\n'), { timeout: 30_000 }).toContain('#3 Release');
-    const listed = telegram.sent.slice(before).map((m) => m.text).join('\n');
-    keep({ listed });
-    expect(listed).toContain('#1 Main');
-    expect(listed).toContain('#2 Inbox');
-    expect(reached('TG4>>')).toEqual([]);
-
-    // 2. What chat #3 sends carries its chat, and a reply to it reaches chat #3.
-    const fromRelease = await api(releaseRunner, '/api/telegram/send', { message: 'TG5 news from the release chat' });
-    keep({ fromRelease });
-    expect(fromRelease.status).toBe(200);
-    const tagged = telegram.sent.find((m) => m.text.includes('TG5 news'))!;
-    keep({ tagged });
-    expect(tagged.text.startsWith('[demo #3 Release]')).toBe(true);
-    telegram.write('TG6>> my reply to the release chat', tagged.message_id);
-    await expect.poll(() => reached('TG6>>'), { timeout: 30_000 }).toEqual([releaseRunner]);
-    await atRest(releaseRunner);
 
     // 3. A kanban task a worker files, and the error triage's note: in the inbox chat.
     const filed = await api('w1', '/api/kanban/tasks', { title: 'KANBAN>> fix the flaky test' });
@@ -334,10 +295,9 @@ test('every sender reaches the inbox chat, Telegram names a chat by its number, 
       await req(`${dist}/services/stall-watch.js`).checkStalls();
     }, { dist });
     await expect.poll(() => reached('nothing to its transcript for 40 minutes'), { timeout: 30_000 }).toEqual([inboxRunner]);
-    keep({ prompts: prompts(), telegramSent: telegram.sent, hermesSends: hermes.sends });
+    keep({ prompts: prompts(), hermesSends: hermes.sends });
   } finally {
     await app.close();
-    await telegram.close();
     await hermes.close();
   }
 });

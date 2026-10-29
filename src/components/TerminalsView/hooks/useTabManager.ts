@@ -100,11 +100,10 @@ export function useTabManager({ existingAgentIds, isLoading }: UseTabManagerOpti
   }, []);
 
   /** One-click board from a project folder: named after it, pre-filled with
-   *  its agents (clamped to the largest layout), and activated. */
+   *  all its agents (past nine, the board scrolls), and activated. */
   const createTabFromProject = useCallback((name: string, agentIds: string[]) => {
     setState(prev => {
-      const maxPanels = Math.max(...Object.values(LAYOUT_PRESETS).map(p => p.maxPanels));
-      const ids = agentIds.slice(0, maxPanels);
+      const ids = [...agentIds];
       const newTab: CustomTab = {
         id: crypto.randomUUID(),
         name: name || `Tab ${prev.customTabs.length + 1}`,
@@ -182,16 +181,13 @@ export function useTabManager({ existingAgentIds, isLoading }: UseTabManagerOpti
   }, []);
 
   /** Bulk membership: add every agent of a project (or any set) in one state
-   *  update, with a single layout auto-upgrade at the end. Clamped to the
-   *  largest layout (3x3 = 9 panels): members beyond that would be silently
-   *  unrendered by the grid. */
+   *  update, with a single layout auto-upgrade at the end. No cap: past the
+   *  largest layout's nine panels the board scrolls. */
   const addAgentsToTab = useCallback((tabId: string, agentIds: string[]) => {
     setState(prev => {
       const tab = prev.customTabs.find(t => t.id === tabId);
       if (!tab) return prev;
-      const maxPanels = Math.max(...Object.values(LAYOUT_PRESETS).map(p => p.maxPanels));
-      const capacity = Math.max(0, maxPanels - tab.agentIds.length);
-      const toAdd = agentIds.filter(id => !tab.agentIds.includes(id)).slice(0, capacity);
+      const toAdd = agentIds.filter(id => !tab.agentIds.includes(id));
       if (toAdd.length === 0) return prev;
 
       const newAgentIds = [...tab.agentIds, ...toAdd];

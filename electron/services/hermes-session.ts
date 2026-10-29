@@ -5,51 +5,54 @@ import { errorDetail, hermesRequest } from './hermes-client';
  * A live Hermes conversation, instead of a cron job.
  *
  * The overseer used to talk to Hermes by rewriting a cron job's prompt,
- * triggering it, and polling for the run: about thirty seconds per turn, for a
- * transport whose whole purpose was to carry one sentence. The gateway has a
- * real conversation and always did, but it is not in the REST surface, which
- * is why it was missed: `/api/sessions/*` only reads and deletes. The live path
- * is two WebSockets, and it is what the gateway's own dashboard uses.
+ * triggering it, and polling for the run: about thirty seconds per turn, and a
+ * Hermes session per turn, since every run of a cron job is a session of its
+ * own (cron/scheduler.py: `cron_{job}_{YYYYMMDD_HHMMSS}`). The gateway has a
+ * real conversation, its JSON-RPC channel, which is what Hermes's own desktop
+ * app speaks:
  *
  *   1. POST /api/auth/ws-ticket           single-use, 30 seconds
- *   2. ws /api/ws?ticket=                 JSON-RPC 2.0 control channel
- *      - `session.create` -> { session_id, stored_session_id, info }
- *      - pushes `session.info` events carrying the model and the effort
- *   3. ws /api/pty?channel=<session_id>&attach=<hex>&ticket=
- *      - raw terminal bytes, not JSON
+ *   2. ws /api/ws?ticket=                 JSON-RPC 2.0
+ *      - `session.resume {session_id: <stored id>}` -> { session_id, session_key, info }
+ *      - `session.create`, the first time only -> { session_id, stored_session_id, info }
+ *      - `prompt.submit {session_id, text}` -> { status }, then the turn's events
+ *        as notifications, {method: 'event', params: {type, session_id, payload}},
+ *        `message.complete` last, carrying the final text and how the turn ended
+ *      - `session.interrupt {session_id}` stops a turn
  *
- * Two things about the PTY that look like bugs and are not:
+ * The session is the gateway's stored one. The overseer keeps its id
+ * (overseer-store.ts) and resumes it on every new socket: after a restart, a
+ * sleep, a gateway restarted. A `session_id` is only good on the socket that
+ * opened it; the stored id is the conversation. Measured on 21/10 and 22/10
+ * against Hermes 0.21.5 and a 0.22.2 canary, behind the basic sign-in: six turns
+ * over three sockets and a gateway restart, one session. Of a stored id it no
+ * longer has, 0.21.5 answers 4007 "session not found", where the canary makes
+ * an empty session under that same id.
  *
- * - **It is lazy.** Nothing at all arrives until the first keystroke, and then
- *   the agent's whole TUI paints at once. A silent socket is not a dead one.
- * - **It is a TUI, not a stream.** The output redraws itself continuously, so
- *   there is no "the reply ends here" in the bytes, and the gateway publishes
- *   no turn-completed event either (the events feed carries `sessions.changed`
- *   and `session.info`, nothing per turn). Completion is therefore taken from
- *   the content: the overseer prompt already asks for a JSON envelope, so the
- *   turn is over when a complete one has been printed. That is a property of
- *   the protocol rather than a guess about the screen.
+ * It used to open the dashboard's terminal instead, /api/pty, and read the
+ * reply off the screen. Each socket with a new attach token started a chat TUI
+ * on the gateway, kept 30 minutes, and the TUI resumed the session its channel's
+ * marker named or started one of its own: a session per Tars start and per
+ * failed turn, and on the canary one per check-in once a terminal had been
+ * reaped. The second turn on a channel was answered by the dashboard's
+ * {"type":"resume"} frame, which was taken for the reply. Hundreds of sessions
+ * in JeanBrasse's Hermes, his report of 21/10.
  */
-
-/** Wide enough that a long JSON envelope is never wrapped by the terminal.
- *  A wrapped line puts hard breaks inside the JSON and it stops parsing. */
-const COLS = 400;
-const ROWS = 50;
-
-/** The PTY paints nothing until it is touched, so it gets touched, and then
- *  given a moment to finish painting before anything is typed into it. */
-const WAKE_MS = 2_500;
 
 /** How long a single turn may take before the caller is told it did not
  *  finish. Hermes turns are slow: a fleet question runs tools. */
 const TURN_TIMEOUT_MS = 180_000;
 
-/** After the envelope parses, the agent may still be painting. Nothing waits
- *  on that: the answer is already complete. */
-const SETTLE_AFTER_ENVELOPE_MS = 150;
+/** How long the gateway has to answer a call that is not a turn. */
+const CALL_TIMEOUT_MS = 20_000;
+
+/** What 0.21.5 answers a `session.resume` of a stored id it does not have. */
+const SESSION_NOT_FOUND = 4007;
 
 export interface LiveSession {
+  /** The session on this socket. */
   sessionId: string;
+  /** The session as the gateway stores it: what the overseer keeps and resumes. */
   storedSessionId: string;
   model?: string;
   provider?: string;
@@ -58,46 +61,34 @@ export interface LiveSession {
   branch?: string;
 }
 
-/** Terminal escape sequences, so the accumulated buffer is text a parser can
- *  look at. Deliberately narrow: this strips the sequences the agent's TUI
- *  actually emits rather than trying to be a terminal emulator. */
-export function stripAnsi(raw: string): string {
-  return raw
-    // OSC (window title and friends), terminated by BEL or ST.
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
-    // CSI.
-    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
-    // Character set selection.
-    .replace(/\x1b[()][AB0-2]/g, '')
-    // Single-character escapes left over.
-    .replace(/\x1b[=>]/g, '');
+export type LiveTurnResult =
+  | { ok: true; text: string }
+  | { ok: false; error: string };
+
+/** The conversation on one socket. */
+export interface Conversation {
+  readonly session: LiveSession;
+  /** The socket is gone: the next turn opens another and resumes the session. */
+  readonly closed: boolean;
+  ask(prompt: string, opts?: { signal?: { aborted: boolean }; timeoutMs?: number }): Promise<LiveTurnResult>;
+  close(): void;
 }
 
-/**
- * The first complete JSON object in the text, or null.
- *
- * Brace-counting rather than a regular expression, and string-aware, because
- * the envelope contains agent output that itself contains braces and quotes.
- */
-export function firstCompleteJson(text: string): string | null {
-  const start = text.indexOf('{');
-  if (start < 0) return null;
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let i = start; i < text.length; i++) {
-    const ch = text[i];
-    if (escaped) { escaped = false; continue; }
-    if (ch === '\\') { escaped = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) return text.slice(start, i + 1);
-    }
-  }
-  return null;
+/** Whether this process can open a WebSocket at all. Node 22 and Electron's
+ *  main process both have one globally; if some future runtime does not, the
+ *  caller falls back to the cron transport rather than failing. */
+export function liveTransportAvailable(): boolean {
+  return typeof WebSocket !== 'undefined';
+}
+
+/** The gateway takes no conversation socket at all: it, or a proxy before it,
+ *  has none. The one failure after which a question goes to the cron job. */
+export function conversationRefused(err: unknown): boolean {
+  return !!err && (err as { refused?: unknown }).refused === true;
+}
+
+function refused(message: string): Error {
+  return Object.assign(new Error(message), { refused: true });
 }
 
 async function mintTicket(conn: HermesConnection): Promise<string> {
@@ -107,6 +98,8 @@ async function mintTicket(conn: HermesConnection): Promise<string> {
     token: sessionToken(conn),
     body: {},
   });
+  // A gateway without the route has no conversation to offer.
+  if (status === 404 || status === 405) throw refused(`the gateway has no WebSocket tickets (HTTP ${status})`);
   if (status >= 300) throw new Error(`the gateway refused a WebSocket ticket (HTTP ${status})`);
   const ticket = (body as { ticket?: unknown })?.ticket;
   if (typeof ticket !== 'string' || !ticket) throw new Error('the gateway returned no WebSocket ticket');
@@ -117,159 +110,167 @@ function wsBase(conn: HermesConnection): string {
   return resolveHermesBaseUrl(conn).replace(/^http/, 'ws');
 }
 
-/** Sixteen random bytes, the shape the dashboard uses to identify a viewer. */
-function attachToken(): string {
-  const bytes = new Uint8Array(16);
-  for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
-}
+type Answer = { ok: true; result: Record<string, unknown> } | { ok: false; code: number; message: string };
+type GatewayEvent = { type?: unknown; session_id?: unknown; payload?: Record<string, unknown> };
 
-/** Whether this process can open a WebSocket at all. Node 22 and Electron's
- *  main process both have one globally; if some future runtime does not, the
- *  caller falls back to the cron transport rather than failing. */
-export function liveTransportAvailable(): boolean {
-  return typeof WebSocket !== 'undefined';
-}
+const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
 
 /**
- * Open a conversation and keep the control channel for as long as it lives.
+ * Open the conversation on a new socket: resume the stored session when there
+ * is one, create one when there is none or the gateway no longer has it.
  *
- * `close_on_disconnect: false` so a dropped socket does not destroy the
- * session: Tars reconnects to the same `session_id` and the conversation is
- * still there.
+ * `close_on_disconnect: false` so a dropped socket does not end the session on
+ * the gateway, which then still holds it for the next socket.
  */
-export async function createLiveSession(
+export async function openConversation(
   conn: HermesConnection,
-  opts: { profile?: string } = {},
-): Promise<{ session: LiveSession; control: WebSocket }> {
+  opts: { storedSessionId?: string; profile?: string } = {},
+): Promise<Conversation> {
   const ticket = await mintTicket(conn);
-  const control = new WebSocket(`${wsBase(conn)}/api/ws?ticket=${encodeURIComponent(ticket)}`);
+  const socket = new WebSocket(`${wsBase(conn)}/api/ws?ticket=${encodeURIComponent(ticket)}`);
 
-  const result = await new Promise<Record<string, unknown>>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('the gateway did not answer session.create')), 20_000);
-    control.onopen = () => control.send(JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'session.create',
-      params: { close_on_disconnect: false, source: 'tool', ...(opts.profile ? { profile: opts.profile } : {}) },
-    }));
-    control.onerror = () => { clearTimeout(timer); reject(new Error('could not reach the gateway control channel')); };
-    control.onclose = () => { clearTimeout(timer); reject(new Error('the gateway closed the control channel')); };
-    control.onmessage = (event: MessageEvent) => {
-      let msg: { id?: unknown; error?: { message?: string }; result?: Record<string, unknown> };
-      try { msg = JSON.parse(String(event.data)); } catch { return; }
-      if (msg.id !== 1) return;
-      clearTimeout(timer);
-      if (msg.error) reject(new Error(msg.error.message || 'session.create failed'));
-      else resolve(msg.result ?? {});
-    };
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => { socket.close(); reject(refused('the gateway did not open the conversation socket')); }, CALL_TIMEOUT_MS);
+    socket.onopen = () => { clearTimeout(timer); resolve(); };
+    socket.onerror = () => { clearTimeout(timer); reject(refused('could not reach the gateway conversation socket')); };
+    socket.onclose = () => { clearTimeout(timer); reject(refused('the gateway closed the conversation socket')); };
   });
 
-  const info = (result.info ?? {}) as Record<string, unknown>;
-  const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+  let closed = false;
+  let nextId = 1;
+  const pending = new Map<number, (answer: Answer) => void>();
+  const listeners = new Set<(event: GatewayEvent) => void>();
+  const closers = new Set<() => void>();
 
-  return {
-    control,
-    session: {
-      sessionId: String(result.session_id ?? ''),
-      storedSessionId: String(result.stored_session_id ?? ''),
-      model: str(info.model),
-      provider: str(info.provider),
-      reasoningEffort: str(info.reasoning_effort),
-      cwd: str(info.cwd),
-      branch: str(info.branch),
-    },
-  };
-}
-
-/**
- * Type one message into the session and wait for the envelope.
- *
- * Multi-line prompts go inside a bracketed paste: without it every newline is
- * a submit, and the overseer's prompt is a page long, so the agent would
- * receive the first line as a question and the rest as forty more. The delayed
- * carriage return afterwards is the same one `writeProgrammaticInput` sends to
- * Claude Code's TUI, and for the same reason.
- */
-export type LiveTurnResult =
-  | { ok: true; envelope: string; raw: string }
-  | { ok: false; error: string; raw: string };
-
-export function askLiveSession(
-  conn: HermesConnection,
-  session: LiveSession,
-  prompt: string,
-  opts: { signal?: { aborted: boolean }; timeoutMs?: number } = {},
-): Promise<LiveTurnResult> {
-  const timeoutMs = opts.timeoutMs ?? TURN_TIMEOUT_MS;
-
-  return new Promise(async resolve => {
-    let pty: WebSocket;
-    try {
-      const ticket = await mintTicket(conn);
-      const url = `${wsBase(conn)}/api/pty?channel=${encodeURIComponent(session.sessionId)}`
-        + `&attach=${attachToken()}&ticket=${encodeURIComponent(ticket)}`;
-      pty = new WebSocket(url);
-    } catch (err) {
-      resolve({ ok: false, error: err instanceof Error ? err.message : String(err), raw: '' });
+  socket.onmessage = (message: MessageEvent) => {
+    let msg: { id?: unknown; method?: unknown; params?: GatewayEvent; result?: Record<string, unknown>; error?: { code?: unknown; message?: unknown } };
+    try { msg = JSON.parse(String(message.data)); } catch { return; }
+    if (typeof msg.id === 'number' && pending.has(msg.id)) {
+      const done = pending.get(msg.id)!;
+      pending.delete(msg.id);
+      done(msg.error
+        ? { ok: false, code: Number(msg.error.code) || 0, message: str(msg.error.message) ?? 'the gateway refused the call' }
+        : { ok: true, result: msg.result ?? {} });
       return;
     }
-    pty.binaryType = 'arraybuffer';
+    if (msg.method === 'event' && msg.params) for (const listen of [...listeners]) listen(msg.params);
+  };
+  socket.onerror = () => { /* onclose follows */ };
+  socket.onclose = () => {
+    closed = true;
+    for (const done of pending.values()) done({ ok: false, code: 0, message: 'the gateway closed the conversation' });
+    pending.clear();
+    for (const close of [...closers]) close();
+  };
 
-    let raw = '';
+  /** The answer is handed over as the frame is read, so a turn's end that follows it in the same
+   *  read is not taken for an event from before the turn. */
+  const send = (method: string, params: Record<string, unknown>, onAnswer: (answer: Answer) => void): number => {
+    const id = nextId++;
+    if (closed) { onAnswer({ ok: false, code: 0, message: 'the gateway closed the conversation' }); return id; }
+    pending.set(id, onAnswer);
+    socket.send(JSON.stringify({ jsonrpc: '2.0', id, method, params }));
+    return id;
+  };
+  const call = (method: string, params: Record<string, unknown>) => new Promise<Answer>(resolve => {
+    const timer = setTimeout(() => { pending.delete(id); resolve({ ok: false, code: 0, message: `the gateway did not answer ${method}` }); }, CALL_TIMEOUT_MS);
+    const id = send(method, params, answer => { clearTimeout(timer); resolve(answer); });
+  });
+
+  let opened: Record<string, unknown> | null = null;
+  let stored = '';
+  try {
+    if (opts.storedSessionId) {
+      const resumed = await call('session.resume', {
+        session_id: opts.storedSessionId, source: 'tool', close_on_disconnect: false, omit_messages: true,
+      });
+      if (resumed.ok) {
+        opened = resumed.result;
+        stored = str(resumed.result.session_key) ?? opts.storedSessionId;
+      } else if (resumed.code !== SESSION_NOT_FOUND) {
+        throw new Error(resumed.message);
+      }
+    }
+    if (!opened) {
+      const created = await call('session.create', {
+        close_on_disconnect: false, source: 'tool', ...(opts.profile ? { profile: opts.profile } : {}),
+      });
+      if (!created.ok) throw new Error(created.message);
+      opened = created.result;
+      stored = str(created.result.stored_session_id) ?? str(created.result.session_id) ?? '';
+    }
+  } catch (err) {
+    socket.close();
+    throw err;
+  }
+
+  const info = (opened.info ?? {}) as Record<string, unknown>;
+  const session: LiveSession = {
+    sessionId: String(opened.session_id ?? ''),
+    storedSessionId: stored,
+    model: str(info.model),
+    provider: str(info.provider),
+    reasoningEffort: str(info.reasoning_effort),
+    cwd: str(info.cwd),
+    branch: str(info.branch),
+  };
+
+  /**
+   * One turn: the prompt submitted, and the answer read from the turn's own
+   * `message.complete`. A prompt queued behind a turn still running (one this
+   * socket gave up on) is answered after that turn's end, which is skipped.
+   * A turn given up on, at its timeout or by a pause, is interrupted on the
+   * gateway rather than left to run.
+   */
+  const ask = (prompt: string, askOpts: { signal?: { aborted: boolean }; timeoutMs?: number } = {}) => new Promise<LiveTurnResult>(resolve => {
     let settled = false;
-    /** How much of the buffer is the TUI painting itself and the prompt coming
-     *  back, rather than the answer. */
-    let promptEcho = 0;
+    let submitted = false;
+    let skip = 0;
     const finish = (value: LiveTurnResult) => {
       if (settled) return;
       settled = true;
-      clearInterval(abortPoll);
       clearTimeout(timer);
-      try { pty.close(); } catch { /* already gone */ }
+      clearInterval(abortPoll);
+      listeners.delete(onEvent);
+      closers.delete(onClose);
       resolve(value);
     };
-
-    const timer = setTimeout(
-      () => finish({ ok: false, error: 'Hermes did not finish this turn in time.', raw }),
-      timeoutMs,
-    );
+    const stop = (error: string) => {
+      void call('session.interrupt', { session_id: session.sessionId });
+      finish({ ok: false, error });
+    };
+    const onClose = () => finish({ ok: false, error: 'the gateway closed the conversation' });
+    const onEvent = (event: GatewayEvent) => {
+      if (!submitted || event.type !== 'message.complete' || event.session_id !== session.sessionId) return;
+      if (skip > 0) { skip--; return; }
+      const payload = event.payload ?? {};
+      const status = str(payload.status) ?? 'complete';
+      if (status !== 'complete') {
+        finish({ ok: false, error: str(payload.error) ?? str(payload.failure_reason) ?? `Hermes ended the turn: ${status}` });
+        return;
+      }
+      finish({ ok: true, text: typeof payload.text === 'string' ? payload.text : JSON.stringify(payload.text ?? '') });
+    };
+    const timer = setTimeout(() => stop('Hermes did not finish this turn in time.'), askOpts.timeoutMs ?? TURN_TIMEOUT_MS);
     // Pause has to reach a turn already in flight, so the abort flag is read
     // here rather than only between turns.
-    const abortPoll = setInterval(() => {
-      if (opts.signal?.aborted) finish({ ok: false, error: 'aborted', raw });
-    }, 500);
-
-    pty.onerror = () => finish({ ok: false, error: 'the gateway terminal channel failed', raw });
-    pty.onclose = () => finish({ ok: false, error: 'the gateway closed the terminal channel', raw });
-
-    pty.onmessage = (event: MessageEvent) => {
-      const data = event.data;
-      raw += typeof data === 'string' ? data : Buffer.from(data as ArrayBuffer).toString('utf-8');
-      // Only look at what arrived after the prompt was echoed, so the envelope
-      // found is the answer rather than the request.
-      const text = stripAnsi(raw);
-      const after = promptEcho > 0 ? text.slice(promptEcho) : text;
-      const found = firstCompleteJson(after);
-      if (found) {
-        setTimeout(() => finish({ ok: true, envelope: found, raw }), SETTLE_AFTER_ENVELOPE_MS);
-      }
-    };
-
-    pty.onopen = () => {
-      pty.send(`\x1b[RESIZE:${COLS};${ROWS}]`);
-      // Wake it, then let the TUI finish painting before typing into it.
-      pty.send(' ');
-      setTimeout(() => {
-        if (settled) return;
-        pty.send('\x7f'); // erase the wake keystroke
-        // Everything printed so far is the TUI, not the answer.
-        promptEcho = stripAnsi(raw).length;
-        pty.send(`\x1b[200~${prompt}\x1b[201~`);
-        setTimeout(() => { if (!settled) pty.send('\r'); }, 150);
-      }, WAKE_MS);
-    };
+    const abortPoll = setInterval(() => { if (askOpts.signal?.aborted) stop('aborted'); }, 500);
+    if (closed) { onClose(); return; }
+    listeners.add(onEvent);
+    closers.add(onClose);
+    send('prompt.submit', { session_id: session.sessionId, text: prompt }, answer => {
+      if (!answer.ok) { finish({ ok: false, error: answer.message }); return; }
+      if (answer.result.status === 'queued') skip++;
+      submitted = true;
+    });
   });
+
+  return {
+    session,
+    get closed() { return closed; },
+    ask,
+    close: () => { try { socket.close(); } catch { /* already gone */ } },
+  };
 }
 
 /* ── The reasoning effort ────────────────────────────────────────────────── */

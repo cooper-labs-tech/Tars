@@ -85,7 +85,7 @@ beforeAll(async () => {
   api = await import('../../../electron/services/api-server');
   (await import('../../../electron/services/vault-db')).initVaultDb();
   api.startApiServer(
-    null, { notificationsEnabled: false } as never, () => null, () => null, null, null,
+    null, { notificationsEnabled: false } as never, () => null, null, null,
     () => {}, () => {}, async () => 'pty', () => ({ notificationsEnabled: false } as never),
   );
   await new Promise<void>((resolve, reject) => {

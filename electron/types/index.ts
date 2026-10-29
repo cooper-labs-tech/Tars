@@ -102,7 +102,7 @@ export interface AgentStatus {
   permissionAsk?: {
     tool: string;
     askedAt: string;
-    /** When Tars hands the question back to the terminal's dialog if nobody answers. */
+    /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
     /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
     subject: string;
@@ -111,6 +111,11 @@ export interface AgentStatus {
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
+    /** A question Tars cannot show whole, a file tool's or one with a field withheld: the window may refuse it or hand
+     *  it back, never allow it. */
+    withheld?: true;
+    /** What was withheld and why, `<field>: <why>` joined by `; ` (the state mod's words). */
+    withheldWhy?: string;
   };
   /** The last start that undid a stop: the stop, and who started it again and when (core/agent-stop.ts). */
   lastRestartAfterStop?: { stoppedBy?: string; stoppedAt?: string; stopReason?: string; restartedBy: string; restartedAt: string };
@@ -118,6 +123,12 @@ export interface AgentStatus {
    *  at least) and its CLI runs no tool (services/stall-watch.ts). Cleared by
    *  a write or by any other status. Not saved. */
   stalledSince?: string;
+  /** Why the sleep pass last left it awake, and when it read it (services/agent-sleep.ts,
+   *  SleepRefusal): set on each agent with a terminal, gone once asleep. */
+  sleepHeld?: { why: string; at: string };
+  /** The last time its status was put right from its CLI's own record, an event
+   *  having never reached Tars (services/status-truth.ts, StatusFix). */
+  statusReconciled?: { from: string; to: string; why: string; at: string };
   projectPath: string;
   secondaryProjectPath?: string;
   worktreePath?: string;
@@ -292,10 +303,45 @@ export interface AgentStatus {
    * the live session once and the agent is marked failed if that fails too.
    * Runtime state: reset on load, like ptyId.
    */
-  pendingDelivery?: { ptyId: string; task: string; dispatchedAt: string; retried?: boolean; checkArmed?: boolean };
+  pendingDelivery?: { ptyId: string; task: string; dispatchedAt: string; retried?: boolean; checkArmed?: boolean; retypedAt?: string };
+  /** The last idle prompt the CLI sent (Claude Code's idle_prompt notification, ISO): it is at rest at its prompt,
+   *  which a CLI still running its hooks never says. Read by the delivery check (core/delivery-proof.ts). */
+  idlePromptAt?: string;
   /** Why the agent is 'waiting': 'permission' = blocking permission dialog
    *  (auto-continue must NOT type into it), 'idle' = waiting for next prompt. */
   waitingReason?: string;
+  /** What the agent started that still runs while it has no live session (services/born-watch.ts, 2.0.5): its
+   *  processes found by their birth tag and its containers labelled `tars.agent=<id>`, since when they were first
+   *  seen so, and when the project's orchestrator was told (once, an hour on). Never ended by Tars: said. Saved. */
+  leftRunning?: {
+    pids: number[];
+    /** One line each, `pid <n>: <command>`, secrets masked and cut. */
+    commands: string[];
+    /** `<name> (<id>)` of each container. */
+    containers: string[];
+    since: string;
+    reportedAt?: string;
+  };
+  /** What its last stop ended and kept outside its terminal (core/agent-stop.ts, 2.0.5): `pid <n>: <command>` each,
+   *  the kept ones with why (the owner's limits, a shared daemon), and the containers stopped. Cleared by a start. */
+  stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
+  /** What the agent's CLI last said of itself in its terminal, over OSC 7501 (the Program Status Protocol,
+   *  services/program-status): its root record, from its current terminal only, gone with a clear, a new shell
+   *  prompt or a reset. It drives `status` only for a CLI Tars follows no other way (amp, grok, opencode); on
+   *  the others the hooks or the session log win, and this adds the reason of a blocked state. Not saved. */
+  programStatus?: {
+    state: 'idle' | 'working' | 'done' | 'blocked' | 'error';
+    /** Set with `blocked` only. */
+    kind?: 'permission' | 'question' | 'auth';
+    /** One line, as the CLI wrote it (2,048 characters at most). */
+    msg?: string;
+    app?: string;
+    /** ISO: when it was read. */
+    at: string;
+  };
+  /** The line the agent last wrote about itself with the MCP tool `checkpoint` (core/agent-checkpoint.ts): one
+   *  line, 120 characters at most, with when. Saved. */
+  checkpoint?: { line: string; at: string };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line
   lastCleanOutput?: string;  // Clean text output captured from transcript by hooks
@@ -379,24 +425,39 @@ export interface CliKeyState {
   withoutKey: string;
 }
 
+/** When Tars keeps the computer awake (services/keep-awake.ts): while an agent is running (the default), always, never. */
+export type KeepAwakeMode = 'while-working' | 'always' | 'never';
+
 export interface AppSettings {
+  /** Missing or unknown reads as 'while-working'. */
+  keepAwake?: KeepAwakeMode;
+  /** The heavy-run slot (services/heavy-slot.ts): how many runs at once on this machine (1 when unset). */
+  heavySlots?: number;
+  /** The floors under which a grant waits: free disk in GB (15) and free memory in % (20). */
+  heavySlotMinDiskGb?: number;
+  heavySlotMinFreeMemPct?: number;
+  /**
+   * How long Tars holds a permission question for the window before it refuses it with a reason the agent reads
+   * (services/permission-asks.ts): 1 to 60 minutes, 10 when unset or out of range. Past 60 the state mod stops
+   * asking first and Claude Code's dialog shows.
+   */
+  permissionAskMinutes?: number;
   notificationsEnabled: boolean;
   notifyOnWaiting: boolean;
   notifyOnComplete: boolean;
   notifyOnStop: boolean;
   notifyOnError: boolean;
-  telegramEnabled: boolean;
-  telegramBotToken: string;
-  telegramChatId: string; // Legacy - kept for backwards compatibility
-  telegramAuthToken: string; // Secret token for authentication
-  telegramAuthorizedChatIds: string[]; // List of authorized chat IDs
-  telegramRequireMention: boolean; // Only respond when bot is @mentioned in groups
   /**
    * The relay to the user's Telegram through their Hermes (services/hermes-relay.ts): off unless turned on in
-   * Settings, Hermes. On, it is the only voice there: the Tars bot's token is erased and the bot off
-   * (hermes-relay-switch.ts), questions, reports and the orchestrator's send_telegram go through it.
+   * Settings, Hermes. The only way to their Telegram since 2.0.5, when Tars's own bot went: questions, reports, the
+   * Sentry go-ahead and the orchestrator's send_telegram go through it, and nothing does while it is off.
    */
   hermesRelayEnabled?: boolean;
+  /**
+   * Set once, by the first launch of 2.0.5 that found Tars's own Telegram bot set up (services/telegram-retired.ts):
+   * when, and whether it had a token, which the owner may then revoke with BotFather.
+   */
+  telegramBotRetired?: { at: string; hadToken: boolean };
   slackEnabled: boolean;
   slackBotToken: string;
   slackAppToken: string;
@@ -406,7 +467,7 @@ export interface AppSettings {
    * The Slack users (member ids, `U…`) the bot answers. Empty answers nobody:
    * without it, anyone who could reach the bot (a workspace member, a guest, a
    * Slack Connect user in a shared channel) could list, start, stop and brief
-   * agents (the audit's lead #15). The Telegram bot's authorized chats, for Slack.
+   * agents (the audit's lead #15).
    */
   slackAllowedUserIds: string[];
   discordEnabled: boolean;
@@ -555,7 +616,6 @@ export interface AppSettings {
    * Empty means no header, which is exactly today's behaviour.
    */
   memoryHonchoWorkspaceId?: string;
-  defaultProvider?: AgentProvider;
   obsidianVaultPaths?: string[];
   notificationSounds?: {
     waiting?: string;

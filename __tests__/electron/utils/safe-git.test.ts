@@ -86,7 +86,12 @@ describe('a repository\'s own programs never run', () => {
     await safeGit(h.repo, ['log', '-3']);
     await safeGit(h.repo, ['log', '--show-signature', '-3']);
     await safeGit(h.repo, ['show', 'HEAD']);
-    await safeGit(h.repo, ['whatchanged', '-3']);
+    // git 2.54 refuses `whatchanged` unless told --i-still-use-this ("nominated for removal"), which an older
+    // git does not know: asked again with it there, so the verifier is still given its chance to run.
+    await safeGit(h.repo, ['whatchanged', '-3']).catch((err: { stderr?: string; message?: string }) => {
+      if (!/nominated for removal/.test(`${err?.stderr ?? ''}${err?.message ?? ''}`)) throw err;
+      return safeGit(h.repo, ['whatchanged', '--i-still-use-this', '-3']);
+    });
     safeGitSync(h.repo, ['log', '-1', '--format=%G?']);
     expect(h.ran(), 'programs the repository named').toEqual([]);
   });

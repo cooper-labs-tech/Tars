@@ -132,7 +132,7 @@ for (const newInterface of [false, true]) {
       });
       fs.writeFileSync(path.join(folder, 'reports', 'new-from-agent.md'), '# new');
       await expect.poll(() => page.evaluate(() => (window as unknown as { __changed: Array<{ key: string; sub: string }> }).__changed), { timeout: 10_000 })
-        .toContainEqual({ key, sub: 'reports' });
+        .toContainEqual(expect.objectContaining({ key, sub: 'reports' }));
       await page.waitForTimeout(800);
       await stepShot(page, newInterface ? 'vault-new-interface' : 'vault');
     } finally {

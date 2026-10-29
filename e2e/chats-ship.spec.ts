@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
-import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fake-telegram';
+import { startFakeRelay } from '../__tests__/fixtures/fake-tars-relay';
 
 /**
  * Two things of the chats that ship to everyone (GATE-2.0.0-BULLETS), in the real app.
@@ -19,7 +19,8 @@ import { BOT_TOKEN, OWNER_ID, startFakeTelegram } from '../__tests__/fixtures/fa
  *    and where the worktree stays (the Audit's L1 on #398).
  * 2. With the new interface off and a project that has only Main, Telegram and the room read as 1.9.7 had them:
  *    a message that starts with "#2 " (an issue's number) reaches the orchestrator as typed, what the orchestrator
- *    sends carries no "[demo #1 Main]", and it posts in the room under its own name.
+ *    sends carries no "[demo #1 Main]", and it posts in the room under its own name. Telegram through Hermes (the
+ *    relay's stand-in) since 2.0.5, when Tars's own bot went.
  * The artefact: values.json of each test; prompts.jsonl of the stand-ins.
  */
 
@@ -200,14 +201,16 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-only-main-'));
   const project = seedProject(home);
-  const telegram = await startFakeTelegram();
+  const hermes = await startFakeRelay('e2e-hermes-token');
   const port = apiPort(31444);
   const values: Record<string, unknown> = {};
-  const { app, call, atRest } = await boot(home, project, port, { DOROTHY_TELEGRAM_API_URL: telegram.url }, {
-    telegramEnabled: true, telegramBotToken: BOT_TOKEN, telegramAuthToken: 'e2e-auth-token',
-    telegramAuthorizedChatIds: [String(OWNER_ID)], telegramChatId: String(OWNER_ID), newInterface: false,
-  });
+  const { app, call, atRest } = await boot(home, project, port, {}, { hermesRelayEnabled: true, newInterface: false });
   try {
+    const dist = path.resolve('electron', 'dist');
+    await app.evaluate((_e, { dist, port, token }) => {
+      const req = process.mainModule!.require;
+      req(`${dist}/services/hermes-config.js`).writeHermesConnection({ mode: 'local', localPort: port, authMode: 'token', token });
+    }, { dist, port: hermes.port, token: hermes.token });
     const prompts = () => lines<{ id: string; prompt: string }>(path.join(home, 'prompts.jsonl'));
     const chats = (await call('chat', 'list') as unknown as { chats: Array<{ id: string; number: number }> }).chats;
     values.chats = chats;
@@ -217,18 +220,19 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
     await atRest('o1');
 
     // An issue's number at the start: to the orchestrator, as typed.
-    telegram.write('#2 fix the login issue');
+    hermes.projectMessage('demo', '#2 fix the login issue');
     await expect.poll(() => prompts().filter((p) => p.id === 'o1' && p.prompt.includes('#2 fix the login issue')).length, { timeout: 30_000 }).toBe(1);
     await atRest('o1');
-    expect(telegram.sent.map((m) => m.text).join('\n'), 'answered as reaching nobody').not.toContain('reached nobody');
+    expect(hermes.sends.map((m) => m.text).join('\n'), 'answered as reaching nobody').not.toContain('reached nobody');
 
     // What the orchestrator sends: no chat prefix.
     const token = lines<{ id: string; token: string | null }>(path.join(home, 'tokens.jsonl')).filter((l) => l.id === 'o1' && l.token).at(-1)!.token!;
     const api = (route: string, body: unknown) => fetch(`http://127.0.0.1:${port}${route}`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body),
     }).then(async (r) => ({ status: r.status, body: await r.json() as Answer }));
-    expect((await api('/api/telegram/send', { message: 'MAIN news' })).status).toBe(200);
-    const sent = telegram.sent.find((m) => m.text.includes('MAIN news'))!;
+    expect((await api('/api/telegram/send', { message: 'MAIN news' })).status).toBeLessThan(300);
+    await expect.poll(() => hermes.sends.some((m) => m.text.includes('MAIN news')), { timeout: 30_000 }).toBe(true);
+    const sent = hermes.sends.find((m) => m.text.includes('MAIN news'))!;
     values.sent = sent;
     expect(sent.text).not.toContain('[demo #1 Main]');
 
@@ -243,9 +247,9 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
     values.posted = posted;
     expect(posted.authorName).toBe('Lead');
   } finally {
-    values.telegramSent = telegram.sent;
+    values.hermesSends = hermes.sends;
     recordValues(values);
     await app.close();
-    await telegram.close();
+    await hermes.close();
   }
 });

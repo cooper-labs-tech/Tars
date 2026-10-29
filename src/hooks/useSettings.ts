@@ -160,13 +160,6 @@ export const useSettings = () => {
           // The shell follows the switch at once (useNewInterface).
           window.dispatchEvent(new CustomEvent(NEW_INTERFACE_EVENT, { detail: newSettings.newInterface }));
         }
-        // The relay on, main has erased the bot's token and turned the bot
-        // off as it saved (settingsForRelay): this page sends only what
-        // changed, so it says the same of its own copy, or Settings, Telegram
-        // would go on showing a bot that no longer runs.
-        if (newSettings.hermesRelayEnabled === true) {
-          setAppSettings(prev => withSecretState({ ...prev, telegramEnabled: false, telegramBotToken: '' }, 'telegramBotToken', false));
-        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save notification settings');

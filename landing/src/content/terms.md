@@ -1,6 +1,6 @@
 # Tars Terms of Use
 
-Last updated: 2026-09-24.
+Last updated: 2026-10-28.
 
 ## 1. What Tars is
 
@@ -39,7 +39,7 @@ You supply your own API keys, bot tokens and account credentials, and Tars store
 - the charges your providers bill for the use your agents make of them;
 - complying with each provider's terms and usage policies.
 
-When an agent acts through an account you connected (an AI provider, Telegram, Slack, Discord, X, Google Workspace, a Hermes gateway or another service), it acts as you, under that account.
+When an agent acts through an account you connected (an AI provider, Slack, Discord, X, Google Workspace, a Hermes gateway and the Telegram it reaches you on, or another service), it acts as you, under that account.
 
 ## 5. Third-party services
 

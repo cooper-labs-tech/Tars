@@ -15,8 +15,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * report, a log too long to edit and a picture; in tools/ a script that runs; in notes/ a note. Tars's dialogs to
  * Finder and the browser are stood in for in the main process, so the run records what Tars would have opened and
  * opens nothing. Asserted, once with the classic shell and once with the new interface:
- * 1. Projects names atlas; its reports list newest first, under ATLAS · REPORTS · 4 FILES, and say that its notes
- *    moved into reports/notes are not listed there; show notes opens its reports folder.
+ * 1. Projects names atlas; its reports list their folder then their files newest first, under atlas › reports and
+ *    1 FOLDER · 4 FILES (2.0.5), and say where its notes moved; show notes opens reports/notes in the Vault.
  * 2. A report reads as Markdown: a link to a report of the folder opens it here, the page is a link to the browser,
  *    the picture from the web is a link and is never fetched, the link out of the folder is text.
  * 3. Edit, save: the file on disk holds what was typed. An agent writing it meanwhile: the save is refused and said,
@@ -125,14 +125,19 @@ for (const newInterface of [false, true]) {
       await expect(projects(page).getByRole('button', { name: /^atlas/ })).toBeVisible({ timeout: 30_000 });
       await projects(page).getByRole('button', { name: /^atlas/ }).click();
       await projects(page).getByRole('button', { name: /^reports/ }).click();
-      await expect(filesRegion(page)).toContainText('ATLAS · REPORTS · 4 FILES', { timeout: 15_000 });
+      // Since 2.0.5 the list shows a folder's folders too (#530's places): reports holds its notes folder.
+      await expect(filesRegion(page)).toContainText('1 FOLDER · 4 FILES', { timeout: 15_000 });
+      await expect(filesRegion(page).getByRole('navigation', { name: 'Folder path' })).toHaveText(/atlas\s*›\s*reports/);
       const listed = await filesRegion(page).locator('[data-file-name]').evaluateAll((els) => els.map((e) => e.getAttribute('data-file-name')));
       keep({ listed });
       expect(listed).toEqual(['release.md', 'roadmap.md', 'big.log', 'diagram.png']);
-      await expect(filesRegion(page)).toContainText('Its notes are in reports/notes since 2.0.4, and are not listed here.');
-      await filesRegion(page).getByRole('button', { name: 'show notes', exact: true }).click();
-      await expect.poll(async () => (await opened(app)).opened.at(-1) ?? '', { timeout: 10_000 }).toBe(path.join(folder, 'reports'));
+      await expect(filesRegion(page)).toContainText('Its notes are in reports/notes since 2.0.4.');
       await stepShot(page, '01-reports');
+      // show notes opens them here, in the Vault, since 2.0.5 lists every folder.
+      await filesRegion(page).getByRole('button', { name: 'show notes', exact: true }).click();
+      await expect(fileRow(page, 'next.md')).toBeVisible({ timeout: 15_000 });
+      await projects(page).getByRole('button', { name: /^reports/ }).click();
+      await expect(filesRegion(page)).toContainText('1 FOLDER · 4 FILES', { timeout: 15_000 });
 
       // 2. A report as Markdown: here, the browser, a picture never fetched, the way out as text.
       await fileRow(page, 'release.md').click();
@@ -190,7 +195,7 @@ for (const newInterface of [false, true]) {
 
       // 5. Tools: the script, executable, its lines numbered.
       await projects(page).getByRole('button', { name: /^tools/ }).click();
-      await expect(filesRegion(page)).toContainText('ATLAS · TOOLS · 1 FILE', { timeout: 15_000 });
+      await expect(filesRegion(page)).toContainText('0 FOLDERS · 1 FILE', { timeout: 15_000 });
       await fileRow(page, 'slot.sh').click();
       await expect(file).toContainText('executable', { timeout: 15_000 });
       await expect(file).toContainText('echo one slot');
@@ -198,7 +203,7 @@ for (const newInterface of [false, true]) {
 
       // 6. A report an agent writes shows up by itself.
       await projects(page).getByRole('button', { name: /^reports/ }).click();
-      await expect(filesRegion(page)).toContainText('ATLAS · REPORTS · 4 FILES', { timeout: 15_000 });
+      await expect(filesRegion(page)).toContainText('1 FOLDER · 4 FILES', { timeout: 15_000 });
       fs.writeFileSync(report('fresh.md'), '# Fresh\n');
       await expect(fileRow(page, 'fresh.md')).toBeVisible({ timeout: 15_000 });
       await stepShot(page, '07-agent-wrote');

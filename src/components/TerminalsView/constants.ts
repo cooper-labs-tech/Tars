@@ -14,6 +14,17 @@ export const LAYOUT_PRESETS: Record<LayoutPreset, GridDefinition> = {
   'focus': { cols: 2, rows: 1, label: 'Focus', icon: '[> |]', maxPanels: 2 },
 };
 
+/** The largest preset. Past its nine panels a board keeps its three columns and its cells' size, grows by rows,
+ *  and scrolls (JeanBrasse, 22/10): no board caps its agents. Frame: `Dashboard (2.0.5) · twelve agents, three
+ *  columns, scrolled`. */
+export const SCROLLING_PRESET: LayoutPreset = '3x3';
+
+/** The rows a board's grid needs: its preset's, or more on the scrolling preset when it holds more panels. */
+export function boardRows(preset: LayoutPreset, panels: number): number {
+  const { cols, rows } = LAYOUT_PRESETS[preset];
+  return preset === SCROLLING_PRESET ? Math.max(rows, Math.ceil(panels / cols)) : rows;
+}
+
 // Auto-calculate best layout based on agent count
 export function getAutoLayout(agentCount: number): LayoutPreset {
   if (agentCount <= 1) return 'single';

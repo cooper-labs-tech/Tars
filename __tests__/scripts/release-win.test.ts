@@ -140,8 +140,9 @@ describe('the build it runs', () => {
     expect(labels[1]).toMatch(/build:renderer/);
     expect(labels[2]).toMatch(/tsc/);
     expect(labels.at(-1)).toMatch(/electron-builder/);
-    // The seven MCP bundles package.json ships, each installed then built in its own folder.
-    expect(MCPS).toHaveLength(7);
+    // The six MCP bundles package.json ships since 2.0.5 (mcp-telegram went with Tars's own bot), each installed then
+    // built in its own folder.
+    expect(MCPS).toHaveLength(6);
     for (const mcp of MCPS) {
       const own = steps.filter(s => s.cwd === path.join(ROOT, mcp));
       expect(own.map(s => s.label)).toEqual([`${mcp}: npm install`, `${mcp}: npm run build`]);
