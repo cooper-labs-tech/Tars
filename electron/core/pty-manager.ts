@@ -13,6 +13,7 @@ import { app, BrowserWindow } from 'electron';
 import { Draft, confirmSubmitted, emptyDraft, feedDraft, isKeystroke } from './input-draft';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { envelopeValue } from '../utils/envelope-value';
+import { twoZones } from '../utils/two-zones';
 import { AgentMessageWaiting } from '../types';
 import { handOffFrom, noteHandOff } from '../services/task-ledger';
 
@@ -450,7 +451,14 @@ export type MessageSender =
    * there and nowhere else, so no message an agent sends is ever typed after
    * this line.
    */
-  | { kind: 'user'; via: 'Telegram' };
+  | { kind: 'user'; via: 'Telegram' }
+  /**
+   * The owner's words, relayed by an orchestrator and verified by Tars
+   * (services/owner-words.ts, 2.0.6; SECURITY.md §8): the body is Tars's
+   * record of them, never the relaying agent's text. Made by the relay route
+   * and nowhere else.
+   */
+  | { kind: 'owner-relay'; wordsId: string; at: number; via: 'window' | 'Telegram'; by: { id: string; name?: string } };
 
 /**
  * The line typed before a pasted message: who sent it, and, when Tars hands
@@ -465,6 +473,12 @@ export function senderLine(sender: MessageSender, taskRef?: string): string {
   }
   if (sender.kind === 'channel') return `Message from ${sender.channel}${task}: `;
   if (sender.kind === 'user') return `Message from the user via ${sender.via}${task}: `;
+  if (sender.kind === 'owner-relay') {
+    return `Message from Tars: the owner's words of ${twoZones(sender.at)}, via ${sender.via}, `
+      + `relayed by agent ${envelopeValue(sender.by.name || sender.by.id)} (${envelopeValue(sender.by.id)}), `
+      // The id is Tars's own (ow- and 12 hex characters), never a caller's.
+      + `verified by Tars (words ${sender.wordsId}): `;
+  }
   return `Message from Tars${task}: `;
 }
 
@@ -1101,8 +1115,17 @@ function skeletons(line: string): string[] {
  * changes nothing a reader needs.
  */
 function quoteSenderLookAlikes(data: string): string {
-  return data.replace(/^[^\n\u2028\u2029]*/gm, line => (skeletons(line).some(spelt => spelt.startsWith('messagefrom')) ? `> ${line}` : line));
+  return data.replace(/^[^\n\u2028\u2029]*/gm, line => (skeletons(line).some(spelt => spelt.startsWith('messagefrom') || spelt.includes(OWNER_MARK_SPELT)) ? `> ${line}` : line));
 }
+
+/**
+ * The words of the owner mark, as a skeleton spells them (2.0.6, option e;
+ * SECURITY.md \u00a78). The mark is a sender line, and only that counts; a body
+ * line that carries its words sits inside another sender's message, and is
+ * quoted too, as a defence in depth. The skeleton knows the look-alikes of
+ * "message from"'s letters only: a line spelt with others is not quoted.
+ */
+const OWNER_MARK_SPELT = 'verifiedbytars';
 
 /**
  * A message with its sender line, as the prompt of a launch rather than typed:
