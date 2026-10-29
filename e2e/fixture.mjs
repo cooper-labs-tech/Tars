@@ -593,6 +593,27 @@ function withSandboxPath(full, specEnv) {
  */
 const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] : [])];
 
+/** The project of the test that runs, or '' outside one (a global setup, a helper's own unit). */
+function projectName() {
+  try { return test.info().project.name; } catch { return ''; }
+}
+
+/**
+ * The new-interface project (E2E_BOTH_INTERFACES=1, playwright.config.ts) runs the specs that name no interface with
+ * the new one: `newInterface: true` added to the sandbox's ~/.tars/app-settings.json when the spec's seed names none.
+ * A spec that names it keeps its own value, and loops both interfaces itself (the owner's rule of 16/10). What the
+ * QA's throwaway patch did at each release gate until 2.0.6 (pass B), now one command.
+ */
+function seedNewInterface(sandboxHome) {
+  if (projectName() !== 'new-interface') return;
+  const file = path.join(sandboxHome, '.tars', 'app-settings.json');
+  let settings = {};
+  try { settings = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* none yet */ }
+  if ('newInterface' in settings) return;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ ...settings, newInterface: true }, null, 2));
+}
+
 /**
  * The one way a spec starts the app: inside its sandbox, Chromium profile
  * included, or not at all.
@@ -622,6 +643,7 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * spec that runs two Tars on one home gives the second a profile of its own.
  */
 export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+  seedNewInterface(sandboxHome);
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
