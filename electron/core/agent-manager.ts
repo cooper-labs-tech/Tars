@@ -37,6 +37,7 @@ import { emitAgentStatus } from '../services/agent-events';
 import { agentStatusOnExit } from './quit-state';
 import { clearStop } from './agent-stop';
 import { wakeFromSleep } from './agent-asleep';
+import { markNoTerminal } from './no-terminal';
 import { currentApiCall } from '../services/api-routes/call-context';
 import { reportAgentToolError, reportHandledError, taskNeverStarted } from '../services/error-reports/handled';
 import { UNKNOWN_TOOL } from '../services/error-reports/report';
@@ -1102,6 +1103,10 @@ export async function initAgentPty(
   ptyInitLocks.set(agent.id, run);
   try {
     return await run;
+  } catch (err) {
+    // No terminal left on the machine: the agent says why, whoever started it (core/no-terminal.ts).
+    markNoTerminal(agent, err, saveAgentsCallback);
+    throw err;
   } finally {
     if (ptyInitLocks.get(agent.id) === run) ptyInitLocks.delete(agent.id);
   }

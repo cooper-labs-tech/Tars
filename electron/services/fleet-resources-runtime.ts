@@ -8,7 +8,7 @@ import { broadcastToAllWindows } from '../utils/broadcast';
 import { TMP_ROOT, shortIdOf } from './agent-tmp';
 import { buildFleetResources, type AgentResources, type FleetResources, type ProcessRow, type TerminalsResources } from './fleet-resources';
 import { readTerminals } from '../core/pty-spawn';
-import { PTY_WARN_SHARE } from '../core/pty-pool';
+import { PTY_WARN_SHARE, terminalsNotice } from '../core/pty-pool';
 
 /**
  * The fleet's resources in the app (the rules: fleet-resources.ts): one process table per read, at most every 2 s
@@ -58,10 +58,10 @@ export async function readFleetResources(): Promise<FleetResources> {
   return { ...built, measuring, error: t.rows || process.platform === 'win32' ? null : 'the process table could not be read', terminals: terminalsNow() };
 }
 
-/** The machine's terminals as the window reads them, past 80 % of the limit said. */
+/** The machine's terminals as the window reads them, past 80 % of the limit said, and the words it shows as they are. */
 function terminalsNow(): TerminalsResources | null {
   const pool = readTerminals();
-  return pool && { ...pool, nearFull: pool.inUse / pool.max >= PTY_WARN_SHARE };
+  return pool && { ...pool, nearFull: pool.inUse / pool.max >= PTY_WARN_SHARE, notice: terminalsNotice(pool) };
 }
 
 /** Each agent's memory, CPU and processes, for list_agents and get_agent. */
