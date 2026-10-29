@@ -76,6 +76,7 @@ DOROTHY_HEALTH_EVERY_MS  # under DOROTHY_E2E only: how often the health samples 
 DOROTHY_STATUS_EVERY_MS  # under DOROTHY_E2E only: how often a status is set against its CLI's own record (200 ms at least; else every 30 s, services/status-truth.ts)
 DOROTHY_SLEEP_AFTER_MS   # under DOROTHY_E2E only: an agent's rest before it is put to sleep (2 s at least; else 30 minutes, services/agent-sleep.ts)
 DOROTHY_HERMES_SESSION_EVERY_MS # under DOROTHY_E2E only: how often Tars asks its Hermes session (200 ms at least; else every 30 minutes)
+DOROTHY_MEMORY_GUARD_EVERY_MS # under DOROTHY_E2E only: how often each project's MEMORY.md is read against what Claude Code loads (200 ms at least; else every 5 minutes, services/memory-guard.ts)
 DOROTHY_E2E_PASSWD_HOME # under DOROTHY_E2E only: the home a test build takes for the account's own (core/sandbox-build.ts); else the password database's
 DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a stand-in of Sentry); a packaged Tars never reads it (app.isPackaged, services/error-reports/index.ts)
 ELECTRON_BUILD        # '1' switches next.config.ts to output: 'export' for packaging
