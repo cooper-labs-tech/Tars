@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
 import {
   parseVmStat, parseSwapUsage, parseMemoryPressure, parseMeminfo, swapGrowthPerMin, treeMemory,
-  readMachine, readAgentTrees,
+  readMachine, readAgentTrees, parseProcVmstat, swapOutsPer10s,
 } from '../../../electron/services/health/machine';
 import { cleanSample, onlyKnown, type HealthSample } from '../../../electron/services/health/samples';
 
@@ -31,6 +31,11 @@ import { cleanSample, onlyKnown, type HealthSample } from '../../../electron/ser
  *    is not one, or a number that is not; and what leaves (an abrupt end's report, a diagnostic) names an agent:
  *    its trees leave without their ids.
  * 7. On this machine, the read gives no number at all, or does not say what it cost.
+ * And for the heavy-run slot's admission by the machine's room (2.0.6, 29/10), as room-check.sh reads it:
+ * 8. The pages swapped out are not read (macOS vm_stat's Swapouts counter, Linux /proc/vmstat's pswpout), or a
+ *    figure is made up on Windows, where no command line gives them.
+ * 9. Two readings' swapouts are not turned into pages per 10 s, or are given for the first reading, a clock set back,
+ *    a counter that went down (a reboot), or a counter unknown on either side.
  */
 
 const VM_STAT = `Mach Virtual Memory Statistics: (page size of 16384 bytes)
@@ -76,6 +81,21 @@ describe('what the system says, read', () => {
     expect(vm.compressedMb).toBeCloseTo((648280 * 16384) / 1048576, 1);
     expect(parseSwapUsage(SWAP)).toBe(13281);
     expect(parseMemoryPressure(PRESSURE)).toBe(42);
+  });
+
+  it('8. the pages swapped out: vm_stat\'s Swapouts, /proc/vmstat\'s pswpout, nothing made up', () => {
+    expect(parseVmStat(VM_STAT)!.swapOutPages).toBe(167755450);
+    expect(parseVmStat(VM_STAT.replace(/^Swapouts:.*$/m, ''))!.swapOutPages).toBeNull();
+    expect(parseProcVmstat('nr_free_pages 12\npswpin 40\npswpout 9876\npgfault 1\n')).toBe(9876);
+    expect(parseProcVmstat('nr_free_pages 12\n')).toBeNull();
+  });
+
+  it('9. swapouts per 10 s from two readings, none for the first, a clock or a counter going back, or an unknown', () => {
+    expect(swapOutsPer10s({ at: 0, swapOutPages: 1_000 }, { at: 20_000, swapOutPages: 3_000 })).toBe(1_000);
+    expect(swapOutsPer10s(undefined, { at: 20_000, swapOutPages: 3_000 })).toBeNull();
+    expect(swapOutsPer10s({ at: 20_000, swapOutPages: 1_000 }, { at: 10_000, swapOutPages: 3_000 })).toBeNull();
+    expect(swapOutsPer10s({ at: 0, swapOutPages: 5_000 }, { at: 10_000, swapOutPages: 3_000 })).toBeNull();
+    expect(swapOutsPer10s({ at: 0, swapOutPages: null }, { at: 10_000, swapOutPages: 3_000 })).toBeNull();
   });
 
   it('1. Linux: /proc/meminfo\'s available memory and the swap used', () => {
