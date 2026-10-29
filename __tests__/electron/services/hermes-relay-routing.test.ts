@@ -158,7 +158,7 @@ describe('a reply to a report', () => {
   });
 
   it("9. a reply to a project's message is recorded as the owner's words, a reply to that message (the QA's F1 on #569)", async () => {
-    const sent = await relay.relaySend({ text: 'Tars-Orchestrator: the gate is green', kind: 'message', ref: 'message:m-1', projectPath: TARS }, T0);
+    const sent = await relay.relaySend({ text: 'Tars-Orchestrator: the gate is green', kind: 'message', ref: 'message:m-1', projectPath: TARS, chatId: 'chat-x' }, T0);
     fake.reply({ messageId: (sent as { messageId: string }).messageId }, 'Merge it');
 
     await relay.relayTick(T0 + 5_000);
@@ -166,7 +166,9 @@ describe('a reply to a report', () => {
 
     const { ownerWords } = await import('../../../electron/services/owner-words');
     expect(ownerWords.listFor({ id: 'orch-tars', projectPath: TARS, orchestrator: true, projectOrchestrator: true })
-      .filter((w) => w.text === 'Merge it')).toEqual([expect.objectContaining({ via: 'Telegram', about: `a reply to a message of ${twoZones(T0)}` })]);
+      .filter((w) => w.text === 'Merge it')).toEqual([expect.objectContaining({ via: 'Telegram', chatId: 'chat-x', about: `a reply to a message of ${twoZones(T0)}` })]);
+    // The QA's F6 on #569: that chat's, so another chat's runner does not hold it.
+    expect(ownerWords.listFor({ id: 'run-y', projectPath: TARS, orchestrator: true, chatId: 'chat-y' }).filter((w) => w.text === 'Merge it')).toEqual([]);
   });
 });
 

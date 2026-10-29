@@ -31,6 +31,7 @@ import { twoZones } from '../../../electron/utils/two-zones';
  * O13. (M2) Words for no chat (a reply to a report, "@project") reach a chat's runner the same way.
  * O14. (M1) A receiver has no way to confirm an id it was relayed: owner_words names only its own project's words.
  * O15. (L1) An answer is verified without the question it answers: a "yes" relayed beside a claim of the sender's.
+ * O16. (the QA's F3 on #569) With the chats reading each other, a worker of the project lists and relays them.
  */
 
 const A = '/projects/alpha';
@@ -147,6 +148,13 @@ describe("the chats' wall (the Audit's M2 on #569)", () => {
     const open = { ...runnerY, readsAllChats: true };
     expect(words.listFor(open).map((w) => w.id)).toEqual([id]);
     expect(words.relay(id, { by: open, to: orchB })).toMatchObject({ ok: true });
+  });
+
+  it("O16. with chats reading each other, a worker of the project still neither lists nor relays them (the QA's F3 on #569)", () => {
+    const { id } = words.record({ text: 'in chat x', via: 'window', projectPath: A, chatId: 'chat-x' });
+    const worker = { ...workerA, readsAllChats: true };
+    expect(words.listFor(worker)).toEqual([]);
+    expect(words.relay(id, { by: worker, to: orchB })).toMatchObject({ status: 403, code: 'owner_words_not_yours' });
   });
 
   it("O13. words for no chat are the project's orchestrator's", () => {

@@ -403,6 +403,15 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     await startWithTask(fleet, agent, TASK, 'Telegram', { resume: false, reply: vi.fn() });
     expect(spawned).toHaveLength(1);
     expect(typed(spawned[0])).toBe(`cd ${q(project)} && ${claudeCommand(TASK)}\r`);
+    // The QA's F5 on #569: its task keeps its channel, for a retype to type it under (the Audit's M1).
+    expect((agent.pendingDelivery as { sender?: unknown } | undefined)?.sender).toEqual({ kind: 'channel', channel: 'Telegram' });
+  });
+
+  it("an API start from the project's orchestrator keeps it as the task's sender, for a retype (the QA's F5 on #569)", async () => {
+    agents.set('lead', { id: 'lead', name: 'Lead', status: 'idle', provider: 'claude', projectPath: project, role: 'orchestrator', skills: [], output: [], lastActivity: '' } as unknown as AgentStatus);
+    const { answers, agent } = await apiCall({}, () => undefined, 'lead');
+    expect(answers[0]?.status ?? 200, JSON.stringify(answers[0]?.body)).toBe(200);
+    expect((agent.pendingDelivery as { sender?: unknown } | undefined)?.sender).toEqual({ kind: 'agent', id: 'lead', name: 'Lead' });
   });
 
   it('the API start runs `/bin/bash -l -c "cd \'<dir>\' && exec <cmd>"`', async () => {
@@ -781,7 +790,7 @@ async function apiStart(): Promise<{ file: string; args: string[] | string; env:
 }
 
 /** POST /api/agents/api-agent/start from itself, the agent given `fields`; `before` runs once it exists. */
-async function apiCall<T>(fields: Partial<AgentStatus>, before: (agent: AgentStatus) => T): Promise<{
+async function apiCall<T>(fields: Partial<AgentStatus>, before: (agent: AgentStatus) => T, caller: string = API_AGENT.id): Promise<{
   answers: Array<{ body: unknown; status?: number }>; agent: AgentStatus; extra: T;
 }> {
   const agent = {
@@ -803,7 +812,7 @@ async function apiCall<T>(fields: Partial<AgentStatus>, before: (agent: AgentSta
   const req = {
     method: 'POST', pathname: `/api/agents/${API_AGENT.id}/start`, url: new URL('http://localhost/'),
     body: { prompt: API_PROMPT }, raw: {} as never, res: {} as never,
-    params: { id: API_AGENT.id }, callerAgentId: API_AGENT.id,
+    params: { id: API_AGENT.id }, callerAgentId: caller,
   } as unknown as RouteRequest;
   const answers: Array<{ body: unknown; status?: number }> = [];
   await route.handler(req, (body, status) => { answers.push({ body, status }); });

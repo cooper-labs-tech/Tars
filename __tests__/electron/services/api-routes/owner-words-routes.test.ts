@@ -7,6 +7,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * R1. A delivery the receiver's terminal refused still counts as made: every later relay of those words to that
  *     receiver is refused as a replay until Tars restarts.
  * R2. The receiver cannot read back the words relayed to it (the Audit's M1 on #569).
+ * R3. (the QA's F4 on #569) The route does not read chatsReadEachOther from the settings: forced on, every chat's
+ *     runner gets every chat's words; forced off, never.
  */
 
 const dispatched = vi.hoisted(() => ({ status: 409 as number | undefined, calls: 0 }));
@@ -25,6 +27,10 @@ import { ownerWords } from '../../../../electron/services/owner-words';
 import { registerOwnerWordsRoutes } from '../../../../electron/services/api-routes/owner-words-routes';
 import type { RouteHandler, RouteContext } from '../../../../electron/services/api-routes/types';
 import type { AgentStatus } from '../../../../electron/types';
+import { setChatLookups } from '../../../../electron/core/chat-inbox';
+
+/** The settings the route reads at each call. */
+const settings: { chatsReadEachOther?: boolean } = {};
 
 const A = '/projects/alpha';
 const B = '/projects/beta';
@@ -52,7 +58,7 @@ beforeEach(() => {
   };
   app.get = (p, h) => app.add('GET', p, h);
   app.post = (p, h) => app.add('POST', p, h);
-  registerOwnerWordsRoutes(app as never, { getAppSettings: () => ({}) } as unknown as RouteContext);
+  registerOwnerWordsRoutes(app as never, { getAppSettings: () => settings } as unknown as RouteContext);
   dispatched.calls = 0;
 });
 
@@ -73,5 +79,27 @@ describe('the relay route', () => {
     const listed = await call('GET', '/api/owner-words', 'lead-b');
     expect((listed.data.relayedToYou as Array<Record<string, unknown>>).filter((w) => w.id === id))
       .toEqual([expect.objectContaining({ text: 'ROUTE-WORDS-2 ship tonight', by: { id: 'lead-a', name: 'Alpha Lead' } })]);
+  });
+
+  it("R3. another chat's runner reads a chat's words only while the settings let the chats read each other", async () => {
+    for (const id of ['run-x', 'run-y']) {
+      agents.set(id, { id, name: id, projectPath: A, kind: 'chat', role: 'worker', status: 'idle', provider: 'claude', skills: [], output: [], lastActivity: '' } as unknown as AgentStatus);
+    }
+    setChatLookups({
+      inbox: () => null,
+      chatRunBy: (agentId) => (agentId === 'run-x' || agentId === 'run-y' ? { id: `chat-${agentId.slice(4)}`, projectPath: A, number: 2, title: agentId } : undefined),
+    });
+    try {
+      const { id } = ownerWords.record({ text: 'ROUTE-WORDS-3 in chat x', via: 'window', projectPath: A, chatId: 'chat-x' });
+      const seenBy = async (agentId: string) => ((await call('GET', '/api/owner-words', agentId)).data.words as Array<{ id: string }>).some((w) => w.id === id);
+      settings.chatsReadEachOther = false;
+      expect(await seenBy('run-x'), 'its own chat').toBe(true);
+      expect(await seenBy('run-y'), 'another chat, the setting off').toBe(false);
+      settings.chatsReadEachOther = true;
+      expect(await seenBy('run-y'), 'another chat, the setting on').toBe(true);
+    } finally {
+      setChatLookups(undefined);
+      delete settings.chatsReadEachOther;
+    }
   });
 });
