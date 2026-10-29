@@ -76,6 +76,7 @@ DOROTHY_HEALTH_EVERY_MS  # under DOROTHY_E2E only: how often the health samples 
 DOROTHY_STATUS_EVERY_MS  # under DOROTHY_E2E only: how often a status is set against its CLI's own record (200 ms at least; else every 30 s, services/status-truth.ts)
 DOROTHY_SLEEP_AFTER_MS   # under DOROTHY_E2E only: an agent's rest before it is put to sleep (2 s at least; else 30 minutes, services/agent-sleep.ts)
 DOROTHY_HERMES_SESSION_EVERY_MS # under DOROTHY_E2E only: how often Tars asks its Hermes session (200 ms at least; else every 30 minutes)
+DOROTHY_WAITS_MINUTE_MS  # under DOROTHY_E2E only: a minute of the waits' clock (200 ms at least; else 60 s): a held message's 3, a message behind work's 10, and the 30 of the digest that tells its sender (services/waits-digest.ts)
 DOROTHY_MEMORY_GUARD_EVERY_MS # under DOROTHY_E2E only: how often each project's MEMORY.md is read against what Claude Code loads (200 ms at least; else every 5 minutes, services/memory-guard.ts)
 DOROTHY_E2E_PASSWD_HOME # under DOROTHY_E2E only: the home a test build takes for the account's own (core/sandbox-build.ts); else the password database's
 DOROTHY_E2E_PTY_MAX   # under DOROTHY_E2E only, never in a packaged build (app.isPackaged): the pool of terminals is Tars's own open terminals out of this many (a whole count, 0 included), and once they reach it a start is refused as on a full machine, NoTerminalLeft, by the same rule on every system; 0 refuses every start (core/pty-pool.ts ptyTestMax, core/pty-spawn.ts useTestPtyMax); else the machine's pool

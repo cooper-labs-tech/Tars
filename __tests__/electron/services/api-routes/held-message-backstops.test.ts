@@ -53,7 +53,7 @@ vi.mock('../../../../electron/services/acp/delegate', () => ({
 const broadcasts: Array<{ channel: string; payload: unknown }> = [];
 
 import * as pty from 'node-pty';
-import { HELD_RETELL_MS, performDispatch, registerAgentRoutes } from '../../../../electron/services/api-routes/agent-routes';
+import { HELD_RETELL_MS, performDispatch, registerAgentRoutes, resetWaitsDigest } from '../../../../electron/services/api-routes/agent-routes';
 import { agents } from '../../../../electron/core/agent-manager';
 import { spawnAgentPty } from '../../../../electron/core/agent-pty';
 import {
@@ -99,6 +99,7 @@ async function call(method: string, url: string, body: Record<string, unknown> =
 }
 
 beforeEach(() => {
+  resetWaitsDigest();
   vi.useFakeTimers();
   agents.clear();
   ptyProcesses.clear();

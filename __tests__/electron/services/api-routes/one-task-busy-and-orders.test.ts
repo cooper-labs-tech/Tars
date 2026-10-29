@@ -132,7 +132,7 @@ vi.mock('../../../../electron/services/agent-watch', async (original) => ({
   tellCancelled: (...args: unknown[]) => { told.push(args); },
 }));
 
-import { registerAgentRoutes, performDispatch } from '../../../../electron/services/api-routes/agent-routes';
+import { registerAgentRoutes, performDispatch, resetWaitsDigest } from '../../../../electron/services/api-routes/agent-routes';
 import { registerTaskRoutes } from '../../../../electron/services/api-routes/task-routes';
 import { registerKanbanRoutes, carryKanban } from '../../../../electron/services/api-routes/kanban-routes';
 import { agentStatusEmitter } from '../../../../electron/services/agent-events';
@@ -215,6 +215,7 @@ const typedInto = (t: FakePty) => t.write.mock.calls.map(c => String(c[0])).join
 const later = (ms: number) => vi.advanceTimersByTimeAsync(ms);
 
 beforeEach(() => {
+  resetWaitsDigest();
   resetLaunches(); vi.useFakeTimers(); agents.clear(); ptyProcesses.clear(); spawned.length = 0; runs.length = 0; told.length = 0; used.clear();
   const ledgerDir = fs.mkdtempSync(path.join(project, 'ledger-'));
   startTaskWatch(path.join(ledgerDir, 'l.jsonl'), path.join(ledgerDir, 't.jsonl'), path.join(ledgerDir, 'r.jsonl'));
