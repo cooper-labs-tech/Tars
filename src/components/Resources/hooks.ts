@@ -60,6 +60,19 @@ export function useHeavyRuns(): Reading<HeavySlotStatus> & { giveBack: (ticketId
   return { ...reading, giveBack };
 }
 
+/**
+ * How often Heavy runs reads the machine's terminals while it is shown: they move with agents starting and stopping,
+ * and resources:changed comes at once past 80 % of the limit (PR 553), so a slower read than the fleet's is enough.
+ */
+export const TERMINALS_READ_EVERY_MS = 15_000;
+
+/** The machine's terminals (PR 553's FleetResources.terminals): undefined before a reading, null where there is no pool. */
+export function useTerminals(): FleetResources['terminals'] {
+  const api = channel('resources');
+  const { state } = useReading(api?.read, api?.onChanged, TERMINALS_READ_EVERY_MS);
+  return state ? state.terminals : undefined;
+}
+
 export function useFleetResources(): Reading<FleetResources> & { measureDisk: () => Promise<string | null> } {
   const api = channel('resources');
   const reading = useReading(api?.read, api?.onChanged, FLEET_READ_EVERY_MS);
