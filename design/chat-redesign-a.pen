@@ -1,5 +1,5 @@
 {
-  "version": "2.17",
+  "version": "2.19",
   "children": [
     {
       "type": "frame",
@@ -239841,6 +239841,736 @@
                           ]
                         }
                       ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "NBa2d",
+      "x": 0,
+      "y": 24000,
+      "name": "Chat · A · Room (2.0.6) · a note",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 948,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "W7tmG",
+          "name": "t",
+          "fill": "$text-primary",
+          "content": "Chat · A · Room (2.0.6) · a note among messages",
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "N9Ta4",
+          "name": "intro",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 820,
+          "content": "A note is delivered as a note: it opens no task, so it never shows queued, held or a task, only its note chip. A message keeps its chips as today.",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "EYVxO",
+          "name": "room",
+          "width": 900,
+          "fill": "$bg",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "padding": [
+            8,
+            0
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "leSB2",
+              "name": "message 09:41 orchestrator",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                8,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "KlQ7a",
+                  "name": "time",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 36,
+                  "content": "09:41",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Jlhv9",
+                  "name": "body",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "F6G7AO",
+                      "name": "who",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pZA2s",
+                          "name": "from",
+                          "fill": "$text-primary",
+                          "content": "orchestrator",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "wDNuE",
+                          "name": "arrow-right",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Mzy8Z",
+                          "name": "to",
+                          "fill": "$text-secondary",
+                          "content": "frontend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "LRdCr",
+                      "name": "text",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "Take the Memory page frames next; the TSX waits for the Database Engineer's PR.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YdhDX",
+              "name": "message 09:43 backend",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                8,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FNsMw",
+                  "name": "time",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 36,
+                  "content": "09:43",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Y7OehS",
+                  "name": "body",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "LAkN3",
+                      "name": "who",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "aIC5x",
+                          "name": "from",
+                          "fill": "$text-primary",
+                          "content": "backend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "YjVml",
+                          "name": "arrow-right",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "T5g0Xx",
+                          "name": "to",
+                          "fill": "$text-secondary",
+                          "content": "orchestrator",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "J2I4yl",
+                          "name": "MetaChip · note",
+                          "height": 20,
+                          "fill": "$surface-raised",
+                          "padding": [
+                            0,
+                            6
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "i0f3h",
+                              "name": "label",
+                              "fill": "$text-secondary",
+                              "content": "note",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "gLEmu",
+                      "name": "text",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "For your information: the pty count lands in the health samples at 2 s.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wP7hn",
+              "name": "message 09:44 frontend",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                8,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "T9Krt",
+                  "name": "time",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 36,
+                  "content": "09:44",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "f3IYH9",
+                  "name": "body",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "j9iuV4",
+                      "name": "who",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "IyWw3",
+                          "name": "from",
+                          "fill": "$text-primary",
+                          "content": "frontend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "DWxEM",
+                          "name": "arrow-right",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "VtjUo",
+                          "name": "to",
+                          "fill": "$text-secondary",
+                          "content": "backend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "kfFLn",
+                          "name": "MetaChip · queued",
+                          "height": 20,
+                          "fill": "$surface-raised",
+                          "padding": [
+                            0,
+                            6
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "nFptM",
+                              "name": "label",
+                              "fill": "$text-secondary",
+                              "content": "queued",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "k6zme",
+                      "name": "text",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "Send me the shape of the terminals figure before you write it.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "n3BzB",
+      "x": 1000,
+      "y": 24000,
+      "name": "Chat · A · Room (2.0.6) · a note · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 948,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "rfpji",
+          "name": "t",
+          "fill": "$text-primary",
+          "content": "Chat · A · Room (2.0.6) · a note among messages",
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "q05FEi",
+          "name": "intro",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 820,
+          "content": "A note is delivered as a note: it opens no task, so it never shows queued, held or a task, only its note chip. A message keeps its chips as today.",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "ZUohN",
+          "name": "room",
+          "width": 900,
+          "fill": "$bg",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "padding": [
+            8,
+            0
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "jTaI0",
+              "name": "message 09:41 orchestrator",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                8,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "p1tAz",
+                  "name": "time",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 36,
+                  "content": "09:41",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "f6NbuC",
+                  "name": "body",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "aGRBT",
+                      "name": "who",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L1Z4e",
+                          "name": "from",
+                          "fill": "$text-primary",
+                          "content": "orchestrator",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "U9Iqst",
+                          "name": "arrow-right",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "J4F9gQ",
+                          "name": "to",
+                          "fill": "$text-secondary",
+                          "content": "frontend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "D7rxP",
+                      "name": "text",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "Take the Memory page frames next; the TSX waits for the Database Engineer's PR.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fkfv6",
+              "name": "message 09:43 backend",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                8,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "iMKuC",
+                  "name": "time",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 36,
+                  "content": "09:43",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "co1Wm",
+                  "name": "body",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "kR962",
+                      "name": "who",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "asxIG",
+                          "name": "from",
+                          "fill": "$text-primary",
+                          "content": "backend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "cPn5p",
+                          "name": "arrow-right",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q66En",
+                          "name": "to",
+                          "fill": "$text-secondary",
+                          "content": "orchestrator",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "pmoVp",
+                          "name": "MetaChip · note",
+                          "height": 20,
+                          "fill": "$surface-raised",
+                          "padding": [
+                            0,
+                            6
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "tc7BF",
+                              "name": "label",
+                              "fill": "$text-secondary",
+                              "content": "note",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "akXnD",
+                      "name": "text",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "For your information: the pty count lands in the health samples at 2 s.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "P77tlc",
+              "name": "message 09:44 frontend",
+              "width": "fill_container",
+              "gap": 12,
+              "padding": [
+                8,
+                24
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "x6nspU",
+                  "name": "time",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": 36,
+                  "content": "09:44",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 11,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "sGt4u",
+                  "name": "body",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "OEr8I",
+                      "name": "who",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pY79m",
+                          "name": "from",
+                          "fill": "$text-primary",
+                          "content": "frontend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "icon",
+                          "id": "ky0oM",
+                          "name": "arrow-right",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "arrow-right",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "YmpHH",
+                          "name": "to",
+                          "fill": "$text-secondary",
+                          "content": "backend",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "msU3Z",
+                          "name": "MetaChip · queued",
+                          "height": 20,
+                          "fill": "$surface-raised",
+                          "padding": [
+                            0,
+                            6
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "z9BAA",
+                              "name": "label",
+                              "fill": "$text-secondary",
+                              "content": "queued",
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "cdhQG",
+                      "name": "text",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 720,
+                      "content": "Send me the shape of the terminals figure before you write it.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
