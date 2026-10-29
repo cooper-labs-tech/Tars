@@ -7,6 +7,21 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 63,
+    version: '2.0.6',
+    date: '2026-10-29',
+    updates: [
+      'Tars no longer leaks a terminal each time it starts an agent on macOS. Until now each start kept one for good, and after about three days the computer\'s 511 were used up and no agent could start. A start that fails partway no longer keeps its terminals either.',
+      'When no terminal is left, an agent that cannot start says why on its card and its Dashboard panel, asleep too, instead of "Internal server error": how many of how many are in use, how many Tars holds and what frees one. Whoever started it or waits on it is told the same, and the reason goes once a terminal opens.',
+      'Resources, Heavy runs, shows how many of the computer\'s terminals are in use of its limit and how many Tars holds, and says so before they run out: past 80 % of the limit the window and the orchestrators are told. On Windows they are not counted.',
+      'Tars now watches each project\'s MEMORY.md against what Claude Code loads of it: its first 200 lines, then 24.4 KB. Close to either limit, or past it, the project\'s orchestrator is told how many lines never reach an agent and from which line, once, and again only when the file has grown by more than 2 KB or 20 lines. The Memory page says the same on the project\'s row and above the file.',
+      'Agents can send each other a note: information that is not a task, typed at the end of the receiver\'s turn or at once, and no end notice comes back for it.',
+      'An orchestrator is no longer woken once per waiting message: Tars tells it, at most every 30 minutes, which of its messages still wait, to whom, since when and why.',
+      'Every time in a notice Tars types into an agent reads UTC first, then the machine\'s own with its offset, as "19:03 UTC (23:03 +04)".',
+      'Tars runs on Electron 44.10.0, whose Node 24.22.1 carries the Node security fixes of 20 October, and takes body-parser 2.4.0 for a security advisory, in the app and in the bundled MCP servers\' locks. The bundled MCP servers are built with esbuild 0.28 (from 0.24). Nothing changes in what they do.',
+    ],
+  },
+  {
     id: 62,
     version: '2.0.5',
     date: '2026-10-22',
