@@ -72,6 +72,14 @@ import { execFileSync } from 'node:child_process';
  *     Tars, a link hands its target to the window. It reads the same safe way, and says why it did not.
  * S8 (its L3). A pass that cannot list a folder forgets everything told under it, and every orchestrator is told
  *     again: an entry is forgotten only when its file is gone (ENOENT), never on a listing that failed.
+ * And from #558's E2E at 3d34ca644 and 81ec6c382 (29/10), red at its step 3:
+ * M15. A note Tars holds behind a draft in the orchestrator's field (tellAgentAsTars settles only when the terminal
+ *     takes it or gives it up) is awaited for ever: the pass never ends, the timer skips every pass after it, and the
+ *     guard stops for good. A pass waits for a delivery a few seconds at most; a note still held is not told again
+ *     while it is, and is recorded once it is typed.
+ * M16. That record lands while a pass is between its read of what was told and its write: a pass that writes back
+ *     what it read erases the note just typed, which is then told a second time. Each writes what it changed into
+ *     the store as it is when it writes.
  * And from the QA's F1 on #565 at ea7da32d0 (29/10):
  * S6b. The buffer takes the file's own size, so without the open file's size checked first, a file past the ceiling
  *     gets a buffer of its whole size before it is refused (3 MiB for 3 MiB; a MEMORY.md of a few GB, that much in
@@ -530,5 +538,55 @@ describe('the Audit\'s round on #565', () => {
     expect(Object.keys(JSON.parse(fs.readFileSync(store, 'utf8')))).toEqual([file]);
     await pass();
     expect(notes, 'told again after a pass that could not list the folder').toHaveLength(1);
+  });
+});
+
+describe('a note held behind a draft', () => {
+  it('M15. does not stop the guard: later passes run, the held note is not told twice, and is recorded once typed', async () => {
+    const { runMemoryGuardPass } = await import('../../../electron/services/memory-guard');
+    const home = path.join(tmp, 'held-home');
+    const dir = (folder: string) => path.join(home, '.claude', 'projects', folder, 'memory');
+    for (const f of ['-held', '-other']) fs.mkdirSync(dir(f), { recursive: true });
+    fs.writeFileSync(path.join(dir('-held'), 'MEMORY.md'), probeFile(150, 200));
+    const store = path.join(tmp, 'held-store.json');
+    const asked: string[] = [];
+    let typeHeld: ((d: string) => void) | undefined;
+    const tell = (project: string) => {
+      asked.push(project);
+      // The held project's note waits behind a draft until the test lets it go; the other is typed at once.
+      return project === '/p/held' ? new Promise<string>(resolve => { typeHeld = resolve; }) : Promise.resolve('typed');
+    };
+    const pass = () => runMemoryGuardPass({ home, store, owners: new Map([['-held', '/p/held'], ['-other', '/p/other']]), tell, tellWaitMs: 50 });
+    await pass();
+    expect(asked).toEqual(['/p/held']);
+    fs.writeFileSync(path.join(dir('-other'), 'MEMORY.md'), probeFile(150, 200));
+    await pass();
+    expect(asked, 'the held note told again, or the other one not told').toEqual(['/p/held', '/p/other']);
+    typeHeld!('typed');
+    await new Promise(r => setTimeout(r, 10));
+    expect(Object.keys(JSON.parse(fs.readFileSync(store, 'utf8'))).sort()).toEqual([path.join(dir('-held'), 'MEMORY.md'), path.join(dir('-other'), 'MEMORY.md')].sort());
+    await pass();
+    expect(asked).toHaveLength(2);
+  });
+
+  it('M16. a note typed while a later pass waits is kept when that pass writes what it forgot', async () => {
+    const { runMemoryGuardPass } = await import('../../../electron/services/memory-guard');
+    const home = path.join(tmp, 'late-home');
+    const dir = (folder: string) => path.join(home, '.claude', 'projects', folder, 'memory');
+    for (const f of ['-a', '-b', '-c']) fs.mkdirSync(dir(f), { recursive: true });
+    for (const f of ['-a', '-b']) fs.writeFileSync(path.join(dir(f), 'MEMORY.md'), probeFile(150, 200));
+    const store = path.join(tmp, 'late-store.json');
+    let typeA: ((d: string) => void) | undefined;
+    // A waits behind a draft; B is typed at once; C's delivery lets A's go, then waits behind a draft of its own.
+    const tell = (project: string) => project === '/p/a' ? new Promise<string>(resolve => { typeA = resolve; })
+      : project === '/p/b' ? Promise.resolve('typed')
+      : (typeA!('typed'), new Promise<string>(() => {}));
+    const pass = () => runMemoryGuardPass({ home, store, owners: new Map([['-a', '/p/a'], ['-b', '/p/b'], ['-c', '/p/c']]), tell, tellWaitMs: 50 });
+    await pass();
+    // B gone, C past the limit: the next pass forgets B, and A is typed while it waits on C.
+    fs.rmSync(path.join(dir('-b'), 'MEMORY.md'));
+    fs.writeFileSync(path.join(dir('-c'), 'MEMORY.md'), probeFile(150, 200));
+    await pass();
+    expect(Object.keys(JSON.parse(fs.readFileSync(store, 'utf8'))), 'the note typed during the pass, erased by its write').toEqual([path.join(dir('-a'), 'MEMORY.md')]);
   });
 });
