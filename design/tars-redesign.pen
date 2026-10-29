@@ -825644,7 +825644,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "Four of the 2.0.6 options change what agents read; one changes the window: a note says note. The rest is said here so nobody draws it twice.",
+          "content": "The 2.0.6 options change what agents read, not the window: a note, the waiting digest, both zones and the owner's words are said here so nobody draws them.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -825672,78 +825672,11 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "a · a note waiting in an agent's panel: it says note, and is no task",
+                  "content": "a · a note waiting in an agent's panel reads as any message: PR 561 gives the window no mark of a note",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
-                },
-                {
-                  "type": "frame",
-                  "id": "NpU5r",
-                  "name": "bar",
-                  "width": "fill_container",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "ZQozP",
-                      "name": "notice",
-                      "width": "fill_container",
-                      "height": 26,
-                      "fill": "$surface-raised",
-                      "stroke": "$border",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 8,
-                      "padding": [
-                        0,
-                        12
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "KAkiA",
-                          "name": "square",
-                          "fill": "$status-waiting",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
-                          "type": "frame",
-                          "id": "rEL3d",
-                          "name": "line",
-                          "gap": 5,
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "e5pea",
-                              "name": "who",
-                              "fill": "$text-primary",
-                              "content": "A note from Tars-Backend",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "w8tZBG",
-                              "name": "rest",
-                              "fill": "$text-secondary",
-                              "content": "is waiting for this field. Send what you are typing, or clear…",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
                 },
                 {
                   "type": "frame",
@@ -825839,7 +825772,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "A note is delivered and labelled so; it opens no task, so no task line, no queue entry and no end notice follow it. In the panel the waiting line names it a note instead of a message (above); in the Chat it carries a note chip (Chat · A · Room (2.0.6) · a note, in chat-redesign-a.pen).",
+                  "content": "A note is typed into the receiver's terminal under its own label (\"[Note for information from ...]\"); it opens no task, so no task line, no queue entry and no end notice follow it. The window is told nothing that marks it: held behind a draft, it waits under the panel's usual line, \"A message from\" (above), and it never goes through a Chat room, which carries room posts, not send_message. Nothing to build.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -825952,7 +825885,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "Four of the 2.0.6 options change what agents read; one changes the window: a note says note. The rest is said here so nobody draws it twice.",
+          "content": "The 2.0.6 options change what agents read, not the window: a note, the waiting digest, both zones and the owner's words are said here so nobody draws them.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -825980,78 +825913,11 @@
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "a · a note waiting in an agent's panel: it says note, and is no task",
+                  "content": "a · a note waiting in an agent's panel reads as any message: PR 561 gives the window no mark of a note",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
-                },
-                {
-                  "type": "frame",
-                  "id": "Z7wRdb",
-                  "name": "bar",
-                  "width": "fill_container",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "B9HKl0",
-                      "name": "notice",
-                      "width": "fill_container",
-                      "height": 26,
-                      "fill": "$surface-raised",
-                      "stroke": "$border",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
-                      "gap": 8,
-                      "padding": [
-                        0,
-                        12
-                      ],
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "LXN8x",
-                          "name": "square",
-                          "fill": "$status-waiting",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
-                          "type": "frame",
-                          "id": "XKVIv",
-                          "name": "line",
-                          "gap": 5,
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "C3gmE",
-                              "name": "who",
-                              "fill": "$text-primary",
-                              "content": "A note from Tars-Backend",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "dpxoU",
-                              "name": "rest",
-                              "fill": "$text-secondary",
-                              "content": "is waiting for this field. Send what you are typing, or clear…",
-                              "fontFamily": "$font-ui",
-                              "fontSize": 11,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        }
-                      ]
-                    }
-                  ]
                 },
                 {
                   "type": "frame",
@@ -826147,7 +826013,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "A note is delivered and labelled so; it opens no task, so no task line, no queue entry and no end notice follow it. In the panel the waiting line names it a note instead of a message (above); in the Chat it carries a note chip (Chat · A · Room (2.0.6) · a note, in chat-redesign-a.pen).",
+                  "content": "A note is typed into the receiver's terminal under its own label (\"[Note for information from ...]\"); it opens no task, so no task line, no queue entry and no end notice follow it. The window is told nothing that marks it: held behind a draft, it waits under the panel's usual line, \"A message from\" (above), and it never goes through a Chat room, which carries room posts, not send_message. Nothing to build.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
