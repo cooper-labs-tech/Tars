@@ -136,7 +136,8 @@ function Machine({ state }: { state: HeavySlotStatus | null }) {
 export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) => void }) {
   const { state, missing, error, reload, giveBack } = useHeavyRuns();
   const taken = state?.holders.length ?? 0;
-  const head = !state ? 'THE SLOT' : taken === 0 ? (state.slots > 1 ? 'THE SLOTS · FREE' : 'THE SLOT · FREE') : `${state.slots > 1 ? 'THE SLOTS' : 'THE SLOT'} · ${taken} OF ${state.slots} TAKEN`;
+  // Runs are admitted by the machine's room up to a ceiling (PR 573): how many run, and at most how many.
+  const head = !state ? 'THE SLOT' : `${taken === 0 ? 'NONE' : taken} RUNNING · AT MOST ${state.slots}`;
   const firstWaits = state && taken < state.slots ? state.waiting.find((w) => w.why) : undefined;
 
   return (
@@ -187,7 +188,7 @@ export function HeavyRunsView({ onShowAgent }: { onShowAgent: (agentId: string) 
           <Box name="Slots and floors" caption="SLOTS AND FLOORS">
             {state ? (
               <>
-                <FloorLine k="Slots for the whole machine" v={String(state.slots)} />
+                <FloorLine k="Runs at once, at most" v={String(state.slots)} />
                 <FloorLine k="A grant waits under" v={`${state.floors.diskGb} GB free disk`} />
                 <FloorLine k="or under" v={`${state.floors.memFreePct} % free memory`} />
                 <FloorLine k="Alerts at free disk of" v="10, 6 and 3 GB" />

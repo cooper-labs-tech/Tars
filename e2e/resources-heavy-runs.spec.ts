@@ -132,7 +132,7 @@ for (const newInterface of [false, true]) {
       const floors = view.getByRole('region', { name: 'Slots and floors' });
       const text = (await floors.innerText()).replace(/\s+/g, ' ');
       seen.floors = text;
-      expect(text).toContain('Slots for the whole machine 1');
+      expect(text).toContain('Runs at once, at most 1');
       expect(text).toContain('15 GB free disk');
       expect(text).toContain('20 % free memory');
       await stepShot(page, `${tag}1-heavy-runs`);
