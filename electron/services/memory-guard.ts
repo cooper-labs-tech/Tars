@@ -75,33 +75,59 @@ export function guardMemory(text: string | null): MemoryGuard {
 /** The most of a MEMORY.md Tars reads: far past what Claude Code loads, so a larger one is cut whatever it holds. */
 export const MEMORY_READ_CAP = 1024 * 1024;
 
+export type RegularFileRead =
+  | { kind: 'text'; text: string; stat: fs.Stats }
+  | { kind: 'too-large'; stat: fs.Stats }
+  | { kind: 'not-read' };
+
 /**
- * A MEMORY.md's guard, read the safe way (the Audit's L2 on #558): a regular file only, its link not followed (a FIFO
- * opened for reading waits for a writer for ever, a link may lead to a device), read without blocking the main
- * process, and not past MEMORY_READ_CAP, beyond which it is said too large, with no figure made up.
+ * A memory file read the safe way (the Audit's L2 on #558, then R1 and R2 at 3d34ca644): a regular file only, its
+ * link not followed (a FIFO opened for reading waits for a writer for ever, a link may lead to a device), without
+ * blocking the main process, and never more than `cap` bytes. The lstat only spares an open; what is decided is
+ * decided on the open file: O_NOFOLLOW and O_NONBLOCK where the platform has them (a FIFO or a link swapped in after
+ * the lstat opens at once, or not at all), its own stat for its type and its size, and a positional read into a
+ * buffer of cap + 1 bytes, so a file grown or swapped since is never read past the cap. A FIFO swapped in is refused
+ * twice: by the open file's type, and by the positional read itself (ESPIPE). The guard and the Memory page's listing
+ * read through it.
  */
-export async function guardMemoryFile(file: string): Promise<MemoryGuard> {
-  let stat: fs.Stats;
-  try { stat = await fs.promises.lstat(file); } catch { return guardMemory(null); }
-  if (!stat.isFile()) return guardMemory(null);
-  if (stat.size > MEMORY_READ_CAP) {
-    return {
-      state: 'cut', size: null, lines: null, limit: { ...CLAUDE_MEMORY_LIMITS }, cut: null,
-      notice: `MEMORY.md is ${(stat.size / 1024 / 1024).toFixed(1)} MB, more than Tars reads of it (${MEMORY_READ_CAP / 1024 / 1024} MB). Claude Code reads only its first ${kb(CLAUDE_MEMORY_LIMITS.size)} KB: everything after that never reaches an agent. ${TO_DO}`,
-    };
-  }
-  // O_NOFOLLOW where the platform has it: a file swapped for a link after the lstat is not followed either.
+export async function readRegularFile(file: string, cap: number = MEMORY_READ_CAP): Promise<RegularFileRead> {
+  try { if (!(await fs.promises.lstat(file)).isFile()) return { kind: 'not-read' }; } catch { return { kind: 'not-read' }; }
   const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
   let handle: fs.promises.FileHandle | undefined;
   try {
     handle = await fs.promises.open(file, flags);
-    if (!(await handle.stat()).isFile()) return guardMemory(null);
-    return guardMemory(await handle.readFile({ encoding: 'utf8' }));
+    const stat = await handle.stat();
+    if (!stat.isFile()) return { kind: 'not-read' };
+    if (stat.size > cap) return { kind: 'too-large', stat };
+    const buffer = Buffer.alloc(cap + 1);
+    let filled = 0;
+    while (filled < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+    }
+    // Grown past the cap while it was read.
+    if (filled > cap) return { kind: 'too-large', stat };
+    return { kind: 'text', text: buffer.subarray(0, filled).toString('utf8'), stat };
   } catch {
-    return guardMemory(null);
+    return { kind: 'not-read' };
   } finally {
     await handle?.close().catch(() => undefined);
   }
+}
+
+/** A MEMORY.md's guard, read through readRegularFile: past MEMORY_READ_CAP it is said too large, no figure made up. */
+export async function guardMemoryFile(file: string): Promise<MemoryGuard> {
+  const read = await readRegularFile(file);
+  if (read.kind === 'not-read') return guardMemory(null);
+  if (read.kind === 'too-large') {
+    const size = Math.max(read.stat.size, MEMORY_READ_CAP + 1);
+    return {
+      state: 'cut', size: null, lines: null, limit: { ...CLAUDE_MEMORY_LIMITS }, cut: null,
+      notice: `MEMORY.md is ${(size / 1024 / 1024).toFixed(1)} MB, more than Tars reads of it (${MEMORY_READ_CAP / 1024 / 1024} MB). Claude Code reads only its first ${kb(CLAUDE_MEMORY_LIMITS.size)} KB: everything after that never reaches an agent. ${TO_DO}`,
+    };
+  }
+  return guardMemory(read.text);
 }
 
 /** Every project's MEMORY.md under ~/.claude/projects and each Claude account's own folder (~/.claude-accounts/<id>). */
@@ -139,6 +165,9 @@ export function memoryFolderOwners(agents: Iterable<{ projectPath: string; workt
   return owners;
 }
 
+/** How much a file must grow since its last note to be told again: 2 KB or 20 lines. */
+export const MEMORY_NOTE_STEP = { size: 2 * 1024, lines: 20 } as const;
+
 /** What the orchestrator was told of a file: the most of its size and lines, and the worst state, it heard. */
 export interface MemoryTold { size: number; lines: number; state: 'near' | 'cut' }
 
@@ -156,7 +185,10 @@ export function memoryNoteDue(told: MemoryTold | undefined, guard: Pick<MemoryGu
   }
   if (!told) return { tell: true, told: { size: guard.size, lines: guard.lines, state } };
   const worse = state === 'cut' && told.state === 'near';
-  if (!worse && guard.size <= told.size && guard.lines <= told.lines) return { tell: false, told };
+  // A file being written to grows a little at every pass: told again only past a step (the orchestrator's decision
+  // on the Audit's I9 of #558: 10 notes in 10 passes for one line a pass).
+  const grown = guard.size >= told.size + MEMORY_NOTE_STEP.size || guard.lines >= told.lines + MEMORY_NOTE_STEP.lines;
+  if (!worse && !grown) return { tell: false, told };
   return { tell: true, told: { size: Math.max(told.size, guard.size), lines: Math.max(told.lines, guard.lines), state: worse ? 'cut' : told.state === 'cut' ? 'cut' : state } };
 }
 

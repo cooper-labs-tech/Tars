@@ -1930,11 +1930,12 @@ before 25,000 characters (the "24.4 KB" it names; UTF-16 units, so an accented l
 the model, in a `> WARNING: MEMORY.md is ...` line after what it kept. No line is cut on its own: a 320-character line
 reaches the model whole (the ` …` some indexes show are in the files). Every 5 minutes Tars reads each project's
 MEMORY.md under `~/.claude/projects` and each Claude account's folder (`~/.claude-accounts/<id>/projects`); past 22 KB
-or 180 lines it types a note into the project's orchestrator, once, and again only when its size or its lines grew past
-what was told, or it went from near to cut (what was told is kept in `~/.tars/memory-guard.json`, so a restart does
-not repeat it; a note not typed is owed to a later pass). Only a regular file is read, its link not followed (a FIFO
-or a link named MEMORY.md is neither watched nor read), without blocking the main process, and at most 1 MiB of it:
-a larger one is said too large to read whole.
+or 180 lines it types a note into the project's orchestrator, once, and again only when it went from near to cut, or
+grew by at least 2 KB or 20 lines since the last note (what was told is kept in `~/.tars/memory-guard.json`, so a
+restart does not repeat it; a note not typed is owed to a later pass). Only a regular file is read, its link not
+followed (a FIFO or a link named MEMORY.md is neither watched nor read), without blocking the main process, its type
+and size taken from the open file, and never more than 1 MiB of it: a larger one is said too large to read whole. The
+Memory page's listing reads every `.md` of the folder the same way (`readRegularFile`) and lists only regular files.
 A folder belongs to the project of an agent working in it, through its project or its worktree. The Memory page's
 rows carry the same (`guard` on `memory:list-projects`: state, size, lines, what is cut from which line, and the
 words). To see it by hand: `wc -lc` the file, against 200 lines and 25,000 characters.

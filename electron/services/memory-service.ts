@@ -5,7 +5,7 @@ import { projectFolders } from './project-index';
 import { memoryProjectDirName, knownProjectsByFolder, claudeProjectDirNames } from '../platform/claude-project-dir';
 import { unlinkRetryingSync } from '../platform/rename-replacing';
 import { spellingsOf } from '../utils/resume-session';
-import { guardMemoryFile, type MemoryGuard } from './memory-guard';
+import { guardMemoryFile, readRegularFile, type MemoryGuard } from './memory-guard';
 
 export interface MemoryFile {
   name: string;
@@ -90,11 +90,15 @@ function readMemoryFile(filePath: string): MemoryFile {
   return memoryFile(filePath, stat, content);
 }
 
-/** The same, without blocking, for the listing of every project. */
-async function readMemoryFileAsync(filePath: string): Promise<MemoryFile> {
-  const stat = await fs.promises.stat(filePath);
-  const content = await fs.promises.readFile(filePath, 'utf-8').catch(() => '');
-  return memoryFile(filePath, stat, content);
+/**
+ * The same, for the listing of every project, the safe way (memory-guard.ts readRegularFile; the Audit's R2 on #558):
+ * a FIFO named notes.md kept the page loading for ever and held one of libuv's threads. What is not a regular file
+ * is not listed; one past 1 MiB is listed with its size and no content.
+ */
+async function readMemoryFileAsync(filePath: string): Promise<MemoryFile | null> {
+  const read = await readRegularFile(filePath);
+  if (read.kind === 'not-read') return null;
+  return memoryFile(filePath, read.stat, read.kind === 'text' ? read.text : '');
 }
 
 /** The folder a project's memory is created in when Claude has none for it yet (platform/claude-project-dir.ts). */
@@ -203,7 +207,7 @@ async function readProjectRow(provider: string, folderName: string, memoryDir: s
           if (b === 'MEMORY.md') return 1;
           return a.localeCompare(b);
         });
-      const files = await Promise.all(mdFiles.map(f => readMemoryFileAsync(path.join(memoryDir, f))));
+      const files = (await Promise.all(mdFiles.map(f => readMemoryFileAsync(path.join(memoryDir, f))))).filter((f): f is MemoryFile => f !== null);
       project.files = files;
       project.totalSize = files.reduce((sum, f) => sum + f.size, 0);
       project.lastModified = files.reduce((latest, f) => (f.lastModified > latest ? f.lastModified : latest), '');

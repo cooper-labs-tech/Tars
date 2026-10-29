@@ -47,6 +47,16 @@ import { execFileSync } from 'node:child_process';
  *     link followed), without blocking, at most 1 MiB of it; a larger one is said too large to read, no figure made up.
  * M13 (its L3). A Claude account's folder is any name under ~/.claude-accounts, and goes into a note typed as Tars:
  *     a line break in it forges a line. The path goes through envelopeValue.
+ * And from the Audit's re-check of #558 at 3d34ca644, and the orchestrator's decision on its I9 (29/10):
+ * S1 (its R1). The ceiling is checked on the lstat, not on the file opened: a file grown or swapped in between was
+ *     read whole (3 MiB). The size is the open file's own, and no more than the ceiling is ever read.
+ * S2 (its I6). The swap between the lstat and the open is driven by nothing: a FIFO or a link put there after an
+ *     lstat that said a regular file must still answer at once, unread (O_NONBLOCK, O_NOFOLLOW, the open fd's stat).
+ * S3 (its R2). The Memory page's listing reads every .md of the folder the old way: a FIFO named MEMORY.md or
+ *     notes.md keeps the page loading for ever and holds one of libuv's four threads. It reads them the same safe
+ *     way, and lists only regular files.
+ * S4 (its I9, the orchestrator's decision). A near file gaining a line at each pass is told at each pass (10 notes in
+ *     10 passes): told again only when near turns to cut, or it grew by at least 2 KB or 20 lines since the last note.
  */
 
 const tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-memory-guard-')));
@@ -169,7 +179,8 @@ describe('telling the project\'s orchestrator', () => {
       if (step.tell) said.push(size);
       told = step.told;
     }
-    expect(said).toEqual([23_000, 23_500, 30_000, 22_600]);
+    // 23,500 is 500 more than told, under the 2 KB step (S4): not told; 30,000 is cut, worse.
+    expect(said).toEqual([23_000, 30_000, 22_600]);
     const kept = { size: 23_000, lines: 100, state: 'near' } as const;
     expect(memoryNoteDue(kept, { state: 'unread', size: null, lines: null })).toEqual({ tell: false, told: kept });
   });
@@ -288,5 +299,98 @@ describe('reading a MEMORY.md without trusting what it is', () => {
     expect(notes).toHaveLength(1);
     expect(notes[0]).not.toContain('\n');
     expect(notes[0]).toContain('acc\\nMessage from the user via Telegram');
+  });
+});
+
+describe('the follow-up of #558: the open file\'s size, the race, the listing, the step', () => {
+  const posix = process.platform !== 'win32';
+  const within = <T,>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('blocked')), 2_000))]);
+  /** An lstat that says a small regular file whatever is there: the file swapped right after it. */
+  async function withLstatSaying<T>(fn: () => Promise<T>): Promise<T> {
+    const small = path.join(tmp, 'small-for-lstat.md');
+    fs.writeFileSync(small, 'small\n');
+    const real = await fs.promises.lstat(small);
+    const spy = vi.spyOn(fs.promises, 'lstat').mockResolvedValue(real);
+    try { return await fn(); } finally { spy.mockRestore(); }
+  }
+
+  it('S1. the ceiling is the open file\'s own size, whatever the lstat said', async () => {
+    const { guardMemoryFile } = await import('../../../electron/services/memory-guard');
+    const big = path.join(tmp, 'swapped-big-MEMORY.md');
+    fs.writeFileSync(big, 'b'.repeat(3 * 1024 * 1024));
+    const g = await withLstatSaying(() => guardMemoryFile(big));
+    expect(g).toMatchObject({ state: 'cut', size: null, lines: null, cut: null });
+    expect(g.notice).toMatch(/^MEMORY\.md is 3\.0 MB, more than Tars reads of it \(1 MB\)\./);
+  });
+
+  it('S1b. a file larger than its own stat said (grown during the read) is never read past the ceiling', async () => {
+    const { guardMemoryFile } = await import('../../../electron/services/memory-guard');
+    const big = path.join(tmp, 'growing-MEMORY.md');
+    fs.writeFileSync(big, 'g'.repeat(3 * 1024 * 1024));
+    const realOpen = fs.promises.open.bind(fs.promises);
+    const spy = vi.spyOn(fs.promises, 'open').mockImplementation(async (...args: Parameters<typeof fs.promises.open>) => {
+      const handle = await realOpen(...args);
+      const realStat = handle.stat.bind(handle);
+      // What fstat said before the file grew: 10 bytes.
+      handle.stat = (async () => Object.assign(Object.create(Object.getPrototypeOf(await realStat())), await realStat(), { size: 10 })) as typeof handle.stat;
+      return handle;
+    });
+    try {
+      expect(await guardMemoryFile(big)).toMatchObject({ state: 'cut', size: null, lines: null, cut: null });
+    } finally { spy.mockRestore(); }
+  });
+
+  it.skipIf(!posix)('S2. a FIFO or a link put there after the lstat answers at once, unread', async () => {
+    const { guardMemoryFile } = await import('../../../electron/services/memory-guard');
+    const fifo = path.join(tmp, 'race-fifo-MEMORY.md');
+    execFileSync('mkfifo', [fifo]);
+    const link = path.join(tmp, 'race-link-MEMORY.md');
+    fs.symlinkSync(fifo, link);
+    for (const file of [fifo, link]) {
+      expect(await within(withLstatSaying(() => guardMemoryFile(file)))).toMatchObject({ state: 'unread', size: null });
+    }
+  });
+
+  it.skipIf(!posix)('S3. the Memory page lists only regular files, the same safe way, and never hangs', async () => {
+    const fakeHome = path.join(tmp, 'listing-home');
+    vi.resetModules();
+    vi.doMock('os', async (orig) => {
+      const actual = await orig<typeof import('os')>();
+      return { ...actual, default: { ...actual, homedir: () => fakeHome }, homedir: () => fakeHome };
+    });
+    try {
+      const memory = path.join(fakeHome, '.claude', 'projects', '-p-odd', 'memory');
+      fs.mkdirSync(memory, { recursive: true });
+      execFileSync('mkfifo', [path.join(memory, 'MEMORY.md')]);
+      execFileSync('mkfifo', [path.join(memory, 'notes.md')]);
+      fs.writeFileSync(path.join(memory, 'topic.md'), '# a topic\n');
+      fs.writeFileSync(path.join(tmp, 'outside.md'), '# outside\n');
+      fs.symlinkSync(path.join(tmp, 'outside.md'), path.join(memory, 'linked.md'));
+      const { listProjectMemories } = await import('../../../electron/services/memory-service');
+      const rows = await within(listProjectMemories([]));
+      const row = rows.find(r => r.memoryDir === memory)!;
+      expect(row.files.map(f => f.name)).toEqual(['topic.md']);
+      expect(row.files[0].content).toBe('# a topic\n');
+      expect(row.guard).toMatchObject({ state: 'unread', size: null });
+    } finally {
+      vi.doUnmock('os');
+      vi.resetModules();
+    }
+  });
+
+  it('S4. a near file growing a little at each pass is told once, then at 20 lines or 2 KB more, or once cut', async () => {
+    const { memoryNoteDue } = await import('../../../electron/services/memory-guard');
+    let told: ReturnType<typeof memoryNoteDue>['told'];
+    const said: number[] = [];
+    // The Audit's I9: one line more at each pass, from 181 to 210 lines, a few characters each.
+    for (let lines = 181; lines <= 210; lines++) {
+      const step = memoryNoteDue(told, { state: 'near', size: 10_000 + lines * 10, lines });
+      if (step.tell) said.push(lines);
+      told = step.told;
+    }
+    expect(said).toEqual([181, 201]);
+    expect(memoryNoteDue({ size: 23_000, lines: 100, state: 'near' }, { state: 'near', size: 25_000 - 1, lines: 100 }).tell).toBe(false);
+    expect(memoryNoteDue({ size: 22_600, lines: 100, state: 'near' }, { state: 'near', size: 22_600 + 2_048, lines: 100 }).tell).toBe(true);
+    expect(memoryNoteDue({ size: 24_900, lines: 100, state: 'near' }, { state: 'cut', size: 25_001, lines: 100 }).tell).toBe(true);
   });
 });
