@@ -13,7 +13,7 @@ Nothing runs in the cloud. No account, no server, no analytics. The state lives 
 ### Data Flow
 
 ```
-Electron 44.9 main process (Node 24.22, Chromium 152; electron/, ~47k LOC)
+Electron 44.10 main process (Node 24.22.1, Chromium 152; electron/, ~47k LOC)
 ├── BrowserWindow  → Next.js 16.4 static export (src/, ~44k LOC)
 │                     contextIsolation, nodeIntegration off, app:// protocol
 │                     ↕ 214 IPC channels via contextBridge (electron/preload.ts)
@@ -415,6 +415,8 @@ A send can carry a `clientRequestId` (8 to 128 of `A-Z a-z 0-9 . _ : -`; anythin
 | `queue` | Written only once the agent's turn is over (`WriteOrigin.untilRest`, the writer's turn probe, looked at every second); answered `queued: true` while the turn runs. What is queued behind it in that terminal waits with it, in order |
 | `steer` | A claude CLI only (`canInterrupt`): an Esc into the running turn, and the message once the transcript records the interrupt (`interruptTurn`, shared with the room's send now); not on record within 5 s, it waits for the turn's end, `interrupted: false`, `queued: true`. Into any other CLI: `409 not_steerable`, nothing typed |
 | `restart` | The agent stopped (`stopAgent`, with the caller's `reason` or "restarted by X with a new message"), then started with the message |
+| `note` | A note for information (2.0.6): written once the turn is over, as `queue`, labelled `[Note for information from "<name>", <who>: it is not a task, ...]`, where `<who>` is "your project's orchestrator", "an orchestrator", "a worker", or "the app you run in" for Tars's own pass. No task: no `taskRef`, no `requestedBy` link to its sender, so no end notice; it does not move `workHandedAt`, so the turn in hand stays the handed work and its end is told its asker; the writer records no hand-off for it in the task ledger (`WriteOrigin.note`). Answered `note: true`. It never starts an agent with no session open (`409 note_needs_session`), and one sent with `intent: 'task'` is refused (`400 note_is_no_task`) |
+| `note-now` | The same note, typed at once, as `auto`: into a running turn too |
 
 `steer` and `restart` are refused while the agent works on a task another agent asked for (`409 worker_busy_for_other_requester`, `mayInterrupt`, `core/task-requests.ts`): its asker, Tars, or anybody when no task is in hand may. `restart` is refused too while another asker's request waits in the queue (`mayRestart`): the stop would end it. A turn JeanBrasse typed has no asker, and either may interrupt it. Chats (PR D) add their own rule there. `/message` stays an alias of `auto` for this version and refuses any other mode.
 
@@ -681,6 +683,8 @@ A chat is one conversation with a project's orchestrator on one topic (ORCHESTRA
 | `honcho` | Honcho | remote HTTP MCP endpoint | tool discovery, see below |
 
 Project directory names are resolved by trying three encodings of the project path (`[^a-zA-Z0-9]→-`, `[/.]→-`, `/→-`): Claude Code's path-as-folder-name scheme has drifted.
+
+**What Claude Code loads of a MEMORY.md** (2.0.6, `services/memory-guard.ts`). Claude Code 2.1.312 loads a project's MEMORY.md trimmed, its first 200 lines, then up to the last line break before 25,000 characters (UTF-16 units; the 24.4 KB it names), and tells the model what it cut, never the user (read in its loader and measured with the real CLI, 29/10). Tars measures each project's MEMORY.md the same way, under `~/.claude/projects` and each Claude account's folder: `ok`, `near` past 22 KB or 180 lines, `cut` past either limit (which limit, how many lines from which, how much), or `unread`. Near or cut, the project's orchestrator is told once, and again only when it went from near to cut, or grew by at least 2 KB or 20 lines since the last note; only a regular file is read (no link followed, no FIFO, its type and size from the open file), without blocking, never more than 1 MiB, and the Memory page's listing reads every `.md` the same way; the Memory page's rows carry it as `guard`, with the words to show (`notice`).
 
 Remote backends are probed rather than assumed. `pickSearchTool()` scans the endpoint's tool list for `memory_search`, `search_memory`, `honcho_search`, `search`, `recall`, `query`, `retrieve` (exact or `_`-suffixed), then anything matching `/search|recall|query|retriev/i`. The query parameter name is read off the tool's own input schema (`query`, `q`, `search`, `text`, `question`, default `query`).
 
@@ -1173,7 +1177,7 @@ The token is kept in `~/.tars-private/sentry-token` (`0600`), not in `app-settin
 | asarUnpack | `out/`, `hooks/`, `electron/resources/`, `better-sqlite3`, `node-pty` |
 | Target | macOS dmg + zip, hardened runtime, `build/entitlements.mac.plist`, notarized via `@electron/notarize`. Windows x64: a per-user NSIS installer (`Tars-Setup-<version>.exe`, no elevation, `%LOCALAPPDATA%\Programs\tars`) and a zip, icon `build/icon.ico` drawn from `public/icon.svg` by `scripts/make-app-ico.mjs`, not signed, built on Windows by `npm run release:win` (`scripts/release-win.mjs`) |
 | Updates | `electron-updater` against `cooper-labs-tech/Tars` releases, on both platforms: one release carries `latest-mac.yml` and the macOS files, then `latest.yml` and the Windows files, added to it by `npm run release:win` |
-| Electron | 44.9 (Node 24.22, ABI 149, Chromium 152). Its `LSMinimumSystemVersion` is 13.0, so the app needs macOS 13 or later; on Windows, 10 or later |
+| Electron | 44.10 (Node 24.22.1, ABI 149, Chromium 152; 2.0.6, for the 21/10 Node security release). Its `LSMinimumSystemVersion` is 13.0, so the app needs macOS 13 or later; on Windows, 10 or later |
 | Node | ≥22.12, Electron's own floor; `.nvmrc` pins 22 |
 
 Tests: `vitest run` over `__tests__/**/*.test.ts` (node environment, `@` aliased to `src/`), with coverage scoped to `electron/{constants,utils,services,handlers,providers}` and the MCP server sources. Suites exist for the ACP client, the model catalogue, transcript usage, the memory hub, agent persistence, the PTY manager, four providers, delegation plumbing, and two dedicated security files.

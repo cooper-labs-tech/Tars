@@ -84,7 +84,7 @@ function heldText(agentName: string, what: string, reason?: string): string {
 }
 
 /** How a message goes in (ORCHESTRATOR-PER-CHAT.md v2.2, 4.4 item 4). */
-const SEND_MODES = ["auto", "queue", "steer", "restart"] as const;
+const SEND_MODES = ["auto", "queue", "steer", "restart", "note", "note-now"] as const;
 type SendMode = (typeof SEND_MODES)[number];
 
 /**
@@ -790,13 +790,13 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "send_message",
-    description: "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator.",
+    description: "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
     schema: {
       id: z.string().describe("The agent ID, or \"requester\" for whoever asked you for your current task"),
       message: z.string().optional().describe("The message to send to the agent"),
       prompt: z.string().optional().describe("Alias for 'message', use either one"),
       allowCrossProject: z.boolean().optional().describe("Explicitly allow acting on an agent of ANOTHER project (normally rejected)"),
-      mode: z.enum(SEND_MODES).optional().describe("How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for."),
+      mode: z.enum(SEND_MODES).optional().describe("How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."),
       reason: z.string().optional().describe("With mode 'restart': why, in one line, kept with the stop"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this request. Calling again with the same id is answered with the first call's outcome, and nothing is sent twice. Omitted: one is made for this call."),
     },
@@ -817,7 +817,11 @@ const AGENT_TOOLS: Tool[] = [
       }
 
       if (data.note) {
-        return text(`Sent to agent "${agentName}" as a note for information, not a task: ${data.queued ? "it goes in once its current turn ends" : "it is in its terminal"}. A worker does not hand work to another agent: if this needs doing, ask your orchestrator.${again}`);
+        const where = data.queued ? "it goes in once its current turn ends" : "it is in its terminal";
+        // Asked for as a note, or a worker's message Tars made one.
+        return text(mode === "note" || mode === "note-now"
+          ? `Sent to agent "${agentName}" as a note for information, not a task: ${where}. You are not told when its turn ends.${again}`
+          : `Sent to agent "${agentName}" as a note for information, not a task: ${where}. A worker does not hand work to another agent: if this needs doing, ask your orchestrator.${again}`);
       }
 
       if (data.queued && data.paused) {

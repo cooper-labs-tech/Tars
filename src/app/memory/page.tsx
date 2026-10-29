@@ -29,6 +29,22 @@ const TABS = [
   { value: 'backends' as const, label: 'Backends' },
 ];
 
+// ─── MEMORY.md against what Claude Code reads ───────────────────────────────
+
+type MemoryGuard = NonNullable<ProjectMemory['guard']>;
+
+/**
+ * What a project's MEMORY.md guard shows: main's own words (guard.notice, PR 558: its first 200 lines, then 24.4 KB),
+ * never the window's, in the tone of its state; null well under both limits. Frame: `Brain · Projects · MEMORY.md
+ * past what Claude Code reads (2.0.6) · states`.
+ */
+function guardNotice(guard: ProjectMemory['guard']): { state: MemoryGuard['state']; tone: 'error' | 'waiting' | 'idle'; ink: string; text: string } | null {
+  if (!guard?.notice) return null;
+  const tone = guard.state === 'cut' ? 'error' : guard.state === 'near' ? 'waiting' : 'idle';
+  const ink = tone === 'error' ? 'text-status-error' : tone === 'waiting' ? 'text-status-waiting' : 'text-text-muted';
+  return { state: guard.state, tone, ink, text: guard.notice };
+}
+
 // ─── File pane (always editable) ────────────────────────────────────────────
 
 /**
@@ -43,6 +59,7 @@ function FilePane({
   onSave,
   onNewFile,
   onDelete,
+  guard,
 }: {
   file: MemoryFile;
   saving: boolean;
@@ -50,9 +67,12 @@ function FilePane({
   onSave: (content: string) => void;
   onNewFile: () => void;
   onDelete: () => void;
+  /** The project's guard: its notice, whole, above the MEMORY.md it speaks of. */
+  guard?: ProjectMemory['guard'];
 }) {
   const [content, setContent] = useState(file.content);
   const dirty = content !== file.content;
+  const notice = file.isEntrypoint ? guardNotice(guard) : null;
 
   return (
     <div className="flex flex-col h-full">
@@ -79,6 +99,12 @@ function FilePane({
           </Button>
         </div>
       </div>
+      {notice && (
+        <div className="flex items-center gap-2.5 px-3 py-2 bg-secondary border-b border-border shrink-0">
+          <StatusSquare tone={notice.tone} />
+          <p data-memory-file-notice={notice.state} className="flex-1 min-w-0 text-[11.5px] leading-[1.45] text-foreground">{notice.text}</p>
+        </div>
+      )}
       <textarea
         className="flex-1 w-full resize-none bg-card font-mono text-xs leading-relaxed p-3 focus:outline-none text-foreground"
         value={content}
@@ -103,8 +129,10 @@ function ProjectRow({
   onClick: () => void;
 }) {
   const olderFolder = olderCopyFolder(project.olderCopy);
+  const notice = guardNotice(project.guard);
   return (
     <button
+      data-memory-row={project.projectName}
       onClick={onClick}
       className={`w-full text-left px-2 py-2 border transition-colors ${isSelected
         ? 'bg-secondary border-border-accent text-foreground'
@@ -131,6 +159,13 @@ function ProjectRow({
           ? `${project.files.length} files · ${formatBytes(project.totalSize)} · ${timeAgo(project.lastModified)}`
           : 'no memory yet'}
       </p>
+      {/* Close to or past what Claude Code reads of MEMORY.md: main's notice, cut to the row, whole in its title. */}
+      {notice && (
+        <p className={`mt-1 flex items-center gap-1.5 font-mono text-[10px] ${notice.ink}`}>
+          <StatusSquare tone={notice.tone} />
+          <span data-memory-notice={notice.state} title={notice.text} className="min-w-0 truncate">{notice.text}</span>
+        </p>
+      )}
       {/* The folder an older Tars kept this memory in, under a name Claude never reads (PR 375): kept as it was. */}
       {olderFolder && (
         <p title={project.olderCopy} className="mt-1 font-mono text-[10px] text-text-muted truncate">
@@ -629,7 +664,10 @@ export default function MemoryPage() {
                   >
                     <span className="block text-xs font-mono truncate">{file.name}</span>
                     {file.isEntrypoint && (
-                      <span className="block text-[10px] text-muted-foreground mt-0.5">entrypoint</span>
+                      <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                        {guardNotice(selectedProject.guard) && <StatusSquare tone={guardNotice(selectedProject.guard)!.tone} />}
+                        entrypoint
+                      </span>
                     )}
                   </button>
                 ))
@@ -648,6 +686,7 @@ export default function MemoryPage() {
                 onSave={(content) => { void saveFile(selectedFile.path, content); }}
                 onNewFile={() => setShowNewFileDialog(true)}
                 onDelete={() => handleDelete(selectedFile.path)}
+                guard={selectedProject?.guard}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8">

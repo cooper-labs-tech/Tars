@@ -377,7 +377,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -403,9 +403,11 @@
                     "auto",
                     "queue",
                     "steer",
-                    "restart"
+                    "restart",
+                    "note",
+                    "note-now"
                   ],
-                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for."
+                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."
                 },
                 "reason": {
                   "type": "string",
@@ -2585,6 +2587,131 @@
           }
         },
         {
+          "scenario": "send_message, a worker's note",
+          "call": {
+            "tool": "send_message",
+            "arguments": {
+              "id": "a1",
+              "message": "FYI"
+            }
+          },
+          "requests": [
+            {
+              "to": "tars",
+              "method": "POST",
+              "path": "/api/agents/a1/dispatch",
+              "headers": [
+                "host: 127.0.0.1:<port>",
+                "connection: keep-alive",
+                "Content-Type: application/json",
+                "X-Tars-Client: mcp",
+                "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
+                "X-Tars-Caller-Project: /projects/alpha",
+                "accept: */*",
+                "accept-language: *",
+                "sec-fetch-mode: cors",
+                "user-agent: node",
+                "accept-encoding: gzip, deflate",
+                "content-length: 74"
+              ],
+              "body": "{\"message\":\"FYI\",\"clientRequestId\":\"<request id>\"}"
+            }
+          ],
+          "answer": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Sent to agent \"Dune\" as a note for information, not a task: it goes in once its current turn ends. A worker does not hand work to another agent: if this needs doing, ask your orchestrator."
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "send_message, a note at the turn's end",
+          "call": {
+            "tool": "send_message",
+            "arguments": {
+              "id": "a1",
+              "message": "FYI",
+              "mode": "note"
+            }
+          },
+          "requests": [
+            {
+              "to": "tars",
+              "method": "POST",
+              "path": "/api/agents/a1/dispatch",
+              "headers": [
+                "host: 127.0.0.1:<port>",
+                "connection: keep-alive",
+                "Content-Type: application/json",
+                "X-Tars-Client: mcp",
+                "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
+                "X-Tars-Caller-Project: /projects/alpha",
+                "accept: */*",
+                "accept-language: *",
+                "sec-fetch-mode: cors",
+                "user-agent: node",
+                "accept-encoding: gzip, deflate",
+                "content-length: 88"
+              ],
+              "body": "{\"message\":\"FYI\",\"mode\":\"note\",\"clientRequestId\":\"<request id>\"}"
+            }
+          ],
+          "answer": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Sent to agent \"Dune\" as a note for information, not a task: it goes in once its current turn ends. You are not told when its turn ends."
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "send_message, a note now",
+          "call": {
+            "tool": "send_message",
+            "arguments": {
+              "id": "a1",
+              "message": "FYI",
+              "mode": "note-now"
+            }
+          },
+          "requests": [
+            {
+              "to": "tars",
+              "method": "POST",
+              "path": "/api/agents/a1/dispatch",
+              "headers": [
+                "host: 127.0.0.1:<port>",
+                "connection: keep-alive",
+                "Content-Type: application/json",
+                "X-Tars-Client: mcp",
+                "X-Tars-Caller-Id: agent-lead",
+                "X-Tars-Tool: send_message",
+                "X-Tars-Caller-Project: /projects/alpha",
+                "accept: */*",
+                "accept-language: *",
+                "sec-fetch-mode: cors",
+                "user-agent: node",
+                "accept-encoding: gzip, deflate",
+                "content-length: 92"
+              ],
+              "body": "{\"message\":\"FYI\",\"mode\":\"note-now\",\"clientRequestId\":\"<request id>\"}"
+            }
+          ],
+          "answer": {
+            "content": [
+              {
+                "type": "text",
+                "text": "Sent to agent \"Dune\" as a note for information, not a task: it is in its terminal. You are not told when its turn ends."
+              }
+            ]
+          }
+        },
+        {
           "scenario": "remove_agent",
           "call": {
             "tool": "remove_agent",
@@ -4143,7 +4270,7 @@
                 "isError": true
               },
               "jsonrpc": "2.0",
-              "id": 78
+              "id": 81
             }
           ],
           "answer": {
@@ -5351,7 +5478,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -5377,9 +5504,11 @@
                     "auto",
                     "queue",
                     "steer",
-                    "restart"
+                    "restart",
+                    "note",
+                    "note-now"
                   ],
-                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for."
+                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."
                 },
                 "reason": {
                   "type": "string",
@@ -6376,7 +6505,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -6402,9 +6531,11 @@
                     "auto",
                     "queue",
                     "steer",
-                    "restart"
+                    "restart",
+                    "note",
+                    "note-now"
                   ],
-                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for."
+                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."
                 },
                 "reason": {
                   "type": "string",
@@ -7329,7 +7460,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -7355,9 +7486,11 @@
                     "auto",
                     "queue",
                     "steer",
-                    "restart"
+                    "restart",
+                    "note",
+                    "note-now"
                   ],
-                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for."
+                  "description": "How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."
                 },
                 "reason": {
                   "type": "string",

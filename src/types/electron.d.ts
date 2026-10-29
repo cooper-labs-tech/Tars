@@ -412,6 +412,20 @@ export interface ProjectMemory {
   provider: string;    // 'claude' | 'codex' | 'gemini'
   /** The memory folder an older Tars made under a name Claude never reads; its files were copied into `memoryDir` once, and kept. */
   olderCopy?: string;
+  /**
+   * What Claude Code loads of this row's MEMORY.md (measured on 2.1.312: its first 200 lines, then 25,000 characters,
+   * the 24.4 KB it names), on a Claude row whose folder holds one. `near` past 22 KB or 180 lines, `cut` past either
+   * limit (`cut` says which, how many lines from which, how much), `unread` when the file could not be read (`size`
+   * null). `notice` is the text to show as it is, null well under the limits.
+   */
+  guard?: {
+    state: 'ok' | 'near' | 'cut' | 'unread';
+    size: number | null;
+    lines: number | null;
+    limit: { size: number; lines: number };
+    cut: { by: 'size' | 'lines' | 'both'; lines: number; fromLine: number; size: number } | null;
+    notice: string | null;
+  };
 }
 
 export interface ObsidianFile {
