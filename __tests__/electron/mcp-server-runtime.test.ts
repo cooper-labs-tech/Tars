@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { hasPosixModes, skipOnWindows } from '../setup/platform-limits';
 import { cannotSymlink } from '../setup/symlink-privilege';
-import { Leftovers, RECORDS_ITS_PID, takePidsRecordedIn } from '../setup/leftover-processes';
+import { Leftovers, RECORDS_ITS_PID, endLeftUnder, processesUnder, takePidsRecordedIn } from '../setup/leftover-processes';
 
 /**
  * Tars's own MCP servers run on the Node inside the app, not on whatever
@@ -82,6 +82,17 @@ import { Leftovers, RECORDS_ITS_PID, takePidsRecordedIn } from '../setup/leftove
  *     one.
  * 21. The Settings button (`orchestrator:setup`) registers the orchestrator
  *     from such a copy all the same.
+ * The QA's gate of #553 (2026-10-29), written before the fix:
+ * 22. Every setup starts the shared servers too (services/mcp-shared.ts,
+ *     2.0.5), on this file's stand-in bundles, and nothing here stops them:
+ *     they outlive the test that started them. Empty bundles end at once and
+ *     are started again, five times a minute, then given up, and the give-up
+ *     writes claude's config under os.homedir() as it is then. Under a gate's
+ *     load the last one came after the file's teardown, once home-isolation
+ *     had put the real HOME back: the write went for the real
+ *     ~/.claude/mcp.json, the guard refused it, and `npm test` exited 1 with
+ *     every test passed. A server that does not end on its own outlives the
+ *     file as well.
  */
 
 const home = () => os.homedir();
@@ -140,6 +151,7 @@ import * as mcpNode from '../../electron/utils/mcp-node';
 import { mcpNodeCommand } from '../../electron/utils/mcp-node';
 import { delegateOverAcp } from '../../electron/services/acp/delegate';
 import { setupMcpOrchestrator, setupOrchestratorSetupHandler } from '../../electron/services/mcp-orchestrator';
+import { stopSharedMcp } from '../../electron/services/mcp-shared';
 import { ipcMain } from 'electron';
 
 const launcher = () => path.join(home(), '.tars', 'bin', 'tars-mcp-node');
@@ -166,6 +178,9 @@ afterAll(() => fs.promises.rm(scratch, { recursive: true, force: true, maxRetrie
 // Ended by its id in the test's own teardown, stopped or not, whatever the run's own stop got to (leftover-processes.ts).
 const leftovers = new Leftovers();
 afterEach(() => { leftovers.push(...takePidsRecordedIn(scratch)); leftovers.end(); });
+// The shared servers a setup started end with the test that started them, as the app's quit ends them: none restarts
+// or gives up later, under whatever HOME is set by then (22).
+afterEach(() => stopSharedMcp());
 
 // 30 s, not vitest's 5: these cases run the launcher through a real shell, and under a
 // gate's load (load average 100 to 180 on 2026-10-01) case 13 took 6.8 s and case 3
@@ -505,5 +520,35 @@ function handle(msg) {
     const servers = JSON.parse(fs.readFileSync(report, 'utf-8')) as { name: string; command: string }[];
     expect(servers.length).toBeGreaterThan(0);
     for (const server of servers) expect(server.command, server.name).toBe(program());
+  });
+});
+
+// Last in the file, in order: the first case starts the shared servers on bundles that say their port and stay up, the
+// second looks for them once the first's teardown has run.
+describe('the shared servers a setup starts', { timeout: 30_000 }, () => {
+  const live = path.join(scratch, 'resources-live');
+  beforeEach(() => {
+    for (const dir of ['mcp-orchestrator', 'mcp-memory', 'mcp-kanban']) {
+      fs.mkdirSync(path.join(live, dir, 'dist'), { recursive: true });
+      // As a shared server does (mcp-shared/src/shared-host.ts): it says its port, then serves until its stdin closes.
+      fs.writeFileSync(path.join(live, dir, 'dist', 'bundle.js'), "process.stdout.write('listening 1\\n');\nprocess.stdin.resume();\n");
+    }
+    (process as unknown as { resourcesPath: string }).resourcesPath = live;
+    registry.clear(); calls.length = 0; providerList.value = 'one'; appState.isPackaged = true;
+  });
+
+  it('22. are up while the test that started them runs', async () => {
+    await setupMcpOrchestrator({} as never);
+    expect(processesUnder(live).length).toBe(3);
+  });
+
+  it('22. are gone once its teardown has run', async () => {
+    try {
+      const ends = Date.now() + 5_000;
+      while (processesUnder(live).length > 0 && Date.now() < ends) await new Promise(resolve => setTimeout(resolve, 100));
+      expect(processesUnder(live).map(p => p.command), 'a shared server outlived the test that started it').toEqual([]);
+    } finally {
+      await endLeftUnder(live, 0);
+    }
   });
 });
