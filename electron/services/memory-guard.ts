@@ -75,33 +75,66 @@ export function guardMemory(text: string | null): MemoryGuard {
 /** The most of a MEMORY.md Tars reads: far past what Claude Code loads, so a larger one is cut whatever it holds. */
 export const MEMORY_READ_CAP = 1024 * 1024;
 
+export type RegularFileRead =
+  | { kind: 'text'; text: string; stat: fs.Stats }
+  | { kind: 'too-large'; stat: fs.Stats }
+  | { kind: 'not-read' };
+
 /**
- * A MEMORY.md's guard, read the safe way (the Audit's L2 on #558): a regular file only, its link not followed (a FIFO
- * opened for reading waits for a writer for ever, a link may lead to a device), read without blocking the main
- * process, and not past MEMORY_READ_CAP, beyond which it is said too large, with no figure made up.
+ * A memory file read the safe way (the Audit's L2 on #558, then R1 and R2 at 3d34ca644): a regular file only, its
+ * link not followed (a FIFO opened for reading waits for a writer for ever, a link may lead to a device), without
+ * blocking the main process, and never more than `cap` bytes. The lstat only spares an open; what is decided is
+ * decided on the open file: O_NOFOLLOW and O_NONBLOCK where the platform has them (a FIFO or a link swapped in after
+ * the lstat opens at once, or not at all), its own stat for its type and its size, and a positional read into a
+ * buffer of cap + 1 bytes, so a file grown or swapped since is never read past the cap. A FIFO swapped in is refused
+ * twice: by the open file's type, and by the positional read itself (ESPIPE). The guard and the Memory page's listing
+ * read through it.
  */
-export async function guardMemoryFile(file: string): Promise<MemoryGuard> {
-  let stat: fs.Stats;
-  try { stat = await fs.promises.lstat(file); } catch { return guardMemory(null); }
-  if (!stat.isFile()) return guardMemory(null);
-  if (stat.size > MEMORY_READ_CAP) {
-    return {
-      state: 'cut', size: null, lines: null, limit: { ...CLAUDE_MEMORY_LIMITS }, cut: null,
-      notice: `MEMORY.md is ${(stat.size / 1024 / 1024).toFixed(1)} MB, more than Tars reads of it (${MEMORY_READ_CAP / 1024 / 1024} MB). Claude Code reads only its first ${kb(CLAUDE_MEMORY_LIMITS.size)} KB: everything after that never reaches an agent. ${TO_DO}`,
-    };
-  }
-  // O_NOFOLLOW where the platform has it: a file swapped for a link after the lstat is not followed either.
+export async function readRegularFile(file: string, cap: number = MEMORY_READ_CAP): Promise<RegularFileRead> {
+  try { if (!(await fs.promises.lstat(file)).isFile()) return { kind: 'not-read' }; } catch { return { kind: 'not-read' }; }
   const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
   let handle: fs.promises.FileHandle | undefined;
   try {
     handle = await fs.promises.open(file, flags);
-    if (!(await handle.stat()).isFile()) return guardMemory(null);
-    return guardMemory(await handle.readFile({ encoding: 'utf8' }));
+    const stat = await handle.stat();
+    if (!stat.isFile()) return { kind: 'not-read' };
+    if (stat.size > cap) return { kind: 'too-large', stat };
+    // The file's own size and a byte (the Audit's L1 on #565: a buffer of the whole ceiling per read, 20 MiB for 20
+    // small files); a file that grew since its stat fills it, and the buffer then grows to the ceiling and a byte.
+    let buffer = Buffer.allocUnsafe(stat.size + 1);
+    let filled = 0;
+    for (;;) {
+      const { bytesRead } = await handle.read(buffer, filled, buffer.length - filled, filled);
+      if (bytesRead === 0) break;
+      filled += bytesRead;
+      if (filled < buffer.length) continue;
+      if (buffer.length > cap) break;
+      const grown = Buffer.allocUnsafe(cap + 1);
+      buffer.copy(grown, 0, 0, filled);
+      buffer = grown;
+    }
+    // Grown past the cap while it was read.
+    if (filled > cap) return { kind: 'too-large', stat };
+    return { kind: 'text', text: buffer.subarray(0, filled).toString('utf8'), stat };
   } catch {
-    return guardMemory(null);
+    return { kind: 'not-read' };
   } finally {
     await handle?.close().catch(() => undefined);
   }
+}
+
+/** A MEMORY.md's guard, read through readRegularFile: past MEMORY_READ_CAP it is said too large, no figure made up. */
+export async function guardMemoryFile(file: string): Promise<MemoryGuard> {
+  const read = await readRegularFile(file);
+  if (read.kind === 'not-read') return guardMemory(null);
+  if (read.kind === 'too-large') {
+    const size = Math.max(read.stat.size, MEMORY_READ_CAP + 1);
+    return {
+      state: 'cut', size: null, lines: null, limit: { ...CLAUDE_MEMORY_LIMITS }, cut: null,
+      notice: `MEMORY.md is ${(size / 1024 / 1024).toFixed(1)} MB, more than Tars reads of it (${MEMORY_READ_CAP / 1024 / 1024} MB). Claude Code reads only its first ${kb(CLAUDE_MEMORY_LIMITS.size)} KB: everything after that never reaches an agent. ${TO_DO}`,
+    };
+  }
+  return guardMemory(read.text);
 }
 
 /** Every project's MEMORY.md under ~/.claude/projects and each Claude account's own folder (~/.claude-accounts/<id>). */
@@ -139,6 +172,9 @@ export function memoryFolderOwners(agents: Iterable<{ projectPath: string; workt
   return owners;
 }
 
+/** How much a file must grow since its last note to be told again: 2 KB or 20 lines. */
+export const MEMORY_NOTE_STEP = { size: 2 * 1024, lines: 20 } as const;
+
 /** What the orchestrator was told of a file: the most of its size and lines, and the worst state, it heard. */
 export interface MemoryTold { size: number; lines: number; state: 'near' | 'cut' }
 
@@ -156,7 +192,10 @@ export function memoryNoteDue(told: MemoryTold | undefined, guard: Pick<MemoryGu
   }
   if (!told) return { tell: true, told: { size: guard.size, lines: guard.lines, state } };
   const worse = state === 'cut' && told.state === 'near';
-  if (!worse && guard.size <= told.size && guard.lines <= told.lines) return { tell: false, told };
+  // A file being written to grows a little at every pass: told again only past a step (the orchestrator's decision
+  // on the Audit's I9 of #558: 10 notes in 10 passes for one line a pass).
+  const grown = guard.size >= told.size + MEMORY_NOTE_STEP.size || guard.lines >= told.lines + MEMORY_NOTE_STEP.lines;
+  if (!worse && !grown) return { tell: false, told };
   return { tell: true, told: { size: Math.max(told.size, guard.size), lines: Math.max(told.lines, guard.lines), state: worse ? 'cut' : told.state === 'cut' ? 'cut' : state } };
 }
 
@@ -168,25 +207,64 @@ export interface MemoryGuardPass {
   owners: Map<string, string>;
   /** Tars's note to that project's orchestrator; only one typed is told (kanban-routes.ts tellOrchestratorAsTars). */
   tell: (projectPath: string, text: string) => Promise<string>;
+  /** How long a pass waits for a delivery before going on (TELL_WAIT_MS); a test's own. */
+  tellWaitMs?: number;
 }
+
+/**
+ * How long a pass waits for a note's delivery. A note Tars holds behind a draft in the orchestrator's field settles
+ * only when the terminal takes it or gives it up (kanban-routes.ts tellAgentAsTars): awaited, it stopped the pass,
+ * and the guard with it (#558's E2E, 29/10). Past this, the pass goes on; the note held is not told again while it
+ * is, and is recorded the moment it is typed.
+ */
+export const TELL_WAIT_MS = 5_000;
+const held = new Set<string>();
 
 /** One pass over every project's MEMORY.md: the notes owed, told, and what was told kept. Never throws. */
 export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   const told = readStore(opts.store);
-  let changed = false;
-  for (const { folder, file } of findMemoryFiles(opts.home)) {
+  const forget = new Set<string>();
+  const files = findMemoryFiles(opts.home);
+  // A file gone is forgotten, in this pass: written again past the limit, smaller than what was told, it would never
+  // be told (the QA's F1 on #558: a new file losing 14 lines with no note). Gone means ENOENT, never a listing that
+  // failed (the Audit's L3 on #565: a folder briefly unreadable forgot everything under it, and everyone was told
+  // again).
+  const found = new Set(files.map(f => f.file));
+  for (const file of Object.keys(told)) {
+    if (found.has(file)) continue;
+    try { fs.lstatSync(file); } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') forget.add(file);
+    }
+  }
+  for (const { folder, file } of files) {
     const guard = await guardMemoryFile(file);
-    const step = memoryNoteDue(told[file], guard);
-    if (step.told === undefined && told[file] !== undefined) { delete told[file]; changed = true; }
+    // Its entry as it stands: a note held at an earlier pass may have been typed while this one waited (the Audit's L1).
+    const entry = readStore(opts.store)[file];
+    const step = memoryNoteDue(entry, guard);
+    if (step.told === undefined && entry !== undefined) forget.add(file);
     const project = opts.owners.get(folder);
-    if (!step.tell || !project) continue;
+    if (!step.tell || !project || held.has(file)) continue;
+    held.add(file);
+    const record = step.told!;
     // The path holds an account folder's name, any name under ~/.claude-accounts: quoted and escaped, as every value
     // a note from Tars interpolates (utils/envelope-value.ts; the Audit's L3 on #558).
-    const delivery = await opts.tell(project, `${guard.notice} The file: ${envelopeValue(file)}`).catch(() => 'failed');
-    // Not typed (the orchestrator busy, or none running): owed, and given at a later pass.
-    if (delivery === 'typed') { told[file] = step.told!; changed = true; }
+    const delivery = opts.tell(project, `${guard.notice} The file: ${envelopeValue(file)}`).catch(() => 'failed').then(d => {
+      held.delete(file);
+      // Not typed (the orchestrator busy, or none running): owed, and given at a later pass.
+      if (d === 'typed') editStore(opts.store, s => { s[file] = record; });
+    });
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([delivery, new Promise<void>(resolve => { timer = setTimeout(resolve, opts.tellWaitMs ?? TELL_WAIT_MS); })]);
+    if (timer) clearTimeout(timer);
   }
-  if (changed) writeStore(opts.store, told);
+  if (forget.size) editStore(opts.store, s => { for (const file of forget) delete s[file]; });
+}
+
+/** What was told, read, edited and written in one step: a pass and a delivery held past it each keep their own. */
+function editStore(file: string, edit: (told: Record<string, MemoryTold>) => void): void {
+  const told = readStore(file);
+  edit(told);
+  writeStore(file, told);
 }
 
 function readStore(file: string): Record<string, MemoryTold> {

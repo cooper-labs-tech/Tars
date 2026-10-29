@@ -50,15 +50,27 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
   const memory = path.join(memoryDir, 'MEMORY.md');
   fs.writeFileSync(memory, probeFile(150, 200));
   const typed = path.join(home, 'typed.jsonl');
-  // A claude that registers its session, then logs every write into its terminal.
+  // A claude that registers its session, logs every write into its terminal, and, as Claude Code's hooks do, says a
+  // turn began when a line is submitted and ended a moment later: a note from Tars is typed only into an orchestrator
+  // at rest, and one left mid-turn kept the second note owed (the E2E at 3d34ca644, 29/10).
   const cli = writeNodeCli(path.join(home, 'cli-orchestrator.cjs'), [
     "const fs = require('fs');",
     "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
-    `process.stdin.on('data', b => fs.appendFileSync(${JSON.stringify(typed)}, JSON.stringify(b.toString('utf8')) + '\\n'));`,
-    "fetch(process.env.CLAUDE_MGR_API_URL + '/api/hooks/status', {",
+    "const session = require('crypto').randomUUID();",
+    "const post = body => fetch(process.env.CLAUDE_MGR_API_URL + '/api/hooks/status', {",
     "  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN },",
-    "  body: JSON.stringify({ agent_id: process.env.CLAUDE_AGENT_ID, session_id: require('crypto').randomUUID(), status: 'idle', source: 'startup' }),",
+    "  body: JSON.stringify({ agent_id: process.env.CLAUDE_AGENT_ID, session_id: session, ...body }),",
     "}).catch(() => {});",
+    'process.stdin.on(\'data\', b => {',
+    `  fs.appendFileSync(${JSON.stringify(typed)}, JSON.stringify(b.toString('utf8')) + '\\n');`,
+    // Its terminal reads in cooked mode, whose line discipline turns Tars's Enter (\r) into \n (ICRNL): either ends
+    // the line (the E2E at 3d71e83de, 29/10: the first note's chunk ended in \n, so no turn began and none ended).
+    "  if (!/[\\r\\n]/.test(b.toString('utf8'))) return;",
+    // `event` as the real hook sends it: the server reads a turn start from it, and with it that the field emptied
+    // (hooks/user-prompt-submit.sh); without it, the next note is held behind the first as a draft.
+    "  void post({ hook: 'UserPromptSubmit', event: 'UserPromptSubmit', status: 'running' }).then(() => setTimeout(() => void post({ hook: 'Stop', status: 'idle' }), 300));",
+    '});',
+    "void post({ status: 'idle', source: 'startup' });",
     "process.stdout.write('stand-in ready\\r\\n');",
     'process.stdin.resume();', '',
   ].join('\n'));
