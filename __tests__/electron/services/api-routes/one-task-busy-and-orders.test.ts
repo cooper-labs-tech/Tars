@@ -96,6 +96,16 @@ import { EventEmitter } from 'node:events';
  * And from the Audit's train audit (Info 2): one owner's cancel had three wordings.
  * 23c. A delegated task the owner takes back from its queue in the window answers its waiting asker in other words
  *     than the window says it is told: "It never started: it was taken back by you, in the window."
+ *
+ * Added with 2.0.6's option a (a note message type, the DB brief electron-and-options-2-0-6-2910.md), before the code:
+ * N1. The project's orchestrator sends with mode 'note': it is a task all the same (a task id, the receiver's
+ *     requester link set to the sender, a hand-off the ledger counts the receiver's turn under, `workHandedAt` moved,
+ *     so the sender is woken by a "finished its turn"); or it is typed into the turn under way instead of once that
+ *     turn ends; or it is not labelled a note, from the orchestrator.
+ * N2. With mode 'note-now' it waits for the turn's end; or, typed into a turn under way, it takes that turn from the
+ *     task it runs (moves `workHandedAt`, or the requester link), so that task's asker is never told its end.
+ * N3. A note to an agent with no session open starts one, or says nothing of why it was not sent.
+ * N4. A note that also asks for a task (`intent: 'task'`) is taken as either.
  */
 
 type FakePty = { pid: number; process: string; write: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn>; resize: ReturnType<typeof vi.fn>; onData: ReturnType<typeof vi.fn>; onExit: ReturnType<typeof vi.fn> };
@@ -132,7 +142,7 @@ import { ptyProcesses, resetTerminalInput, writeHumanInput } from '../../../../e
 import { spawnAgentPty } from '../../../../electron/core/agent-pty';
 import { oneTaskQueue } from '../../../../electron/core/one-task';
 import { stopTask } from '../../../../electron/services/task-banner';
-import { noteTurn } from '../../../../electron/services/task-ledger';
+import { liveTaskLedger, noteTurn } from '../../../../electron/services/task-ledger';
 import { startTaskWatch, stopTaskWatch } from '../../../../electron/services/task-watch';
 import { emitAgentStatus } from '../../../../electron/services/agent-events';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';
@@ -808,5 +818,72 @@ describe('after the Audit\'s gate of 6fb17592 on #453', () => {
     const seen = call('GET', `/api/tasks/${ref}`, {}, 'orch');
     await seen.done;
     expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ id: ref, outcome: 'delivered', how: 'started' });
+  });
+});
+
+describe('a note, from whoever sends it (2.0.6, option a)', () => {
+  /** The tasks the ledger holds that name `requester` as their asker. */
+  const askedBy = (requester: string) => (liveTaskLedger()?.tasks() ?? []).filter((t) => t.requesterAgentId === requester);
+
+  it('N1. mode note from the orchestrator: labelled its note, typed once the turn ends, and no task: no id, no link, no hand-off', async () => {
+    const { agent, terminal } = withCli('cl', 'claude', 'idle');
+    call('POST', '/api/agents/cl/run-task', { task: 'TASK-N run the gate', answer: 'started' }, 'chat2');
+    await later(1500);
+    expect(runs).toHaveLength(1);
+    const linkBefore = agent.requestedBy;
+    const handedBefore = agent.workHandedAt;
+    const n = call('POST', '/api/agents/cl/dispatch', { message: 'NOTE-OPT the release is cut', mode: 'note' }, 'orch');
+    await later(1500);
+    await n.done;
+    expect(n.answer()?.data, JSON.stringify(n.answer())).toMatchObject({ success: true, note: true, queued: true });
+    expect(n.answer()?.data.taskRef).toBeUndefined();
+    expect(n.answer()?.data.queuedTask).toBeUndefined();
+    expect(typedInto(terminal), 'typed into the turn under way').not.toContain('NOTE-OPT');
+    runs[0].end();
+    await later(3000);
+    const typed = typedInto(terminal);
+    expect(typed).toContain('NOTE-OPT the release is cut');
+    expect(typed).toMatch(/Note for information from ORCH, your project's orchestrator: it is not a task/);
+    // No task: the link stays the run's asker's, the hand-off mark where it was, and the ledger names no task of orch's.
+    expect(agent.requestedBy?.agentId).toBe(linkBefore?.agentId);
+    expect(agent.workHandedAt).toBe(handedBefore);
+    expect(askedBy('orch')).toEqual([]);
+    expect(oneTaskQueue.queued('cl')).toEqual([]);
+  });
+
+  it('N2. mode note-now: typed into the turn under way, and that turn stays the task it runs, for its asker', async () => {
+    const { agent, terminal } = withCli('cl', 'claude', 'idle');
+    call('POST', '/api/agents/cl/run-task', { task: 'TASK-M review the notes', answer: 'started' }, 'chat2');
+    await later(1500);
+    expect(runs).toHaveLength(1);
+    const link = agent.requestedBy;
+    const handed = agent.workHandedAt;
+    const n = call('POST', '/api/agents/cl/dispatch', { message: 'NOTE-NOW the build is green', mode: 'note-now' }, 'orch');
+    await later(1500);
+    await n.done;
+    expect(n.answer()?.data, JSON.stringify(n.answer())).toMatchObject({ success: true, note: true });
+    expect(n.answer()?.data.taskRef).toBeUndefined();
+    expect(typedInto(terminal)).toContain('NOTE-NOW the build is green');
+    expect(agent.requestedBy).toEqual(link);
+    expect(agent.workHandedAt).toBe(handed);
+    expect(askedBy('orch')).toEqual([]);
+  });
+
+  it('N3. a note to an agent with no session open starts none, and says why, to the orchestrator too', async () => {
+    member('w2');
+    const n = call('POST', '/api/agents/w2/dispatch', { message: 'NOTE-COLD', mode: 'note' }, 'orch');
+    await later(500);
+    await n.done;
+    expect(n.answer(), JSON.stringify(n.answer())).toMatchObject({ status: 409, data: { code: 'note_needs_session' } });
+    expect(String(n.answer()?.data.error)).not.toContain('A worker does not hand work');
+    expect(ctx.initAgentPtyCallback).not.toHaveBeenCalled();
+    expect(spawned).toHaveLength(0);
+  });
+
+  it('N4. a note that also asks for a task is refused, as neither', async () => {
+    withCli('cl', 'claude', 'idle');
+    const n = call('POST', '/api/agents/cl/dispatch', { message: 'NOTE-TASK', mode: 'note', intent: 'task' }, 'orch');
+    await n.done;
+    expect(n.answer(), JSON.stringify(n.answer())).toMatchObject({ status: 400, data: { code: 'note_is_no_task' } });
   });
 });
