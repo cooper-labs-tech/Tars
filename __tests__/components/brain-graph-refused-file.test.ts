@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { openedFile } from '../../src/components/Memory/AgentKnowledgeGraph';
+import { canSave, openedFile } from '../../src/components/Memory/AgentKnowledgeGraph';
 
 /**
  * A file the Brain graph's panel opens, from memory:read-file or fs:read-text-file's answer: `{ content }`, or
@@ -12,6 +12,12 @@ import { openedFile } from '../../src/components/Memory/AgentKnowledgeGraph';
  * 3. no answer at all (no bridge) reads as an empty file that can be saved over;
  * 4. a file read whole is refused, or its content altered;
  * 5. an empty file that was read (no error) is refused: it is a real file, and may be written.
+ *
+ * And whether the panel may save (the Audit's Low on #572): while a file loads, the panel still holds the previous
+ * file's draft, and save wrote it over the file being opened. Its ways to fail:
+ * 6. save is offered while a file loads, whatever draft the panel holds;
+ * 7. save is offered for a refused file;
+ * 8. save is offered with nothing changed, or withheld for a change made to a file read whole.
  */
 
 describe('a file the graph opens', () => {
@@ -39,5 +45,22 @@ describe('a file the graph opens', () => {
 
   it('an empty file that was read stays a file (5)', () => {
     expect(openedFile({ content: '' })).toEqual({ content: '', refused: null });
+  });
+});
+
+describe('whether the panel may save', () => {
+  const read = { loading: false, refused: null, content: '# Memory\n', draft: '# Memory\n- a fact\n' };
+
+  it('not while a file loads, even with the previous file\'s draft in hand (6)', () => {
+    expect(canSave({ ...read, loading: true })).toBe(false);
+  });
+
+  it('not for a refused file (7)', () => {
+    expect(canSave({ ...read, refused: 'Not a regular file, or past 1 MB: Tars does not read it.' })).toBe(false);
+  });
+
+  it('only for a change to a file read whole (8)', () => {
+    expect(canSave({ ...read, draft: read.content })).toBe(false);
+    expect(canSave(read)).toBe(true);
   });
 });
