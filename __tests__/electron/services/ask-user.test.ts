@@ -242,6 +242,8 @@ describe('the user\'s reply', () => {
 
     expect(all('a1')).toContain('Message from the user via Telegram: ');
     expect(all('a1')).toContain('Use the staging database.');
+    // 2.0.6, option d (the QA's F1 on #563): the question's time, UTC first.
+    expect(all('a1')).toContain(`Answer to the question you asked at ${twoZones(T0)}:`);
     expect(all('a2')).toBe('');
     expect(notices().at(-1), "JeanBrasse's answer 24: one short line").toBe('Passed to Asker.');
     // Answered: a second reply to the same message is told the question is closed.
@@ -390,6 +392,8 @@ describe('Hermes down', () => {
     await settle();
 
     expect(all('a1')).toMatch(/could not reach the user/);
+    // 2.0.6, option d (the QA's F1 on #563): the question's time, UTC first.
+    expect(all('a1')).toContain(`Your question asked at ${twoZones(T0)} could not reach the user`);
     expect(all('a1')).not.toContain('Which database');
   });
 });
