@@ -109,7 +109,8 @@ for (const newInterface of [false, true]) {
 
       // 4. The cut project open on its MEMORY.md: the notice whole above it.
       await harbor.click();
-      await where.getByRole('button', { name: /MEMORY\.md/ }).first().click();
+      // The file's own button: a project row's name holds its notice, which names MEMORY.md too.
+      await where.getByRole('button', { name: /^MEMORY\.md/ }).first().click();
       const fileNotice = where.locator('[data-memory-file-notice]');
       await expect(fileNotice).toBeVisible({ timeout: 30_000 });
       seen.fileNotice = (await fileNotice.innerText()).trim();
