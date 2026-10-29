@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { claudeProjectDirNames } from '../platform/claude-project-dir';
 import { spellingsOf } from '../utils/resume-session';
+import { envelopeValue } from '../utils/envelope-value';
 
 /**
  * A project's MEMORY.md past what Claude Code loads of it (2.0.6, option c; its failures:
@@ -61,12 +62,46 @@ export function guardMemory(text: string | null): MemoryGuard {
   }
   const keptLines = trimmed[kept.length] === '\n' ? kept.split('\n').length : 0;
   const by = byLines && keptBySize ? 'both' : byLines ? 'lines' : 'size';
-  const cut = { by, lines: keptLines === 0 ? 1 : lines - keptLines, fromLine: keptLines + 1, size: size - kept.length } as const;
+  // No line kept whole (a first line past 25,000): the rest of line 1 is lost, and every line after it.
+  const cut = { by, lines: lines - keptLines, fromLine: keptLines + 1, size: size - kept.length } as const;
   const first = by === 'both' ? `${limit.lines} lines and ${kb(limit.size)} KB` : by === 'lines' ? `${limit.lines} lines` : `${kb(limit.size)} KB`;
+  const after = lines - 1;
   const lost = keptLines === 0
-    ? `the end of line 1 never reaches an agent (${kb(cut.size)} KB)`
+    ? `everything after the first ${kb(limit.size)} KB of line 1${after > 0 ? `, and the ${after} ${after === 1 ? 'line' : 'lines'} after it,` : ''} never reaches an agent (${kb(cut.size)} KB)`
     : `${cut.lines} of its ${lines} lines, from line ${cut.fromLine}, never reach an agent (${kb(cut.size)} KB)`;
   return { state: 'cut', size, lines, limit, cut, notice: `${head}. Claude Code reads only its first ${first}: ${lost}. ${TO_DO}` };
+}
+
+/** The most of a MEMORY.md Tars reads: far past what Claude Code loads, so a larger one is cut whatever it holds. */
+export const MEMORY_READ_CAP = 1024 * 1024;
+
+/**
+ * A MEMORY.md's guard, read the safe way (the Audit's L2 on #558): a regular file only, its link not followed (a FIFO
+ * opened for reading waits for a writer for ever, a link may lead to a device), read without blocking the main
+ * process, and not past MEMORY_READ_CAP, beyond which it is said too large, with no figure made up.
+ */
+export async function guardMemoryFile(file: string): Promise<MemoryGuard> {
+  let stat: fs.Stats;
+  try { stat = await fs.promises.lstat(file); } catch { return guardMemory(null); }
+  if (!stat.isFile()) return guardMemory(null);
+  if (stat.size > MEMORY_READ_CAP) {
+    return {
+      state: 'cut', size: null, lines: null, limit: { ...CLAUDE_MEMORY_LIMITS }, cut: null,
+      notice: `MEMORY.md is ${(stat.size / 1024 / 1024).toFixed(1)} MB, more than Tars reads of it (${MEMORY_READ_CAP / 1024 / 1024} MB). Claude Code reads only its first ${kb(CLAUDE_MEMORY_LIMITS.size)} KB: everything after that never reaches an agent. ${TO_DO}`,
+    };
+  }
+  // O_NOFOLLOW where the platform has it: a file swapped for a link after the lstat is not followed either.
+  const flags = fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0) | (fs.constants.O_NONBLOCK ?? 0);
+  let handle: fs.promises.FileHandle | undefined;
+  try {
+    handle = await fs.promises.open(file, flags);
+    if (!(await handle.stat()).isFile()) return guardMemory(null);
+    return guardMemory(await handle.readFile({ encoding: 'utf8' }));
+  } catch {
+    return guardMemory(null);
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }
 
 /** Every project's MEMORY.md under ~/.claude/projects and each Claude account's own folder (~/.claude-accounts/<id>). */
@@ -77,7 +112,10 @@ export function findMemoryFiles(home: string): Array<{ folder: string; account: 
   for (const { account, dir } of roots) {
     for (const folder of listDir(dir)) {
       const file = path.join(dir, folder, 'memory', 'MEMORY.md');
-      if (fs.existsSync(file)) out.push({ folder, account, file });
+      // A regular file only, its link not followed: what else bears the name is not Claude Code's memory to watch.
+      let regular = false;
+      try { regular = fs.lstatSync(file).isFile(); } catch { /* none */ }
+      if (regular) out.push({ folder, account, file });
     }
   }
   return out;
@@ -101,11 +139,25 @@ export function memoryFolderOwners(agents: Iterable<{ projectPath: string; workt
   return owners;
 }
 
-/** Whether the orchestrator is owed a note: once past the threshold, again only when it grew, re-armed under it. */
-export function memoryNoteDue(told: number | undefined, guard: Pick<MemoryGuard, 'state' | 'size'>): { tell: boolean; told: number | undefined } {
+/** What the orchestrator was told of a file: the most of its size and lines, and the worst state, it heard. */
+export interface MemoryTold { size: number; lines: number; state: 'near' | 'cut' }
+
+/**
+ * Whether the orchestrator is owed a note: once past the threshold, again when either limit grew past what it was
+ * told or the state got worse (the Audit's M1 on #558: a file shrinking in size while passing 200 lines lost lines
+ * untold), re-armed under the threshold. A file too large to read gives no figure: told once, as cut.
+ */
+export function memoryNoteDue(told: MemoryTold | undefined, guard: Pick<MemoryGuard, 'state' | 'size' | 'lines'>): { tell: boolean; told: MemoryTold | undefined } {
   if (guard.state === 'ok') return { tell: false, told: undefined };
-  if (guard.state === 'unread' || guard.size === null) return { tell: false, told };
-  return told === undefined || guard.size > told ? { tell: true, told: guard.size } : { tell: false, told };
+  if (guard.state === 'unread') return { tell: false, told };
+  const state = guard.state;
+  if (guard.size === null || guard.lines === null) {
+    return told?.state === 'cut' ? { tell: false, told } : { tell: true, told: { size: told?.size ?? 0, lines: told?.lines ?? 0, state } };
+  }
+  if (!told) return { tell: true, told: { size: guard.size, lines: guard.lines, state } };
+  const worse = state === 'cut' && told.state === 'near';
+  if (!worse && guard.size <= told.size && guard.lines <= told.lines) return { tell: false, told };
+  return { tell: true, told: { size: Math.max(told.size, guard.size), lines: Math.max(told.lines, guard.lines), state: worse ? 'cut' : told.state === 'cut' ? 'cut' : state } };
 }
 
 export interface MemoryGuardPass {
@@ -123,28 +175,32 @@ export async function runMemoryGuardPass(opts: MemoryGuardPass): Promise<void> {
   const told = readStore(opts.store);
   let changed = false;
   for (const { folder, file } of findMemoryFiles(opts.home)) {
-    let text: string | null;
-    try { text = fs.readFileSync(file, 'utf8'); } catch { text = null; }
-    const guard = guardMemory(text);
+    const guard = await guardMemoryFile(file);
     const step = memoryNoteDue(told[file], guard);
     if (step.told === undefined && told[file] !== undefined) { delete told[file]; changed = true; }
     const project = opts.owners.get(folder);
     if (!step.tell || !project) continue;
-    const delivery = await opts.tell(project, `${guard.notice} The file: ${file}`).catch(() => 'failed');
+    // The path holds an account folder's name, any name under ~/.claude-accounts: quoted and escaped, as every value
+    // a note from Tars interpolates (utils/envelope-value.ts; the Audit's L3 on #558).
+    const delivery = await opts.tell(project, `${guard.notice} The file: ${envelopeValue(file)}`).catch(() => 'failed');
     // Not typed (the orchestrator busy, or none running): owed, and given at a later pass.
     if (delivery === 'typed') { told[file] = step.told!; changed = true; }
   }
   if (changed) writeStore(opts.store, told);
 }
 
-function readStore(file: string): Record<string, number> {
+function readStore(file: string): Record<string, MemoryTold> {
+  const count = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
   try {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
-    return Object.fromEntries(Object.entries(raw).filter((e): e is [string, number] => typeof e[1] === 'number' && Number.isFinite(e[1])));
+    return Object.fromEntries(Object.entries(raw).filter((e): e is [string, MemoryTold] => {
+      const t = e[1] as Partial<MemoryTold> | null;
+      return !!t && typeof t === 'object' && count(t.size) && count(t.lines) && (t.state === 'near' || t.state === 'cut');
+    }));
   } catch { return {}; }
 }
 
-function writeStore(file: string, told: Record<string, number>): void {
+function writeStore(file: string, told: Record<string, MemoryTold>): void {
   try { fs.writeFileSync(file, JSON.stringify(told, null, 2)); } catch (err) { console.warn('[memory-guard] what was told could not be kept:', (err as Error).message); }
 }
 
