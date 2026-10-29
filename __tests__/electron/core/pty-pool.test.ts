@@ -26,6 +26,12 @@ import * as path from 'node:path';
  *     orchestrators are told once, and again only after it fell under 70 %.
  * Q6b. The warning does not say how many of how many, or offers a restart when stopping agents would do (Q4b).
  * Q7. The health monitor does not put the pool in its samples, or does not run the warning on them.
+ * And from the gates of #553 (29/10):
+ * Q4c. The Audit's M1 and Info 2: a macOS start opens two PTYs (node-pty's spare, then the master), so the pool is
+ *     full with one free there, and the remedy must say two are needed; Linux's forkpty opens one, and a refusal
+ *     with one free there is another failure, not a full pool.
+ * Q8. The window builds the Resources notice itself, a second copy of these words (the Frontend's #555): Tars must
+ *     give it, null below 80 %, the warning past it, the refusal once full.
  */
 
 describe('the machine\'s PTY pool', () => {
@@ -76,13 +82,23 @@ describe('the machine\'s PTY pool', () => {
     vi.resetModules();
   });
 
-  it('Q4b. a full pool Tars holds no more of than it has open says to stop an agent, never to restart Tars', async () => {
+  it('Q4b. a full pool Tars holds no more of than it has open says to stop agents, never to restart Tars', async () => {
     const { explainSpawnFailure } = await import('../../../electron/core/pty-pool');
-    const own = explainSpawnFailure(new Error('posix_spawnp failed.'), { inUse: 511, max: 511, tars: 18, open: 18 }) as Error;
-    expect(own.message).toBe('No terminal can be opened on this machine: 511 of 511 are in use, 18 of them held by Tars for its 18 open terminals. Stop an agent that does not need its terminal, or close terminals in other apps, to free one.');
-    const unknown = explainSpawnFailure(new Error('posix_spawnp failed.'), { inUse: 4096, max: 4096, tars: null }) as Error;
+    const failed = new Error('posix_spawnp failed.');
+    const own = explainSpawnFailure(failed, { inUse: 510, max: 511, tars: 18, open: 18 }, 'darwin') as Error;
+    expect(own.message).toBe('No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.');
+    const unknown = explainSpawnFailure(failed, { inUse: 4096, max: 4096, tars: null }, 'linux') as Error;
     expect(unknown.message).toBe('No terminal can be opened on this machine: 4096 of 4096 are in use. Stop an agent that does not need its terminal, or close terminals in other apps, to free one.');
     expect(own.message + unknown.message).not.toMatch(/restart/i);
+  });
+
+  it('Q4c. a pool is full at one free on macOS (a start opens two) and at none on Linux (forkpty opens one)', async () => {
+    const { explainSpawnFailure, NoTerminalLeft } = await import('../../../electron/core/pty-pool');
+    const failed = new Error('posix_spawnp failed.');
+    expect(explainSpawnFailure(failed, { inUse: 510, max: 511, tars: 1, open: 1 }, 'darwin')).toBeInstanceOf(NoTerminalLeft);
+    expect(explainSpawnFailure(failed, { inUse: 509, max: 511, tars: 1, open: 1 }, 'darwin')).toBe(failed);
+    expect(explainSpawnFailure(failed, { inUse: 4095, max: 4096, tars: 1, open: 1 }, 'linux')).toBe(failed);
+    expect(explainSpawnFailure(failed, { inUse: 4096, max: 4096, tars: 1, open: 1 }, 'linux')).toBeInstanceOf(NoTerminalLeft);
   });
 
   it('Q4b. the terminals Tars has open are counted at spawn and given back at exit', async () => {
@@ -117,9 +133,21 @@ describe('the machine\'s PTY pool', () => {
 
   it('Q6b. the warning says how many of how many, and a restart only for masters Tars has no terminal for', async () => {
     const { terminalsNearFullNote } = await import('../../../electron/core/pty-pool');
-    expect(terminalsNearFullNote({ inUse: 410, max: 511, tars: 400, open: 400 })).toBe('The machine\'s terminals are filling: 410 of 511 are in use, 400 of them held by Tars for its 400 open terminals. At 511 no agent can start: stop the agents that do not need their terminal.');
-    expect(terminalsNearFullNote({ inUse: 410, max: 511, tars: 400, open: 380 })).toBe('The machine\'s terminals are filling: 410 of 511 are in use, 400 of them held by Tars, which has 380 open. The other 20 were never given back, and only a restart of Tars frees them: it stops every agent.');
-    expect(terminalsNearFullNote({ inUse: 3300, max: 4096, tars: null })).not.toMatch(/restart/i);
+    expect(terminalsNearFullNote({ inUse: 410, max: 511, tars: 400, open: 400 }, 'darwin')).toBe('The machine\'s terminals are filling: 410 of 511 are in use, 400 of them held by Tars for its 400 open terminals. With fewer than two free no agent can start on macOS: stop the agents that do not need their terminal.');
+    expect(terminalsNearFullNote({ inUse: 3300, max: 4096, tars: 3000, open: 3000 }, 'linux')).toBe('The machine\'s terminals are filling: 3300 of 4096 are in use, 3000 of them held by Tars for its 3000 open terminals. At 4096 no agent can start: stop the agents that do not need their terminal.');
+    expect(terminalsNearFullNote({ inUse: 410, max: 511, tars: 400, open: 380 }, 'darwin')).toBe('The machine\'s terminals are filling: 410 of 511 are in use, 400 of them held by Tars, which has 380 open. The other 20 were never given back, and only a restart of Tars frees them: it stops every agent.');
+    expect(terminalsNearFullNote({ inUse: 3300, max: 4096, tars: null }, 'linux')).not.toMatch(/restart/i);
+  });
+
+  it('Q8. the notice the window shows as is: none below 80 %, the warning past it, the refusal once full', async () => {
+    const { terminalsNotice, terminalsNearFullNote, NoTerminalLeft } = await import('../../../electron/core/pty-pool');
+    const at = (inUse: number) => ({ inUse, max: 511, tars: 20, open: 20 });
+    expect(terminalsNotice(at(408), 'darwin')).toBeNull();
+    expect(terminalsNotice(at(409), 'darwin')).toBe(terminalsNearFullNote(at(409), 'darwin'));
+    expect(terminalsNotice(at(509), 'darwin')).toBe(terminalsNearFullNote(at(509), 'darwin'));
+    expect(terminalsNotice(at(510), 'darwin')).toBe(new NoTerminalLeft(at(510), 'darwin').message);
+    expect(terminalsNotice(at(510), 'linux')).toBe(terminalsNearFullNote(at(510), 'linux'));
+    expect(terminalsNotice(at(511), 'linux')).toBe(new NoTerminalLeft(at(511), 'linux').message);
   });
 
   it('Q7. each health sample carries the pool, and the monitor warns once past 80 %', async () => {

@@ -87,7 +87,15 @@ export function readPtyPool(io: PtyPoolIo = defaultIo): PtyPool | null {
   return null;
 }
 
-const STOP_ONE = ' Stop an agent that does not need its terminal, or close terminals in other apps, to free one.';
+/**
+ * The PTYs one start opens: on macOS node-pty takes a spare master before the real one (so that it is not fd 0 to 2),
+ * so a start needs two free, and with one free it fails; on Linux forkpty opens one (the Audit's M1 on #553).
+ */
+const perStart = (platform: NodeJS.Platform) => (platform === 'darwin' ? 2 : 1);
+
+const stopToFree = (platform: NodeJS.Platform) => (perStart(platform) === 2
+  ? ' A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.'
+  : ' Stop an agent that does not need its terminal, or close terminals in other apps, to free one.');
 
 /**
  * A terminal the machine refused because its pool is full. Stopping an agent gives its terminal back; a restart of
@@ -96,20 +104,26 @@ const STOP_ONE = ' Stop an agent that does not need its terminal, or close termi
  */
 export class NoTerminalLeft extends Error {
   readonly code = 'no_terminal';
-  constructor(readonly pool: PtyPool) {
-    super(noTerminalMessage(pool));
+  constructor(readonly pool: PtyPool, platform: NodeJS.Platform = process.platform) {
+    super(withRemedy(`No terminal can be opened on this machine: ${pool.inUse} of ${pool.max} are in use`, pool, stopToFree(platform)));
     this.name = 'NoTerminalLeft';
   }
 }
 
-function noTerminalMessage(pool: PtyPool): string {
-  return withRemedy(`No terminal can be opened on this machine: ${pool.inUse} of ${pool.max} are in use`, pool, STOP_ONE);
+/** The note the window and the orchestrators get past 80 % of the limit (ptyWarning). */
+export function terminalsNearFullNote(pool: PtyPool, platform: NodeJS.Platform = process.platform): string {
+  const edge = perStart(platform) === 2 ? ' With fewer than two free no agent can start on macOS:' : ` At ${pool.max} no agent can start:`;
+  return withRemedy(`The machine's terminals are filling: ${pool.inUse} of ${pool.max} are in use`, pool,
+    `${edge} stop the agents that do not need their terminal.`);
 }
 
-/** The note the window and the orchestrators get past 80 % of the limit (ptyWarning). */
-export function terminalsNearFullNote(pool: PtyPool): string {
-  return withRemedy(`The machine's terminals are filling: ${pool.inUse} of ${pool.max} are in use`, pool,
-    ` At ${pool.max} no agent can start: stop the agents that do not need their terminal.`);
+/** Whether no start can open a terminal in this pool. */
+const isFull = (pool: PtyPool, platform: NodeJS.Platform) => pool.max - pool.inUse < perStart(platform);
+
+/** What the window shows of the pool, word for word: the refusal once full, the warning past 80 %, else nothing. */
+export function terminalsNotice(pool: PtyPool, platform: NodeJS.Platform = process.platform): string | null {
+  if (isFull(pool, platform)) return new NoTerminalLeft(pool, platform).message;
+  return pool.inUse / pool.max >= PTY_WARN_SHARE ? terminalsNearFullNote(pool, platform) : null;
 }
 
 /** A restart only for the masters Tars holds with no terminal open for them; else what stopping agents frees. */
@@ -122,8 +136,8 @@ function withRemedy(head: string, { tars, open }: PtyPool, stop: string): string
 }
 
 /** Whether a refused spawn was refused by a full pool: then the pool says so, else the error stays what it was. */
-export function explainSpawnFailure(err: unknown, pool: PtyPool | null): unknown {
-  return pool && pool.inUse >= pool.max - 1 ? new NoTerminalLeft(pool) : err;
+export function explainSpawnFailure(err: unknown, pool: PtyPool | null, platform: NodeJS.Platform = process.platform): unknown {
+  return pool && isFull(pool, platform) ? new NoTerminalLeft(pool, platform) : err;
 }
 
 /** What the local API answers for an error its routes threw. */

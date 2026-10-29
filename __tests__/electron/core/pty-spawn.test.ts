@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 
 /**
@@ -15,6 +15,13 @@ import * as fs from 'node:fs';
  * P4. Another terminal's master, open before this one, is closed with the leftovers.
  * P5. An fd the spawn did not open is taken for a leftover because its number was reused (a directory listed just
  *     before, its fd closed and reopened as a master): one is closed that is not node-pty's, or a leftover is kept.
+ *     And from the Audit's L2 on #553 (29/10): told by number alone, a character device listed before whose number
+ *     node-pty reuses for its stray master keeps that master open. P5b frees such a number (/dev/null) just before
+ *     the real spawn.
+ * And from the Audit's M1 on #553 (29/10):
+ * P6. A spawn that fails after node-pty opened its PTYs (posix_spawn refused: an argument past ARG_MAX, as a long
+ *     task prompt on a CLI's command line can be) leaves them open for good: 2 masters per failed start, measured.
+ *     node-pty closes nothing on that path; what it opened must be closed, and its error must stay its own.
  */
 
 const unix = process.platform !== 'win32';
@@ -84,5 +91,49 @@ describe.skipIf(!unix)('a terminal opened through pty-spawn', () => {
     const done = exited(t);
     t.kill();
     await done;
+  }, 30_000);
+
+  it('P5b. a character device listed before, whose number node-pty reuses, does not keep the stray master', async () => {
+    const real = await vi.importActual<typeof import('node-pty')>('node-pty');
+    // /dev/null is open when spawnPty lists the fds, and closed inside the spawn, right before node-pty opens its
+    // first master: that master takes its number, with another device.
+    const freed = fs.openSync('/dev/null', 'r');
+    vi.resetModules();
+    vi.doMock('node-pty', () => ({ ...real, spawn: (...args: Parameters<typeof real.spawn>) => { fs.closeSync(freed); return real.spawn(...args); } }));
+    try {
+      const { spawnPty } = await import('../../../electron/core/pty-spawn');
+      const t = spawnPty('/bin/cat', [], { cols: 80, rows: 24 }) as Term;
+      const ptc = majorOf(fs.fstatSync(t._fd).rdev);
+      const masters = [...charFds()].filter(([, rdev]) => majorOf(rdev) === ptc).map(([fd]) => fd);
+      expect(masters, 'only the terminal\'s own master is open').toEqual([t._fd]);
+      const done = exited(t);
+      t.kill();
+      await done;
+    } finally {
+      vi.doUnmock('node-pty');
+      vi.resetModules();
+    }
+  }, 30_000);
+
+  it('P6. a spawn that fails after node-pty opened its PTYs leaves none of them open, and keeps its error', async () => {
+    const { spawnPty } = await import('../../../electron/core/pty-spawn');
+    const probe = spawnPty('/bin/cat', [], {}) as Term;
+    const ptc = majorOf(fs.fstatSync(probe._fd).rdev);
+    const pts = majorOf(fs.statSync(probe._pty).rdev);
+    const ended = exited(probe);
+    probe.kill();
+    await ended;
+    await new Promise(r => setTimeout(r, 300));
+    const ptys = () => [...charFds().values()].filter(rdev => majorOf(rdev) === ptc || majorOf(rdev) === pts).length;
+    const before = ptys();
+    // Past macOS's ARG_MAX (1 MB) and Linux's single-argument limit (128 KB): posix_spawn answers E2BIG.
+    const tooLong = 'x'.repeat(2 * 1024 * 1024);
+    let thrown: unknown;
+    let t: Term | undefined;
+    try { t = spawnPty('/bin/echo', [tooLong], {}) as Term; } catch (err) { thrown = err; }
+    // forkpty (Linux) forks first: the exec fails in the child, which ends; the terminal closes as any other.
+    if (t) { await exited(t); await new Promise(r => setTimeout(r, 300)); }
+    else expect((thrown as Error).message).toBe('posix_spawnp failed.');
+    expect(ptys(), 'PTYs this process holds after the failed spawn').toBe(before);
   }, 30_000);
 });

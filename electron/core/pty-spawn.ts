@@ -21,8 +21,15 @@ import { explainSpawnFailure, readPtyPool, PtyPool } from './pty-pool';
 export function spawnPty(file: string, args: string[] | string, options: pty.IPtyForkOptions | pty.IWindowsPtyForkOptions): pty.IPty {
   const before = process.platform === 'darwin' ? charDevices() : null;
   let term: pty.IPty;
-  // A full pool reads as node-pty's bare "posix_spawnp failed." (posix_openpt fails first): say what it is.
-  try { term = pty.spawn(file, args, options); } catch (err) { throw explainSpawnFailure(err, readTerminals()); }
+  try {
+    term = pty.spawn(file, args, options);
+  } catch (err) {
+    // node-pty closes nothing when it fails after opening its PTYs (posix_spawn refused, the pool's last one taken
+    // by its spare master): 3 left for good per failed start, measured (the Audit's M1 on #553).
+    if (before) closeFailedSpawn(before);
+    // A full pool reads as node-pty's bare "posix_spawnp failed." (posix_openpt fails first): say what it is.
+    throw explainSpawnFailure(err, readTerminals());
+  }
   if (before) closeLeftovers(term as pty.IPty & { _fd?: unknown; _pty?: unknown }, before);
   open++;
   term.onExit(() => { open--; });
@@ -52,6 +59,28 @@ function charDevices(): Map<number, number> {
 }
 
 const major = (rdev: number) => (rdev >>> 24) & 0xff;
+
+/**
+ * After a spawn that threw: no terminal was returned, so every PTY this process holds that it did not hold before is
+ * node-pty's, its masters (/dev/ptmx's major) and its slave (a /dev/ttysNNN node's device). Told by device, as above.
+ */
+function closeFailedSpawn(before: Map<number, number>): void {
+  let masters: number;
+  try { masters = major(fs.statSync('/dev/ptmx').rdev); } catch { return; }
+  const after = [...charDevices()].filter(([fd, rdev]) => before.get(fd) !== rdev);
+  if (!after.length) return;
+  const slaves = new Set<number>();
+  try {
+    for (const name of fs.readdirSync('/dev')) {
+      if (/^ttys\d+$/.test(name)) { try { slaves.add(fs.statSync(`/dev/${name}`).rdev); } catch { /* gone meanwhile */ } }
+    }
+  } catch { /* no listing: the masters alone */ }
+  for (const [fd, rdev] of after) {
+    if (major(rdev) === masters || slaves.has(rdev)) {
+      try { fs.closeSync(fd); } catch { /* already closed */ }
+    }
+  }
+}
 
 function closeLeftovers(term: { _fd?: unknown; _pty?: unknown }, before: Map<number, number>): void {
   // A terminal whose fds Tars cannot read (a test's stand-in, another node-pty): nothing to tell apart.
