@@ -9638,10 +9638,10 @@
                               "type": "rectangle",
                               "id": "NEmYT",
                               "name": "c7",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             }
                           ]
                         },
@@ -9655,37 +9655,37 @@
                               "type": "rectangle",
                               "id": "btApP",
                               "name": "c8",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             },
                             {
                               "type": "rectangle",
                               "id": "zbx5Y",
                               "name": "c9",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             },
                             {
                               "type": "rectangle",
                               "id": "op13J",
                               "name": "c10",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             },
                             {
                               "type": "rectangle",
                               "id": "b0l3F",
                               "name": "c11",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             }
                           ]
                         },
@@ -9699,37 +9699,37 @@
                               "type": "rectangle",
                               "id": "LWDHy",
                               "name": "c12",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             },
                             {
                               "type": "rectangle",
                               "id": "zpukZ",
                               "name": "c13",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             },
                             {
                               "type": "rectangle",
                               "id": "cu5Ze",
                               "name": "c14",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             },
                             {
                               "type": "rectangle",
                               "id": "kncXw",
                               "name": "c15",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 6.31,
-                              "height": 6.31,
-                              "opacity": 0.16
+                              "height": 6.31
                             }
                           ]
                         }
@@ -9923,37 +9923,37 @@
                               "type": "rectangle",
                               "id": "gKlLL",
                               "name": "c12",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 5.05,
-                              "height": 5.05,
-                              "opacity": 0.16
+                              "height": 5.05
                             },
                             {
                               "type": "rectangle",
                               "id": "cQjoz",
                               "name": "c13",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 5.05,
-                              "height": 5.05,
-                              "opacity": 0.16
+                              "height": 5.05
                             },
                             {
                               "type": "rectangle",
                               "id": "nfpv3",
                               "name": "c14",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 5.05,
-                              "height": 5.05,
-                              "opacity": 0.16
+                              "height": 5.05
                             },
                             {
                               "type": "rectangle",
                               "id": "bshOs",
                               "name": "c15",
+                              "opacity": 0.16,
                               "fill": "$accent",
                               "width": 5.05,
-                              "height": 5.05,
-                              "opacity": 0.16
+                              "height": 5.05
                             }
                           ]
                         }
@@ -257862,8 +257862,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -264336,8 +264336,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -268902,8 +268902,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -275376,8 +275376,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -289246,8 +289246,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -289635,8 +289635,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "text",
@@ -290081,8 +290081,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -290470,8 +290470,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "text",
@@ -293749,8 +293749,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -294914,8 +294914,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "text",
@@ -295402,8 +295402,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -296942,8 +296942,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -299397,8 +299397,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -300562,8 +300562,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "text",
@@ -301050,8 +301050,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -302590,8 +302590,8 @@
                       "name": "mark",
                       "width": 10,
                       "height": 10,
-                      "layout": "none",
-                      "fill": "$accent"
+                      "fill": "$accent",
+                      "layout": "none"
                     },
                     {
                       "type": "frame",
@@ -810356,7 +810356,7 @@
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "of 511 on this computer · Tars holds 42",
+                              "content": "of 511 on this machine · Tars holds 42 for 42 open",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -812744,7 +812744,7 @@
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "of 511 on this computer · Tars holds 42",
+                              "content": "of 511 on this machine · Tars holds 42 for 42 open",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -815132,7 +815132,7 @@
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "of 511 on this computer · Tars holds 42",
+                              "content": "of 511 on this machine · Tars holds 42 for 42 open",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -816462,7 +816462,7 @@
     },
     {
       "type": "frame",
-      "id": "hZNTn",
+      "id": "CvgqG",
       "x": 0,
       "y": 133100,
       "name": "Resources (2.0.6) · terminals left · states",
@@ -816477,22 +816477,22 @@
       "children": [
         {
           "type": "text",
-          "id": "SWjQD",
+          "id": "KRJp7",
           "name": "t",
           "fill": "$text-primary",
-          "content": "Resources (2.0.6) · Heavy runs · the terminals left on this computer",
+          "content": "Resources (2.0.6) · Heavy runs · the terminals left on this machine",
           "fontFamily": "$font-display",
           "fontSize": 20,
           "fontWeight": "normal"
         },
         {
           "type": "text",
-          "id": "PS9wJ",
+          "id": "B7K3RN",
           "name": "intro",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "A fifth figure beside free memory, swap, free disk and load: the terminals in use on this computer, of its limit, and how many of them Tars holds. Where the system gives only Tars's own count, the figure is Tars's and the line names the computer's limit. Normal, warning past the share the Backend sets, error when none is left, and Windows, which has no such pool.",
+          "content": "A fifth figure beside free memory, swap, free disk and load: the machine's terminals in use of its limit, the ones Tars holds and the ones it has open (FleetResources.terminals: inUse, max, tars, open, nearFull). Normal, near full past 80 %, full, a leak, Tars's own count unknown, Windows (null) and not read.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -816500,14 +816500,14 @@
         },
         {
           "type": "frame",
-          "id": "Yhl4q",
+          "id": "KWuxu",
           "name": "row 1",
           "width": "fill_container",
           "gap": 16,
           "children": [
             {
               "type": "frame",
-              "id": "p4dkW",
+              "id": "ZHIGI",
               "name": "pane normal",
               "width": 340,
               "layout": "vertical",
@@ -816515,12 +816515,12 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "n1wEX",
+                  "id": "Y5oARt",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "normal · the computer's terminals in use, of its limit, and Tars's own",
+                  "content": "normal · the machine's terminals in use, of its limit, and Tars's own",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816528,7 +816528,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "sVZPL",
+                  "id": "IO0Cz",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -816540,14 +816540,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "A7EpU",
+                      "id": "QyOJK",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "JSWsi",
+                          "id": "znXn1",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -816559,7 +816559,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "s8hRgx",
+                      "id": "dnx4W",
                       "name": "value",
                       "fill": "$text-primary",
                       "content": "137",
@@ -816569,12 +816569,12 @@
                     },
                     {
                       "type": "text",
-                      "id": "L2xVg",
+                      "id": "Ln5NB",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 on this computer · Tars holds 42",
+                      "content": "of 511 on this machine · Tars holds 42 for 42 open",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -816586,20 +816586,20 @@
             },
             {
               "type": "frame",
-              "id": "GoWRX",
-              "name": "pane warning",
+              "id": "d3oJN",
+              "name": "pane near full",
               "width": 340,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "b8Ayi1",
+                  "id": "E5gwge",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "warning · past 80 % of the computer's limit (the Backend's share)",
+                  "content": "near full · past 80 % of the limit (nearFull)",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816607,7 +816607,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "NCUx6",
+                  "id": "zNDsR",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -816619,14 +816619,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "c8bJb",
+                      "id": "BMlXJ",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "x4NS2",
+                          "id": "OMNCv",
                           "name": "square",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -816634,7 +816634,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "IcsQF",
+                          "id": "v6PWK",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -816646,92 +816646,25 @@
                     },
                     {
                       "type": "text",
-                      "id": "vuwhX",
+                      "id": "Kbp0I",
                       "name": "value",
                       "fill": "$status-waiting",
-                      "content": "431",
+                      "content": "410",
                       "fontFamily": "$font-display",
                       "fontSize": 28,
                       "fontWeight": "normal"
                     },
                     {
                       "type": "text",
-                      "id": "tznXs",
+                      "id": "tKghW",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 on this computer · 84 % · Tars holds 38",
+                      "content": "of 511 on this machine · Tars holds 400 for 400 open",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
-                      "fontWeight": "normal"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "P5CDi",
-                  "name": "alert",
-                  "width": "fill_container",
-                  "fill": "$surface",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "gap": 4,
-                  "padding": [
-                    8,
-                    14
-                  ],
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "vUYCk",
-                      "name": "l1",
-                      "gap": 8,
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "SLq6Q",
-                          "name": "square",
-                          "fill": "$status-waiting",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
-                          "type": "text",
-                          "id": "xPsUx",
-                          "name": "time",
-                          "fill": "$text-muted",
-                          "content": "14:02",
-                          "fontFamily": "$font-mono",
-                          "fontSize": 10.5,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "N5soW6",
-                          "name": "what",
-                          "fill": "$text-secondary",
-                          "content": "terminals",
-                          "fontFamily": "$font-mono",
-                          "fontSize": 10.5,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "text",
-                      "id": "jDDui",
-                      "name": "m",
-                      "fill": "$text-primary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "431 of 511 terminals in use on this computer, 38 of them Tars's. At 511 no agent can start: stop an agent or close a terminal to free one.",
-                      "lineHeight": 1.45,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 11.5,
                       "fontWeight": "normal"
                     }
                   ]
@@ -816740,20 +816673,20 @@
             },
             {
               "type": "frame",
-              "id": "VdXea",
-              "name": "pane error",
+              "id": "B5P6mi",
+              "name": "pane full",
               "width": 340,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "nA9Ae",
+                  "id": "j818nI",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "error · none left, said above the figures",
+                  "content": "full · one free on macOS, none on Linux: no agent can start",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816761,7 +816694,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "JGfCW",
+                  "id": "Dt7vf",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -816773,14 +816706,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "B4RcC",
+                      "id": "A1HmG",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "KocpO",
+                          "id": "JmIvs",
                           "name": "square",
                           "fill": "$status-error",
                           "width": 6,
@@ -816788,7 +816721,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "b5MsR",
+                          "id": "Nvl54",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -816800,22 +816733,22 @@
                     },
                     {
                       "type": "text",
-                      "id": "NSEcK",
+                      "id": "IPnUR",
                       "name": "value",
                       "fill": "$status-error",
-                      "content": "511",
+                      "content": "510",
                       "fontFamily": "$font-display",
                       "fontSize": 28,
                       "fontWeight": "normal"
                     },
                     {
                       "type": "text",
-                      "id": "UEybB",
+                      "id": "BVBYn",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 on this computer · none left · Tars holds 40",
+                      "content": "of 511 on this machine · Tars holds 18 for 18 open",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -816827,7 +816760,7 @@
             },
             {
               "type": "frame",
-              "id": "hAuE6",
+              "id": "e0yoU",
               "name": "pane windows",
               "width": 340,
               "layout": "vertical",
@@ -816835,12 +816768,12 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "F7gBM",
+                  "id": "N7Fqa",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Windows · no shared pool to count",
+                  "content": "Windows · no shared pool to count (null)",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816848,7 +816781,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "xe2cW",
+                  "id": "U1PNy",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -816860,14 +816793,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "O7FTLO",
+                      "id": "RpJ02",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "n3q1Yt",
+                          "id": "t9ise9",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -816879,7 +816812,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "G6koD",
+                      "id": "To4Na",
                       "name": "value",
                       "fill": "$text-primary",
                       "content": "not counted",
@@ -816889,7 +816822,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "o1Hy0",
+                      "id": "F5Ybz",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
@@ -816908,27 +816841,27 @@
         },
         {
           "type": "frame",
-          "id": "At22m",
+          "id": "MH8Ac",
           "name": "row 2",
           "width": "fill_container",
           "gap": 16,
           "children": [
             {
               "type": "frame",
-              "id": "qBHgQ",
-              "name": "pane error notice",
+              "id": "RAPwR",
+              "name": "pane near full notice",
               "width": 1392,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "iPGkp",
+                  "id": "zuMgt",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "error · the notice at the top of Heavy runs, full width",
+                  "content": "near full · the notice at the top of Heavy runs, main's own text (terminals.notice), as the orchestrators get it",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -816936,7 +816869,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Vb3VV",
+                  "id": "yECLQ",
                   "name": "notice",
                   "width": "fill_container",
                   "fill": "$surface-raised",
@@ -816951,20 +816884,20 @@
                   "children": [
                     {
                       "type": "rectangle",
-                      "id": "fIvXj",
+                      "id": "UBU1d",
                       "name": "square",
-                      "fill": "$status-error",
+                      "fill": "$status-waiting",
                       "width": 6,
                       "height": 6
                     },
                     {
                       "type": "text",
-                      "id": "S3oVf",
+                      "id": "b3VwRR",
                       "name": "m",
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use, 40 of them Tars's. Stop an agent or close a terminal on this computer to free one. If Tars's own count does not fall, restart Tars as a last resort.",
+                      "content": "The machine's terminals are filling: 410 of 511 are in use, 400 of them held by Tars for its 400 open terminals. With fewer than two free no agent can start on macOS: stop the agents that do not need their terminal.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -816978,27 +816911,27 @@
         },
         {
           "type": "frame",
-          "id": "RuqyH",
+          "id": "Msc4H",
           "name": "row 3",
           "width": "fill_container",
           "gap": 16,
           "children": [
             {
               "type": "frame",
-              "id": "eO5kW",
-              "name": "pane not read",
-              "width": 340,
+              "id": "LpKqM",
+              "name": "pane full notice",
+              "width": 1392,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "vtUNE",
+                  "id": "i7QgP",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "not read yet · before the first health sample",
+                  "content": "full · the notice, main's own text: the 503's words (code no_terminal) a start gets",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817006,7 +816939,77 @@
                 },
                 {
                   "type": "frame",
-                  "id": "s0rCq",
+                  "id": "HKmEB",
+                  "name": "notice",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "teXKH",
+                      "name": "square",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "A5xN6",
+                      "name": "m",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "dM36O",
+          "name": "row 4",
+          "width": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "H8Mya6",
+              "name": "pane leak",
+              "width": 688,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fSbjF",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "full, Tars holding more than it has open · a leak, which only a restart frees",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "HEdPo",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -817018,14 +817021,22 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "AI5sd",
+                      "id": "S6TIM",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
+                          "type": "rectangle",
+                          "id": "w4LAn",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
                           "type": "text",
-                          "id": "bB7ZK",
+                          "id": "uglfe",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -817037,7 +817048,258 @@
                     },
                     {
                       "type": "text",
-                      "id": "EAwJB",
+                      "id": "s1t9U",
+                      "name": "value",
+                      "fill": "$status-error",
+                      "content": "511",
+                      "fontFamily": "$font-display",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "cvVKQ",
+                      "name": "sub",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "of 511 on this machine · Tars holds 505, 0 open",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "G3u1We",
+                  "name": "notice",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "HS3nm",
+                      "name": "square",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "WLi3D",
+                      "name": "m",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 511 of 511 are in use, 505 of them held by Tars, which has 0 open. The other 505 were never given back, and only a restart of Tars frees them: it stops every agent.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "L8rhP",
+              "name": "pane tars unknown",
+              "width": 688,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FTczm",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Tars's own count unknown · the machine's, without Tars's part",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "cgIj8",
+                  "name": "tile TERMINALS",
+                  "width": 232,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "w2DXgv",
+                      "name": "cap",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ppinl",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "uNGUO",
+                          "name": "caption",
+                          "fill": "$text-secondary",
+                          "content": "TERMINALS",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "T5xruO",
+                      "name": "value",
+                      "fill": "$status-error",
+                      "content": "510",
+                      "fontFamily": "$font-display",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "EhhqQ",
+                      "name": "sub",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "of 511 on this machine",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "V37t88",
+                  "name": "notice",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "aLDot",
+                      "name": "square",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "cINsR",
+                      "name": "m",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "i5uCdS",
+          "name": "row 5",
+          "width": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "WdcbB",
+              "name": "pane not read",
+              "width": 340,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "R53HuR",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "not read yet · before the first reading",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "P4ftjH",
+                  "name": "tile TERMINALS",
+                  "width": 232,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "P7iUA",
+                      "name": "cap",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bcRqb",
+                          "name": "caption",
+                          "fill": "$text-secondary",
+                          "content": "TERMINALS",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "yduaj",
                       "name": "value",
                       "fill": "$text-primary",
                       "content": "not read",
@@ -817047,7 +817309,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "uprQG",
+                      "id": "WMpdP",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
@@ -817064,86 +817326,7 @@
             },
             {
               "type": "frame",
-              "id": "X447GA",
-              "name": "pane tars only",
-              "width": 340,
-              "layout": "vertical",
-              "gap": 8,
-              "children": [
-                {
-                  "type": "text",
-                  "id": "MR2H0",
-                  "name": "caption",
-                  "fill": "$text-muted",
-                  "textGrowth": "fixed-width",
-                  "width": "fill_container",
-                  "content": "only Tars's count · where the system gives no other, the line names the computer's limit",
-                  "lineHeight": 1.45,
-                  "fontFamily": "$font-mono",
-                  "fontSize": 10.5,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "frame",
-                  "id": "m9FZL",
-                  "name": "tile TERMINALS",
-                  "width": 232,
-                  "fill": "$surface",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "gap": 8,
-                  "padding": 12,
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "iAGi1",
-                      "name": "cap",
-                      "gap": 6,
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "I0sLCl",
-                          "name": "caption",
-                          "fill": "$text-secondary",
-                          "content": "TERMINALS",
-                          "fontFamily": "$font-ui",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "text",
-                      "id": "O4H3T",
-                      "name": "value",
-                      "fill": "$text-primary",
-                      "content": "42",
-                      "fontFamily": "$font-display",
-                      "fontSize": 28,
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "text",
-                      "id": "hQvG9",
-                      "name": "sub",
-                      "fill": "$text-secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "Tars holds 42 · the computer allows 511",
-                      "lineHeight": 1.45,
-                      "fontFamily": "$font-mono",
-                      "fontSize": 11,
-                      "fontWeight": "normal"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "ylSGD",
+              "id": "vKTfa",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -817151,22 +817334,25 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "Dgdvi",
+                  "id": "xBVjc",
                   "name": "caption",
                   "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
                   "content": "what it is",
+                  "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
                 },
                 {
                   "type": "text",
-                  "id": "s1Q1rE",
+                  "id": "t3QIf",
                   "name": "note",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Every agent, quick terminal and login runs in a terminal of the computer's own pool, which every other program shares: 511 on macOS (kern.tty.ptmx_max), the kernel's pty max on Linux. The line under the figure names whose count is whose: the computer's in use where the system gives it, and Tars's own. Past the Backend's share the tile turns to the waiting colour and the alert lands in Alerts; at the limit the notice says what frees one: stopping an agent or closing a terminal. Restarting Tars is the last resort, when its own count does not fall. Tars never restarts itself.",
+                  "content": "Every agent, quick terminal and login runs in a terminal of the machine's own pool, which every other program shares: 511 on macOS (kern.tty.ptmx_max), 4096 by default on Linux (pty/max). The figure is the machine's terminals in use; the line under it names the limit, the ones Tars holds and the ones it has open. A start on macOS opens two, on Linux one, so the pool is full with one free on macOS and none on Linux. Past 80 % the tile turns to the waiting colour; full, to the error colour. The notice is main's own text (terminals.notice), shown as it comes: the warning past 80 %, the 503's words once full. Tars holding more than it has open is a leak: only then is a restart named, and it stops every agent.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -817174,22 +817360,25 @@
                 },
                 {
                   "type": "text",
-                  "id": "q89DyF",
+                  "id": "NDqAP",
                   "name": "caption",
                   "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
                   "content": "what does not move",
+                  "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
                 },
                 {
                   "type": "text",
-                  "id": "DpUrC",
+                  "id": "AGaq8",
                   "name": "note",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "The four figures keep their place; the fifth takes the same width. The slot, Alerts and Floors are unchanged.",
+                  "content": "The four figures keep their place; the fifth takes the same width. The slot, Alerts and Floors are unchanged: the terminals warn through the notice, not the slot's alerts.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -817203,7 +817392,7 @@
     },
     {
       "type": "frame",
-      "id": "ojrkY",
+      "id": "p88Ych",
       "x": 1540,
       "y": 133100,
       "name": "Resources (2.0.6) · terminals left · states · light",
@@ -817218,22 +817407,22 @@
       "children": [
         {
           "type": "text",
-          "id": "yWAXm",
+          "id": "kfZM7",
           "name": "t",
           "fill": "$text-primary",
-          "content": "Resources (2.0.6) · Heavy runs · the terminals left on this computer",
+          "content": "Resources (2.0.6) · Heavy runs · the terminals left on this machine",
           "fontFamily": "$font-display",
           "fontSize": 20,
           "fontWeight": "normal"
         },
         {
           "type": "text",
-          "id": "YEgAH",
+          "id": "fI3rM",
           "name": "intro",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
-          "content": "A fifth figure beside free memory, swap, free disk and load: the terminals in use on this computer, of its limit, and how many of them Tars holds. Where the system gives only Tars's own count, the figure is Tars's and the line names the computer's limit. Normal, warning past the share the Backend sets, error when none is left, and Windows, which has no such pool.",
+          "content": "A fifth figure beside free memory, swap, free disk and load: the machine's terminals in use of its limit, the ones Tars holds and the ones it has open (FleetResources.terminals: inUse, max, tars, open, nearFull). Normal, near full past 80 %, full, a leak, Tars's own count unknown, Windows (null) and not read.",
           "lineHeight": 1.45,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -817241,14 +817430,14 @@
         },
         {
           "type": "frame",
-          "id": "iNUes",
+          "id": "sCHQk",
           "name": "row 1",
           "width": "fill_container",
           "gap": 16,
           "children": [
             {
               "type": "frame",
-              "id": "G93NkB",
+              "id": "GxXRy",
               "name": "pane normal",
               "width": 340,
               "layout": "vertical",
@@ -817256,12 +817445,12 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "PdYxl",
+                  "id": "oBvy3",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "normal · the computer's terminals in use, of its limit, and Tars's own",
+                  "content": "normal · the machine's terminals in use, of its limit, and Tars's own",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817269,7 +817458,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "h31yV7",
+                  "id": "fS9b3",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -817281,14 +817470,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "e7sO5E",
+                      "id": "V62aW",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "c31hSa",
+                          "id": "E5qYd",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -817300,7 +817489,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "JvSMP",
+                      "id": "lj213",
                       "name": "value",
                       "fill": "$text-primary",
                       "content": "137",
@@ -817310,12 +817499,12 @@
                     },
                     {
                       "type": "text",
-                      "id": "X7YwVA",
+                      "id": "HsT4M",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 on this computer · Tars holds 42",
+                      "content": "of 511 on this machine · Tars holds 42 for 42 open",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -817327,20 +817516,20 @@
             },
             {
               "type": "frame",
-              "id": "paPKr",
-              "name": "pane warning",
+              "id": "cOIdN",
+              "name": "pane near full",
               "width": 340,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "DeYRl",
+                  "id": "ShS51",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "warning · past 80 % of the computer's limit (the Backend's share)",
+                  "content": "near full · past 80 % of the limit (nearFull)",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817348,7 +817537,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "oybuf",
+                  "id": "i76kX",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -817360,14 +817549,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "mGFBj",
+                      "id": "PR5nH",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "ePBHm",
+                          "id": "lfe6C",
                           "name": "square",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -817375,7 +817564,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "jaLGI",
+                          "id": "tVxR4",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -817387,92 +817576,25 @@
                     },
                     {
                       "type": "text",
-                      "id": "P33EYM",
+                      "id": "jmGHF",
                       "name": "value",
                       "fill": "$status-waiting",
-                      "content": "431",
+                      "content": "410",
                       "fontFamily": "$font-display",
                       "fontSize": 28,
                       "fontWeight": "normal"
                     },
                     {
                       "type": "text",
-                      "id": "Pr3hJ",
+                      "id": "dzxSS",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 on this computer · 84 % · Tars holds 38",
+                      "content": "of 511 on this machine · Tars holds 400 for 400 open",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
-                      "fontWeight": "normal"
-                    }
-                  ]
-                },
-                {
-                  "type": "frame",
-                  "id": "FaTT4",
-                  "name": "alert",
-                  "width": "fill_container",
-                  "fill": "$surface",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "gap": 4,
-                  "padding": [
-                    8,
-                    14
-                  ],
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "DamFi",
-                      "name": "l1",
-                      "gap": 8,
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "rectangle",
-                          "id": "k27Tvg",
-                          "name": "square",
-                          "fill": "$status-waiting",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
-                          "type": "text",
-                          "id": "dcd4H",
-                          "name": "time",
-                          "fill": "$text-muted",
-                          "content": "14:02",
-                          "fontFamily": "$font-mono",
-                          "fontSize": 10.5,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "text",
-                          "id": "L4bbzT",
-                          "name": "what",
-                          "fill": "$text-secondary",
-                          "content": "terminals",
-                          "fontFamily": "$font-mono",
-                          "fontSize": 10.5,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "text",
-                      "id": "ExtSE",
-                      "name": "m",
-                      "fill": "$text-primary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "431 of 511 terminals in use on this computer, 38 of them Tars's. At 511 no agent can start: stop an agent or close a terminal to free one.",
-                      "lineHeight": 1.45,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 11.5,
                       "fontWeight": "normal"
                     }
                   ]
@@ -817481,20 +817603,20 @@
             },
             {
               "type": "frame",
-              "id": "szTno",
-              "name": "pane error",
+              "id": "rU0Hh",
+              "name": "pane full",
               "width": 340,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "uSO3N",
+                  "id": "ecGmm",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "error · none left, said above the figures",
+                  "content": "full · one free on macOS, none on Linux: no agent can start",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817502,7 +817624,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "u0zQd",
+                  "id": "UZ2fj",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -817514,14 +817636,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "XYvXs",
+                      "id": "mwmL9",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "qfYhz",
+                          "id": "evRYb",
                           "name": "square",
                           "fill": "$status-error",
                           "width": 6,
@@ -817529,7 +817651,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "HzK8V",
+                          "id": "asWM6",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -817541,22 +817663,22 @@
                     },
                     {
                       "type": "text",
-                      "id": "SrAqR",
+                      "id": "yzKww",
                       "name": "value",
                       "fill": "$status-error",
-                      "content": "511",
+                      "content": "510",
                       "fontFamily": "$font-display",
                       "fontSize": 28,
                       "fontWeight": "normal"
                     },
                     {
                       "type": "text",
-                      "id": "R4hkZl",
+                      "id": "fjwZx",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "of 511 on this computer · none left · Tars holds 40",
+                      "content": "of 511 on this machine · Tars holds 18 for 18 open",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-mono",
                       "fontSize": 11,
@@ -817568,7 +817690,7 @@
             },
             {
               "type": "frame",
-              "id": "bWh4K",
+              "id": "jleje",
               "name": "pane windows",
               "width": 340,
               "layout": "vertical",
@@ -817576,12 +817698,12 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "kbKTU",
+                  "id": "gu5x7",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Windows · no shared pool to count",
+                  "content": "Windows · no shared pool to count (null)",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817589,7 +817711,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Zbmqs",
+                  "id": "kWRnr",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -817601,14 +817723,14 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "qyjTN",
+                      "id": "O0Z1i",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
                           "type": "text",
-                          "id": "JTSVb",
+                          "id": "m7RZm",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -817620,7 +817742,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "WV3I4",
+                      "id": "SpJVY",
                       "name": "value",
                       "fill": "$text-primary",
                       "content": "not counted",
@@ -817630,7 +817752,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "ICk56",
+                      "id": "w1XyEH",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
@@ -817649,27 +817771,27 @@
         },
         {
           "type": "frame",
-          "id": "D8LXq",
+          "id": "AdCaQ",
           "name": "row 2",
           "width": "fill_container",
           "gap": 16,
           "children": [
             {
               "type": "frame",
-              "id": "K6pdrP",
-              "name": "pane error notice",
+              "id": "E8re3",
+              "name": "pane near full notice",
               "width": 1392,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "Ff5km",
+                  "id": "hyVMP",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "error · the notice at the top of Heavy runs, full width",
+                  "content": "near full · the notice at the top of Heavy runs, main's own text (terminals.notice), as the orchestrators get it",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817677,7 +817799,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "QhWg3",
+                  "id": "k9Hhd",
                   "name": "notice",
                   "width": "fill_container",
                   "fill": "$surface-raised",
@@ -817692,20 +817814,20 @@
                   "children": [
                     {
                       "type": "rectangle",
-                      "id": "b1q7IN",
+                      "id": "saVb3",
                       "name": "square",
-                      "fill": "$status-error",
+                      "fill": "$status-waiting",
                       "width": 6,
                       "height": 6
                     },
                     {
                       "type": "text",
-                      "id": "rn33f",
+                      "id": "rbriF",
                       "name": "m",
                       "fill": "$text-primary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use, 40 of them Tars's. Stop an agent or close a terminal on this computer to free one. If Tars's own count does not fall, restart Tars as a last resort.",
+                      "content": "The machine's terminals are filling: 410 of 511 are in use, 400 of them held by Tars for its 400 open terminals. With fewer than two free no agent can start on macOS: stop the agents that do not need their terminal.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -817719,27 +817841,27 @@
         },
         {
           "type": "frame",
-          "id": "zxNbR",
+          "id": "UJxyL",
           "name": "row 3",
           "width": "fill_container",
           "gap": 16,
           "children": [
             {
               "type": "frame",
-              "id": "O2gb4Z",
-              "name": "pane not read",
-              "width": 340,
+              "id": "ennd0",
+              "name": "pane full notice",
+              "width": 1392,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "l4uQFm",
+                  "id": "ExucP",
                   "name": "caption",
                   "fill": "$text-muted",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "not read yet · before the first health sample",
+                  "content": "full · the notice, main's own text: the 503's words (code no_terminal) a start gets",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
@@ -817747,7 +817869,77 @@
                 },
                 {
                   "type": "frame",
-                  "id": "qYHCP",
+                  "id": "KRkzj",
+                  "name": "notice",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "P3gghp",
+                      "name": "square",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "qXFTK",
+                      "name": "m",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "WiF2b",
+          "name": "row 4",
+          "width": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "mJNad",
+              "name": "pane leak",
+              "width": 688,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "yhx3N",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "full, Tars holding more than it has open · a leak, which only a restart frees",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "lX5Fk",
                   "name": "tile TERMINALS",
                   "width": 232,
                   "fill": "$surface",
@@ -817759,14 +817951,22 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "u4Iaw",
+                      "id": "SyDDe",
                       "name": "cap",
                       "gap": 6,
                       "alignItems": "center",
                       "children": [
                         {
+                          "type": "rectangle",
+                          "id": "krfPh",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
                           "type": "text",
-                          "id": "jnDF7",
+                          "id": "C14Hm",
                           "name": "caption",
                           "fill": "$text-secondary",
                           "content": "TERMINALS",
@@ -817778,7 +817978,258 @@
                     },
                     {
                       "type": "text",
-                      "id": "M8z57p",
+                      "id": "xUPVx",
+                      "name": "value",
+                      "fill": "$status-error",
+                      "content": "511",
+                      "fontFamily": "$font-display",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "YUrY2",
+                      "name": "sub",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "of 511 on this machine · Tars holds 505, 0 open",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Ps1XW",
+                  "name": "notice",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "WMB81",
+                      "name": "square",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "ztwam",
+                      "name": "m",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 511 of 511 are in use, 505 of them held by Tars, which has 0 open. The other 505 were never given back, and only a restart of Tars frees them: it stops every agent.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "c5d5a",
+              "name": "pane tars unknown",
+              "width": 688,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "kZTfT",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "Tars's own count unknown · the machine's, without Tars's part",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Z6Trji",
+                  "name": "tile TERMINALS",
+                  "width": 232,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "G2WOEy",
+                      "name": "cap",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "W2uzeq",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "drChm",
+                          "name": "caption",
+                          "fill": "$text-secondary",
+                          "content": "TERMINALS",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "e73Dyh",
+                      "name": "value",
+                      "fill": "$status-error",
+                      "content": "510",
+                      "fontFamily": "$font-display",
+                      "fontSize": 28,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "h7r0Tw",
+                      "name": "sub",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "of 511 on this machine",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bCElN",
+                  "name": "notice",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    8,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "NI2FI",
+                      "name": "square",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "bxLqZ",
+                      "name": "m",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KfEd8",
+          "name": "row 5",
+          "width": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "wIoEm",
+              "name": "pane not read",
+              "width": 340,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "D2qT2q",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
+                  "content": "not read yet · before the first reading",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "xob7U",
+                  "name": "tile TERMINALS",
+                  "width": 232,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "WuEbt",
+                      "name": "cap",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "asWVn",
+                          "name": "caption",
+                          "fill": "$text-secondary",
+                          "content": "TERMINALS",
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "B7DCTT",
                       "name": "value",
                       "fill": "$text-primary",
                       "content": "not read",
@@ -817788,7 +818239,7 @@
                     },
                     {
                       "type": "text",
-                      "id": "dZ5FJ",
+                      "id": "RFAdR",
                       "name": "sub",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
@@ -817805,86 +818256,7 @@
             },
             {
               "type": "frame",
-              "id": "Hi5IG",
-              "name": "pane tars only",
-              "width": 340,
-              "layout": "vertical",
-              "gap": 8,
-              "children": [
-                {
-                  "type": "text",
-                  "id": "hxGMq",
-                  "name": "caption",
-                  "fill": "$text-muted",
-                  "textGrowth": "fixed-width",
-                  "width": "fill_container",
-                  "content": "only Tars's count · where the system gives no other, the line names the computer's limit",
-                  "lineHeight": 1.45,
-                  "fontFamily": "$font-mono",
-                  "fontSize": 10.5,
-                  "fontWeight": "normal"
-                },
-                {
-                  "type": "frame",
-                  "id": "nzpGA",
-                  "name": "tile TERMINALS",
-                  "width": 232,
-                  "fill": "$surface",
-                  "stroke": "$border",
-                  "strokeWidth": 1,
-                  "layout": "vertical",
-                  "gap": 8,
-                  "padding": 12,
-                  "children": [
-                    {
-                      "type": "frame",
-                      "id": "vzgUU",
-                      "name": "cap",
-                      "gap": 6,
-                      "alignItems": "center",
-                      "children": [
-                        {
-                          "type": "text",
-                          "id": "GePq5",
-                          "name": "caption",
-                          "fill": "$text-secondary",
-                          "content": "TERMINALS",
-                          "fontFamily": "$font-ui",
-                          "fontSize": 10,
-                          "fontWeight": "normal"
-                        }
-                      ]
-                    },
-                    {
-                      "type": "text",
-                      "id": "DWawH",
-                      "name": "value",
-                      "fill": "$text-primary",
-                      "content": "42",
-                      "fontFamily": "$font-display",
-                      "fontSize": 28,
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "text",
-                      "id": "Zko1F",
-                      "name": "sub",
-                      "fill": "$text-secondary",
-                      "textGrowth": "fixed-width",
-                      "width": "fill_container",
-                      "content": "Tars holds 42 · the computer allows 511",
-                      "lineHeight": 1.45,
-                      "fontFamily": "$font-mono",
-                      "fontSize": 11,
-                      "fontWeight": "normal"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "type": "frame",
-              "id": "HGaAX",
+              "id": "E4Pk76",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -817892,22 +818264,25 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "fB20q",
+                  "id": "eH8Gn",
                   "name": "caption",
                   "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
                   "content": "what it is",
+                  "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
                 },
                 {
                   "type": "text",
-                  "id": "ePVlX",
+                  "id": "Zwmbd",
                   "name": "note",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "Every agent, quick terminal and login runs in a terminal of the computer's own pool, which every other program shares: 511 on macOS (kern.tty.ptmx_max), the kernel's pty max on Linux. The line under the figure names whose count is whose: the computer's in use where the system gives it, and Tars's own. Past the Backend's share the tile turns to the waiting colour and the alert lands in Alerts; at the limit the notice says what frees one: stopping an agent or closing a terminal. Restarting Tars is the last resort, when its own count does not fall. Tars never restarts itself.",
+                  "content": "Every agent, quick terminal and login runs in a terminal of the machine's own pool, which every other program shares: 511 on macOS (kern.tty.ptmx_max), 4096 by default on Linux (pty/max). The figure is the machine's terminals in use; the line under it names the limit, the ones Tars holds and the ones it has open. A start on macOS opens two, on Linux one, so the pool is full with one free on macOS and none on Linux. Past 80 % the tile turns to the waiting colour; full, to the error colour. The notice is main's own text (terminals.notice), shown as it comes: the warning past 80 %, the 503's words once full. Tars holding more than it has open is a leak: only then is a restart named, and it stops every agent.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -817915,22 +818290,25 @@
                 },
                 {
                   "type": "text",
-                  "id": "TkyC2",
+                  "id": "Na6K7",
                   "name": "caption",
                   "fill": "$text-muted",
+                  "textGrowth": "fixed-width",
+                  "width": "fill_container",
                   "content": "what does not move",
+                  "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
                 },
                 {
                   "type": "text",
-                  "id": "Gxz2d",
+                  "id": "f6lQZx",
                   "name": "note",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "The four figures keep their place; the fifth takes the same width. The slot, Alerts and Floors are unchanged.",
+                  "content": "The four figures keep their place; the fifth takes the same width. The slot, Alerts and Floors are unchanged: the terminals warn through the notice, not the slot's alerts.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -817963,7 +818341,7 @@
           "id": "GyNra",
           "name": "t",
           "fill": "$text-primary",
-          "content": "Agent cannot start · no terminal left on this computer, said where its error is said",
+          "content": "Agent cannot start · no terminal can be opened on this machine, said where its error is said",
           "fontFamily": "$font-display",
           "fontSize": 20,
           "fontWeight": "normal"
@@ -817988,7 +818366,7 @@
                   "id": "L89fi",
                   "name": "caption",
                   "fill": "$text-muted",
-                  "content": "dashboard pane · the reason in the header, one red line, as any start error",
+                  "content": "dashboard pane · agent.error in the header, as it comes, cut to one red line",
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
@@ -818225,7 +818603,7 @@
                               "id": "UkV1s",
                               "name": "reason",
                               "fill": "$status-error",
-                              "content": "No terminal left · 511 of 511 in use, stop an agent to free one",
+                              "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 o…",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -818327,7 +818705,6 @@
                           "id": "MP7Ro",
                           "name": "l",
                           "fill": "$text-muted",
-                          "content": "Tars could not open a terminal for this agent: none is left on this computer.",
                           "lineHeight": 1.6,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -818701,7 +819078,6 @@
                           "id": "X3Tbg",
                           "name": "l",
                           "fill": "$text-muted",
-                          "content": "Tars could not open a terminal for this agent.",
                           "lineHeight": 1.6,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -818748,7 +819124,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "start_agent, delegate_task and send_message answer the same sentence, never \"Internal server error\": \"Tars cannot start Audit Engineer: no terminal is left on this computer (511 of 511 in use, 40 of them Tars's). Stop an agent or close a terminal on this computer to free one; restart Tars only if its own count does not fall.\" Sentry still gets it.",
+                  "content": "start_agent, delegate_task and send_message answer 503, code no_terminal, with the same sentence, never \"Internal server error\". When Tars holds more terminals than it has open, the sentence says so: \"No terminal can be opened on this machine: 511 of 511 are in use, 505 of them held by Tars, which has 0 open. The other 505 were never given back, and only a restart of Tars frees them: it stops every agent.\" Sentry still gets it.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -819036,7 +819412,7 @@
                       "fill": "$status-error",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -819431,7 +819807,7 @@
                       "id": "iQ9OC",
                       "name": "reason",
                       "fill": "$status-error",
-                      "content": "No terminal is left on this computer: 511 of 51…",
+                      "content": "No terminal can be opened on this machine: 510 of…",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -819599,7 +819975,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -820061,6 +820437,412 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "sqe9O",
+          "name": "asleep",
+          "width": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "hqMZ4",
+              "name": "card asleep",
+              "width": 384,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TBZbG",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "content": "asleep, its wake refused · it stays asleep, the reason under its word; its next message or key wakes it again",
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "p9Rbi",
+                  "name": "card Audit Engineer",
+                  "width": 384,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 13,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "k2cAGY",
+                      "name": "top",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "KJRGq",
+                          "name": "who",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "BfKeO",
+                              "name": "agent mark",
+                              "width": 16,
+                              "height": 16,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "V5FSi",
+                                  "name": "grid",
+                                  "layout": "vertical",
+                                  "gap": 1,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "pboDF",
+                                      "name": "row 0",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "auFFZ",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "ktPQL",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "BGRez",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "ukV7X",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "LAh3U",
+                                      "name": "row 1",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "b6MGCz",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "iviYT",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "tYMGy",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "Hk431",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "MMYKa",
+                                      "name": "row 2",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "KJEHS",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "kMUaC",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "fvBuy",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "L4Ik4z",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "zcOhW",
+                                      "name": "row 3",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "Hk9a5",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "o6ONad",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "FoT25",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "zUHDD",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "NOyt8",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "content": "Audit Engineer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "Lt24C",
+                          "name": "s",
+                          "fill": "$status-idle",
+                          "content": "asleep",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "xMvjZ",
+                      "name": "reason",
+                      "fill": "$status-error",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "j6i0I",
+                      "name": "words",
+                      "fill": "$text-muted",
+                      "content": "claude · opus 5 · main",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HOWYu",
+                      "name": "acts",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "RNAo8",
+                          "name": "a open",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "YcEaq",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "open",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "d5TGXi",
+                          "name": "a start",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "H0345t",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "wake",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "k8x2B",
+                          "name": "a edit",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "nqTOc",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "edit",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "M14Du",
+                          "name": "a delete",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "hkFoM",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "delete",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -820085,7 +820867,7 @@
           "id": "MnFvc",
           "name": "t",
           "fill": "$text-primary",
-          "content": "Agent cannot start · no terminal left on this computer, said where its error is said",
+          "content": "Agent cannot start · no terminal can be opened on this machine, said where its error is said",
           "fontFamily": "$font-display",
           "fontSize": 20,
           "fontWeight": "normal"
@@ -820110,7 +820892,7 @@
                   "id": "vxNdj",
                   "name": "caption",
                   "fill": "$text-muted",
-                  "content": "dashboard pane · the reason in the header, one red line, as any start error",
+                  "content": "dashboard pane · agent.error in the header, as it comes, cut to one red line",
                   "fontFamily": "$font-mono",
                   "fontSize": 10.5,
                   "fontWeight": "normal"
@@ -820347,7 +821129,7 @@
                               "id": "zRBkc",
                               "name": "reason",
                               "fill": "$status-error",
-                              "content": "No terminal left · 511 of 511 in use, stop an agent to free one",
+                              "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 o…",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -820449,7 +821231,6 @@
                           "id": "dcCxS",
                           "name": "l",
                           "fill": "$text-muted",
-                          "content": "Tars could not open a terminal for this agent: none is left on this computer.",
                           "lineHeight": 1.6,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -820823,7 +821604,6 @@
                           "id": "w0NmH",
                           "name": "l",
                           "fill": "$text-muted",
-                          "content": "Tars could not open a terminal for this agent.",
                           "lineHeight": 1.6,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -820870,7 +821650,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
-                  "content": "start_agent, delegate_task and send_message answer the same sentence, never \"Internal server error\": \"Tars cannot start Audit Engineer: no terminal is left on this computer (511 of 511 in use, 40 of them Tars's). Stop an agent or close a terminal on this computer to free one; restart Tars only if its own count does not fall.\" Sentry still gets it.",
+                  "content": "start_agent, delegate_task and send_message answer 503, code no_terminal, with the same sentence, never \"Internal server error\". When Tars holds more terminals than it has open, the sentence says so: \"No terminal can be opened on this machine: 511 of 511 are in use, 505 of them held by Tars, which has 0 open. The other 505 were never given back, and only a restart of Tars frees them: it stops every agent.\" Sentry still gets it.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -821158,7 +821938,7 @@
                       "fill": "$status-error",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -821553,7 +822333,7 @@
                       "id": "dLXmv",
                       "name": "reason",
                       "fill": "$status-error",
-                      "content": "No terminal is left on this computer: 511 of 51…",
+                      "content": "No terminal can be opened on this machine: 510 of…",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -821721,7 +822501,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "No terminal is left on this computer: 511 of 511 in use. Stop an agent or close a terminal to free one.",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -822173,6 +822953,412 @@
                                   "fontWeight": "normal"
                                 }
                               ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "A1cQoH",
+          "name": "asleep",
+          "width": "fill_container",
+          "gap": 16,
+          "children": [
+            {
+              "type": "frame",
+              "id": "rP05q",
+              "name": "card asleep",
+              "width": 384,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Z3cAbr",
+                  "name": "caption",
+                  "fill": "$text-muted",
+                  "content": "asleep, its wake refused · it stays asleep, the reason under its word; its next message or key wakes it again",
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "VmZYv",
+                  "name": "card Audit Engineer",
+                  "width": 384,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 13,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "xYXYi",
+                      "name": "top",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "f6P5t",
+                          "name": "who",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "twxpI",
+                              "name": "agent mark",
+                              "width": 16,
+                              "height": 16,
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "frame",
+                                  "id": "aI1mi",
+                                  "name": "grid",
+                                  "layout": "vertical",
+                                  "gap": 1,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "Kw7k5",
+                                      "name": "row 0",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "bFHtc",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "lc0Os",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "lDNST",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "yIy2A",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "Ltn9I",
+                                      "name": "row 1",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "b0Q2tS",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "PYcUw",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "L4HusO",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "mhMw9",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "ehXSC",
+                                      "name": "row 2",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "F0tGA",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "XiE1w",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "V31BZu",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "RHrzz",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "D5cXyY",
+                                      "name": "row 3",
+                                      "gap": 1,
+                                      "children": [
+                                        {
+                                          "type": "rectangle",
+                                          "id": "Wd2jW",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "KCR8J",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "PnQAA",
+                                          "name": "off",
+                                          "fill": "$surface-raised",
+                                          "width": 3,
+                                          "height": 3
+                                        },
+                                        {
+                                          "type": "rectangle",
+                                          "id": "GxzJz",
+                                          "name": "on",
+                                          "fill": "$text-secondary",
+                                          "width": 3,
+                                          "height": 3
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "ym4xb",
+                              "name": "n",
+                              "fill": "$text-primary",
+                              "content": "Audit Engineer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 13,
+                              "fontWeight": "500"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "C83jg",
+                          "name": "s",
+                          "fill": "$status-idle",
+                          "content": "asleep",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "RLYE9",
+                      "name": "reason",
+                      "fill": "$status-error",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "No terminal can be opened on this machine: 510 of 511 are in use, 18 of them held by Tars for its 18 open terminals. A start on macOS needs two free: stop two agents that do not need their terminal, or close terminals in other apps.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "o0K1tb",
+                      "name": "words",
+                      "fill": "$text-muted",
+                      "content": "claude · opus 5 · main",
+                      "lineHeight": 1.35,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "twN2V",
+                      "name": "acts",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "CjhHX",
+                          "name": "a open",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "HUUXx",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "open",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "CZFiU",
+                          "name": "a start",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "cVz2s",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "wake",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "e8Pte",
+                          "name": "a edit",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "rFenT",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "edit",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "A8tow",
+                          "name": "a delete",
+                          "height": 26,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            4,
+                            9
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "jrCIu",
+                              "name": "l",
+                              "fill": "$text-muted",
+                              "content": "delete",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
                             }
                           ]
                         }

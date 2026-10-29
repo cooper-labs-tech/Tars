@@ -304,11 +304,13 @@ For 2.0.5:
   scrollback (its light copy, the narrowest window).
 
 For 2.0.6:
-- The terminals left on this computer, a fifth figure of Heavy runs naming the computer's count in use and Tars's own:
+- The terminals left on this machine, a fifth figure of Heavy runs naming the machine's count in use, the ones Tars holds
+  and the ones it has open, in the words of #553's answer and warning:
   Resources (2.0.6) · heavy runs, terminals left (its light copy, the narrowest window), · terminals left · states (and
   its light copy).
-- An agent that cannot start for lack of a terminal, said on its pane and its card, its pane's menu offering start:
-  Agent cannot start · no terminal left (2.0.6) (and its light copy).
+- An agent that cannot start for lack of a terminal, said on its pane and its card as main's sentence, its pane's menu
+  offering start, and an asleep agent whose wake was refused, asleep with the same sentence: Agent cannot start · no
+  terminal left (2.0.6) (and its light copy).
 - A project's MEMORY.md past what Claude Code reads, on Brain's Projects: Brain · Projects · MEMORY.md past what Claude
   Code reads (2.0.6) · states (and its light copy).
 - A note among messages, and what the window shows of the other options: Messages (2.0.6) · a note, the waiting digest,
