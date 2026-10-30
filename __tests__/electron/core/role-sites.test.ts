@@ -138,6 +138,8 @@ const SITES: Site[] = [
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (driver.kind === \'agent\' && !…) {', is: 'powers', why: 'update_agent: who changes an agent\'s settings, as who hands it work' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const withPowers = …;', is: 'powers', why: 'update_agent: an agent with the orchestrator\'s powers is changed in the window only' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'return !!caller && … && caller.projectPath === agent.projectPath;', is: 'powers', why: "an agent's answers: its project's orchestrator reads them (#550)" },
+  { file: 'electron/services/api-routes/agent-routes.ts', line: "if (!…) return 'a worker';", is: 'powers', why: "a note's label: from a worker, or from an orchestrator (#561)" },
+  { file: 'electron/services/api-routes/agent-routes.ts', line: 'return !!caller && !…;', is: 'powers', why: 'a note refused for want of a session tells a worker to ask its orchestrator (#561)' },
   { file: 'electron/services/api-routes/telegram-routes.ts', line: 'if (!caller || !…) {', is: 'powers', why: 'who writes to the user through the relay' },
   { file: 'electron/services/bot-core.ts', line: 'group = [...group].sort((a, b) => (… ? 1 : 0) - (… ? 1 : 0));', is: 'team-list', why: 'the orchestrator first in each group of the status' },
   { file: 'electron/services/bot-core.ts', line: 'if (…) continue;', is: 'team-list', why: 'the orchestrators left out of each project\'s agents' },

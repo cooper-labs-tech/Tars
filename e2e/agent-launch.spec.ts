@@ -293,7 +293,8 @@ test('an agent is created, started from a window, over the API and from a bot, r
     const answer = await response.json();
     expect(response.status, JSON.stringify(answer)).toBe(200);
     const overApi = await launchOf(log, apiStarted.id);
-    expect(overApi.argv.at(-1)).toMatch(/^\[Tars: you are agent "Api Started" .*\]\n\nfrom the api\nsecond line$/s);
+    // Since #569 the message goes under its sender's line, after Tars's header (launchPrompt).
+    expect(overApi.argv.at(-1)).toMatch(new RegExp(`^\\[Tars: you are agent "Api Started" .*\\]\\n\\nMessage from agent "Launch Lead" \\("${lead.id}"\\): \\nfrom the api\\nsecond line$`, 's'));
     expect(overApi.argv.slice(0, -1)).toEqual(expectedArgv.slice(0, -1));
     expect(fs.realpathSync(overApi.cwd)).toBe(fs.realpathSync(project));
     expect(overApi.token).toBe(true);
@@ -320,7 +321,7 @@ test('an agent is created, started from a window, over the API and from a bot, r
     }, { dist, id: botStarted.id });
     expect(reply).toEqual(['started']);
     const fromBot = await launchOf(log, botStarted.id);
-    expect(fromBot.argv).toEqual([...expectedArgv.slice(0, -1), 'from a chat']);
+    expect(fromBot.argv).toEqual([...expectedArgv.slice(0, -1), 'Message from Telegram: \nfrom a chat']);
     expect(fs.realpathSync(fromBot.cwd)).toBe(fs.realpathSync(project));
     await expect.poll(async () => (await call(page, (api, id) => api.agent.get(id as string), botStarted.id))?.cliRunning, { timeout: 15_000 }).toBe(true);
     values.fromBot = { reply, argv: fromBot.argv, cwd: fromBot.cwd, agentId: fromBot.agentId };

@@ -61,11 +61,19 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     "  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN },",
     "  body: JSON.stringify({ agent_id: process.env.CLAUDE_AGENT_ID, session_id: session, ...body }),",
     "}).catch(() => {});",
+    'let pasting = false;',
     'process.stdin.on(\'data\', b => {',
     `  fs.appendFileSync(${JSON.stringify(typed)}, JSON.stringify(b.toString('utf8')) + '\\n');`,
     // Its terminal reads in cooked mode, whose line discipline turns Tars's Enter (\r) into \n (ICRNL): either ends
     // the line (the E2E at 3d71e83de, 29/10: the first note's chunk ended in \n, so no turn began and none ended).
-    "  if (!/[\\r\\n]/.test(b.toString('utf8'))) return;",
+    // Outside a paste only: since #569 the sender line ends its own line inside its paste, as claude takes it.
+    '  let enter = false;',
+    "  for (const piece of b.toString('utf8').split(/(\\x1b\\[20[01]~)/)) {",
+    "    if (piece === '\\x1b[200~') pasting = true;",
+    "    else if (piece === '\\x1b[201~') pasting = false;",
+    '    else if (!pasting && /[\\r\\n]/.test(piece)) enter = true;',
+    '  }',
+    '  if (!enter) return;',
     // `event` as the real hook sends it: the server reads a turn start from it, and with it that the field emptied
     // (hooks/user-prompt-submit.sh); without it, the next note is held behind the first as a draft.
     "  void post({ hook: 'UserPromptSubmit', event: 'UserPromptSubmit', status: 'running' }).then(() => setTimeout(() => void post({ hook: 'Stop', status: 'idle' }), 300));",
@@ -102,7 +110,8 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'o1', prompt: '' }));
 
     // 1. Told once, by Tars, with what is cut and where.
-    await expect.poll(() => notes().length, { timeout: 60_000, message: 'a note from Tars typed into the orchestrator' }).toBeGreaterThanOrEqual(1);
+    // Since #569 the sender line is its own paste, before the body's: the note is read once its body is in.
+    await expect.poll(() => notes()[0] ?? '', { timeout: 60_000, message: 'a note from Tars typed into the orchestrator' }).toContain('never reach an agent');
     const first = notes()[0];
     values.first = first;
     recordValues(values);
@@ -113,9 +122,9 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     expect(notes()).toHaveLength(1);
     // 3. Again once it grew.
     fs.appendFileSync(memory, probeFile(10, 200));
-    await expect.poll(() => notes().length, { timeout: 30_000, message: 'told again once it grew' }).toBe(2);
+    await expect.poll(() => notes()[1] ?? '', { timeout: 30_000, message: 'told again once it grew' }).toMatch(/MEMORY\.md is 31\.\d KB in 160 lines\./);
     values.second = notes()[1];
-    expect(notes()[1]).toMatch(/MEMORY\.md is 31\.\d KB in 160 lines\./);
+    expect(notes()).toHaveLength(2);
     // 4. The window's row.
     const rows = await page.evaluate(p => (window as unknown as Api).electronAPI.memory.listProjects([p]).then(r => r.projects), project);
     const row = rows.find(r => r.memoryDir === memoryDir);

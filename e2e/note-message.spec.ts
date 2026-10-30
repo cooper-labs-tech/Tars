@@ -78,15 +78,20 @@ log({ launched: true });
 process.stdout.write('stand-in ready\n');
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 let buffer = '';
+let pasting = false;
 process.stdin.on('data', (data) => {
-  buffer += data.toString();
-  let end;
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const line = buffer.slice(0, end).replace(/\x1b\[20[01]~/g, '');
-    buffer = buffer.slice(end + 1);
-    if (!line.trim()) continue;
-    if (busy) log({ folded: tag(line), line });
-    else turn(line);
+  // Enter outside a paste ends a message: since #569 the sender line ends its own line inside its paste, as in claude.
+  for (const piece of data.toString().split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if ((ch !== '\r' && ch !== '\n') || pasting) { buffer += ch; continue; }
+      const line = buffer;
+      buffer = '';
+      if (!line.trim()) continue;
+      if (busy) log({ folded: tag(line), line });
+      else turn(line);
+    }
   }
 });
 process.stdin.resume();
