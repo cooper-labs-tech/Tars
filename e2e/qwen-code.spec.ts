@@ -150,16 +150,22 @@ const run = (line) => {
 const first = flag('-i');
 if (first) run(first);
 let buffer = '';
+let pasting = false;
 process.stdin.on('data', (d) => {
   const typed = d.toString();
   if (typed === '\x1b' && cancelTurn) { cancelTurn(); return; }
-  for (const ch of typed.replace(/\x1b\[20[01]~/g, '')) buffer = ch === '\x7f' ? buffer.slice(0, -1) : ch === '\x03' ? '' : buffer + ch;
-  let end;
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const line = buffer.slice(0, end);
-    buffer = buffer.slice(end + 1);
-    if (!line.trim()) continue;
-    if (running) { pending.push(line); log({ queued: line }); } else run(line);
+  // Enter outside a paste ends a message: since #569 the sender line ends its own line inside its paste, as qwen does.
+  for (const piece of typed.split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if ((ch === '\r' || ch === '\n') && !pasting) {
+        const line = buffer;
+        buffer = '';
+        if (!line.trim()) continue;
+        if (running) { pending.push(line); log({ queued: line }); } else run(line);
+      } else buffer = ch === '\x7f' ? buffer.slice(0, -1) : ch === '\x03' ? '' : buffer + ch;
+    }
   }
 });
 process.stdin.resume();
@@ -345,7 +351,9 @@ for (const newInterface of [false, true]) {
       const two = await lead.call('delegate_task', { id: 'qw', prompt: 'TASK-SENDBACK report to me when done', timeoutSeconds: 120 });
       await expect.poll(() => (fs.existsSync(leadReceived) ? fs.readFileSync(leadReceived, 'utf8') : ''), { timeout: 30_000 }).toContain('REPORT-FROM-QWEN');
       // Since #507 the sender line and the body are two pastes into one field: the markers go before the lines are cut.
-      const leadLine = fs.readFileSync(leadReceived, 'utf8').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).find((l) => l.includes('REPORT-FROM-QWEN')) ?? '';
+      // Since #569 the sender line ends its own line: the report is the line under it.
+      const leadLines = fs.readFileSync(leadReceived, 'utf8').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).filter(Boolean);
+      const leadLine = leadLines[leadLines.findIndex((l) => l.includes('REPORT-FROM-QWEN')) - 1] ?? '';
       keep({ two, leadLine, sent: records().find((r) => r.sent)?.sent });
       expect.soft(two.isError, two.text).toBe(false);
       expect.soft(launches(), 'one session for both tasks').toHaveLength(1);

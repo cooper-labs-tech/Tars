@@ -98,15 +98,21 @@ let buffer = '';
 let queue = Promise.resolve();
 const dashes = process.argv.indexOf('--');
 if (dashes !== -1 && process.argv.slice(dashes + 1).join(' ').trim()) queue = queue.then(() => turn(process.argv.slice(dashes + 1).join(' ')));
+let pasting = false;
 process.stdin.on('data', (data) => {
   const typed = data.toString();
   if (typed === '\x1b' && cancelTurn) { cancelTurn(); return; }
-  for (const ch of typed.replace(/\x1b\[20[01]~/g, '')) buffer = ch === '\x7f' ? buffer.slice(0, -1) : ch === '\x03' ? '' : buffer + ch;
-  let end;
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const line = buffer.slice(0, end);
-    buffer = buffer.slice(end + 1);
-    if (line.trim()) queue = queue.then(() => turn(line));
+  // Enter outside a paste ends a message: since #569 the sender line ends its own line inside its paste, as in claude.
+  for (const piece of typed.split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if ((ch === '\r' || ch === '\n') && !pasting) {
+        const line = buffer;
+        buffer = '';
+        if (line.trim()) queue = queue.then(() => turn(line));
+      } else buffer = ch === '\x7f' ? buffer.slice(0, -1) : ch === '\x03' ? '' : buffer + ch;
+    }
   }
 });
 process.stdin.resume();
@@ -273,7 +279,8 @@ for (const newInterface of [false, true]) {
       // 1. Into the terminal its card shows: one launch of dev's CLI, the window's; every task in its session.
       expect.soft(devLaunches.length, 'launches of dev\'s CLI').toBe(1);
       expect.soft(devTurns.map((e) => e.sid), 'sessions dev\'s tasks ran in').toEqual(devTurns.map(() => devSession));
-      expect.soft(devTurns[0]?.turn).toMatch(/^Message from agent "Project Lead" \("lead"\), task t-[0-9a-f]{8}: SLOW LONG review the release notes$/);
+      // Since #569 the sender line ends its own line, and the task is the line under it.
+      expect.soft(devTurns[0]?.turn).toMatch(/^Message from agent "Project Lead" \("lead"\), task t-[0-9a-f]{8}: \nSLOW LONG review the release notes$/);
       // 2. The full final message, its end, tokens and cost.
       expect.soft(one.isError, one.text.slice(0, 300)).toBe(false);
       expect.soft(one.text).toContain(LONG);
@@ -287,7 +294,7 @@ for (const newInterface of [false, true]) {
       expect.soft(two.text).toContain('Second task done: the tests pass.');
       expect.soft(two.text).not.toContain('END-OF-ANSWER');
       // 4. One conversation holds both, in order.
-      expect.soft(devTurns.slice(0, 2).map((e) => /: (.*)$/.exec(e.turn)?.[1])).toEqual(['SLOW LONG review the release notes', 'run the tests']);
+      expect.soft(devTurns.slice(0, 2).map((e) => /: \n(.*)$/.exec(e.turn)?.[1])).toEqual(['SLOW LONG review the release notes', 'run the tests']);
       expect.soft(transcript.indexOf('SLOW LONG review')).toBeLessThan(transcript.indexOf('run the tests'));
       const devTasks = report.tasks.filter((t) => t.agentId === 'dev' && t.requesterAgentId === 'lead');
       expect.soft(devTasks.length, 'dev\'s tasks from lead in the ledger').toBeGreaterThanOrEqual(2);

@@ -38,7 +38,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    delegated task runs in the permission mode of the agent that receives it);
  * 8. a message from an agent in plan mode to a worker in bypass is marked so;
  * 9. after a relaunch, the task's result (its transcript's final message) is read from the ledger by its id, and
- *    by the clientRequestId it was sent with; another agent reads nothing.
+ *    by the clientRequestId it was sent with; a chat's runner of its project reads it, as its project's orchestrator
+ *    would (#550's readers: the asker, the agent, its project's orchestrator and Tars, and a runner holds orchestrator
+ *    powers; the orchestrator's decision of 30/10, where 2.0.5 answered it 404); a worker of the project reads nothing.
  * The artefact: values.json with every answer, the bytes each stand-in
  * received, the ledger's tasks, and the receipts file itself.
  */
@@ -61,7 +63,7 @@ const STAND_IN = (file: string) => [
 
 const HOOKS = path.resolve('hooks');
 
-/** A stand-in named `claude` that records what is typed into it and answers each line as a turn, hooks and transcript. */
+/** A stand-in named `claude` that records what is typed into it and answers each message as a turn, hooks and transcript. */
 const TURN_STAND_IN = (file: string) => String.raw`
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const { spawnSync } = require('child_process');
@@ -81,14 +83,20 @@ const turn = (prompt) => {
 hook('session-start.sh', { hook_event_name: 'SessionStart', source: 'startup' });
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
 let buffer = '';
+let pasting = false;
 process.stdin.on('data', (d) => {
   fs.appendFileSync(${JSON.stringify(file)}, d);
-  buffer += d.toString();
-  let end;
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const line = buffer.slice(0, end).replace(/\x1b\[20[01]~/g, '');
-    buffer = buffer.slice(end + 1);
-    if (line.trim()) turn(line);
+  // Enter outside a paste ends the turn: since #569 the sender line ends its own line inside the paste, as in claude.
+  for (const piece of d.toString().split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if ((ch === '\r' || ch === '\n') && !pasting) {
+        const typed = buffer;
+        buffer = '';
+        if (typed.trim()) turn(typed);
+      } else buffer += ch;
+    }
   }
 });
 process.stdout.write('stand-in ready\n');
@@ -301,6 +309,11 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
   const values: Record<string, unknown> = { newInterface: process.env.E2E_NEW_INTERFACE === '1' };
   // Since #507 the sender line and the body are two pastes into one field: the markers go before the lines are cut.
   const ocLines = () => (fs.existsSync(ocReceived) ? fs.readFileSync(ocReceived, 'utf8') : '').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).filter(Boolean);
+  // The line holding a word, and the sender line just before it.
+  const senderAndBody = (lines: string[], word: string): [string, string] => {
+    const at = lines.findIndex((l) => l.includes(word));
+    return [at > 0 ? lines[at - 1] : '', at >= 0 ? lines[at] : ''];
+  };
 
   // Builder is not started: a chat's runner takes its orchestrator's mode at its launch (services/chat-runners.ts),
   // and this needs an asker in bypass beside one in plan. It asks through the API with its own token, as before.
@@ -314,16 +327,19 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
     // 7. Delegated from plan mode: into oc's own terminal, marked so; from bypass mode: unmarked.
     const planned = await post('/api/agents/oc/run-task', 'p1', { task: 'TASK-PLAN review the notes', clientRequestId: 'cr-acp-plan-1' });
     const bypassed = await post('/api/agents/oc/run-task', 'by', { task: 'TASK-BYPASS review the notes' });
-    const planLine = ocLines().find((l) => l.includes('TASK-PLAN')) ?? '';
-    const bypassLine = ocLines().find((l) => l.includes('TASK-BYPASS')) ?? '';
-    values.runs = { planned, bypassed, planLine, bypassLine };
+    // Since #569 the sender line, and the mark after it, end their own line: the task is the line after.
+    const [planSender, planLine] = senderAndBody(ocLines(), 'TASK-PLAN');
+    const [bypassSender, bypassLine] = senderAndBody(ocLines(), 'TASK-BYPASS');
+    values.runs = { planned, bypassed, planSender, planLine, bypassSender, bypassLine };
     expect(planned.status).toBe(200);
     expect(planned.body).toMatchObject({ ok: true, outcome: 'completed', text: 'reviewed' });
-    expect(planLine).toMatch(/^Message from agent "Planner" \("p1"\), task t-[0-9a-f]{8}: \(sender in plan mode, you in bypass mode\) TASK-PLAN review the notes$/);
+    expect(planSender).toMatch(/^Message from agent "Planner" \("p1"\), task t-[0-9a-f]{8}: \(sender in plan mode, you in bypass mode\) $/);
+    expect(planLine).toBe('TASK-PLAN review the notes');
     expect(bypassed.status).toBe(200);
     expect(bypassed.body).toMatchObject({ ok: true, text: 'reviewed' });
-    expect(bypassLine).toContain('TASK-BYPASS review the notes');
-    expect(bypassLine).not.toContain('(sender in');
+    expect(bypassLine).toBe('TASK-BYPASS review the notes');
+    expect(bypassSender).toMatch(/^Message from agent /);
+    expect(bypassSender).not.toContain('(sender in');
     taskId = String(planned.body.taskId ?? '');
     expect(taskId).toMatch(/^[0-9a-f-]{36}$/);
 
@@ -331,9 +347,10 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
     const marked = await post('/api/agents/wb/dispatch', 'p1', { message: 'MARK-ME build it' });
     await expect.poll(() => s.read('wb').includes('MARK-ME'), { timeout: 20_000 }).toBe(true);
     // The sender line and the body are two pastes into one field since #507: the markers go before the lines are cut.
-    const line = s.read('wb').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).find(l => l.includes('MARK-ME')) ?? '';
-    values.marked = { answer: marked, line };
-    expect(line).toMatch(/^Message from agent "Planner" \("p1"\), task t-[0-9a-f]{8}: \(sender in plan mode, you in bypass mode\) MARK-ME build it$/);
+    const [sender, line] = senderAndBody(s.read('wb').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).filter(Boolean), 'MARK-ME');
+    values.marked = { answer: marked, sender, line };
+    expect(sender).toMatch(/^Message from agent "Planner" \("p1"\), task t-[0-9a-f]{8}: \(sender in plan mode, you in bypass mode\) $/);
+    expect(line).toBe('MARK-ME build it');
   } finally {
     await opened.app.close();
   }
@@ -341,16 +358,19 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
   // 9. Relaunched: the result is read from the ledger.
   opened = await open(s.home, port, []);
   try {
-    const tokens = await opened.tokensFor(['p1', 'by']);
+    const tokens = await opened.tokensFor(['p1', 'by', 'wb']);
     const { get } = client(port, () => tokens);
     const byId = await get(`/api/tasks/${taskId}`, 'p1');
     const byRequest = await get('/api/tasks?clientRequestId=cr-acp-plan-1', 'p1');
-    const stranger = await get(`/api/tasks/${taskId}`, 'by');
-    values.afterRelaunch = { byId, byRequest, stranger };
+    const byRunner = await get(`/api/tasks/${taskId}`, 'by');
+    const stranger = await get(`/api/tasks/${taskId}`, 'wb');
+    values.afterRelaunch = { byId, byRequest, byRunner, stranger };
     expect(byId.status).toBe(200);
     expect(byId.body.task).toMatchObject({ id: taskId, agentId: 'oc', requesterAgentId: 'p1', outcome: 'completed', stopReason: 'end_turn', result: 'reviewed' });
     expect(byRequest.status).toBe(200);
     expect((byRequest.body.task as { id?: string } | undefined)?.id).toBe(taskId);
+    expect(byRunner.status).toBe(200);
+    expect((byRunner.body.task as { id?: string } | undefined)?.id).toBe(taskId);
     expect(stranger.status).toBe(404);
   } finally {
     recordValues(values);

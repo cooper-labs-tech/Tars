@@ -97,14 +97,19 @@ let queue = Promise.resolve();
 // A launch with a task hands it after \`--\` (promptOperand), as Claude Code takes it: its first turn.
 const dashes = process.argv.indexOf('--');
 if (dashes !== -1 && process.argv.slice(dashes + 1).join(' ').trim()) queue = queue.then(() => turn(process.argv.slice(dashes + 1).join(' ')));
+let pasting = false;
 process.stdin.on('data', (data) => {
-  buffer += data.toString();
-  let end;
-  // \r in raw mode; \n for what was typed before raw mode was set, which the line discipline turned into one.
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const line = buffer.slice(0, end).replace(/\x1b\[20[01]~/g, '');
-    buffer = buffer.slice(end + 1);
-    if (line.trim()) queue = queue.then(() => turn(line));
+  // Enter outside a paste ends a message: since #569 the sender line ends its own line inside its paste, as in claude.
+  for (const piece of data.toString().split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      // \r in raw mode; \n for what was typed before raw mode was set, which the line discipline turned into one.
+      if ((ch !== '\r' && ch !== '\n') || pasting) { buffer += ch; continue; }
+      const line = buffer;
+      buffer = '';
+      if (line.trim()) queue = queue.then(() => turn(line));
+    }
   }
 });
 process.stdin.resume();

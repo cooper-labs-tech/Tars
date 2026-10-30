@@ -14,7 +14,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * file with its pid once it runs.
  *
  * Asserted, once with the classic shell and once with the new interface:
- * 1. a holds the slot; b, of another project, waits, and the window reads why: held by a;
+ * 1. a holds the slot (its ceiling set to 1: #573 made it 3 when unset); b, of another project, waits, and the window
+ *    reads why: held by a, at most 1 run at once;
  * 2. o asks for a release gate after b: o waits first, b second (priority before arrival);
  * 3. a's `tars-slot` is killed (SIGKILL, no give-back): the lease goes with its process, and o is granted, not b;
  * 4. o's command ends: o's `tars-slot` gives the slot back, and b is granted;
@@ -144,7 +145,9 @@ for (const newInterface of [false, true]) {
       { id: 'a', name: 'Harbor Worker', role: 'worker', project: harbor, cli: standIn(home, 'a', ['--label', 'harbor e2e suite']) },
       { id: 'b', name: 'Meridian Worker', role: 'worker', project: meridian, cli: standIn(home, 'b', ['--label', 'meridian build']) },
       { id: 'o', name: 'Harbor Lead', role: 'orchestrator', project: harbor, cli: standIn(home, 'o', ['--priority', 'gate', '--label', 'harbor release gate'], 1_500) },
-    ]);
+    // Since #573 heavySlots is a ceiling, 3 when unset, and a further run waits for the last one to settle: the order
+    // and the hand-over asked here are those of a full slot, so the ceiling is 1.
+    ], { heavySlots: 1 });
     const values: Record<string, unknown> = { newInterface };
     const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
     const started = (name: string) => fs.existsSync(path.join(home, `started-${name}`));
@@ -161,7 +164,7 @@ for (const newInterface of [false, true]) {
       const one = await status();
       keep({ one });
       expect.soft(one.holders.map(t => [t.agentId, t.label])).toEqual([['a', 'harbor e2e suite']]);
-      expect.soft(one.waiting[0].why).toMatch(/^held by Harbor Worker \(harbor e2e suite\)/);
+      expect.soft(one.waiting[0].why).toMatch(/^held by Harbor Worker \(harbor e2e suite\).*; at most 1 run at once$/);
       // What the window's Resources page reads in one call (the Frontend's notes of #535): the settings, the machine,
       // each holder's pid and its tree, the day's alerts.
       expect.soft([one.slots, one.floors]).toEqual([1, { diskGb: 15, memFreePct: 20 }]);

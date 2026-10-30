@@ -64,13 +64,18 @@ log({ launched: process.argv.slice(2) });
 process.stdout.write('stand-in ready\n');
 process.stdin.setRawMode(true);
 let buffer = '';
+let pasting = false;
 process.stdin.on('data', (data) => {
-  buffer += data.toString();
-  let end;
-  while ((end = buffer.search(/[\r\n]/)) !== -1) {
-    const line = buffer.slice(0, end).replace(/\x1b\[20[01]~/g, '');
-    buffer = buffer.slice(end + 1);
-    if (line.trim()) turn(line);
+  // Enter outside a paste ends a message: since #569 the sender line ends its own line inside its paste, as in claude.
+  for (const piece of data.toString().split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if ((ch !== '\r' && ch !== '\n') || pasting) { buffer += ch; continue; }
+      const line = buffer;
+      buffer = '';
+      if (line.trim()) turn(line);
+    }
   }
 });
 process.stdin.resume();
@@ -226,8 +231,9 @@ for (const newInterface of [false, true]) {
       expect.soft(linksBefore, 'oc\'s and ap\'s links to dev, up since their turns never end').toEqual({ oc: 'dev', ap: 'dev' });
       // 2 and 3. Each task under its asker's line with its id, each asker its own answer.
       expect.soft(devTurns, 'dev\'s turns').toHaveLength(2);
-      expect.soft(devTurns[0]).toMatch(/^Message from agent "Amp Agent" \("ap"\), task t-[0-9a-f]{8}: ECHO FIRSTDELEG$/);
-      expect.soft(devTurns[1]).toMatch(/^Message from agent "Opencode Agent" \("oc"\), task t-[0-9a-f]{8}: ECHO SECONDDELEG$/);
+      // Since #569 the sender line ends its own line, and the task is the line under it.
+      expect.soft(devTurns[0]).toMatch(/^Message from agent "Amp Agent" \("ap"\), task t-[0-9a-f]{8}: \nECHO FIRSTDELEG$/);
+      expect.soft(devTurns[1]).toMatch(/^Message from agent "Opencode Agent" \("oc"\), task t-[0-9a-f]{8}: \nECHO SECONDDELEG$/);
       expect.soft(first.isError, first.text.slice(0, 300)).toBe(false);
       expect.soft(first.text).toContain('ANSWER FIRSTDELEG');
       expect.soft(second.isError, second.text.slice(0, 300)).toBe(false);

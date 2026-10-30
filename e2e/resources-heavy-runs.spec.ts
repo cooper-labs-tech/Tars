@@ -16,7 +16,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. the machine's memory, swap or load say "not read" on a platform that reads them (macOS and Linux), free memory is
  *    not one measure (the share's free memory over "P % of T GB", the QA's F2 on PR 539), or the free
  *    disk differs from system.disk's, in Tars's unit (1024³ bytes, the slot's and Settings'), by more than 0.2 GB;
- * 4. the slots and the floors shown are not the settings' (defaults: 1 slot, 15 GB free disk, 20 % free memory);
+ * 4. the slots and the floors shown are not the settings' (1 slot set here, defaults of 15 GB free disk, 20 % free memory);
  * 5. a holder is not shown with its agent, its project and what it runs, or its label shows a secret it was given;
  * 6. a waiter is not shown behind it, or its why gives the holder's start in another zone than the holder's line;
  * 7. give back goes without asking once; asked and kept, it gives back; given back, the holder stays, the waiter is not
@@ -72,7 +72,8 @@ for (const newInterface of [false, true]) {
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([harbor, meridian]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
+    // Since #573 heavySlots is a ceiling, 3 when unset: the holder and the waiter asked here are a full slot's, so the ceiling is 1.
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, heavySlots: 1 }));
     const seen: Record<string, unknown> = { newInterface };
     const tag = newInterface ? 'new-' : '';
     const errors: string[] = [];
