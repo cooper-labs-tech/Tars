@@ -61,15 +61,37 @@ describe('team-template-handlers', () => {
         'Orchestrator', 'Frontend Engineer', 'Backend Engineer', 'QA Engineer', 'Audit Engineer', 'Database Engineer',
       ]);
       // Only the orchestrator has the role, and the toggle's old field equal to
-      // it for the renderer that deploys from it; every dev has its own branch
+      // it for the renderer that deploys from it. No member has a branch of its
+      // own any more (2.0.7, W2): each piece of work gets its worktree from
+      // worktree_new, so the team deploys on any folder and no long-lived
+      // branch drifts from the default one.
       expect(team.members[0].role).toBe('orchestrator');
       expect(team.members[0].orchestratorMode).toBe(true);
-      expect(team.members[0].worktreeBranch).toBeUndefined();
+      for (const member of team.members) expect(member.worktreeBranch, member.name).toBeUndefined();
       for (const member of team.members.slice(1)) {
         expect(member.role ?? 'worker').toBe('worker');
         expect(member.orchestratorMode).toBeUndefined();
-        expect(member.worktreeBranch).toMatch(/^feat\//);
       }
+    });
+
+    /**
+     * W2 of the fresh-install report, written before the briefs (2026-11-10). How the team fails the gate loop:
+     * T1. a developer is not told its area and to stay in it, to deliver a pull request, and never to merge;
+     * T2. QA is not told it is the gate: run the checks, a verdict first (MERGE or FIX FIRST) in the reports folder,
+     *     never overwriting an earlier one, defects reported and never patched;
+     * T3. the Audit is not told it is read-only, with file:line findings ranked by severity and a verdict first;
+     * T4. the orchestrator is not on the strongest model and effort, as the owner runs it.
+     */
+    it('T1-T4. tells each member its part in the gate loop', () => {
+      const [lead, ...members] = BUILTIN_TEAM_TEMPLATES[0].members;
+      const brief = (name: string) => members.find(m => m.name === name)!.savedPrompt ?? '';
+      for (const name of ['Frontend Engineer', 'Backend Engineer', 'Database Engineer']) {
+        for (const word of ['You own', 'never outside', 'pull request', 'never merge', 'worktree_new']) expect(brief(name), `${name}: ${word}`).toContain(word);
+      }
+      for (const word of ['gate', 'MERGE or FIX FIRST', 'reports/', 'never overwrite', 'never patch']) expect(brief('QA Engineer'), word).toContain(word);
+      for (const word of ['read-only', 'file:line', 'severity', 'verdict first', 'reports/']) expect(brief('Audit Engineer'), word).toContain(word);
+      expect(lead).toMatchObject({ model: 'opus', effort: 'max' });
+      for (const word of ['gate loop', 'never merge', 'QA', 'Audit']) expect(lead.savedPrompt ?? '', word).toContain(word);
     });
 
     it('teamTemplate:list returns builtin first, empty user list', async () => {

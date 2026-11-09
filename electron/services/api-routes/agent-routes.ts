@@ -760,7 +760,7 @@ function senderName(agent: AgentStatus, req: RouteRequest): string {
  * while the first was still the agent's work. Returns its id, for the sender
  * line Tars types before the message.
  */
-function requestFor(agent: AgentStatus, req: RouteRequest, title?: string, ref?: string): string | undefined {
+function requestFor(agent: AgentStatus, req: RouteRequest, title?: string, ref?: string, gate?: boolean): string | undefined {
   const callerId = resolveCallerId(req);
   const agentId = callerId && callerId !== agent.id ? callerId : undefined;
   // A worker writing to the agent that leads it (the orchestrator that handed
@@ -773,7 +773,7 @@ function requestFor(agent: AgentStatus, req: RouteRequest, title?: string, ref?:
   if (caller && (caller.requestedBy?.agentId === agent.id
       || (hasOrchestratorPowers(agent) && agent.projectPath === caller.projectPath))) return undefined;
   if (!agentId) return undefined;
-  const queued = enqueueRequest(agent, agentId, { title, ...(ref ? { ref } : {}) });
+  const queued = enqueueRequest(agent, agentId, { title, ...(ref ? { ref } : {}), ...(gate ? { gate: true } : {}) });
   saveAgents();
   return queued;
 }
@@ -1168,7 +1168,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * final answer from the transcript. The answer the route gives at the end.
  */
 async function runInTerminal(
-  agent: AgentStatus, req: RouteRequest, ctx: RouteContext, job: { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } },
+  agent: AgentStatus, req: RouteRequest, ctx: RouteContext, job: { task: string; ref: string; model?: string; gate?: true; asSent?: { from?: string; sender?: MessageSender; mark?: string } },
   onHanded: (start: Record<string, unknown>) => void,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const ledger = liveTaskLedger();
@@ -1211,7 +1211,7 @@ async function runInTerminal(
       // Its sender line as it was queued, for a task kept across a restart (the Audit's Info 1 on #536).
       message: job.task, model: job.model, from: job.asSent?.from ?? senderName(agent, req), sender: job.asSent?.sender ?? senderOf(agent, req), mark: job.asSent?.mark ?? markFor(agent, req),
       turnTaken: true,
-      onAccepted: () => requestFor(agent, req, job.task, job.ref),
+      onAccepted: () => requestFor(agent, req, job.task, job.ref, job.gate),
       // An agent's task carries its id on its line, a request queued for it
       // or not; Tars's line carries none (taskOfPrompt reads an agent's). The
       // writer notes the hand-off the turn takes (pty-manager.ts, takeField):
@@ -2771,11 +2771,25 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayHandWork(req, agent, sendJson)) return;
 
-    const { task, model, answer } = req.body as { task?: string; model?: unknown; answer?: unknown };
+    const { task, model, answer, gate } = req.body as { task?: string; model?: unknown; answer?: unknown; gate?: unknown };
     if (!task?.trim()) {
       sendJson({ error: 'task is required' }, 400);
       return;
     }
+    // A release gate (2.0.7, the Audit's L4 on #579): its worker's heavy runs go first in the slot, so only the
+    // agent's project's orchestrator, or a chat's runner of it, hands one.
+    if (gate !== undefined && typeof gate !== 'boolean') {
+      sendJson({ error: 'gate is true or false.', code: 'invalid_gate' }, 400);
+      return;
+    }
+    if (gate === true) {
+      const by = req.callerAgentId ? agents.get(req.callerAgentId) : undefined;
+      if (!by || !hasOrchestratorPowers(by) || by.projectPath !== agent.projectPath) {
+        sendJson({ error: 'A release gate is handed by the agent\'s project\'s orchestrator only.', code: 'gate_is_the_orchestrators' }, 403);
+        return;
+      }
+    }
+    const asGate = gate === true ? { gate: true as const } : {};
     // A model for this task only: the agent's saved one is not changed.
     if (model !== undefined && (typeof model !== 'string' || !RUN_MODEL.test(model))) {
       sendJson({ error: 'model is 1 to 100 letters, digits, dots, colons, dashes, slashes, underscores or brackets.', code: 'invalid_model' }, 400);
@@ -2786,7 +2800,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // request outlived undici's 300 s on any long task.
     const answerAtStart = answer === 'started';
 
-    await withReceipt(req, sendJson, { route: 'run-task', agentId: agent.id, payload: { task, ...(model ? { model } : {}) } }, async (sendJson, receipt) => {
+    await withReceipt(req, sendJson, { route: 'run-task', agentId: agent.id, payload: { task, ...(model ? { model } : {}), ...asGate } }, async (sendJson, receipt) => {
       const callerId = resolveCallerId(req);
       const requester = callerId && callerId !== agent.id ? callerId : undefined;
       // One task at a time: the agent works (a task in hand, a turn in its
@@ -2798,7 +2812,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task), how: 'task', from: senderName(agent, req),
         replay: {
           kind: 'run-task', task, ...(typeof model === 'string' ? { model } : {}), ...(requester ? { requesterId: requester } : {}),
-          from: senderName(agent, req), sender: senderOf(agent, req), ...(markFor(agent, req) ? { mark: markFor(agent, req) } : {}),
+          from: senderName(agent, req), sender: senderOf(agent, req), ...(markFor(agent, req) ? { mark: markFor(agent, req) } : {}), ...asGate,
         } satisfies RunTaskReplay,
       });
       const startBody = {
@@ -2825,7 +2839,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       }
       announceTask(agent.id);
       try {
-        const end = await runInTerminal(agent, req, ctx, { task, ref: queued.ref, ...(typeof model === 'string' ? { model } : {}) }, answerNow);
+        const end = await runInTerminal(agent, req, ctx, { task, ref: queued.ref, ...(typeof model === 'string' ? { model } : {}), ...asGate }, answerNow);
         receipt.update({ outcome: end.body.outcome, ok: end.body.ok, ...(end.body.taskId ? { taskId: end.body.taskId } : {}) });
         if (!answered) sendJson(end.body, end.status);
       } finally {

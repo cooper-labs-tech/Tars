@@ -20,6 +20,13 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 - Never mark a task complete without proving it works: a worker runs the proof itself; an orchestrator has its agents run it (QA, audit) and reads their results
 - A worker given a bug report just fixes it: point at logs, errors, failing tests and resolve them. An orchestrator never does: it hands the bug report to one of its agents, as all the work, and never reads the code or the logs to diagnose it itself
 
+## Delivery
+
+- A change goes on its own branch, in its own worktree (the `worktree_new` tool), and is delivered as a pull request into the default branch. A worker never merges it, never commits to the default branch and never pushes to it
+- Each pull request is gated before it is merged: QA runs the project's checks, then the Audit reviews it, each writing its verdict first (MERGE or FIX FIRST) in the project folder's `reports/`, never overwriting an earlier one. They report defects; they never patch them. CI must be green too
+- The checks are the project's own: its `CLAUDE.md` names them; without one, those its CI or its package files run
+- Once the pull request is merged, its worktree goes (`worktree_remove`)
+
 ## Core Principles
 
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.

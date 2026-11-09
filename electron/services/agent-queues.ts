@@ -111,15 +111,15 @@ export function keptSender(raw: unknown): MessageSender | undefined {
 }
 
 /** What a run-task waiting its turn keeps, to be handed over again: its sender line as it was queued (the Audit's Info 1 on #536). */
-export interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string; from?: string; sender?: MessageSender; mark?: string }
+export interface RunTaskReplay { kind: 'run-task'; task: string; model?: string; requesterId?: string; from?: string; sender?: MessageSender; mark?: string; gate?: true }
 
 /** What a kept run-task hands runInTerminal after a restart (api-routes/agent-routes.ts): the task, and its sender line. */
-export function replayJobOf(item: QueuedTask): { task: string; ref: string; model?: string; asSent?: { from?: string; sender?: MessageSender; mark?: string } } | undefined {
+export function replayJobOf(item: QueuedTask): { task: string; ref: string; model?: string; gate?: true; asSent?: { from?: string; sender?: MessageSender; mark?: string } } | undefined {
   const replay = item.replay as RunTaskReplay | undefined;
   if (replay?.kind !== 'run-task') return undefined;
   const sender = keptSender(replay.sender);
   const asSent = { ...(replay.from ? { from: replay.from } : {}), ...(sender ? { sender } : {}), ...(replay.mark ? { mark: replay.mark } : {}) };
-  return { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}), ...(Object.keys(asSent).length ? { asSent } : {}) };
+  return { task: replay.task, ref: item.ref, ...(replay.model ? { model: replay.model } : {}), ...(replay.gate === true ? { gate: true as const } : {}), ...(Object.keys(asSent).length ? { asSent } : {}) };
 }
 
 export interface QueueItemView {

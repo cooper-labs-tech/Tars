@@ -56,6 +56,22 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     ].join('\n'),
   },
   {
+    id: 'workflow',
+    title: 'How a change is delivered: the gate loop',
+    roles: ['orchestrator', 'worker'],
+    text: [
+      'Every change goes through the same loop, on every project, unless the user asks otherwise: the orchestrator splits the work by domain and hands each piece to the agent that owns its area; the worker makes it on its own branch and delivers a pull request; QA gates it, then the Audit; CI must be green; only then is it merged; the orchestrator reports what shipped.',
+      'A branch per piece, in a worktree of its own: `worktree_new` makes one from the project\'s fresh default branch (in the project\'s .worktrees folder, kept out of git by .git/info/exclude), refusing on a disk too full or past the project\'s count; `worktree_remove` removes a clean one, never by force, and keeps its branch; `worktree_prune` removes every clean worktree whose branch is merged into the default branch. `worktree_list` shows them. Never `git worktree add` by hand.',
+      'The worker: commits on its branch, pushes it, and opens the pull request into the default branch (`gh pr create`). It never merges, never commits to the default branch, and never pushes to it. Its report names the PR.',
+      'QA, the first gate: runs the project\'s checks on the PR\'s branch (its build, typecheck, lint and tests, as the project\'s CLAUDE.md or CI names them), and writes its verdict first, MERGE or FIX FIRST, then why, in a report in the project folder\'s reports/ (QA-PR<number>.md). A later gate of the same PR adds a section: never overwrite an earlier verdict. QA reports defects with their exact output; it does not patch them.',
+      'The Audit, the second gate: a read-only review of the PR\'s diff, findings with file:line ranked by severity (High, Medium, Low, Info), its verdict first, in reports/ too (AUDIT-PR<number>.md). It never edits the code.',
+      'CI: read with `gh pr checks <number>` before any merge. A project with no CI has QA run the same checks locally, and its report says so.',
+      'The merge: only once QA and the Audit say MERGE and CI is green, by the orchestrator (`gh pr merge`), or by the user when they said they merge themselves, the orchestrator telling them it is ready. A red gate (FIX FIRST, a failing check, a red CI) goes back to the worker with the findings, and both gates run again after every fix. Never merge over a red gate; a worker never merges.',
+      'A full gate run before a merge or a release is handed with `delegate_task`\'s `gate: true`: that agent\'s heavy runs for it go first in the heavy-run slot. Once a PR is merged, its worktree goes (`worktree_remove`, or `worktree_prune` for all the merged ones).',
+      'A project with no remote: the same loop on local branches, the gates on the branch, and the orchestrator merges it with git once they are green.',
+    ].join('\n'),
+  },
+  {
     id: 'messages',
     title: 'Messages and their modes',
     roles: ['orchestrator', 'worker'],
@@ -195,6 +211,10 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   send_discord: 'asking-the-user',
   tars_guide: 'limits',
   heavy_slot_take: 'heavy-runs',
+  worktree_new: 'workflow',
+  worktree_list: 'workflow',
+  worktree_remove: 'workflow',
+  worktree_prune: 'workflow',
   heavy_slot_give_back: 'heavy-runs',
   heavy_slot_status: 'heavy-runs',
   // mcp-kanban
@@ -275,6 +295,7 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
       // first prompt (2.0.7, the owner's rule of 10/11).
       `- You orchestrate, and only that. You never do the work yourself: development, research, investigation, reading code or logs to diagnose, QA and audit all go to your project's agents. You split the work, delegate each piece, follow it, read what your agents report, and report to the user. A question whose answer needs the code, the logs or the web is a task for an agent too.`,
       `- No agent of your project fits a piece of work, or your project has none yet: create the one it needs with create_agent (a developer, a QA, an auditor), then delegate to it.`,
+      `- Every change goes through the gate loop: each piece on its own branch, the worker delivers a pull request and never merges it, QA's verdict, then the Audit's, CI green (gh pr checks), and only then you merge, or the user does if they said so. A red gate goes back to the worker. tars_guide workflow says more.`,
       `- Write each task as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance. tars_guide delegation says more.`,
       `- delegate_task hands a task to the agent's own terminal and returns its full final answer, tokens and cost (claude, Qwen Code; codex, pi, gemini: the answer only; opencode, amp, grok: delivered only). timeoutSeconds is how long it waits: 3600 s when you give none; the task is never stopped there. If it says the task may still be working, read it with task_status: never send it twice. start_agent is deprecated.`,
       `- send_message modes: auto, queue, steer, restart. HELD means it waits for the terminal and goes in by itself.`,
@@ -285,13 +306,14 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
     lines.push(
       `- Answer whoever asked you with send_message to "requester", or in your final report. HELD means your message waits for the terminal and goes in by itself.`,
       `- You hand no work to another agent and stop none: ask your orchestrator (send_message to "orchestrator"). What you send another worker is a note for information.`,
+      `- You deliver a change on its own branch, in its own worktree (worktree_new), as a pull request into the default branch: you never merge it and never commit to the default branch. As QA or the Audit you gate: a verdict first, in the reports folder, and you report defects, never patch them.`,
       `- The kanban is the project's Hermes board (one lane per agent): claim a task with assign_task, finish it with mark_task_done, file a follow-up you find with create_task.`,
     );
   }
   lines.push(
     where,
     `- When Hermes refuses or cannot be reached, the user signs in to it in Tars (Settings, Hermes): say so once and go on.`,
-    `- tars_guide gives the details: delegation, messages, held-and-refused, kanban, project-folder, asking-the-user, limits.`,
+    `- tars_guide gives the details: delegation, workflow, messages, held-and-refused, kanban, project-folder, asking-the-user, limits.`,
   );
   return lines;
 }

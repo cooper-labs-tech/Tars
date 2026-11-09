@@ -196,6 +196,24 @@ describe('the rules an orchestrator is actually handed', () => {
     expect(read()).not.toContain('agent manager only');
   });
 
+  it('carries the gate loop before the tools, in its order (W1 of the fresh-install report)', () => {
+    const text = read();
+    const steps = ['own feature branch', 'delivers a pull request', 'QA gates it', 'The Audit gates it', 'gh pr checks', 'Only then is the PR merged', 'Report'];
+    const at = steps.map(s => text.indexOf(s));
+    for (const [i, s] of steps.entries()) expect(at[i], s).toBeGreaterThan(-1);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(at[at.length - 1]).toBeLessThan(text.indexOf('## Available MCP Tools'));
+    expect(text).toContain('Never merge over a red gate');
+  });
+
+  it('hands parallel work with a short timeoutSeconds, never as waiting calls in one message (the Audit\'s L5 on #579)', () => {
+    // Measured with claude 2.1.321: the tool calls of one message run one after another
+    // (reports/workflow-runs/parallel): two waiting delegations took 40 s of work in series.
+    const text = read();
+    expect(text).not.toContain('all in one message');
+    expect(text).toContain('timeoutSeconds: 1');
+  });
+
   it('hands work with delegate_task, never the deprecated start_agent (the Audit\'s I3 on #579)', () => {
     expect(read()).toContain('delegate_task');
     expect(read()).not.toContain('start_agent');
