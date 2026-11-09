@@ -7,6 +7,16 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-10',
+    updates: [
+      'An agent now asks you only when Claude Code would really show its permission dialog. Until now Tars also held calls Claude Code was about to allow by itself: every Claude in Chrome action of an agent in bypass waited in the window, could only be refused, and was refused after 10 minutes, and ask in terminal then seemed to do nothing, since no dialog ever opened there.',
+      'A permission question can be allowed from the window whatever its fields hold: a number, a yes or no, a list or a set of values is shown whole, as text. Only what cannot be shown stays refuse or ask in terminal: a field past 2,000 characters, a file\'s new content, more than 16 fields.',
+      'A new setting lets Claude in Chrome act with no question at all, for every agent of every project: off unless you turn it on, it takes away the safety review Claude Code gives each browser action (SECURITY.md says what it opens). Until Settings has a switch: quit Tars, write { "chromeActsWithoutAsking": true } into ~/.tars-private/owner-switches.json, start Tars again.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

@@ -12,9 +12,9 @@
  * run, Tars setting their four posts aside for a session the mod registered.
  *
  * And one decision (mods step 2): when Claude Code would put a tool call to
- * its permission dialog, it asks Tars instead (`tool.check`), and Tars's allow
- * or deny is the decision, with no dialog in the terminal. Anything else Tars
- * answers, or no answer, keeps Claude Code's own decision: the dialog.
+ * its permission dialog, it asks Tars instead (`classic.PermissionRequest`), and
+ * Tars's allow or deny is the decision, with no dialog in the terminal. Anything
+ * else Tars answers, or no answer, hands the event on: Claude Code's dialog.
  *
  * Its token is sent only to a Tars that proves it is the one that started this
  * CLI, as the shell hooks do (hooks/tars-hook.sh): sha256 of
@@ -44,14 +44,30 @@ type Engine = {
   http: { fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ ok: boolean; status: number; text: string }> };
   clock: { every(ms: number, fn: () => void): unknown; sleep(ms: number): Promise<void> };
 };
-/** tool.check's input, and its verdict: `ask` puts the call to the dialog. */
+/**
+ * tool.check's input, and its verdict. Measured on 2.1.321: an `ask` there is not yet the dialog, later steps may
+ * still decide it (the auto mode classifier, which Claude Code hands Claude in Chrome's calls to under the server's
+ * flag, allowed every one of them while the mod held them for the window).
+ */
 type Check = { tool: string; input: unknown; tool_use_id?: string };
 type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: string; hook?: string };
-/** The fields of a tool's input a person decides on: never a file's content. */
-const ASKED_ABOUT = ['command', 'description', 'file_path', 'notebook_path', 'path', 'url', 'query', 'pattern'];
+/**
+ * classic.PermissionRequest's input, as measured on 2.1.321: sent when the dialog would show, after the mode, the
+ * rules and the classifier. No call id and no reason: those come from the call's tool.check.
+ */
+type Request = { session_id?: string; tool_name?: unknown; tool_input?: unknown; permission_mode?: unknown };
+/** Its answer: the decision, or the event handed on (`next`) for the dialog. */
+type Decision = { decision: { behavior: 'allow' } | { behavior: 'deny'; message: string } };
+/** The fields that carry a file's new content: never sent, whatever their size (an allow would approve what nobody saw). */
+const FILE_CONTENT: Record<string, string[]> = {
+  Write: ['content'], Edit: ['old_string', 'new_string'], MultiEdit: ['edits'], NotebookEdit: ['new_source'],
+};
+/** The window's caps, the route's too (hooks-routes.ts askedFields): one field's text, a field's name, the fields of one call. */
 const INPUT_CAP = 2000;
-/** Bash's fields Tars shows as words, each with the type it shows (the Audit's M1 on #538: one Bash call in eight set a timeout). */
-const BASH_WORDS: Record<string, 'number' | 'boolean'> = { timeout: 'number', run_in_background: 'boolean', dangerouslyDisableSandbox: 'boolean' };
+const KEY_CAP = 64;
+const FIELDS_CAP = 16;
+/** The checks that asked, latest last, for the dialog that follows to take its call id and reason from. */
+const CHECKS_KEPT = 16;
 /**
  * Asks for one call at most: 190 of Tars's 20 s holds (63 minutes) outlast the
  * longest delay the owner can set (permissionAskMinutes, 60), after which Tars
@@ -159,53 +175,87 @@ function report($: Engine, route: string, body: Body): void {
   }).catch(() => undefined);
 }
 
-/**
- * What the call asks about, as Tars shows it: every field it shows whole, and why each other one is withheld. A
- * question with a field withheld still goes to Tars, marked so, with the fields shown: the window may refuse it or
- * hand it back to the terminal, never allow it, and a bypass agent's is refused at the owner's delay instead of
- * waiting at Claude Code's dialog all night (the Audit's M1 on #538). A tweet's text, a message, a delegated task, a
- * subagent's prompt, an edit's new content or a heredoc past the cap reached Tars as nothing before #318's rechecks,
- * and an allow approved what nobody saw: such a field is never sent, only its name.
- */
-function askedAbout(tool: string, input: unknown): { fields: Record<string, string>; withheld: string[] } {
-  const fields: Record<string, string> = {};
-  const withheld: string[] = [];
-  if (!input || typeof input !== 'object') return { fields, withheld };
-  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    const word = tool === 'Bash' ? BASH_WORDS[key] : undefined;
-    if (word && typeof value === word) fields[key] = String(value);
-    else if (!word && !ASKED_ABOUT.includes(key)) withheld.push(`${key}: a field the window does not show`);
-    else if (typeof value !== 'string') withheld.push(`${key}: not text`);
-    else if (value.length > INPUT_CAP) withheld.push(`${key}: ${String(value.length).replace(/\B(?=(\d{3})+(?!\d))/g, ',')} characters, past the 2,000 the window shows`);
-    else fields[key] = value;
-  }
-  return { fields, withheld };
+/** A count as the window writes it: 3,014. */
+function count(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 /**
- * What the question is about, as Tars computes it: sha256 of the tool and the
- * asked fields, sorted by name. An answer counts only when it names this
- * call's: a post the agent's own shell made for the same call id, with `ls`,
- * would otherwise have its answer allow this call (the gate of #318, Medium 1).
+ * What the call asks about, as Tars shows it: every field whole, a field that is not text (a number, a boolean,
+ * null, an array, an object) as its JSON and named in `json`, so that the window can allow the call (the owner's
+ * report of 10/11: Claude in Chrome's tabId, coordinate and createIfEmpty made every one of its questions withheld).
+ * What cannot be shown is withheld, never sent, only its name and why: a field past the cap, a file's new content,
+ * a field name past 64 characters, the fields past the 16th. A question with a field withheld still goes to Tars,
+ * marked so: the window may refuse it or hand it back to the terminal, never allow it, and a bypass agent's is refused
+ * at the owner's delay instead of waiting at Claude Code's dialog all night (the Audit's M1 on #538).
  */
-async function fingerprint(tool: string, fields: Record<string, string>): Promise<string> {
-  const canonical = JSON.stringify([tool, Object.keys(fields).sort().map(k => [k, fields[k]])]);
+function askedAbout(tool: string, input: unknown): { fields: Record<string, string>; json: string[]; withheld: string[] } {
+  const fields: Record<string, string> = {};
+  const json: string[] = [];
+  const withheld: string[] = [];
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return { fields, json, withheld };
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (key.length > KEY_CAP) { withheld.push(`${key.slice(0, KEY_CAP)}: a field whose name is past ${KEY_CAP} characters`); continue; }
+    if (FILE_CONTENT[tool]?.includes(key)) { withheld.push(`${key}: a file's new content`); continue; }
+    let text: string | undefined;
+    try { text = typeof value === 'string' ? value : JSON.stringify(value); } catch { text = undefined; }
+    if (typeof text !== 'string') { withheld.push(`${key}: cannot be shown`); continue; }
+    if (text.length > INPUT_CAP) { withheld.push(`${key}: ${count(text.length)} characters, past the 2,000 the window shows`); continue; }
+    if (Object.keys(fields).length >= FIELDS_CAP) { withheld.push(`${key}: past the ${FIELDS_CAP} fields the window shows`); continue; }
+    fields[key] = text;
+    if (typeof value !== 'string') json.push(key);
+  }
+  return { fields, json: json.sort(), withheld: withheld.sort() };
+}
+
+/**
+ * What the question is about, as Tars computes it (permission-asks.ts questionFingerprint): sha256 of the tool and the
+ * asked fields, sorted by name, and of the fields shown as JSON when there are any. An answer counts only when it
+ * names this call's: a post the agent's own shell made for the same call id, with `ls`, would otherwise have its
+ * answer allow this call (the gate of #318, Medium 1), and an answer about `"true"` would allow `true`.
+ */
+async function fingerprint(tool: string, fields: Record<string, string>, json: string[]): Promise<string> {
+  const entries = Object.keys(fields).sort().map(k => [k, fields[k]]);
+  const canonical = JSON.stringify(json.length ? [tool, entries, [...json].sort()] : [tool, entries]);
   return hex(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(canonical)));
 }
 
+/** The calls tool.check said Claude Code would ask about, latest last: the dialog that follows has neither id nor reason. */
+const asked: Array<{ tool: string; input: string; id: string; reason?: string; rule?: string }> = [];
+
+function inputText(input: unknown): string {
+  try { return JSON.stringify(input) ?? ''; } catch { return ''; }
+}
+
 /**
- * Tars's answer to a call Claude Code would ask about, or null for the
- * engine's own decision: Tars handed it back, did not prove itself, could not
- * be reached or answered something else.
+ * The tool.check that asked about this dialog's call: the same tool and input, else the latest of that tool (Claude
+ * Code may hand the dialog an input its check rewrote), taken out so that one check lends itself to one dialog.
  */
-async function askTars($: Engine, e: Check, verdict: Verdict): Promise<Verdict | null> {
+function checkFor(tool: string, input: unknown): (typeof asked)[number] | undefined {
+  const text = inputText(input);
+  let at = -1;
+  for (let i = asked.length - 1; i >= 0; i--) {
+    if (asked[i].tool !== tool) continue;
+    if (asked[i].input === text) { at = i; break; }
+    if (at < 0) at = i;
+  }
+  return at < 0 ? undefined : asked.splice(at, 1)[0];
+}
+
+/**
+ * Tars's answer to a call Claude Code would put to its dialog, or null for the
+ * dialog: Tars handed it back, did not prove itself, could not be reached or
+ * answered something else.
+ */
+async function askTars($: Engine, e: Check, verdict: Pick<Verdict, 'reason' | 'rule'>): Promise<Verdict | null> {
   const to = await proven($);
   if (!to || !sessionId) return null;
-  const { fields, withheld } = askedAbout(e.tool, e.input);
-  const mine = await fingerprint(e.tool, fields);
+  const { fields, json, withheld } = askedAbout(e.tool, e.input);
+  const mine = await fingerprint(e.tool, fields, json);
   const question = {
     agent_id: to.agentId, session_id: sessionId, tool: e.tool, tool_use_id: e.tool_use_id,
     input: fields, reason: verdict.reason, rule: verdict.rule, via: 'mod',
+    ...(json.length ? { json_fields: json } : {}),
     ...(withheld.length ? { withheld: true, withheld_why: withheld.join('; ').slice(0, 1000) } : {}),
   };
   // Tars says `pending` every 20 s and is asked again for the same call: a
@@ -301,15 +351,37 @@ export function register(on: On) {
     return next(e);
   });
 
-  // A call Claude Code would put to its dialog goes to Tars. Only those: a call
-  // the mode or a rule settles is the engine's, and a query with no call behind
-  // it decides nothing. An AskUserQuestion goes too, withheld (its questions are
-  // not sent): Tars, which knows the agent's role and mode, refuses a bypass
-  // worker's and hands any other back to the person (the Audit's fifth gate of #538).
-  on<Check>('tool.check', async ($, e, next) => {
+  // The engine's verdict, handed back untouched: an `ask` here may still be
+  // decided by Claude Code's later steps (the auto mode classifier, measured on
+  // 2.1.321 with Claude in Chrome), so it is only noted, for the dialog that may
+  // follow to take its call id and reason. A query with no call behind it lends
+  // nothing.
+  on<Check>('tool.check', async (_$, e, next) => {
     const verdict = await next(e) as Verdict;
-    if (verdict?.decision !== 'ask' || !e.tool_use_id) return verdict;
-    return (await askTars($, e, verdict)) ?? verdict;
+    if (verdict?.decision === 'ask' && e.tool_use_id) {
+      asked.push({ tool: e.tool, input: inputText(e.input), id: e.tool_use_id, reason: verdict.reason, rule: verdict.rule });
+      if (asked.length > CHECKS_KEPT) asked.shift();
+    }
+    return verdict;
+  });
+
+  // The dialog Claude Code would show goes to Tars instead, and only that: it
+  // comes after the mode, the rules and the classifier. Tars's allow or deny is
+  // the decision, and nothing beneath runs (the shell hooks, the dialog); held,
+  // the dialog does not show (measured on 2.1.321, 60 s and 5 minutes). Anything
+  // else hands the event on, to the shell hooks and the dialog. An
+  // AskUserQuestion goes too: Tars, which knows the agent's role and mode,
+  // refuses a bypass worker's and hands any other back to the person (the
+  // Audit's fifth gate of #538).
+  on<Request>('classic.PermissionRequest', async ($, e, next) => {
+    const tool = typeof e.tool_name === 'string' ? e.tool_name : '';
+    if (!tool) return next(e);
+    const from = checkFor(tool, e.tool_input);
+    const id = from?.id ?? `tars_${hex(crypto.getRandomValues(new Uint8Array(8)).buffer)}`;
+    const said = await askTars($, { tool, input: e.tool_input, tool_use_id: id }, { reason: from?.reason, rule: from?.rule });
+    if (said?.decision === 'allow') return { decision: { behavior: 'allow' } } satisfies Decision;
+    if (said?.decision === 'deny') return { decision: { behavior: 'deny', message: said.reason || 'Refused in Tars.' } } satisfies Decision;
+    return next(e);
   });
 
   // The tool in flight, for the heartbeat: a long Bash, an MCP wait or a subagent.

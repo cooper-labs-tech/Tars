@@ -88,6 +88,7 @@ import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
+import { registerChromeSwitchHandlers } from '../services/chrome-without-asking';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -223,6 +224,8 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerObsidianHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerGwsHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerMcpConfigHandlers();
+  // The owner's switch, Claude in Chrome acts without asking (2.0.7): the window's own channel, kept in ~/.tars-private.
+  registerChromeSwitchHandlers(ipcMain);
   registerTrayHandlers(deps);
 }
 
