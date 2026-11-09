@@ -21,18 +21,20 @@ import { writeSecretFileSync } from '../utils/secret-file';
  *   what the window cannot show whole is never allowed by anyone but the terminal.
  *
  * One source, out of the agents' folders (the Audit's M1 on #582): ~/.tars-private/owner-switches.json, which no agent
- * is handed (~/.tars, where app-settings.json is, is in every agent's --add-dir). Read once, at its first use after
- * Tars starts, and changed only by the window's own channel (chromeWithoutAsking:set), which writes the file and what
- * Tars holds together; the launch and the route read what Tars holds. A hand edit, or anything else that writes the
- * file while Tars runs, is taken at Tars's next start, never at once.
+ * is handed (~/.tars, where app-settings.json is, is in every agent's --add-dir). Read once at Tars's start, before any
+ * agent is loaded or launched (main.ts, loadChromeSwitch), never at its first use (the Audit's L3 on #582: a bypass
+ * agent writing the file before the first claude launch or Chrome question turned it on for the run), and changed only
+ * by the window's own channel (chromeWithoutAsking:set), which writes the file and what Tars holds together; the
+ * launch and the route read what Tars holds. A hand edit, or anything else that writes the file while Tars runs, is
+ * taken at Tars's next start, never at once.
  */
 
 /** The owner's switches, kept where no agent is handed them. */
 export const CHROME_SWITCH_FILE = privatePath('owner-switches.json');
 const KEY = 'chromeActsWithoutAsking';
 
-/** What Tars holds: undefined until its first use, then what the private file said, then what the window set. */
-let held: boolean | undefined;
+/** What Tars holds: what the private file said at Tars's start, then what the window set. Off until it is read. */
+let held = false;
 
 /** The private file's word: on only for `true` itself; a file missing, unreadable or holding anything else is off. */
 function readSwitch(): boolean {
@@ -44,8 +46,13 @@ function readSwitch(): boolean {
   }
 }
 
+/** Tars's start (main.ts), before any agent is loaded or launched: the one read of the private file in a run. */
+export function loadChromeSwitch(): void {
+  held = readSwitch();
+  if (held) console.log('[chrome] Claude in Chrome acts without asking: on, read at the start');
+}
+
 export function chromeActsWithoutAsking(): boolean {
-  if (held === undefined) held = readSwitch();
   return held;
 }
 
@@ -86,7 +93,7 @@ export function chromeLaunchEnv(binaryName: string): Record<string, string> {
   return binaryName === 'claude' && chromeActsWithoutAsking() ? { CLAUDE_CHROME_CLASSIFIER_FLOOR: '0' } : {};
 }
 
-/** Test seam: forget what Tars holds, as a start of Tars does. */
+/** Test seam: what a start of Tars does, the private file read again. */
 export function resetChromeSwitch(): void {
-  held = undefined;
+  loadChromeSwitch();
 }

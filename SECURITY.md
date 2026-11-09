@@ -271,8 +271,10 @@ Claude in Chrome acts with no question, for every agent of every project. It is 
 and it is the owner's to turn on. Measured on claude 2.1.321 with the extension connected
 (chrome-and-permissions-general.md):
 
-- Where it lives, and who changes it (the Audit's M1 on #582). One source: `~/.tars-private/owner-switches.json`, read
-  once at its first use after Tars starts, and changed only by the window's own channel (`chromeWithoutAsking:set`,
+- Where it lives, and who changes it (the Audit's M1 and L3 on #582). One source: `~/.tars-private/owner-switches.json`,
+  read once at Tars's start, before any agent is loaded or launched (`loadChromeSwitch` in `main.ts`; read at its first
+  use instead, a write by a bypass agent before the first claude launch would have turned it on for the run), and
+  changed only by the window's own channel (`chromeWithoutAsking:set`,
   which no API route reaches), which writes the file and what Tars holds together. The terminal's launch and the
   route read what Tars holds. Not `~/.tars/app-settings.json`: `~/.tars` is in every agent's `--add-dir`, and an agent,
   or a page steering one, that wrote the key there would have turned the classifier off for every agent started after
