@@ -14,7 +14,7 @@ export const CHANGELOG: Release[] = [
       'A team is now deployed whole or not at all: if one member cannot be made, the members already made are taken back and Tars says who failed and why. The orchestrator now starts after its whole team, so its first look at the team lists every member.',
       'A team\'s brief is now its orchestrator\'s first task, typed once when it starts, even when the team is created without starting; it is never kept as anyone\'s role, and each member keeps its own.',
       'A project folder that is not a git repository can be made one in a click: a main branch and a first commit with its files, signed with your git name, or with "Tars" for that commit alone when you have none. A team that needs worktrees on a plain folder is refused before anything is made, instead of leaving the orchestrator alone.',
-      'Tars can now tell what a project still lacks to open pull requests: a repository, a first commit, a remote, the GitHub CLI and its sign-in. It also tells when Claude Code is not installed, and refuses to deploy a team on a Claude Code that is signed out unless you choose to.',
+      'Tars can now tell what a project still lacks to open pull requests: a repository, a first commit, a remote, the GitHub CLI and its sign-in. It also tells when Claude Code is not installed, and refuses to deploy a team when Claude Code is signed out on the account a member would start on, naming that account, unless you choose to.',
       'Without a Hermes gateway, agents are no longer told to file their tasks on a Hermes board that is not there.',
     ],
   },
