@@ -37,9 +37,14 @@ interface Detected { stack: Stack; install: string; checks: string[]; setup: str
 function detect(projectPath: string): Detected | undefined {
   const at = (f: string) => path.join(projectPath, f);
   if (exists(at('package.json'))) {
-    let scripts: Record<string, unknown> = {};
-    try { scripts = (JSON.parse(read(at('package.json'))) as { scripts?: Record<string, unknown> }).scripts ?? {}; } catch { /* no scripts */ }
+    let pkg: { scripts?: Record<string, unknown>; packageManager?: unknown } = {};
+    try { pkg = JSON.parse(read(at('package.json'))); } catch { /* no scripts */ }
+    const scripts = pkg.scripts ?? {};
     const pm = exists(at('pnpm-lock.yaml')) ? 'pnpm' : exists(at('yarn.lock')) ? 'yarn' : 'npm';
+    // A first run green (the Audit's L1 on #586): setup-node fails when it is asked to cache with no lock file to key
+    // it, and pnpm's setup fails with no version unless package.json names its packageManager.
+    const locked = exists(at('pnpm-lock.yaml')) || exists(at('yarn.lock')) || exists(at('package-lock.json'));
+    const pnpmPinned = typeof pkg.packageManager === 'string' && pkg.packageManager.startsWith('pnpm@');
     const install = pm === 'pnpm' ? 'pnpm install --frozen-lockfile' : pm === 'yarn' ? 'yarn install --frozen-lockfile' : exists(at('package-lock.json')) ? 'npm ci' : 'npm install';
     const runScript = (s: string) => `${pm} run ${s}`;
     const checks: string[] = [];
@@ -48,17 +53,18 @@ function detect(projectPath: string): Detected | undefined {
     for (const s of ['lint', 'test', 'build']) if (typeof scripts[s] === 'string') checks.push(runScript(s));
     const node = read(at('.nvmrc')).trim().replace(/^v/, '') || '22';
     const setup = [
-      ...(pm === 'pnpm' ? ['      - uses: pnpm/action-setup@v4'] : []),
+      ...(pm === 'pnpm' ? ['      - uses: pnpm/action-setup@v4', ...(pnpmPinned ? [] : ['        with:', '          version: 9'])] : []),
       '      - uses: actions/setup-node@v4',
       '        with:',
       `          node-version: '${node}'`,
-      `          cache: ${pm}`,
+      ...(locked ? [`          cache: ${pm}`] : []),
     ];
     return { stack: 'node', install, checks, setup };
   }
   if (exists(at('pyproject.toml')) || exists(at('requirements.txt'))) {
-    const install = exists(at('pyproject.toml')) ? 'pip install -e .' : 'pip install -r requirements.txt';
     const usesPytest = exists(at('tests')) || /\[tool\.pytest/.test(read(at('pyproject.toml'))) || exists(at('pytest.ini'));
+    // pytest installed with the project: a project need not declare it to have tests (the Audit's L1 on #586).
+    const install = `${exists(at('pyproject.toml')) ? 'pip install -e .' : 'pip install -r requirements.txt'}${usesPytest ? ' pytest' : ''}`;
     return { stack: 'python', install, checks: usesPytest ? ['pytest'] : [], setup: ['      - uses: actions/setup-python@v5', '        with:', "          python-version: '3.12'"] };
   }
   if (exists(at('go.mod'))) {
@@ -159,23 +165,61 @@ export async function setupOffer(projectPath: string, team: readonly TeamMember[
   };
 }
 
-/** On the owner's yes: the offered workflow committed on chore/ci in its own worktree. Never pushed. */
-export async function writeCi(projectPath: string, opts: { freeBytes?: (dir: string) => Promise<number> } = {}): Promise<{ branch: string; worktree: string; file: string } | { error: string; code: string }> {
+/**
+ * On the owner's yes: the offered workflow committed on chore/ci in its own worktree. Never pushed. The worktrees
+ * agents work in are named by the caller and never pruned (the Audit's M1 on #586); what was pruned is said. A
+ * failure once the worktree is made takes the worktree and the branch back, and says what it could not.
+ */
+export async function writeCi(
+  projectPath: string, opts: { protectedPaths: readonly string[]; freeBytes?: (dir: string) => Promise<number> },
+): Promise<{ branch: string; worktree: string; file: string; pruned: string[] } | { error: string; code: string; left?: string[] }> {
   const offer = await ciOffer(projectPath);
   if (offer.state !== 'offer') return { error: offer.state === 'present' ? `The project has a workflow already: ${offer.path}.` : offer.why, code: offer.state === 'present' ? 'exists' : offer.state };
   const branchExists = await git(projectPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${CI_BRANCH}`]).then(() => true, () => false);
   if (branchExists) return { error: `The branch ${CI_BRANCH} exists already: Tars writes nothing over it.`, code: 'exists' };
-  const made = await newWorktree(projectPath, CI_BRANCH, { freeBytes: opts.freeBytes });
+  const made = await newWorktree(projectPath, CI_BRANCH, { protectedPaths: opts.protectedPaths, freeBytes: opts.freeBytes });
   if ('code' in made) return made;
   const file = path.join(made.path, CI_FILE);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, offer.content);
-  // The user's own identity when git has one; Tars's, for this commit only, when it has none.
-  const named = (await git(made.path, ['config', 'user.email']).then(r => r.stdout.trim(), () => '')) !== '';
-  const who = named ? [] : ['-c', 'user.name=Tars', '-c', 'user.email=tars@localhost'];
-  await git(made.path, ['add', CI_FILE]);
-  await git(made.path, [...who, 'commit', '-q', '-m', 'chore: ci, the checks qa runs at each gate, on every pull request (offered by tars)']);
-  return { branch: CI_BRANCH, worktree: made.path, file };
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, offer.content, { flag: 'wx' });
+    // The user's own identity when git has both its keys; Tars's, for this commit only, when it lacks either (git set
+    // to its config alone refuses a commit with an email and no name).
+    const key = (k: string) => git(made.path, ['config', k]).then(r => r.stdout.trim(), () => '');
+    const named = (await key('user.name')) !== '' && (await key('user.email')) !== '';
+    const who = named ? [] : ['-c', 'user.name=Tars', '-c', 'user.email=tars@localhost'];
+    await git(made.path, ['add', CI_FILE]);
+    await git(made.path, [...who, 'commit', '-q', '-m', 'chore: ci, the checks qa runs at each gate, on every pull request (offered by tars)']);
+  } catch (err) {
+    const why = String((err as { stderr?: unknown }).stderr ?? '').trim() || (err as Error).message;
+    return { error: `The workflow could not be written (${why}).${await takeBack(projectPath, made.path, file)}`, code: 'write_failed' };
+  }
+  return { branch: CI_BRANCH, worktree: made.path, file, pruned: made.pruned };
+}
+
+/**
+ * What a failed write leaves, taken back: the file Tars wrote, the worktree (clean once the file is gone, so never by
+ * force), and the branch it made a moment before, which holds no commit of anyone's. Says what it could not take back.
+ */
+async function takeBack(projectPath: string, worktree: string, file: string): Promise<string> {
+  const left: string[] = [];
+  try { if (fs.existsSync(file)) fs.rmSync(file); } catch { left.push(file); }
+  // Unstaged in the worktree, should the add have run: its index then matches its HEAD again.
+  await git(worktree, ['reset', '-q', '--', CI_FILE]).catch(() => undefined);
+  if (!(await git(projectPath, ['worktree', 'remove', worktree]).then(() => true, () => false))) left.push(`the worktree ${worktree}`);
+  else if (!(await git(projectPath, ['branch', '-D', CI_BRANCH]).then(() => true, () => false))) left.push(`the branch ${CI_BRANCH}`);
+  return left.length ? ` Left behind: ${left.join(', ')}.` : ' Nothing was left behind: the next yes tries again.';
+}
+
+/**
+ * The project a window's call names, if Tars knows it: one of its projects, never the home folder nor a root, so a
+ * CLAUDE.md or a commit lands only in a project the user added (the Audit's L2 on #586).
+ */
+export function acceptedProject(value: unknown, knownProjects: readonly string[], home: string): string | undefined {
+  if (typeof value !== 'string' || !path.isAbsolute(value)) return undefined;
+  const asked = path.resolve(value);
+  if (asked === path.parse(asked).root || asked === path.resolve(home)) return undefined;
+  return knownProjects.some(p => path.resolve(p) === asked) ? asked : undefined;
 }
 
 /** On the owner's yes: the offered CLAUDE.md, at the project's root, never over one it has. */
