@@ -24,6 +24,11 @@
  *    start, the owner's way to turn it on until Settings has a switch (quit Tars, edit, start Tars).
  * 8. The window's channel takes anything but true or false, or forgets what it set across a start.
  * 9. A private file that cannot be read, or holds anything but true, turns it on, or throws at a launch.
+ * And from the Audit's re-check of #582 (L3, at 6ad523a6b), written before the code:
+ * 10. The switch is read at its first use (the first claude launch or the first Chrome question), not at Tars's start:
+ *     a bypass agent that writes the file between the start and that first use turns it on for the current run. It is
+ *     read once at the start, before any agent is loaded or launched (main.ts calls loadChromeSwitch before
+ *     loadAgents), and a write after the start changes nothing until the next one.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
@@ -34,7 +39,7 @@ import {
 } from '../../../electron/services/chrome-without-asking';
 import { APP_SETTINGS_FILE, PRIVATE_DIR } from '../../../electron/constants';
 
-/** What a start of Tars does: forget what was loaded, read the private file again at the first use. */
+/** What a start of Tars does (its test seam): forget what was held, and read the private file again. */
 const restart = () => resetChromeSwitch();
 const writeByHand = (file: string, body: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, body); };
 
@@ -101,6 +106,20 @@ describe("the owner's Claude in Chrome switch", () => {
     expect(await handlers.get('chromeWithoutAsking:set')!({}, false)).toEqual({ success: true, on: false });
     restart();
     expect(chromeActsWithoutAsking()).toBe(false);
+  });
+
+  it('10. read at Tars\'s start, before any agent: a write between the start and the first use changes nothing', () => {
+    restart();
+    writeByHand(CHROME_SWITCH_FILE, '{ "chromeActsWithoutAsking": true }\n');
+    expect(chromeActsWithoutAsking()).toBe(false);
+    expect(chromeLaunchEnv('claude')).toEqual({});
+    restart();
+    expect(chromeActsWithoutAsking()).toBe(true);
+    // main.ts reads it before it loads the agents, so before any launch or question.
+    const main = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'electron', 'main.ts'), 'utf8');
+    const read = main.indexOf('loadChromeSwitch();');
+    expect(read, 'main.ts reads the switch at its start').toBeGreaterThan(-1);
+    expect(read).toBeLessThan(main.indexOf('loadAgents();'));
   });
 
   it('7. a hand edit of the private file is taken at the next start, not before', () => {
