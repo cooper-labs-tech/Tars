@@ -29,6 +29,10 @@
  *     taken once at its next start (core/first-task.ts), whether or not the team starts now.
  * 12. Started on deploy, every member works on the brief at once: only the orchestrator gets it; the others start at
  *     their prompt with their role, and wait for its delegations.
+ * And from the Audit's gate of #584 (L1, at 13f018132), before the code:
+ * 13. A member that fails after its worktree was made (the API not listening, no terminal left) keeps that worktree
+ *     and its new branch, while the answer says nothing was kept: they are taken back too, and what cannot be is in
+ *     `left`. A worktree that was there before the deploy is never removed.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { deployTeam, type TeamDeployDeps, type TeamDeployParams } from '../../../electron/services/team-deploy';
@@ -48,11 +52,13 @@ let log: string[];
 let deps: TeamDeployDeps;
 let failCreate: string | null;
 let failStart: string | null;
+let failAfterWorktree: boolean;
 let signIn: 'signed-in' | 'signed-out' | 'cli-missing' | 'unknown';
 let repo: boolean;
 let names: Set<string>;
 let branches: Set<string>;
 let roles: Record<string, string>;
+let worktrees: Set<string>;
 let firstTasks: Record<string, string>;
 
 beforeEach(() => {
@@ -65,6 +71,8 @@ beforeEach(() => {
   branches = new Set(['main']);
   roles = {};
   firstTasks = {};
+  worktrees = new Set();
+  failAfterWorktree = false;
   let n = 0;
   const made = new Map<string, string>();
   deps = {
@@ -74,10 +82,18 @@ beforeEach(() => {
     branchExists: async (_p, b) => branches.has(b),
     deleteBranch: async (_p, b) => { log.push(`delete branch ${b}`); branches.delete(b); },
     claudeSignIn: async () => signIn,
+    worktreeExists: (_p, b) => worktrees.has(b),
+    removeWorktree: async (_p, b) => { log.push(`remove worktree ${b}`); worktrees.delete(b); },
     create: async (config) => {
       log.push(`create ${config.name}`);
+      if (failCreate && config.name.startsWith(failCreate) && failAfterWorktree && config.worktree?.enabled) {
+        // Its worktree made, then the terminal refused (core/no-terminal.ts).
+        worktrees.add(config.worktree.branchName);
+        branches.add(config.worktree.branchName);
+        throw new Error('No terminal is left on this machine');
+      }
       if (failCreate && config.name.startsWith(failCreate)) throw new Error('The worktree could not be made: a branch named feat/backend is checked out elsewhere');
-      if (config.worktree?.enabled) branches.add(config.worktree.branchName);
+      if (config.worktree?.enabled) { branches.add(config.worktree.branchName); worktrees.add(config.worktree.branchName); }
       const id = `id-${++n}`;
       made.set(id, config.name);
       return { id };
@@ -140,6 +156,33 @@ describe('a team deploy', () => {
     failCreate = 'Backend';
     await deploy();
     expect(log).not.toContain('delete branch feat/frontend');
+  });
+
+  it('13. takes back the worktree and new branch of the member that failed after making them', async () => {
+    failCreate = 'Backend';
+    failAfterWorktree = true;
+    const r = await deploy();
+    expect(r).toMatchObject({ success: false, code: 'failed', failed: [{ member: 'Backend', reason: 'No terminal is left on this machine' }], left: [] });
+    expect(log).toEqual([
+      'create Frontend - my-app', 'create Backend - my-app',
+      'remove Frontend - my-app', 'delete branch feat/frontend',
+      'remove worktree feat/backend', 'delete branch feat/backend',
+    ]);
+    expect(worktrees.size).toBe(0);
+  });
+
+  it('13. says what it could not take back of the failing member, and never removes a worktree that was there', async () => {
+    failCreate = 'Backend';
+    failAfterWorktree = true;
+    deps.removeWorktree = async (_p, b) => { throw new Error(`git refused to remove .worktrees/${b}`); };
+    const r = await deploy();
+    expect(!r.success && r.left).toEqual(['the worktree of Backend: git refused to remove .worktrees/feat/backend']);
+    // A worktree there before the deploy stays, whatever fails.
+    log = [];
+    worktrees = new Set(['feat/backend']);
+    deps.removeWorktree = async (_p, b) => { log.push(`remove worktree ${b}`); };
+    await deploy();
+    expect(log).not.toContain('remove worktree feat/backend');
   });
 
   it('2. refuses worktrees on a folder with no first commit before making anything', async () => {

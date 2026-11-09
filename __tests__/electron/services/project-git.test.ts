@@ -27,6 +27,13 @@
  * 13. gh read from its exit code alone: missing, signed out and signed in are told apart from its own words, the
  *     account named.
  * 14. No git: installed false, and nothing else claimed.
+ * And from the Audit's gate of #584 (at 13f018132), written before the code:
+ * 15. (M2) gitInit's git runs outside safeGit: the user's hooks (core.hooksPath), a clean filter a .gitattributes
+ *     names, and commit signing (commit.gpgSign, gpg.program) run from a click in Tars. Every git call goes through
+ *     safeGit, which switches off every program a configuration can name.
+ * 16. (L2) A folder whose .git is there but broken reads as no repository, is "reinitialised", and the undo of a later
+ *     failure deletes the user's .git, objects included: a folder with a .git, file or directory, is
+ *     `already-a-repository`, untouched.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'node:fs';
@@ -37,6 +44,13 @@ import { gitInit, projectReadiness, type ProjectGitOptions } from '../../../elec
 
 // Each test runs git several times: 5 s is too short under the fleet's load (as auth.test.ts).
 vi.setConfig({ testTimeout: 60_000 });
+
+/** No git on the PATH safeGit hands git: a folder with nothing in it, for the duration of `run`. */
+async function withoutGit<T>(run: () => Promise<T>): Promise<T> {
+  const saved = process.env.PATH;
+  process.env.PATH = fs.mkdtempSync(path.join(os.tmpdir(), 'no-git-'));
+  try { return await run(); } finally { process.env.PATH = saved; }
+}
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } }).trim();
 let root: string;
@@ -85,7 +99,7 @@ describe('git init for a project', () => {
 
   it('3. says git is missing', async () => {
     const p = folder('no-git');
-    expect(await gitInit(p, { ...opts, git: path.join(root, 'nowhere', 'git') })).toMatchObject({ success: false, code: 'git-missing' });
+    expect(await withoutGit(() => gitInit(p, opts))).toMatchObject({ success: false, code: 'git-missing' });
     expect(fs.existsSync(path.join(p, '.git'))).toBe(false);
   });
 
@@ -119,6 +133,54 @@ describe('git init for a project', () => {
     const r = await gitInit(p, opts);
     expect(r).toMatchObject({ success: true, files: 2 });
     expect(git(p, 'ls-files').split('\n').sort()).toEqual(['.gitignore', 'index.js']);
+  });
+});
+
+describe('the Audit\'s gate of #584', () => {
+  it.skipIf(process.platform === 'win32')('15. runs none of the user\'s hooks, filters or signing programs', async () => {
+    const p = folder('guarded');
+    const marks = path.join(root, 'marks');
+    fs.mkdirSync(marks);
+    const hooks = path.join(root, 'user-hooks');
+    fs.mkdirSync(hooks);
+    const script = (name: string) => {
+      const file = path.join(root, `${name}.sh`);
+      fs.writeFileSync(file, `#!/bin/sh\ntouch '${path.join(marks, name)}'\ncat\n`, { mode: 0o755 });
+      return file;
+    };
+    fs.writeFileSync(path.join(hooks, 'pre-commit'), `#!/bin/sh\ntouch '${path.join(marks, 'hook')}'\n`, { mode: 0o755 });
+    fs.writeFileSync(path.join(p, '.gitattributes'), '* filter=evil\n');
+    fs.writeFileSync(path.join(p, 'a.txt'), 'a\n');
+    const config = path.join(os.homedir(), '.gitconfig');
+    fs.writeFileSync(config, [
+      '[user]', '\tname = Ada', '\temail = ada@example.com',
+      '[core]', `\thooksPath = ${hooks}`,
+      '[filter "evil"]', `\tclean = ${script('filter')}`, '\trequired = true',
+      '[commit]', '\tgpgSign = true',
+      '[gpg]', `\tprogram = ${script('gpg')}`, '',
+    ].join('\n'));
+    try {
+      const r = await gitInit(p, opts);
+      expect(r).toMatchObject({ success: true, files: 2, identity: 'yours' });
+      expect(fs.readdirSync(marks)).toEqual([]);
+    } finally {
+      fs.rmSync(config, { force: true });
+    }
+  });
+
+  it('16. leaves a folder whose .git is there, even broken, untouched', async () => {
+    const p = folder('broken');
+    fs.mkdirSync(path.join(p, '.git', 'objects'), { recursive: true });
+    fs.writeFileSync(path.join(p, '.git', 'HEAD'), 'not a ref\n');
+    fs.writeFileSync(path.join(p, '.git', 'objects', 'keep'), 'precious');
+    expect(await gitInit(p, opts)).toMatchObject({ success: false, code: 'already-a-repository' });
+    expect(fs.readFileSync(path.join(p, '.git', 'objects', 'keep'), 'utf8')).toBe('precious');
+    expect(fs.readFileSync(path.join(p, '.git', 'HEAD'), 'utf8')).toBe('not a ref\n');
+    // A .git file (a worktree's, a submodule's) as well.
+    const q = folder('gitfile');
+    fs.writeFileSync(path.join(q, '.git'), 'gitdir: /nowhere\n');
+    expect(await gitInit(q, opts)).toMatchObject({ success: false, code: 'already-a-repository' });
+    expect(fs.readFileSync(path.join(q, '.git'), 'utf8')).toBe('gitdir: /nowhere\n');
   });
 });
 
@@ -170,7 +232,7 @@ describe('what a project lacks for PR delivery', () => {
   });
 
   it('14. no git: not installed, nothing else claimed', async () => {
-    const r = await projectReadiness(folder('nogit'), { ...opts, git: path.join(root, 'nowhere', 'git') });
+    const r = await withoutGit(() => projectReadiness(folder('nogit'), opts));
     expect(r).toMatchObject({ success: true, git: { installed: false, repository: false, hasCommit: false, branch: null }, remote: null, missing: ['git'] });
   });
 });
