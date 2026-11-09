@@ -2660,7 +2660,7 @@ export interface ElectronAPI {
         claudeMd: { state: 'offer'; path: string; content: string } | { state: 'present'; path: string };
       }
     >;
-    writeCi: (projectPath: string) => Promise<{ success: true; branch: string; worktree: string; file: string } | { success: false; error: string; code?: string }>;
+    writeCi: (projectPath: string) => Promise<{ success: true; branch: string; worktree: string; file: string; pruned: string[] } | { success: false; error: string; code?: string; left?: string[] }>;
     writeClaudeMd: (projectPath: string) => Promise<{ success: true; path: string } | { success: false; error: string; code?: string }>;
     setTeamPermissionMode: (projectPath: string, permissionMode: 'plan' | 'normal' | 'auto' | 'bypass') => Promise<{
       success: boolean;

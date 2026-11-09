@@ -1,9 +1,12 @@
 import { ipcMain } from 'electron';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
+import { DATA_DIR } from '../constants';
 import { agents } from '../core/agent-manager';
 import { updateAgent } from '../core/agent-update';
 import { restartRunnersOf } from '../services/chat-runners';
-import { setupOffer, teamOf, writeCi, writeClaudeMd } from '../services/project-setup';
+import { acceptedProject, setupOffer, teamOf, writeCi, writeClaudeMd } from '../services/project-setup';
 import type { AgentPermissionMode } from '../types';
 
 /**
@@ -15,27 +18,45 @@ import type { AgentPermissionMode } from '../types';
 
 const MODES: readonly AgentPermissionMode[] = ['plan', 'normal', 'auto', 'bypass'];
 
-function projectOf(value: unknown): string | undefined {
-  return typeof value === 'string' && path.isAbsolute(value) ? value : undefined;
+/** The projects Tars knows: the ones the user added (projects.json) and every agent's. */
+function knownProjects(): string[] {
+  let added: string[] = [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'projects.json'), 'utf-8'));
+    if (Array.isArray(parsed)) added = parsed.filter((p: unknown): p is string => typeof p === 'string');
+  } catch { /* none added */ }
+  return [...added, ...Array.from(agents.values()).map(a => a.projectPath)];
 }
+
+/** One of those, never the home folder nor a root (the Audit's L2 on #586). */
+function projectOf(value: unknown): string | undefined {
+  return acceptedProject(value, knownProjects(), os.homedir());
+}
+
+/** The folders agents work in, never pruned to write the CI (the Audit's M1 on #586): their worktrees, their terminals'. */
+function agentFolders(): string[] {
+  return Array.from(agents.values()).flatMap(a => [a.worktreePath, a.ptyCwd]).filter((p): p is string => typeof p === 'string' && p.length > 0);
+}
+
+const UNKNOWN = 'projectPath is not one of Tars\'s projects: add it on the Projects page first.';
 
 export function registerProjectSetupHandlers(): void {
   ipcMain.handle('project:setupOffer', async (_event, projectPath: unknown) => {
     const project = projectOf(projectPath);
-    if (!project) return { success: false, error: 'projectPath is an absolute path.' };
+    if (!project) return { success: false, error: UNKNOWN };
     return { success: true, ...(await setupOffer(project, teamOf(project, agents.values()))) };
   });
 
   ipcMain.handle('project:writeCi', async (_event, projectPath: unknown) => {
     const project = projectOf(projectPath);
-    if (!project) return { success: false, error: 'projectPath is an absolute path.' };
-    const written = await writeCi(project);
+    if (!project) return { success: false, error: UNKNOWN };
+    const written = await writeCi(project, { protectedPaths: agentFolders() });
     return 'code' in written ? { success: false, ...written } : { success: true, ...written };
   });
 
   ipcMain.handle('project:writeClaudeMd', async (_event, projectPath: unknown) => {
     const project = projectOf(projectPath);
-    if (!project) return { success: false, error: 'projectPath is an absolute path.' };
+    if (!project) return { success: false, error: UNKNOWN };
     const written = await writeClaudeMd(project, teamOf(project, agents.values()));
     return 'code' in written ? { success: false, ...written } : { success: true, ...written };
   });
@@ -45,7 +66,7 @@ export function registerProjectSetupHandlers(): void {
   ipcMain.handle('project:setTeamPermissionMode', async (_event, params: { projectPath?: unknown; permissionMode?: unknown }) => {
     const project = projectOf(params?.projectPath);
     const mode = params?.permissionMode as AgentPermissionMode;
-    if (!project) return { success: false, error: 'projectPath is an absolute path.' };
+    if (!project) return { success: false, error: UNKNOWN };
     if (!MODES.includes(mode)) return { success: false, error: `permissionMode is one of ${MODES.join(', ')}.` };
     const results: Array<{ id: string; name?: string; success: boolean; error?: string }> = [];
     for (const agent of teamOf(project, agents.values())) {
