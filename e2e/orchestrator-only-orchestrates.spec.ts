@@ -21,9 +21,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. claude: its session is denied the tools of the work, editing (Edit, Write, NotebookEdit), its own subagents
  *    (Task), searching code (Grep, Glob) and the web (WebFetch, WebSearch), and keeps Read and Bash;
  * 3. claude: its identity says the same, and, its project having no agent yet, to create the ones the work needs;
- * 4. codex, which has no system prompt file and no tool to deny: its first prompt says the same as 3.
+ * 4. codex, which has no system prompt file and no tool to deny: its first prompt says the same as 3;
+ * 5. ~/.tars/CLAUDE.md, every agent's instructions as the app publishes them and every claude session loads them,
+ *    tells a worker to fix a bug report itself, and an orchestrator to hand it to an agent (the Audit's M1 on #579).
  * Red on main 58f2863b4: the role file says reading the code is its own work, Grep, Glob, WebFetch and WebSearch are
- * allowed, and neither identity says it.
+ * allowed, neither identity says it, and ~/.tars/CLAUDE.md tells every agent to fix a bug report itself.
  * The artefact: values.json (the role file's rule, the denied tools, both identities).
  */
 
@@ -110,13 +112,19 @@ for (const newInterface of [false, true]) {
       expect(seen.role).toContain(RULE);
       expect(seen.role).not.toContain('reading the code to check a fact');
       // 2.
-      expect([...seen.denied].sort()).toEqual(['Edit', 'Glob', 'Grep', 'NotebookEdit', 'Task', 'WebFetch', 'WebSearch', 'Write']);
+      expect([...seen.denied].sort()).toEqual(['Edit', 'Glob', 'Grep', 'LSP', 'NotebookEdit', 'Task', 'WebFetch', 'WebSearch', 'Workflow', 'Write']);
       // 3.
       expect(seen.identity).toContain(RULE);
       expect(seen.identity).toContain(CREATE);
       // 4.
       expect(codexPrompt).toContain(RULE);
       expect(codexPrompt).toContain(CREATE);
+      // 5.
+      const everyAgent = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8');
+      values.bugReportLine = everyAgent.split('\n').find(l => l.includes('bug report')) ?? null;
+      recordValues(values);
+      expect(everyAgent).not.toContain('When given a bug report, just fix it');
+      expect(everyAgent).toContain('An orchestrator never does: it hands the bug report to one of its agents');
       expect(errors).toEqual([]);
     } finally {
       recordValues(values);

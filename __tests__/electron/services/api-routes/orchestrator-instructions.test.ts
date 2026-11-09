@@ -69,7 +69,7 @@ vi.mock('../../../../electron/services/memory-hub', () => ({
 import { performDispatch } from '../../../../electron/services/api-routes/agent-routes';
 import { agents } from '../../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../../electron/core/pty-manager';
-import { getSuperAgentInstructionsPath } from '../../../../electron/utils';
+import { getAgentInstructionsPath, getSuperAgentInstructionsPath } from '../../../../electron/utils';
 import { RouteContext } from '../../../../electron/services/api-routes/types';
 import { AgentStatus, AppSettings } from '../../../../electron/types';
 
@@ -194,5 +194,23 @@ describe('the rules an orchestrator is actually handed', () => {
     // "agent manager only" is what forbade it to answer at all, which is the
     // instruction this whole change exists to replace.
     expect(read()).not.toContain('agent manager only');
+  });
+
+  it('hands work with delegate_task, never the deprecated start_agent (the Audit\'s I3 on #579)', () => {
+    expect(read()).toContain('delegate_task');
+    expect(read()).not.toContain('start_agent');
+  });
+
+  /**
+   * Every agent's instructions, published as ~/.tars/CLAUDE.md and loaded by
+   * every claude session, an orchestrator's too (the Audit's M1 on #579): their
+   * "When given a bug report, just fix it: point at logs, errors, failing tests"
+   * told an orchestrator to diagnose itself, with Read and Bash left to it.
+   */
+  it('every agent\'s instructions tell a worker, never an orchestrator, to fix a bug report itself', () => {
+    const text = fs.readFileSync(getAgentInstructionsPath(), 'utf-8');
+    expect(text).not.toContain('When given a bug report, just fix it');
+    expect(text).toMatch(/A worker given a bug report just fixes it/);
+    expect(text).toMatch(/An orchestrator never does: it hands the bug report to one of its agents/);
   });
 });

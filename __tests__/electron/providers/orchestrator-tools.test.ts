@@ -44,7 +44,7 @@ describe('the restriction itself', () => {
   it('names no tool claude does not have: every orchestrator start warned about MultiEdit', () => {
     // claude 2.1.268, 2.1.273 and 2.1.280: `Permission deny rule "MultiEdit"
     // matches no known tool - check for typos.` on stderr, at every start.
-    expect(orchestratorToolFlags(true)).toBe(' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" "Grep" "Glob" "WebFetch" "WebSearch"');
+    expect(orchestratorToolFlags(true)).toBe(' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" "Workflow" "Grep" "Glob" "LSP" "WebFetch" "WebSearch"');
     expect(orchestratorToolFlags(true)).not.toContain('MultiEdit');
   });
 
@@ -54,7 +54,9 @@ describe('the restriction itself', () => {
 
   it('blocks searching the code and the web, the tools of an investigation or a research', () => {
     const flags = orchestratorToolFlags(true);
-    for (const tool of ['Grep', 'Glob', 'WebFetch', 'WebSearch']) expect(flags).toContain(`"${tool}"`);
+    // LSP reads code as Grep does; Workflow runs subagents as Task does (claude 2.1.321's own tool list, the Audit's
+    // L2 on #579).
+    for (const tool of ['Grep', 'Glob', 'LSP', 'WebFetch', 'WebSearch', 'Workflow']) expect(flags).toContain(`"${tool}"`);
   });
 
   it('leaves Read and Bash alone: its agents\' reports, and gh and git to merge', () => {
