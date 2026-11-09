@@ -52,7 +52,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       '`start_agent` is deprecated: it hands the task the same way and answers with its taskId without waiting. Use delegate_task. `wait_for_agent` waits on an agent\'s status, `get_agent_output` reads its terminal, `get_agent` gives its whole record.',
       '`create_agent` adds an agent to your project, on any provider; `stop_agent` stops one with a reason the user reads; `remove_agent` deletes one for good.',
       '`update_agent` changes one of your agents afterwards (name, provider, model, effort, permission mode, CLI path, skills), never its role, and never your own settings: those stay the user\'s, in the Agents page. A running turn is never cut: a new model or effort restarts a claude agent once its turn ends, on the same conversation, and another CLI takes it at its next start; a new provider or CLI path waits until you stop the agent with `stop_agent` (cli_running until then), and its next start is on a new conversation. The answer says when the change applies.',
-      'An orchestrator does not edit files: its sessions are denied the editing tools. It splits the work, delegates, and reports.',
+      'An orchestrator only orchestrates: development, research, investigation, reading code or logs to diagnose, QA and audit are its agents\' work. It splits the work, delegates, follows, and reports. Its sessions are denied the tools of that work where its CLI allows it (claude and its kin: editing, subagents, searching the code and the web; Qwen Code the same); it keeps reading files and its shell, for its agents\' reports and to merge.',
     ].join('\n'),
   },
   {
@@ -271,6 +271,10 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
   const lines = [`## How Tars works`];
   if (role === 'orchestrator') {
     lines.push(
+      // The rule first, on every CLI: this section is the one text each orchestrator gets, from its bootstrap or in its
+      // first prompt (2.0.7, the owner's rule of 10/11).
+      `- You orchestrate, and only that. You never do the work yourself: development, research, investigation, reading code or logs to diagnose, QA and audit all go to your project's agents. You split the work, delegate each piece, follow it, read what your agents report, and report to the user. A question whose answer needs the code, the logs or the web is a task for an agent too.`,
+      `- No agent of your project fits a piece of work, or your project has none yet: create the one it needs with create_agent (a developer, a QA, an auditor), then delegate to it.`,
       `- Write each task as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance. tars_guide delegation says more.`,
       `- delegate_task hands a task to the agent's own terminal and returns its full final answer, tokens and cost (claude, Qwen Code; codex, pi, gemini: the answer only; opencode, amp, grok: delivered only). timeoutSeconds is how long it waits: 3600 s when you give none; the task is never stopped there. If it says the task may still be working, read it with task_status: never send it twice. start_agent is deprecated.`,
       `- send_message modes: auto, queue, steer, restart. HELD means it waits for the terminal and goes in by itself.`,

@@ -93,8 +93,12 @@ export function qwenApprovalMode(mode: AgentPermissionMode | undefined): 'plan' 
   return 'default';
 }
 
-/** What an orchestrator on Qwen Code may not use: its edit, write and sub-agent tools (ToolNames in 0.25.2). */
-export const QWEN_ORCHESTRATOR_EXCLUDED = ['edit', 'write_file', 'agent'] as const;
+/**
+ * What an orchestrator on Qwen Code may not use (ToolNames in 0.25.2): the tools of the work, which is its agents'
+ * (2.0.7), as claude's are denied (providers/cli-provider.ts orchestratorToolFlags): editing, its own sub-agents,
+ * searching the code and the web. Reading a file and its shell stay: its agents' reports, gh and git.
+ */
+export const QWEN_ORCHESTRATOR_EXCLUDED = ['edit', 'notebook_edit', 'write_file', 'agent', 'grep_search', 'glob', 'web_fetch', 'web_search'] as const;
 
 type HookTable = Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string }> }>>;
 

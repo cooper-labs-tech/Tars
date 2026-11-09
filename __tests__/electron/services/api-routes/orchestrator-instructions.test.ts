@@ -165,29 +165,29 @@ describe('the rules an orchestrator is actually handed', () => {
   const read = () => fs.readFileSync(getSuperAgentInstructionsPath(), 'utf-8');
 
   /**
-   * The one thing worth asserting about the prose, because it is what makes an
-   * orchestrator open a task for a question that needed a sentence: the
-   * smallest response has to be considered before any tool is reached for, so
-   * the section that says so has to come before the tools do.
+   * The one thing worth asserting about the prose (2.0.7, the owner's rule of
+   * 10/11, which replaces the "smallest response" triage of 2026-09): the
+   * orchestrator only orchestrates. Under the triage, a fresh orchestrator
+   * asked why something was broken read the code itself and delegated nothing
+   * (reports/orchestrator-role-runs, claude 2.1.321). The rule has to come
+   * before any tool is reached for.
    */
-  it('tells the orchestrator to size the response before it reaches for a tool', () => {
+  it('tells the orchestrator it never does the work itself, before it reaches for a tool', () => {
     const text = read();
-    const triage = text.indexOf('smallest response');
+    const rule = text.indexOf('You never do the work yourself');
     const tools = text.indexOf('## Available MCP Tools');
 
-    expect(triage, 'no triage step in the instructions').toBeGreaterThan(-1);
+    expect(rule, 'no rule in the instructions').toBeGreaterThan(-1);
     expect(tools).toBeGreaterThan(-1);
-    expect(triage).toBeLessThan(tools);
+    expect(rule).toBeLessThan(tools);
   });
 
-  it('offers answering without any agent as one of the outcomes', () => {
+  it('no longer offers answering from the code without an agent', () => {
     const text = read();
-    const triage = text.slice(text.indexOf('smallest response'), text.indexOf('## Your identity'));
-
-    // All three sizes, or the smallest one is not really on the table.
-    expect(triage).toMatch(/\*\*No agent\.\*\*/);
-    expect(triage).toMatch(/\*\*One agent\.\*\*/);
-    expect(triage).toMatch(/\*\*Several agents\.\*\*/);
+    expect(text).not.toMatch(/\*\*No agent\.\*\*/);
+    expect(text).not.toContain('reading the code to check a fact');
+    // A project with no agent yet is not a reason to do the work: it creates one.
+    expect(text).toContain('create_agent');
   });
 
   it('does not tell the orchestrator it may only manage', () => {
