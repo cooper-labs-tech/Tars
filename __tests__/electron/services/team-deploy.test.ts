@@ -18,7 +18,7 @@
  *    to run them.
  * 5. A member already deployed on the project (its name taken there) is made twice: it is skipped, and said.
  * 6. A start that fails takes the made team back, or is lost: the members stay, and the answer names who did not start.
- * 7. Not started on deploy: nothing starts, and the brief is kept as each member's saved prompt.
+ * 7. Not started on deploy, a member starts all the same: nothing starts (the brief and the roles are item 11's).
  * 8. Members the deploy cannot tell apart (two with one name or one branch), a branch name git would refuse or that
  *    would leave .worktrees, two orchestrators: refused first, nothing made, `invalid`.
  * 9. A folder that is not one of Tars's projects, or no member at all: refused, nothing made.
@@ -33,6 +33,10 @@
  * 13. A member that fails after its worktree was made (the API not listening, no terminal left) keeps that worktree
  *     and its new branch, while the answer says nothing was kept: they are taken back too, and what cannot be is in
  *     `left`. A worktree that was there before the deploy is never removed.
+ * And from the Audit's I1 on #584, made a fix by the orchestrator's task t-e05241d5, before the code:
+ * 14. With several Claude accounts, the deploy goes ahead when any one is signed in, and a member starts on one that
+ *     is not: the sign-in asked is the one of the accounts the members will start on (newAgentSignIn,
+ *     claude-accounts/launch.ts), and a refusal names those that are signed out, in its error and for each member.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { deployTeam, type TeamDeployDeps, type TeamDeployParams } from '../../../electron/services/team-deploy';
@@ -54,6 +58,7 @@ let failCreate: string | null;
 let failStart: string | null;
 let failAfterWorktree: boolean;
 let signIn: 'signed-in' | 'signed-out' | 'cli-missing' | 'unknown';
+let signedOutAccounts: string[];
 let repo: boolean;
 let names: Set<string>;
 let branches: Set<string>;
@@ -66,6 +71,7 @@ beforeEach(() => {
   failCreate = null;
   failStart = null;
   signIn = 'signed-in';
+  signedOutAccounts = [];
   repo = true;
   names = new Set();
   branches = new Set(['main']);
@@ -82,7 +88,7 @@ beforeEach(() => {
     hasCommit: async () => repo,
     branchExists: async (_p, b) => branches.has(b),
     deleteBranch: async (_p, b) => { log.push(`delete branch ${b}`); branches.delete(b); },
-    claudeSignIn: async () => signIn,
+    claudeSignIn: async () => ({ state: signIn, signedOut: signedOutAccounts }),
     worktreeExists: (_p, b) => worktrees.has(b),
     removeWorktree: async (_p, b) => { log.push(`remove worktree ${b}`); worktrees.delete(b); },
     create: async (config) => {
@@ -214,6 +220,24 @@ describe('a team deploy', () => {
     // A team with no Claude member is not asked about.
     signIn = 'signed-out';
     expect(await deploy({ members: [member('Coder', { provider: 'codex' })] })).toMatchObject({ success: true });
+  });
+
+  it('14. names the accounts the members would start on that are signed out', async () => {
+    signIn = 'signed-out';
+    signedOutAccounts = ['Account 1'];
+    const r = await deploy();
+    expect(r).toMatchObject({ success: false, code: 'signed-out' });
+    expect(!r.success && r.error).toMatch(/signed out on Account 1/);
+    expect(!r.success && r.failed.map(f => f.reason)).toEqual([
+      'Claude Code is signed out on Account 1, the account it would start on',
+      'Claude Code is signed out on Account 1, the account it would start on',
+      'Claude Code is signed out on Account 1, the account it would start on',
+    ]);
+    expect(log).toEqual([]);
+    signedOutAccounts = ['Account 1', 'Max two'];
+    const two = await deploy();
+    expect(!two.success && two.failed[0].reason).toBe('Claude Code is signed out on Account 1 and Max two, the accounts it may start on');
+    expect(await deploy({ signedOutOk: true })).toMatchObject({ success: true });
   });
 
   it('5. skips a member already deployed on the project, and says so', async () => {
