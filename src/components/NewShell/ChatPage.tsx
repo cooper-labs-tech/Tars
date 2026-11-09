@@ -198,7 +198,8 @@ function LimitBlock({ outcome, chats }: { outcome: Extract<SendOutcome, { kind: 
 export function ChatPage({ chat }: { chat: ChatView }) {
   const { agents, startAgent, stopAgent } = useElectronAgents();
   // The orchestrator's window, opened when its question went back to its terminal: this page shows none.
-  const [terminalOpen, setTerminalOpen] = useState(false);
+  // Held by the runner's id, so another runner, or one that comes back, never finds it open.
+  const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const { chats } = useChats();
   const { feed, problem, showEarlier, readingEarlier } = useChatFeed(chat.id);
 
@@ -318,7 +319,7 @@ export function ChatPage({ chat }: { chat: ChatView }) {
           </div>
 
           <div className="shrink-0 flex flex-col gap-2 px-10 pb-5">
-            {runner && <PermissionAskNotice agent={runner} layout="window" onAskedInTerminal={() => setTerminalOpen(true)} />}
+            {runner && <PermissionAskNotice agent={runner} layout="window" onAskedInTerminal={() => setTerminalFor(runner.id)} />}
             {outcome?.kind === 'limit' && <LimitBlock outcome={outcome} chats={chats ?? []} />}
             {nameProblem && <p role="alert" className="text-xs text-status-waiting">{nameProblem}</p>}
             <ComposerCard
@@ -349,9 +350,9 @@ export function ChatPage({ chat }: { chat: ChatView }) {
       </div>
       {/* Its terminal, where Claude Code's own dialog waits once ask in terminal handed it the question. */}
       <AgentTerminalDialog
-        agent={terminalOpen ? runner ?? null : null}
-        open={terminalOpen && !!runner}
-        onClose={() => setTerminalOpen(false)}
+        agent={runner && terminalFor === runner.id ? runner : null}
+        open={!!runner && terminalFor === runner.id}
+        onClose={() => setTerminalFor(null)}
         onStart={(id, prompt) => void startAgent(id, prompt)}
         onStop={id => void stopAgent(id)}
         agents={agents}
