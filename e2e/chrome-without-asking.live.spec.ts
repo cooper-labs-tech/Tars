@@ -1,19 +1,26 @@
 // Opt-in live E2E with the owner's own Claude in Chrome:
-//   E2E_LIVE_CHROME=1 npx playwright test e2e/chrome-without-asking.live.spec.ts
+//   E2E_LIVE_CHROME=1 E2E_CHROME_SIGNED_IN_URL=<a page the owner is signed in to> \
+//   E2E_CHROME_X_THREAD_URL=<an x.com thread> npx playwright test e2e/chrome-without-asking.live.spec.ts
 //
 // The owner's report of 10/11 (chrome-and-permissions-general.md): every Claude in Chrome call of an agent in bypass
 // was held for Tars's window, which could not allow it, and refused at the delay; "ask in terminal" seemed to do
 // nothing. Measured on claude 2.1.321: under the server's flag tengu_cowork_chrome_automode_default, Claude Code takes
 // Chrome's calls out of bypass and hands each to the auto mode classifier after tool.check, which the state mod took
-// for the dialog. A sandbox Tars runs two workers in bypass, each asked to open https://example.com in Chrome, read
-// it and close the tab:
-// - "off": the owner's setting chromeActsWithoutAsking off (the default). The mod asks Tars only when Claude Code's
+// for the dialog. Among them, the Parallel orchestrator's of that night (its answer of 10/11): a browser_batch that
+// navigated to a page of a site the owner is signed in to, refused at the 10-minute delay, and the x.com threads and
+// searches it reads in Chrome, SocialData having no key. A sandbox Tars runs two workers in bypass, each asked, in one
+// turn, to open https://example.com and read it, to make one browser_batch that navigates to the signed-in page
+// (E2E_CHROME_SIGNED_IN_URL) and reads it, to read an x.com search and an x.com thread (E2E_CHROME_X_THREAD_URL), and
+// to close the tab:
+// - "off": the owner's switch chromeActsWithoutAsking off (the default). The mod asks Tars only when Claude Code's
 //   dialog would show (classic.PermissionRequest): the classifier decides, nothing asks.
-// - "on": the owner's switch turned on from the window (its own channel, chromeWithoutAsking:set, kept in ~/.tars-private), then the agent started: its CLI starts with
-//   CLAUDE_CHROME_CLASSIFIER_FLOOR=0, Chrome's calls under bypass, and nothing asks.
+// - "on": the owner's switch turned on from the window (its own channel, chromeWithoutAsking:set, kept in
+//   ~/.tars-private), then the agent started: its CLI starts with CLAUDE_CHROME_CLASSIFIER_FLOOR=0, Chrome's calls
+//   under bypass, and nothing asks.
 // For each: the agent never reads waiting on a permission and Tars holds no question (the window), no
 // PermissionRequest hook ran and no permission line was written (the terminal), and every Chrome call came back with
-// its result within the turn, the tab opened, read and closed (the extension: a site prompt would have held it).
+// its result within the turn (the extension: a site prompt would have held it). No page's text is kept: the artefact
+// holds the tools, the addresses navigated to, whether each call failed and how many characters a read returned.
 //
 // Needs, on the machine that runs it: a native claude (E2E_CLAUDE, or `claude` on PATH), the Claude in Chrome
 // extension connected, and the owner signed in to claude.ai in that claude. The keychain that holds the sign-in is
@@ -34,10 +41,20 @@ const WT = process.cwd();
 const DIST = `${WT}/electron/dist`;
 const PORT = apiPort(31467);
 const ACCOUNT_HOME = os.userInfo().homedir;
-const PROMPT = 'Use Claude in Chrome now, without asking me anything. 1) Call mcp__claude-in-chrome__tabs_context_mcp with '
-  + 'createIfEmpty true. 2) Call mcp__claude-in-chrome__navigate to https://example.com in that tab. 3) Call '
-  + 'mcp__claude-in-chrome__get_page_text on it. 4) Call mcp__claude-in-chrome__tabs_close_mcp on that tab. Then reply '
-  + 'with CHROME-DONE followed by the page title.';
+const SIGNED_IN = process.env.E2E_CHROME_SIGNED_IN_URL ?? '';
+const X_THREAD = process.env.E2E_CHROME_X_THREAD_URL ?? '';
+const X_SEARCH = 'https://x.com/search?q=claude%20code&f=live';
+const PROMPT = 'Use Claude in Chrome now, without asking me anything, in this order. '
+  + '1) Call mcp__claude-in-chrome__tabs_context_mcp with createIfEmpty true. '
+  + '2) Call mcp__claude-in-chrome__navigate to https://example.com in that tab, then mcp__claude-in-chrome__get_page_text. '
+  + `3) Make ONE call of mcp__claude-in-chrome__browser_batch on that tab whose actions are a navigate to ${SIGNED_IN}, `
+  + 'a computer wait of 2 seconds and a get_page_text; if the batch says it cannot act after a navigate, call '
+  + 'get_page_text on its own after it. '
+  + `4) Navigate to ${X_SEARCH}, wait 3 seconds (computer wait) and call get_page_text. `
+  + `5) Navigate to ${X_THREAD}, wait 3 seconds and call get_page_text. `
+  + 'On x.com, if a read finds no text, wait 3 seconds more and read once again. '
+  + '6) Call mcp__claude-in-chrome__tabs_close_mcp on that tab. '
+  + 'Do not repeat anything the pages say: reply with CHROME-DONE followed only by the title of the first page.';
 let FACTS = '';
 
 function resolveClaude() {
@@ -89,31 +106,50 @@ function seed(claude, run) {
   return { home, project };
 }
 
-/** The tool results of Chrome's calls in the agent's transcript, which its CLI wrote in the account's own home. */
-function chromeResults(project, sessionId) {
+/** The addresses a Chrome call navigates to: a navigate's url, or each navigate of a browser_batch. */
+function navigationsOf(name, input) {
+  if (name.endsWith('__navigate')) return typeof input?.url === 'string' ? [input.url] : [];
+  if (!name.endsWith('__browser_batch')) return [];
+  const actions = Array.isArray(input?.actions) ? input.actions : [];
+  return actions.filter(a => a?.name === 'navigate' && typeof a.input?.url === 'string').map(a => a.input.url);
+}
+
+/**
+ * Chrome's calls and their results in the agent's transcript, which its CLI wrote in the account's own home. No page's
+ * text is kept: a read is its length, a navigate's answer (the address it reached) its first 200 characters.
+ */
+function chromeCalls(project, sessionId) {
   // Claude Code names the folder after the path the CLI runs in, through its link (/var) or not (/private/var).
   const file = [...new Set([fs.realpathSync(project), project])]
     .map(p => path.join(ACCOUNT_HOME, '.claude', 'projects', p.replace(/[^A-Za-z0-9]/g, '-'), `${sessionId}.jsonl`))
     .find(f => fs.existsSync(f));
-  if (!sessionId || !file) return { file: null, uses: [], results: [] };
+  if (!sessionId || !file) return { file: null, calls: [] };
   const lines = fs.readFileSync(file, 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-  const uses = new Map();
-  const results = [];
+  const calls = new Map();
   for (const line of lines) {
     for (const part of Array.isArray(line.message?.content) ? line.message.content : []) {
-      if (part.type === 'tool_use' && String(part.name).startsWith('mcp__claude-in-chrome__')) uses.set(part.id, part.name);
-      if (part.type === 'tool_result' && uses.has(part.tool_use_id)) {
+      if (part.type === 'tool_use' && String(part.name).startsWith('mcp__claude-in-chrome__')) {
+        calls.set(part.id, { tool: part.name, navigates: navigationsOf(part.name, part.input), answered: false });
+      }
+      if (part.type === 'tool_result' && calls.has(part.tool_use_id)) {
         const text = (Array.isArray(part.content) ? part.content : [part.content]).map(c => (typeof c === 'string' ? c : c?.text ?? '')).join(' ');
-        results.push({ tool: uses.get(part.tool_use_id), error: part.is_error === true, text: text.slice(0, 300) });
+        const call = calls.get(part.tool_use_id);
+        Object.assign(call, {
+          answered: true, error: part.is_error === true, chars: text.length,
+          // A refusal says so (Claude Code's and the extension's words); a page not loaded yet ("No text content found") does not.
+          refused: /permission|denied|refused|not allowed|requires approval/i.test(text),
+          ...(call.tool.endsWith('__navigate') ? { said: text.slice(0, 200) } : {}),
+        });
       }
     }
   }
-  return { file, uses: [...uses.values()], results };
+  return { file, calls: [...calls.values()] };
 }
 
-test('Claude in Chrome acts for an agent in bypass with nothing asking, the owner\'s setting off and on', async () => {
+test('Claude in Chrome acts for an agent in bypass with nothing asking, the owner\'s switch off and on', async () => {
   test.skip(process.env.E2E_LIVE_CHROME !== '1', 'live: E2E_LIVE_CHROME=1, a native claude signed in to claude.ai, the Claude in Chrome extension connected');
-  test.setTimeout(12 * 60_000);
+  test.skip(!/^https:\/\//.test(SIGNED_IN) || !/^https:\/\/x\.com\//.test(X_THREAD), 'set E2E_CHROME_SIGNED_IN_URL (a page the owner is signed in to) and E2E_CHROME_X_THREAD_URL (an x.com thread)');
+  test.setTimeout(20 * 60_000);
   const CLAUDE = resolveClaude();
   test.skip(!CLAUDE, 'no claude: set E2E_CLAUDE or put claude on PATH');
   const OUT = test.info().outputPath();
@@ -122,7 +158,7 @@ test('Claude in Chrome acts for an agent in bypass with nothing asking, the owne
   const run = Date.now().toString(36);
   const startedAt = new Date();
   const { home: HOME, project: PROJECT } = seed(CLAUDE, run);
-  fact('seeded', { home: HOME, claude: CLAUDE, oldMod: process.env.E2E_CHROME_STATE_MOD_DIR ?? null });
+  fact('seeded', { home: HOME, claude: CLAUDE, signedIn: new URL(SIGNED_IN).origin, xThread: X_THREAD, oldMod: process.env.E2E_CHROME_STATE_MOD_DIR ?? null });
   let app;
   try {
     app = await launchSandboxed(electron, HOME, {
@@ -141,33 +177,33 @@ test('Claude in Chrome acts for an agent in bypass with nothing asking, the owne
       };
     }, { id, dist: DIST });
 
-    /** One leg: the agent started on the prompt, watched every 300 ms until its turn ends with the page's title. */
+    /** One leg: the agent started on the prompt, watched every 300 ms until its turn ends. */
     const leg = async (name) => {
       const id = `chrome-${name}-${run}`;
       await page.evaluate(({ agentId, prompt }) => window.electronAPI.agent.start({ id: agentId, prompt }), { agentId: id, prompt: PROMPT });
       const asked = [];
       let last = null;
       let ran = false;
-      const end = Date.now() + 5 * 60_000;
+      const end = Date.now() + 8 * 60_000;
       while (Date.now() < end) {
         last = await state(id);
-        if (last?.permissionAsk || last?.waitingReason === 'permission') asked.push({ at: new Date().toISOString(), ...last });
+        if (last?.permissionAsk || last?.waitingReason === 'permission') asked.push({ at: new Date().toISOString(), tool: last.permissionAsk?.tool ?? null, subject: last.permissionAsk?.subject ?? null });
         // Held: fail at once, with what was asked, rather than wait out the delay.
         if (asked.length) break;
         if (last?.status === 'running') ran = true;
         if (ran && (last?.status === 'idle' || last?.status === 'completed') && (last.output ?? '').includes('CHROME-DONE')) break;
         await sleep(300);
       }
-      const transcript = chromeResults(PROJECT, last?.sessionId);
+      const transcript = chromeCalls(PROJECT, last?.sessionId);
       const env = fs.existsSync(path.join(HOME, `cli-env-${name}.txt`)) ? fs.readFileSync(path.join(HOME, `cli-env-${name}.txt`), 'utf8') : '';
-      const result = { id, last, asked, transcript, env };
+      const result = { id, status: last?.status ?? null, mod: last?.mod ?? null, done: (last?.output ?? '').includes('CHROME-DONE'), asked, transcript, env };
       fact(`leg ${name}`, result);
       return result;
     };
 
     const off = await leg('off');
     const saved = await page.evaluate(() => window.electronAPI.chromeWithoutAsking.set(true));
-    fact('setting on', { saved });
+    fact('switch on', { saved });
     const on = await leg('on');
 
     const permissionsLog = path.join(HOME, '.tars', 'logs', 'permissions.log');
@@ -177,17 +213,25 @@ test('Claude in Chrome acts for an agent in bypass with nothing asking, the owne
     const dialogs = (fs.existsSync(hooksLog) ? fs.readFileSync(hooksLog, 'utf8').split('\n') : [])
       .filter(l => l.includes('PERMISSION_REQUEST') && (l.includes(off.id) || l.includes(on.id)));
     fact('logs', { permissionLines, dialogs });
-    recordValues({ claude: CLAUDE, startedAt: startedAt.toISOString(), off, saved, on, permissionLines, dialogs });
+    recordValues({ claude: CLAUDE, startedAt: startedAt.toISOString(), signedInOrigin: new URL(SIGNED_IN).origin, xThread: X_THREAD, off, saved, on, permissionLines, dialogs });
 
+    const navigated = r => r.transcript.calls.flatMap(c => c.navigates.map(url => ({ url, tool: c.tool, answered: c.answered, error: c.error })));
     for (const [name, r] of [['off', off], ['on', on]]) {
       expect(r.asked, `${name}: Tars held no question and the agent never waited on a permission`).toEqual([]);
-      expect(r.last?.mod, `${name}: the agent ran the state mod`).toBe(true);
-      expect(r.last?.output ?? '', `${name}: the turn ended with the page's title`).toMatch(/CHROME-DONE[\s\S]*Example Domain/);
-      expect(r.transcript.uses, `${name}: Chrome's four calls were made`).toEqual(expect.arrayContaining([
-        'mcp__claude-in-chrome__tabs_context_mcp', 'mcp__claude-in-chrome__navigate', 'mcp__claude-in-chrome__get_page_text', 'mcp__claude-in-chrome__tabs_close_mcp',
-      ]));
-      expect(r.transcript.results.filter(x => x.error), `${name}: no Chrome call was refused or failed`).toEqual([]);
-      expect(r.transcript.results.some(x => x.tool.endsWith('__navigate') && x.text.includes('https://example.com')), `${name}: the page opened`).toBe(true);
+      expect(r.mod, `${name}: the agent ran the state mod`).toBe(true);
+      expect(r.done, `${name}: the turn ended with CHROME-DONE`).toBe(true);
+      expect(r.transcript.calls.filter(c => !c.answered || c.refused), `${name}: every Chrome call came back, none refused`).toEqual([]);
+      expect(r.transcript.calls.filter(c => c.error && !c.tool.endsWith('__get_page_text')), `${name}: no call failed but a read of a page still loading`).toEqual([]);
+      const went = navigated(r);
+      expect(went.some(n => n.url.startsWith('https://example.com')), `${name}: example.com opened`).toBe(true);
+      // Parallel's first case: a browser_batch that navigates on a site the owner is signed in to.
+      expect(went.some(n => n.tool.endsWith('__browser_batch') && n.url === SIGNED_IN), `${name}: a browser_batch navigated to the signed-in page`).toBe(true);
+      // Its second: x.com, a search and a thread, read.
+      expect(went.some(n => n.url === X_SEARCH), `${name}: the x.com search opened`).toBe(true);
+      expect(went.some(n => n.url === X_THREAD), `${name}: the x.com thread opened`).toBe(true);
+      const reads = r.transcript.calls.filter(c => (c.tool.endsWith('__get_page_text') || c.tool.endsWith('__browser_batch')) && !c.error);
+      expect(reads.length, `${name}: the pages were read (example.com, the signed-in page, the x.com search and thread)`).toBeGreaterThanOrEqual(4);
+      expect(r.transcript.calls.some(c => c.tool.endsWith('__tabs_close_mcp')), `${name}: the tab was closed`).toBe(true);
     }
     expect(off.env).toContain('CLAUDE_CHROME_CLASSIFIER_FLOOR=unset');
     expect(on.env).toContain('CLAUDE_CHROME_CLASSIFIER_FLOOR=0');
