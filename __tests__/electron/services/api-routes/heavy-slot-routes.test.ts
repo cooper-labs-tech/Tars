@@ -14,7 +14,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *     outlive the run and end with the turn. It keeps the pid it sends.
  * And who may ask for `gate`, a release gate's priority (2.0.7, the Audit's L1 on #579: an orchestrator no longer runs
  * the work, its QA runs the gate):
- * S4. The agent its project's orchestrator handed the work to (its live requestedBy link) is clamped to `normal`.
+ * S4. The agent its project's orchestrator handed the work to as a gate (its live requestedBy link, `gate`) is clamped
+ *     to `normal`.
+ * S8. (The Audit's L4 on #579.) Any work an orchestrator handed, not as a gate, lets its worker put any run first.
  * S5. A worker whose work came from another worker, or from another project's orchestrator, may take it.
  * S6. A link left from another terminal (a past session's) still counts.
  * S7. The orchestrator itself, or a chat's runner, loses it.
@@ -87,22 +89,27 @@ describe('who may ask for a release gate\'s priority', () => {
     return asked[0].mayGate;
   };
 
-  it('S4. the agent its project\'s orchestrator handed the work to may take it', async () => {
-    fleet.get('a')!.requestedBy = { agentId: 'lead', ptyId: 'pty-a' };
+  it('S4. the agent its project\'s orchestrator handed the work to as a gate may take it', async () => {
+    fleet.get('a')!.requestedBy = { agentId: 'lead', ptyId: 'pty-a', gate: true };
     expect(await gateBy('a')).toBe(true);
   });
 
-  it('S5. work from another worker, or from another project\'s orchestrator, is not a gate', async () => {
-    fleet.get('a')!.requestedBy = { agentId: 'peer', ptyId: 'pty-a' };
+  it('S8. work its orchestrator handed, not as a gate, does not put a run first', async () => {
+    fleet.get('a')!.requestedBy = { agentId: 'lead', ptyId: 'pty-a' };
     expect(await gateBy('a')).toBe(false);
-    fleet.get('a')!.requestedBy = { agentId: 'other-lead', ptyId: 'pty-a' };
+  });
+
+  it('S5. work from another worker, or from another project\'s orchestrator, is not a gate', async () => {
+    fleet.get('a')!.requestedBy = { agentId: 'peer', ptyId: 'pty-a', gate: true };
+    expect(await gateBy('a')).toBe(false);
+    fleet.get('a')!.requestedBy = { agentId: 'other-lead', ptyId: 'pty-a', gate: true };
     expect(await gateBy('a')).toBe(false);
     delete fleet.get('a')!.requestedBy;
     expect(await gateBy('a')).toBe(false);
   });
 
   it('S6. a link left from a past session\'s terminal does not count', async () => {
-    fleet.get('a')!.requestedBy = { agentId: 'lead', ptyId: 'pty-gone' };
+    fleet.get('a')!.requestedBy = { agentId: 'lead', ptyId: 'pty-gone', gate: true };
     expect(await gateBy('a')).toBe(false);
   });
 
