@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-10',
+    updates: [
+      'Ask in terminal on a chat\'s page now opens the orchestrator\'s window on its terminal, where Claude Code\'s own dialog waits for your answer. The chat\'s page shows no terminal, so the question seemed to vanish.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',
