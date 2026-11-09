@@ -11,7 +11,7 @@ import { useElectronAgents } from '@/hooks/useElectron';
 import { useElectronTeamTemplates } from '@/hooks/useElectronTeamTemplates';
 import { useSkillInstall } from './hooks/useSkillInstall';
 import { Button, DialogShell, SegmentedControl, StatusSquare } from '@/components/ui';
-import type { SegmentedOption } from '@/components/ui';
+import type { SegmentedOption, StatusTone } from '@/components/ui';
 import { AgentPanel } from './AgentPanel';
 import { TeamPanel } from './TeamPanel';
 import SkillInstallTerminal from './SkillInstallTerminal';
@@ -22,6 +22,8 @@ import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
 import { modeForProvider } from '@/lib/plan-mode';
 import { ipcReason } from '@/lib/ipc-error';
+import { deployOutcome, gitInitLine } from '@/lib/first-run';
+import { ClaudeAccountLoginModal } from '@/components/Settings/ClaudeAccountLoginModal';
 
 const MODE_OPTIONS: SegmentedOption<CreationMode>[] = [
   { value: 'agent', label: 'One agent' },
@@ -142,7 +144,7 @@ export default function NewChatModal({
   }, [allInstalledSkills]);
 
   /* ── team mode ────────────────────────────────────────────────────── */
-  const { agents: existingAgents, createAgent, updateAgent, startAgent } = useElectronAgents();
+  const { agents: existingAgents } = useElectronAgents();
   const { teams } = useElectronTeamTemplates();
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [editedMembers, setEditedMembers] = useState<TeamTemplateMember[]>([]);
@@ -153,6 +155,12 @@ export default function NewChatModal({
   const [startOnDeploy, setStartOnDeploy] = useState(true);
   const [deploying, setDeploying] = useState(false);
   const [deployErrors, setDeployErrors] = useState<string[]>([]);
+  // The deploy's answer: its tone, its way on (a plain folder, a signed-out Claude), and whether the team is made.
+  const [deployTone, setDeployTone] = useState<StatusTone>('error');
+  const [deployOffer, setDeployOffer] = useState<'repository' | 'signed-out' | null>(null);
+  const [deployed, setDeployed] = useState(false);
+  const [gitLine, setGitLine] = useState<{ tone: StatusTone; text: string } | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
 
   // Loading a preset replaces the working roster with a fresh copy of its
   // members - editing them here never writes back to the saved team.
@@ -424,53 +432,49 @@ export default function NewChatModal({
     [editedMembers, selectedMemberIdx],
   );
 
-  const commitTeam = useCallback(async () => {
+  // Make it a repository: main's git init and a first commit (PR 584), then the members keep their worktrees.
+  const makeRepository = useCallback(async () => {
+    const gitInit = window.electronAPI?.project?.gitInit;
+    if (!gitInit || !projectPath) return;
+    const answer = await gitInit(projectPath).catch((err: unknown) => ({ success: false as const, error: ipcReason(err, 'git init did not run'), code: 'failed' as const }));
+    setGitLine(gitInitLine(answer));
+    if (answer.success) {
+      setPlainFolder(false);
+      setDeployErrors([]);
+      setDeployOffer(null);
+    }
+  }, [projectPath]);
+
+  // The whole team in one call (PR 584's teams.deploy): every member made or none, the orchestrator last and started
+  // after its team, each member's role saved by main. The answer says what the window shows (src/lib/first-run.ts).
+  const commitTeam = useCallback(async (opts?: { signedOutOk?: boolean }) => {
+    const deploy = window.electronAPI?.teams?.deploy;
+    if (!deploy) return;
     setDeploying(true);
     setDeployErrors([]);
-    const existingNames = new Set(existingAgents.filter(a => a.projectPath === projectPath).map(a => a.name));
-    const createdIds: string[] = [];
-    const issues: string[] = [];
-
-    for (const member of selectedMembers) {
-      const agentDisplayName = deployedMemberName(member.name, projectPath);
-      if (existingNames.has(agentDisplayName)) {
-        issues.push(`${member.name}: already deployed on this project, so it was skipped.`);
-        continue;
-      }
-      try {
-        const resolvedModel = member.provider !== 'local' && member.model && member.model !== 'default' ? member.model : undefined;
-        const agent = await createAgent({
-          projectPath,
-          skills: member.skills,
-          character: member.character,
-          name: agentDisplayName,
-          permissionMode: member.permissionMode,
-          effort: member.effort,
-          provider: member.provider,
-          model: resolvedModel,
-          localModel: member.localModel,
-          worktree: member.worktreeBranch ? { enabled: true, branchName: member.worktreeBranch } : undefined,
-          role: member.role,
-        });
-        createdIds.push(agent.id);
-        const combinedBrief = [teamBrief.trim(), member.savedPrompt?.trim()].filter(Boolean).join('\n\n');
-        if (startOnDeploy && combinedBrief) {
-          await startAgent(agent.id, combinedBrief, { model: resolvedModel, provider: member.provider, localModel: member.localModel });
-        } else if (combinedBrief) {
-          await updateAgent({ id: agent.id, savedPrompt: combinedBrief });
-        }
-      } catch (err) {
-        console.error(`Failed to create team member "${member.name}":`, err);
-        // The reason main gave, git's for a worktree it could not make, without Electron's own words before it.
-        issues.push(`${member.name}: ${ipcReason(err, 'it could not be created')}`);
-      }
+    setDeployOffer(null);
+    let answer: Awaited<ReturnType<typeof deploy>>;
+    try {
+      answer = await deploy({ projectPath, members: selectedMembers, brief: teamBrief.trim() || undefined, startOnDeploy, signedOutOk: opts?.signedOutOk });
+    } catch (err) {
+      setDeploying(false);
+      setDeployTone('error');
+      setDeployErrors([ipcReason(err, 'The team could not be deployed.')]);
+      return;
     }
-
     setDeploying(false);
-    if (issues.length > 0) setDeployErrors(issues);
-    if (createdIds.length > 0) onTeamDeployed?.(createdIds);
-    if (issues.length === 0) onClose();
-  }, [projectPath, selectedMembers, existingAgents, createAgent, updateAgent, startAgent, teamBrief, startOnDeploy, onTeamDeployed, onClose]);
+    const outcome = deployOutcome(answer);
+    if (answer.success) {
+      if (answer.agentIds.length > 0) onTeamDeployed?.(answer.agentIds);
+      // Said before it closes: what it skipped or did not start.
+      if (outcome.lines.length === 0) { onClose(); return; }
+      setDeployed(true);
+    }
+    if (outcome.offer === 'repository') setPlainFolder(true);
+    setDeployOffer(outcome.offer);
+    setDeployTone(outcome.tone);
+    setDeployErrors(outcome.lines);
+  }, [projectPath, selectedMembers, teamBrief, startOnDeploy, onTeamDeployed, onClose]);
 
   // A team with an orchestrator member, deployed into a project that already
   // has one, takes the role from it. Not when that member is the orchestrator
@@ -506,7 +510,7 @@ export default function NewChatModal({
   }, [pendingReplace, commitTeam, commitAgent]);
 
   const canStartAgent = canSubmitAgent({ projectPath, useWorktree, branchName });
-  const canDeployTeam = canSubmitTeam({ projectPath, selectedCount: selectedMembers.length }) && !deploying;
+  const canDeployTeam = canSubmitTeam({ projectPath, selectedCount: selectedMembers.length }) && !deploying && !deployed;
 
   if (!open) return null;
 
@@ -564,11 +568,28 @@ export default function NewChatModal({
         }
       >
         <div className="space-y-5">
-          {deployErrors.length > 0 && (
-            <div className="border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-xs text-danger space-y-0.5">
+          {deployErrors.length > 0 && (deployTone === 'error' ? (
+            <div data-deploy-answer="error" className="border border-danger/30 bg-danger/10 px-2.5 py-1.5 text-xs text-danger space-y-0.5">
               {deployErrors.map((e, i) => <p key={i}>{e}</p>)}
             </div>
-          )}
+          ) : (
+            // What the deploy says that is no failure (frame `First run (2.0.7) · states`, its row `deploy answers`).
+            <div data-deploy-answer={deployTone} className="flex flex-col gap-2 px-3.5 py-3 border border-border bg-card">
+              {deployErrors.map((e, i) => (
+                <p key={i} className={`flex items-start gap-2 text-xs ${i === 0 ? 'text-foreground' : 'text-text-muted pl-4'}`}>
+                  {i === 0 && <span className="mt-[5px]"><StatusSquare tone={deployTone} /></span>}
+                  {e}
+                </p>
+              ))}
+              {deployOffer === 'signed-out' && (
+                <div className="flex items-center gap-1.5">
+                  <Button size="sm" className="font-mono lowercase" onClick={() => setSigningIn(true)}>sign in</Button>
+                  <Button size="sm" className="font-mono lowercase" disabled={deploying} onClick={() => { void commitTeam({ signedOutOk: true }); }}>deploy anyway</Button>
+                </div>
+              )}
+            </div>
+          ))}
+          {signingIn && <ClaudeAccountLoginModal accountId="default" onClose={() => setSigningIn(false)} />}
 
           {mode === 'agent' || isEditMode ? (
             <AgentPanel
@@ -624,11 +645,22 @@ export default function NewChatModal({
                   {`${lastPathPart(projectPath) || projectPath} is not a git repository, so its members cannot each work in a worktree of their own.`}
                 </p>
                 <div className="flex items-center gap-1.5">
+                  {window.electronAPI?.project?.gitInit && (
+                    <Button size="sm" className="font-mono lowercase" disabled={deploying} onClick={() => { void makeRepository(); }}>
+                      make it a repository
+                    </Button>
+                  )}
                   <Button size="sm" className="font-mono lowercase" onClick={() => setEditedMembers(ms => ms.map(m => ({ ...m, worktreeBranch: undefined })))}>
                     deploy without worktrees
                   </Button>
                 </div>
               </div>
+            )}
+            {gitLine && (
+              <p data-git-init={gitLine.tone} className="mb-4 flex items-start gap-2 text-xs text-foreground">
+                <span className="mt-[5px]"><StatusSquare tone={gitLine.tone} /></span>
+                {gitLine.text}
+              </p>
             )}
             <TeamPanel
               projects={projects}

@@ -11,28 +11,17 @@ import type { StatusTone } from '@/components/ui';
 import { useClaudeAccounts } from '@/hooks/useClaudeAccounts';
 import { useElectronAgents, useElectronFS } from '@/hooks/useElectron';
 import { lastPathPart } from '@/lib/display-path';
+import { claudeStepState, gitInitLine, readinessLines } from '@/lib/first-run';
 
-/** Whether a folder is a git repository, and on which branch, as `git branch` answers for it. */
-export type FolderRepository = { repository: true; branch: string } | { repository: false };
-
-/** The state line of the Claude step, in the words main gives (`claude auth status`). */
-export function claudeStepState(account: { signedIn: boolean | null; email: string | null; subscriptionType: string | null; error: string | null } | undefined):
-  { done: boolean; word: string; tone: StatusTone } {
-  if (account?.signedIn === true) {
-    return { done: true, word: ['signed in', account.email, account.subscriptionType].filter(Boolean).join(' · '), tone: 'running' };
-  }
-  if (account?.signedIn === false) return { done: false, word: 'signed out', tone: 'waiting' };
-  if (account?.error) return { done: false, word: account.error, tone: 'error' };
-  return { done: false, word: 'checking claude', tone: 'idle' };
-}
+type Readiness = Extract<Awaited<ReturnType<NonNullable<NonNullable<typeof window.electronAPI>['project']>['readiness']>>, { success: true }>;
 
 /**
- * A new user's first run (frames `First run (2.0.7)` and `· states`; QA's fresh-install report, B3, B4 and M1): sign
- * in to Claude, add a project folder, deploy its team with the orchestrator's first task as its brief. Shown by its
- * host while no project has an agent: the new interface's empty chats page and the classic Dashboard's empty grid.
- * Each step reads its state from main (the accounts' `claude auth status`, the folder's `git branch`); the next opens
- * once the one before is done. Sign in is Settings' own sign-in for account 1; Deploy the team is New team on the
- * folder, which offers a folder that is not a repository its way on.
+ * A new user's first run (frames `First run (2.0.7)` and `· states`; QA's fresh-install report, B3, B4, M1 and W4):
+ * sign in to Claude, add a project folder, deploy its team with the orchestrator's first task as its brief. Shown by
+ * its host while no project has an agent: the new interface's empty chats page and the classic Dashboard's empty grid.
+ * Each step reads its state from main: the accounts' `claude auth status` (and `cli-missing`), the folder's readiness
+ * for pull requests in main's order (PR 584), its make it a repository through main's git init. Sign in is Settings'
+ * own sign-in for account 1; Deploy the team is New team on the folder, deployed whole or not at all.
  */
 export default function FirstRun() {
   const { view } = useClaudeAccounts();
@@ -43,21 +32,31 @@ export default function FirstRun() {
   const [added, setAdded] = useState<string | null>(null);
   // The folder this run works on: the one added here, else the first project known.
   const folder = added ?? projects[0]?.path ?? null;
-  const [repo, setRepo] = useState<{ of: string; is: FolderRepository } | null>(null);
+  const [ready, setReady] = useState<{ of: string; is: Readiness | null; error?: string } | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [deploying, setDeploying] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [gitLine, setGitLine] = useState<{ tone: StatusTone; text: string } | null>(null);
+  const [reread, setReread] = useState(0);
 
+  // What the folder lacks for pull requests, read again after make it a repository.
   useEffect(() => {
     if (!folder) return;
     let live = true;
-    void window.electronAPI?.shell?.branch(folder).then(r => {
-      if (!live) return;
-      const branch = r?.success ? r.output?.trim() : '';
-      setRepo({ of: folder, is: branch ? { repository: true, branch } : { repository: false } });
-    }).catch(() => { if (live) setRepo({ of: folder, is: { repository: false } }); });
+    void window.electronAPI?.project?.readiness(folder).then(r => {
+      if (live) setReady(r.success ? { of: folder, is: r } : { of: folder, is: null, error: r.error });
+    }).catch((err: unknown) => { if (live) setReady({ of: folder, is: null, error: err instanceof Error ? err.message : String(err) }); });
     return () => { live = false; };
-  }, [folder]);
+  }, [folder, reread]);
+
+  const makeRepository = async () => {
+    if (!folder) return;
+    const answer = await window.electronAPI?.project?.gitInit(folder)
+      .catch((err: unknown) => ({ success: false as const, error: err instanceof Error ? err.message : String(err), code: 'failed' as const }));
+    if (!answer) return;
+    setGitLine(gitInitLine(answer));
+    setReread(n => n + 1);
+  };
 
   const addFolder = async () => {
     setAddError(null);
@@ -72,9 +71,11 @@ export default function FirstRun() {
     }
   };
 
-  const known = folder && repo?.of === folder ? repo.is : null;
+  const known = folder && ready?.of === folder ? ready : null;
+  const lacks = known?.is ? readinessLines(known.is) : [];
+  const branch = known?.is?.git.repository && known.is.git.hasCommit ? known.is.git.branch : null;
   const folderWord = folder
-    ? [lastPathPart(folder) || folder, known === null ? 'reading the folder' : known.repository ? `a git repository on ${known.branch}` : 'not a git repository'].join(' · ')
+    ? [lastPathPart(folder) || folder, !known ? 'reading the folder' : known.error ?? (branch ? `a git repository on ${branch}` : lacks.length ? 'not ready for pull requests' : 'ready')].join(' · ')
     : null;
 
   return (
@@ -88,17 +89,38 @@ export default function FirstRun() {
         <Step
           name="claude" n={1} done={claude.done}
           title="Sign in to Claude"
-          detail={claude.done ? 'Claude Code is signed in on this computer.' : 'Claude Code is not signed in on this computer. Every agent runs on it.'}
+          detail={claude.done
+            ? 'Claude Code is signed in on this computer.'
+            : account?.code === 'cli-missing'
+              ? 'Claude Code is not installed on this computer, or not where Settings says it is. Install it, then come back.'
+              : 'Claude Code is not signed in on this computer. Every agent runs on it.'}
           state={{ word: claude.word, tone: claude.tone }}
-          action={claude.done ? null : <Button variant="primary" onClick={() => setSigningIn(true)}>Sign in</Button>}
+          action={claude.canSignIn ? <Button variant="primary" onClick={() => setSigningIn(true)}>Sign in</Button> : null}
         />
         <Step
           name="project" n={2} done={!!folder}
           title="Add a project folder"
           detail={folder ?? 'The folder your agents work in. In a git repository, each member gets its own worktree.'}
-          state={folderWord ? { word: folderWord, tone: known?.repository ? 'running' : 'waiting' } : addError ? { word: addError, tone: 'error' } : null}
+          state={folderWord ? { word: folderWord, tone: known?.error ? 'error' : branch ? 'running' : 'waiting' } : addError ? { word: addError, tone: 'error' } : null}
           action={<Button size={folder ? 'sm' : undefined} onClick={() => { void addFolder(); }}>{folder ? 'Add another' : 'Add a folder'}</Button>}
-        />
+        >
+          {/* What it lacks for pull requests, in main's order (frame `First run (2.0.7) · states`, its row `what a folder lacks`). */}
+          {lacks.map(lack => (
+            <p key={lack.key} data-lack={lack.key} className="flex items-center gap-2 text-[11.5px] text-foreground">
+              <StatusSquare tone="waiting" />
+              <span className="min-w-0 flex-1 break-words">{lack.text}</span>
+              {lack.action === 'git-init' && window.electronAPI?.project?.gitInit && (
+                <Button size="sm" className="font-mono lowercase" onClick={() => { void makeRepository(); }}>make it a repository</Button>
+              )}
+            </p>
+          ))}
+          {gitLine && (
+            <p data-git-init={gitLine.tone} className="flex items-start gap-2 text-[11.5px] text-foreground">
+              <span className="mt-[5px]"><StatusSquare tone={gitLine.tone} /></span>
+              <span className="min-w-0 break-words">{gitLine.text}</span>
+            </p>
+          )}
+        </Step>
         <Step
           name="team" n={3} done={false} dim={!folder}
           title="Deploy its team, then give the orchestrator its first task"
@@ -125,9 +147,9 @@ export default function FirstRun() {
   );
 }
 
-function Step({ name, n, done, dim, title, detail, state, action }: {
+function Step({ name, n, done, dim, title, detail, state, action, children }: {
   name: string; n: number; done: boolean; dim?: boolean; title: string; detail: string;
-  state: { word: string; tone: StatusTone } | null; action: ReactNode;
+  state: { word: string; tone: StatusTone } | null; action: ReactNode; children?: ReactNode;
 }) {
   return (
     <li data-first-run-step={name} className="flex items-center gap-3.5 px-4 py-3.5 border border-border bg-secondary">
@@ -143,6 +165,7 @@ function Step({ name, n, done, dim, title, detail, state, action }: {
             <span className={state.tone === 'running' ? 'text-status-running' : state.tone === 'waiting' ? 'text-status-waiting' : state.tone === 'error' ? 'text-danger' : 'text-text-muted'}>{state.word}</span>
           </p>
         )}
+        {children && <div className="mt-1.5 flex flex-col gap-1.5">{children}</div>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </li>
