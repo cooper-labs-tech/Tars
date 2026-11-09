@@ -1169,6 +1169,8 @@ export interface ClaudeAccountState extends ClaudeAccount {
   agentIds: string[];
   /** Why the last sign-in or check did not work, as a sentence. */
   error: string | null;
+  /** `cli-missing` (2.0.7): no claude to ask, not installed or not where Settings says: the step says "install Claude Code". */
+  code?: 'cli-missing' | null;
 }
 
 export interface ClaudeAccountsView {
@@ -1908,6 +1910,30 @@ export interface ElectronAPI {
       Promise<{ success: boolean; files?: string[]; error?: string }>;
     searchContent: (root: string, query: string) =>
       Promise<{ success: boolean; hits?: { path: string; line: number; text: string }[]; error?: string }>;
+    // The first run (2.0.7), for one of Tars's projects only.
+    /**
+     * `git init` on `main`, its files added (its own .gitignore applies) and a first commit, allowed empty. When the
+     * user set no git identity, that commit alone is signed "Tars" (`identity: 'tars'`), nothing written to a config.
+     */
+    gitInit: (projectPath: string) => Promise<
+      | { success: true; branch: string; commit: string; files: number; identity: 'yours' | 'tars' }
+      | { success: false; error: string; code: 'not-a-project' | 'already-a-repository' | 'git-missing' | 'failed' }
+    >;
+    /**
+     * What PR delivery lacks, in the order the user fixes it (`missing`): git, the repository, its first commit, a
+     * remote (origin first; `github` is its owner/repo on GitHub, which gh needs), gh installed, gh signed in.
+     */
+    readiness: (projectPath: string) => Promise<
+      | {
+          success: true;
+          projectPath: string;
+          git: { installed: boolean; repository: boolean; hasCommit: boolean; branch: string | null };
+          remote: { name: string; url: string; github: string | null } | null;
+          gh: { installed: boolean; signedIn: boolean | null; account: string | null; error: string | null };
+          missing: Array<'git' | 'repository' | 'commit' | 'remote' | 'gh' | 'gh-sign-in'>;
+        }
+      | { success: false; error: string; code: 'not-a-project' }
+    >;
   };
 
   /** What an agent changed: per-file stats plus the actual patch. */
@@ -2644,6 +2670,35 @@ export interface ElectronAPI {
     create: (input: TeamTemplateInput) => Promise<{ success: boolean; team?: TeamTemplate; error?: string }>;
     delete: (id: string) => Promise<{ success: boolean; error?: string }>;
   };
+
+  /**
+   * A team deployed in one call (2.0.7): every member made or none, the orchestrator made last and started after its
+   * whole team, so the roster its session reads holds every member. Checked first, nothing made when it refuses:
+   * `not-a-project`, `invalid` (two members with one name or branch, a branch git refuses, two orchestrators),
+   * `not-a-repository` (a member asks for a worktree on a folder with no first commit: offer project.gitInit, or clear
+   * every worktreeBranch), `signed-out` (send `signedOutOk: true` once the user knows), `cli-missing`, `busy`. `failed`:
+   * a member could not be made, and every member this deploy made was taken back; `left` says what could not be.
+   * Members are named "<member> - <folder>"; one already on the project is skipped and said.
+   */
+  teams?: {
+    deploy: (params: {
+      projectPath: string;
+      members: TeamTemplateMember[];
+      brief?: string;
+      startOnDeploy: boolean;
+      signedOutOk?: boolean;
+    }) => Promise<
+      | { success: true; agentIds: string[]; skipped: Array<{ member: string; reason: string }>; notStarted: Array<{ member: string; reason: string }> }
+      | {
+          success: false;
+          error: string;
+          code: 'not-a-project' | 'invalid' | 'not-a-repository' | 'signed-out' | 'cli-missing' | 'busy' | 'failed';
+          failed: Array<{ member: string; reason: string }>;
+          left: string[];
+        }
+    >;
+  };
+
 
   // Which providers enforce orchestrator mode rather than only asking for it
   provider?: {

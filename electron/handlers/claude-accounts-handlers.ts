@@ -20,7 +20,7 @@ import {
   writeAccountsSettings,
 } from '../services/claude-accounts/registry';
 import { accountDirProblem, claudeCredentialOverrides, ensureAccountDir, projectsProblem, provisionAccountDir } from '../services/claude-accounts/provision';
-import { claudeAuthLogout, claudeAuthStatus, loginCommand } from '../services/claude-accounts/auth';
+import { ClaudeCliMissing, claudeAuthLogout, claudeAuthStatus, loginCommand } from '../services/claude-accounts/auth';
 import { countersDir, readAccountUsage, usageForView } from '../services/claude-accounts/counters';
 import { probeUsage, recordProbe, usageProbeEnv } from '../services/claude-accounts/usage-probe';
 import { blockedUntil, deleteAuth, getAuth, setAuth, type AuthState } from '../services/claude-accounts/state';
@@ -145,6 +145,7 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
       // A sign-in problem first; then a projects/ folder that keeps the
       // account's usage out of the page, why its agents start on account 1.
       error: a?.error ?? (account.configDir ? projectsProblem(account.configDir) : null),
+      code: a?.code ?? null,
     };
   }
 
@@ -174,7 +175,10 @@ export function registerClaudeAccountsHandlers(deps: ClaudeAccountsHandlerDeps):
         setAuth(account.id, { signedIn: info.signedIn, email: info.email, subscriptionType: info.subscriptionType, error: null });
       })
       .catch(err => {
-        setAuth(account.id, { signedIn: null, email: null, subscriptionType: null, error: err instanceof Error ? err.message : String(err) });
+        setAuth(account.id, {
+          signedIn: null, email: null, subscriptionType: null, error: err instanceof Error ? err.message : String(err),
+          code: err instanceof ClaudeCliMissing ? 'cli-missing' : null,
+        });
       })
       .finally(() => {
         askedAt.set(account.id, now());

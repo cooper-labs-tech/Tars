@@ -28,12 +28,15 @@
  *     account named.
  * 14. No git: installed false, and nothing else claimed.
  */
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { gitInit, projectReadiness, type ProjectGitOptions } from '../../../electron/services/project-git';
+
+// Each test runs git several times: 5 s is too short under the fleet's load (as auth.test.ts).
+vi.setConfig({ testTimeout: 60_000 });
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, LC_ALL: 'C' } }).trim();
 let root: string;
@@ -50,7 +53,7 @@ function folder(name: string): string {
 /** A stand-in gh that answers `auth status` as the real one does (measured on gh 2.88.1). */
 function fakeGh(name: string, out: string, code: number): string {
   const file = path.join(root, `gh-${name}`);
-  fs.writeFileSync(file, `#!/bin/sh\nprintf '%s\\n' ${JSON.stringify(out)} >&2\nexit ${code}\n`, { mode: 0o755 });
+  fs.writeFileSync(file, `#!/bin/sh\ncat >&2 <<'GH_SAYS'\n${out}\nGH_SAYS\nexit ${code}\n`, { mode: 0o755 });
   return file;
 }
 

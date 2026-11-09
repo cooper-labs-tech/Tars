@@ -114,6 +114,8 @@ const SITES: Site[] = [
   { file: 'electron/handlers/chat-handlers.ts', line: 'const orchestrators = (): OrchestratorFacts[] => [...agents.values()].filter((a) => … && a.kind !== \'chat\').map((a) => ({', is: 'identity', why: 'the orchestrators whose conversation is their project\'s chat #1, Main' },
   { file: 'electron/handlers/ipc-handlers.ts', line: 'const isSuperAgentCheck = …;', is: 'powers', why: 'agent:start: the instructions, the skills prefix, the denied tools' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'if (… || member.role === \'worker\') return member;', is: 'identity', why: 'a template\'s orchestrator member' },
+  { file: 'electron/services/team-deploy.ts', line: 'if (members.filter(m => m?.…).length > 1) invalid.push({ member: \'\', reason: \'a team has one orchestrator at most\' });', is: 'identity', why: 'a team deploy takes one orchestrator member at most (2.0.7)' },
+  { file: 'electron/services/team-deploy.ts', line: 'const order = [...toMake.filter(m => …), ...toMake.filter(m => …)];', is: 'identity', why: 'a team deploy makes and starts its orchestrator member after its whole team (2.0.7)' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'return { ...member, role, orchestratorMode: … || undefined };', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'orchestratorMode: … || undefined,', is: 'identity', why: 'a template\'s orchestrator member' },
 

@@ -940,6 +940,8 @@ export interface ClaudeAccountState extends ClaudeAccount {
   agentIds: string[];
   /** A sentence for the page: why the last sign-in or status check did not work. */
   error: string | null;
+  /** `cli-missing`: there is no claude to ask (not installed, or not where Settings says), so install Claude Code first. */
+  code: 'cli-missing' | null;
 }
 
 export interface ClaudeAccountsView {

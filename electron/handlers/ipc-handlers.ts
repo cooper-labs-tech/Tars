@@ -88,6 +88,7 @@ import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
+import { registerFirstRunHandlers } from './first-run-handlers';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -327,7 +328,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
-  ipcMain.handle('agent:create', async (_event, config: {
+  type AgentCreateConfig = {
     projectPath: string;
     skills: string[];
     worktree?: WorktreeConfig;
@@ -345,7 +346,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     /** The toggle's old name, read when `role` is absent. */
     orchestratorMode?: boolean;
     cliPath?: string;
-  }) => {
+  };
+  // The one creation of an agent from the window: agent:create, and every member of teams:deploy (first-run-handlers.ts).
+  const createAgentFromConfig = async (config: AgentCreateConfig) => {
     const id = uuidv4();
     const { shell, args: shellArgv } = agentShell({ setting: getAppSettings().terminalShell });
 
@@ -536,7 +539,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     });
 
     return { ...status, ptyId };
-  });
+  };
+  ipcMain.handle('agent:create', async (_event, config: AgentCreateConfig) => createAgentFromConfig(config));
+  // The first run's channels (2.0.7): a project's git, what it lacks for PR delivery, a team deployed whole or not at all.
+  registerFirstRunHandlers({ createAgent: createAgentFromConfig, projectPaths: () => [...readCustomProjects(), ...[...agents.values()].map(a => a.projectPath)], getAppSettings });
 
   // Start an agent with a prompt (sends command to PTY). The one launch of an
   // agent's CLI into its terminal: the handler below and the restart that

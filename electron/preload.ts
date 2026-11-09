@@ -576,6 +576,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('project:search-files', { root, query }),
     searchContent: (root: string, query: string) =>
       ipcRenderer.invoke('project:search-content', { root, query }),
+    // The first run (2.0.7, handlers/first-run-handlers.ts): made a repository, and what PR delivery still lacks
+    gitInit: (projectPath: string) =>
+      ipcRenderer.invoke('project:git-init', projectPath),
+    readiness: (projectPath: string) =>
+      ipcRenderer.invoke('project:readiness', projectPath),
   },
 
   shell: {
@@ -748,6 +753,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('teamTemplate:create', input),
     delete: (id: string) =>
       ipcRenderer.invoke('teamTemplate:delete', id),
+  },
+
+  // A team deployed whole or not at all, its orchestrator started last (2.0.7, handlers/first-run-handlers.ts)
+  teams: {
+    deploy: (params: Record<string, unknown>) =>
+      ipcRenderer.invoke('teams:deploy', params),
   },
 
   // The heavy-run slot for the whole machine (services/heavy-slot.ts): who holds it, who waits and why, and the
