@@ -18,7 +18,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    first run;
  * 2. a signed-out Claude reads ready, in the first run or in the New agent dialog;
  * 3. Sign in does not open Claude Code's own sign-in for account 1, or the step does not read signed in after it;
- * 4. adding a folder does not say it is not a git repository, nor lead to its team;
+ * 4. adding a folder does not say it is not a git repository, nor what else it lacks for pull requests (PR 584's
+ *    readiness, in its order), nor lead to its team;
  * 5. New team on that folder does not offer to deploy without worktrees, so members fail on git's words;
  * 6. the deploy without worktrees does not make every member, or makes one with a worktree;
  * 7. a new agent still starts in normal, where it asks before every edit and command;
@@ -124,7 +125,10 @@ for (const newInterface of [true, false]) {
       // 4. A plain folder, said so.
       await step('project').getByRole('button', { name: 'Add a folder' }).click();
       await expect(step('project')).toContainText('harbor', { timeout: 30_000 });
-      await expect(step('project')).toContainText('not a git repository');
+      // What it lacks for pull requests, in main's order (PR 584's readiness): the repository first, then a remote.
+      await expect(step('project').locator('[data-lack]').first()).toHaveText(/Not a git repository\./, { timeout: 30_000 });
+      await expect(step('project').locator('[data-lack="remote"]')).toContainText('No remote');
+      seen.lacks = await step('project').locator('[data-lack]').allInnerTexts();
       seen.project = (await step('project').innerText()).replace(/\s+/g, ' ');
       await stepShot(page, `${tag}2-folder-added`);
 
