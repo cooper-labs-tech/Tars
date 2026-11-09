@@ -195,7 +195,9 @@ anyway. Tars updates itself from the same releases as on macOS. Closing the wind
 keeps your agents working, with Tars in the tray; Quit Tars in the tray's menu ends it.
 
 Then point Tars at a folder. It finds the CLIs already installed on your machine:
-you do not configure paths unless something lives somewhere unusual.
+you do not configure paths unless something lives somewhere unusual. The first window
+leads you through it (2.0.7): sign in to Claude, add the folder, deploy its team with
+the orchestrator's first task as its brief.
 
 It also keeps claude and Amp up to date, when an agent runs them, at launch and every half
 hour, under the same "Check for updates" switch as Tars itself, so a model
