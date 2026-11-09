@@ -490,6 +490,16 @@ export const CHAT_ROOMS = [
   },
 ];
 
+// The first run (2.0.7, frames `First run (2.0.7)` and `· states`): the panel a fresh install shows while no project
+// has an agent, in place of the new interface's empty chats page and of the classic Dashboard's empty grid.
+//
+// Deliberately not in ALL: they need a sandbox with no agent and a Claude Code that answers `claude auth status`
+// signed out. e2e/first-run.spec.ts drives them, from the panel to a deployed team.
+export const FIRST_RUN = [
+  { name: 'first-run-chats', route: '/chats', shows: 'Set up your first project' },
+  { name: 'first-run-dashboard', route: '/', shows: 'Set up your first project' },
+];
+
 /**
  * Every spec that tolerates KNOWN_PAGE_ERRORS, by the name it records under,
  * with the surfaces it records. e2e/known-errors.spec.ts only judges a run in
