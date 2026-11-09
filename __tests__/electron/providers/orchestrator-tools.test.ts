@@ -16,6 +16,13 @@ import { orchestratorToolFlags } from '../../../electron/providers/cli-provider'
  * session, never reaches the specialist agent, and cannot be seen or stopped
  * from Tars. An orchestrator asked for a security audit did exactly that.
  *
+ * And the work itself (2.0.7, the owner's rule of 10/11: an orchestrator does no development, research,
+ * investigation, QA or audit). Ways it fails:
+ * - asked why something is broken, a fresh orchestrator read the code itself and delegated nothing (measured with
+ *   claude 2.1.321 on main 58f2863b4, reports/orchestrator-role-runs): searching code (Grep, Glob) and the web
+ *   (WebFetch, WebSearch) are the tools of that work, and stayed open;
+ * - taking Read or Bash away would cut what is its own: reading its agents' reports, gh and git to merge.
+ *
  * The last test is the one that matters over time: it reads the provider
  * directory, so a fourteenth provider added without the restriction fails
  * here rather than shipping.
@@ -37,7 +44,7 @@ describe('the restriction itself', () => {
   it('names no tool claude does not have: every orchestrator start warned about MultiEdit', () => {
     // claude 2.1.268, 2.1.273 and 2.1.280: `Permission deny rule "MultiEdit"
     // matches no known tool - check for typos.` on stderr, at every start.
-    expect(orchestratorToolFlags(true)).toBe(' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task"');
+    expect(orchestratorToolFlags(true)).toBe(' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" "Grep" "Glob" "WebFetch" "WebSearch"');
     expect(orchestratorToolFlags(true)).not.toContain('MultiEdit');
   });
 
@@ -45,8 +52,14 @@ describe('the restriction itself', () => {
     expect(orchestratorToolFlags(true)).toContain('"Task"');
   });
 
-  it('leaves Bash alone, which an orchestrator needs to know what to delegate', () => {
+  it('blocks searching the code and the web, the tools of an investigation or a research', () => {
+    const flags = orchestratorToolFlags(true);
+    for (const tool of ['Grep', 'Glob', 'WebFetch', 'WebSearch']) expect(flags).toContain(`"${tool}"`);
+  });
+
+  it('leaves Read and Bash alone: its agents\' reports, and gh and git to merge', () => {
     expect(orchestratorToolFlags(true)).not.toContain('"Bash"');
+    expect(orchestratorToolFlags(true)).not.toContain('"Read"');
   });
 });
 

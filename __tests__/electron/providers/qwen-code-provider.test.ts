@@ -135,9 +135,11 @@ describe('the qwen-code provider', () => {
     expect(provider().buildInteractiveCommand({ ...base, forkSession: true })).not.toContain('--fork-session');
   });
 
-  it('Q4. an orchestrator has no edit, write or sub-agent tool', () => {
+  it('Q4. an orchestrator has no edit, write, sub-agent, code search or web tool, and keeps reading and its shell', () => {
     const cmd = provider().buildInteractiveCommand({ ...base, orchestratorMode: true });
-    for (const tool of ['edit', 'write_file', 'agent']) expect(QWEN_ORCHESTRATOR_EXCLUDED).toContain(tool);
+    // Qwen Code 0.25.2's ToolNames: the work is its agents' (2.0.7), as for claude (orchestrator-tools.test.ts).
+    for (const tool of ['edit', 'notebook_edit', 'write_file', 'agent', 'grep_search', 'glob', 'web_fetch', 'web_search']) expect(QWEN_ORCHESTRATOR_EXCLUDED).toContain(tool);
+    for (const tool of ['read_file', 'run_shell_command', 'list_directory']) expect(QWEN_ORCHESTRATOR_EXCLUDED).not.toContain(tool);
     expect(cmd).toContain(`--exclude-tools ${QWEN_ORCHESTRATOR_EXCLUDED.join(' ')}`);
     expect(provider().buildInteractiveCommand(base)).not.toContain('--exclude-tools');
   });
