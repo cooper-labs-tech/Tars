@@ -125,6 +125,7 @@ import { registerReviewHandlers } from './handlers/review-handlers';
 import { registerAgentQueueHandlers } from './handlers/agent-queue-handlers';
 import { registerTemplateHandlers } from './handlers/template-handlers';
 import { registerTeamTemplateHandlers } from './handlers/team-template-handlers';
+import { registerProjectSetupHandlers } from './handlers/project-setup-handlers';
 import { registerHermesHandlers } from './handlers/hermes-handlers';
 import { registerOverseerHandlers } from './handlers/overseer-handlers';
 import { startOverseerWatch, stopOverseerWatch, migrateOverseerOutOfAgentReach } from './services/overseer';
@@ -664,6 +665,7 @@ app.whenReady().then(async () => {
   // Register agent template handlers (no deps, self-contained)
   registerTemplateHandlers();
   registerTeamTemplateHandlers();
+  registerProjectSetupHandlers();
   registerHermesHandlers();
   registerDiscordHandlers({ getAppSettings: () => appSettings });
   const claudeAccounts = registerClaudeAccountsHandlers({
