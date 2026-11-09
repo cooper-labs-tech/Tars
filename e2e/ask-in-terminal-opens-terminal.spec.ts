@@ -23,10 +23,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. on a chat's page, ask in terminal clicked on a question Tars no longer holds (answered elsewhere first) opens
  *    the window all the same, over no dialog (the Audit's L1 on PR 578). The question is denied through main and the
  *    button clicked in the same step, before the window hears of it; main takes the deny first and answers the ask
- *    false. The card's late line is not read: the deny clears the question, and the card with it.
+ *    false. The card's late line is not read: the deny clears the question, and the card with it;
+ * 7. the window a chat's page opens has no project list: its side panel says "No projects added yet" whatever the
+ *    fleet has (QA's L1 on PR 578), where the Agents page's window lists them.
  * The chat's page exists in the new interface only; the Dashboard's panel is the classic shell's.
  * Red on main (58f2863b4) with the frames: on the chat's page no window opens. Case 6 is red on a mutant that opens
- * the window without `taken` (PermissionAskNotice's answer).
+ * the window without `taken` (PermissionAskNotice's answer). Case 7 is red at 9c7efa146 (no projects passed); the
+ * Dashboard case (4) is red on a mutant whose panel opens the window over itself (QA's L2; the mutant is in the PR's report).
  * The artefact: values.json (the answer, the window's name and its terminal's lines), screenshots.
  */
 
@@ -139,6 +142,9 @@ for (const { newInterface, late } of [{ newInterface: true, late: false }, { new
         await expect(win).toBeVisible({ timeout: 15_000 });
         await expect(win.locator('.xterm-rows')).toContainText(DIALOG, { timeout: 30_000 });
         seen.window = (await win.locator('.xterm-rows').innerText()).split('\n').map(l => l.trimEnd()).filter(Boolean).slice(-6);
+        // 7. Its side panel lists the fleet's projects, as the Agents page's window does (QA's L1 on PR 578).
+        await expect(win).toContainText('projects/harbor', { timeout: 15_000 });
+        await expect(win).not.toContainText('No projects added yet');
         await stepShot(page, `${tag}2-window-on-the-dialog`);
       } else {
         // 4. The panel's terminal already shows it: no window opens over it.
