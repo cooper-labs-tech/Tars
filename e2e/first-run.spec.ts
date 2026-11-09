@@ -89,7 +89,7 @@ for (const newInterface of [true, false]) {
     const errors: string[] = [];
 
     const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31598 : 31599), DOROTHY_E2E: '1' },
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31592 : 31593), DOROTHY_E2E: '1' },
     });
     try {
       // The folder picker answers the plain folder.
@@ -207,7 +207,7 @@ for (const newInterface of [true, false]) {
     const seen: Record<string, unknown> = { newInterface };
     const errors: string[] = [];
     const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31596 : 31597), DOROTHY_E2E: '1' },
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31589 : 31590), DOROTHY_E2E: '1' },
     });
     try {
       const page = await app.firstWindow();
