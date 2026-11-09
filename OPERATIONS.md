@@ -1430,6 +1430,37 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
 
+## Orchestration: the gate loop and a worktree per task
+
+Since 2.0.7, every project gets the owner's delivery workflow without any setup (W1, W2 and W6 of the fresh-install
+report):
+
+- **The loop**, in the orchestrator's role file (`electron/resources/super-agent-instructions.md`), first in its
+  identity section on every CLI (`services/agent-guide.ts`), in the guide's `workflow` topic and in every agent's
+  instructions (`agent-instructions.md`, `~/.tars/CLAUDE.md`): each piece on its own branch; the worker delivers a
+  pull request and never merges; QA gates it, then the Audit, each a verdict first (MERGE or FIX FIRST) in the
+  project folder's `reports/`, never overwriting an earlier one, never patching; CI green (`gh pr checks`); only
+  then the merge, by the orchestrator or by the user when they said so.
+- **The built-in Full Project Team** tells each member its part: the developers their area, a PR and never a merge;
+  QA and the Audit that they are the gates. No member has a branch of its own any more; the orchestrator runs on
+  opus at max effort.
+- **Parallel delegation**: `delegate_task` with `timeoutSeconds: 1` to each agent, then `wait_for_agent` and
+  `task_status`. Claude Code runs the tool calls of one message one after another: measured with claude 2.1.321,
+  two waiting `delegate_task` calls in one message ran their 20 s of work in series (40 s), handed with a short
+  timeout they overlapped (`reports/workflow-runs/parallel`).
+- **A release gate**: `delegate_task` with `gate: true`, from the project's orchestrator only (`run-task` refuses it
+  from anyone else, `gate_is_the_orchestrators`). The worker's link carries it (`requestedBy.gate`), and its heavy
+  runs for that task may take `gate` in the slot; any other task's are given `normal`.
+- **Worktrees** (`services/project-worktrees.ts`, `/api/worktrees`, the tools `worktree_new`, `worktree_list`,
+  `worktree_remove`, `worktree_prune`), always in the calling agent's own project:
+  - in `<project>/.worktrees/<branch>`, kept out of git by `.git/info/exclude`, never the project's `.gitignore`;
+  - from `origin/<default>` after a fetch, as last fetched when the fetch fails (said in the answer), or the local
+    default branch with no remote. The fetch runs through `safeGit`: https, http and ssh only, no credential helper;
+  - refused under 10 GB free, past 20 per project, outside a git repository;
+  - removed only when clean and no agent runs in it, never forced, its branch kept;
+  - pruned before each new one: clean, merged into the default branch, HEAD unmoved for an hour (a fresh worktree has
+    no commit of its own yet), no agent in it.
+
 ## The disk janitor
 
 A scan that proposes, by rule, what may go to give the disk back space, and deletes nothing (2.0.5, lot 3 item H;
