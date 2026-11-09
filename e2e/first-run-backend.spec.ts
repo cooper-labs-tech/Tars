@@ -16,6 +16,8 @@
 //    answer names who failed and why.
 // 7. A team deployed on a signed-out Claude Code with no word: refused first (`signed-out`).
 // 8. A claude that is not there reads like any failure: the account says `cli-missing`.
+// 9. (the orchestrator's task of 10/11) A team not started loses its brief, or keeps it as the orchestrator's role:
+//    its role stays its own, the brief is its first task, typed once at its first start, then gone.
 // Its artefact, in the run directory: values.json (the answers asserted), launches.jsonl (each stand-in launch, with
 // the bootstrap it read), and screenshots of the window at the end.
 import { test, expect, _electron as electron } from '@playwright/test';
@@ -45,7 +47,7 @@ const at = Date.now();
 fetch(process.env.CLAUDE_MGR_API_URL + '/api/agents/' + id + '/bootstrap', { headers: { Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN } })
   .then(r => r.json()).catch(e => ({ error: String(e) }))
   .then(b => {
-    fs.appendFileSync(path.join(dir, 'launches.jsonl'), JSON.stringify({ id, at, bootstrap: b.context ?? b.error ?? null }) + '\\n');
+    fs.appendFileSync(path.join(dir, 'launches.jsonl'), JSON.stringify({ id, at, args: args.join(' '), bootstrap: b.context ?? b.error ?? null }) + '\\n');
   });
 setInterval(() => {}, 60000);
 `);
@@ -54,16 +56,17 @@ setInterval(() => {}, 60000);
 function seed() {
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-first-run-be-')));
   const project = path.join(home, 'work', 'my-app');
+  const other = path.join(home, 'work', 'other-app');
   const bin = path.join(home, 'stand-in');
-  for (const dir of [path.join(home, '.claude'), path.join(home, '.tars'), bin, project]) fs.mkdirSync(dir, { recursive: true });
+  for (const dir of [path.join(home, '.claude'), path.join(home, '.tars'), bin, project, other]) fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(project, 'index.js'), 'console.log("hello")\n');
   const claude = standInClaude(bin);
   fs.writeFileSync(path.join(home, '.tars', 'agents.json'), '[]');
-  fs.writeFileSync(path.join(home, '.tars', 'projects.json'), JSON.stringify([project], null, 2));
+  fs.writeFileSync(path.join(home, '.tars', 'projects.json'), JSON.stringify([project, other], null, 2));
   fs.writeFileSync(path.join(home, '.tars', 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { claude },
   }, null, 2));
-  return { home, project, bin, claude };
+  return { home, project, other, bin, claude };
 }
 
 const team = [
@@ -76,7 +79,7 @@ test('a plain folder becomes a repository, takes its whole team, and its orchest
   test.setTimeout(5 * 60_000);
   const OUT = test.info().outputPath();
   fs.mkdirSync(OUT, { recursive: true });
-  const { home, project, bin, claude } = seed();
+  const { home, project, other, bin, claude } = seed();
   const values = { project };
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: `${DEV_URL}/`, DOROTHY_API_PORT: PORT, DOROTHY_E2E: '1' },
@@ -136,14 +139,33 @@ test('a plain folder becomes a repository, takes its whole team, and its orchest
     expect(values.partial).toMatchObject({ success: false, code: 'failed', failed: [{ member: 'Reviewer', reason: expect.stringMatching(/worktree/) }] });
     expect((await agents()).map(a => a.id).sort()).toEqual(before);
 
+    // 9. Not started: the orchestrator's role is its own, the brief its first task, typed once at its first start.
+    values.idle = await call('teams.deploy', [{ projectPath: other, startOnDeploy: false, brief: 'Write the README.', members: [
+      { name: 'Lead', character: 'robot', provider: 'claude', permissionMode: 'auto', skills: [], role: 'orchestrator', savedPrompt: 'You lead other-app.' },
+      { name: 'Writer', character: 'robot', provider: 'claude', permissionMode: 'auto', skills: [] },
+    ] }]);
+    expect(values.idle).toMatchObject({ success: true });
+    const idleLead = () => agents().then(list => list.find(a => a.name === 'Lead - other-app'));
+    values.idleLeadBefore = await idleLead();
+    expect(values.idleLeadBefore).toMatchObject({ savedPrompt: 'You lead other-app.', firstTask: { text: 'Write the README.' } });
+    expect((await agents()).find(a => a.name === 'Writer - other-app')?.firstTask).toBeUndefined();
+    await page.evaluate(id => window.electronAPI.agent.start({ id, prompt: '' }), values.idleLeadBefore.id);
+    await expect.poll(() => fs.readFileSync(launches, 'utf8').includes(values.idleLeadBefore.id), { timeout: 90_000 }).toBe(true);
+    const firstLaunch = fs.readFileSync(launches, 'utf8').trim().split('\n').map(l => JSON.parse(l)).find(l => l.id === values.idleLeadBefore.id);
+    expect(firstLaunch.args).toContain('Write the README.');
+    values.idleLeadAfter = await idleLead();
+    expect(values.idleLeadAfter.firstTask).toBeUndefined();
+    expect(values.idleLeadAfter.savedPrompt).toBe('You lead other-app.');
+
     // 7. Signed out: refused before anything is made.
+    const beforeSignedOut = (await agents()).map(a => a.id).sort();
     fs.writeFileSync(path.join(bin, 'signed-out'), '');
     await call('claudeAccounts.refresh', ['default']);
     values.signedOut = await call('teams.deploy', [{ projectPath: project, startOnDeploy: false, members: [
       { name: 'Writer', character: 'robot', provider: 'claude', permissionMode: 'auto', skills: [] },
     ] }]);
     expect(values.signedOut).toMatchObject({ success: false, code: 'signed-out' });
-    expect((await agents()).map(a => a.id).sort()).toEqual(before);
+    expect((await agents()).map(a => a.id).sort()).toEqual(beforeSignedOut);
 
     // 8. No claude at all: the account says so.
     fs.renameSync(claude, `${claude}.gone`);

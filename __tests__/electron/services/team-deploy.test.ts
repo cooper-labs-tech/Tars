@@ -23,6 +23,12 @@
  *    would leave .worktrees, two orchestrators: refused first, nothing made, `invalid`.
  * 9. A folder that is not one of Tars's projects, or no member at all: refused, nothing made.
  * 10. Two deploys on one project at once make a team twice: the second is refused, `busy`.
+ * And from the orchestrator's task of 10/11 (Tars-Frontend's role-saved-on-create.md, M1), before the code:
+ * 11. The brief is kept as a member's role (savedPrompt), which every start of it reads: each member's role is its own
+ *     saved prompt, and the brief is the orchestrator's first task (each member's when the team has no orchestrator),
+ *     taken once at its next start (core/first-task.ts), whether or not the team starts now.
+ * 12. Started on deploy, every member works on the brief at once: only the orchestrator gets it; the others start at
+ *     their prompt with their role, and wait for its delegations.
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { deployTeam, type TeamDeployDeps, type TeamDeployParams } from '../../../electron/services/team-deploy';
@@ -46,7 +52,8 @@ let signIn: 'signed-in' | 'signed-out' | 'cli-missing' | 'unknown';
 let repo: boolean;
 let names: Set<string>;
 let branches: Set<string>;
-let saved: Record<string, string>;
+let roles: Record<string, string>;
+let firstTasks: Record<string, string>;
 
 beforeEach(() => {
   log = [];
@@ -56,7 +63,8 @@ beforeEach(() => {
   repo = true;
   names = new Set();
   branches = new Set(['main']);
-  saved = {};
+  roles = {};
+  firstTasks = {};
   let n = 0;
   const made = new Map<string, string>();
   deps = {
@@ -75,11 +83,12 @@ beforeEach(() => {
       return { id };
     },
     remove: async (id) => { log.push(`remove ${made.get(id)}`); return {}; },
-    start: async (id) => {
-      log.push(`start ${made.get(id)}`);
+    start: async (id, prompt) => {
+      log.push(`start ${made.get(id)}${prompt ? ` with ${prompt}` : ''}`);
       if (failStart && made.get(id)!.startsWith(failStart)) throw new Error('No terminal is left on this machine');
     },
-    savePrompt: (id, prompt) => { saved[made.get(id)!] = prompt; },
+    saveRole: (id, role) => { roles[made.get(id)!] = role; },
+    setFirstTask: (id, task) => { log.push(`first task of ${made.get(id)}`); firstTasks[made.get(id)!] = task; },
   };
 });
 
@@ -91,6 +100,7 @@ describe('a team deploy', () => {
     expect(r).toMatchObject({ success: true, skipped: [], notStarted: [] });
     expect(log).toEqual([
       'create Frontend - my-app', 'create Backend - my-app', 'create Orchestrator - my-app',
+      'first task of Orchestrator - my-app',
       'start Frontend - my-app', 'start Backend - my-app', 'start Orchestrator - my-app',
     ]);
     expect(r.success && r.agentIds).toHaveLength(3);
@@ -175,15 +185,31 @@ describe('a team deploy', () => {
     expect(log.some(l => l.startsWith('remove'))).toBe(false);
   });
 
-  it('7. starts nothing when asked not to, and keeps the brief as each saved prompt', async () => {
+  it('7, 11. starts nothing when asked not to, keeps each role as its own, and the brief as the orchestrator\'s first task', async () => {
     const r = await deploy({ startOnDeploy: false });
     expect(r).toMatchObject({ success: true });
     expect(log.some(l => l.startsWith('start'))).toBe(false);
-    expect(saved).toEqual({
-      'Orchestrator - my-app': 'Build the login page.',
-      'Frontend - my-app': 'Build the login page.\n\nYou own src/.',
-      'Backend - my-app': 'Build the login page.',
-    });
+    expect(roles).toEqual({ 'Frontend - my-app': 'You own src/.' });
+    expect(firstTasks).toEqual({ 'Orchestrator - my-app': 'Build the login page.' });
+  });
+
+  it('11. with no orchestrator, the brief is each member\'s first task; never a role', async () => {
+    const workers = TEAM.filter(m => m.role !== 'orchestrator');
+    await deploy({ members: workers, startOnDeploy: false });
+    expect(firstTasks).toEqual({ 'Frontend - my-app': 'Build the login page.', 'Backend - my-app': 'Build the login page.' });
+    expect(roles).toEqual({ 'Frontend - my-app': 'You own src/.' });
+    // No brief: no first task.
+    firstTasks = {};
+    await deploy({ members: [member('Docs')], brief: '  ', startOnDeploy: false });
+    expect(firstTasks).toEqual({});
+  });
+
+  it('12. started on deploy: the orchestrator takes the brief at its start, the others start with no task', async () => {
+    await deploy();
+    expect(roles).toEqual({ 'Frontend - my-app': 'You own src/.' });
+    expect(firstTasks).toEqual({ 'Orchestrator - my-app': 'Build the login page.' });
+    // Each start carries no prompt of its own: the launch types the first task (core/first-task.ts).
+    expect(log.filter(l => l.startsWith('start'))).toEqual(['start Frontend - my-app', 'start Backend - my-app', 'start Orchestrator - my-app']);
   });
 
   it('8. refuses members it cannot tell apart, a bad branch, two orchestrators, before making anything', async () => {
