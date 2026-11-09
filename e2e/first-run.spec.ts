@@ -20,7 +20,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. Sign in does not open Claude Code's own sign-in for account 1, or the step does not read signed in after it;
  * 4. adding a folder does not say it is not a git repository, nor what else it lacks for pull requests (PR 584's
  *    readiness, in its order), nor lead to its team;
- * 5. New team on that folder does not offer to deploy without worktrees, so members fail on git's words;
+ * 5. New team on that folder does not offer to deploy without worktrees, so members fail on git's words, or still
+ *    says every member gets the brief when main gives it to the orchestrator alone, as its first task;
  * 6. the deploy without worktrees does not make every member, or makes one with a worktree;
  * 7. a new agent still starts in normal, where it asks before every edit and command;
  * 8. the first run stays once the team is deployed;
@@ -138,6 +139,10 @@ for (const newInterface of [true, false]) {
       const notice = teamDialog.locator('[data-plain-folder]');
       await expect(notice).toContainText('harbor is not a git repository', { timeout: 30_000 });
       seen.notice = (await notice.innerText()).replace(/\s+/g, ' ');
+      // 5b. The brief is the orchestrator's first task (PR 584's teams.deploy), not a brief every member gets.
+      await expect(teamDialog).toContainText('The orchestrator\'s first task');
+      await expect(teamDialog).toContainText('never kept as its role');
+      await expect(teamDialog).not.toContainText('The brief they all get');
       await stepShot(page, `${tag}3-plain-folder`);
       await notice.getByRole('button', { name: 'deploy without worktrees' }).click();
       const deploy = teamDialog.getByRole('button', { name: /^Deploy \d+ agents?$/ });
