@@ -862,10 +862,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const refused = cliStartRefusal(agent, start);
     if (refused) return { success: false, cliRunning: true, error: refused };
     // What the agent was, should its CLI's terminal fail to open below.
-    const before = { status: agent.status, currentTask: agent.currentTask, waitingReason: agent.waitingReason, savedPrompt: agent.savedPrompt };
+    const before = { status: agent.status, currentTask: agent.currentTask, waitingReason: agent.waitingReason };
 
-    // Persist the prompt for future re-launches and update status. Working
-    // only with a task. A start without one, which is every start from the
+    // The prompt is a turn, never the agent's role (savedPrompt, "## Your
+    // role" in its bootstrap), which only the role editor and a template set:
+    // kept here, a first task, Restart's "Continue working on the previous
+    // task" and the note of a resume after an abrupt stop each replaced it,
+    // and 12 agents of one machine had a restart notice for a role (B2 of the
+    // fresh-install report, 10/11/2026). Working only with a task. A start without one, which is every start from the
     // Dashboard, autostart included, and every restart, brings the CLI up at
     // its prompt, where it waits: marked `running`, it stayed that way until a
     // turn it never had came to an end. Measured on 2026-09-22: eleven agents
@@ -874,8 +878,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // to an agent that is `running`, so a note owed to one of them waited on a
     // turn that was not coming.
     if (prompt.trim()) {
-      // A chat's message is a turn, not the agent's brief (AgentLaunchOptions.message).
-      if (!options?.message) agent.savedPrompt = prompt;
       agent.status = 'running';
       agent.currentTask = prompt.slice(0, 100);
     } else {
@@ -958,10 +960,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Started from a window while asleep: woken by you (core/agent-asleep.ts).
     if (agents.get(id)?.status === 'asleep') noteWaker(id, 'you', 'start');
     // Through the slot gate, as every start: a chat's runner takes a slot
-    // within the RAM's limit, its settings stay the orchestrator's, and the
-    // window's words are a turn, not its brief (the Audit's M1 on #379).
+    // within the RAM's limit, and its settings stay the orchestrator's (the
+    // Audit's M1 on #379).
     try {
-      if (agents.get(id)?.kind === 'chat') return await launchAgent(id, prompt, { message: true });
+      if (agents.get(id)?.kind === 'chat') return await launchAgent(id, prompt);
       // What a window may choose, and nothing else: the session a restart
       // resumes lands on a command line, and the permission the Kanban
       // automation imposes is its own. Neither is taken from an IPC message.

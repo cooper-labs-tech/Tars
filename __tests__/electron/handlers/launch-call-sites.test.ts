@@ -376,7 +376,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
 
   it("L2. a launch of a chat's runner by a channel's message keeps that sender for a retype (the Audit's L2 on #569)", async () => {
     const agent = await createAgent();
-    await launchAgent(agent.id, TASK, { message: true, sender: { kind: 'channel', channel: 'Slack' } });
+    await launchAgent(agent.id, TASK, { sender: { kind: 'channel', channel: 'Slack' } });
     await pause(50);
     expect((agent.pendingDelivery as { sender?: unknown } | undefined)?.sender).toEqual({ kind: 'channel', channel: 'Slack' });
   });
