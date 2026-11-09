@@ -198,7 +198,7 @@ describe('pruning', () => {
     for (const w of [open, fresh, own]) expect(fs.existsSync(w.path)).toBe(true);
     const why = Object.fromEntries(done.kept.map(k => [k.branch, k.why]));
     expect(why['feat/open']).toMatch(/not merged/);
-    expect(why['feat/fresh']).toMatch(/moved/);
+    expect(why['feat/fresh']).toMatch(/no commit of its own/);
     expect(why['feat/own']).toMatch(/agent/);
   });
 
@@ -244,7 +244,8 @@ describe('the Audit\'s FIX FIRST on #585', () => {
     git(worker.path, 'commit', '-q', '-m', 'w');
     const head = git(worker.path, 'rev-parse', 'HEAD');
     const gate = await newWorktree(p.dir, 'feat/held', { freeBytes: plenty, protectedPaths: [] });
-    expect(gate).toMatchObject({ kind: 'detached', head, heldBy: worker.path });
+    expect(gate).toMatchObject({ kind: 'detached', head });
+    expect(fs.realpathSync(String((gate as { heldBy?: string }).heldBy))).toBe(fs.realpathSync(worker.path));
     const gatePath = (gate as { path: string }).path;
     expect(gatePath).not.toBe(worker.path);
     expect(git(gatePath, 'rev-parse', 'HEAD')).toBe(head);

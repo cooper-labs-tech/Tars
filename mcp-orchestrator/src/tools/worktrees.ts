@@ -15,15 +15,19 @@ export function registerWorktreeTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "worktree_new",
-      description: "Make a worktree for one task in your project: a new branch from the project's default branch as last fetched from origin (or the local one with no remote), checked out in the project's .worktrees/<branch>, which git is told to ignore. An existing branch is checked out there instead. The merged worktrees nobody works in are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
+      description: "Make a worktree for one task in your project, in its .worktrees (which git is told to ignore), with the branch as it is: a branch another worktree holds (the worker's, when you gate its pull request) gives a detached checkout of its head, as pushed to origin when origin has it; a local branch is checked out; a branch only on origin (a pull request from elsewhere) is checked out from origin; any other name is a new branch from the default branch as last fetched (the local one with no remote). The answer says which and the commit it is on. The worktrees whose work is done are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
       schema: {
         branch: z.string().max(200).describe("The branch, as feat/<what>, fix/<what> or chore/<what>: letters, digits, . _ - and /."),
       },
       failure: "making a worktree",
       async run({ branch }) {
-        const made = (await apiRequest("/api/worktrees", "POST", { branch })) as { path: string; branch: string; base: string; note?: string; pruned: string[] };
+        const made = (await apiRequest("/api/worktrees", "POST", { branch })) as { path: string; branch: string; kind: string; head: string; base: string; heldBy?: string; note?: string; pruned: string[] };
+        const what = made.kind === "detached" ? `a detached checkout of ${made.branch}'s head, which ${made.heldBy} holds`
+          : made.kind === "from-origin" ? `${made.branch}, as origin has it`
+          : made.kind === "existing" ? `${made.branch}, as it is`
+          : `${made.branch}, new from ${made.base}`;
         return text([
-          `Worktree ${made.path}, on ${made.branch}, from ${made.base}. Work there: cd into it for every command.`,
+          `Worktree ${made.path}: ${what}, at ${made.head.slice(0, 9)}. Work there: cd into it for every command.`,
           ...(made.note ? [`Note: ${made.note}.`] : []),
           ...(made.pruned.length ? [`Removed first, merged: ${made.pruned.join(", ")}.`] : []),
         ].join("\n"));

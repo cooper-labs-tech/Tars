@@ -19,9 +19,12 @@ function callerAgent(req: RouteRequest, sendJson: SendJson) {
   return agent;
 }
 
-/** The worktrees agents of the project run in: never removed here. */
-function agentWorktrees(projectPath: string): string[] {
-  return Array.from(agents.values()).filter(a => a.projectPath === projectPath && a.worktreePath).map(a => a.worktreePath!);
+/**
+ * The folders agents work in: each one's own worktree, and the folder its terminal was started in (a task worktree
+ * no worktreePath names, the Audit's L2 on #585). Every agent's, whatever its project: never removed here.
+ */
+function agentWorktrees(): string[] {
+  return Array.from(agents.values()).flatMap(a => [a.worktreePath, a.ptyCwd]).filter((p): p is string => typeof p === 'string' && p.length > 0);
 }
 
 const STATUS: Record<WorktreeRefusal['code'], number> = {
@@ -43,7 +46,7 @@ export function registerWorktreeRoutes(app: RouteApp): void {
       sendJson({ error: 'branch is the new worktree\'s branch, as feat/<what>.', code: 'invalid_branch' }, 400);
       return;
     }
-    const made = await newWorktree(agent.projectPath, branch.trim(), { protectedPaths: agentWorktrees(agent.projectPath) });
+    const made = await newWorktree(agent.projectPath, branch.trim(), { protectedPaths: agentWorktrees() });
     if ('code' in made) sendJson(made, STATUS[made.code]);
     else sendJson({ success: true, ...made });
   });
@@ -56,7 +59,7 @@ export function registerWorktreeRoutes(app: RouteApp): void {
       sendJson({ error: 'branch names the worktree to remove.', code: 'invalid_branch' }, 400);
       return;
     }
-    const removed = await removeWorktree(agent.projectPath, branch.trim(), { protectedPaths: agentWorktrees(agent.projectPath) });
+    const removed = await removeWorktree(agent.projectPath, branch.trim(), { protectedPaths: agentWorktrees() });
     if ('code' in removed) sendJson(removed, STATUS[removed.code]);
     else sendJson({ success: true, ...removed });
   });
@@ -65,6 +68,6 @@ export function registerWorktreeRoutes(app: RouteApp): void {
     const agent = callerAgent(req, sendJson);
     if (!agent) return;
     const { dryRun } = req.body as { dryRun?: unknown };
-    sendJson({ success: true, ...(await pruneWorktrees(agent.projectPath, { protectedPaths: agentWorktrees(agent.projectPath), dryRun: dryRun === true })) });
+    sendJson({ success: true, ...(await pruneWorktrees(agent.projectPath, { protectedPaths: agentWorktrees(), dryRun: dryRun === true })) });
   });
 }
