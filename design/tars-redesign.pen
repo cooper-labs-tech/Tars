@@ -89953,7 +89953,7 @@
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Each member also gets the brief its role carries. This is added on top of it, not instead of it.",
+                      "content": "Each member also gets the brief its role carries. This is added on top of it, not instead of it. Created idle, without start on deploy, nobody gets the brief: it is not kept.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 10.5,
@@ -134351,6 +134351,19 @@
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "iTQxn",
+                          "name": "role",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "On, it starts with this prompt and keeps it as its role, which it reads at every start. Off, it is created idle, with no role.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -134532,6 +134545,19 @@
                           "fontWeight": "normal"
                         }
                       ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "tuzhR",
+                      "name": "role",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "On, it starts with this prompt and keeps it as its role, which it reads at every start. Off, it is created idle, with no role.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -136436,6 +136462,19 @@
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
                           "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "iiMBh",
+                          "name": "role",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "On, it starts with this prompt and keeps it as its role, which it reads at every start. Off, it is created idle, with no role.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -136617,6 +136656,19 @@
                           "fontWeight": "normal"
                         }
                       ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Tf0xd",
+                      "name": "role",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "On, it starts with this prompt and keeps it as its role, which it reads at every start. Off, it is created idle, with no role.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -322367,7 +322419,7 @@
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": "fill_container",
-                      "content": "Each member also gets the brief its role carries. This is added on top of it, not instead of it.",
+                      "content": "Each member also gets the brief its role carries. This is added on top of it, not instead of it. Created idle, without start on deploy, nobody gets the brief: it is not kept.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 10.5,
