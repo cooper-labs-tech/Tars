@@ -12,12 +12,15 @@ import { createAgentWithRole } from '../../src/lib/agent-role';
  * 2. a blank role (empty, spaces, none) writes an empty savedPrompt over nothing, or calls main for nothing;
  * 3. the role is saved before the agent exists, on an id main does not know;
  * 4. a creation main refuses saves a role somewhere, or does not throw its reason;
- * 5. what main answered for the agent is not handed back to the caller (its id is what starts it).
+ * 5. what main answered for the agent is not handed back to the caller (its id is what starts it);
+ * 6. a role main refuses to save, once the agent is made, reads as a creation that failed: the caller loses the
+ *    agent's id, a team says the member could not be created, and a template's retry makes a second agent (the Audit's
+ *    L2 on #581). The agent is handed back with why its role was not saved.
  */
 
 type Stored = { id: string; name: string; savedPrompt?: string };
 
-function main() {
+function main(refuseSave?: string) {
   const agents = new Map<string, Stored>();
   let n = 0;
   return {
@@ -29,6 +32,7 @@ function main() {
       return { ...agent };
     },
     updateAgent: async (params: { id: string; savedPrompt?: string | null }) => {
+      if (refuseSave) throw new Error(refuseSave);
       const agent = agents.get(params.id);
       if (!agent) throw new Error(`Agent ${params.id} not found`);
       if (params.savedPrompt !== undefined) agent.savedPrompt = params.savedPrompt ?? undefined;
@@ -40,16 +44,25 @@ function main() {
 describe('an agent made with a role', () => {
   it('keeps its role (1, 3)', async () => {
     const m = main();
-    const agent = await createAgentWithRole(m, { name: 'Reviewer' }, 'You review every PR before it merges.');
+    const { agent, roleNotSaved } = await createAgentWithRole(m, { name: 'Reviewer' }, 'You review every PR before it merges.');
     expect(m.agents.get(agent.id)?.savedPrompt).toBe('You review every PR before it merges.');
+    expect(roleNotSaved).toBeNull();
   });
 
   it('a blank role saves nothing (2)', async () => {
     const m = main();
     for (const role of ['', '   ', undefined, null]) {
-      const agent = await createAgentWithRole(m, { name: 'Worker' }, role);
+      const { agent } = await createAgentWithRole(m, { name: 'Worker' }, role);
       expect(m.agents.get(agent.id)).toEqual({ id: agent.id, name: 'Worker' });
     }
+  });
+
+  it('a role main refuses to save still hands back the agent made, with why (6)', async () => {
+    const m = main('The agent could not be saved: disk full');
+    const { agent, roleNotSaved } = await createAgentWithRole(m, { name: 'Tester' }, 'You test.');
+    expect(agent).toMatchObject({ id: 'a1', name: 'Tester' });
+    expect(m.agents.size).toBe(1);
+    expect(roleNotSaved).toBe('The agent could not be saved: disk full');
   });
 
   it('a refused creation saves nothing and says why (4)', async () => {
@@ -60,7 +73,7 @@ describe('an agent made with a role', () => {
 
   it('hands back the agent main made (5)', async () => {
     const m = main();
-    const agent = await createAgentWithRole(m, { name: 'Planner' }, 'You plan.');
+    const { agent } = await createAgentWithRole(m, { name: 'Planner' }, 'You plan.');
     expect(agent).toMatchObject({ id: 'a1', name: 'Planner' });
   });
 });
