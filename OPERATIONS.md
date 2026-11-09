@@ -1442,8 +1442,9 @@ report):
   project folder's `reports/`, never overwriting an earlier one, never patching; CI green (`gh pr checks`); only
   then the merge, by the orchestrator or by the user when they said so.
 - **The built-in Full Project Team** tells each member its part: the developers their area, a PR and never a merge;
-  QA and the Audit that they are the gates. No member has a branch of its own any more; the orchestrator runs on
-  opus at max effort.
+  QA and the Audit that they are the gates. No member has a branch of its own any more. The models are the user's
+  defaults: the orchestrator at high effort, the others at their CLI's own (opus at max for every new user's
+  orchestrator, the Audit's L3 on #585, spent the team's quota where it buys least).
 - **Parallel delegation**: `delegate_task` with `timeoutSeconds: 1` to each agent, then `wait_for_agent` and
   `task_status`. Claude Code runs the tool calls of one message one after another: measured with claude 2.1.321,
   two waiting `delegate_task` calls in one message ran their 20 s of work in series (40 s), handed with a short
@@ -1457,9 +1458,15 @@ report):
   - from `origin/<default>` after a fetch, as last fetched when the fetch fails (said in the answer), or the local
     default branch with no remote. The fetch runs through `safeGit`: https, http and ssh only, no credential helper;
   - refused under 10 GB free, past 20 per project, outside a git repository;
-  - removed only when clean and no agent runs in it, never forced, its branch kept;
-  - pruned before each new one: clean, merged into the default branch, HEAD unmoved for an hour (a fresh worktree has
-    no commit of its own yet), no agent in it.
+  - the branch as it is (the Audit's M1 on #585): held by another worktree, the worker's, a detached checkout of its
+    head (origin's when pushed), in `.worktrees/gate/<branch>-<commit>`, which is what QA gates; a local branch,
+    itself; one only on origin, from origin; else a new branch. The answer names which (`kind`) and the commit;
+  - removed only when clean and no agent works in it (its own worktree, or its terminal's folder, this one or one
+    inside it), never forced, its branch kept;
+  - pruned before each new one, one new worktree at a time per project: clean, no agent in it, HEAD unmoved for an
+    hour, and done: a branch with a commit of its own merged into the default branch, or whose pull request GitHub
+    says is merged (`gh pr list --state merged`, for a squash or a rebase), or a detached gate checkout. A branch
+    never moved since it was made (one reflog entry) is kept, however idle.
 
 ## The disk janitor
 
