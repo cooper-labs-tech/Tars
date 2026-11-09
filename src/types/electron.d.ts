@@ -2645,6 +2645,30 @@ export interface ElectronAPI {
     delete: (id: string) => Promise<{ success: boolean; error?: string }>;
   };
 
+  // What a project is offered so that the owner's workflow runs there (electron/services/project-setup.ts): its CI
+  // workflow (committed on chore/ci in a worktree, never pushed) and its CLAUDE.md (never over one it has), written
+  // only on the owner's yes; and one permission level for its whole team, applied as agent:update applies it.
+  projectSetup?: {
+    offer: (projectPath: string) => Promise<
+      | { success: false; error: string }
+      | {
+        success: true;
+        ci:
+          | { state: 'offer'; path: string; content: string; checks: string[]; stack: 'node' | 'python' | 'go' | 'rust' }
+          | { state: 'present'; path: string }
+          | { state: 'not_a_repository' | 'no_remote' | 'not_github' | 'unknown_stack'; why: string };
+        claudeMd: { state: 'offer'; path: string; content: string } | { state: 'present'; path: string };
+      }
+    >;
+    writeCi: (projectPath: string) => Promise<{ success: true; branch: string; worktree: string; file: string } | { success: false; error: string; code?: string }>;
+    writeClaudeMd: (projectPath: string) => Promise<{ success: true; path: string } | { success: false; error: string; code?: string }>;
+    setTeamPermissionMode: (projectPath: string, permissionMode: 'plan' | 'normal' | 'auto' | 'bypass') => Promise<{
+      success: boolean;
+      error?: string;
+      agents?: Array<{ id: string; name?: string; success: boolean; error?: string }>;
+    }>;
+  };
+
   // Which providers enforce orchestrator mode rather than only asking for it
   provider?: {
     orchestratorSupport: () => Promise<Record<string, boolean>>;
