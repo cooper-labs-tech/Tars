@@ -22,6 +22,7 @@ import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
 import { modeForProvider } from '@/lib/plan-mode';
 import { ipcReason } from '@/lib/ipc-error';
+import { createAgentWithRole } from '@/lib/agent-role';
 
 const MODE_OPTIONS: SegmentedOption<CreationMode>[] = [
   { value: 'agent', label: 'One agent' },
@@ -427,7 +428,8 @@ export default function NewChatModal({
       }
       try {
         const resolvedModel = member.provider !== 'local' && member.model && member.model !== 'default' ? member.model : undefined;
-        const agent = await createAgent({
+        // The member's role is saved on it as it is made: a start's brief is its first task, not its role.
+        const { agent, roleNotSaved } = await createAgentWithRole({ createAgent, updateAgent }, {
           projectPath,
           skills: member.skills,
           character: member.character,
@@ -439,13 +441,15 @@ export default function NewChatModal({
           localModel: member.localModel,
           worktree: member.worktreeBranch ? { enabled: true, branchName: member.worktreeBranch } : undefined,
           role: member.role,
-        });
+        }, member.savedPrompt);
         createdIds.push(agent.id);
+        // Made, but its role was not saved: said, and the member kept (the Audit's L2 on PR 581).
+        if (roleNotSaved) issues.push(`${member.name}: created, but its role was not saved: ${roleNotSaved}`);
+        // The brief is a first task, never a role: it goes in with the start. Created idle, nobody gets it, since
+        // nothing in Tars keeps a first task for a later start (the Audit's M1 on PR 581).
         const combinedBrief = [teamBrief.trim(), member.savedPrompt?.trim()].filter(Boolean).join('\n\n');
         if (startOnDeploy && combinedBrief) {
           await startAgent(agent.id, combinedBrief, { model: resolvedModel, provider: member.provider, localModel: member.localModel });
-        } else if (combinedBrief) {
-          await updateAgent({ id: agent.id, savedPrompt: combinedBrief });
         }
       } catch (err) {
         console.error(`Failed to create team member "${member.name}":`, err);
