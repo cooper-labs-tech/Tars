@@ -10,13 +10,13 @@ import { computeProviderAvailability } from '@/lib/providers';
 import { useElectronAgents } from '@/hooks/useElectron';
 import { useElectronTeamTemplates } from '@/hooks/useElectronTeamTemplates';
 import { useSkillInstall } from './hooks/useSkillInstall';
-import { Button, DialogShell, SegmentedControl } from '@/components/ui';
+import { Button, DialogShell, SegmentedControl, StatusSquare } from '@/components/ui';
 import type { SegmentedOption } from '@/components/ui';
 import { AgentPanel } from './AgentPanel';
 import { TeamPanel } from './TeamPanel';
 import SkillInstallTerminal from './SkillInstallTerminal';
 import { blankMember } from './team-defaults';
-import { canSubmitAgent, canSubmitTeam, deployButtonLabel, deployedMemberName, ownWorktreeOf, worktreeToSave } from './logic';
+import { canSubmitAgent, canSubmitTeam, deployButtonLabel, deployedMemberName, ownWorktreeOf, worktreeCount, worktreeToSave } from './logic';
 import type { CreationMode } from './types';
 import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
@@ -104,7 +104,7 @@ export default function NewChatModal({
   const [branchName, setBranchName] = useState('');
   // Why the main process refused the last save of an agent's settings, or its creation; the dialog stays open with what was chosen.
   const [saveRefusal, setSaveRefusal] = useState<string | null>(null);
-  const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('normal');
+  const [permissionMode, setPermissionMode] = useState<AgentPermissionMode>('auto');
   const [effort, setEffort] = useState<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('medium');
   const [isOrchestrator, setIsOrchestrator] = useState(false);
   const [agentOptionsOpen, setAgentOptionsOpen] = useState(false);
@@ -164,6 +164,18 @@ export default function NewChatModal({
     setSelectedMemberIdx(new Set(members.map((_, i) => i)));
     setTeamPermissionOverride(members[0]?.permissionMode ?? 'auto');
   }, [teams]);
+
+  // Whether the team's folder is a git repository, as `git branch` answers for it: a member's worktree needs one.
+  const [plainFolder, setPlainFolder] = useState(false);
+  useEffect(() => {
+    setPlainFolder(false);
+    if (mode !== 'team' || !projectPath) return;
+    let live = true;
+    void window.electronAPI?.shell?.branch(projectPath)
+      .then(r => { if (live) setPlainFolder(!(r?.success && r.output?.trim())); })
+      .catch(() => { if (live) setPlainFolder(true); });
+    return () => { live = false; };
+  }, [mode, projectPath]);
 
   // The team half opens with a roster already in view rather than an empty
   // table waiting for a pick - one team exists on every install (the built-in
@@ -232,7 +244,7 @@ export default function NewChatModal({
       setPrompt('');
       setUseWorktree(false);
       setBranchName('');
-      setPermissionMode('normal');
+      setPermissionMode('auto');
       setEffort('medium');
       setProvider('claude');
       setModel('default');
@@ -368,7 +380,7 @@ export default function NewChatModal({
       setBranchName('');
       setCharacter('robot');
       setAgentName('');
-      setPermissionMode('normal');
+      setPermissionMode('auto');
       setEffort('medium');
       setProvider('claude');
       setModel('default');
@@ -603,6 +615,21 @@ export default function NewChatModal({
               onCliPathChange={setCliPath}
             />
           ) : (
+            <>
+            {/* A folder that is not a git repository, while members still ask for worktrees (frame `First run (2.0.7) · states`, its row `plain folder`). */}
+            {plainFolder && worktreeCount(selectedMembers) > 0 && (
+              <div data-plain-folder className="mb-4 flex flex-col gap-2 px-3.5 py-3 border border-border bg-card">
+                <p className="flex items-start gap-2 text-xs text-foreground">
+                  <span className="mt-[5px]"><StatusSquare tone="waiting" /></span>
+                  {`${lastPathPart(projectPath) || projectPath} is not a git repository, so its members cannot each work in a worktree of their own.`}
+                </p>
+                <div className="flex items-center gap-1.5">
+                  <Button size="sm" className="font-mono lowercase" onClick={() => setEditedMembers(ms => ms.map(m => ({ ...m, worktreeBranch: undefined })))}>
+                    deploy without worktrees
+                  </Button>
+                </div>
+              </div>
+            )}
             <TeamPanel
               projects={projects}
               projectPath={projectPath}
@@ -626,6 +653,7 @@ export default function NewChatModal({
               startOnDeploy={startOnDeploy}
               onToggleStartOnDeploy={() => setStartOnDeploy(v => !v)}
             />
+            </>
           )}
         </div>
       </DialogShell>
