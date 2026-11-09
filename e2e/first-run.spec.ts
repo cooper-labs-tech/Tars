@@ -163,4 +163,48 @@ for (const newInterface of [true, false]) {
       removeHome(home);
     }
   });
+
+  /**
+   * The Kanban page with no Hermes set up at all (2.0.7, H3; frame `First run (2.0.7) · states`, its row `Kanban,
+   * with no Hermes gateway`). How it can fail: 10. main's not-configured answer is shown as a failure, a warning and
+   * Retry; 11. the page does not say the rest of Tars works without it, nor lead to Settings, Hermes; 12. an uncaught
+   * error in the page. Red before the window's change (376461c19): the warning.
+   */
+  test(`the kanban page without hermes says the rest of tars works${newInterface ? ' (new interface)' : ''}`, async () => {
+    test.setTimeout(180_000);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-no-hermes-'));
+    const dir = path.join(home, '.tars');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, cliPaths: { claude: claude(home) },
+    }));
+    const seen: Record<string, unknown> = { newInterface };
+    const errors: string[] = [];
+    const app = await launchSandboxed(electron, home, {
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31596 : 31597), DOROTHY_E2E: '1' },
+    });
+    try {
+      const page = await app.firstWindow();
+      listenForErrors(page, errors);
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await page.goto(`${DEV_URL}/kanban`, { waitUntil: 'domcontentloaded' });
+      await expect(page.locator(SPLASH)).toHaveCount(0, { timeout: 90_000 });
+      // 10, 11.
+      const absent = page.locator('[data-hermes-absent]');
+      await expect(absent).toContainText('Without it, the rest of Tars works', { timeout: 30_000 });
+      await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
+      seen.kanban = (await absent.innerText()).replace(/\s+/g, ' ');
+      await stepShot(page, `${newInterface ? 'new-' : 'classic-'}5-kanban-without-hermes`);
+      await absent.getByRole('link', { name: 'Open Hermes settings' }).click();
+      await expect(page).toHaveURL(/\/settings\?section=hermes/, { timeout: 30_000 });
+      // 12.
+      seen.errors = errors;
+      expect(errors).toEqual([]);
+    } finally {
+      recordValues(seen);
+      await app.close().catch(() => {});
+      removeHome(home);
+    }
+  });
 }
