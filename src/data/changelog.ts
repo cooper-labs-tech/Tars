@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-10',
+    updates: [
+      'An agent keeps the role you gave it. Until now, whatever it was last started with replaced its role, which it is shown at every session start: a first task, a Restart\'s "Continue working on the previous task", or the note Tars resumes it with after stopping abruptly. A start\'s words are now only its first turn; only the agent\'s edit form and a template set its role.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',
