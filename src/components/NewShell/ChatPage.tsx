@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ArrowUp, Square } from 'lucide-react';
 import { BrandMark } from '@/components/Brand';
+import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import PermissionAskNotice from '@/components/PermissionAskNotice';
 import { RichText } from '@/components/Overseer/RichText';
 import { Button, ComposerCard, PanelCaption, StatusSquare } from '@/components/ui';
@@ -195,7 +196,9 @@ function LimitBlock({ outcome, chats }: { outcome: Extract<SendOutcome, { kind: 
 }
 
 export function ChatPage({ chat }: { chat: ChatView }) {
-  const { agents } = useElectronAgents();
+  const { agents, startAgent, stopAgent } = useElectronAgents();
+  // The orchestrator's window, opened when its question went back to its terminal: this page shows none.
+  const [terminalOpen, setTerminalOpen] = useState(false);
   const { chats } = useChats();
   const { feed, problem, showEarlier, readingEarlier } = useChatFeed(chat.id);
 
@@ -315,7 +318,7 @@ export function ChatPage({ chat }: { chat: ChatView }) {
           </div>
 
           <div className="shrink-0 flex flex-col gap-2 px-10 pb-5">
-            {runner && <PermissionAskNotice agent={runner} layout="window" />}
+            {runner && <PermissionAskNotice agent={runner} layout="window" onAskedInTerminal={() => setTerminalOpen(true)} />}
             {outcome?.kind === 'limit' && <LimitBlock outcome={outcome} chats={chats ?? []} />}
             {nameProblem && <p role="alert" className="text-xs text-status-waiting">{nameProblem}</p>}
             <ComposerCard
@@ -344,6 +347,15 @@ export function ChatPage({ chat }: { chat: ChatView }) {
           </p>
         </aside>
       </div>
+      {/* Its terminal, where Claude Code's own dialog waits once ask in terminal handed it the question. */}
+      <AgentTerminalDialog
+        agent={terminalOpen ? runner ?? null : null}
+        open={terminalOpen && !!runner}
+        onClose={() => setTerminalOpen(false)}
+        onStart={(id, prompt) => void startAgent(id, prompt)}
+        onStop={id => void stopAgent(id)}
+        agents={agents}
+      />
     </div>
   );
 }
