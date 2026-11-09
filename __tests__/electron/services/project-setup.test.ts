@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { setupOffer, writeCi, writeClaudeMd, teamOf } from '../../../electron/services/project-setup';
+import { setupOffer, writeCi, writeClaudeMd, teamOf, acceptedProject } from '../../../electron/services/project-setup';
 
 /**
  * What Tars offers a project so that the owner's workflow runs there with nothing set up by hand (2.0.7, W3, W5 and W7
@@ -26,12 +26,29 @@ import { setupOffer, writeCi, writeClaudeMd, teamOf } from '../../../electron/se
  * K2. The CLAUDE.md offered does not name the project's checks and its team's areas, or runs past 40 lines.
  * T1. The whole team's permission level reaches an agent of another project, or a chat's runner (whose settings are
  *     its orchestrator's).
+ *
+ * From the Audit's FIX FIRST on #586 (written before the fixes, 2026-11-10):
+ * F1. (M1) Writing the CI prunes an agent's own worktree (the prune before a new worktree, with no agent's folder
+ *     protected), and says nothing of what it removed.
+ * F2. (L1) The offered workflow is red on its first run: setup-node caching with no lock file to key it, pnpm's setup
+ *     with no version when package.json names no packageManager, pytest run without being installed.
+ * F3. (L2) Any absolute path is taken: a CLAUDE.md written into the home folder, a commit made in any repository. Only
+ *     a project Tars knows, never the home folder nor a root.
+ * F4. (L3) A failure once the worktree is made (a file named .github, a commit refused) leaves chore/ci and its
+ *     worktree behind, and the next yes answers "exists"; or git with an email and no name refuses the commit.
  */
 
 vi.setConfig({ testTimeout: 60_000 });
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-project-setup-'));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
-const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
+const git = (cwd: string, ...args: string[]) => {
+  try {
+    return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } }).trim();
+  } catch (err) {
+    const e = err as { stderr?: unknown; stdout?: unknown };
+    throw new Error(`git ${args.join(' ')}: ${[e.stderr, e.stdout].map(s => String(s ?? '').trim()).filter(Boolean).join(' / ') || (err as Error).message}`);
+  }
+};
 
 let n = 0;
 /** A git project with files, an origin URL (never fetched) and one commit on main. */
@@ -83,7 +100,7 @@ describe('the CI offer', () => {
 
   it('C4. gives Python, Go and Rust their own tools, and an unknown stack nothing', async () => {
     const py = (await setupOffer(project({ 'pyproject.toml': '[project]\nname = "shop"\n[tool.pytest.ini_options]\n', 'tests/test_a.py': '' }), noTeam)).ci as { checks: string[] };
-    expect(py.checks).toEqual(['pip install -e .', 'pytest']);
+    expect(py.checks).toEqual(['pip install -e . pytest', 'pytest']);
     expect(((await setupOffer(project({ 'go.mod': 'module shop\n' }), noTeam)).ci as { checks: string[] }).checks).toEqual(['go build ./...', 'go vet ./...', 'go test ./...']);
     expect(((await setupOffer(project({ 'Cargo.toml': '[package]\nname = "shop"\n' }), noTeam)).ci as { checks: string[] }).checks).toEqual(['cargo build --locked', 'cargo test --locked']);
     expect((await setupOffer(project({ 'main.c': 'int main(){}' }), noTeam)).ci).toMatchObject({ state: 'unknown_stack' });
@@ -98,14 +115,14 @@ describe('the CI offer', () => {
   it('C6. is committed on chore/ci in a worktree, the user\'s checkout untouched and nothing pushed', async () => {
     const dir = project({ 'package.json': pkg({ test: 'vitest run' }) });
     const before = git(dir, 'status', '--porcelain');
-    const written = await writeCi(dir, { freeBytes: async () => 500 * 1024 ** 3 });
+    const written = await writeCi(dir, { freeBytes: async () => 500 * 1024 ** 3, protectedPaths: [] });
     expect(written).toMatchObject({ branch: 'chore/ci' });
     expect(git(dir, 'status', '--porcelain')).toBe(before);
     expect(git(dir, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
     expect(git(dir, 'show', 'chore/ci:.github/workflows/ci.yml')).toContain('run: npm run test');
     expect(git(dir, 'for-each-ref', '--format=%(upstream)', 'refs/heads/chore/ci')).toBe('');
     // Asked again, it writes nothing over it.
-    expect(await writeCi(dir, { freeBytes: async () => 500 * 1024 ** 3 })).toMatchObject({ code: 'exists' });
+    expect(await writeCi(dir, { freeBytes: async () => 500 * 1024 ** 3, protectedPaths: [] })).toMatchObject({ code: 'exists' });
   });
 });
 
@@ -140,5 +157,67 @@ describe('the whole team', () => {
       { id: 'c', projectPath: '/p/other' }, { id: 'd', projectPath: '/p/shop' },
     ];
     expect(teamOf('/p/shop', fleet).map(a => a.id)).toEqual(['a', 'd']);
+  });
+});
+
+const roomy = async () => 500 * 1024 ** 3;
+/** A worktree as an agent's own: on a branch with a commit of its own, merged into main, its HEAD idle for hours. */
+function mergedAgentWorktree(dir: string, branch: string): string {
+  const wt = path.join(dir, '.worktrees', ...branch.split('/'));
+  git(dir, 'worktree', 'add', '-q', '-b', branch, wt, 'main');
+  fs.writeFileSync(path.join(wt, `${branch.replace(/\//g, '-')}.txt`), branch);
+  git(wt, 'add', '.');
+  git(wt, 'commit', '-q', '-m', 'x');
+  git(dir, 'merge', '-q', '--ff-only', branch);
+  const when = new Date(Date.now() - 3 * 3600_000);
+  const gitDir = path.resolve(wt, git(wt, 'rev-parse', '--git-dir'));
+  for (const f of ['HEAD', path.join('logs', 'HEAD')]) if (fs.existsSync(path.join(gitDir, f))) fs.utimesSync(path.join(gitDir, f), when, when);
+  return wt;
+}
+
+describe('the Audit\'s FIX FIRST on #586', () => {
+  it('F1. never prunes an agent\'s own worktree to write the CI, and names what it pruned', async () => {
+    const dir = project({ 'package.json': pkg({ test: 'vitest run' }), 'package-lock.json': '{}' });
+    const own = mergedAgentWorktree(dir, 'feat/frontend');
+    const other = mergedAgentWorktree(dir, 'feat/done');
+    const written = await writeCi(dir, { freeBytes: roomy, protectedPaths: [own] });
+    expect(written).toMatchObject({ branch: 'chore/ci', pruned: ['feat/done'] });
+    expect(fs.existsSync(own)).toBe(true);
+    expect(fs.existsSync(other)).toBe(false);
+  });
+
+  it('F2. offers a workflow that can pass its first run', async () => {
+    const noLock = (await setupOffer(project({ 'package.json': pkg({ test: 'vitest run' }) }), noTeam)).ci as { content: string; checks: string[] };
+    expect(noLock.checks[0]).toBe('npm install');
+    expect(noLock.content).not.toMatch(/cache:/);
+    const pnpm = (await setupOffer(project({ 'package.json': pkg({ test: 'vitest run' }), 'pnpm-lock.yaml': '' }), noTeam)).ci as { content: string };
+    expect(pnpm.content).toMatch(/pnpm\/action-setup@v4\n {8}with:\n {10}version: 9/);
+    const pinned = (await setupOffer(project({ 'package.json': pkg({ test: 'vitest run' }, { packageManager: 'pnpm@8.15.4' }), 'pnpm-lock.yaml': '' }), noTeam)).ci as { content: string };
+    expect(pinned.content).toMatch(/pnpm\/action-setup@v4\n {6}- uses: actions\/setup-node/);
+    const py = (await setupOffer(project({ 'requirements.txt': 'flask\n', 'tests/test_a.py': '' }), noTeam)).ci as { content: string };
+    expect(py.content.indexOf('pip install -r requirements.txt pytest')).toBeGreaterThan(-1);
+    expect(py.content.indexOf('pip install -r requirements.txt pytest')).toBeLessThan(py.content.indexOf('run: pytest'));
+  });
+
+  it('F3. takes only a project Tars knows, never the home folder nor a root', () => {
+    const known = ['/Users/u/projects/shop'];
+    expect(acceptedProject('/Users/u/projects/shop', known, '/Users/u')).toBe('/Users/u/projects/shop');
+    expect(acceptedProject('/Users/u/projects/shop/', known, '/Users/u')).toBe('/Users/u/projects/shop');
+    for (const bad of ['/Users/u/projects/other', '/Users/u', '/', 'relative/shop', 42, undefined]) expect(acceptedProject(bad, [...known, '/Users/u', '/'], '/Users/u'), String(bad)).toBeUndefined();
+  });
+
+  it('F4. leaves nothing behind when the write fails after the worktree, so the next yes can try again', async () => {
+    const dir = project({ 'package.json': pkg({ test: 'vitest run' }), 'package-lock.json': '{}', '.github': 'not a folder\n' });
+    const failed = await writeCi(dir, { freeBytes: roomy, protectedPaths: [] });
+    expect(failed).toMatchObject({ code: 'write_failed' });
+    expect(git(dir, 'branch', '--list', 'chore/ci')).toBe('');
+    expect(fs.existsSync(path.join(dir, '.worktrees', 'chore', 'ci'))).toBe(false);
+  });
+
+  it('F4. commits under Tars\'s name when git has an email and no name', async () => {
+    const dir = project({ 'package.json': pkg({ test: 'vitest run' }), 'package-lock.json': '{}' });
+    git(dir, 'config', 'user.useConfigOnly', 'true');
+    git(dir, 'config', 'user.email', 'someone@example.com');
+    expect(await writeCi(dir, { freeBytes: roomy, protectedPaths: [] })).toMatchObject({ branch: 'chore/ci' });
   });
 });
