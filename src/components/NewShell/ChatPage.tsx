@@ -4,10 +4,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, ArrowUp, Square } from 'lucide-react';
 import { BrandMark } from '@/components/Brand';
+import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import PermissionAskNotice from '@/components/PermissionAskNotice';
 import { RichText } from '@/components/Overseer/RichText';
 import { Button, ComposerCard, PanelCaption, StatusSquare } from '@/components/ui';
-import { useElectronAgents } from '@/hooks/useElectron';
+import { useElectronAgents, useElectronFS } from '@/hooks/useElectron';
 import { useChatFeed } from '@/hooks/useChatFeed';
 import { projectNameOf, refreshChats, useChats } from '@/hooks/useChats';
 import { forgetSentOutcome, sendComposer, useChatComposer, writeComposer } from '@/hooks/useChatComposer';
@@ -195,7 +196,12 @@ function LimitBlock({ outcome, chats }: { outcome: Extract<SendOutcome, { kind: 
 }
 
 export function ChatPage({ chat }: { chat: ChatView }) {
-  const { agents } = useElectronAgents();
+  const { agents, startAgent, stopAgent } = useElectronAgents();
+  // The window's side panel lists the fleet's projects, as the Agents page's does (QA's L1 on PR 578).
+  const { projects, openFolderDialog } = useElectronFS();
+  // The orchestrator's window, opened when its question went back to its terminal: this page shows none.
+  // Held by the runner's id, so another runner, or one that comes back, never finds it open.
+  const [terminalFor, setTerminalFor] = useState<string | null>(null);
   const { chats } = useChats();
   const { feed, problem, showEarlier, readingEarlier } = useChatFeed(chat.id);
 
@@ -315,7 +321,7 @@ export function ChatPage({ chat }: { chat: ChatView }) {
           </div>
 
           <div className="shrink-0 flex flex-col gap-2 px-10 pb-5">
-            {runner && <PermissionAskNotice agent={runner} layout="window" />}
+            {runner && <PermissionAskNotice agent={runner} layout="window" onAskedInTerminal={() => setTerminalFor(runner.id)} />}
             {outcome?.kind === 'limit' && <LimitBlock outcome={outcome} chats={chats ?? []} />}
             {nameProblem && <p role="alert" className="text-xs text-status-waiting">{nameProblem}</p>}
             <ComposerCard
@@ -344,6 +350,17 @@ export function ChatPage({ chat }: { chat: ChatView }) {
           </p>
         </aside>
       </div>
+      {/* Its terminal, where Claude Code's own dialog waits once ask in terminal handed it the question. */}
+      <AgentTerminalDialog
+        agent={runner && terminalFor === runner.id ? runner : null}
+        open={!!runner && terminalFor === runner.id}
+        onClose={() => setTerminalFor(null)}
+        onStart={(id, prompt) => void startAgent(id, prompt)}
+        onStop={id => void stopAgent(id)}
+        agents={agents}
+        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        onBrowseFolder={openFolderDialog}
+      />
     </div>
   );
 }

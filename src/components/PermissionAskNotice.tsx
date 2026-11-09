@@ -60,9 +60,15 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * show all. Tars cannot see what would be written, and refuses an allow anyway
  * (frame `Permission asked of Tars`, its withheld row).
  */
-export default function PermissionAskNotice({ agent, layout }: {
+export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }: {
   agent: Pick<AgentStatus, 'id' | 'status' | 'permissionAsk'>;
   layout: 'panel' | 'window';
+  /**
+   * Tars handed the question back to Claude Code's dialog. A host that shows no terminal under the question (a
+   * chat's page) brings the agent's terminal into view, where that dialog waits (frame `Permission asked of Tars`,
+   * its row `ask in terminal from a chat`). Not called when Tars no longer held the question.
+   */
+  onAskedInTerminal?: () => void;
 }) {
   const askedAt = agent.permissionAsk?.askedAt;
   const withheld = agent.permissionAsk?.withheld === true;
@@ -108,6 +114,7 @@ export default function PermissionAskNotice({ agent, layout }: {
     // Taken: off until the agent's next state takes the line away. Not taken:
     // the time ran out, the turn ended, or another window answered first.
     setKept(prev => (prev.of === askedAt ? { ...prev, phase: taken ? 'sent' : 'late' } : prev));
+    if (taken && decision === 'ask') onAskedInTerminal?.();
   };
   const deny = () => answer('deny', state.reason.trim() || undefined);
   const back = () => update({ phase: 'answers', reason: '' });
