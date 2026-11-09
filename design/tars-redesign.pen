@@ -829062,6 +829062,1347 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "kt3TO",
+          "name": "what a project is offered",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "qvqSW",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RjOH0",
+                  "fill": "$text-muted",
+                  "content": "step 2, once the folder is known: what Tars offers for the team's workflow, written only on your yes",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ZSx0c",
+                  "name": "offers",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "hXSdz",
+                      "fill": "$text-primary",
+                      "content": "Offered for harbor",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hOsSf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "NOC1P",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "qXY3O",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A CI workflow for GitHub: npm ci, npm run lint, npm test on each pull request into main.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "scN0q",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "iV0Jy",
+                              "name": "b add the CI workflow",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Gbc3q",
+                                  "fill": "$text-primary",
+                                  "content": "add the CI workflow",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "HMSHW",
+                              "name": "b see it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "NHq7Y",
+                                  "fill": "$text-primary",
+                                  "content": "see it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Ws5Mz",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "GFFSP",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "tU73T",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A short CLAUDE.md: the checks, each agent's area, and how a change is delivered.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JqnbP",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "YHrNJ",
+                              "name": "b write CLAUDE.md",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ElrSK",
+                                  "fill": "$text-primary",
+                                  "content": "write CLAUDE.md",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "E0sQ6",
+                              "name": "b see it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "UU4J0",
+                                  "fill": "$text-primary",
+                                  "content": "see it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "XKejK",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Your team's permission level is chosen when you deploy it: New team, Options, Permissions.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Q2g0a",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RftcB",
+                  "fill": "$text-muted",
+                  "content": "main's projectSetup.offer",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "GOODV",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Each offer shows only when it applies. The workflow is committed on chore/ci in a worktree of its own and never pushed: your orchestrator delivers it as a pull request, like any change.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "tycbv",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "CLAUDE.md is never written over one the project has. see it opens what would be written, as it is, before you say yes.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "oq7de",
+          "name": "after yes, and what is not offered",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "D5TwzO",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "u8Aoh",
+                  "fill": "$text-muted",
+                  "content": "the same lines, once answered, and a project with nothing to offer",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "O5qi1",
+                  "name": "after yes",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "abw3F",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "A4PKPE",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "ev0Cb",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed: your orchestrator delivers it as a pull request.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VlO1P",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Awftw",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "IwAOG",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Wrote CLAUDE.md.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mJe2Q",
+                  "name": "nothing to offer",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "X5I3E",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "d9GUB",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "TRBiG",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Has a CI workflow: .github/workflows/ci.yml",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nOySl",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "PImtw",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "ny5lr",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Has its CLAUDE.md.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "c3HVK",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iYrlv",
+                          "name": "square",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "ijBU6",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its remote is not on GitHub (git@git.example.com:you/harbor.git): Tars offers GitHub Actions only.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BXKC1",
+                  "name": "refused",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "iwULR",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "d2n4v",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "FQ5hK",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The project has a CLAUDE.md already: ~/projects/harbor/CLAUDE.md. Tars writes nothing over it.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eFj9R",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "f4Ob6",
+                  "fill": "$text-muted",
+                  "content": "main's answers, said once",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "z7B8hq",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "What the project already has reads done. An offer that does not apply says main's reason, as main words it, in a quiet line. A refusal says main's error, in the error tone, and nothing is written.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "TjOOJ",
+          "name": "see it",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "CXrFa",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RYgAE",
+                  "fill": "$text-muted",
+                  "content": "see it: what the yes would write, read-only",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "XRqRx",
+                  "name": "preview",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "O8F5to",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "rCNLI",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "NySsi",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A CI workflow for GitHub: npm ci, npm run lint, npm test on each pull request into main.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RsgZI",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "n9dxEM",
+                              "name": "b add the CI workflow",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "RNW0M",
+                                  "fill": "$text-primary",
+                                  "content": "add the CI workflow",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "X4Xl1v",
+                              "name": "b hide it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "A0rdT",
+                                  "fill": "$text-primary",
+                                  "content": "hide it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "tOOMY",
+                      "name": "preview",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "padding": [
+                        10,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LEXXt",
+                          "fill": "$text-secondary",
+                          "content": ".github/workflows/ci.yml",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Qzol3",
+                          "fill": "$text-secondary",
+                          "content": "name: CI",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "f7rCEq",
+                          "fill": "$text-secondary",
+                          "content": "on:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "FFB6A",
+                          "fill": "$text-secondary",
+                          "content": "  pull_request:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "IJvnE",
+                          "fill": "$text-secondary",
+                          "content": "    branches: [main]",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "mdusA",
+                          "fill": "$text-secondary",
+                          "content": "  push:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uiTTc",
+                          "fill": "$text-secondary",
+                          "content": "    branches: [main]",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Ricrw",
+                          "fill": "$text-secondary",
+                          "content": "jobs:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "WsliE",
+                          "fill": "$text-secondary",
+                          "content": "  checks:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "p2k2f",
+                          "fill": "$text-secondary",
+                          "content": "    runs-on: ubuntu-latest",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "z0F0JH",
+                          "fill": "$text-secondary",
+                          "content": "    steps:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "z6jJ2S",
+                          "fill": "$text-secondary",
+                          "content": "      - uses: actions/checkout@v4",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "TF08F",
+                          "fill": "$text-secondary",
+                          "content": "      - run: npm ci",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "rjBI3",
+                          "fill": "$text-secondary",
+                          "content": "      - run: npm test",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "p339qG",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "REktT",
+                  "fill": "$text-muted",
+                  "content": "main's content, verbatim",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "LwjiN",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The file as main would write it, scrolled within its box when long. Nothing is written until the yes.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "M3eEN",
+          "name": "a project's panel, its team there",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "y4qSO",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "m8x3i",
+                  "fill": "$text-muted",
+                  "content": "Projects, a project's panel: the same offers, and one level for its whole team",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "I5Fa3",
+                  "name": "project panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ZzT4w",
+                      "fill": "$text-muted",
+                      "content": "SET UP FOR YOUR TEAM",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.6
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yjHSS",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "TnNcS",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "g0IhFh",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Has a CI workflow: .github/workflows/ci.yml",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ifWrh",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "rw8Wm",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "T6bbX",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A short CLAUDE.md: the checks, each agent's area, and how a change is delivered.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "LmDy3",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "F3MCHM",
+                              "name": "b write CLAUDE.md",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "CVgRj",
+                                  "fill": "$text-primary",
+                                  "content": "write CLAUDE.md",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "nHCZz",
+                              "name": "b see it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "OJlZy",
+                                  "fill": "$text-primary",
+                                  "content": "see it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UaroQ",
+                      "name": "permission",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xsiCC",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 200,
+                          "content": "Every agent of harbor works in",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Wjxxa",
+                          "name": "segmented",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "BQ0n0",
+                              "name": "s plan",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "RKEmF",
+                                  "fill": "$text-secondary",
+                                  "content": "plan",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "D0OpY",
+                              "name": "s normal",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "O7A5j",
+                                  "fill": "$text-secondary",
+                                  "content": "normal",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "a6YzZv",
+                              "name": "s auto",
+                              "height": 26,
+                              "fill": "$accent-dim",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "mcOjw",
+                                  "fill": "$accent",
+                                  "content": "auto",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "eSZXD",
+                              "name": "s bypass",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "WCcHx",
+                                  "fill": "$text-secondary",
+                                  "content": "bypass",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "UGkcT",
+                          "name": "b apply to 5 agents",
+                          "height": 26,
+                          "fill": "$accent",
+                          "padding": [
+                            0,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "MOEwl",
+                              "fill": "$bg",
+                              "content": "apply to 5 agents",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vl1Zy",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "cVw5K",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "TWEj4",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Set to auto: 4 of 5 agents.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "z2XW5",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "V2rsc",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "kREgE",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Builder: Agent not found.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Q5NrAd",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "EWb2a",
+                  "fill": "$text-muted",
+                  "content": "main's setTeamPermissionMode",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "m5hDc",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Shown once the project has agents: every one of them, never another project's, never a chat's runner. Each agent's answer is said; one that failed by name and reason.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "ja6FS",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Adding a project on this page opens its panel, so the offers come at once.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -832028,6 +833369,1347 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task. The footer says what the deploy makes: a worktree for each member with a branch, or none when no member asks for one, the agents then making one for each piece of work.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "agdBG",
+          "name": "what a project is offered",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "Kh8g5",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "T9gn3",
+                  "fill": "$text-muted",
+                  "content": "step 2, once the folder is known: what Tars offers for the team's workflow, written only on your yes",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "TqkfW",
+                  "name": "offers",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "o43fTN",
+                      "fill": "$text-primary",
+                      "content": "Offered for harbor",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HnwRf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "leE9T",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "sql8m",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A CI workflow for GitHub: npm ci, npm run lint, npm test on each pull request into main.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "pDzBw",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "WxloQ",
+                              "name": "b add the CI workflow",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "QzA7R",
+                                  "fill": "$text-primary",
+                                  "content": "add the CI workflow",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Ygnur",
+                              "name": "b see it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "S0Aa9",
+                                  "fill": "$text-primary",
+                                  "content": "see it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gp8NA",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "tZSYq",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "wmyIM",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A short CLAUDE.md: the checks, each agent's area, and how a change is delivered.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "jbVoh",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "j9C3y9",
+                              "name": "b write CLAUDE.md",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "e2UGG",
+                                  "fill": "$text-primary",
+                                  "content": "write CLAUDE.md",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "QJHJf",
+                              "name": "b see it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "leskD",
+                                  "fill": "$text-primary",
+                                  "content": "see it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "sqiBg",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Your team's permission level is chosen when you deploy it: New team, Options, Permissions.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "iwbu7",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RO3Gc",
+                  "fill": "$text-muted",
+                  "content": "main's projectSetup.offer",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "xddln",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Each offer shows only when it applies. The workflow is committed on chore/ci in a worktree of its own and never pushed: your orchestrator delivers it as a pull request, like any change.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "J2XnMC",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "CLAUDE.md is never written over one the project has. see it opens what would be written, as it is, before you say yes.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "tjxJr",
+          "name": "after yes, and what is not offered",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "zdpdP",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "B7lc2T",
+                  "fill": "$text-muted",
+                  "content": "the same lines, once answered, and a project with nothing to offer",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Ah6WF",
+                  "name": "after yes",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "UPRj5",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "JmeMC",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "m5Z6b",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed: your orchestrator delivers it as a pull request.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZnLlO",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "LpGQ8",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "c7vuGq",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Wrote CLAUDE.md.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "j9yMj",
+                  "name": "nothing to offer",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "bm9Pl",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "EtG5m",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "cK9NB",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Has a CI workflow: .github/workflows/ci.yml",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BGfxT",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "U59otX",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "w6yxv",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Has its CLAUDE.md.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PbOzw",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "L5Efp",
+                          "name": "square",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "XSobi",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its remote is not on GitHub (git@git.example.com:you/harbor.git): Tars offers GitHub Actions only.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "vE76b",
+                  "name": "refused",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "HaJ2K",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "adf9L",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "KhSAi",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The project has a CLAUDE.md already: ~/projects/harbor/CLAUDE.md. Tars writes nothing over it.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "DibWs",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FJ3ps",
+                  "fill": "$text-muted",
+                  "content": "main's answers, said once",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "Wg3Sw",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "What the project already has reads done. An offer that does not apply says main's reason, as main words it, in a quiet line. A refusal says main's error, in the error tone, and nothing is written.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "UxC0e",
+          "name": "see it",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "nuWoA",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "zpVHG",
+                  "fill": "$text-muted",
+                  "content": "see it: what the yes would write, read-only",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "cAqv4",
+                  "name": "preview",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "GU67C",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "LMjFL",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "IhpVn",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A CI workflow for GitHub: npm ci, npm run lint, npm test on each pull request into main.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "nUVnv",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "EUZxi",
+                              "name": "b add the CI workflow",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "PLpPx",
+                                  "fill": "$text-primary",
+                                  "content": "add the CI workflow",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ZGDrG",
+                              "name": "b hide it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "hTq1z",
+                                  "fill": "$text-primary",
+                                  "content": "hide it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iNGMR",
+                      "name": "preview",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "padding": [
+                        10,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "F4SD3",
+                          "fill": "$text-secondary",
+                          "content": ".github/workflows/ci.yml",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "BqfkP",
+                          "fill": "$text-secondary",
+                          "content": "name: CI",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "HtFeZ",
+                          "fill": "$text-secondary",
+                          "content": "on:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XUaI9",
+                          "fill": "$text-secondary",
+                          "content": "  pull_request:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "BBNv0",
+                          "fill": "$text-secondary",
+                          "content": "    branches: [main]",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y1Y0y",
+                          "fill": "$text-secondary",
+                          "content": "  push:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ubSg4",
+                          "fill": "$text-secondary",
+                          "content": "    branches: [main]",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "HI4ia",
+                          "fill": "$text-secondary",
+                          "content": "jobs:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "uvkJe",
+                          "fill": "$text-secondary",
+                          "content": "  checks:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "LRzaz",
+                          "fill": "$text-secondary",
+                          "content": "    runs-on: ubuntu-latest",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "F4HN3p",
+                          "fill": "$text-secondary",
+                          "content": "    steps:",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "OyS4Z",
+                          "fill": "$text-secondary",
+                          "content": "      - uses: actions/checkout@v4",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "gHmrT",
+                          "fill": "$text-secondary",
+                          "content": "      - run: npm ci",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "nNZMs",
+                          "fill": "$text-secondary",
+                          "content": "      - run: npm test",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "OxuVE",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "NefCJ",
+                  "fill": "$text-muted",
+                  "content": "main's content, verbatim",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "gAXwS",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The file as main would write it, scrolled within its box when long. Nothing is written until the yes.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "U5tI6",
+          "name": "a project's panel, its team there",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "O2QdA5",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "palSD",
+                  "fill": "$text-muted",
+                  "content": "Projects, a project's panel: the same offers, and one level for its whole team",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Ombpb",
+                  "name": "project panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xHYhL",
+                      "fill": "$text-muted",
+                      "content": "SET UP FOR YOUR TEAM",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.6
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XxfcT",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "HxWqt",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "GokrZ",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Has a CI workflow: .github/workflows/ci.yml",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "S6krlj",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "k4fse",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "TDC1X",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 400,
+                          "content": "A short CLAUDE.md: the checks, each agent's area, and how a change is delivered.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BTW0O",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "OdNJE",
+                              "name": "b write CLAUDE.md",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "WO2ol",
+                                  "fill": "$text-primary",
+                                  "content": "write CLAUDE.md",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "YohzN",
+                              "name": "b see it",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "voKHG",
+                                  "fill": "$text-primary",
+                                  "content": "see it",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JrDIA",
+                      "name": "permission",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "X5wpO",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 200,
+                          "content": "Every agent of harbor works in",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "VrwhM",
+                          "name": "segmented",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "XDAgF",
+                              "name": "s plan",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "cvKPD",
+                                  "fill": "$text-secondary",
+                                  "content": "plan",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "f6rz4",
+                              "name": "s normal",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "nwnxK",
+                                  "fill": "$text-secondary",
+                                  "content": "normal",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qa29t",
+                              "name": "s auto",
+                              "height": 26,
+                              "fill": "$accent-dim",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Ap2tp",
+                                  "fill": "$accent",
+                                  "content": "auto",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yQJIk",
+                              "name": "s bypass",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "W596b",
+                                  "fill": "$text-secondary",
+                                  "content": "bypass",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "no5Kh",
+                          "name": "b apply to 5 agents",
+                          "height": 26,
+                          "fill": "$accent",
+                          "padding": [
+                            0,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "dRaIz",
+                              "fill": "$bg",
+                              "content": "apply to 5 agents",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pIzh3",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iuZVV",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "kdz3F",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Set to auto: 4 of 5 agents.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ikGYL",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "m3DQj",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "arNLU",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Builder: Agent not found.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "yxit3",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "sLril",
+                  "fill": "$text-muted",
+                  "content": "main's setTeamPermissionMode",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "CzeHM",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Shown once the project has agents: every one of them, never another project's, never a chat's runner. Each agent's answer is said; one that failed by name and reason.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "RE1Ap",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Adding a project on this page opens its panel, so the offers come at once.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
