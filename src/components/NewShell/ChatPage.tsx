@@ -8,7 +8,7 @@ import AgentTerminalDialog from '@/components/AgentWorld/AgentTerminalDialog';
 import PermissionAskNotice from '@/components/PermissionAskNotice';
 import { RichText } from '@/components/Overseer/RichText';
 import { Button, ComposerCard, PanelCaption, StatusSquare } from '@/components/ui';
-import { useElectronAgents } from '@/hooks/useElectron';
+import { useElectronAgents, useElectronFS } from '@/hooks/useElectron';
 import { useChatFeed } from '@/hooks/useChatFeed';
 import { projectNameOf, refreshChats, useChats } from '@/hooks/useChats';
 import { forgetSentOutcome, sendComposer, useChatComposer, writeComposer } from '@/hooks/useChatComposer';
@@ -197,6 +197,8 @@ function LimitBlock({ outcome, chats }: { outcome: Extract<SendOutcome, { kind: 
 
 export function ChatPage({ chat }: { chat: ChatView }) {
   const { agents, startAgent, stopAgent } = useElectronAgents();
+  // The window's side panel lists the fleet's projects, as the Agents page's does (QA's L1 on PR 578).
+  const { projects, openFolderDialog } = useElectronFS();
   // The orchestrator's window, opened when its question went back to its terminal: this page shows none.
   // Held by the runner's id, so another runner, or one that comes back, never finds it open.
   const [terminalFor, setTerminalFor] = useState<string | null>(null);
@@ -356,6 +358,8 @@ export function ChatPage({ chat }: { chat: ChatView }) {
         onStart={(id, prompt) => void startAgent(id, prompt)}
         onStop={id => void stopAgent(id)}
         agents={agents}
+        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        onBrowseFolder={openFolderDialog}
       />
     </div>
   );
