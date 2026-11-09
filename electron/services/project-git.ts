@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { buildFullPath } from '../utils/path-builder';
+import { safeGit } from '../utils/safe-git';
 import { githubRepoOf } from './github-watch';
 
 /**
@@ -12,15 +13,16 @@ import { githubRepoOf } from './github-watch';
  * for a worktree, and nothing checked a remote or whether `gh` is signed in, so the workflow's agents could not open
  * a PR.
  *
- * Every command is an argv to execFile, never a shell string; the folder is one of Tars's projects, checked by the
+ * Every git command goes through safeGit (utils/safe-git.ts), as every other git call of the main process on a
+ * project: an argv, never a shell string, and no program a configuration names (hooks, clean filters, commit signing:
+ * the Audit's M2 on #584). gh is run by name, an argv too. The folder is one of Tars's projects, checked by the
  * caller's `isProject`, never the home folder or a filesystem root.
  */
 
 export interface ProjectGitOptions {
   /** Whether the folder is one of Tars's projects (projects.json, or an agent's project). */
   isProject: (projectPath: string) => boolean;
-  /** The git and gh to run: by name, found on the shell's PATH, unless a test names others. */
-  git?: string;
+  /** The gh to run: by name, found on the shell's PATH, unless a test names another. */
   gh?: string;
   /** Added to the environment the commands run with. */
   env?: NodeJS.ProcessEnv;
@@ -54,6 +56,28 @@ const TARS_IDENTITY = ['-c', 'user.name=Tars', '-c', 'user.email=tars@localhost'
 
 interface Ran { code: number | null; stdout: string; stderr: string; missing: boolean }
 
+/** The identity the user may have set in Tars's environment, which safeGit hands git only when named. */
+function identityEnv(): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL']) {
+    const v = process.env[k];
+    if (v) out[k] = v;
+  }
+  return out;
+}
+
+/** git through safeGit, its answer read as run() reads one: the exit code, the outputs, and whether git is missing. */
+function runGit(args: string[], cwd: string, opts: ProjectGitOptions, timeout = 30_000): Promise<Ran> {
+  const env = { LC_ALL: 'C', ...identityEnv(), ...(opts.env as Record<string, string> | undefined) };
+  return safeGit(cwd, args, { env, timeout }).then(
+    r => ({ code: 0, stdout: r.stdout, stderr: r.stderr, missing: false }),
+    (err: NodeJS.ErrnoException & { stdout?: string; stderr?: string }) => ({
+      code: typeof err.code === 'number' ? err.code : null, stdout: err.stdout ?? '', stderr: err.stderr ?? '', missing: err.code === 'ENOENT',
+    }),
+  );
+}
+
+/** gh, by name on the shell's PATH (it is not git: safeGit's rules are git's). */
 function run(binary: string, args: string[], cwd: string, opts: ProjectGitOptions, timeout = 30_000): Promise<Ran> {
   const env: NodeJS.ProcessEnv = { ...process.env, PATH: buildFullPath(), LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', ...opts.env };
   // The folder is the one named, never a repository an inherited variable points at.
@@ -85,12 +109,12 @@ function firstLine(text: string): string {
 }
 
 /** Whether the user set a git identity: name and e-mail in their config, or in the environment git reads. */
-async function hasIdentity(git: string, cwd: string, opts: ProjectGitOptions): Promise<boolean> {
+async function hasIdentity(cwd: string, opts: ProjectGitOptions): Promise<boolean> {
   const env = { ...process.env, ...opts.env };
   const fromEnv = (who: 'AUTHOR' | 'COMMITTER') => !!env[`GIT_${who}_NAME`]?.trim() && !!env[`GIT_${who}_EMAIL`]?.trim();
   if (fromEnv('AUTHOR') && fromEnv('COMMITTER')) return true;
-  const name = await run(git, ['config', '--get', 'user.name'], cwd, opts);
-  const email = await run(git, ['config', '--get', 'user.email'], cwd, opts);
+  const name = await runGit(['config', '--get', 'user.name'], cwd, opts);
+  const email = await runGit(['config', '--get', 'user.email'], cwd, opts);
   return name.code === 0 && !!name.stdout.trim() && email.code === 0 && !!email.stdout.trim();
 }
 
@@ -102,33 +126,35 @@ async function hasIdentity(git: string, cwd: string, opts: ProjectGitOptions): P
 export async function gitInit(projectPath: string, opts: ProjectGitOptions): Promise<GitInitResult> {
   const p = projectFolder(projectPath, opts);
   if (!p) return { success: false, code: 'not-a-project', error: `${projectPath} is not one of Tars's projects` };
-  const git = opts.git ?? 'git';
-  const version = await run(git, ['--version'], p, opts);
+  const version = await runGit(['--version'], p, opts);
   if (version.missing) return { success: false, code: 'git-missing', error: 'git is not installed, or not on the PATH Tars reads' };
-  const inside = await run(git, ['rev-parse', '--is-inside-work-tree'], p, opts);
-  if (inside.code === 0 && inside.stdout.trim() === 'true') {
+  // A .git there, file or directory, even one git cannot read: never initialised again, never undone (the Audit's L2).
+  const dotGit = path.join(p, '.git');
+  let hasDotGit = false;
+  try { fs.lstatSync(dotGit); hasDotGit = true; } catch { /* none */ }
+  const inside = hasDotGit ? null : await runGit(['rev-parse', '--is-inside-work-tree'], p, opts);
+  if (hasDotGit || (inside && inside.code === 0 && inside.stdout.trim() === 'true')) {
     return { success: false, code: 'already-a-repository', error: `${p} is already in a git repository` };
   }
-  const dotGit = path.join(p, '.git');
   const undo = (why: string): GitInitResult => {
     try { fs.rmSync(dotGit, { recursive: true, force: true }); } catch { /* said below */ }
     return { success: false, code: 'failed', error: why };
   };
-  const init = await run(git, ['-c', 'init.defaultBranch=main', 'init', '-q'], p, opts);
+  const init = await runGit(['-c', 'init.defaultBranch=main', 'init', '-q'], p, opts);
   if (init.code !== 0) return { success: false, code: 'failed', error: `git init failed: ${firstLine(init.stderr) || `exit ${init.code}`}` };
   // An older git ignores init.defaultBranch: the unborn HEAD is pointed at main all the same.
-  const head = await run(git, ['symbolic-ref', 'HEAD', 'refs/heads/main'], p, opts);
+  const head = await runGit(['symbolic-ref', 'HEAD', 'refs/heads/main'], p, opts);
   if (head.code !== 0) return undo(`git could not name the branch main: ${firstLine(head.stderr)}`);
-  const add = await run(git, ['add', '-A'], p, opts, 120_000);
+  const add = await runGit(['add', '-A'], p, opts, 120_000);
   if (add.code !== 0) return undo(`git add failed: ${firstLine(add.stderr) || `exit ${add.code}`}`);
   // The user's own identity only when they set one (their git config, or GIT_AUTHOR_* and GIT_COMMITTER_*): git
   // would otherwise make one up from the machine's name (measured on macOS), and sign as nobody the user chose.
-  const identity: 'yours' | 'tars' = (await hasIdentity(git, p, opts)) ? 'yours' : 'tars';
+  const identity: 'yours' | 'tars' = (await hasIdentity(p, opts)) ? 'yours' : 'tars';
   const commitArgs = ['commit', '-q', '--allow-empty', '-m', 'Initial commit'];
-  const commit = await run(git, identity === 'tars' ? [...TARS_IDENTITY, ...commitArgs] : commitArgs, p, opts, 120_000);
+  const commit = await runGit(identity === 'tars' ? [...TARS_IDENTITY, ...commitArgs] : commitArgs, p, opts, 120_000);
   if (commit.code !== 0) return undo(`git commit failed: ${firstLine(commit.stderr) || `exit ${commit.code}`}`);
-  const sha = (await run(git, ['rev-parse', 'HEAD'], p, opts)).stdout.trim();
-  const files = (await run(git, ['ls-tree', '-r', '--name-only', 'HEAD'], p, opts)).stdout.split('\n').filter(Boolean).length;
+  const sha = (await runGit(['rev-parse', 'HEAD'], p, opts)).stdout.trim();
+  const files = (await runGit(['ls-tree', '-r', '--name-only', 'HEAD'], p, opts)).stdout.split('\n').filter(Boolean).length;
   console.log(`[project] ${p} made a git repository: main, ${files} file${files === 1 ? '' : 's'} in its first commit (${identity === 'tars' ? 'signed Tars' : 'your identity'})`);
   return { success: true, branch: 'main', commit: sha, files, identity };
 }
@@ -152,25 +178,24 @@ function readGh(out: Ran): GhState {
 export async function projectReadiness(projectPath: string, opts: ProjectGitOptions): Promise<ProjectReadiness> {
   const p = projectFolder(projectPath, opts);
   if (!p) return { success: false, code: 'not-a-project', error: `${projectPath} is not one of Tars's projects` };
-  const git = opts.git ?? 'git';
   const gh = readGh(await run(opts.gh ?? 'gh', ['auth', 'status', '--hostname', 'github.com'], p, opts, 15_000));
-  const version = await run(git, ['--version'], p, opts);
+  const version = await runGit(['--version'], p, opts);
   if (version.missing) {
     return { success: true, projectPath: p, git: { installed: false, repository: false, hasCommit: false, branch: null }, remote: null, gh, missing: ['git'] };
   }
-  const inside = await run(git, ['rev-parse', '--is-inside-work-tree'], p, opts);
+  const inside = await runGit(['rev-parse', '--is-inside-work-tree'], p, opts);
   const repository = inside.code === 0 && inside.stdout.trim() === 'true';
   let hasCommit = false;
   let branch: string | null = null;
   let remote: { name: string; url: string; github: string | null } | null = null;
   if (repository) {
-    hasCommit = (await run(git, ['rev-parse', '--verify', '--quiet', 'HEAD'], p, opts)).code === 0;
-    const named = await run(git, ['symbolic-ref', '--short', '-q', 'HEAD'], p, opts);
+    hasCommit = (await runGit(['rev-parse', '--verify', '--quiet', 'HEAD'], p, opts)).code === 0;
+    const named = await runGit(['symbolic-ref', '--short', '-q', 'HEAD'], p, opts);
     branch = named.code === 0 ? named.stdout.trim() || null : null;
-    const names = (await run(git, ['remote'], p, opts)).stdout.split('\n').map(s => s.trim()).filter(Boolean);
+    const names = (await runGit(['remote'], p, opts)).stdout.split('\n').map(s => s.trim()).filter(Boolean);
     const name = names.includes('origin') ? 'origin' : names[0];
     if (name) {
-      const url = (await run(git, ['remote', 'get-url', name], p, opts)).stdout.trim();
+      const url = (await runGit(['remote', 'get-url', name], p, opts)).stdout.trim();
       remote = { name, url, github: githubRepoOf(url) ?? null };
     }
   }

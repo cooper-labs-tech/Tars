@@ -1,5 +1,7 @@
 import { ipcMain } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
+import { resolveWorktreePath } from '../utils/worktree-path';
 import type { AppSettings } from '../types';
 import { agents, saveAgents } from '../core/agent-manager';
 import { removeAgent } from '../core/agent-remove';
@@ -73,6 +75,21 @@ export function registerFirstRunHandlers(deps: FirstRunDeps): void {
       .map(a => a.name ?? '')),
     hasCommit: projectPath => gitOk(projectPath, ['rev-parse', '--verify', '--quiet', 'HEAD']),
     branchExists: (projectPath, branch) => gitOk(projectPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]),
+    worktreeExists: (projectPath, branch) => {
+      const where = resolveWorktreePath(projectPath, branch);
+      return !!where && fs.existsSync(where);
+    },
+    // Made by this deploy moments ago for a member that then failed, never used: --force takes the dependencies
+    // cloned into it (ignored files) with it, as agent-remove.ts does for a member it removes.
+    removeWorktree: async (projectPath, branch) => {
+      const where = resolveWorktreePath(projectPath, branch);
+      if (!where) return;
+      try {
+        await safeGit(projectPath, ['worktree', 'remove', where, '--force'], { env: { LC_ALL: 'C' } });
+      } catch (err) {
+        throw new Error(String((err as { stderr?: unknown }).stderr ?? (err as Error).message).trim().replace(/^(fatal|error): /, ''));
+      }
+    },
     deleteBranch: async (projectPath, branch) => {
       try {
         await safeGit(projectPath, ['branch', '-D', branch], { env: { LC_ALL: 'C' } });

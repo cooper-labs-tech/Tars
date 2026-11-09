@@ -66,6 +66,10 @@ export interface TeamDeployDeps {
   /** Whether the folder is a git repository with a first commit, which a worktree needs. */
   hasCommit(projectPath: string): Promise<boolean>;
   branchExists(projectPath: string, branch: string): Promise<boolean>;
+  /** Whether the member's worktree (<project>/.worktrees/<branch>) is there. */
+  worktreeExists(projectPath: string, branch: string): boolean;
+  /** A worktree this deploy made for a member that then failed, taken away again. */
+  removeWorktree(projectPath: string, branch: string): Promise<void>;
   deleteBranch(projectPath: string, branch: string): Promise<void>;
   claudeSignIn(): Promise<ClaudeSignIn>;
   create(config: MemberAgentConfig): Promise<{ id: string }>;
@@ -153,6 +157,8 @@ export async function deployTeam(params: TeamDeployParams, deps: TeamDeployDeps)
     }
     const newBranches = new Set<string>();
     for (const m of withWorktree) if (!(await deps.branchExists(projectPath, m.worktreeBranch!))) newBranches.add(m.worktreeBranch!);
+    // A worktree there before the deploy is never taken away, whatever fails.
+    const hadWorktree = new Set(withWorktree.map(m => m.worktreeBranch!).filter(b => deps.worktreeExists(projectPath, b)));
 
     // Every member made, the orchestrator last; one that fails takes the others back.
     const order = [...toMake.filter(m => m.role !== 'orchestrator'), ...toMake.filter(m => m.role === 'orchestrator')];
@@ -173,6 +179,17 @@ export async function deployTeam(params: TeamDeployParams, deps: TeamDeployDeps)
           if (removed.worktreeKept) { left.push(`${deployedName(member.name, projectPath)}: ${removed.worktreeKept}`); continue; }
           if (member.worktreeBranch && newBranches.has(member.worktreeBranch)) {
             await deps.deleteBranch(projectPath, member.worktreeBranch).catch(e => { left.push(`the branch ${member.worktreeBranch}: ${reasonOf(e)}`); });
+          }
+        }
+        // The member that failed may have made its worktree first (the API not listening, no terminal left: the
+        // Audit's L1 on #584): taken back too, and its new branch.
+        const own = m.worktreeBranch;
+        if (own && !hadWorktree.has(own) && deps.worktreeExists(projectPath, own)) {
+          try {
+            await deps.removeWorktree(projectPath, own);
+            if (newBranches.has(own)) await deps.deleteBranch(projectPath, own).catch(e => { left.push(`the branch ${own}: ${reasonOf(e)}`); });
+          } catch (e) {
+            left.push(`the worktree of ${m.name}: ${reasonOf(e)}`);
           }
         }
         console.warn(`[team-deploy] ${projectPath}: ${m.name} could not be made (${reason}); ${made.length} member(s) taken back${left.length ? `, left: ${left.join('; ')}` : ''}`);

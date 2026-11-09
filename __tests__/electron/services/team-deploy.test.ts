@@ -75,6 +75,7 @@ beforeEach(() => {
   failAfterWorktree = false;
   let n = 0;
   const made = new Map<string, string>();
+  const branchOf = new Map<string, string>();
   deps = {
     isProject: p => p === PROJECT,
     takenNames: () => names,
@@ -96,9 +97,11 @@ beforeEach(() => {
       if (config.worktree?.enabled) { branches.add(config.worktree.branchName); worktrees.add(config.worktree.branchName); }
       const id = `id-${++n}`;
       made.set(id, config.name);
+      if (config.worktree?.enabled) branchOf.set(id, config.worktree.branchName);
       return { id };
     },
-    remove: async (id) => { log.push(`remove ${made.get(id)}`); return {}; },
+    // As removeAgent: the agent goes, and its worktree with it.
+    remove: async (id) => { log.push(`remove ${made.get(id)}`); worktrees.delete(branchOf.get(id) ?? ''); return {}; },
     start: async (id, prompt) => {
       log.push(`start ${made.get(id)}${prompt ? ` with ${prompt}` : ''}`);
       if (failStart && made.get(id)!.startsWith(failStart)) throw new Error('No terminal is left on this machine');
