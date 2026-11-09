@@ -13,6 +13,7 @@ import { gitInit, projectReadiness } from '../services/project-git';
 import { DEFAULT_ACCOUNT_ID, readAccountsSettings } from '../services/claude-accounts/registry';
 import { setAuth } from '../services/claude-accounts/state';
 import { ClaudeCliMissing, claudeAuthStatus } from '../services/claude-accounts/auth';
+import { newAgentSignIn, type SignInAnswer } from '../services/claude-accounts/launch';
 
 /**
  * The first run's channels (2.0.7), from QA's fresh-install report (B3, B4, W4) and Tars-Frontend's request
@@ -32,26 +33,27 @@ export interface FirstRunDeps {
 }
 
 /**
- * Claude Code's sign-in for the accounts a team's Claude members would run on, asked now: account 1, or every
- * enabled account with several on. Signed in when one of them is, missing when there is no claude to ask.
+ * Claude Code's sign-in for the accounts a team's Claude members will start on (the Audit's I1 on #584: any one
+ * account signed in was taken as enough). Every account a launch can give them is asked now (account 1 always, and
+ * each enabled account with several on), the answers recorded as the launch reads them, then the accounts a new
+ * agent may start on are the ones that count (claude-accounts/launch.ts newAgentSignIn).
  */
 async function claudeSignIn(getAppSettings: () => AppSettings): Promise<ClaudeSignIn> {
   const settings = readAccountsSettings();
-  const listed = settings.enabled ? settings.accounts.filter(a => a.enabled) : settings.accounts.filter(a => a.id === DEFAULT_ACCOUNT_ID);
-  const accounts = listed.length ? listed : [{ id: DEFAULT_ACCOUNT_ID, configDir: null }];
+  const asked = settings.accounts.filter(a => a.id === DEFAULT_ACCOUNT_ID || (settings.enabled && a.enabled));
+  const accounts = asked.some(a => a.id === DEFAULT_ACCOUNT_ID) ? asked : [{ id: DEFAULT_ACCOUNT_ID, configDir: null }, ...asked];
   const binary = getAppSettings().cliPaths?.claude || 'claude';
-  const states = await Promise.all(accounts.map(async (a): Promise<ClaudeSignIn> => {
+  const answers: Record<string, SignInAnswer> = {};
+  await Promise.all(accounts.map(async a => {
     try {
       const info = await claudeAuthStatus(binary, a.configDir ?? null);
       setAuth(a.id, { signedIn: info.signedIn, email: info.email, subscriptionType: info.subscriptionType, error: null, code: null });
-      return info.signedIn ? 'signed-in' : 'signed-out';
+      answers[a.id] = info.signedIn ? 'signed-in' : 'signed-out';
     } catch (err) {
-      return err instanceof ClaudeCliMissing ? 'cli-missing' : 'unknown';
+      answers[a.id] = err instanceof ClaudeCliMissing ? 'cli-missing' : 'unknown';
     }
   }));
-  if (states.includes('signed-in')) return 'signed-in';
-  if (states.includes('cli-missing')) return 'cli-missing';
-  return states.every(s => s === 'signed-out') ? 'signed-out' : 'unknown';
+  return newAgentSignIn(settings, answers);
 }
 
 const gitOk = (cwd: string, args: string[]) => safeGit(cwd, args, { env: { LC_ALL: 'C' } }).then(() => true, () => false);

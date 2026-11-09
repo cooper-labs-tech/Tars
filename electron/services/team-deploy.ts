@@ -11,7 +11,8 @@ import { isValidBranchName, resolveWorktreePath } from '../utils/worktree-path';
  *
  * Everything that can be known before is checked before anything is made: the folder is a project, the members can
  * be told apart and their branches are ones git takes inside .worktrees, a folder holds a first commit when a member
- * asks for a worktree, Claude Code is there and signed in for the Claude members. Then every member is made, the
+ * asks for a worktree, Claude Code is there and signed in on the accounts the Claude members will start on. Then
+ * every member is made, the
  * orchestrator last; one that cannot be made takes back every member this deploy made (and the branches it created).
  * Each member's role is its own saved prompt; the brief is the orchestrator's first task (each member's when the team
  * has no orchestrator), typed once at its next start and never kept as a role (core/first-task.ts; the orchestrator's
@@ -55,8 +56,11 @@ export interface MemberAgentConfig {
   worktree?: { enabled: true; branchName: string };
 }
 
-/** Claude Code's sign-in for the accounts the team's Claude members would run on. */
-export type ClaudeSignIn = 'signed-in' | 'signed-out' | 'cli-missing' | 'unknown';
+/**
+ * Claude Code's sign-in for the accounts the team's Claude members will start on (claude-accounts/launch.ts
+ * newAgentSignIn), and, with several accounts on, the names of those that are signed out.
+ */
+export interface ClaudeSignIn { state: 'signed-in' | 'signed-out' | 'cli-missing' | 'unknown'; signedOut: string[] }
 
 /** The main process's pieces, injected so the rules above are tested on their own (team-deploy.test.ts). */
 export interface TeamDeployDeps {
@@ -135,17 +139,21 @@ export async function deployTeam(params: TeamDeployParams, deps: TeamDeployDeps)
     });
     if (!toMake.length) return { success: true, agentIds: [], skipped, notStarted: [] };
 
-    // Claude Code there, and signed in, for the Claude members (QA's B3: six terminals asking for a login after the deploy).
+    // Claude Code there, and signed in on the accounts the Claude members will start on (QA's B3: six terminals asking
+    // for a login after the deploy; the Audit's I1: one account signed in among several was taken as enough).
     const claudeMembers = toMake.filter(isClaude);
     if (claudeMembers.length) {
       const signIn = await deps.claudeSignIn();
-      if (signIn === 'cli-missing') {
+      if (signIn.state === 'cli-missing') {
         return refuse('cli-missing', 'Claude Code is not installed, or not where Tars looks for it: install it first (Settings, CLI paths)',
           claudeMembers.map(m => ({ member: m.name, reason: 'Claude Code is not installed' })));
       }
-      if (signIn === 'signed-out' && !params.signedOutOk) {
-        return refuse('signed-out', 'Claude Code is signed out: sign in first, or deploy anyway and sign in from a member\'s terminal',
-          claudeMembers.map(m => ({ member: m.name, reason: 'Claude Code is signed out' })));
+      if (signIn.state === 'signed-out' && !params.signedOutOk) {
+        const out = signIn.signedOut;
+        const on = out.length ? ` on ${out.length > 1 ? `${out.slice(0, -1).join(', ')} and ${out[out.length - 1]}` : out[0]}` : '';
+        const reason = `Claude Code is signed out${on}${out.length > 1 ? ', the accounts it may start on' : out.length ? ', the account it would start on' : ''}`;
+        return refuse('signed-out', `Claude Code is signed out${on}: sign in first, or deploy anyway and sign in from a member's terminal`,
+          claudeMembers.map(m => ({ member: m.name, reason })));
       }
     }
 
