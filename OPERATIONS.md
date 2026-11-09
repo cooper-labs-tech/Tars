@@ -1476,6 +1476,26 @@ report):
     says is merged (`gh pr list --state merged`, on the full PATH, for a squash or a rebase), or a detached gate checkout. A branch
     never moved since it was made (one reflog entry) is kept, however idle.
 
+### What a project is offered (W3, W5, W7)
+
+The window's channels `electronAPI.projectSetup` (`handlers/project-setup-handlers.ts`, `services/project-setup.ts`),
+IPC only: no agent's token reaches them, so a write is always the owner's yes.
+
+- `offer(projectPath)`: the CI workflow and the CLAUDE.md the project would get, or why not.
+  - CI: only for a git repository whose `origin` is on GitHub, with no `.github/workflows/*.yml` yet and a stack Tars
+    knows (`package.json` with its lock file's package manager and its `.nvmrc`, else Node 22; `pyproject.toml` or
+    `requirements.txt`; `go.mod`; `Cargo.toml`). Its steps are the project's own: the install, then typecheck (the
+    script, else `tsc --noEmit` with a `tsconfig.json`), lint, test and build, each only if the project has it. It runs on
+    pull requests to the default branch and pushes to it, nothing else.
+  - CLAUDE.md: the checks, each agent of the project's area (its role's first sentences), the gate loop.
+- `writeCi(projectPath)`: the workflow committed on `chore/ci` in a worktree of its own (`newWorktree`), the user's
+  checkout untouched; never pushed: the project's agents deliver it through the gate loop. Refused when the project has
+  a workflow or a `chore/ci` branch already. Commits with the user's git identity, Tars's for that commit only when git
+  has none.
+- `writeClaudeMd(projectPath)`: at the project's root, never over one (`wx`).
+- `setTeamPermissionMode(projectPath, mode)`: every agent of the project, never another project's nor a chat's runner
+  (whose settings are its orchestrator's), through `updateAgent`, the window's `agent:update` path.
+
 ## The disk janitor
 
 A scan that proposes, by rule, what may go to give the disk back space, and deletes nothing (2.0.5, lot 3 item H;
