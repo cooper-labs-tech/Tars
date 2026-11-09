@@ -117,7 +117,7 @@ export function TeamPanel(props: {
           className="h-[72px]"
         />
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Each member also gets the brief its role carries. This is added on top of it, not instead of it.
+          Each member also gets the brief its role carries. This is added on top of it, not instead of it. Created idle, without start on deploy, nobody gets the brief: it is not kept.
         </p>
       </div>
 
