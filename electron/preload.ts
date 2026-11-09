@@ -118,6 +118,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('agent:input', params),
     wake: (id: string) =>
       ipcRenderer.invoke('agent:wake', id),
+    setFirstTask: (params: { id: string; task: string | null }) =>
+      ipcRenderer.invoke('agent:set-first-task', params),
     resize: (params: { id: string; cols: number; rows: number }) =>
       ipcRenderer.invoke('agent:resize', params),
     setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) =>

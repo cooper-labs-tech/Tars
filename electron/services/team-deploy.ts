@@ -13,8 +13,11 @@ import { isValidBranchName, resolveWorktreePath } from '../utils/worktree-path';
  * be told apart and their branches are ones git takes inside .worktrees, a folder holds a first commit when a member
  * asks for a worktree, Claude Code is there and signed in for the Claude members. Then every member is made, the
  * orchestrator last; one that cannot be made takes back every member this deploy made (and the branches it created).
- * Then each is started with the brief, the orchestrator after its whole team, so the roster it reads at its start
- * holds every member. A start that fails leaves the team made, and says who did not start.
+ * Each member's role is its own saved prompt; the brief is the orchestrator's first task (each member's when the team
+ * has no orchestrator), typed once at its next start and never kept as a role (core/first-task.ts; the orchestrator's
+ * task of 10/11). Started on deploy, each starts with no task of its own, the orchestrator after its whole team, so
+ * the roster it reads at its start holds every member and the brief is its first prompt; the others wait at their
+ * prompt for its delegations. A start that fails leaves the team made, and says who did not start.
  */
 
 export interface TeamDeployParams {
@@ -68,7 +71,10 @@ export interface TeamDeployDeps {
   create(config: MemberAgentConfig): Promise<{ id: string }>;
   remove(id: string): Promise<{ worktreeKept?: string }>;
   start(id: string, prompt: string, options: { model?: string; provider?: AgentProvider; localModel?: string }): Promise<unknown>;
-  savePrompt(id: string, prompt: string): void;
+  /** The member's role, its saved prompt: what every start of it reads ("## Your role"). */
+  saveRole(id: string, role: string): void;
+  /** A task kept for the agent's next fresh start, typed once (core/first-task.ts). */
+  setFirstTask(id: string, task: string): void;
 }
 
 /** A member's agent name on its project, as New team named them: "Frontend - my-app". */
@@ -177,14 +183,20 @@ export async function deployTeam(params: TeamDeployParams, deps: TeamDeployDeps)
       }
     }
 
-    // The brief, then each member's own saved prompt; started in the same order, the orchestrator after its whole team.
+    // Each role its own; the brief the orchestrator's first task (each member's with no orchestrator), never a role.
+    for (const { member, id } of made) if (member.savedPrompt?.trim()) deps.saveRole(id, member.savedPrompt.trim());
+    const brief = params.brief?.trim();
+    if (brief) {
+      const lead = made.find(x => x.member.role === 'orchestrator');
+      const leadless = !members.some(m => m.role === 'orchestrator');
+      for (const { id } of lead ? [lead] : leadless ? made : []) deps.setFirstTask(id, brief);
+    }
+    // Started in the same order, the orchestrator after its whole team: the launch types its first task.
     const notStarted: MemberProblem[] = [];
     for (const { member, id } of made) {
-      const prompt = [params.brief?.trim(), member.savedPrompt?.trim()].filter(Boolean).join('\n\n');
-      if (!prompt) continue;
-      if (!params.startOnDeploy) { deps.savePrompt(id, prompt); continue; }
+      if (!params.startOnDeploy) continue;
       try {
-        const started = await deps.start(id, prompt, { model: member.model, provider: member.provider, localModel: member.localModel });
+        const started = await deps.start(id, '', { model: member.model, provider: member.provider, localModel: member.localModel });
         const answer = started as { success?: unknown; error?: unknown } | undefined;
         if (answer && answer.success === false) notStarted.push({ member: member.name, reason: String(answer.error ?? 'it did not start') });
       } catch (err) {

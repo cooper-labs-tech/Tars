@@ -89,6 +89,7 @@ import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretFie
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
+import { setFirstTask, withFirstTask } from '../core/first-task';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -881,7 +882,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // turn that was not coming.
     if (prompt.trim()) {
       // A chat's message is a turn, not the agent's brief (AgentLaunchOptions.message).
-      if (!options?.message) agent.savedPrompt = prompt;
+      // Nor is a first task (core/first-task.ts): typed once, never the agent's role.
+      if (!options?.message && !options?.firstTask) agent.savedPrompt = prompt;
       agent.status = 'running';
       agent.currentTask = prompt.slice(0, 100);
     } else {
@@ -944,10 +946,16 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
    * session over it and lose the conversation.
    */
   const startAgentCli: AgentLauncher = async (id, prompt, options) => {
-    const launch = launchBegins(id, { withTask: !!prompt?.trim() });
+    // The agent's first task, kept for this start (core/first-task.ts): taken by a fresh start, cleared once it launched.
+    const first = withFirstTask(agents.get(id), prompt ?? '', options);
+    const launch = launchBegins(id, { withTask: !!first.prompt.trim() });
     try {
-      const result = await launchInTerminal(id, prompt, options);
+      const result = await launchInTerminal(id, first.prompt, first.took ? { ...options, firstTask: true } : options);
       if (!result.success) launchAbandoned(id, launch);
+      else if (first.took) {
+        const agent = agents.get(id);
+        if (agent) { agent.firstTask = undefined; saveAgents(); }
+      }
       return result;
     } catch (err) {
       launchAbandoned(id, launch);
@@ -986,6 +994,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
   // Wake an asleep agent: its CLI started on its own conversation, nothing
   // typed (core/agent-asleep.ts). The window's `wake`.
+  // A first task kept for the agent's next fresh start (2.0.7, core/first-task.ts): typed once, never its role.
+  ipcMain.handle('agent:set-first-task', async (_event, params: { id?: unknown; task?: unknown }) => {
+    const agent = typeof params?.id === 'string' ? agents.get(params.id) : undefined;
+    const set = setFirstTask(agent, params?.task);
+    if (set.success) saveAgents();
+    return set;
+  });
+
   ipcMain.handle('agent:wake', async (_event, id: string) => {
     const agent = agents.get(id);
     if (!agent) return { success: false, error: 'Agent not found' };

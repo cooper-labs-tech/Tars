@@ -690,6 +690,8 @@ export interface AgentStatus {
   sessionModel?: string;
   localModel?: string;        // Tasmania model name when provider is 'local'
   savedPrompt?: string;       // Saved task/prompt for re-launching the agent
+  /** A task kept for the agent's next fresh start (2.0.7, agent.setFirstTask, a team's brief): typed once, never its role. */
+  firstTask?: { text: string; setAt: string };
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
@@ -1623,6 +1625,12 @@ export interface ElectronAPI {
     sendInput: (params: { id: string; input: string }) => Promise<{ success: boolean; woke?: boolean; error?: string }>;
     /** An asleep agent's CLI started on its own conversation, nothing typed; refused for one that is not asleep. */
     wake: (id: string) => Promise<{ success: boolean; error?: string }>;
+    /**
+     * A task kept for the agent's next fresh start (2.0.7): typed once as that start's prompt (before the start's own,
+     * if any), then cleared; never kept as its role (savedPrompt). Empty or null clears it. Refused: an agent that is
+     * not there, a task that is not text, past 20,000 characters.
+     */
+    setFirstTask: (params: { id: string; task: string | null }) => Promise<{ success: true } | { success: false; error: string }>;
     resize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
     setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     onOutput: (callback: (event: AgentEvent) => void) => () => void;

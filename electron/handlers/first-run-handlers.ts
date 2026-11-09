@@ -4,6 +4,7 @@ import type { AppSettings } from '../types';
 import { agents, saveAgents } from '../core/agent-manager';
 import { removeAgent } from '../core/agent-remove';
 import { launchAgent } from '../core/agent-launch';
+import { setFirstTask } from '../core/first-task';
 import { safeGit } from '../utils/safe-git';
 import { deployTeam, type ClaudeSignIn, type MemberAgentConfig, type TeamDeployParams } from '../services/team-deploy';
 import { gitInit, projectReadiness } from '../services/project-git';
@@ -83,11 +84,14 @@ export function registerFirstRunHandlers(deps: FirstRunDeps): void {
     create: config => deps.createAgent(config),
     remove: id => removeAgent(id),
     start: (id, prompt, options) => launchAgent(id, prompt, options),
-    savePrompt: (id, prompt) => {
+    saveRole: (id, role) => {
       const agent = agents.get(id);
       if (!agent) return;
-      agent.savedPrompt = prompt;
+      agent.savedPrompt = role;
       saveAgents();
+    },
+    setFirstTask: (id, task) => {
+      if (setFirstTask(agents.get(id), task).success) saveAgents();
     },
   }));
 }
