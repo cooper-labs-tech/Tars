@@ -214,6 +214,14 @@ describe('the rules an orchestrator is actually handed', () => {
     expect(text).toContain('timeoutSeconds: 1');
   });
 
+  it('every agent\'s instructions give the loop with its exceptions: the user\'s say, no git, no remote (the Audit\'s L5 on #585)', () => {
+    const text = fs.readFileSync(getAgentInstructionsPath(), 'utf-8');
+    const delivery = text.slice(text.indexOf('## Delivery'), text.indexOf('## Core Principles'));
+    expect(delivery).toContain('unless the user asks otherwise');
+    expect(delivery).toMatch(/not a git repository/);
+    expect(delivery).toMatch(/no remote/);
+  });
+
   it('hands work with delegate_task, never the deprecated start_agent (the Audit\'s I3 on #579)', () => {
     expect(read()).toContain('delegate_task');
     expect(read()).not.toContain('start_agent');

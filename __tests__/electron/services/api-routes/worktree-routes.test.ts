@@ -14,6 +14,8 @@ import { execFileSync } from 'node:child_process';
  *      project's repository. It is the caller's own project, always.
  * WR3. A remove or a prune takes a worktree an agent of the project runs in (its worktreePath): kept, and said so.
  * WR4. A refusal of the service reaches the caller as a success, or without its code.
+ * WR5. (The Audit's L2 on #585) a worktree an agent's terminal was started in (its ptyCwd), a task worktree no
+ *      agent's worktreePath names, is removed from under it.
  */
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -82,6 +84,13 @@ describe('the worktree routes', () => {
     expect(removed).toMatchObject({ status: 409, body: { code: 'in_use' } });
     const pruned = await call('POST', '/api/worktrees/prune', { dryRun: true }, 'w');
     expect(pruned.body.removed).toEqual([]);
+    expect(fs.existsSync(String(made.body.path))).toBe(true);
+  });
+
+  it('WR5. keep a task worktree an agent\'s terminal was started in', async () => {
+    const made = await call('POST', '/api/worktrees', { branch: 'feat/task' }, 'w');
+    fleet.set('qa', { id: 'qa', name: 'QA', role: 'worker', projectPath: mine, ptyCwd: made.body.path });
+    expect(await call('POST', '/api/worktrees/remove', { branch: 'feat/task' }, 'w')).toMatchObject({ status: 409, body: { code: 'in_use' } });
     expect(fs.existsSync(String(made.body.path))).toBe(true);
   });
 

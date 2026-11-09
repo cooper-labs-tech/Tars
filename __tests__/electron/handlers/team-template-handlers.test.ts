@@ -80,7 +80,9 @@ describe('team-template-handlers', () => {
      * T2. QA is not told it is the gate: run the checks, a verdict first (MERGE or FIX FIRST) in the reports folder,
      *     never overwriting an earlier one, defects reported and never patched;
      * T3. the Audit is not told it is read-only, with file:line findings ranked by severity and a verdict first;
-     * T4. the orchestrator is not on the strongest model and effort, as the owner runs it.
+     * T4. (the Audit's L3 on #585) every new user's orchestrator is put on a model and an effort of Tars's choosing (opus
+     *     at max effort, the costliest, on the same quota as the team): it takes the user's default model, at high effort,
+     *     and the workers their CLI's own defaults.
      */
     it('T1-T4. tells each member its part in the gate loop', () => {
       const [lead, ...members] = BUILTIN_TEAM_TEMPLATES[0].members;
@@ -90,7 +92,9 @@ describe('team-template-handlers', () => {
       }
       for (const word of ['gate', 'MERGE or FIX FIRST', 'reports/', 'never overwrite', 'never patch']) expect(brief('QA Engineer'), word).toContain(word);
       for (const word of ['read-only', 'file:line', 'severity', 'verdict first', 'reports/']) expect(brief('Audit Engineer'), word).toContain(word);
-      expect(lead).toMatchObject({ model: 'opus', effort: 'max' });
+      expect(lead.model, 'the user\'s default model').toBeUndefined();
+      expect(lead.effort).toBe('high');
+      for (const m of members) expect(m.effort, m.name).toBeUndefined();
       for (const word of ['gate loop', 'never merge', 'QA', 'Audit']) expect(lead.savedPrompt ?? '', word).toContain(word);
     });
 
