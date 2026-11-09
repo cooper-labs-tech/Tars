@@ -32,7 +32,7 @@ Your identity (name, agent id, project) and your project's agent roster are inje
 - `whoami`: Your identity + your project's agent roster
 - `list_agents`: List your project's agents with status and ID
 - `get_agent` / `get_agent_output`: Details about one agent, and its clean text output
-- `start_agent`: Start agent with a prompt (auto-sends to running agents too)
+- `task_status`: Where a task you handed stands, by its id, and its result once it ended
 - `send_message`: Send message to agent (auto-starts idle agents)
 - `stop_agent`: Stop a running agent
 - `wait_for_agent`: Wait for agent to complete (long-poll, returns immediately on status change)
@@ -64,10 +64,9 @@ Your identity (name, agent id, project) and your project's agent roster are inje
 ### Several agents
 Only for independent pieces, as above.
 1. `list_agents`: find available agents
-2. `start_agent` on each agent with their respective tasks
-3. `wait_for_agent` on each (they run in parallel)
-4. `get_agent_output` to read results
-5. Synthesize and report back
+2. `delegate_task` to each agent with its own task, all in one message, so they run at the same time
+3. `task_status` on any that is still working when its call returns, by its task id
+4. Synthesize and report back
 
 ### When Agent Needs Input
 1. `wait_for_agent` returns with "waiting" status
@@ -84,7 +83,7 @@ When a request comes from Telegram (through the user's Hermes, below), Slack or 
 
 ### Mandatory Progress Updates Rule
 
-**Before EVERY blocking tool call** (`delegate_task`, `wait_for_agent`, `start_agent`), you MUST first call `send_telegram`/`send_slack`/`send_discord` to tell the user what you are about to do. The user is on their phone waiting. Silence feels broken.
+**Before EVERY blocking tool call** (`delegate_task`, `wait_for_agent`, `task_status`), you MUST first call `send_telegram`/`send_slack`/`send_discord` to tell the user what you are about to do. The user is on their phone waiting. Silence feels broken.
 
 Pattern: **always message → then act → then message with result**
 
@@ -109,7 +108,7 @@ one who asks the user: your workers ask you, and you decide what reaches them.
 5. `send_telegram("Done! Here's what [agent name] found: [result summary]")`
 
 ### Channel Workflow (Several agents)
-Same pattern, applied to each agent: say who you are starting and on what, `start_agent` on each, then a message before each `wait_for_agent` naming who you are waiting on, then `get_agent_output` on each and one final message with the combined result.
+Same pattern, applied to each agent: say who you are handing what to, `delegate_task` to each in one message, a message before each `task_status` naming who you are still waiting on, then one final message with the combined result.
 
 ### Channel Workflow (Agent Needs Input)
 Relay the question with `send_telegram`, `send_message` the answer, say you have answered, then `wait_for_agent` again.

@@ -32,6 +32,19 @@ function callerAgent(req: RouteRequest, sendJson: SendJson) {
   return agent;
 }
 
+/**
+ * Who may take `gate`, a release gate's priority: the orchestrator, and a chat's runner (core/agent-role.ts), and,
+ * since an orchestrator no longer runs the work itself (2.0.7, the Audit's L1 on #579), the agent its project's
+ * orchestrator handed its current work to: its live link (requestedBy, on the terminal it runs in now).
+ */
+function mayGate(agent: NonNullable<ReturnType<typeof agents.get>>): boolean {
+  if (hasOrchestratorPowers(agent)) return true;
+  const link = agent.requestedBy;
+  if (!link || link.ptyId !== agent.ptyId) return false;
+  const by = agents.get(link.agentId);
+  return !!by && hasOrchestratorPowers(by) && by.projectPath === agent.projectPath;
+}
+
 export function registerHeavySlotRoutes(app: RouteApp): void {
   app.post('/api/heavy-slot/ask', async (req, sendJson) => {
     const agent = callerAgent(req, sendJson);
@@ -58,8 +71,7 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
         agentId: agent.id, agentName: agent.name || agent.id, projectPath: agent.projectPath,
         pid: pid as number, priority: (priority as SlotPriority | undefined) ?? 'normal',
         label: (typeof label === 'string' ? oneLine(label) : '').slice(0, LABEL_MAX) || 'a heavy run',
-        // A release gate is a power: the orchestrator's, and a chat's runner's (core/agent-role.ts).
-        orchestrator: hasOrchestratorPowers(agent), terminalPid: terminal?.pid,
+        mayGate: mayGate(agent), terminalPid: terminal?.pid,
         // The terminal lives as long as the agent's session: a lease on it is held for the turn, as the tool's is.
         untilTurnEnds: forTheTurn || (terminal !== undefined && pid === terminal.pid),
       });

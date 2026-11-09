@@ -96,9 +96,14 @@ export function qwenApprovalMode(mode: AgentPermissionMode | undefined): 'plan' 
 /**
  * What an orchestrator on Qwen Code may not use (ToolNames in 0.25.2): the tools of the work, which is its agents'
  * (2.0.7), as claude's are denied (providers/cli-provider.ts orchestratorToolFlags): editing, its own sub-agents,
- * searching the code and the web. Reading a file and its shell stay: its agents' reports, gh and git.
+ * sub-sessions, teams and workflows, searching and reading the code (lsp), and the web. Reading a file and its shell
+ * stay: its agents' reports, gh and git. Each name is one of 0.25.2's, read from its bundle: a name it does not know
+ * is dropped without a word, its tool left open (the Audit's L2 on #579).
  */
-export const QWEN_ORCHESTRATOR_EXCLUDED = ['edit', 'notebook_edit', 'write_file', 'agent', 'grep_search', 'glob', 'web_fetch', 'web_search'] as const;
+export const QWEN_ORCHESTRATOR_EXCLUDED = [
+  'edit', 'notebook_edit', 'write_file', 'agent', 'create_sub_session', 'team_create', 'workflow',
+  'grep_search', 'glob', 'lsp', 'web_fetch', 'web_search',
+] as const;
 
 type HookTable = Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string }> }>>;
 

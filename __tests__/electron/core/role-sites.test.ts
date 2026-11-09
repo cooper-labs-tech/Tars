@@ -86,7 +86,8 @@ const SITES: Site[] = [
   // core/
   { file: 'electron/core/agent-manager.ts', line: 'const conversing = …;', is: 'powers', why: 'no desktop notification for the turns of the user\'s own conversations' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
-  { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
+  { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'if (…) return true;', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
+  { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'return !!by && … && by.projectPath === agent.projectPath;', is: 'powers', why: 'the heavy-run slot: the agent its project\'s orchestrator handed the work to may ask for a release gate too (2.0.7, the Audit\'s L1 on #579)' },
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'id: agent.id, name: agent.name, projectPath: agent.projectPath, orchestrator: …,', is: 'powers', why: 'who may relay the owner\'s words, and receive them under Tars\'s mark (2.0.6): a chat\'s runner too, within its own chat (the Audit\'s M2 on #569)' },
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'if (!… || !caller.projectPath) {', is: 'powers', why: 'who reads the owner\'s words of its project (2.0.6)' },
   { file: 'electron/services/api-routes/mcp-routes.ts', line: 'if (ORCHESTRATOR_ONLY_MCP.includes(name) && !…) {', is: 'powers', why: 'the door to a shared server only the orchestrator\'s powers may call (x), a chat\'s runner included (QA-PR541 F1)' },

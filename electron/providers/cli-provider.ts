@@ -220,8 +220,9 @@ export function orchestratorToolFlags(orchestratorMode: boolean | undefined): st
   // investigation or a research, its agents' work (2.0.7, the owner's rule of
   // 10/11). Asked why something was broken, a fresh orchestrator read the code
   // itself and delegated nothing. Read and Bash stay: its agents' reports, and
-  // gh and git to merge.
-  return ' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" "Grep" "Glob" "WebFetch" "WebSearch"';
+  // gh and git to merge. Workflow runs subagents as Task does, and LSP reads
+  // code as Grep does (claude 2.1.321's own tool list, the Audit's L2 on #579).
+  return ' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task" "Workflow" "Grep" "Glob" "LSP" "WebFetch" "WebSearch"';
 }
 
 /**

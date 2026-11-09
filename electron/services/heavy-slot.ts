@@ -93,7 +93,8 @@ export interface SlotAsk {
   pid: number;
   priority: SlotPriority;
   label: string;
-  orchestrator: boolean;
+  /** It may take `gate`: an orchestrator, or the agent it handed the work to (api-routes/heavy-slot-routes.ts). */
+  mayGate: boolean;
   /** The asking agent's terminal: the lease's process must be under it, where the table can be read. */
   terminalPid?: number;
   /** Held by the agent's CLI (the MCP tool): given back when the agent's turn ends. */
@@ -222,7 +223,7 @@ export class HeavySlot {
     if (parentOf && a.pid !== a.terminalPid && !under(a.pid, a.terminalPid, parentOf)) {
       throw new Error(`process ${a.pid} is not under your terminal: a lease is held by one of your own processes`);
     }
-    const clamped = a.priority === 'gate' && !a.orchestrator;
+    const clamped = a.priority === 'gate' && !a.mayGate;
     const ticket: SlotTicket = {
       id: crypto.randomBytes(6).toString('hex'),
       agentId: a.agentId, agentName: a.agentName, project: path.basename(a.projectPath), projectPath: a.projectPath,
