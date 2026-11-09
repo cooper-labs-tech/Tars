@@ -19,9 +19,14 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. the window that opens is not that orchestrator's, or its terminal does not show the dialog;
  * 3. the question is not handed back (the stand-in does not read `ask`);
  * 4. on the Dashboard's panel, where the terminal is already under the question, a window opens over it;
- * 5. an uncaught error in the page.
+ * 5. an uncaught error in the page;
+ * 6. on a chat's page, ask in terminal clicked on a question Tars no longer holds (answered elsewhere first) opens
+ *    the window all the same, over no dialog (the Audit's L1 on PR 578). The question is denied through main and the
+ *    button clicked in the same step, before the window hears of it; main takes the deny first and answers the ask
+ *    false. The card's late line is not read: the deny clears the question, and the card with it.
  * The chat's page exists in the new interface only; the Dashboard's panel is the classic shell's.
- * Red on main (58f2863b4) with the frames: on the chat's page no window opens.
+ * Red on main (58f2863b4) with the frames: on the chat's page no window opens. Case 6 is red on a mutant that opens
+ * the window without `taken` (PermissionAskNotice's answer).
  * The artefact: values.json (the answer, the window's name and its terminal's lines), screenshots.
  */
 
@@ -56,9 +61,12 @@ function standIn(home: string): string {
   ].join('\n'));
 }
 
-for (const newInterface of [true, false]) {
+for (const { newInterface, late } of [{ newInterface: true, late: false }, { newInterface: false, late: false }, { newInterface: true, late: true }]) {
   const where = newInterface ? 'a chat\'s page (new interface)' : 'the Dashboard\'s panel';
-  test(`ask in terminal leads to the terminal that shows Claude Code's dialog, from ${where}`, async () => {
+  const name = late
+    ? 'ask in terminal on a question Tars no longer holds opens no window, from a chat\'s page (new interface)'
+    : `ask in terminal leads to the terminal that shows Claude Code's dialog, from ${where}`;
+  test(name, async () => {
     test.setTimeout(240_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-ask-terminal-'));
     const project = path.join(home, 'projects', 'harbor');
@@ -78,12 +86,12 @@ for (const newInterface of [true, false]) {
     }] }, null, 2));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const seen: Record<string, unknown> = { newInterface };
-    const tag = newInterface ? 'new-chat-' : 'dashboard-';
+    const seen: Record<string, unknown> = { newInterface, late };
+    const tag = late ? 'new-chat-late-' : newInterface ? 'new-chat-' : 'dashboard-';
     const errors: string[] = [];
 
     const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31595 : 31596), DOROTHY_E2E: '1' },
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(late ? 31597 : newInterface ? 31595 : 31596), DOROTHY_E2E: '1' },
     });
     try {
       const page = await app.firstWindow();
@@ -98,6 +106,25 @@ for (const newInterface of [true, false]) {
       await expect(ask).toBeVisible({ timeout: 60_000 });
       await expect(ask).toContainText('tabs_context_mcp');
       await stepShot(page, `${tag}1-asked`);
+
+      if (late) {
+        // 6. Denied through main, then ask in terminal clicked in the same step: Tars no longer holds the question.
+        await page.evaluate(() => {
+          void window.electronAPI!.agent!.answerPermission('lead', 'deny');
+          const button = [...document.querySelectorAll('[data-permission-ask="lead"] button')]
+            .find(b => b.textContent?.trim() === 'ask in terminal') as HTMLButtonElement | undefined;
+          button?.click();
+        });
+        await expect.poll(() => fs.existsSync(path.join(home, 'answer.json')), { timeout: 30_000 }).toBe(true);
+        seen.answer = JSON.parse(fs.readFileSync(path.join(home, 'answer.json'), 'utf8'));
+        expect(seen.answer).toMatchObject({ decision: 'deny' });
+        await page.waitForTimeout(1_500);
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+        await stepShot(page, `${tag}2-no-window`);
+        seen.errors = errors;
+        expect(errors).toEqual([]);
+        return;
+      }
 
       // 3. ask in terminal hands it back: the stand-in reads `ask` and shows its dialog.
       await ask.getByRole('button', { name: 'ask in terminal' }).click();
