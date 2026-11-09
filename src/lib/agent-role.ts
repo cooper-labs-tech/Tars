@@ -22,7 +22,12 @@ export async function createAgentWithRole<P, A extends { id: string }>(
   const text = role?.trim();
   if (!text) return { agent, roleNotSaved: null };
   try {
-    await api.updateAgent({ id: agent.id, savedPrompt: text });
+    const answer = await api.updateAgent({ id: agent.id, savedPrompt: text });
+    // useElectronAgents' updateAgent answers main's refusal rather than throwing it (the Audit's L3 on PR 581).
+    if (answer && typeof answer === 'object' && (answer as { success?: unknown }).success === false) {
+      const error = (answer as { error?: unknown }).error;
+      return { agent, roleNotSaved: typeof error === 'string' && error.trim() ? error.trim() : 'it was not saved' };
+    }
     return { agent, roleNotSaved: null };
   } catch (err) {
     return { agent, roleNotSaved: ipcReason(err, 'it was not saved') };
