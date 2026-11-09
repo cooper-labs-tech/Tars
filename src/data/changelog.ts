@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-10',
+    updates: [
+      'An agent made from a template or a team keeps its role on itself, saved as it is made, instead of only in the prompt it was first started with. A template\'s role is saved only when its prompt is used, as before.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',
