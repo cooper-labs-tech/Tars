@@ -22,6 +22,7 @@ import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
 import { modeForProvider } from '@/lib/plan-mode';
 import { ipcReason } from '@/lib/ipc-error';
+import { createAgentWithRole } from '@/lib/agent-role';
 
 const MODE_OPTIONS: SegmentedOption<CreationMode>[] = [
   { value: 'agent', label: 'One agent' },
@@ -427,7 +428,8 @@ export default function NewChatModal({
       }
       try {
         const resolvedModel = member.provider !== 'local' && member.model && member.model !== 'default' ? member.model : undefined;
-        const agent = await createAgent({
+        // The member's role is saved on it as it is made: a start's brief is its first task, not its role.
+        const agent = await createAgentWithRole({ createAgent, updateAgent }, {
           projectPath,
           skills: member.skills,
           character: member.character,
@@ -439,7 +441,7 @@ export default function NewChatModal({
           localModel: member.localModel,
           worktree: member.worktreeBranch ? { enabled: true, branchName: member.worktreeBranch } : undefined,
           role: member.role,
-        });
+        }, member.savedPrompt);
         createdIds.push(agent.id);
         const combinedBrief = [teamBrief.trim(), member.savedPrompt?.trim()].filter(Boolean).join('\n\n');
         if (startOnDeploy && combinedBrief) {

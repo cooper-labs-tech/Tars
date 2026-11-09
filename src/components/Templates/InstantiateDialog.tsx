@@ -7,6 +7,7 @@ import { useElectronAgents, useElectronFS } from '@/hooks/useElectron';
 import { Button, DialogShell, Dropdown, Input, Label } from '@/components/ui';
 import type { DropdownOption } from '@/components/ui';
 import { Toggle } from '@/components/Settings/Toggle';
+import { createAgentWithRole } from '@/lib/agent-role';
 import { revealLine, startsWithPromptByDefault, templateFacts } from '@/lib/template-review';
 import { PromptBlock, TemplateFactRows } from './TemplateReview';
 
@@ -24,7 +25,7 @@ interface InstantiateDialogProps {
  * just like one you made; off, the agent is created and not started.
  */
 export function InstantiateDialog({ template, onClose, onCreated }: InstantiateDialogProps) {
-  const { createAgent, startAgent } = useElectronAgents();
+  const { createAgent, updateAgent, startAgent } = useElectronAgents();
   const { projects, openFolderDialog } = useElectronFS();
 
   const [projectPath, setProjectPath] = useState<string | null>(null);
@@ -69,7 +70,10 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
       const resolvedModel = template.provider !== 'local' && template.model && template.model !== 'default'
         ? template.model
         : undefined;
-      const agent = await createAgent({
+      // The template's prompt is the agent's role, which main puts in every session's bootstrap ("## Your role"). Saved
+      // on it as it is made, under the same switch as the start: an imported or edited template's prompt may carry
+      // what the user did not write, and saved as the role it would run at every start, unread (the Audit's gate of #204).
+      const agent = await createAgentWithRole({ createAgent, updateAgent }, {
         projectPath,
         skills: template.skills,
         character: template.character,
@@ -80,7 +84,7 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
         model: resolvedModel,
         localModel: template.localModel,
         obsidianVaultPaths: template.obsidianVaultPaths,
-      });
+      }, sendPrompt ? template.savedPrompt : undefined);
       const prompt = template.savedPrompt?.trim() ?? '';
       if (prompt && sendPrompt) {
         await startAgent(agent.id, prompt, {
