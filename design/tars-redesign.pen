@@ -828079,6 +828079,849 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "m8cH3u",
+          "name": "what a folder lacks",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "h8JDMB",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "drd0E",
+                  "fill": "$text-muted",
+                  "content": "step 2: what the folder still lacks to open pull requests, in the order to fix it",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "l8MTrB",
+                  "name": "readiness",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "A0npMi",
+                      "fill": "$text-primary",
+                      "content": "harbor · ~/projects/harbor",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rnnxx",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "LNmAn",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "hKKTp",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Not a git repository.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aVtUM",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "jZjU7",
+                              "name": "b make it a repository",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "NfyXY",
+                                  "fill": "$text-primary",
+                                  "content": "make it a repository",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BvTZa",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "SqaYH",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "qV0TR",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "No remote: add one, for instance gh repo create --source . --push",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T3RZIL",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "V6p8DA",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "GerJE",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "The GitHub CLI is not installed.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KeD0Y",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "bmuxB",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "qLWXD",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "The GitHub CLI is not signed in: run gh auth login.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "P4oqf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "PiPLt",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "h4swU",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Made a repository on main: 3 files in its first commit, signed Tars, since git knows no name of yours. Set yours with git config --global user.name and user.email.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "b2HVDp",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DSe5a",
+                  "fill": "$text-muted",
+                  "content": "from main's readiness",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "UvxYD",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The lines are main's `missing`, in its order: git, the repository, its first commit, a remote, gh, gh's sign-in. Each says what to do; make it a repository runs Tars's git init and a first commit, then the lines are read again.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "B9MyQQ",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A remote that is not on GitHub is said: pull requests go through GitHub. Nothing here stops the deploy: a team can work without them.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "kFLE6",
+          "name": "deploy answers",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "dTSYj",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "cbJTv",
+                  "fill": "$text-muted",
+                  "content": "New team: what the deploy answers, whole or not at all",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "v1y9KG",
+                  "name": "signed out",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "qZYl6",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "OO9OT",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "mnNgp",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Claude Code is signed out: the team's agents cannot work until it is signed in.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "A8N4v",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "c6Ftx",
+                              "name": "b sign in",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "T3OWF",
+                                  "fill": "$text-primary",
+                                  "content": "sign in",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Z3zrY",
+                              "name": "b deploy anyway",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "tcbcv",
+                                  "fill": "$text-primary",
+                                  "content": "deploy anyway",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "aqgYV",
+                  "name": "failed",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "zdziQ",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "m5uVs",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "rMTel",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Builder could not be made: not a git repository (or any of the parent directories): .git. Nothing was kept.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "EiNGO",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 560,
+                      "content": "Left: Planner's worktree at .worktrees/planner, which could not be removed.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "R0AqIX",
+                  "name": "done, with what it skipped",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Bbx7m",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Vik4Q",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Qy1Jg",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Deployed 5 agents.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "RYPTp",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 560,
+                      "content": "Skipped: Orchestrator, already on this project. Not started: Builder, its CLI did not start.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "v5T47V",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "r55aK",
+                  "fill": "$text-muted",
+                  "content": "one call, every member or none",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "fKp7d",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "signed out: sign in opens Claude Code's own sign-in; deploy anyway deploys knowing it. cli-missing: Claude Code is not installed, said, and nothing is made.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "k4qoY",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "failed: the member that could not be made and why; every member made is taken back, and what could not be is listed.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "NMBTF",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A success that skipped a member already there, or did not start one, says it before the dialog closes.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "hhK5W",
+          "name": "claude missing",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "vNIyc",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DXwla",
+                  "fill": "$text-muted",
+                  "content": "step 1 with no Claude Code on this computer",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "PeRjT",
+                  "name": "cli missing",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "vdzRE",
+                      "fill": "$text-primary",
+                      "content": "Sign in to Claude",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "oFTyS",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 560,
+                      "content": "Claude Code is not installed on this computer, or not where Settings says it is. Install it, then come back.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qeLZb",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "TlTdG",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "g7tgp1",
+                          "fill": "$status-waiting",
+                          "content": "not installed",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bYbm9",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "WQf6P",
+                  "fill": "$text-muted",
+                  "content": "cli-missing on account 1",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "BZ8rs",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The account answers cli-missing when there is no claude to ask: the step says install, not the sentence of a failed check, and offers no sign in.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "eEvoP",
+          "name": "kanban without hermes",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "c64rbH",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "OJBJk",
+                  "fill": "$text-muted",
+                  "content": "Kanban, with no Hermes gateway",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "i9RASy",
+                  "name": "kanban",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "vXiq5",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Tars's kanban board is a Hermes gateway's, a tool installed apart. Without it, the rest of Tars works: your agents keep their split of the work in their delegations and their reports. To have the board: install Hermes, start its gateway, then connect it in Settings, Hermes.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g6VwMS",
+                      "name": "actions",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Yi8Bh",
+                          "name": "b Open Hermes settings",
+                          "height": 26,
+                          "fill": "$accent",
+                          "padding": [
+                            0,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Z54s3r",
+                              "fill": "$bg",
+                              "content": "Open Hermes settings",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "J7oiYM",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fhav0",
+                  "fill": "$text-muted",
+                  "content": "not an error",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "qBf3x",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "With no gateway set up, the page says what the board is and how to get it, instead of an error. A gateway set up but unreachable keeps its error and Retry.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -830062,6 +830905,849 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "A new agent starts in auto, the permission mode a team's members get, instead of normal, which asks before every edit and command.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Q8pivu",
+          "name": "what a folder lacks",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "FHeVY",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "y8Qab",
+                  "fill": "$text-muted",
+                  "content": "step 2: what the folder still lacks to open pull requests, in the order to fix it",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "DXcIz",
+                  "name": "readiness",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "l1JtRs",
+                      "fill": "$text-primary",
+                      "content": "harbor · ~/projects/harbor",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "c6L64",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "cYQHd",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "s6SFyM",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Not a git repository.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "NOsJC",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Coqyl",
+                              "name": "b make it a repository",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "pFowq",
+                                  "fill": "$text-primary",
+                                  "content": "make it a repository",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "AONqD",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "eckC7",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "EqP3T",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "No remote: add one, for instance gh repo create --source . --push",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x8S2E",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "oSArG",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "UGDs5",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "The GitHub CLI is not installed.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Sw7GZ",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "o1M0l",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "n1ixi",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "The GitHub CLI is not signed in: run gh auth login.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "B4prPA",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ziJDI",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Gr1jX",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Made a repository on main: 3 files in its first commit, signed Tars, since git knows no name of yours. Set yours with git config --global user.name and user.email.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "jT4Ab",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "P688oh",
+                  "fill": "$text-muted",
+                  "content": "from main's readiness",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "HMfiD",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The lines are main's `missing`, in its order: git, the repository, its first commit, a remote, gh, gh's sign-in. Each says what to do; make it a repository runs Tars's git init and a first commit, then the lines are read again.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "p3IK2",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A remote that is not on GitHub is said: pull requests go through GitHub. Nothing here stops the deploy: a team can work without them.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "eHDaW",
+          "name": "deploy answers",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "rEUIP",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "CsnP1",
+                  "fill": "$text-muted",
+                  "content": "New team: what the deploy answers, whole or not at all",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "mBPF4",
+                  "name": "signed out",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "kjQdv",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iFwtE",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "FntHn",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Claude Code is signed out: the team's agents cannot work until it is signed in.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vlcwa",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "htB8g",
+                              "name": "b sign in",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "fvmFP",
+                                  "fill": "$text-primary",
+                                  "content": "sign in",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rfIX8",
+                              "name": "b deploy anyway",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "TbHFF",
+                                  "fill": "$text-primary",
+                                  "content": "deploy anyway",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qsi17",
+                  "name": "failed",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "H4KUvf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "luH25",
+                          "name": "square",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "iwxlH",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Builder could not be made: not a git repository (or any of the parent directories): .git. Nothing was kept.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Ehds0",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 560,
+                      "content": "Left: Planner's worktree at .worktrees/planner, which could not be removed.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YOXQj",
+                  "name": "done, with what it skipped",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "wJCEi",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "kADtk",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "aj30b",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 420,
+                          "content": "Deployed 5 agents.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Jh0Fs",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 560,
+                      "content": "Skipped: Orchestrator, already on this project. Not started: Builder, its CLI did not start.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "e8s8s",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n86PD",
+                  "fill": "$text-muted",
+                  "content": "one call, every member or none",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "LzTiH",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "signed out: sign in opens Claude Code's own sign-in; deploy anyway deploys knowing it. cli-missing: Claude Code is not installed, said, and nothing is made.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "g5QduI",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "failed: the member that could not be made and why; every member made is taken back, and what could not be is listed.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "z8OUd6",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A success that skipped a member already there, or did not start one, says it before the dialog closes.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Px7vY",
+          "name": "claude missing",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "xdii6",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "NXipM",
+                  "fill": "$text-muted",
+                  "content": "step 1 with no Claude Code on this computer",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "drPR8",
+                  "name": "cli missing",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "TznSo",
+                      "fill": "$text-primary",
+                      "content": "Sign in to Claude",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 13.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "pqRx7",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 560,
+                      "content": "Claude Code is not installed on this computer, or not where Settings says it is. Install it, then come back.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qZIaU",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "e1FN1h",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "X5LH9a",
+                          "fill": "$status-waiting",
+                          "content": "not installed",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "q3gaaj",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "uQbcY",
+                  "fill": "$text-muted",
+                  "content": "cli-missing on account 1",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "N010V",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The account answers cli-missing when there is no claude to ask: the step says install, not the sentence of a failed check, and offers no sign in.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "NeiVD",
+          "name": "kanban without hermes",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "PqRI7",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "LJl4H",
+                  "fill": "$text-muted",
+                  "content": "Kanban, with no Hermes gateway",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "urv3w",
+                  "name": "kanban",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "d2GcY1",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Tars's kanban board is a Hermes gateway's, a tool installed apart. Without it, the rest of Tars works: your agents keep their split of the work in their delegations and their reports. To have the board: install Hermes, start its gateway, then connect it in Settings, Hermes.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YjoGC",
+                      "name": "actions",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "e9wwo",
+                          "name": "b Open Hermes settings",
+                          "height": 26,
+                          "fill": "$accent",
+                          "padding": [
+                            0,
+                            10
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "cCz2Q",
+                              "fill": "$bg",
+                              "content": "Open Hermes settings",
+                              "lineHeight": 1.45,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "vSZN7",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "c3p84k",
+                  "fill": "$text-muted",
+                  "content": "not an error",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "nZVXc",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "With no gateway set up, the page says what the board is and how to get it, instead of an error. A gateway set up but unreachable keeps its error and Retry.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
