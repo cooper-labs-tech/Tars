@@ -12,6 +12,12 @@
  * 3. A stop or a delete leaves the question held: the mod's request open on a
  *    CLI that is being ended, and a later answer taken for a gone session.
  * 4. The quit leaves the questions held: a request open while the app exits.
+ * And from the owner's question of 10/11 (approve-everywhere.md), written before the code:
+ * 5. The window has only the view Tars publishes of a question (each field at most 2,000 characters): it cannot show
+ *    the whole call it would allow. agent:permissionQuestion gives it whole, with its fingerprint, and nothing for an
+ *    agent with no question.
+ * 6. The window's answer cannot name what it read: agent:answerPermission takes the fingerprint the window showed,
+ *    and an allow naming another question's changes nothing.
  *
  * The handlers are the real ones; the question is held as the route holds it.
  */
@@ -98,11 +104,44 @@ describe("the window's answer", () => {
     expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow')).toEqual({ success: false });
   });
 
-  it('1. is in the preload and typed for the renderer', () => {
+  it('1, 6. is in the preload and typed for the renderer, with the fingerprint the window read', () => {
     const preload = fs.readFileSync(path.join(ROOT, 'electron/preload.ts'), 'utf8');
     const types = fs.readFileSync(path.join(ROOT, 'src/types/electron.d.ts'), 'utf8');
-    expect(preload).toMatch(/answerPermission: \(id: string, decision: 'allow' \| 'deny' \| 'ask', reason\?: string\) =>\s*ipcRenderer\.invoke\('agent:answerPermission', id, decision, reason\)/);
-    expect(types).toContain("answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string) => Promise<{ success: boolean }>;");
+    expect(preload).toMatch(/answerPermission: \(id: string, decision: 'allow' \| 'deny' \| 'ask', reason\?: string, fingerprint\?: string\) =>\s*ipcRenderer\.invoke\('agent:answerPermission', id, decision, reason, fingerprint\)/);
+    expect(types).toContain("answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string) => Promise<{ success: boolean }>;");
+  });
+
+  it('6. an allow naming the fingerprint of what the window read is taken; one naming another changes nothing', async () => {
+    const { answer } = held();
+    const shown = (await handlers.get('agent:permissionQuestion')!({}, 'a1') as { question: { fingerprint: string } }).question.fingerprint;
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow', undefined, 'f'.repeat(64))).toEqual({ success: false });
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow', undefined, shown)).toEqual({ success: true });
+    expect(await answer).toMatchObject({ decision: 'allow', fingerprint: shown });
+  });
+});
+
+describe('the whole question, for the window', () => {
+  it('5. agent:permissionQuestion gives the held question whole, with its fingerprint', async () => {
+    const command = `cat > notes.md <<'EOF'\n${'y'.repeat(5000)}\nEOF`;
+    const agent = { id: 'a1', name: 'Backend', status: 'running', projectPath: tmpHome, skills: [], output: [], lastActivity: new Date().toISOString() } as unknown as AgentStatus;
+    agents.set('a1', agent);
+    void holdPermissionAsk(agent, { tool: 'Bash', toolUseId: 'toolu_1', fields: { command }, waitingOn: undefined }, () => undefined);
+    const got = await handlers.get('agent:permissionQuestion')!({}, 'a1') as { success: boolean; question: Record<string, unknown> };
+    expect(got).toMatchObject({ success: true, question: { tool: 'Bash', fields: { command }, subject: command, jsonFields: [] } });
+    expect(got.question.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(agent.permissionAsk?.fields.command).toHaveLength(2000);
+  });
+
+  it('5. says when there is no question', async () => {
+    expect(await handlers.get('agent:permissionQuestion')!({}, 'a1')).toMatchObject({ success: false });
+    expect(await handlers.get('agent:permissionQuestion')!({}, 42)).toMatchObject({ success: false });
+  });
+
+  it('5. is in the preload and typed for the renderer', () => {
+    const preload = fs.readFileSync(path.join(ROOT, 'electron/preload.ts'), 'utf8');
+    const types = fs.readFileSync(path.join(ROOT, 'src/types/electron.d.ts'), 'utf8');
+    expect(preload).toMatch(/permissionQuestion: \(id: string\) =>\s*ipcRenderer\.invoke\('agent:permissionQuestion', id\)/);
+    expect(types).toMatch(/permissionQuestion: \(id: string\) => Promise<\{ success: true; question: PermissionQuestionWhole \} \| \{ success: false; error: string \}>;/);
   });
 });
 
