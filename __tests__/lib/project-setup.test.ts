@@ -17,7 +17,8 @@ import { ciDoneLine, ciLine, claudeMdDoneLine, claudeMdLine, permissionOutcome, 
  *    chat's runner), so the button names a number main does not change;
  * 6. a permission level applied to some agents and refused for others reads as done, or hides who failed and why;
  *    one refused before any agent (main's error) reads as nothing;
- * 7. a CI's yes that pruned worktrees of merged work first does not say which (the Audit's L2 on PR 587);
+ * 7. a CI's yes that pruned worktrees first does not say which, or names only merged work when the prune also
+ *    removes idle gate checkouts (the Audit's L2 and its re-check's Info on PR 587);
  * 8. the committed CI's line promises the orchestrator delivers it, when nothing hands it the task (the Audit's L3).
  */
 
@@ -53,7 +54,7 @@ describe('the CI offer', () => {
 describe('what the CI\'s yes pruned', () => {
   it('names the worktrees of merged work it removed first, and says nothing when there were none (7)', () => {
     const made = { success: true as const, branch: 'chore/ci', worktree: `${P}/.worktrees/chore/ci`, file: `${P}/.worktrees/chore/ci/.github/workflows/ci.yml` };
-    expect(ciDoneLine({ ...made, pruned: ['feat/login', 'feat/api'] }, P).note).toBe('Before it, removed the worktrees of work already merged: feat/login, feat/api.');
+    expect(ciDoneLine({ ...made, pruned: ['feat/login', 'feat/api'] }, P).note).toBe('Before it, removed the worktrees whose work was done, merged or an idle gate checkout: feat/login, feat/api.');
     expect(ciDoneLine({ ...made, pruned: [] }, P).note).toBeUndefined();
   });
 });
