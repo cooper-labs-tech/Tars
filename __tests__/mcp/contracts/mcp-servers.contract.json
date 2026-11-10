@@ -559,6 +559,9 @@
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
+            "annotations": {
+              "readOnlyHint": true
+            },
             "execution": {
               "taskSupport": "forbidden"
             }
@@ -592,6 +595,10 @@
                 "clientRequestId": {
                   "type": "string",
                   "description": "An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."
+                },
+                "gate": {
+                  "type": "boolean",
+                  "description": "The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."
                 }
               },
               "required": [
@@ -622,6 +629,9 @@
               },
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "annotations": {
+              "readOnlyHint": true
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -910,6 +920,84 @@
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
               "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_new",
+            "description": "Make a worktree for one task in your project, in its .worktrees (which git is told to ignore), with the branch as it is: a branch another worktree holds (the worker's, when you gate its pull request) gives a detached checkout of its head, as pushed to origin when origin has it; a local branch is checked out; a branch only on origin (a pull request from elsewhere) is checked out from origin; any other name is a new branch from the default branch as last fetched (the local one with no remote). The answer says which and the commit it is on. The worktrees whose work is done are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The branch, as feat/<what>, fix/<what> or chore/<what>: letters, digits, . _ - and /."
+                },
+                "existing": {
+                  "type": "boolean",
+                  "description": "The branch must exist already (a pull request's, when you gate it): refused, never made new from the default branch, when it is neither local nor on origin as last fetched."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_list",
+            "description": "The worktrees of your project's .worktrees: each one's branch, folder and commit.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_remove",
+            "description": "Remove one of your project's worktrees once its work is merged or abandoned. Never by force: refused while it has uncommitted or untracked changes, or while an agent runs in it. Its branch stays.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The worktree's branch, as worktree_list names it."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_prune",
+            "description": "Remove every worktree of your project whose branch is merged into the default branch, that is clean, whose HEAD has not moved for an hour, and that no agent runs in; say why each other one is kept. dry_run says what it would remove.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "dry_run": {
+                  "type": "boolean",
+                  "description": "Say what would be removed, and remove nothing."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -5986,6 +6074,9 @@
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
+            "annotations": {
+              "readOnlyHint": true
+            },
             "execution": {
               "taskSupport": "forbidden"
             }
@@ -6019,6 +6110,10 @@
                 "clientRequestId": {
                   "type": "string",
                   "description": "An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."
+                },
+                "gate": {
+                  "type": "boolean",
+                  "description": "The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."
                 }
               },
               "required": [
@@ -6049,6 +6144,9 @@
               },
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "annotations": {
+              "readOnlyHint": true
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -6337,6 +6435,84 @@
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
               "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_new",
+            "description": "Make a worktree for one task in your project, in its .worktrees (which git is told to ignore), with the branch as it is: a branch another worktree holds (the worker's, when you gate its pull request) gives a detached checkout of its head, as pushed to origin when origin has it; a local branch is checked out; a branch only on origin (a pull request from elsewhere) is checked out from origin; any other name is a new branch from the default branch as last fetched (the local one with no remote). The answer says which and the commit it is on. The worktrees whose work is done are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The branch, as feat/<what>, fix/<what> or chore/<what>: letters, digits, . _ - and /."
+                },
+                "existing": {
+                  "type": "boolean",
+                  "description": "The branch must exist already (a pull request's, when you gate it): refused, never made new from the default branch, when it is neither local nor on origin as last fetched."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_list",
+            "description": "The worktrees of your project's .worktrees: each one's branch, folder and commit.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_remove",
+            "description": "Remove one of your project's worktrees once its work is merged or abandoned. Never by force: refused while it has uncommitted or untracked changes, or while an agent runs in it. Its branch stays.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The worktree's branch, as worktree_list names it."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_prune",
+            "description": "Remove every worktree of your project whose branch is merged into the default branch, that is clean, whose HEAD has not moved for an hour, and that no agent runs in; say why each other one is kept. dry_run says what it would remove.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "dry_run": {
+                  "type": "boolean",
+                  "description": "Say what would be removed, and remove nothing."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -7051,6 +7227,9 @@
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
+            "annotations": {
+              "readOnlyHint": true
+            },
             "execution": {
               "taskSupport": "forbidden"
             }
@@ -7084,6 +7263,10 @@
                 "clientRequestId": {
                   "type": "string",
                   "description": "An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."
+                },
+                "gate": {
+                  "type": "boolean",
+                  "description": "The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."
                 }
               },
               "required": [
@@ -7114,6 +7297,9 @@
               },
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "annotations": {
+              "readOnlyHint": true
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -7402,6 +7588,84 @@
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
               "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_new",
+            "description": "Make a worktree for one task in your project, in its .worktrees (which git is told to ignore), with the branch as it is: a branch another worktree holds (the worker's, when you gate its pull request) gives a detached checkout of its head, as pushed to origin when origin has it; a local branch is checked out; a branch only on origin (a pull request from elsewhere) is checked out from origin; any other name is a new branch from the default branch as last fetched (the local one with no remote). The answer says which and the commit it is on. The worktrees whose work is done are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The branch, as feat/<what>, fix/<what> or chore/<what>: letters, digits, . _ - and /."
+                },
+                "existing": {
+                  "type": "boolean",
+                  "description": "The branch must exist already (a pull request's, when you gate it): refused, never made new from the default branch, when it is neither local nor on origin as last fetched."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_list",
+            "description": "The worktrees of your project's .worktrees: each one's branch, folder and commit.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_remove",
+            "description": "Remove one of your project's worktrees once its work is merged or abandoned. Never by force: refused while it has uncommitted or untracked changes, or while an agent runs in it. Its branch stays.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The worktree's branch, as worktree_list names it."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_prune",
+            "description": "Remove every worktree of your project whose branch is merged into the default branch, that is clean, whose HEAD has not moved for an hour, and that no agent runs in; say why each other one is kept. dry_run says what it would remove.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "dry_run": {
+                  "type": "boolean",
+                  "description": "Say what would be removed, and remove nothing."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -8044,6 +8308,9 @@
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
+            "annotations": {
+              "readOnlyHint": true
+            },
             "execution": {
               "taskSupport": "forbidden"
             }
@@ -8077,6 +8344,10 @@
                 "clientRequestId": {
                   "type": "string",
                   "description": "An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."
+                },
+                "gate": {
+                  "type": "boolean",
+                  "description": "The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."
                 }
               },
               "required": [
@@ -8107,6 +8378,9 @@
               },
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "annotations": {
+              "readOnlyHint": true
             },
             "execution": {
               "taskSupport": "forbidden"
@@ -8395,6 +8669,84 @@
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
               "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_new",
+            "description": "Make a worktree for one task in your project, in its .worktrees (which git is told to ignore), with the branch as it is: a branch another worktree holds (the worker's, when you gate its pull request) gives a detached checkout of its head, as pushed to origin when origin has it; a local branch is checked out; a branch only on origin (a pull request from elsewhere) is checked out from origin; any other name is a new branch from the default branch as last fetched (the local one with no remote). The answer says which and the commit it is on. The worktrees whose work is done are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The branch, as feat/<what>, fix/<what> or chore/<what>: letters, digits, . _ - and /."
+                },
+                "existing": {
+                  "type": "boolean",
+                  "description": "The branch must exist already (a pull request's, when you gate it): refused, never made new from the default branch, when it is neither local nor on origin as last fetched."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_list",
+            "description": "The worktrees of your project's .worktrees: each one's branch, folder and commit.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_remove",
+            "description": "Remove one of your project's worktrees once its work is merged or abandoned. Never by force: refused while it has uncommitted or untracked changes, or while an agent runs in it. Its branch stays.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "branch": {
+                  "type": "string",
+                  "maxLength": 200,
+                  "description": "The worktree's branch, as worktree_list names it."
+                }
+              },
+              "required": [
+                "branch"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "worktree_prune",
+            "description": "Remove every worktree of your project whose branch is merged into the default branch, that is clean, whose HEAD has not moved for an hour, and that no agent runs in; say why each other one is kept. dry_run says what it would remove.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "dry_run": {
+                  "type": "boolean",
+                  "description": "Say what would be removed, and remove nothing."
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             },
             "execution": {
               "taskSupport": "forbidden"
