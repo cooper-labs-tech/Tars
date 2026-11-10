@@ -251,7 +251,7 @@ describe('the question whole, field by field', () => {
   });
 
   it('each value whole, every line, every mark (13)', () => {
-    const [f] = questionFields({ content: '\nfirst\r\n\tsecond x‮ \n' }, []);
+    const [f] = questionFields({ content: '\nfirst\r\n\tsecond\u00a0x\u202e\u2028\n' }, []);
     expect(f.lines).toEqual(['', 'first', `${TAB_MARK}second${OTHER_SPACE_MARK}x�`, '', '']);
   });
 

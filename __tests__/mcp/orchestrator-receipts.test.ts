@@ -35,8 +35,9 @@ function makeFakeServer() {
   const tools = new Map<string, (args: Record<string, unknown>, extra?: unknown) => Promise<unknown>>();
   return {
     tools,
-    tool(name: string, _desc: string, _schema: unknown, handler: (args: Record<string, unknown>) => Promise<unknown>) {
-      tools.set(name, handler);
+    // The handler is the last argument: a read-only tool passes its annotations before it (mcp-shared, #585).
+    tool(name: string, ...rest: unknown[]) {
+      tools.set(name, rest[rest.length - 1] as (args: Record<string, unknown>) => Promise<unknown>);
     },
   };
 }

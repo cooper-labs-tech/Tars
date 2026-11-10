@@ -20,8 +20,9 @@ function makeFakeServer() {
   const tools = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
   return {
     tools,
-    tool(name: string, _desc: string, _schema: unknown, handler: (args: Record<string, unknown>) => Promise<unknown>) {
-      tools.set(name, handler);
+    // The handler is the last argument: a read-only tool passes its annotations before it (mcp-shared, #585).
+    tool(name: string, ...rest: unknown[]) {
+      tools.set(name, rest[rest.length - 1] as (args: Record<string, unknown>) => Promise<unknown>);
     },
   };
 }
@@ -128,7 +129,7 @@ describe('delegate_task keeps its caller listening while it waits', () => {
   async function loadWithExtra() {
     const { registerAgentTools } = await import('../../mcp-orchestrator/src/tools/agents.js');
     const tools = new Map<string, (args: Record<string, unknown>, extra?: unknown) => Promise<unknown>>();
-    registerAgentTools({ tool: (name: string, _d: string, _s: unknown, h: typeof tools extends Map<string, infer H> ? H : never) => tools.set(name, h) } as never);
+    registerAgentTools({ tool: (name: string, ...rest: unknown[]) => tools.set(name, rest[rest.length - 1] as typeof tools extends Map<string, infer H> ? H : never) } as never);
     return tools.get('delegate_task')!;
   }
 
@@ -195,7 +196,7 @@ describe('wait_for_agent keeps its caller listening while it waits too', () => {
   async function loadWait() {
     const { registerAgentTools } = await import('../../mcp-orchestrator/src/tools/agents.js');
     const tools = new Map<string, (args: Record<string, unknown>, extra?: unknown) => Promise<unknown>>();
-    registerAgentTools({ tool: (name: string, _d: string, _s: unknown, h: typeof tools extends Map<string, infer H> ? H : never) => tools.set(name, h) } as never);
+    registerAgentTools({ tool: (name: string, ...rest: unknown[]) => tools.set(name, rest[rest.length - 1] as typeof tools extends Map<string, infer H> ? H : never) } as never);
     return tools.get('wait_for_agent')!;
   }
 
