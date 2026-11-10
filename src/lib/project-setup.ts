@@ -40,7 +40,7 @@ export function ciDoneLine(a: CiAnswer, projectPath: string): SetupLine & { note
   return {
     tone: 'running',
     text: `Committed ${inProject(a.file, a.worktree)} on ${a.branch}, in ${inProject(a.worktree, projectPath)}, not pushed. Ask your orchestrator to deliver it as a pull request.`,
-    ...(a.pruned.length ? { note: `Before it, removed the worktrees of work already merged: ${a.pruned.join(', ')}.` } : {}),
+    ...(a.pruned.length ? { note: `Before it, removed the worktrees whose work was done, merged or an idle gate checkout: ${a.pruned.join(', ')}.` } : {}),
   };
 }
 
