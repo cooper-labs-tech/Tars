@@ -1265,7 +1265,9 @@ agent died.
   path: it runs `$TARS_NODE $TARS_SLOT_SCRIPT`, which every agent terminal is given, with `TARS_SLOT` naming the shim
   and `~/.tars/bin` **last** on its PATH (`services/heavy-slot-cli.ts`): first, a file any agent put there would run
   instead of the command it is named after. The script is `electron/resources/tars-slot.cjs`.
-- **The queue.** `gate` (a release gate: orchestrators only; anyone else asking gets `normal`, and is told), then
+- **The queue.** `gate` (a release gate: an orchestrator, or the agent its project's orchestrator handed its current
+  work to, its live `requestedBy` link, since 2.0.7, when the orchestrator no longer runs the gate itself; anyone else
+  asking gets `normal`, and is told), then
   `normal`, then `background`, then arrival. An ask from under a holder's process (a pre-push hook inside its own
   run) is granted at once, inside that lease: a lease of the same agent only.
 - **A lease is a live process.** A pass every second while anything is held or waited for drops the leases and asks

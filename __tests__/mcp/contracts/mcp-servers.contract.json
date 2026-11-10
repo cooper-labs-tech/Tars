@@ -850,7 +850,7 @@
                     "normal",
                     "background"
                   ],
-                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                  "description": "gate: a release gate (an orchestrator, or the agent its orchestrator handed the work to; others get normal). normal by default; background for what can wait."
                 },
                 "ticket": {
                   "type": "string",
@@ -6277,7 +6277,7 @@
                     "normal",
                     "background"
                   ],
-                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                  "description": "gate: a release gate (an orchestrator, or the agent its orchestrator handed the work to; others get normal). normal by default; background for what can wait."
                 },
                 "ticket": {
                   "type": "string",
@@ -7342,7 +7342,7 @@
                     "normal",
                     "background"
                   ],
-                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                  "description": "gate: a release gate (an orchestrator, or the agent its orchestrator handed the work to; others get normal). normal by default; background for what can wait."
                 },
                 "ticket": {
                   "type": "string",
@@ -8335,7 +8335,7 @@
                     "normal",
                     "background"
                   ],
-                  "description": "gate: a release gate (orchestrators only; others get normal). normal by default; background for what can wait."
+                  "description": "gate: a release gate (an orchestrator, or the agent its orchestrator handed the work to; others get normal). normal by default; background for what can wait."
                 },
                 "ticket": {
                   "type": "string",

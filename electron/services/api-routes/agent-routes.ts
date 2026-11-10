@@ -2309,7 +2309,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       lines.push(
         ``,
         `## Orchestration rules`,
-        `- Delegate ONLY to the agents listed above: they are your project's team. Other projects' agents are off-limits and the API rejects cross-project actions.`,
+        `- Delegate ONLY to your project's team: the agents listed above, and those you create in it with create_agent. Other projects' agents are off-limits and the API rejects cross-project actions.`,
         `- Use delegate_task with the agent id for one-shot delegation; list_agents already returns only your project's agents.`,
         `- No greeting ritual is needed: this roster is current as of session start, and each agent receives its own identity automatically when you delegate.`
       );

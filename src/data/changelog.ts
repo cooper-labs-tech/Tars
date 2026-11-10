@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-10',
+    updates: [
+      'An orchestrator now only orchestrates, out of the box: it hands development, research, investigation, reading code or logs, QA and audit to its project\'s agents, and creates the agent a piece of work needs when its project has none. Until now it was told that reading the code to answer a question was its own work, and asked why something was broken, it read the code itself and delegated nothing. On Claude Code and the providers that run it, and on Qwen Code, it can no longer search the code or the web itself; it still reads its agents\' reports and runs git and gh.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',
