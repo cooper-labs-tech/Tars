@@ -250096,6 +250096,627 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "ZvvS2",
+          "name": "an empty field, and a read that failed",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "j06I7",
+              "name": "panel and window",
+              "width": 860,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "SZOpK",
+                  "fill": "$text-muted",
+                  "content": "an empty field: never allowed from a panel's line, said empty in the block; a read that failed, said, read again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "oiZXX",
+                  "name": "panel row",
+                  "width": 660,
+                  "height": 26,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4,
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "DCiUx",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "D1lPiO",
+                      "fill": "$text-primary",
+                      "content": "Asks to use Write:",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Kj0B9",
+                      "fill": "$text-muted",
+                      "content": "src/app/main.ts",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KXnGc",
+                      "name": "spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "UfF2o",
+                      "name": "b show all",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OKOkM",
+                          "fill": "$text-muted",
+                          "content": "show all",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IcRdM",
+                      "name": "b deny",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dl9RX",
+                          "fill": "$text-muted",
+                          "content": "deny",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "clv8h",
+                      "name": "b ask in terminal",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YhuTZ",
+                          "fill": "$text-muted",
+                          "content": "ask in terminal",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "d3dE9",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "s5DSN",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "IU1YB",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "hoLM7",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "Wf11R",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Write",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "GzDRS",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:07",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ttMpD",
+                      "fill": "$text-muted",
+                      "content": "file_path",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "svEd6",
+                      "name": "value",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "fkEV9",
+                          "fill": "$text-primary",
+                          "content": "src/app/main.ts",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "oMQje",
+                      "fill": "$text-muted",
+                      "content": "content · empty",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MAiLu",
+                      "name": "value",
+                      "width": "fill_container",
+                      "height": 34,
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        7,
+                        10
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EiuJF",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "s99k9",
+                          "name": "b allow",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OM5jk",
+                              "fill": "$text-primary",
+                              "content": "allow",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zeFS3",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "AEOZV",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "L0rAp",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ByGH1",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nKdIJ",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "dXs7T",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "LJ0S9",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "rhw4o",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "JEf2W",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Bash",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "VLPWo",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:08",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "U4tlu",
+                      "name": "said",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "gJYJA",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "YqxkO",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 760,
+                          "content": "The agent asked about another call meanwhile: read the new question before you answer it",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rTCXa",
+                      "name": "read failed",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "elBlB",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "h5sgm",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 600,
+                          "content": "The question could not be read: the window lost its link to Tars.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "OCJEj",
+                          "name": "b read again",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "gcj9R",
+                              "fill": "$text-primary",
+                              "content": "read again",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ieCEM",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "EWRhe",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "STqyU",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aSPfe",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "bNy7S",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "nxAj7",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "g6Efpr",
+                  "fill": "$text-muted",
+                  "content": "what the line leaves out is read first",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "oX255",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Main's line names every field but an empty one: a Write whose content is empty reads as its path alone, and its allow empties the file. A panel offers allow on its line only when every field is in it (a Bash's description excepted, which does not run); otherwise show all. In the block, an empty field says so: content · empty.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "m4tKR",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A read of the question that fails is said with its reason, and offers read again: never the line that Tars holds no question, which it may still hold. No allow until the question is read.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -262573,6 +263194,627 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "read-first: the window reads the question whole again, and offers allow once it is shown. withheld: allow goes, deny and ask in terminal stay. not-a-decision: a fault of the window, said in the error tone, the answers kept. no-question: the line Tars no longer holds this question.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RMHuA",
+          "name": "an empty field, and a read that failed",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "cgQzV",
+              "name": "panel and window",
+              "width": 860,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "E82K8s",
+                  "fill": "$text-muted",
+                  "content": "an empty field: never allowed from a panel's line, said empty in the block; a read that failed, said, read again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "SEOYz",
+                  "name": "panel row",
+                  "width": 660,
+                  "height": 26,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4,
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "xLPpT",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "w0NHX",
+                      "fill": "$text-primary",
+                      "content": "Asks to use Write:",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "cFn5M",
+                      "fill": "$text-muted",
+                      "content": "src/app/main.ts",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jVDeb",
+                      "name": "spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eYvjL",
+                      "name": "b show all",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "e9mTT1",
+                          "fill": "$text-muted",
+                          "content": "show all",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "S4cBWX",
+                      "name": "b deny",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "H74V4G",
+                          "fill": "$text-muted",
+                          "content": "deny",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sNGo6",
+                      "name": "b ask in terminal",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zXbqR",
+                          "fill": "$text-muted",
+                          "content": "ask in terminal",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "c7skt3",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "R8gJvw",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "CPsjT",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "DYOxL",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "Gq4GS",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Write",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "B1fM9p",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:07",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Qijzm",
+                      "fill": "$text-muted",
+                      "content": "file_path",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x1cZk",
+                      "name": "value",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "K6Rzbm",
+                          "fill": "$text-primary",
+                          "content": "src/app/main.ts",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "PthmN",
+                      "fill": "$text-muted",
+                      "content": "content · empty",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "HibIW",
+                      "name": "value",
+                      "width": "fill_container",
+                      "height": 34,
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "padding": [
+                        7,
+                        10
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KanLF",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "aXieZ",
+                          "name": "b allow",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "FRdl5",
+                              "fill": "$text-primary",
+                              "content": "allow",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "O5KmwW",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Z8stXg",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xShqs",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "wPTs9",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "JrvSt",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "sc6sE",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "wY7VL",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "wbLNi",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "T38ZH",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Bash",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "TRGfC",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:08",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "I21h2",
+                      "name": "said",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "D171q",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "gVXax",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 760,
+                          "content": "The agent asked about another call meanwhile: read the new question before you answer it",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "S4Khv",
+                      "name": "read failed",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "xS2Kr",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Mist0",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 600,
+                          "content": "The question could not be read: the window lost its link to Tars.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "OA55a",
+                          "name": "b read again",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "VFYg6",
+                              "fill": "$text-primary",
+                              "content": "read again",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ukdwc",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Ecqsu",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ktYXH",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "WvOYK",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ziFc2",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "xlqVR",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ezrcp",
+                  "fill": "$text-muted",
+                  "content": "what the line leaves out is read first",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "R1rcI",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Main's line names every field but an empty one: a Write whose content is empty reads as its path alone, and its allow empties the file. A panel offers allow on its line only when every field is in it (a Bash's description excepted, which does not run); otherwise show all. In the block, an empty field says so: content · empty.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "hvX5R",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A read of the question that fails is said with its reason, and offers read again: never the line that Tars holds no question, which it may still hold. No allow until the question is read.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
