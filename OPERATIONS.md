@@ -1463,8 +1463,9 @@ report):
     itself; one only on origin, from origin; else a new branch. The answer names which (`kind`) and the commit;
   - removed only when clean and nothing works in it: no agent (its own worktree, its terminal's folder) and no process
     whose working directory is in it (QA's shell cd'd into its gate checkout: `/proc` on Linux, `lsof` on macOS, as
-    `scripts/worktree.mjs` reads them; on Windows the system refuses to delete a folder a process works in, so git's
-    removal fails and the worktree is kept), never forced, its branch kept;
+    `scripts/worktree.mjs` reads them; on Windows, where no process's folder can be read, a rename of the folder and back,
+    which Windows refuses while a process works in it: git's own removal deletes the files first and fails only on the
+    folder, the Audit's M3 on #585), never forced, its branch kept;
   - `existing: true` (QA gating a PR): a branch neither local nor on origin as last fetched is refused, never made from
     the default branch under the PR's name (the Audit's L6 on #585). Without it, a name nowhere to be found is a new
     branch, and a failed fetch is said;

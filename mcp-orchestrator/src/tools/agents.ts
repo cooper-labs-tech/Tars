@@ -926,6 +926,7 @@ const AGENT_TOOLS: Tool[] = [
       timeoutSeconds: z.number().optional().describe("Maximum time to wait in seconds (default: 300)"),
     },
     failure: "waiting for agent",
+    readOnly: true,
     async run({ id, timeoutSeconds = 300 }, extra) {
       // As delegate_task's: any timeoutSeconds is taken, and Claude Code gives up a call silent for 30 minutes
       // (the QA's F8 of the 2.0.5 final verification: the keep-alive everyone counted on was delegate_task's only).
@@ -1013,6 +1014,7 @@ const AGENT_TOOLS: Tool[] = [
       clientRequestId: z.string().optional().describe("The clientRequestId the delegation was sent with"),
     },
     failure: "reading the task",
+    readOnly: true,
     async run({ taskId, clientRequestId }) {
       if (!taskId && !clientRequestId) return problem("Error: taskId or clientRequestId is required.");
       const endpoint = taskId ? `/api/tasks/${encodeURIComponent(taskId)}` : `/api/tasks?clientRequestId=${encodeURIComponent(clientRequestId!)}`;

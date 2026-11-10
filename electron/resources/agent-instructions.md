@@ -12,6 +12,7 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 - Create topic files (e.g. `patterns.md`, `debugging.md`) for detailed notes: keep `MEMORY.md` under 200 lines
 - At session start, review `MEMORY.md` for relevant context before diving in
 - After any correction or new discovery, update memory so the next session benefits
+- An orchestrator writes no files (its Write and Edit are denied): it keeps what it learns with the `memory_write` tool, the project's notes by default, and reads them back with `memory_read`
 
 ## Workflow
 
@@ -56,6 +57,8 @@ starts is inside that run.
 
 Write a file with the Write tool (or Edit it), never with a heredoc or a redirection in a shell
 command (`cat > file <<EOF`, `echo ... > file`), and split a compound command into simple ones.
+An orchestrator writes no file at all, by either way: a file to write is a task for one of its
+agents, and what it must remember goes in `memory_write`.
 When Claude Code asks permission for a call, Tars never answers yes by itself: the question
 waits for the user, who may be away for the night, and is refused after a delay. A Write inside
 your own worktree is not asked about in bypass; a shell command that writes a file often is.

@@ -81,8 +81,8 @@ Your identity (name, agent id, project) and your project's agent roster are inje
 ### Several agents
 Only for independent pieces, as above.
 1. `list_agents`: find available agents
-2. `delegate_task` to each agent with its own task and `timeoutSeconds: 1`: each call hands its task and returns at once with its task id, so every agent works at the same time. Claude Code runs the tool calls of one message one after another, so calls that wait for their answers make the work serial (measured with claude 2.1.321: two calls in one message, the second began when the first ended)
-3. Follow each: `wait_for_agent` waits on the agent, then `task_status` by its task id reads its result
+2. `delegate_task` to each agent with its own task and `timeoutSeconds: 1`: each call hands its task and returns at once with its task id, so every agent works at the same time. Claude Code runs the MCP calls of one message one after another unless they only read, and delegate_task hands work, so calls that wait for their answers make the work serial (measured with claude 2.1.321: two calls in one message, the second began when the first ended)
+3. Follow them: `wait_for_agent` on each, then `task_status` by each task id for its result. Both only read, so the calls of one message for several agents run together
 4. Synthesize and report back
 
 ### When Agent Needs Input

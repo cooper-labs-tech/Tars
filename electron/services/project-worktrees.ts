@@ -205,8 +205,8 @@ type ProcessCwd = { pid: number; command: string; cwd: string };
 /**
  * Every process's working directory, as scripts/worktree.mjs reads it (the Audit's M2 on #585: QA's shell cd'd into
  * its gate checkout is no agent's folder Tars knows): /proc on Linux, lsof on macOS, the lsof Tars runs left out.
- * Null when they cannot be read. On Windows, null too: Windows refuses to delete a folder a process works in, so
- * git's removal fails there by itself, and the worktree is kept with git's reason.
+ * Null when they cannot be read. Not on Windows, where no process's working folder can be read: occupiedBy asks the
+ * folder itself there.
  */
 async function processCwds(): Promise<ProcessCwd[] | null> {
   if (process.platform === 'win32') return null;
@@ -239,9 +239,30 @@ async function processCwds(): Promise<ProcessCwd[] | null> {
   return found;
 }
 
+/**
+ * On Windows, whether a process works in the folder: Windows refuses to rename a folder a process works in or holds a
+ * file of, so it is renamed and back. Nothing is asked of git's deletion, which removes the files first and fails
+ * only on the folder itself, emptying it under the process (the Audit's M3 on #585).
+ */
+function windowsOccupied(worktreePath: string): string | undefined {
+  const probe = `${worktreePath}.tars-in-use`;
+  try {
+    fs.renameSync(worktreePath, probe);
+  } catch (err) {
+    return `a process works in it (Windows would not move it: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message})`;
+  }
+  try {
+    fs.renameSync(probe, worktreePath);
+  } catch (err) {
+    return `moved to ${probe} to see whether it was in use, and not moved back (${(err as NodeJS.ErrnoException).code ?? (err as Error).message}): move it back by hand`;
+  }
+  return undefined;
+}
+
 /** Why a worktree is in use by a process, or undefined; on macOS and Linux, unknown counts as in use. */
 function occupiedBy(worktreePath: string, cwds: ProcessCwd[] | null): string | undefined {
-  if (cwds === null) return process.platform === 'win32' ? undefined : 'Tars cannot tell which processes work in it (their working folders could not be read)';
+  if (process.platform === 'win32') return windowsOccupied(worktreePath);
+  if (cwds === null) return 'Tars cannot tell which processes work in it (their working folders could not be read)';
   const wt = real(worktreePath);
   const inIt = cwds.filter(p => { const r = real(p.cwd); return r === wt || r.startsWith(wt + path.sep); });
   return inIt.length ? `a process works in it: ${inIt.slice(0, 3).map(p => `${p.command || 'process'} (${p.pid})`).join(', ')}` : undefined;
