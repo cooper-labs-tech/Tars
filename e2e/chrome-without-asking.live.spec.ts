@@ -85,28 +85,32 @@ function wrapper(home, leg, claude, stateModDir) {
 }
 
 /**
- * Whether the account's Claude Code trusts a folder, itself or one of its parents (claude 2.1.321 walks up the folders
- * for `hasTrustDialogAccepted`, read in its code). The agents' CLI reads the account's ~/.claude.json, not the
- * sandbox's where Tars pre-accepts the trust: the spec's first run, the night of 10/11, kept both agents on Claude
- * Code's "Is this a project you created or one you trust?" for their whole leg, the project being under the system's
- * temporary folder.
+ * Whether the account's Claude Code trusts a folder, as claude 2.1.322 decides it (read in its code, `$dn`, `Wy`,
+ * `jy`): the folder's own `hasTrustDialogAccepted`, else that of a parent, walking up no further than the root of the
+ * git repository the folder is in, and with no bound for a folder in none. The agents' CLI reads the account's
+ * ~/.claude.json, not the sandbox's where Tars pre-accepts the trust. The spec's first run, the night of 10/11, kept
+ * both agents on Claude Code's "Is this a project you created or one you trust?" for their whole leg, the project under
+ * the system's temporary folder; its second, the project in the run's folder under the account's trusted home, but made
+ * a git repository of its own, which bounds the walk to itself.
  */
 function accountTrusts(dir) {
   let config;
   try { config = JSON.parse(fs.readFileSync(path.join(ACCOUNT_HOME, '.claude.json'), 'utf8')); } catch { return false; }
+  let root = null;
+  try { root = fs.realpathSync(execFileSync('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()); } catch { root = null; }
   for (let p = fs.realpathSync(dir); ; p = path.dirname(p)) {
     if (config.projects?.[p]?.hasTrustDialogAccepted === true) return true;
-    if (path.dirname(p) === p) return false;
+    if (p === root || path.dirname(p) === p) return false;
   }
 }
 
 /** The sandbox: Tars's home in the system's temporary folder, the agents' project in the run's folder (`projectRoot`). */
 function seed(claude, run, projectRoot) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-chrome-'));
-  // In the run's folder, under the account's home, which the account's Claude Code trusts (see accountTrusts).
+  // In the run's folder, under the account's home, which the account's Claude Code trusts (see accountTrusts), and no
+  // git repository of its own: the agents only use Chrome, and a repository would bound the trust to the folder itself.
   const project = path.join(projectRoot, 'chrome-project');
   for (const dir of [path.join(home, '.claude'), path.join(home, '.tars'), path.join(home, 'bin'), project]) fs.mkdirSync(dir, { recursive: true });
-  execFileSync('git', ['init', '-q', project]);
   const agent = (leg, cliPath) => ({
     id: `chrome-${leg}-${run}`, name: `Chrome ${leg}`, character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
     projectPath: project, skills: [], output: [], permissionMode: 'bypass', cliPath, model: 'claude-sonnet-5-5',
