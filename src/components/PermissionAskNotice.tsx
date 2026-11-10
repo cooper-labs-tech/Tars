@@ -53,7 +53,7 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * A permission question the state mod asked Tars instead of Claude Code's
  * dialog (the state mod, PR 318), and its three answers: allow runs the call, deny refuses it
  * with a reason the agent reads if one is given, ask in terminal puts it to
- * Claude Code's own dialog, which has no delay: answer it there. Nothing is
+ * Claude Code's own dialog (the quiet last answer since 2.0.7, for what only it offers). Nothing is
  * typed into the terminal. Tars never answers allow by itself (PR 538): a
  * question waits for the owner, and at the delay Tars refuses it, with its
  * reason. Frame: `Permission asked of Tars`.
