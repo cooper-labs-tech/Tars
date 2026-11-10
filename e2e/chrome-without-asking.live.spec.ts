@@ -84,9 +84,27 @@ function wrapper(home, leg, claude, stateModDir) {
   return file;
 }
 
-function seed(claude, run) {
+/**
+ * Whether the account's Claude Code trusts a folder, itself or one of its parents (claude 2.1.321 walks up the folders
+ * for `hasTrustDialogAccepted`, read in its code). The agents' CLI reads the account's ~/.claude.json, not the
+ * sandbox's where Tars pre-accepts the trust: the spec's first run, the night of 10/11, kept both agents on Claude
+ * Code's "Is this a project you created or one you trust?" for their whole leg, the project being under the system's
+ * temporary folder.
+ */
+function accountTrusts(dir) {
+  let config;
+  try { config = JSON.parse(fs.readFileSync(path.join(ACCOUNT_HOME, '.claude.json'), 'utf8')); } catch { return false; }
+  for (let p = fs.realpathSync(dir); ; p = path.dirname(p)) {
+    if (config.projects?.[p]?.hasTrustDialogAccepted === true) return true;
+    if (path.dirname(p) === p) return false;
+  }
+}
+
+/** The sandbox: Tars's home in the system's temporary folder, the agents' project in the run's folder (`projectRoot`). */
+function seed(claude, run, projectRoot) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-chrome-'));
-  const project = path.join(home, 'projects', 'chrome');
+  // In the run's folder, under the account's home, which the account's Claude Code trusts (see accountTrusts).
+  const project = path.join(projectRoot, 'chrome-project');
   for (const dir of [path.join(home, '.claude'), path.join(home, '.tars'), path.join(home, 'bin'), project]) fs.mkdirSync(dir, { recursive: true });
   execFileSync('git', ['init', '-q', project]);
   const agent = (leg, cliPath) => ({
@@ -157,8 +175,10 @@ test('Claude in Chrome acts for an agent in bypass with nothing asking, the owne
   FACTS = path.join(OUT, 'facts.jsonl');
   const run = Date.now().toString(36);
   const startedAt = new Date();
-  const { home: HOME, project: PROJECT } = seed(CLAUDE, run);
-  fact('seeded', { home: HOME, claude: CLAUDE, signedIn: new URL(SIGNED_IN).origin, xThread: X_THREAD, oldMod: process.env.E2E_CHROME_STATE_MOD_DIR ?? null });
+  const { home: HOME, project: PROJECT } = seed(CLAUDE, run, OUT);
+  fact('seeded', { home: HOME, project: PROJECT, claude: CLAUDE, signedIn: new URL(SIGNED_IN).origin, xThread: X_THREAD, oldMod: process.env.E2E_CHROME_STATE_MOD_DIR ?? null });
+  // Said at once rather than after two legs on a dialog nobody answers.
+  expect(accountTrusts(PROJECT), `the account's Claude Code trusts ${PROJECT} or a parent of it: trust one in claude, or set E2E_RUN_DIR under a trusted folder`).toBe(true);
   let app;
   try {
     app = await launchSandboxed(electron, HOME, {
