@@ -19,7 +19,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. the CLAUDE.md's yes does not write it, or the window does not say so;
  * 5. a project added on the Projects page does not open its panel with its offers, nor say why a CI is not offered
  *    (no remote);
- * 6. a project's panel offers no single permission level for its team, or applying it changes a chat's runner, or
+ * 6. a project's panel offers no single permission level for its team, or counts a chat's runner among the agents it
+ *    sets (main sets the project's own agents, and a runner follows its orchestrator: chat-runners.ts syncWithLead), or
  *    misses an agent, or does not say how many took it;
  * 7. an uncaught error in the page;
  * 8. the committed CI's line promises a delivery nobody asks for, instead of telling the user to ask the orchestrator
@@ -199,7 +200,8 @@ for (const newInterface of [true, false]) {
         const file = JSON.parse(fs.readFileSync(path.join(home, '.tars', 'agents.json'), 'utf8')) as Saved[] | { agents: Saved[] };
         return Object.fromEntries((Array.isArray(file) ? file : file.agents).map(a => [a.id, a.permissionMode]));
       };
-      await expect.poll(() => modes(), { timeout: 15_000 }).toEqual({ lead: 'bypass', fe: 'bypass', chat: 'auto' });
+      // The two set (lead, fe), and the chat's runner after its orchestrator, as main keeps it (syncWithLead).
+      await expect.poll(() => modes(), { timeout: 15_000 }).toEqual({ lead: 'bypass', fe: 'bypass', chat: 'bypass' });
       seen.modes = modes();
       seen.panel = (await setup.innerText()).replace(/\s+/g, ' ');
       await stepShot(page, `${tag}5-team-level`);
