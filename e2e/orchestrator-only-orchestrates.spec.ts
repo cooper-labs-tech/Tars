@@ -24,6 +24,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. codex, which has no system prompt file and no tool to deny: its first prompt says the same as 3;
  * 5. ~/.tars/CLAUDE.md, every agent's instructions as the app publishes them and every claude session loads them,
  *    tells a worker to fix a bug report itself, and an orchestrator to hand it to an agent (the Audit's M1 on #579).
+ * Each of 1 to 5 is a soft assertion naming its item: a red run shows every one that fails, not only the first (QA's
+ * L3 on #579, which saw 3 and 4 never red).
  * Red on main 58f2863b4: the role file says reading the code is its own work, Grep, Glob, WebFetch and WebSearch are
  * allowed, neither identity says it, and ~/.tars/CLAUDE.md tells every agent to fix a bug report itself.
  * The artefact: values.json (the role file's rule, the denied tools, both identities).
@@ -109,22 +111,22 @@ for (const newInterface of [false, true]) {
       recordValues(values);
 
       // 1.
-      expect(seen.role).toContain(RULE);
-      expect(seen.role).not.toContain('reading the code to check a fact');
+      expect.soft(seen.role, "1. the role file").toContain(RULE);
+      expect.soft(seen.role, "1. the role file").not.toContain('reading the code to check a fact');
       // 2.
-      expect([...seen.denied].sort()).toEqual(['Edit', 'Glob', 'Grep', 'LSP', 'NotebookEdit', 'Task', 'WebFetch', 'WebSearch', 'Workflow', 'Write']);
+      expect.soft([...seen.denied].sort(), "2. the denied tools").toEqual(['Edit', 'Glob', 'Grep', 'LSP', 'NotebookEdit', 'Task', 'WebFetch', 'WebSearch', 'Workflow', 'Write']);
       // 3.
-      expect(seen.identity).toContain(RULE);
-      expect(seen.identity).toContain(CREATE);
+      expect.soft(seen.identity, "3. the claude identity").toContain(RULE);
+      expect.soft(seen.identity, "3. the claude identity").toContain(CREATE);
       // 4.
-      expect(codexPrompt).toContain(RULE);
-      expect(codexPrompt).toContain(CREATE);
+      expect.soft(codexPrompt, "4. codex's first prompt").toContain(RULE);
+      expect.soft(codexPrompt, "4. codex's first prompt").toContain(CREATE);
       // 5.
       const everyAgent = fs.readFileSync(path.join(dir, 'CLAUDE.md'), 'utf8');
       values.bugReportLine = everyAgent.split('\n').find(l => l.includes('bug report')) ?? null;
       recordValues(values);
-      expect(everyAgent).not.toContain('When given a bug report, just fix it');
-      expect(everyAgent).toContain('An orchestrator never does: it hands the bug report to one of its agents');
+      expect.soft(everyAgent, "5. every agent's CLAUDE.md").not.toContain('When given a bug report, just fix it');
+      expect.soft(everyAgent, "5. every agent's CLAUDE.md").toContain('An orchestrator never does: it hands the bug report to one of its agents');
       expect(errors).toEqual([]);
     } finally {
       recordValues(values);
