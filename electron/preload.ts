@@ -118,6 +118,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('agent:input', params),
     wake: (id: string) =>
       ipcRenderer.invoke('agent:wake', id),
+    setFirstTask: (params: { id: string; task: string | null }) =>
+      ipcRenderer.invoke('agent:set-first-task', params),
     resize: (params: { id: string; cols: number; rows: number }) =>
       ipcRenderer.invoke('agent:resize', params),
     setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) =>
@@ -576,6 +578,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('project:search-files', { root, query }),
     searchContent: (root: string, query: string) =>
       ipcRenderer.invoke('project:search-content', { root, query }),
+    // The first run (2.0.7, handlers/first-run-handlers.ts): made a repository, and what PR delivery still lacks
+    gitInit: (projectPath: string) =>
+      ipcRenderer.invoke('project:git-init', projectPath),
+    readiness: (projectPath: string) =>
+      ipcRenderer.invoke('project:readiness', projectPath),
   },
 
   shell: {
@@ -758,6 +765,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     writeClaudeMd: (projectPath: string) => ipcRenderer.invoke('project:writeClaudeMd', projectPath),
     setTeamPermissionMode: (projectPath: string, permissionMode: string) =>
       ipcRenderer.invoke('project:setTeamPermissionMode', { projectPath, permissionMode }),
+  },
+
+  // A team deployed whole or not at all, its orchestrator started last (2.0.7, handlers/first-run-handlers.ts)
+  teams: {
+    deploy: (params: Record<string, unknown>) =>
+      ipcRenderer.invoke('teams:deploy', params),
   },
 
   // The heavy-run slot for the whole machine (services/heavy-slot.ts): who holds it, who waits and why, and the

@@ -116,9 +116,20 @@ function stringOrNull(v: unknown): string | null {
   return typeof v === 'string' && v ? v : null;
 }
 
+/**
+ * No claude to ask: the binary is not there (ENOENT), as on a new user's machine before Claude Code is installed.
+ * Told apart from a claude that answers badly, so the first run can say "install Claude Code" (QA's B3, 10/11).
+ */
+export class ClaudeCliMissing extends Error {
+  readonly code = 'cli-missing' as const;
+}
+
 /** Whether the directory is signed in, and as whom. Exit 1 is "not signed in", an answer. */
 export async function claudeAuthStatus(binary: string, configDir: string | null): Promise<ClaudeAuthInfo> {
   const r = await run(binary, ['auth', 'status'], configDir);
+  if (r.spawnError && (r.spawnError as NodeJS.ErrnoException).code === 'ENOENT') {
+    throw new ClaudeCliMissing(`claude auth status could not run: Claude Code is not installed, or not where Tars looks for it (${binary}).`);
+  }
   if (r.spawnError) throw new Error(`claude auth status could not run: ${r.spawnError.message}`);
   let parsed: Record<string, unknown>;
   try {

@@ -40,6 +40,7 @@ import { ensureProjectFiles } from '../../utils/project-files';
 import { app } from 'electron';
 import { usableHermesConnection } from '../hermes-config';
 import { consumeResumeSessionId, newConversationOnNextStart, nextStartResumes } from '../../utils/resume-session';
+import { spendFirstTask, withFirstTask } from '../../core/first-task';
 import { getTasmaniaStatus } from '../tasmania-client';
 import { emitAgentStatus } from '../agent-events';
 import { handOffFrom, liveTaskLedger, noteHandOff, watchTurns, type TaskWithResult } from '../task-ledger';
@@ -329,8 +330,6 @@ async function spawnAgentSessionInSlot(
   // Its own header says who the agent is: the guide without the line.
   const guide = guideForPrompt(agent, cliProvider.configDir, { identity: false });
   const guideBlock = guide ? `\n\n${guide}` : '';
-  // The message under its sender's line, its mark for a relay (the Audit's M3 on #569).
-  const taskPrompt = `${identityHeader}${guideBlock}${memoryBlock}\n\n${launchPrompt(opts.sender, prompt)}`;
 
   // The conversation to continue: the last session, once per run or after a
   // sleep. The agent's own session is a tombstone once this launch ends its
@@ -339,6 +338,14 @@ async function spawnAgentSessionInSlot(
   // (agent-restart.ts), and the ended CLI's late posts stay refused.
   const resumeSessionId = consumeResumeSessionId(agent) ?? undefined;
   const forkSession = !!resumeSessionId && resumeSessionId === agent.currentSessionId;
+
+  // The agent's first task, at whichever start comes first (core/first-task.ts, the Audit's L3 on #584): a session
+  // this start opens types it, in Tars's words before the message; one it continues types nothing of it. Spent below,
+  // once the terminal is there.
+  const first = withFirstTask(agent, '', { resumes: !!resumeSessionId });
+  const firstBlock = first.took ? `${launchPrompt(undefined, first.prompt)}\n\n` : '';
+  // The message under its sender's line, its mark for a relay (the Audit's M3 on #569).
+  const taskPrompt = `${identityHeader}${guideBlock}${memoryBlock}\n\n${firstBlock}${launchPrompt(opts.sender, prompt)}`;
 
   // Build the CLI command through the provider so non-claude CLIs (codex,
   // gemini, grok, opencode, pi) get their own syntax instead of claude flags,
@@ -529,6 +536,7 @@ async function spawnAgentSessionInSlot(
   // session that would otherwise flip this new task's status.
   agent.currentSessionId = undefined;
   agent.lastActivity = new Date().toISOString();
+  if (first.spent) spendFirstTask(agent, first.took);
   saveAgents();
 
   armTaskStartWatch(agent, ptyId, taskPrompt, opts.sender);
