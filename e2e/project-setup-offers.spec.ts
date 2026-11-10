@@ -90,7 +90,8 @@ for (const newInterface of [false, true]) {
       expect(ci).toMatchObject({ success: true, branch: 'chore/ci' });
       expect(git(project, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('main');
       expect(git(project, 'status', '--porcelain', '--untracked-files=no')).toBe('');
-      expect(git(project, 'show', 'chore/ci:.github/workflows/ci.yml')).toBe(offer.ci.content);
+      // The helper trims what git prints, the file's last newline with it.
+      expect(git(project, 'show', 'chore/ci:.github/workflows/ci.yml')).toBe(offer.ci.content?.trimEnd());
       expect(git(project, 'for-each-ref', '--format=%(upstream)', 'refs/heads/chore/ci')).toBe('');
       // 4.
       const team = await api('setTeamPermissionMode', project, 'bypass');
