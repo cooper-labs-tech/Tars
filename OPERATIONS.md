@@ -1738,7 +1738,9 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude Code's
   own dialog. What each tick carries is a view (each field at most 2,000 characters, 32 fields, `cut` naming the
   rest); the window asks for the question whole (`agent:permissionQuestion`) and its allow names the fingerprint it
-  read: `success: false` when the agent asked about another call meanwhile. Proven with real claude by
+  read. A refused answer says why: `{ success: false, code, error }`, `code` `another-question` (the agent asked about
+  another call meanwhile), `read-first` (an allow naming no fingerprint: every allow names one since #588's audit),
+  `withheld`, `no-question` (gone) or `not-a-decision`. Proven with real claude by
   `E2E_LIVE=1 npx playwright test e2e/approve-everywhere.live.spec.ts` (a Write of 8,692 characters, shown whole and
   allowed, the file written byte for byte, no dialog); its negative witness runs #582's mod
   (`E2E_STATE_MOD_DIR=<folder holding its tars-state>`), which withholds the content: the question never reaches Tars.

@@ -264,13 +264,17 @@ Until 2.0.7 a file tool came by its path alone, and a field past 2,000 character
 the question withheld (the Audit's M1 on #538): the window could only refuse them, or open the terminal. The window
 shows a view of each question on every tick (each field at most 2,000 characters, 32 fields, `cut` naming the rest),
 asks Tars for the question whole (`agent:permissionQuestion`) before it offers allow, and names the fingerprint it read
-when it allows: an answer naming another question's changes nothing, so an allow never lands on a call asked after the
-one read, and a question whose view is cut takes no allow without it. What is still withheld (a file tool without its
+when it allows. Tars takes no allow that names none (`read-first`; the Audit's M1 on #588: until then a question shown
+whole took one, so a call asked between the read and the click was allowed unread), and an answer naming another
+question's changes nothing (`another-question`): an allow never lands on a call asked after the one read. A deny or an
+ask may come without one. A refusal says why, so the window says what happened rather than a question gone. What is still withheld (a file tool without its
 content, whatever the request says; a field past the bound; a field with no JSON) the window may refuse or hand back,
 never allow, and the mod takes no allow for it either. Such a question is held only for an agent in bypass, autonomous,
 whose nights this is for, and refused at the owner's delay; any other agent's goes straight to Claude Code's own
 dialog, where its owner chose to be asked. An agent reads the view of a teammate's question (`list_agents`,
-`get_agent`), masked, never its whole content. Every decision goes to
+`get_agent`, and the answer of `update_agent`, which answered it unmasked until the Audit's L1 on #588), masked, never
+its whole content. The masking (`utils/redact-secrets.ts`) takes a private key's block whole since then, from its BEGIN
+to its END or to the end of a view that cut it: a key file being written fits in 2,000 characters, and was read whole. Every decision goes to
 `~/.tars/logs/permissions.log`, masked, which any agent can write, being the same user: a record for the owner, not
 evidence against a hostile agent.
 
