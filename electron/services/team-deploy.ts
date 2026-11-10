@@ -218,8 +218,10 @@ export async function deployTeam(params: TeamDeployParams, deps: TeamDeployDeps)
     }
     // Started in the same order, the orchestrator after its whole team: the launch types its first task.
     const notStarted: MemberProblem[] = [];
-    for (const { member, id } of made) {
+    for (const [i, { member, id }] of made.entries()) {
       if (!params.startOnDeploy) continue;
+      // The order Tars launches them in, which is what it holds to: each CLI then starts when its shell is ready.
+      console.log(`[team-deploy] ${projectPath}: starting ${deployedName(member.name, projectPath)}, ${i + 1} of ${made.length}`);
       try {
         const started = await deps.start(id, '', { model: member.model, provider: member.provider, localModel: member.localModel });
         const answer = started as { success?: unknown; error?: unknown } | undefined;

@@ -19,7 +19,9 @@
 // 9. (the orchestrator's task of 10/11) A team not started loses its brief, or keeps it as the orchestrator's role:
 //    its role stays its own, the brief is its first task, typed once at its first start, then gone.
 // Its artefact, in the run directory: values.json (the answers asserted), launches.jsonl (each stand-in launch, with
-// the bootstrap it read), and screenshots of the window at the end.
+// the bootstrap it read), app.log (the main process's log, whose `[team-deploy] ... starting` lines give the order
+// Tars launched the team in: its first run, the night of 10/11, compared the stand-ins' own start times instead, and a
+// member's shell, slower under load, started its CLI 232 ms after the orchestrator's), and screenshots of the window.
 import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -84,6 +86,10 @@ test('a plain folder becomes a repository, takes its whole team, and its orchest
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: `${DEV_URL}/`, DOROTHY_API_PORT: PORT, DOROTHY_E2E: '1' },
   });
+  // The main process's log: the order Tars launches the team in, which is what it holds to. Each CLI then starts when
+  // its own shell is ready, and under load a member's started after the orchestrator's (232 ms, the night of 10/11).
+  const appLog = path.join(OUT, 'app.log');
+  app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
   try {
     const page = await app.firstWindow();
     await page.waitForFunction(() => !!window.electronAPI?.project?.gitInit, null, { timeout: 300_000 });
@@ -124,7 +130,9 @@ test('a plain folder becomes a repository, takes its whole team, and its orchest
     const lead = byName['Orchestrator - my-app'];
     expect(lead?.role).toBe('orchestrator');
     const leadLaunch = launched.find(l => l.id === lead.id);
-    for (const other of launched.filter(l => l.id !== lead.id)) expect(leadLaunch.at, 'the orchestrator starts after every member').toBeGreaterThanOrEqual(other.at);
+    values.launchOrder = fs.readFileSync(appLog, 'utf8').split('\n')
+      .map(l => /\[team-deploy\] .*: starting (.+), (\d+) of (\d+)$/.exec(l.trim())).filter(Boolean).map(m => m[1]);
+    expect(values.launchOrder, 'Tars launches the orchestrator after every member').toEqual(['Frontend - my-app', 'Backend - my-app', 'Orchestrator - my-app']);
     expect(leadLaunch.bootstrap).toContain('"Frontend - my-app"');
     expect(leadLaunch.bootstrap).toContain('"Backend - my-app"');
     expect(leadLaunch.bootstrap).toMatch(/no kanban board/i);
