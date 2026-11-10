@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { permissionAskLine } from '../../src/lib/permission-ask';
+import { OTHER_SPACE_MARK, TAB_MARK, afterRefusedAllow, permissionAskLine, questionFields } from '../../src/lib/permission-ask';
 import type { AgentStatus } from '../../src/types/electron';
 
 /**
@@ -228,3 +228,48 @@ describe('why Claude Code asks', () => {
   });
 });
 
+
+/**
+ * The question whole, field by field (2.0.7, approve-everywhere; frame `Permission asked of Tars`, its rows `approve a
+ * file, shown whole`, `a cut view, and while it is read` and `the question changed`). Written before the code. How it
+ * can fail:
+ * 12. the fields come in no set order: the main one (command, file_path, notebook_path, url, query, pattern, path) is
+ *     not first, the rest not by name;
+ * 13. a value is cut, trimmed or joined: a blank line dropped, a break read as a space, a tab, another space or a
+ *     hidden character shown as nothing (what is allowed must be what was read);
+ * 14. a field sent as JSON is shown as one line, not indented, or one that does not parse is lost;
+ * 15. a long field gives no size above it, or a short one does;
+ * 16. an allow main refused is read as late when the question changed in between (another fingerprint), or as
+ *     changed when Tars holds none, or the same one.
+ */
+describe('the question whole, field by field', () => {
+  it('the main field first, then the others by name (12)', () => {
+    expect(questionFields({ content: 'x', file_path: 'src/a.ts', append: 'no' }, []).map(f => f.name)).toEqual(['file_path', 'append', 'content']);
+    expect(questionFields({ timeout: '120000', command: 'npm test', description: 'tests' }, []).map(f => f.name)).toEqual(['command', 'description', 'timeout']);
+  });
+
+  it('each value whole, every line, every mark (13)', () => {
+    const [f] = questionFields({ content: '\nfirst\r\n\tsecond x‮ \n' }, []);
+    expect(f.lines).toEqual(['', 'first', `${TAB_MARK}second${OTHER_SPACE_MARK}x�`, '', '']);
+  });
+
+  it('a JSON field indented, one that does not parse as it came (14)', () => {
+    const [edits] = questionFields({ edits: '[{"old_string":"a","new_string":"b"}]' }, ['edits']);
+    expect(edits.lines).toEqual(['[', '  {', '    "old_string": "a",', '    "new_string": "b"', '  }', ']']);
+    const [odd] = questionFields({ edits: '[not json' }, ['edits']);
+    expect(odd.lines).toEqual(['[not json']);
+  });
+
+  it('a long field says its size, a short one nothing (15)', () => {
+    const content = Array.from({ length: 400 }, (_, i) => `line ${i}`.padEnd(20, '.')).join('\n');
+    const [f] = questionFields({ content }, []);
+    expect(f.size).toBe(`${content.length.toLocaleString('en-US')} characters, 400 lines`);
+    expect(questionFields({ command: 'npm test' }, [])[0].size).toBe('');
+  });
+
+  it('a refused allow: changed when Tars holds another question, late otherwise (16)', () => {
+    expect(afterRefusedAllow('fp1', { fingerprint: 'fp2' })).toBe('changed');
+    expect(afterRefusedAllow('fp1', { fingerprint: 'fp1' })).toBe('late');
+    expect(afterRefusedAllow('fp1', null)).toBe('late');
+  });
+});
