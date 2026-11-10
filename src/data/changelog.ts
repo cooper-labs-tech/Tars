@@ -11,6 +11,9 @@ export const CHANGELOG: Release[] = [
     version: '2.0.7',
     date: '2026-11-10',
     updates: [
+      'Every project gets the owner\'s workflow out of the box: its orchestrator delivers each change through the gate loop, a branch and a pull request per piece that the worker never merges, then QA\'s verdict, the Audit\'s, CI green, and only then the merge, by the orchestrator or by you if you said so. The built-in Full Project Team\'s QA and Audit are told they are those gates, verdict first in the project\'s reports folder, and its developers their area and that they never merge.',
+      'Agents of any project make a worktree per task with a tool of Tars\'s (worktree_new), from the default branch as fetched, and remove it once merged (worktree_remove, worktree_prune): never forced, never past 20 worktrees or under 10 GB free, so merged ones no longer pile up.',
+      'An orchestrator hands work to several agents at once for real: it hands each task without waiting for its answer, then follows them, since Claude Code runs the calls of one message one after another. And it marks the task it hands QA for a release gate, whose heavy runs then go first.',
       'An orchestrator now only orchestrates, out of the box: it hands development, research, investigation, reading code or logs, QA and audit to its project\'s agents, and creates the agent a piece of work needs when its project has none. Until now it was told that reading the code to answer a question was its own work, and asked why something was broken, it read the code itself and delegated nothing. On Claude Code and the providers that run it, and on Qwen Code, it can no longer search the code or the web itself; it still reads its agents\' reports and runs git and gh.',
     ],
   },

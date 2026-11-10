@@ -196,6 +196,49 @@ describe('the rules an orchestrator is actually handed', () => {
     expect(read()).not.toContain('agent manager only');
   });
 
+  it('carries the gate loop before the tools, in its order (W1 of the fresh-install report)', () => {
+    const text = read();
+    const steps = ['own feature branch', 'delivers a pull request', 'QA gates it', 'The Audit gates it', 'gh pr checks', 'Only then is the PR merged', 'Report'];
+    const at = steps.map(s => text.indexOf(s));
+    for (const [i, s] of steps.entries()) expect(at[i], s).toBeGreaterThan(-1);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(at[at.length - 1]).toBeLessThan(text.indexOf('## Available MCP Tools'));
+    expect(text).toContain('Never merge over a red gate');
+  });
+
+  it('hands parallel work with a short timeoutSeconds, never as waiting calls in one message (the Audit\'s L5 on #579)', () => {
+    // Measured with claude 2.1.321: the tool calls of one message run one after another
+    // (reports/workflow-runs/parallel): two waiting delegations took 40 s of work in series.
+    const text = read();
+    expect(text).not.toContain('all in one message');
+    expect(text).toContain('timeoutSeconds: 1');
+  });
+
+  it('every agent\'s instructions give the loop with its exceptions: the user\'s say, no git, no remote (the Audit\'s L5 on #585)', () => {
+    const text = fs.readFileSync(getAgentInstructionsPath(), 'utf-8');
+    const delivery = text.slice(text.indexOf('## Delivery'), text.indexOf('## Core Principles'));
+    expect(delivery).toContain('unless the user asks otherwise');
+    expect(delivery).toMatch(/not a git repository/);
+    expect(delivery).toMatch(/no remote/);
+  });
+
+  it('every agent\'s instructions tell an orchestrator it writes no files, and keep its memory with memory_write (QA\'s L1 on #579)', () => {
+    // Write and Edit are denied to it (providers/cli-provider.ts orchestratorToolFlags): "write files with the Write
+    // tool, never through the shell" left it no way, and its memory none.
+    const text = fs.readFileSync(getAgentInstructionsPath(), 'utf-8');
+    expect(text).toMatch(/An orchestrator writes no files/);
+    expect(text).toContain('memory_write');
+    expect(text).toMatch(/An orchestrator writes no file at all/);
+  });
+
+  it('follows parallel work with the reading tools, which run together (QA\'s gate of #579)', () => {
+    // Claude Code 2.1.321 runs an MCP call beside the others of a message only when its tool is read-only:
+    // wait_for_agent and task_status are (mcp-orchestrator, readOnly); delegate_task, which hands work, is not.
+    const text = read();
+    expect(text).toMatch(/`wait_for_agent` on each, then `task_status`.*Both only read/);
+    expect(text).toContain('timeoutSeconds: 1');
+  });
+
   it('hands work with delegate_task, never the deprecated start_agent (the Audit\'s I3 on #579)', () => {
     expect(read()).toContain('delegate_task');
     expect(read()).not.toContain('start_agent');
