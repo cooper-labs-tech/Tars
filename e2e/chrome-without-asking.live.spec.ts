@@ -158,8 +158,10 @@ function chromeCalls(project, sessionId) {
         const call = calls.get(part.tool_use_id);
         Object.assign(call, {
           answered: true, error: part.is_error === true, chars: text.length,
-          // A refusal says so (Claude Code's and the extension's words); a page not loaded yet ("No text content found") does not.
-          refused: /permission|denied|refused|not allowed|requires approval/i.test(text),
+          // A refusal is a call that failed saying so (Claude Code's and the extension's words); a page not loaded yet ("No
+          // text content found") does not. Never a page's own text: example.com's says "asking for permission", which the
+          // spec's third run (07:02Z) took for a refusal of a get_page_text that read it whole.
+          refused: part.is_error === true && /permission|denied|refused|not allowed|requires approval/i.test(text),
           ...(call.tool.endsWith('__navigate') ? { said: text.slice(0, 200) } : {}),
         });
       }
