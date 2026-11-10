@@ -5,7 +5,7 @@ import { AlertCircle, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { Button, Dropdown, Input, LoadingPanel, PanelCaption, Textarea, PageHeader } from '@/components/ui';
 import { DialogShell } from '@/components/ui';
-import { describeHermesFailure } from './hermes-error';
+import { describeHermesFailure, HERMES_ABSENT_TEXT, isHermesAbsent } from './hermes-error';
 
 /**
  * Hermes-backed board. The harness - task lifecycle, workers, runs - lives in
@@ -70,6 +70,8 @@ export default function HermesBoard({ subtitle }: { subtitle?: string } = {}) {
   const [error, setError] = useState<string | null>(null);
   const [errorDetail, setErrorDetail] = useState<string | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
+  // No Hermes set up at all: not a failure, said as such (frame `First run (2.0.7) · states`).
+  const [absent, setAbsent] = useState(false);
 
   const [newTaskOpen, setNewTaskOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -93,11 +95,13 @@ export default function HermesBoard({ subtitle }: { subtitle?: string } = {}) {
       const r = await window.electronAPI?.hermes?.kanbanBoard();
       if (!r) { setError('Electron API unavailable'); return; }
       if (!r.success) {
+        setAbsent(isHermesAbsent(r.error || ''));
         setError(r.error || 'Could not read the Hermes board');
         setNeedsSignIn(!!r.needsSignIn);
         return;
       }
       setNeedsSignIn(false);
+      setAbsent(false);
       setBoard((r.board ?? {}) as BoardPayload);
     } catch (err) {
       // The failure this fixes: a transport error rejects the IPC call instead
@@ -109,6 +113,7 @@ export default function HermesBoard({ subtitle }: { subtitle?: string } = {}) {
       try { baseUrl = (await window.electronAPI?.hermes?.getConnection())?.baseUrl || null; } catch { /* best effort */ }
       const { message, detail: d } = describeHermesFailure(raw, baseUrl);
       setNeedsSignIn(false);
+      setAbsent(false);
       setError(message);
       setErrorDetail(d);
     } finally {
@@ -238,6 +243,27 @@ export default function HermesBoard({ subtitle }: { subtitle?: string } = {}) {
 
   if (loading && !board) {
     return <div className="flex flex-col h-full">{header}<LoadingPanel what="Reading the Hermes board" /></div>;
+  }
+
+  if (error && absent) {
+    return (
+      <div className="flex flex-col h-full">
+        {header}
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div data-hermes-absent className="w-full max-w-[660px] flex flex-col gap-2 px-3.5 py-3 bg-secondary">
+            <p className="text-[12.5px] leading-[1.45] text-foreground">{HERMES_ABSENT_TEXT}</p>
+            <div className="flex items-center gap-1.5">
+              <Link
+                href="/settings?section=hermes"
+                className="inline-flex items-center justify-center h-[26px] px-2.5 text-xs font-medium border border-primary bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                Open Hermes settings
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (error) {

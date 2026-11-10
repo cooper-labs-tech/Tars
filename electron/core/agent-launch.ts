@@ -40,6 +40,8 @@ export interface AgentLaunchOptions {
   message?: boolean;
   /** Who sent that message: a retype of the launch's task types it under them, never as Tars (the Audit's L2 on #569). */
   sender?: MessageSender;
+  /** The prompt holds the agent's first task (core/first-task.ts): typed, never kept as its saved prompt, which is its role. */
+  firstTask?: boolean;
 }
 
 export type AgentLaunchResult =

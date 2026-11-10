@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import type { AgentProvider } from '@/types/electron';
 import { PROVIDER_REGISTRY } from '@/lib/providers';
 import { ProviderIconRenderer } from '@/components/ui/ProviderBadge';
-import { Dropdown, PanelCaption } from '@/components/ui';
+import { Button, Dropdown, PanelCaption, StatusSquare } from '@/components/ui';
+import { ClaudeAccountLoginModal } from '@/components/Settings/ClaudeAccountLoginModal';
+import { useClaudeAccounts } from '@/hooks/useClaudeAccounts';
 import type { DropdownOption } from '@/components/ui';
 
 interface ProviderModel {
@@ -80,6 +82,10 @@ export function ProviderAndModel({
   installedProviders?: Record<string, boolean>;
 }) {
   const [dynamicModels, setDynamicModels] = useState<ProviderModel[] | null>(null);
+  // Account 1's `claude auth status`: an installed Claude Code that is signed out is not ready (QA's B3).
+  const { view } = useClaudeAccounts();
+  const claudeSignedOut = view?.accounts.find(a => a.id === 'default')?.signedIn === false;
+  const [signingIn, setSigningIn] = useState(false);
 
   // Switching provider twice quickly could land the first catalogue after the
   // second, leaving the model list describing a provider the user had already
@@ -159,8 +165,10 @@ export function ProviderAndModel({
                 <ProviderIconRenderer icon={icon} className="w-4 h-4 text-muted-foreground" />
                 <span className="text-xs font-medium text-foreground truncate">{label}</span>
               </div>
-              <span className="font-mono text-[10px] text-muted-foreground truncate">
-                {installed ? (
+              <span data-provider-state={id} className="font-mono text-[10px] text-muted-foreground truncate">
+                {installed && id === 'claude' && claudeSignedOut ? (
+                  <><span className="text-status-waiting">signed out</span>{' · cli'}</>
+                ) : installed ? (
                   <><span className="text-status-running">ready</span>{` · ${requiresCli ? 'cli' : 'api'}`}</>
                 ) : requiresCli ? 'not installed' : 'no api key'}
               </span>
@@ -168,6 +176,16 @@ export function ProviderAndModel({
           );
         })}
       </div>
+
+      {/* Claude Code signed out, as `claude auth status` says it (frame `First run (2.0.7) · states`, its New agent row). */}
+      {claudeSignedOut && installedProviders?.claude === true && (
+        <div data-claude-signed-out className="flex items-center gap-2">
+          <StatusSquare tone="waiting" />
+          <span className="flex-1 min-w-0 text-[11px] text-text-secondary">Claude Code is signed out: an agent on it cannot work until it is signed in.</span>
+          <Button size="sm" className="font-mono lowercase" onClick={() => setSigningIn(true)}>sign in</Button>
+        </div>
+      )}
+      {signingIn && <ClaudeAccountLoginModal accountId="default" onClose={() => setSigningIn(false)} />}
 
       {others.length > 0 && (
         <div className="flex items-center gap-2">

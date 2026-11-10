@@ -353,6 +353,11 @@ export interface AgentStatus {
   model?: string;              // Model name (e.g. 'sonnet', 'opus', 'haiku'), persisted across restarts
   localModel?: string;        // Tasmania model name when provider is 'local'
   savedPrompt?: string;       // Saved task/prompt for re-launching the agent
+  /**
+   * A task kept for the agent's next fresh start (2.0.7, core/first-task.ts): the window's agent.setFirstTask, or a
+   * team's brief for an orchestrator not started on deploy. Typed once, as that start's prompt, never as its role.
+   */
+  firstTask?: { text: string; setAt: string };
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
@@ -942,6 +947,8 @@ export interface ClaudeAccountState extends ClaudeAccount {
   agentIds: string[];
   /** A sentence for the page: why the last sign-in or status check did not work. */
   error: string | null;
+  /** `cli-missing`: there is no claude to ask (not installed, or not where Settings says), so install Claude Code first. */
+  code: 'cli-missing' | null;
 }
 
 export interface ClaudeAccountsView {

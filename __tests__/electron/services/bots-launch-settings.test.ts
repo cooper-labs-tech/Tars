@@ -596,7 +596,8 @@ describe('how Tars works, on the launches the bots make (the Audit\'s M1 on #448
     agent({ id: 'agent-oc', name: 'Opencode', provider: 'opencode', model: undefined });
     const typed = await launch('start opencode Rebase onto main');
     expect(count(typed), typed).toBe(1);
-    expect(typed).toContain('assign_task');
+    // A worker's section (2.0.7: its kanban line follows Hermes, absent here, so a line every worker gets).
+    expect(typed).toContain('send_message to "orchestrator"');
     expect(typed).not.toContain('delegate_task');
     expect(typed).toContain('Rebase onto main');
   });
