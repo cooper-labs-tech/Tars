@@ -26,6 +26,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
@@ -138,11 +139,14 @@ test('a plain folder becomes a repository, takes its whole team, and its orchest
     expect(leadLaunch.bootstrap).toMatch(/no kanban board/i);
     expect(leadLaunch.bootstrap).not.toContain('Hermes board');
 
-    // 6. One member that cannot be made: none of this deploy is left.
+    // 6. One member that cannot be made: none of this deploy is left. Its worktree is refused by git itself: a branch
+    // `review` leaves no room for `review/one`. (A member on a branch another worktree holds shares that worktree, as
+    // agent:create always did, so the spec's first run, the night of 10/11, saw that deploy succeed.)
+    execFileSync('git', ['-C', project, 'branch', 'review']);
     const before = (await agents()).map(a => a.id).sort();
     values.partial = await call('teams.deploy', [{ projectPath: project, startOnDeploy: false, members: [
       { name: 'Docs', character: 'robot', provider: 'claude', permissionMode: 'auto', skills: [] },
-      { name: 'Reviewer', character: 'robot', provider: 'claude', permissionMode: 'auto', skills: [], worktreeBranch: 'feat/frontend' },
+      { name: 'Reviewer', character: 'robot', provider: 'claude', permissionMode: 'auto', skills: [], worktreeBranch: 'review/one' },
     ] }]);
     expect(values.partial).toMatchObject({ success: false, code: 'failed', failed: [{ member: 'Reviewer', reason: expect.stringMatching(/worktree/) }] });
     expect((await agents()).map(a => a.id).sort()).toEqual(before);
