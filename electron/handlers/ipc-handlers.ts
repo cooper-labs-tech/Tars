@@ -64,7 +64,7 @@ import { usageByProvider as ledgerUsageByProvider } from '../services/usage-ledg
 import { tasksReport } from '../services/task-watch';
 import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
-import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
+import { consumeResumeSessionId, launchResumes, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
@@ -89,7 +89,7 @@ import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretFie
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
-import { setFirstTask, withFirstTask } from '../core/first-task';
+import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -946,15 +946,18 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
    * session over it and lose the conversation.
    */
   const startAgentCli: AgentLauncher = async (id, prompt, options) => {
-    // The agent's first task, kept for this start (core/first-task.ts): taken by a fresh start, cleared once it launched.
-    const first = withFirstTask(agents.get(id), prompt ?? '', options);
+    // The agent's first task (core/first-task.ts): typed by a start that opens a new conversation, read from the one
+    // this launch resolves (a wake gives no option and continues it all the same), and spent once it launched.
+    const agent = agents.get(id);
+    const resumes = !!agent && launchResumes(agent, options?.resumeSessionId);
+    const first = withFirstTask(agent, prompt ?? '', { message: options?.message, resumes });
     const launch = launchBegins(id, { withTask: !!first.prompt.trim() });
     try {
       const result = await launchInTerminal(id, first.prompt, first.took ? { ...options, firstTask: true } : options);
       if (!result.success) launchAbandoned(id, launch);
-      else if (first.took) {
-        const agent = agents.get(id);
-        if (agent) { agent.firstTask = undefined; saveAgents(); }
+      else if (first.spent) {
+        spendFirstTask(agents.get(id), first.took);
+        saveAgents();
       }
       return result;
     } catch (err) {
