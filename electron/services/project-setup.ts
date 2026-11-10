@@ -143,7 +143,11 @@ function claudeMd(projectPath: string, team: readonly TeamMember[], branch: stri
     '## The team',
     '',
     ...(members.length
-      ? members.map(a => `- **${a.name ?? 'An agent'}**${a.role === 'orchestrator' ? ' (orchestrator)' : ''}: ${area(a.savedPrompt) || (a.role === 'orchestrator' ? 'splits the work, delegates it and merges.' : 'its area is not written yet.')}`)
+      ? members.map(a => {
+        // THE project's orchestrator, by its role (__tests__/electron/core/role-sites.test.ts: a team listing).
+        const lead = a.role === 'orchestrator';
+        return `- **${a.name ?? 'An agent'}**${lead ? ' (orchestrator)' : ''}: ${area(a.savedPrompt) || (lead ? 'splits the work, delegates it and merges.' : 'its area is not written yet.')}`;
+      })
       : ['No agent yet: each one the project gets owns an area.']),
     '',
     'Each agent stays in its area: a change elsewhere is asked of its owner through the orchestrator.',

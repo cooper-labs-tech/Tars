@@ -92,6 +92,7 @@ const SITES: Site[] = [
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'if (!… || !caller.projectPath) {', is: 'powers', why: 'who reads the owner\'s words of its project (2.0.6)' },
   { file: 'electron/services/api-routes/mcp-routes.ts', line: 'if (ORCHESTRATOR_ONLY_MCP.includes(name) && !…) {', is: 'powers', why: 'the door to a shared server only the orchestrator\'s powers may call (x), a chat\'s runner included (QA-PR541 F1)' },
   { file: 'electron/services/api-routes/hooks-routes.ts', line: "if (levelOf(agent) === 'bypass' && !…) {", is: 'powers', why: 'an AskUserQuestion a bypass worker is refused, to ask its orchestrator; one with the powers (a chat\'s runner too) asks the user (QA-PR538 F1)' },
+  { file: 'electron/services/project-setup.ts', line: 'const lead = …;', is: 'team-list', why: 'the CLAUDE.md a project is offered names its orchestrator in the team (2.0.7, W7)' },
   { file: 'electron/core/agent-update.ts', line: 'const demoted = assignRole(agent, role ?? (… ? \'orchestrator\' : \'worker\'), agents.values());', is: 'identity', why: 'agent:update and update_agent keep the role, and one orchestrator per project' },
   { file: 'electron/core/agent-role.ts', line: 'if (… || params.role === \'worker\') return params.role;', is: 'identity', why: 'requestedRole: the role a create or an update names' },
   { file: 'electron/core/agent-role.ts', line: 'agent.orchestratorMode = …;', is: 'identity', why: 'the toggle\'s old field follows the role' },
