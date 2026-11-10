@@ -208,7 +208,8 @@ for (const newInterface of [false, true]) {
       keep({ long });
       expect.soft(long?.permissionAsk?.subject).toBe('Bash (timeout 600000 ms)');
       await stepShot(page, newInterface ? 'permission-withheld-new-interface' : 'permission-withheld');
-      expect(await answer('allow'), 'the window allowed a command it never showed whole').toEqual({ success: false });
+      // Refused, and since 2.0.7 (#588) said why: the question was withheld, Tars never had it whole.
+      expect(await answer('allow'), 'the window allowed a command it never showed whole').toMatchObject({ success: false, code: 'withheld' });
       await expect.poll(() => answers().length, { timeout: 90_000 }).toBe(3);
       const longLate = answers()[2];
       keep({ longLate });

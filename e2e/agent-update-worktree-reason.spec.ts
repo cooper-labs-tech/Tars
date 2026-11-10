@@ -190,7 +190,12 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     await modal.getByRole('button', { name: 'Project', exact: true }).click();
     await page.getByRole('option').filter({ hasText: 'projects/repo' }).first().click();
     await modal.getByRole('button', { name: 'Deploy 1 agent', exact: true }).click();
-    const listed = modal.getByText(/^Builder: /);
+    // Since 2.0.7 (#584) the deploy asks Claude Code first, signed out in this sandbox: deploy anyway, as a user who
+    // signs in later would, and the worktree git cannot make is what answers.
+    await modal.getByRole('button', { name: 'deploy anyway', exact: true }).click({ timeout: 30_000 });
+    // The deploy answers a member it could not make as #584 words it (frame `First run (2.0.7) · states`, its deploy
+    // answers): "Builder could not be made: <git's reason>".
+    const listed = modal.getByText(/^Builder could not be made: /);
     await expect(listed).toBeVisible({ timeout: 30_000 });
     values.teamLine = await listed.innerText();
     // 10. New agent, on the same branch: the dialog says why, and keeps what was chosen.
@@ -242,7 +247,7 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     expect.soft(values.createNotGit, '7, 8. not a git repository').toEqual({ error: expect.stringMatching(/The worktree could not be made: not a git repository/) });
     for (const made of [values.createCheckedOut, values.createNotGit] as Made[]) expect.soft(made.error ?? '').not.toMatch(notGitsReason);
     expect.soft(values.createdByRefusals, '7. a refused create made an agent').toBe(0);
-    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(new RegExp(`^Builder: The worktree could not be made: ${CHECKED_OUT} `));
+    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(new RegExp(`^Builder could not be made: The worktree could not be made: ${CHECKED_OUT} `));
     expect.soft(values.teamLine).not.toMatch(notGitsReason);
     expect(values.createTaken, '7. a branch git takes').toMatchObject({ worktreePath: path.join(repo, '.worktrees', 'feat', 'new') });
     expect(fs.existsSync(path.join(repo, '.worktrees', 'feat', 'new', 'README.md'))).toBe(true);
