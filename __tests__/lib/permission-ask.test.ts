@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OTHER_SPACE_MARK, TAB_MARK, afterRefusedAllow, permissionAskLine, questionFields } from '../../src/lib/permission-ask';
+import { OTHER_SPACE_MARK, TAB_MARK, permissionAskLine, questionFields, refusalStep } from '../../src/lib/permission-ask';
 import type { AgentStatus } from '../../src/types/electron';
 
 /**
@@ -239,8 +239,10 @@ describe('why Claude Code asks', () => {
  *     hidden character shown as nothing (what is allowed must be what was read);
  * 14. a field sent as JSON is shown as one line, not indented, or one that does not parse is lost;
  * 15. a long field gives no size above it, or a short one does;
- * 16. an allow main refused is read as late when the question changed in between (another fingerprint), or as
- *     changed when Tars holds none, or the same one.
+ * 16. a refused answer is read without its code (#588 after its Audit: no-question, another-question, read-first,
+ *     withheld, not-a-decision): another question read as late, a withheld one still offered allow, a read-first not
+ *     read again, or main's sentence replaced by another; an answer with no code (an older main, a failed call) read
+ *     as anything but late.
  */
 describe('the question whole, field by field', () => {
   it('the main field first, then the others by name (12)', () => {
@@ -267,9 +269,13 @@ describe('the question whole, field by field', () => {
     expect(questionFields({ command: 'npm test' }, [])[0].size).toBe('');
   });
 
-  it('a refused allow: changed when Tars holds another question, late otherwise (16)', () => {
-    expect(afterRefusedAllow('fp1', { fingerprint: 'fp2' })).toBe('changed');
-    expect(afterRefusedAllow('fp1', { fingerprint: 'fp1' })).toBe('late');
-    expect(afterRefusedAllow('fp1', null)).toBe('late');
+  it('a refused answer: what the card does for each code, in main\'s words (16)', () => {
+    expect(refusalStep({ code: 'another-question', error: 'E1' })).toEqual({ step: 'changed', say: 'E1', tone: 'waiting' });
+    expect(refusalStep({ code: 'read-first', error: 'E2' })).toEqual({ step: 'read', say: 'E2', tone: 'waiting' });
+    expect(refusalStep({ code: 'withheld', error: 'E3' })).toEqual({ step: 'no-allow', say: 'E3', tone: 'idle' });
+    expect(refusalStep({ code: 'not-a-decision', error: 'E4' })).toEqual({ step: 'stay', say: 'E4', tone: 'error' });
+    expect(refusalStep({ code: 'no-question', error: 'E5' })).toEqual({ step: 'late' });
+    expect(refusalStep({})).toEqual({ step: 'late' });
+    expect(refusalStep(undefined)).toEqual({ step: 'late' });
   });
 });

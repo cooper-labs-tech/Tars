@@ -58,10 +58,12 @@ vi.mock('react', async (importOriginal) => ({
  *     older main) is allowed on what it shows;
  * 13. a cut view is allowed from a panel's line that fits, or from the window before the whole question is read; once
  *     read, a field is still shown cut, or the allow names the view's fingerprint and not the whole question's;
- * 14. an allow main refused because the question changed in between reads late, or hides the new question, or
- *     allows it by itself;
+ * 14. an allow main refused because the question changed in between (`another-question`) reads late, or hides the
+ *     new question, or allows it by itself, or says it in other words than main's;
  * 15. ask in terminal stays a first answer: in the window it is not the ghost after deny;
- * 16. the window shows a value without its field's name, or a long one without its size above it.
+ * 16. the window shows a value without its field's name, or a long one without its size above it;
+ * 17. a refusal's code is not followed (#588 after its Audit): `read-first` not read again before allow, `withheld`
+ *     still offered allow, `not-a-decision` not said, each in other words than main's sentence.
  */
 
 type Tick = (items: AgentTickItem[]) => void;
@@ -72,6 +74,11 @@ const ASK = {
   subject: 'npm run build && npm test', fields: { command: 'npm run build && npm test' }, fingerprint: 'fp1',
 };
 const LONG = `rm -rf build && ${'npm run build && '.repeat(12)}npm test`;
+/** Main's sentences for its refusals (electron/services/permission-asks.ts). */
+const ANOTHER = 'The agent asked about another call meanwhile: read the new question before you answer it';
+const READ_FIRST = 'An allow names the question it was given for: open the question whole, then allow it';
+const WITHHELD = 'Tars could not receive this question whole, so it cannot be allowed here: refuse it, or answer it in the terminal';
+const NOT_A_DECISION = 'An answer is allow, deny or ask';
 
 function agent(over: Partial<AgentStatus> = {}): AgentStatus {
   return {
@@ -391,17 +398,52 @@ describe('the line answers the question Tars holds', () => {
       const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
       question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, tool: 'Bash', subject: 'npm publish', fields: { command: 'npm publish' }, fingerprint: 'fp2' } }));
       button(view.result, 'allow').props.onClick!();
-      reply.resolve({ success: false });
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'another-question', error: ANOTHER });
       await settle();
       view.rerender();
       const text = textOf(view.result as never);
-      expect(text).toContain('The agent asked about another call: this is the new one. Read it, then answer.');
+      expect(text).toContain(ANOTHER);
       expect(text).toContain('npm publish');
       expect(buttons(view.result).map(b => [b.text, !!b.props.disabled])).toEqual([['allow', false], ['deny', false], ['ask in terminal', false]]);
       expect(answer).toHaveBeenCalledTimes(1);
       reply = deferred<{ success: boolean }>();
       button(view.result, 'allow').props.onClick!();
       expect(answer).toHaveBeenLastCalledWith('a1', 'allow', undefined, 'fp2');
+    });
+
+    it('read-first: said, the question read whole again, allow once it is shown (17)', async () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      button(view.result, 'allow').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'read-first', error: READ_FIRST });
+      await settle();
+      view.rerender();
+      await settle();
+      view.rerender();
+      expect(textOf(view.result as never)).toContain(READ_FIRST);
+      expect(question).toHaveBeenCalledWith('a1');
+      expect(textOf(view.result as never)).toContain('const line399 = 399;');
+      expect(buttons(view.result).map(b => [b.text, !!b.props.disabled])).toEqual([['allow', false], ['deny', false], ['ask in terminal', false]]);
+      expect(answer).toHaveBeenCalledTimes(1);
+    });
+
+    it('withheld: said, allow gone, deny and ask in terminal kept; not-a-decision: said in the error tone, the answers kept (17)', async () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      button(view.result, 'allow').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'withheld', error: WITHHELD });
+      await settle();
+      view.rerender();
+      expect(textOf(view.result as never)).toContain(WITHHELD);
+      expect(buttons(view.result).map(b => b.text)).toEqual(['deny', 'ask in terminal']);
+
+      reply = deferred<{ success: boolean }>();
+      const odd = mount(() => PermissionAskNotice({ agent: asking({ id: 'a2' }), layout: 'window' }));
+      button(odd.result, 'deny').props.onClick!();
+      button(odd.result, 'deny').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'not-a-decision', error: NOT_A_DECISION });
+      await settle();
+      odd.rerender();
+      expect(textOf(odd.result as never)).toContain(NOT_A_DECISION);
+      expect(buttons(odd.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
     });
 
     it('in the window, ask in terminal is the ghost after deny (15)', () => {
