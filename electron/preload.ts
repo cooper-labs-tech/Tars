@@ -468,6 +468,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('secrets:set', field, value),
   },
 
+  // The owner's switch, Claude in Chrome acts without asking (2.0.7): its own channel, kept in ~/.tars-private.
+  chromeWithoutAsking: {
+    get: () =>
+      ipcRenderer.invoke('chromeWithoutAsking:get'),
+    set: (on: boolean) =>
+      ipcRenderer.invoke('chromeWithoutAsking:set', on),
+  },
+
   appSettings: {
     get: () =>
       ipcRenderer.invoke('app:getSettings'),

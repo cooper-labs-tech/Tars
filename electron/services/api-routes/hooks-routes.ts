@@ -14,6 +14,7 @@ import { restPendingOf } from '../../core/agent-asleep';
 import { modRunsSession, noteModBeat, noteModSession } from '../state-mod';
 import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs, questionFingerprint, subjectOf } from '../permission-asks';
 import { levelOf } from '../../core/permission-ceiling';
+import { chromeActsWithoutAsking, isClaudeInChromeTool } from '../chrome-without-asking';
 import { hasOrchestratorPowers } from '../../core/agent-role';
 import { slotTurnEnded } from '../heavy-slot-runtime';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
@@ -33,26 +34,41 @@ function setAsideForMod(agentId: string, sessionId: string | undefined, body: { 
   return typeof body.hook === 'string' && MOD_HOOKS.has(body.hook) && modRunsSession(agentId, sessionId);
 }
 
-/** The mod's cap on one asked field: a call whose field is longer is left to the terminal's dialog, which shows it whole. */
+/** The mod's caps (mods/tars-state, askedAbout): one field's text, a field's name, the fields of one call. */
 const ASKED_FIELD_CAP = 2000;
+const ASKED_KEY_CAP = 64;
+const ASKED_FIELDS_CAP = 16;
 
 /**
- * The fields a permission question is about, as the mod sent them: strings
- * only, kept whole. Null when one is past the mod's cap or there are more than
- * a call has, and the question then goes to the dialog: Tars shows and
- * decides only what it holds in full (the gate of #318, Medium 2).
+ * The fields a permission question is about, as the mod sent them, kept whole: each one text, a field that is not
+ * text as its JSON, named in `json_fields` (2.0.7). Null, and the question goes to the dialog, when anything is not
+ * as the mod sends it: a field that is not a string (dropped without a word until 2.0.7, so the window could allow a
+ * call whose other fields it never saw), one past the cap, a name past 64 characters (cut until 2.0.7, so the
+ * fingerprint was not the mod's), more than 16 fields, or a json field the question does not hold, or whose text is
+ * not JSON, or is a JSON string. Tars shows and decides only what it holds in full (the gate of #318, Medium 2).
  */
-function askedFields(input: unknown): Record<string, string> | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
+function askedFields(input: unknown, jsonFields: unknown): { fields: Record<string, string>; json: string[] } | null {
   const fields: Record<string, string> = {};
-  const entries = Object.entries(input as Record<string, unknown>);
-  if (entries.length > 16) return null;
-  for (const [key, value] of entries) {
-    if (typeof value !== 'string') continue;
-    if (value.length > ASKED_FIELD_CAP) return null;
-    fields[key.slice(0, 64)] = value;
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    const entries = Object.entries(input as Record<string, unknown>);
+    if (entries.length > ASKED_FIELDS_CAP) return null;
+    for (const [key, value] of entries) {
+      if (typeof value !== 'string' || value.length > ASKED_FIELD_CAP || key.length > ASKED_KEY_CAP) return null;
+      fields[key] = value;
+    }
   }
-  return fields;
+  if (jsonFields === undefined) return { fields, json: [] };
+  if (!Array.isArray(jsonFields)) return null;
+  const json = [...new Set(jsonFields)];
+  for (const key of json) {
+    if (typeof key !== 'string' || !Object.hasOwn(fields, key)) return null;
+    try {
+      if (typeof JSON.parse(fields[key]) === 'string') return null;
+    } catch {
+      return null;
+    }
+  }
+  return { fields, json: (json as string[]).sort() };
 }
 
 /**
@@ -676,9 +692,12 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     sendJson({ success: !!taskId, taskId });
   });
 
-  // POST /api/hooks/permission: the state mod's tool.check, when Claude Code
-  // would show its permission dialog (services/permission-asks.ts). Tars
-  // allows nothing by itself. A question is held until the window answers:
+  // POST /api/hooks/permission: the state mod's classic.PermissionRequest, when
+  // Claude Code would show its permission dialog (services/permission-asks.ts;
+  // its tool.check until 2.0.7, which also caught what the auto mode classifier
+  // was about to allow). Tars allows nothing by itself, but for Claude in
+  // Chrome's calls once the owner turned on chromeActsWithoutAsking
+  // (services/chrome-without-asking.ts). A question is held until the window answers:
   // allow or deny is then the decision, with no dialog. A question the window
   // cannot show whole (a file tool's, held by its path, or one the mod marks
   // withheld) is held for an agent in bypass only (the window may refuse it,
@@ -688,24 +707,27 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
   // `ask` hands it back to the dialog: for a session that is not the agent's
   // current one, nothing to name, or a question dropped.
   const FILE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
+  const CHROME_ALLOWED = 'Allowed by Tars: the owner lets Claude in Chrome act without asking.';
   const ASK_YOUR_ORCHESTRATOR = 'Nobody answers a question in your terminal while you work on your own, at night as well: '
     + 'ask your orchestrator with send_message, and go on with the rest meanwhile.';
   app.post('/api/hooks/permission', async (req, sendJson) => {
-    const { agent_id, tool, input, tool_use_id, reason, rule } = req.body as {
-      agent_id?: string; tool?: unknown; input?: unknown; tool_use_id?: unknown; reason?: unknown; rule?: unknown;
+    const { agent_id, tool, input, tool_use_id, reason, rule, json_fields } = req.body as {
+      agent_id?: string; tool?: unknown; input?: unknown; tool_use_id?: unknown; reason?: unknown; rule?: unknown; json_fields?: unknown;
     };
     const session_id = usableSessionId((req.body as { session_id?: string }).session_id);
     const agent = agent_id ? agents.get(agent_id) : undefined;
-    const fields = askedFields(input);
+    const asked = askedFields(input, json_fields);
     if (!agent || !session_id || agent.currentSessionId !== session_id || agent.status === 'stopped'
-      || typeof tool !== 'string' || !tool || typeof tool_use_id !== 'string' || !tool_use_id || !fields) {
+      || typeof tool !== 'string' || !tool || typeof tool_use_id !== 'string' || !tool_use_id || !asked) {
       sendJson({ decision: 'ask' });
       return;
     }
+    const { fields, json } = asked;
     const question = {
       tool: tool.slice(0, 200),
       toolUseId: tool_use_id.slice(0, 200),
       fields,
+      ...(json.length ? { jsonFields: json } : {}),
       waitingOn: waitingOnFrom(tool, fields),
       ...(typeof reason === 'string' && reason ? { reason: reason.slice(0, 1000) } : {}),
       ...(typeof rule === 'string' && rule ? { rule: rule.slice(0, 1000) } : {}),
@@ -714,9 +736,10 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     if (typeof afterError === 'string') console.log(`[permission] ${agent.name || agent.id}'s mod asks again after a failed request: ${oneLine(afterError)}`);
     // A question the window cannot show whole: a file tool, whose content is a
     // field the window does not show, marked withheld whatever the body says
-    // (the Audit's L2), or any call the mod marks withheld, a field past 2,000
-    // characters, not text or not shown (the Audit's M1 on #538: a Bash with a
-    // long heredoc waited at Claude Code's dialog all night). The window can
+    // (the Audit's L2), or any call the mod marks withheld: a field past 2,000
+    // characters, a name past 64, the fields past the 16th (the Audit's M1 on
+    // #538: a Bash with a long heredoc waited at Claude Code's dialog all night;
+    // since 2.0.7 a field that is not text comes as its JSON, shown). The window can
     // never allow it, and Tars allows nothing by itself (the orchestrator's
     // decision of 28/10). For an agent in bypass, autonomous, held and refused
     // at the delay; for any other, back to Claude Code's own dialog at once,
@@ -727,7 +750,7 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     if (question.tool === 'AskUserQuestion') {
       if (levelOf(agent) === 'bypass' && !hasOrchestratorPowers(agent)) {
         logPermission(agent, agent.id, question.tool, 'deny', 'Tars (a bypass worker asks its orchestrator)', subjectOf(question.tool, fields));
-        sendJson({ decision: 'deny', reason: ASK_YOUR_ORCHESTRATOR, fingerprint: questionFingerprint(question.tool, fields) });
+        sendJson({ decision: 'deny', reason: ASK_YOUR_ORCHESTRATOR, fingerprint: questionFingerprint(question.tool, fields, json) });
       } else {
         sendJson({ decision: 'ask' });
       }
@@ -737,6 +760,14 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
     const withheld = fileTool || (req.body as { withheld?: unknown }).withheld === true;
     const said = (req.body as { withheld_why?: unknown }).withheld_why;
     const withheldWhy = withheld && typeof said === 'string' && said ? oneLine(said).slice(0, 1000) : undefined;
+    // The owner's switch (2.0.7, off by default, held from ~/.tars-private, the one the launch reads): a call of Claude in Chrome's own tools is Tars's to
+    // allow, at once, with nothing held and the agent never waiting. Never a withheld one: what the window cannot show
+    // whole is no rule's to allow.
+    if (!withheld && isClaudeInChromeTool(question.tool) && chromeActsWithoutAsking()) {
+      logPermission(agent, agent.id, question.tool, 'allow', "Tars (the owner's setting chromeActsWithoutAsking)", subjectOf(question.tool, fields));
+      sendJson({ decision: 'allow', reason: CHROME_ALLOWED, fingerprint: questionFingerprint(question.tool, fields, json) });
+      return;
+    }
     if (withheld && levelOf(agent) !== 'bypass') {
       const what = fileTool ? 'a file tool' : 'a question the window cannot show whole';
       logPermission(agent, agent.id, question.tool, 'back to its dialog', `Tars (${what} of an agent not in bypass: Claude Code asks)`, subjectOf(question.tool, fields));

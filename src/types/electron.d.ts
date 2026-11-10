@@ -2008,6 +2008,18 @@ export interface ElectronAPI {
     set: (field: string, value: string | null) => Promise<{ success: boolean; error?: string; set?: boolean }>;
   };
 
+  /**
+   * The owner's switch "Claude in Chrome acts without asking" (2.0.7, off by default): every claude agent starts with
+   * Claude in Chrome's calls under bypass, without the auto mode classifier's review, and Tars allows any Chrome
+   * question that still reaches it. Kept in ~/.tars-private, which no agent is handed, and set only here: never through
+   * appSettings. Taken by each agent at its next start. SECURITY.md, "Claude in Chrome without asking", says what it
+   * opens. `set` takes true or false only; `on` is the switch after the call.
+   */
+  chromeWithoutAsking?: {
+    get: () => Promise<{ on: boolean }>;
+    set: (on: boolean) => Promise<{ success: boolean; on: boolean; error?: string }>;
+  };
+
   appSettings?: {
     /**
      * Since 2.0.4 no secret comes back: a secret field is a mask of bullets when
