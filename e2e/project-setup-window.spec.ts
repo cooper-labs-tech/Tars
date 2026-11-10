@@ -152,8 +152,9 @@ for (const newInterface of [true, false]) {
     ], [harbor]);
     // The chat that names its runner: without it, main makes the runner a worker at boot (chat-runners.ts
     // startChatRunners), and the team is three.
-    fs.writeFileSync(path.join(home, '.tars', 'chats.json'), JSON.stringify({ version: 1, numbers: { [harbor]: 1 }, chats: [{
-      id: HARBOR_CHAT, projectPath: harbor, number: 1, title: 'Main', titleSource: 'user', runnerId: 'chat',
+    // Its chat is number 2: number 1, Main, is the orchestrator's own (core/chat-slots.ts recordedRunner).
+    fs.writeFileSync(path.join(home, '.tars', 'chats.json'), JSON.stringify({ version: 1, numbers: { [harbor]: 2 }, chats: [{
+      id: HARBOR_CHAT, projectPath: harbor, number: 2, title: 'Release notes', titleSource: 'user', runnerId: 'chat',
       sessionIds: [], pinned: false, snoozedUntil: null, settledAt: null, inbox: true, createdAt: at, updatedAt: at, lastActivityAt: at,
     }] }, null, 2));
     const seen: Record<string, unknown> = { newInterface };
