@@ -1718,7 +1718,9 @@ Separate scripts from `hooks/gemini/`: `session-start.sh`, `user-prompt-submit.s
 ### A permission asked of Tars (the state mod, step 2)
 
 A claude agent that runs the state mod asks Tars, not its terminal, before a call Claude Code
-would put to its permission dialog (SPECS.md, "Permissions decided by Tars"). The agent reads
+would put to its permission dialog (SPECS.md, "Permissions decided by Tars"): since 2.0.7 from the
+dialog's own event, so a call the auto mode classifier allows (Claude in Chrome's, under the server's
+flag) never reaches the window. The agent reads
 `waiting` on a `permission` with `permissionAsk` set, its terminal shows no dialog, and the main
 process log says `[permission] <agent> asks Tars: Bash <command>`, then the answer:
 `allow (the user allowed it in Tars)`, `deny (the user refused it in Tars: <reason>)`, or
@@ -1730,9 +1732,11 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   window may allow or refuse it. A file tool (Write, Edit, MultiEdit, NotebookEdit) is asked by its path alone,
   `withheld` (the route marks it so whatever the request says): for an agent in bypass it is held, the window may
   refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
-  Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field it does not show, past 2,000
-  characters, not text) is asked the same way, `withheld`, with `withheldWhy` naming each field left out and why.
-  Bash's timeout, background and sandbox fields are shown as words after the command, and stay allowable. The
+  Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field past 2,000 characters, a name
+  past 64, the fields past the 16th) is asked the same way, `withheld`, with `withheldWhy` naming each field left out
+  and why. Every other field is shown whole, one that is not text as its JSON (since 2.0.7: Claude in Chrome's
+  `tabId`, `coordinate`, `createIfEmpty` made each of its questions withheld before), and stays allowable.
+  Bash's timeout, background and sandbox fields are shown as words after the command. The
   window's line names every field an allow covers (a Grep reads `BEGIN OPENSSH in /Users/x/.ssh`). A bypass
   worker's AskUserQuestion is refused at once, telling it to ask its orchestrator with `send_message`; an
   orchestrator's, or an agent's not in bypass, stays with the person.
@@ -1747,6 +1751,15 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
 - **An orchestrator sees it**: `list_agents` gives a teammate's `waitingReason` and `permissionAsk`
   (the tool, what it runs, why Claude Code asked, since and until when); `get_agent` gives it all. Both
   mask a token or a URL's password in the command; the window, where the owner decides, shows it whole.
+- **Claude in Chrome without asking** (2.0.7, the owner's switch `chromeActsWithoutAsking` in
+  `~/.tars-private/owner-switches.json`, off by default, set only by the window's own channel; SECURITY.md
+  says what it opens). On: every claude agent starts with `CLAUDE_CHROME_CLASSIFIER_FLOOR=0` (Chrome's calls under
+  bypass, no classifier), and Tars allows any Chrome question that still reaches it, logged
+  `allow by Tars (the owner's setting chromeActsWithoutAsking)`. Until Settings has a switch: quit Tars, write
+  `{ "chromeActsWithoutAsking": true }` into `~/.tars-private/owner-switches.json`, start Tars (a key in
+  `~/.tars/app-settings.json` turns nothing on, since every agent can write that file); an agent started before keeps the
+  classifier until its next start. Proven with the owner's own extension by
+  `E2E_LIVE_CHROME=1 npx playwright test e2e/chrome-without-asking.live.spec.ts`.
 When the turn, the session or the agent ends, or the window answers `ask`, it goes back to Claude
 Code, which then shows its own dialog, and the `PermissionRequest` hook reports it as before. An agent
 waiting with no `permissionAsk` is at its terminal's dialog: the mod did not load, or the question

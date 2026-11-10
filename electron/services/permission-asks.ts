@@ -10,7 +10,9 @@ import { redactSecrets } from '../utils/redact-secrets';
  * Permissions decided by Tars (mods step 2, ETUDE-MODS-CLAUDE-CODE.md §2).
  *
  * When Claude Code would put a tool call to its permission dialog, the state
- * mod's `tool.check` hook asks Tars instead (POST /api/hooks/permission), and
+ * mod's `classic.PermissionRequest` hook asks Tars instead (POST
+ * /api/hooks/permission; until 2.0.7 its `tool.check`, which also caught calls
+ * the auto mode classifier was about to allow), and
  * the request is held here until the window answers (agent:answerPermission):
  * allow or deny is then Claude Code's decision, with no dialog and nothing
  * typed into the terminal. A question handed back (`ask`) and one whose
@@ -20,7 +22,8 @@ import { redactSecrets } from '../utils/redact-secrets';
  * reads, so the agent takes another way instead of freezing at a dialog all
  * night (2.0.5, fix-permission-dialogs-2810.md; until then it went back to
  * the dialog, and three projects' agents waited there until morning). Tars
- * allows nothing by itself; a file tool's question, its content withheld, is
+ * allows nothing by itself, but for what the owner turned on in the settings
+ * (chromeActsWithoutAsking, services/chrome-without-asking.ts); a file tool's question, its content withheld, is
  * held for an agent in bypass only, and the window may refuse it, never allow
  * it (hooks-routes.ts). Every decision is written to
  * ~/.tars/logs/permissions.log with who or what decided. Measured on 2.1.289:
@@ -84,18 +87,24 @@ export type PermissionQuestion = {
   withheldWhy?: string;
   /** Why Tars could not allow it itself: said with the refusal at the delay. */
   notAllowedBecause?: string;
+  /** The fields the mod sent as their JSON (a number, a boolean, null, an array, an object), not as text (2.0.7). */
+  jsonFields?: string[];
 };
 
 /**
  * What a question is about, as the mod computes it for the call it holds:
- * sha256 of the tool and the asked fields, sorted by name. A question and any
+ * sha256 of the tool and the asked fields, sorted by name, and of the fields
+ * sent as JSON when there are any (2.0.7: an answer about `"true"` never allows
+ * `true`; a question with none binds as 2.0.6's did). A question and any
  * answer kept for it are bound to it, not to the call's id alone, and every
  * decision names it: the agent's own shell holds the hook token and can read
  * its next call's id from its transcript, so a post for that id with `ls`
  * made JeanBrasse allow a `curl ... | sh` (the gate of #318, Medium 1).
  */
-export function questionFingerprint(tool: string, fields: Record<string, string>): string {
-  return createHash('sha256').update(JSON.stringify([tool, Object.keys(fields).sort().map(k => [k, fields[k]])])).digest('hex');
+export function questionFingerprint(tool: string, fields: Record<string, string>, jsonFields: string[] = []): string {
+  const entries = Object.keys(fields).sort().map(k => [k, fields[k]]);
+  const canonical = jsonFields.length ? [tool, entries, [...jsonFields].sort()] : [tool, entries];
+  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 }
 
 /** The field the window's line opens on, in this order: what runs, the file, the address, the search, the folder. */
@@ -200,7 +209,7 @@ export function holdPermissionAsk(
   holdMs: number = PERMISSION_HOLD_MS,
   pollMs: number = PERMISSION_POLL_MS,
 ): Promise<PermissionAnswer | PermissionPending> {
-  const fingerprint = questionFingerprint(question.tool, question.fields);
+  const fingerprint = questionFingerprint(question.tool, question.fields, question.jsonFields);
   const decided = kept.get(agent.id);
   if (decided) {
     kept.delete(agent.id);

@@ -102,6 +102,24 @@
  *     main one, then each other as words (a search's path as "in <path>", any other as "<field> <value>").
  * 33. (Low) A bypass worker's AskUserQuestion waits at its terminal all night: Tars refuses it at once, telling it to
  *     ask its orchestrator with send_message. An orchestrator's, or an agent's not in bypass, stays with the person.
+ * And from the owner's report of 10/11 (Claude in Chrome asked of the window, never allowable, chrome-and-permissions-
+ * general.md), written before the code: the mod now sends every field it can show whole, a field that is not text as
+ * its JSON, and names those fields in `json_fields`.
+ * 34. A field that is not text reaches the route and is dropped without a word: the window allows a call whose other
+ *     fields it never saw. Any field that is not a string is refused (`ask`).
+ * 35. A field sent as its JSON binds like the same text sent as a string: an answer to `createIfEmpty "true"` allows
+ *     `createIfEmpty true`. `json_fields` goes into the question's fingerprint, and one that names a field the
+ *     question does not hold, or whose text is not JSON, or is a JSON string, is refused (`ask`).
+ * 36. A field name past 64 characters is cut, so the fingerprint Tars names is not the mod's and the window's allow
+ *     reaches nothing: refused (`ask`), as a call with more than 16 fields is.
+ * 37. A question about Claude in Chrome waits for the window while the owner turned on `chromeActsWithoutAsking`:
+ *     Tars allows it at once, naming the call's fingerprint, writes who decided, and holds nothing. Off, the default,
+ *     the same call is held like any other.
+ * 38. The owner's Chrome setting allows more than Claude in Chrome's own calls: a withheld one (a field past the cap),
+ *     a tool whose name only holds the server's name further in, or any other tool.
+ * And from the Audit's M1 on #582 (at 97444406d):
+ * 39. The route reads the setting from the app's settings, which a save of app-settings.json (an agent can write it)
+ *     carries: it reads the owner's switch in ~/.tars-private, the one the launch reads (chrome-without-asking.ts).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
@@ -748,5 +766,107 @@ describe('Tars allows nothing by itself', () => {
     expect(log).toContain('curl -H');
     expect(log).not.toContain(token);
     expect(log).not.toContain('hunter2secret');
+  });
+});
+
+describe('every field shown whole, and the owner\'s Chrome setting (2.0.7)', () => {
+  const bypass = () => { const a = agent(); Object.assign(a, { permissionMode: 'bypass', projectPath: '/p' }); return a; };
+  beforeEach(async () => {
+    const fs = await import('fs');
+    const { CHROME_SWITCH_FILE, resetChromeSwitch } = await import('../../../../electron/services/chrome-without-asking');
+    fs.rmSync(CHROME_SWITCH_FILE, { force: true });
+    resetChromeSwitch();
+  });
+  const CHROME = 'mcp__claude-in-chrome__navigate';
+  const chromeInput = { url: 'https://example.com', tabId: '620336631' };
+
+  it('34. a field that is not text is refused, never dropped', async () => {
+    const a = bypass();
+    for (const value of [620336631, true, null, ['a'], { x: 1 }]) {
+      expect(await ask(question({ tool: CHROME, input: { url: 'https://example.com', tabId: value } })), JSON.stringify(value)).toEqual({ decision: 'ask' });
+    }
+    expect(a.permissionAsk).toBeUndefined();
+  });
+
+  it('35. a field sent as JSON binds apart from the same text sent as a string, and json_fields must name JSON the question holds', async () => {
+    const { questionFingerprint } = await import('../../../../electron/services/permission-asks');
+    const a = bypass();
+    const asJson = askUntilAnswered(question({ tool: CHROME, tool_use_id: 'toolu_j', input: chromeInput, json_fields: ['tabId'] }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk).toMatchObject({ tool: CHROME, subject: 'https://example.com (tabId 620336631)' });
+    expect(a.permissionAsk?.withheld).toBeUndefined();
+    expect(answerPermission('a1', 'allow', 'the user')).toBe(true);
+    const allowed = await asJson;
+    expect(allowed.fingerprint).toBe(questionFingerprint(CHROME, chromeInput, ['tabId']));
+    expect(allowed.fingerprint).not.toBe(questionFingerprint(CHROME, chromeInput));
+    // A question with no JSON field binds as 2.0.6's did: no json list, the same fingerprint.
+    const asText = askUntilAnswered(question({ tool: CHROME, tool_use_id: 'toolu_s', input: chromeInput }));
+    await vi.advanceTimersByTimeAsync(0);
+    answerPermission('a1', 'allow', 'the user');
+    expect((await asText).fingerprint).toBe(questionFingerprint(CHROME, chromeInput));
+    for (const json_fields of [['nope'], ['url'], 'tabId', [7], ['tabId', 'tabId', 'nope']]) {
+      expect(await ask(question({ tool: CHROME, tool_use_id: 'toolu_bad', input: chromeInput, json_fields })), JSON.stringify(json_fields)).toEqual({ decision: 'ask' });
+    }
+    // The text of a JSON string is not JSON of anything else.
+    expect(await ask(question({ tool: CHROME, tool_use_id: 'toolu_q', input: { url: '"https://example.com"' }, json_fields: ['url'] }))).toEqual({ decision: 'ask' });
+  });
+
+  it('36. a field name past 64 characters is refused whole, never cut', async () => {
+    const a = bypass();
+    const long = 'k'.repeat(65);
+    expect(await ask(question({ tool: 'mcp__any__run', input: { [long]: 'v' } }))).toEqual({ decision: 'ask' });
+    expect(a.permissionAsk).toBeUndefined();
+    const many = Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`f${i}`, 'v']));
+    expect(await ask(question({ tool: 'mcp__any__run', input: many }))).toEqual({ decision: 'ask' });
+    const at64 = askUntilAnswered(question({ tool: 'mcp__any__run', tool_use_id: 'toolu_64', input: { ['k'.repeat(64)]: 'v' } }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk?.fields).toEqual({ ['k'.repeat(64)]: 'v' });
+    answerPermission('a1', 'deny', 'the user');
+    await at64;
+  });
+
+  it('37, 39. with the owner\'s switch on, Claude in Chrome is allowed at once and written down; off, it is held', async () => {
+    const fs = await import('fs');
+    const { PERMISSION_LOG, questionFingerprint } = await import('../../../../electron/services/permission-asks');
+    const { setChromeActsWithoutAsking } = await import('../../../../electron/services/chrome-without-asking');
+    fs.rmSync(PERMISSION_LOG, { force: true });
+    const a = agent('a2', S2);
+    Object.assign(a, { permissionMode: 'normal' });
+    const body = question({ agent_id: 'a2', session_id: S2, tool: CHROME, tool_use_id: 'toolu_c', input: chromeInput, json_fields: ['tabId'] });
+    // Off, the default, and a key in the app's settings (a file agents can write) turns nothing on: held for the window.
+    Object.assign(ctx.getAppSettings(), { chromeActsWithoutAsking: true });
+    const held = ask(body);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(a.permissionAsk).toMatchObject({ tool: CHROME });
+    answerPermission('a2', 'deny', 'the user');
+    await held;
+    // On, by the owner's switch: allowed at once, nothing held, the agent never waiting.
+    setChromeActsWithoutAsking(true);
+    a.status = 'running';
+    expect(await ask({ ...body, tool_use_id: 'toolu_c2' })).toEqual({
+      decision: 'allow', reason: expect.stringMatching(/Claude in Chrome/), fingerprint: questionFingerprint(CHROME, chromeInput, ['tabId']),
+    });
+    expect(a.permissionAsk).toBeUndefined();
+    expect(a.status).toBe('running');
+    const lines = fs.readFileSync(PERMISSION_LOG, 'utf8').trim().split('\n');
+    expect(lines.at(-1)).toMatch(/Frontend \(a2\) mcp__claude-in-chrome__navigate allow by Tars \(the owner's setting chromeActsWithoutAsking\): https:\/\/example\.com/);
+  });
+
+  it('38. the owner\'s Chrome setting allows nothing else: a withheld Chrome call, a name that only holds the server\'s, another tool', async () => {
+    const a = bypass();
+    const { setChromeActsWithoutAsking } = await import('../../../../electron/services/chrome-without-asking');
+    setChromeActsWithoutAsking(true);
+    for (const body of [
+      question({ tool: 'mcp__claude-in-chrome__javascript_tool', tool_use_id: 'toolu_w', input: { action: 'javascript_exec' }, withheld: true, withheld_why: 'text: 3,000 characters, past the 2,000 the window shows' }),
+      question({ tool: 'mcp__evil__claude-in-chrome__navigate', tool_use_id: 'toolu_e', input: chromeInput }),
+      question({ tool: 'mcp__claude-in-chrome', tool_use_id: 'toolu_n', input: chromeInput }),
+      question({ tool_use_id: 'toolu_b' }),
+    ]) {
+      const pending = askUntilAnswered(body);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(a.permissionAsk?.tool, String(body.tool)).toBe(body.tool);
+      answerPermission('a1', 'deny', 'the user');
+      expect(await pending).toMatchObject({ decision: 'deny' });
+    }
   });
 });
