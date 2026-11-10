@@ -81,3 +81,48 @@ export function permissionAskLine(
     reason: flat(agent.permissionAsk.reason), rule: flat(agent.permissionAsk.rule),
   };
 }
+
+/** The field that names what a call acts on, first (the order main's line takes, permission-asks.ts subjectOf). */
+const MAIN_FIELDS = ['command', 'file_path', 'notebook_path', 'url', 'query', 'pattern', 'path'];
+/** Past this, a field says its size above it, so the extent shows before the scrolling. */
+const LONG_CHARS = 400;
+const LONG_LINES = 10;
+
+export interface QuestionField {
+  name: string;
+  /** Every line of the value, none dropped, a break never read as a space; ⇥, ⍽ and U+FFFD for what does not show. */
+  lines: string[];
+  /** "8,692 characters, 400 lines" for a long field; '' otherwise. */
+  size: string;
+}
+
+/**
+ * The question whole, field by field, as the window shows it before an allow (2.0.7, approve-everywhere; frame
+ * `Permission asked of Tars`, its row `approve a file, shown whole`): the main field first, the others by name; each
+ * value whole, its lines kept, blank ones too; a field sent as JSON indented. What is allowed must be what was read.
+ */
+export function questionFields(fields: Record<string, string>, jsonFields: readonly string[]): QuestionField[] {
+  const names = Object.keys(fields);
+  const main = MAIN_FIELDS.filter(n => names.includes(n));
+  const rest = names.filter(n => !main.includes(n)).sort();
+  return [...main, ...rest].map(name => {
+    let value = fields[name] ?? '';
+    if (jsonFields.includes(name)) {
+      try { value = JSON.stringify(JSON.parse(value), null, 2); } catch { /* shown as it came */ }
+    }
+    const lines = value.split(BREAKS).map(l => l.replace(/\t/g, TAB_MARK).replace(OTHER_SPACE, OTHER_SPACE_MARK).replace(HIDDEN, '�'));
+    const long = value.length > LONG_CHARS || lines.length > LONG_LINES;
+    return {
+      name, lines,
+      size: long ? `${value.length.toLocaleString('en-US')} characters, ${lines.length.toLocaleString('en-US')} line${lines.length === 1 ? '' : 's'}` : '',
+    };
+  });
+}
+
+/**
+ * What an allow main refused means: `changed` when Tars now holds a question of another fingerprint (the agent asked
+ * about another call in between: the window shows it anew and allows nothing by itself), `late` otherwise.
+ */
+export function afterRefusedAllow(sent: string | undefined, now: { fingerprint: string } | null): 'changed' | 'late' {
+  return now && now.fingerprint !== sent ? 'changed' : 'late';
+}
