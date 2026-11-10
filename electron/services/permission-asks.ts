@@ -184,8 +184,6 @@ type Held = {
   subject: string;
   /** The question whole, for the window (permissionQuestionOf). */
   whole: PermissionQuestionWhole;
-  /** The view does not hold it whole: an allow must name its fingerprint, which only its whole form gives. */
-  cut: boolean;
   /** The asks waiting on it now: one, or none between two asks. */
   waiters: Set<(answer: PermissionAnswer) => void>;
   timer: ReturnType<typeof setTimeout>;
@@ -289,7 +287,6 @@ export function holdPermissionAsk(
       ...(question.withheld ? { withheld: true as const } : {}),
       ...(question.withheld && question.withheldWhy ? { withheldWhy: question.withheldWhy } : {}),
     },
-    cut: view.cut.length > 0,
     waiters: new Set(),
     // Unanswered: refused, with what the agent can do instead, and it runs on.
     // Never back to the dialog, where nobody may answer until morning.
@@ -358,30 +355,48 @@ export function permissionQuestionOf(agentId: string): PermissionQuestionWhole |
   return whole ? { ...whole, fields: { ...whole.fields }, jsonFields: [...whole.jsonFields] } : undefined;
 }
 
+/** Why the window's answer changed nothing (the Audit's L2 on #588): the window says what really happened. */
+export type PermissionRefusal = 'no-question' | 'another-question' | 'read-first' | 'withheld' | 'not-a-decision';
+
+const REFUSALS: Record<PermissionRefusal, string> = {
+  'no-question': 'Tars no longer holds this question: if its terminal asks, answer there',
+  'another-question': 'The agent asked about another call meanwhile: read the new question before you answer it',
+  'read-first': 'An allow names the question it was given for: open the question whole, then allow it',
+  'withheld': 'Tars could not receive this question whole, so it cannot be allowed here: refuse it, or answer it in the terminal',
+  'not-a-decision': 'An answer is allow, deny or ask',
+};
+
 /**
  * The window's answer to the agent's held question: allow or deny decide the
- * call and the agent runs on; ask hands it back to the terminal's dialog.
- * False, and nothing changed, when the agent has no question or the decision
- * is none of the three. The window is told through the question's own
- * `changed`. `fingerprint`, the one the window read (approve-everywhere): an
- * answer naming another question's changes nothing, so an allow never lands on
- * a question asked after the one read; and a question whose view is cut is
- * allowed only by naming it, which only its whole form gives.
+ * call and the agent runs on; ask hands it back to the terminal's dialog. The
+ * window is told through the question's own `changed`. `fingerprint`, the one
+ * the window read (approve-everywhere): an answer naming another question's
+ * changes nothing, and every allow names it (the Audit's M1 on #588: an allow
+ * with none landed on a question asked between the read and the click). A deny
+ * or an ask may come without one. Refused, nothing changed, with why.
  */
-export function answerPermission(agentId: string, decision: PermissionDecision, by: string, reason?: string, fingerprint?: string): boolean {
-  if (decision !== 'allow' && decision !== 'deny' && decision !== 'ask') return false;
+export function decidePermission(
+  agentId: string, decision: PermissionDecision, by: string, reason?: string, fingerprint?: string,
+): { ok: true } | { ok: false; code: PermissionRefusal; error: string } {
+  const refuse = (code: PermissionRefusal) => ({ ok: false as const, code, error: REFUSALS[code] });
+  if (decision !== 'allow' && decision !== 'deny' && decision !== 'ask') return refuse('not-a-decision');
   const entry = held.get(agentId);
-  if (!entry) return false;
+  if (!entry) return refuse('no-question');
   const named = typeof fingerprint === 'string' ? fingerprint : undefined;
-  if (named !== undefined && named !== entry.fingerprint) return false;
+  if (named !== undefined && named !== entry.fingerprint) return refuse('another-question');
   // Content the window never showed is never allowed from it: refused, or handed back to the dialog.
-  if (decision === 'allow' && entry.withheld) return false;
-  if (decision === 'allow' && entry.cut && named === undefined) return false;
+  if (decision === 'allow' && entry.withheld) return refuse('withheld');
+  if (decision === 'allow' && named === undefined) return refuse('read-first');
   const agent = agents.get(agentId);
   if (agent && decision !== 'ask') running(agent);
   const text = reasonFor(decision, by, reason);
   close(agent, entry, text ? { decision, reason: text } : { decision }, by);
-  return true;
+  return { ok: true };
+}
+
+/** decidePermission, answered as whether it was taken. */
+export function answerPermission(agentId: string, decision: PermissionDecision, by: string, reason?: string, fingerprint?: string): boolean {
+  return decidePermission(agentId, decision, by, reason, fingerprint).ok;
 }
 
 /** The question held for this agent ends: its session or its turn did, it was stopped or deleted. */

@@ -519,6 +519,16 @@ export interface AgentTaskBanner {
 }
 
 /**
+ * Why the window's answer to a permission question changed nothing (agent.answerPermission):
+ * - `no-question`: Tars no longer holds it (answered, ended, or the delay ran out);
+ * - `another-question`: the fingerprint named is not the held question's, the agent asked about another call meanwhile;
+ * - `read-first`: an allow that names no fingerprint;
+ * - `withheld`: a question Tars could not receive whole, which may be refused or handed to the terminal, never allowed;
+ * - `not-a-decision`: neither allow, deny nor ask.
+ */
+export type PermissionRefusal = 'no-question' | 'another-question' | 'read-first' | 'withheld' | 'not-a-decision';
+
+/**
  * A permission question whole (agent.permissionQuestion, electron/services/permission-asks.ts): what the window shows
  * before an allow, when the view on the agent (permissionAsk) is cut. Every field whole, a file's new content
  * included, up to the 3 MiB a request to Tars carries.
@@ -584,7 +594,8 @@ export interface AgentStatus {
      * whole (agent.permissionQuestion) before it offers allow, and the allow names that question's fingerprint.
      */
     cut?: Array<{ field: string; length: number }>;
-    /** The question's fingerprint when this view holds it whole: what an allow names (agent.answerPermission). */
+    /** The question's fingerprint when this view holds it whole: what an allow names (agent.answerPermission). When
+     *  `cut` is set, agent.permissionQuestion gives it with the question whole. */
     fingerprint?: string;
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
@@ -1651,8 +1662,11 @@ export interface ElectronAPI {
     /** savedTo: the wip/ branch its uncommitted work was saved on. worktreeKept: why its worktree was not removed (the save failed, or it holds what no commit keeps). processes: what it started outside its terminal, ended and kept, as a stop says it. */
     remove: (id: string) => Promise<{ success: boolean; savedTo?: string; worktreeKept?: string; processes?: { ended: string[]; kept: string[]; containers: string[] } }>;
     /** Answers the permission question the state mod asked Tars for this agent (AgentStatus.permissionAsk): allow or deny decide the call, ask shows it in the terminal's dialog. False when there was none. */
-    /** `fingerprint`: the one the window read (permissionAsk.fingerprint, or permissionQuestion's); required for an allow when permissionAsk.cut is set. */
-    answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string) => Promise<{ success: boolean }>;
+    /**
+     * `fingerprint`: the one the window read (permissionAsk.fingerprint, or permissionQuestion's). Required for every
+     * allow; a deny or an ask may come without it. Refused, the answer says why (`code`, and `error` in words).
+     */
+    answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string) => Promise<{ success: true } | { success: false; code: PermissionRefusal; error: string }>;
     /** The question Tars holds for the agent, whole: every field, its line and the fingerprint an allow names. */
     permissionQuestion: (id: string) => Promise<{ success: true; question: PermissionQuestionWhole } | { success: false; error: string }>;
     /** Into the agent's terminal. Asleep, a key wakes it (`woke: true`); a lone Esc or Ctrl+C, a mouse or focus report does nothing. */

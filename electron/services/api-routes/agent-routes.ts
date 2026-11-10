@@ -604,10 +604,17 @@ async function spawnAgentSessionInSlot(
 
 /** Serializable agent projection for API responses: excludes the raw ANSI
  *  `output` buffer (up to 10 000 chunks), which destroys LLM context windows
- *  when returned to MCP callers. Use /output or ?full=true when needed. */
-function projectAgent(agent: AgentStatus) {
+ *  when returned to MCP callers. Use /output or ?full=true when needed. A
+ *  permission question it waits on is masked for the agent that reads it, as
+ *  get_agent always did (the Audit's L1 on #588: the update route answered a
+ *  pending write's content unmasked). Exported for its tests. */
+export function projectAgent(agent: AgentStatus) {
   const { output, ...rest } = agent;
-  return { ...withoutCommandLines(rest), outputChunks: output.length };
+  return {
+    ...withoutCommandLines(rest), outputChunks: output.length,
+    ...(rest.permissionAsk ? { permissionAsk: maskedAsk(rest.permissionAsk) } : {}),
+    ...(rest.waitingOn ? { waitingOn: { ...rest.waitingOn, text: redactSecrets(rest.waitingOn.text) } } : {}),
+  };
 }
 
 /**
