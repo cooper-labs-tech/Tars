@@ -663,7 +663,19 @@ export default function ProjectsPage() {
                 {/* What it is offered for the team's workflow, and one level for its whole team. */}
                 {hasElectron && (
                   <Panel>
-                    <ProjectSetup key={selectedProject.path} projectPath={selectedProject.path} agents={agents} />
+                    <ProjectSetup
+                      key={selectedProject.path}
+                      projectPath={selectedProject.path}
+                      agents={agents}
+                      tracked={isCustomProject(selectedProject.path) || agents.some(a => a.projectPath === selectedProject.path)}
+                      onAddToTars={async () => {
+                        const at = selectedProject.path;
+                        await window.electronAPI?.fs?.addCustomProject(at);
+                        setCustomProjects(list => list.some(p => p.path === at)
+                          ? list
+                          : [...list, { path: at, name: selectedProject.name, addedAt: new Date().toISOString() }]);
+                      }}
+                    />
                   </Panel>
                 )}
 

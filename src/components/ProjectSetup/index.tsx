@@ -30,13 +30,18 @@ const MODES: SegmentedOption<AgentPermissionMode>[] = [
  * and, in a project's panel once it has agents, one permission level for its whole team. Main decides what applies.
  * `firstRun`: under the first run's folder step, where the team does not exist yet; else a project's panel.
  */
-export default function ProjectSetup({ projectPath, agents, firstRun = false }: {
+export default function ProjectSetup({ projectPath, agents, firstRun = false, tracked = true, onAddToTars }: {
   projectPath: string;
   agents?: readonly AgentStatus[];
   firstRun?: boolean;
+  /** One of Tars's projects (added, or an agent's): main offers nothing for a folder Claude Code has only seen. */
+  tracked?: boolean;
+  /** Adds the folder to Tars, as + Project does; the offers are read once it is. */
+  onAddToTars?: () => Promise<void>;
 }) {
   const [offer, setOffer] = useState<{ of: string; is: Offer | null; error?: string } | null>(null);
-  const [done, setDone] = useState<{ of: string; ci?: SetupLine; claudeMd?: SetupLine }>({ of: projectPath });
+  const [done, setDone] = useState<{ of: string; ci?: SetupLine & { note?: string }; claudeMd?: SetupLine }>({ of: projectPath });
+  const [adding, setAdding] = useState<{ of: string; error?: string } | null>(null);
   const [shown, setShown] = useState<'ci' | 'claude-md' | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const team = teamOf(agents ?? [], projectPath);
@@ -46,17 +51,43 @@ export default function ProjectSetup({ projectPath, agents, firstRun = false }: 
 
   useEffect(() => {
     const setup = window.electronAPI?.projectSetup;
-    if (!setup) return;
+    if (!setup || !tracked) return;
     let live = true;
     setup.offer(projectPath)
       .then(r => { if (live) setOffer(r.success ? { of: projectPath, is: r } : { of: projectPath, is: null, error: r.error }); })
       .catch((err: unknown) => { if (live) setOffer({ of: projectPath, is: null, error: ipcReason(err, 'Tars could not read what this project is offered.') }); });
     return () => { live = false; };
-  }, [projectPath]);
+  }, [projectPath, tracked]);
 
   const known = offer?.of === projectPath ? offer : null;
   const answered = done.of === projectPath ? done : { of: projectPath };
-  if (!window.electronAPI?.projectSetup || !known) return null;
+  if (!window.electronAPI?.projectSetup) return null;
+
+  // A folder Tars does not know: the way on beside the reason (frame `First run (2.0.7) · states`, its row `a folder
+  // Tars does not know`).
+  if (!tracked) {
+    const add = async () => {
+      setAdding({ of: projectPath });
+      try {
+        await onAddToTars?.();
+      } catch (err) {
+        setAdding({ of: projectPath, error: ipcReason(err, 'The folder could not be added.') });
+      }
+    };
+    const failed = adding?.of === projectPath ? adding.error : undefined;
+    return (
+      <div data-project-setup={projectPath} className="flex flex-col gap-2">
+        <PanelCaption>Set up for your team</PanelCaption>
+        <Line data="unknown" line={{ tone: 'idle', text: 'Tars does not know this folder yet: add it to Tars, and it is offered its CI and CLAUDE.md.' }}>
+          {onAddToTars && (
+            <Button size="sm" className="font-mono" disabled={adding?.of === projectPath && !failed} onClick={() => { void add(); }}>add it to Tars</Button>
+          )}
+        </Line>
+        {failed && <Line line={{ tone: 'error', text: failed }} />}
+      </div>
+    );
+  }
+  if (!known) return null;
 
   const yes = async (what: 'ci' | 'claude-md') => {
     const setup = window.electronAPI?.projectSetup;
@@ -105,7 +136,7 @@ export default function ProjectSetup({ projectPath, agents, firstRun = false }: 
       </div>
     );
   };
-  const offerRow = (what: 'ci' | 'claude-md', line: OfferLine | null, after: SetupLine | undefined, label: string) => {
+  const offerRow = (what: 'ci' | 'claude-md', line: OfferLine | null, after: (SetupLine & { note?: string }) | undefined, label: string) => {
     if (!line) return null;
     const open = line.offer && !after;
     return (
@@ -118,6 +149,7 @@ export default function ProjectSetup({ projectPath, agents, firstRun = false }: 
             </>
           )}
         </Line>
+        {after?.note && <p className="ml-3.5 text-[11.5px] leading-[1.45] text-text-muted">{after.note}</p>}
         {open && preview(what)}
       </div>
     );

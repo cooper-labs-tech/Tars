@@ -31,12 +31,16 @@ export function ciLine(ci: Offer['ci'], projectPath: string): OfferLine {
   return { tone: 'idle', text: ci.why, offer: false };
 }
 
-/** What the CI's yes did: where it is committed, and that nothing was pushed; or main's refusal. */
-export function ciDoneLine(a: CiAnswer, projectPath: string): SetupLine {
+/**
+ * What the CI's yes did: where it is committed, that nothing was pushed, and what the user does next (nothing hands
+ * the orchestrator the task by itself); `note`, the worktrees of merged work main pruned first. Or main's refusal.
+ */
+export function ciDoneLine(a: CiAnswer, projectPath: string): SetupLine & { note?: string } {
   if (!a.success) return { tone: 'error', text: a.error };
   return {
     tone: 'running',
-    text: `Committed ${inProject(a.file, a.worktree)} on ${a.branch}, in ${inProject(a.worktree, projectPath)}, not pushed: your orchestrator delivers it as a pull request.`,
+    text: `Committed ${inProject(a.file, a.worktree)} on ${a.branch}, in ${inProject(a.worktree, projectPath)}, not pushed. Ask your orchestrator to deliver it as a pull request.`,
+    ...(a.pruned.length ? { note: `Before it, removed the worktrees of work already merged: ${a.pruned.join(', ')}.` } : {}),
   };
 }
 
