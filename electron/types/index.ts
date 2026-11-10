@@ -104,15 +104,23 @@ export interface AgentStatus {
     askedAt: string;
     /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
-    /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
+    /** What is asked: the command, the path or the address (the fields' first), the tool when none, made of `fields`. */
     subject: string;
-    /** The fields the person decides on, whole (each at most 2,000 characters). */
+    /** The fields the person decides on, as Tars publishes them (services/permission-asks.ts viewOf): each at most
+     *  2,000 characters, 32 fields at most. Whole unless `cut` names them; agent:permissionQuestion gives them whole. */
     fields: Record<string, string>;
+    /** The fields sent as their JSON (a number, a boolean, null, an array, an object), among `fields`. */
+    jsonFields?: string[];
+    /** The fields this view does not hold whole, each with its whole length: the window shows the question whole
+     *  (agent:permissionQuestion) before an allow, which must then name its fingerprint. */
+    cut?: Array<{ field: string; length: number }>;
+    /** The question's fingerprint, when this view holds it whole: what agent:answerPermission's allow names. */
+    fingerprint?: string;
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
-    /** A question Tars cannot show whole, a file tool's or one with a field withheld: the window may refuse it or hand
-     *  it back, never allow it. */
+    /** A question Tars cannot show whole, a file tool's without its content or one with a field the mod could not
+     *  send: the window may refuse it or hand it back, never allow it. */
     withheld?: true;
     /** What was withheld and why, `<field>: <why>` joined by `; ` (the state mod's words). */
     withheldWhy?: string;

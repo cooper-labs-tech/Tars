@@ -43,11 +43,11 @@ const LONG_WHY = 'command: 3,014 characters, past the 2,000 the window shows';
 
 type Answer = { call: string; decision: string; reason?: string; at: number };
 type Typed = { at: number; text: string };
-type Agent = { id: string; status: string; waitingReason?: string; permissionAsk?: { subject: string; until: string; withheld?: true; withheldWhy?: string } };
+type Agent = { id: string; status: string; waitingReason?: string; permissionAsk?: { subject: string; until: string; withheld?: true; withheldWhy?: string; fingerprint?: string } };
 type Api = { electronAPI: { agent: {
   start(p: { id: string; prompt: string }): Promise<unknown>;
   list(): Promise<Agent[]>;
-  answerPermission(id: string, decision: 'allow' | 'deny' | 'ask', reason?: string): Promise<{ success: boolean }>;
+  answerPermission(id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string): Promise<{ success: boolean; code?: string }>;
 } } };
 
 const MARK = 'MARK-REPORT-FROM-O';
@@ -143,7 +143,11 @@ for (const newInterface of [false, true]) {
       await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'o', prompt: '' }));
       await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'w', prompt: '' }));
 
-      const answer = (decision: 'allow' | 'deny' | 'ask') => page.evaluate(d => (window as unknown as Api).electronAPI.agent.answerPermission('w', d), decision);
+      // Every allow names the fingerprint of the question read (#588's M1): the view's, when it holds the question whole.
+      const answer = async (decision: 'allow' | 'deny' | 'ask') => {
+        const read = (await w())?.permissionAsk?.fingerprint;
+        return page.evaluate(([d, fp]) => (window as unknown as Api).electronAPI.agent.answerPermission('w', d as 'allow', undefined, fp), [decision, read] as const);
+      };
 
       // 1. The shell command: held for the owner, whole, and the owner allows it from the window.
       await expect.poll(async () => (await w())?.permissionAsk?.subject ?? '', { timeout: 30_000 }).toContain('retry-probe/p.yml <<');
@@ -161,7 +165,7 @@ for (const newInterface of [false, true]) {
       const file = await w();
       keep({ file });
       expect(file?.permissionAsk?.subject).toMatch(/^Write .*retry-probe\/p\.yml$/);
-      expect(await answer('allow'), 'the window allowed content it never showed').toEqual({ success: false });
+      expect(await answer('allow'), 'the window allowed content it never showed').toMatchObject({ success: false, code: 'withheld' });
 
       // 3. o's message meanwhile: held, not refused, and not typed while the question stands.
       fs.writeFileSync(path.join(home, 'send-now'), '1');
