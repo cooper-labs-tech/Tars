@@ -2,31 +2,49 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, listenForErrors, recordValues, removeHome, stepShot } from './fixture.mjs';
+import { launchSandboxed, listenForErrors, recordValues, removeHome, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * A team deployed from New team keeps each member's role as its role, the team's brief apart (QA's fresh-install B2,
  * the Audit's M1 on PR 581; frame `Overlay · New team (one screen)`, its brief's note).
  *
- * A project and a team of two whose members carry their roles (`savedPrompt` of the team template). New team, with a
- * brief and Start on deploy off, deploys them.
+ * A project and a team of two whose members carry their roles (`savedPrompt` of the team template), and no
+ * orchestrator. New team, with a brief and Start on deploy off, deploys them. Since 2.0.7 (#580 and #584) the brief is
+ * the orchestrator's first task, typed once at its first start; a team with no orchestrator gives it to every member as
+ * its first task (`firstTask` in agents.json), never as its role. The deploy asks Claude Code whether it is signed in:
+ * the claude here is a stand-in at `cliPaths.claude` that answers `auth status` signed in.
  *
- * How it can fail, written before the change:
+ * How it can fail, written before the change (and adapted to the 2.0.7 train, the Audit's M1 on #590):
  * 1. a member's role becomes the brief and its role run together, which main puts under "## Your role" at every
- *    session (main writes the brief over the role when the team is created idle);
+ *    session (main wrote the brief over the role when the team was created idle);
  * 2. a member's role is lost;
- * 3. New team does not say that a team created idle gets no brief;
- * 4. an uncaught error in the page.
- * Start on deploy on is left to Tars-Backend's B2 change: until main stops writing a start's prompt into the role, a
- * started member's role is the brief and its role whatever the window does.
+ * 3. the brief is lost: a member of a team with no orchestrator does not keep it as its first task;
+ * 4. New team does not say that the brief is a first task, never kept as a role, and every member's with no
+ *    orchestrator;
+ * 5. an uncaught error in the page.
  * Once with the classic shell and once with the new interface (New team from the Agents page, or its dialog).
- * Red on main (58f2863b4): each role is the brief and the role.
- * The artefact: values.json (each member's saved role), screenshots.
+ * Red on main (58f2863b4): each role is the brief and the role. Red on a mutant of the train that saves the brief and
+ * the role together as the role (team-deploy.ts).
+ * The artefact: values.json (each member's saved role and first task), screenshots.
  */
 
 const BRIEF = 'Ship the login page this week.';
 const ROLES = { Planner: 'You plan the work and hand it out.', Builder: 'You build what the planner hands you.' };
+
+/** Claude Code as the deploy asks it: its version, and signed in. Nothing here starts it as an agent. */
+function signedInClaude(home: string): string {
+  return writeNodeCli(path.join(home, 'claude-signed-in.cjs'), [
+    'const args = process.argv.slice(2);',
+    "if (args.includes('--version')) { console.log('2.1.321 (Claude Code)'); process.exit(0); }",
+    "if (args[0] === 'auth' && args[1] === 'status') {",
+    "  console.log(JSON.stringify({ loggedIn: true, authMethod: 'claude.ai', email: 'new.user@example.com', subscriptionType: 'max' }));",
+    '  process.exit(0);',
+    '}',
+    'process.stdin.resume();',
+    '',
+  ].join('\n'));
+}
 
 for (const newInterface of [false, true]) {
   test(`a team created idle keeps each member's role, without the brief${newInterface ? ' (new interface)' : ''}`, async () => {
@@ -39,7 +57,9 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, cliPaths: { claude: signedInClaude(home) },
+    }));
     const at = '2026-11-10T08:00:00.000Z';
     fs.writeFileSync(path.join(dir, 'team-templates.json'), JSON.stringify({ user: [{
       id: 'two', name: 'Two with roles', description: '', icon: '', createdAt: at, updatedAt: at,
@@ -71,11 +91,14 @@ for (const newInterface of [false, true]) {
       await page.getByRole('option').filter({ hasText: 'Two with roles' }).first().click();
       await modal.getByRole('button', { name: 'Project', exact: true }).click();
       await page.getByRole('option').filter({ hasText: 'projects/harbor' }).first().click();
-      await modal.getByPlaceholder('What is this team shipping? Shared context every member starts with.').fill(BRIEF);
+      await modal.getByPlaceholder('What should this team ship? The orchestrator starts on it and splits the work.').fill(BRIEF);
 
-      // 3. Created idle, the brief is not kept: said under it. Soft, so the run still reaches the roles (1, 2).
-      seen.briefNote = await modal.getByText('Created idle, without start on deploy, nobody gets the brief: it is not kept.', { exact: false }).count();
-      expect.soft(seen.briefNote, 'the brief says it is not kept when the team is created idle').toBe(1);
+      // 4. The brief is a first task, never a role, and every member's with no orchestrator: said under it. Soft, so
+      // the run still reaches the roles (1 to 3).
+      seen.briefNote = await modal.getByText('never kept as its role', { exact: false }).count();
+      expect.soft(seen.briefNote, 'the brief says it is never kept as a role').toBe(1);
+      seen.leaderlessNote = await modal.getByText('A team with no orchestrator: every member gets it.', { exact: false }).count();
+      expect.soft(seen.leaderlessNote, 'the brief says every member gets it with no orchestrator').toBe(1);
       await modal.getByRole('button', { name: /skills per role/ }).click();
       const start = modal.getByText('Start on deploy', { exact: true }).locator('xpath=../..').getByRole('switch');
       await start.click();
@@ -84,17 +107,25 @@ for (const newInterface of [false, true]) {
       await modal.getByRole('button', { name: 'Deploy 2 agents', exact: true }).click();
       await expect(modal).toHaveCount(0, { timeout: 60_000 });
 
-      // 1, 2. Each member's role is its role, the brief apart.
-      const made = await page.evaluate(() => window.electronAPI!.agent!.list());
-      seen.roles = Object.fromEntries(made.map(a => [a.name, a.savedPrompt ?? null]));
+      // 1 to 3. Each member's role is its role, and the brief its first task: both as main keeps them on disk.
+      // agents.json as main writes it: { version, savedAt, agents } (core/agent-manager.ts saveAgents).
+      type Stored = { name?: string; savedPrompt?: string; firstTask?: { text?: string } };
+      const stored = (): Stored[] => {
+        const raw = JSON.parse(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')) as Stored[] | { agents?: Stored[] };
+        return Array.isArray(raw) ? raw : raw.agents ?? [];
+      };
+      await expect.poll(() => stored().length, { timeout: 30_000, message: 'both members saved' }).toBe(2);
+      const made = stored();
+      seen.members = made.map(a => ({ name: a.name, savedPrompt: a.savedPrompt ?? null, firstTask: a.firstTask?.text ?? null }));
       for (const [name, role] of Object.entries(ROLES)) {
         const agent = made.find(a => (a.name ?? '').includes(name));
         expect(agent, `${name} was made`).toBeTruthy();
-        expect(agent!.savedPrompt).toBe(role);
+        expect.soft(agent!.savedPrompt, `${name}'s role is its role alone`).toBe(role);
+        expect.soft(agent!.firstTask?.text, `${name} keeps the brief as its first task`).toBe(BRIEF);
       }
       await stepShot(page, `${tag}2-deployed`);
 
-      // 4.
+      // 5.
       seen.errors = errors;
       expect(errors).toEqual([]);
     } finally {
