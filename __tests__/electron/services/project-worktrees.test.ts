@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import {
-  newWorktree, listWorktrees, removeWorktree, pruneWorktrees, ghPrMerged, WORKTREE_MAX, PRUNE_IDLE_MS,
+  newWorktree, listWorktrees, removeWorktree, pruneWorktrees, ghPrMerged, occupiedBy, WORKTREE_MAX, PRUNE_IDLE_MS,
 } from '../../../electron/services/project-worktrees';
 
 /**
@@ -54,6 +54,9 @@ import {
  * B4. A new branch asked while the fetch fails is made, and the answer says the fetch failed.
  * B5. (M3, the Audit) On Windows nothing is found working in a worktree, and git worktree remove deletes its files
  *     before failing on the folder a process holds: QA's gate checkout is emptied under it. B1 runs there too.
+ * B6. (L8, the Audit) On Windows the rename back is tried once: an antivirus or an indexer holding the folder that
+ *     moment leaves an idle worktree at <path>.tars-in-use. Retried, bounded; still failing, said with where it is.
+ * B7. (L8) A dry run renames a worktree to see whether it is in use: it renames nothing.
  */
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -361,5 +364,50 @@ describe('the Audit\'s re-check of #585', () => {
     const r = await newWorktree(p.dir, 'feat/brand-new', { freeBytes: plenty, protectedPaths: [] });
     expect(r).toMatchObject({ kind: 'new' });
     expect((r as { note?: string }).note).toMatch(/fetch from origin failed/);
+  });
+});
+
+describe("the Audit's L8 on #585: the Windows probe", () => {
+  /** A folder, and a rename that refuses its first n moves back to it, as an antivirus holding it would. */
+  function folderAndRename(refusalsBack: number) {
+    const dir = fs.mkdtempSync(path.join(root, 'probe-'));
+    fs.writeFileSync(path.join(dir, 'f.txt'), 'f');
+    let left = refusalsBack;
+    const rename = (from: string, to: string) => {
+      if (to === dir && left > 0) { left--; throw Object.assign(new Error('busy'), { code: 'EBUSY' }); }
+      fs.renameSync(from, to);
+    };
+    return { dir, rename, triedBack: () => refusalsBack - left };
+  }
+  const windows = { platform: 'win32' as const, waitMs: 1 };
+
+  it('B6. retries the move back, and finds the folder free once it goes back', async () => {
+    const { dir, rename, triedBack } = folderAndRename(2);
+    expect(await occupiedBy(dir, null, { ...windows, rename })).toBeUndefined();
+    expect(fs.existsSync(path.join(dir, 'f.txt'))).toBe(true);
+    expect(triedBack()).toBe(2);
+  });
+
+  it('B6. still failing after its tries, says where the folder is left and keeps it as in use', async () => {
+    const { dir, rename } = folderAndRename(1000);
+    const why = await occupiedBy(dir, null, { ...windows, rename });
+    expect(why).toMatch(/\.tars-in-use/);
+    expect(why).toMatch(/tries/);
+    expect(fs.existsSync(`${dir}.tars-in-use`)).toBe(true);
+    fs.renameSync(`${dir}.tars-in-use`, dir);
+  });
+
+  it('B6. a folder Windows will not move is in use', async () => {
+    const dir = fs.mkdtempSync(path.join(root, 'held-'));
+    const rename = () => { throw Object.assign(new Error('busy'), { code: 'EBUSY' }); };
+    expect(await occupiedBy(dir, null, { ...windows, rename })).toMatch(/a process works in it/);
+  });
+
+  it('B7. a dry run moves nothing', async () => {
+    const { dir, rename } = folderAndRename(0);
+    let moved = 0;
+    const counting = (from: string, to: string) => { moved++; rename(from, to); };
+    expect(await occupiedBy(dir, null, { ...windows, rename: counting, dryRun: true })).toBeUndefined();
+    expect(moved).toBe(0);
   });
 });
