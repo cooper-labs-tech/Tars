@@ -19,7 +19,7 @@ export const CHANGELOG: Release[] = [
       'The Kanban page without Hermes no longer reads as a failure: it says the board is a Hermes gateway\'s, a tool installed apart, that the rest of Tars works without it, and how to have it.',
       'A first run for a new user: with no agent yet, the Chats page (and the Dashboard in the classic shell) leads through signing in to Claude, adding a project folder, and deploying its team, whose brief is the orchestrator\'s first task.',
       'Claude Code signed out now reads signed out in New agent, with sign in beside it, instead of ready. A new agent starts in auto, as a team\'s members do, rather than asking before every edit and command.',
-      'New team on a folder that is not a git repository says so, and can make it a repository or deploy every member in the folder itself, instead of failing on git\'s words for each worktree. The first run\'s folder step says what the folder still lacks for pull requests.',
+      'New team on a folder that is not a git repository says so, and can make it a repository or deploy every member in the folder itself, instead of failing on git\'s words for each worktree. The first run\'s folder step says what the folder still lacks for pull requests. New team\'s footer now says how many worktrees the deploy makes, from the members chosen, or that none is made now.',
     ],
   },
   {

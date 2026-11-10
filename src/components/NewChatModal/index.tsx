@@ -16,7 +16,7 @@ import { AgentPanel } from './AgentPanel';
 import { TeamPanel } from './TeamPanel';
 import SkillInstallTerminal from './SkillInstallTerminal';
 import { blankMember } from './team-defaults';
-import { canSubmitAgent, canSubmitTeam, deployButtonLabel, deployedMemberName, ownWorktreeOf, worktreeCount, worktreeToSave } from './logic';
+import { canSubmitAgent, canSubmitTeam, deployButtonLabel, deployedMemberName, ownWorktreeOf, teamDeployFooter, worktreeCount, worktreeToSave } from './logic';
 import type { CreationMode } from './types';
 import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
@@ -542,7 +542,7 @@ export default function NewChatModal({
               </p>
             )
             : mode === 'team'
-              ? <span className="text-xs text-muted-foreground">Five worktrees are created under the project. Nothing is pushed.</span>
+              ? <span data-team-footer className="text-xs text-muted-foreground">{teamDeployFooter(worktreeCount(selectedMembers))}</span>
               // A create main refused, a worktree git could not make say: the dialog stays open with what was chosen.
               // Frame: `Overlay · New agent · not created`.
               : saveRefusal
