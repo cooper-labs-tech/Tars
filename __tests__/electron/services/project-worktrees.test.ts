@@ -52,6 +52,8 @@ import {
  * B3. (L6) Asked for an existing branch (a PR's, existing: true) that the failed fetch could not show, it is made
  *     new from the default branch: refused, and why.
  * B4. A new branch asked while the fetch fails is made, and the answer says the fetch failed.
+ * B5. (M3, the Audit) On Windows nothing is found working in a worktree, and git worktree remove deletes its files
+ *     before failing on the folder a process holds: QA's gate checkout is emptied under it. B1 runs there too.
  */
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -302,9 +304,9 @@ describe('the Audit\'s FIX FIRST on #585', () => {
 });
 
 describe('the Audit\'s re-check of #585', () => {
-  // Windows refuses to delete a folder a process works in, so git's removal fails there by itself (OPERATIONS.md):
-  // the scan is macOS's (lsof) and Linux's (/proc).
-  it.skipIf(process.platform === 'win32')('B1. keeps a gate checkout a process works in, an hour on, on a prune and a remove', async () => {
+  // On every system: lsof on macOS, /proc on Linux, and on Windows a rename of the folder and back, which Windows
+  // refuses while a process works in it (M3). Windows's own case runs in the CI's Windows job.
+  it('B1. keeps a gate checkout a process works in, an hour on, on a prune and a remove', async () => {
     const worker = await newWorktree(p.dir, 'feat/gated', { freeBytes: plenty, protectedPaths: [] }) as { path: string };
     fs.writeFileSync(path.join(worker.path, 'g.txt'), 'g');
     git(worker.path, 'add', '.');
