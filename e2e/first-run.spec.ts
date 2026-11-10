@@ -220,7 +220,7 @@ for (const newInterface of [true, false]) {
       seen.kanban = (await absent.innerText()).replace(/\s+/g, ' ');
       await stepShot(page, `${newInterface ? 'new-' : 'classic-'}5-kanban-without-hermes`);
       await absent.getByRole('link', { name: 'Open Hermes settings' }).click();
-      await expect(page).toHaveURL(/\/settings\?section=hermes/, { timeout: 30_000 });
+      await expect(page).toHaveURL(/\/settings\/?\?section=hermes/, { timeout: 30_000 });
       // 12.
       seen.errors = errors;
       expect(errors).toEqual([]);
