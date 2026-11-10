@@ -28,7 +28,7 @@ function agentWorktrees(): string[] {
 }
 
 const STATUS: Record<WorktreeRefusal['code'], number> = {
-  invalid_branch: 400, not_a_repository: 400, disk_full: 507, too_many: 409, git_refused: 409, dirty: 409, in_use: 409, not_found: 404,
+  invalid_branch: 400, not_a_repository: 400, disk_full: 507, too_many: 409, git_refused: 409, dirty: 409, in_use: 409, not_found: 404, unknown_branch: 404,
 };
 
 export function registerWorktreeRoutes(app: RouteApp): void {
@@ -41,12 +41,13 @@ export function registerWorktreeRoutes(app: RouteApp): void {
   app.post('/api/worktrees', async (req, sendJson) => {
     const agent = callerAgent(req, sendJson);
     if (!agent) return;
-    const { branch } = req.body as { branch?: unknown };
+    const { branch, existing } = req.body as { branch?: unknown; existing?: unknown };
     if (typeof branch !== 'string' || !branch.trim()) {
       sendJson({ error: 'branch is the new worktree\'s branch, as feat/<what>.', code: 'invalid_branch' }, 400);
       return;
     }
-    const made = await newWorktree(agent.projectPath, branch.trim(), { protectedPaths: agentWorktrees() });
+    // existing: a PR's branch, never made new from the default branch when it cannot be found (the Audit's L6 on #585).
+    const made = await newWorktree(agent.projectPath, branch.trim(), { protectedPaths: agentWorktrees(), existing: existing === true });
     if ('code' in made) sendJson(made, STATUS[made.code]);
     else sendJson({ success: true, ...made });
   });

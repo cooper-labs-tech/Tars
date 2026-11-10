@@ -18,10 +18,11 @@ export function registerWorktreeTools(server: McpServer): void {
       description: "Make a worktree for one task in your project, in its .worktrees (which git is told to ignore), with the branch as it is: a branch another worktree holds (the worker's, when you gate its pull request) gives a detached checkout of its head, as pushed to origin when origin has it; a local branch is checked out; a branch only on origin (a pull request from elsewhere) is checked out from origin; any other name is a new branch from the default branch as last fetched (the local one with no remote). The answer says which and the commit it is on. The worktrees whose work is done are removed first. Refused on a disk under 10 GB free, past 20 worktrees, or outside a git repository, with why. Work, commit and push in it; deliver a pull request; never merge.",
       schema: {
         branch: z.string().max(200).describe("The branch, as feat/<what>, fix/<what> or chore/<what>: letters, digits, . _ - and /."),
+        existing: z.boolean().optional().describe("The branch must exist already (a pull request's, when you gate it): refused, never made new from the default branch, when it is neither local nor on origin as last fetched."),
       },
       failure: "making a worktree",
-      async run({ branch }) {
-        const made = (await apiRequest("/api/worktrees", "POST", { branch })) as { path: string; branch: string; kind: string; head: string; base: string; heldBy?: string; note?: string; pruned: string[] };
+      async run({ branch, existing }) {
+        const made = (await apiRequest("/api/worktrees", "POST", { branch, ...(existing ? { existing: true } : {}) })) as { path: string; branch: string; kind: string; head: string; base: string; heldBy?: string; note?: string; pruned: string[] };
         const what = made.kind === "detached" ? `a detached checkout of ${made.branch}'s head, which ${made.heldBy} holds`
           : made.kind === "from-origin" ? `${made.branch}, as origin has it`
           : made.kind === "existing" ? `${made.branch}, as it is`

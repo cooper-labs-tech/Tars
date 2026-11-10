@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { safeGit } from '../utils/safe-git';
+import { buildFullPath } from '../utils/path-builder';
 import { resolveWorktreePath } from '../utils/worktree-path';
 import { gitRefusal } from '../core/chat-slots';
 
@@ -42,7 +43,7 @@ export interface WorktreeInfo {
   detached?: true;
 }
 
-export type WorktreeRefusal = { error: string; code: 'invalid_branch' | 'not_a_repository' | 'disk_full' | 'too_many' | 'git_refused' | 'dirty' | 'in_use' | 'not_found' };
+export type WorktreeRefusal = { error: string; code: 'invalid_branch' | 'not_a_repository' | 'disk_full' | 'too_many' | 'git_refused' | 'dirty' | 'in_use' | 'not_found' | 'unknown_branch' };
 
 export interface NewWorktree {
   path: string;
@@ -78,10 +79,13 @@ const real = (p: string): string => {
   }
 };
 
-/** gh, when it is there: the branch's pull request merged, read from GitHub; false on any failure. */
-function ghPrMerged(projectPath: string): PrMerged {
+/**
+ * gh, when it is there: the branch's pull request merged, read from GitHub; false on any failure. On the full PATH
+ * (buildFullPath): a packaged app's own has no /opt/homebrew/bin nor ~/.local/bin (the Audit's L1 on #585).
+ */
+export function ghPrMerged(projectPath: string): PrMerged {
   return (branch) => new Promise((resolve) => {
-    execFile('gh', ['pr', 'list', '--head', branch, '--state', 'merged', '--json', 'number', '--limit', '1'], { cwd: projectPath, timeout: 15_000, windowsHide: true }, (err, stdout) => {
+    execFile('gh', ['pr', 'list', '--head', branch, '--state', 'merged', '--json', 'number', '--limit', '1'], { cwd: projectPath, timeout: 15_000, windowsHide: true, env: { ...process.env, PATH: buildFullPath() } }, (err, stdout) => {
       if (err) { resolve(false); return; }
       try { resolve((JSON.parse(String(stdout)) as unknown[]).length > 0); } catch { resolve(false); }
     });
@@ -196,11 +200,60 @@ const isProtected = (worktreePath: string, protectedPaths: readonly string[]) =>
   return protectedPaths.some(p => { const r = real(p); return r === wt || r.startsWith(wt + path.sep); });
 };
 
+type ProcessCwd = { pid: number; command: string; cwd: string };
+
+/**
+ * Every process's working directory, as scripts/worktree.mjs reads it (the Audit's M2 on #585: QA's shell cd'd into
+ * its gate checkout is no agent's folder Tars knows): /proc on Linux, lsof on macOS, the lsof Tars runs left out.
+ * Null when they cannot be read. On Windows, null too: Windows refuses to delete a folder a process works in, so
+ * git's removal fails there by itself, and the worktree is kept with git's reason.
+ */
+async function processCwds(): Promise<ProcessCwd[] | null> {
+  if (process.platform === 'win32') return null;
+  const found: ProcessCwd[] = [];
+  if (process.platform === 'linux') {
+    let pids: string[] = [];
+    try { pids = fs.readdirSync('/proc').filter(n => /^\d+$/.test(n)); } catch { return null; }
+    for (const pid of pids) {
+      try { found.push({ pid: Number(pid), command: fs.readFileSync(`/proc/${pid}/comm`, 'utf8').trim(), cwd: fs.readlinkSync(`/proc/${pid}/cwd`) }); } catch { /* gone, or not ours */ }
+    }
+    return found;
+  }
+  const lsof = fs.existsSync('/usr/sbin/lsof') ? '/usr/sbin/lsof' : 'lsof';
+  const stdout = await new Promise<string | null>((resolve) => {
+    execFile(lsof, ['-w', '-a', '-d', 'cwd', '-F', 'pcRn'], { timeout: 20_000, maxBuffer: 32 * 1024 * 1024, env: { ...process.env, PATH: buildFullPath() } }, (err, out) => {
+      resolve(err && !out ? null : String(out ?? ''));
+    });
+  });
+  if (stdout === null) return null;
+  let current: (ProcessCwd & { ppid: number }) | null = null;
+  for (const line of stdout.split('\n')) {
+    if (line.startsWith('p')) current = { pid: Number(line.slice(1)), ppid: 0, command: '', cwd: '' };
+    else if (current && line.startsWith('R')) current.ppid = Number(line.slice(1));
+    else if (current && line.startsWith('c')) current.command = line.slice(1);
+    else if (current && line.startsWith('n')) {
+      current.cwd = line.slice(1);
+      if (!(current.command === 'lsof' && current.ppid === process.pid)) found.push({ pid: current.pid, command: current.command, cwd: current.cwd });
+    }
+  }
+  return found;
+}
+
+/** Why a worktree is in use by a process, or undefined; on macOS and Linux, unknown counts as in use. */
+function occupiedBy(worktreePath: string, cwds: ProcessCwd[] | null): string | undefined {
+  if (cwds === null) return process.platform === 'win32' ? undefined : 'Tars cannot tell which processes work in it (their working folders could not be read)';
+  const wt = real(worktreePath);
+  const inIt = cwds.filter(p => { const r = real(p.cwd); return r === wt || r.startsWith(wt + path.sep); });
+  return inIt.length ? `a process works in it: ${inIt.slice(0, 3).map(p => `${p.command || 'process'} (${p.pid})`).join(', ')}` : undefined;
+}
+
 /** Removes a clean worktree that no agent works in, never by force; its branch stays. By its branch or its name. */
-export async function removeWorktree(projectPath: string, branchOrName: string, opts: { protectedPaths: readonly string[] }): Promise<{ removed: true; branch: string } | WorktreeRefusal> {
+export async function removeWorktree(projectPath: string, branchOrName: string, opts: { protectedPaths: readonly string[]; cwds?: ProcessCwd[] | null }): Promise<{ removed: true; branch: string } | WorktreeRefusal> {
   const found = (await listWorktrees(projectPath)).find(w => w.branch === branchOrName || w.name === branchOrName);
   if (!found) return { error: `No worktree of ${branchOrName} in ${path.join(projectPath, '.worktrees')}.`, code: 'not_found' };
   if (isProtected(found.path, opts.protectedPaths)) return { error: `An agent works in ${found.path}: it is never removed from under it.`, code: 'in_use' };
+  const occupied = occupiedBy(found.path, opts.cwds !== undefined ? opts.cwds : await processCwds());
+  if (occupied) return { error: `${found.path} is not removed: ${occupied}.`, code: 'in_use' };
   if (await isDirty(found.path)) {
     return { error: `${found.path} has uncommitted or untracked changes: commit them${found.branch ? ` on ${found.branch}` : ''} (or move them), then remove it. Nothing was removed.`, code: 'dirty' };
   }
@@ -218,13 +271,16 @@ export async function removeWorktree(projectPath: string, branchOrName: string, 
  * is merged (a squash or a rebase), and a detached gate checkout. Says why it keeps each of the others. A dry run
  * removes nothing.
  */
-export async function pruneWorktrees(projectPath: string, opts: { protectedPaths: readonly string[]; dryRun?: boolean; base?: string; now?: number; prMerged?: PrMerged }): Promise<{ removed: string[]; kept: Array<{ branch: string; why: string }> }> {
+export async function pruneWorktrees(projectPath: string, opts: { protectedPaths: readonly string[]; dryRun?: boolean; base?: string; now?: number; prMerged?: PrMerged; cwds?: ProcessCwd[] | null }): Promise<{ removed: string[]; kept: Array<{ branch: string; why: string }> }> {
   const removed: string[] = [];
   const kept: Array<{ branch: string; why: string }> = [];
   if (!(await isRepository(projectPath))) return { removed, kept };
   const base = opts.base ?? (await defaultBase(projectPath)).base;
   const now = opts.now ?? Date.now();
   const prMerged = opts.prMerged ?? ghPrMerged(projectPath);
+  // The processes' working folders, read once, and only when a worktree is otherwise done.
+  let cwds: ProcessCwd[] | null | undefined = opts.cwds;
+  const scan = async () => (cwds === undefined ? (cwds = await processCwds()) : cwds);
   for (const w of await listWorktrees(projectPath)) {
     const label = w.branch ?? w.name;
     if (isProtected(w.path, opts.protectedPaths)) { kept.push({ branch: label, why: 'an agent works in it' }); continue; }
@@ -235,8 +291,10 @@ export async function pruneWorktrees(projectPath: string, opts: { protectedPaths
     }
     if (now - (await lastMoved(w.path)) < PRUNE_IDLE_MS) { kept.push({ branch: label, why: 'its HEAD moved in the last hour' }); continue; }
     if (await isDirty(w.path)) { kept.push({ branch: label, why: 'uncommitted or untracked changes' }); continue; }
+    const occupied = occupiedBy(w.path, await scan());
+    if (occupied) { kept.push({ branch: label, why: occupied }); continue; }
     if (opts.dryRun) { removed.push(label); continue; }
-    const r = await removeWorktree(projectPath, label, opts);
+    const r = await removeWorktree(projectPath, label, { protectedPaths: opts.protectedPaths, cwds: await scan() });
     if ('removed' in r) removed.push(label);
     else kept.push({ branch: label, why: r.error });
   }
@@ -254,7 +312,7 @@ async function freeBytesOf(projectPath: string): Promise<number> {
  */
 export async function newWorktree(
   projectPath: string, branch: string,
-  opts: { protectedPaths: readonly string[]; freeBytes?: (dir: string) => Promise<number>; prMerged?: PrMerged; max?: number },
+  opts: { protectedPaths: readonly string[]; freeBytes?: (dir: string) => Promise<number>; prMerged?: PrMerged; max?: number; existing?: boolean },
 ): Promise<NewWorktree | WorktreeRefusal> {
   const worktreePath = resolveWorktreePath(projectPath, branch);
   if (!worktreePath || path.isAbsolute(branch)) {
@@ -293,6 +351,12 @@ export async function newWorktree(
       } else if (onOrigin) {
         await run(projectPath, ['worktree', 'add', '--track', '-b', branch, worktreePath, `origin/${branch}`]);
         kind = 'from-origin';
+      } else if (opts.existing) {
+        // A PR's branch, asked as one: never made from the default branch under its name (the Audit's L6 on #585).
+        return {
+          error: `${branch} is neither a local branch nor on origin${note ? `, and ${note}` : ''}: a new branch under that name would hold the default branch's code, not the pull request's. Nothing was made: fetch it in your terminal (git fetch origin ${branch}), then ask again.`,
+          code: 'unknown_branch' as const,
+        };
       } else {
         await run(projectPath, ['worktree', 'add', '--no-track', '-b', branch, worktreePath, base]);
         kind = 'new';

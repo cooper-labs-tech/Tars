@@ -1461,11 +1461,16 @@ report):
   - the branch as it is (the Audit's M1 on #585): held by another worktree, the worker's, a detached checkout of its
     head (origin's when pushed), in `.worktrees/gate/<branch>-<commit>`, which is what QA gates; a local branch,
     itself; one only on origin, from origin; else a new branch. The answer names which (`kind`) and the commit;
-  - removed only when clean and no agent works in it (its own worktree, or its terminal's folder, this one or one
-    inside it), never forced, its branch kept;
+  - removed only when clean and nothing works in it: no agent (its own worktree, its terminal's folder) and no process
+    whose working directory is in it (QA's shell cd'd into its gate checkout: `/proc` on Linux, `lsof` on macOS, as
+    `scripts/worktree.mjs` reads them; on Windows the system refuses to delete a folder a process works in, so git's
+    removal fails and the worktree is kept), never forced, its branch kept;
+  - `existing: true` (QA gating a PR): a branch neither local nor on origin as last fetched is refused, never made from
+    the default branch under the PR's name (the Audit's L6 on #585). Without it, a name nowhere to be found is a new
+    branch, and a failed fetch is said;
   - pruned before each new one, one new worktree at a time per project: clean, no agent in it, HEAD unmoved for an
     hour, and done: a branch with a commit of its own merged into the default branch, or whose pull request GitHub
-    says is merged (`gh pr list --state merged`, for a squash or a rebase), or a detached gate checkout. A branch
+    says is merged (`gh pr list --state merged`, on the full PATH, for a squash or a rebase), or a detached gate checkout. A branch
     never moved since it was made (one reflog entry) is kept, however idle.
 
 ## The disk janitor
