@@ -21,7 +21,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    (no remote);
  * 6. a project's panel offers no single permission level for its team, or applying it changes a chat's runner, or
  *    misses an agent, or does not say how many took it;
- * 7. an uncaught error in the page.
+ * 7. an uncaught error in the page;
+ * 8. the committed CI's line promises a delivery nobody asks for, instead of telling the user to ask the orchestrator
+ *    (the Audit's L3 on PR 587);
+ * 9. a folder Claude Code has seen, never added to Tars, shows main's refusal with no way on (the Audit's L1 on PR 587),
+ *    where the panel offers to add it to Tars and then its offers.
  * Once with the new interface and once with the classic shell.
  * Red on 71a90a4c3 (the frames, PR 586's channels and the first run, no window change): no offer is shown.
  * The artefact: values.json (each line read, git's state, each agent's mode), screenshots.
@@ -94,6 +98,8 @@ for (const newInterface of [true, false]) {
       // 3. The CI's yes.
       await ci.getByRole('button', { name: 'add the CI workflow' }).click();
       await expect(ci).toContainText('Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed', { timeout: 30_000 });
+      // 8.
+      await expect(ci).toContainText('Ask your orchestrator to deliver it as a pull request.');
       seen.ci = await ci.innerText();
       seen.git = {
         head: git(project, 'rev-parse', '--abbrev-ref', 'HEAD'),
@@ -127,6 +133,12 @@ for (const newInterface of [true, false]) {
     const dock = path.join(home, 'projects', 'dock');
     nodeProject(harbor, 'git@github.com:someone/harbor.git');
     nodeProject(dock, null);
+    // 9. A folder Claude Code has seen (its transcripts' folder), never added to Tars.
+    const oldwork = path.join(home, 'projects', 'oldwork');
+    nodeProject(oldwork, null);
+    const transcripts = path.join(home, '.claude', 'projects', oldwork.replace(/[^a-zA-Z0-9]/g, '-'));
+    fs.mkdirSync(transcripts, { recursive: true });
+    fs.writeFileSync(path.join(transcripts, '00000000-0000-4000-8000-000000000002.jsonl'), '');
     const at = '2026-11-10T08:00:00.000Z';
     const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
       id, name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker', permissionMode: 'normal',
@@ -183,6 +195,21 @@ for (const newInterface of [true, false]) {
       seen.modes = modes();
       seen.panel = (await setup.innerText()).replace(/\s+/g, ' ');
       await stepShot(page, `${tag}5-team-level`);
+      await page.getByRole('button', { name: 'close' }).first().click();
+
+      // 9. The folder Claude Code has seen: add it to Tars, then its offers.
+      await page.locator(`[data-project-card="${oldwork}"]`).getByRole('button', { name: 'open' }).click();
+      setup = page.locator('[data-project-setup]');
+      const unknown = setup.locator('[data-setup="unknown"]');
+      await expect(unknown).toContainText('Tars does not know this folder yet', { timeout: 30_000 });
+      await expect(setup).not.toContainText('not one of Tars');
+      seen.unknown = await unknown.innerText();
+      await stepShot(page, `${tag}6-not-known`);
+      await unknown.getByRole('button', { name: 'add it to Tars' }).click();
+      await expect(setup.locator('[data-setup="claude-md"]')).toContainText('A short CLAUDE.md', { timeout: 30_000 });
+      const added = await page.evaluate(() => window.electronAPI!.fs!.listProjects());
+      expect(added.find(p => p.path === oldwork)?.custom).toBe(true);
+      seen.afterAdd = (await setup.innerText()).replace(/\s+/g, ' ');
 
       // 7.
       seen.errors = errors;

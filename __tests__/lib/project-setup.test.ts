@@ -16,7 +16,9 @@ import { ciDoneLine, ciLine, claudeMdDoneLine, claudeMdLine, permissionOutcome, 
  * 5. the team counted for the permission level is not main's (the project's agents, never another project's, never a
  *    chat's runner), so the button names a number main does not change;
  * 6. a permission level applied to some agents and refused for others reads as done, or hides who failed and why;
- *    one refused before any agent (main's error) reads as nothing.
+ *    one refused before any agent (main's error) reads as nothing;
+ * 7. a CI's yes that pruned worktrees of merged work first does not say which (the Audit's L2 on PR 587);
+ * 8. the committed CI's line promises the orchestrator delivers it, when nothing hands it the task (the Audit's L3).
  */
 
 const P = '/u/projects/harbor';
@@ -40,11 +42,19 @@ describe('the CI offer', () => {
     expect(ciLine({ state: 'not_github', why }, P)).toEqual({ tone: 'idle', text: why, offer: false });
   });
 
-  it('a committed CI says the branch, the worktree and that nothing was pushed; a refusal says main\'s error (3)', () => {
-    expect(ciDoneLine({ success: true, branch: 'chore/ci', worktree: `${P}/.worktrees/chore/ci`, file: `${P}/.worktrees/chore/ci/.github/workflows/ci.yml` }, P))
-      .toEqual({ tone: 'running', text: 'Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed: your orchestrator delivers it as a pull request.' });
+  it('a committed CI says the branch, the worktree, that nothing was pushed and what to ask; a refusal says main\'s error (3, 8)', () => {
+    expect(ciDoneLine({ success: true, branch: 'chore/ci', worktree: `${P}/.worktrees/chore/ci`, file: `${P}/.worktrees/chore/ci/.github/workflows/ci.yml`, pruned: [] }, P))
+      .toEqual({ tone: 'running', text: 'Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed. Ask your orchestrator to deliver it as a pull request.' });
     expect(ciDoneLine({ success: false, error: 'The branch chore/ci exists already: Tars writes nothing over it.', code: 'exists' }, P))
       .toEqual({ tone: 'error', text: 'The branch chore/ci exists already: Tars writes nothing over it.' });
+  });
+});
+
+describe('what the CI\'s yes pruned', () => {
+  it('names the worktrees of merged work it removed first, and says nothing when there were none (7)', () => {
+    const made = { success: true as const, branch: 'chore/ci', worktree: `${P}/.worktrees/chore/ci`, file: `${P}/.worktrees/chore/ci/.github/workflows/ci.yml` };
+    expect(ciDoneLine({ ...made, pruned: ['feat/login', 'feat/api'] }, P).note).toBe('Before it, removed the worktrees of work already merged: feat/login, feat/api.');
+    expect(ciDoneLine({ ...made, pruned: [] }, P).note).toBeUndefined();
   });
 });
 
