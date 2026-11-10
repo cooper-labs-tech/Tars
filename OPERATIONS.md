@@ -1728,14 +1728,17 @@ process log says `[permission] <agent> asks Tars: Bash <command>`, then the answ
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
 meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
 answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
-- **Tars allows nothing by itself.** Every question waits for the owner. A shell command is shown whole, and the
-  window may allow or refuse it. A file tool (Write, Edit, MultiEdit, NotebookEdit) is asked by its path alone,
-  `withheld` (the route marks it so whatever the request says): for an agent in bypass it is held, the window may
-  refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
-  Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field past 2,000 characters, a name
-  past 64, the fields past the 16th) is asked the same way, `withheld`, with `withheldWhy` naming each field left out
-  and why. Every other field is shown whole, one that is not text as its JSON (since 2.0.7: Claude in Chrome's
-  `tabId`, `coordinate`, `createIfEmpty` made each of its questions withheld before), and stays allowable.
+- **Tars allows nothing by itself.** Every question waits for the owner, and since 2.0.7 the window can allow every
+  one of them (approve-everywhere): a shell command of any length, a file tool (Write, Edit, MultiEdit,
+  NotebookEdit) with its new content, any number of fields, one that is not text as its JSON (Claude in Chrome's
+  `tabId`, `coordinate`, `createIfEmpty` made each of its questions withheld before). The mod sends a question whole
+  up to 3 MiB a request; past it, its largest fields are withheld, and the question is asked `withheld`, with
+  `withheldWhy` naming each field left out and its size. So is a file tool that comes without its content (the route
+  marks it so whatever the request says). A withheld question is held for an agent in bypass, the window may refuse
+  it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude Code's
+  own dialog. What each tick carries is a view (each field at most 2,000 characters, 32 fields, `cut` naming the
+  rest); the window asks for the question whole (`agent:permissionQuestion`) and its allow names the fingerprint it
+  read: `success: false` when the agent asked about another call meanwhile.
   Bash's timeout, background and sandbox fields are shown as words after the command. The
   window's line names every field an allow covers (a Grep reads `BEGIN OPENSSH in /Users/x/.ssh`). A bypass
   worker's AskUserQuestion is refused at once, telling it to ask its orchestrator with `send_message`; an

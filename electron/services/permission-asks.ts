@@ -23,7 +23,10 @@ import { redactSecrets } from '../utils/redact-secrets';
  * night (2.0.5, fix-permission-dialogs-2810.md; until then it went back to
  * the dialog, and three projects' agents waited there until morning). Tars
  * allows nothing by itself, but for what the owner turned on in the settings
- * (chromeActsWithoutAsking, services/chrome-without-asking.ts); a file tool's question, its content withheld, is
+ * (chromeActsWithoutAsking, services/chrome-without-asking.ts). Since 2.0.7 the
+ * mod sends every field whole, a file's new content included (approve-everywhere):
+ * the window can allow every question but one Tars cannot show whole (a file
+ * tool without its content, a field past the 3 MiB a request carries), which is
  * held for an agent in bypass only, and the window may refuse it, never allow
  * it (hooks-routes.ts). Every decision is written to
  * ~/.tars/logs/permissions.log with who or what decided. Measured on 2.1.289:

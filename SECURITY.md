@@ -252,16 +252,25 @@ three gates found each rule it tried reaching outside the agent's folders: a rea
 tools that a dangling or a hard link led into `.claude/settings.json` (the hooks Claude Code runs), outside, or
 `~/.tars-private`. In bypass, Claude Code only asks about the paths it guards or does not know, which is where such
 links lead, so an allow by Tars had almost no honest use and kept that surface open. What the window may allow is only
-what it shows whole: a shell command. A file tool is asked by its path alone, its content withheld (the mod sends no
-content, and the route marks every file tool withheld whatever the request says): the window may refuse it or hand it
-back, never allow it. So is any call the window cannot show whole: a field past 2,000 characters, a name past 64, the
-fields past the 16th, which the mod sends withheld with the fields it shows and why the rest is not (the Audit's M1 on
-#538), and the mod takes no allow for it either. Any other field is shown whole, one that is not text (a number, a
-boolean, an array, an object) as its JSON, named in `json_fields` and bound by the fingerprint, so an answer about
-`"true"` never allows `true`; until 2.0.7 such a field made the question withheld, and every Claude in Chrome call
-(`tabId`, `coordinate`) was one the window could only refuse. Such a question is held only for an agent in bypass, autonomous, whose
-nights this is for, and refused at the owner's delay; any other agent's goes straight to Claude Code's own dialog,
-where its owner chose to be asked. Every decision goes to
+what it can show whole, and since 2.0.7 that is every question but what does not reach Tars (JeanBrasse's question of
+10 November, approve-everywhere.md: why open the terminal rather than approve in Tars). The mod sends every field
+whole: a shell command of any length, a file tool's new content (Write's content, Edit's old and new strings,
+MultiEdit's edits, NotebookEdit's new source), any number of fields under any name, a field that is not text (a
+number, a boolean, an array, an object) as its JSON, named in `json_fields`, so an answer about `"true"` never allows
+`true`. The one bound is the request: at most 3 MiB, under the 4 MiB the API takes of any body; past it, the largest
+fields are withheld one at a time, each said with its size. The fingerprint the mod binds an answer to covers every
+field it sent, the content included: an answer about a Write's path alone, or about other content, allows nothing.
+Until 2.0.7 a file tool came by its path alone, and a field past 2,000 characters, a name past 64 or a 17th field made
+the question withheld (the Audit's M1 on #538): the window could only refuse them, or open the terminal. The window
+shows a view of each question on every tick (each field at most 2,000 characters, 32 fields, `cut` naming the rest),
+asks Tars for the question whole (`agent:permissionQuestion`) before it offers allow, and names the fingerprint it read
+when it allows: an answer naming another question's changes nothing, so an allow never lands on a call asked after the
+one read, and a question whose view is cut takes no allow without it. What is still withheld (a file tool without its
+content, whatever the request says; a field past the bound; a field with no JSON) the window may refuse or hand back,
+never allow, and the mod takes no allow for it either. Such a question is held only for an agent in bypass, autonomous,
+whose nights this is for, and refused at the owner's delay; any other agent's goes straight to Claude Code's own
+dialog, where its owner chose to be asked. An agent reads the view of a teammate's question (`list_agents`,
+`get_agent`), masked, never its whole content. Every decision goes to
 `~/.tars/logs/permissions.log`, masked, which any agent can write, being the same user: a record for the owner, not
 evidence against a hostile agent.
 
@@ -297,8 +306,8 @@ and it is the owner's to turn on. Measured on claude 2.1.321 with the extension 
   Claude in Chrome's own tools (`mcp__claude-in-chrome__<tool>`) at once and writes who decided in permissions.log.
 - What stays. A deny rule still refuses its site: Claude Code reads `ClaudeInChromeDomain(<site>)` deny rules
   (`~/.claude/settings.json`, an organization's managed settings, its blocked domains) before the mode (read in
-  2.1.321's code, not measured). Tars allows no other tool, and never a withheld Chrome call (a field past 2,000
-  characters, which only the terminal shows whole). A tool whose name holds `claude-in-chrome` further in is not
+  2.1.321's code, not measured). Tars allows no other tool, and never a withheld Chrome call (a field past the 3 MiB a
+  request to Tars carries, which only the terminal shows whole). A tool whose name holds `claude-in-chrome` further in is not
   Chrome's. The server's name is enough to know it (the Audit's L1 on #582): claude 2.1.321 reserves `claude-in-chrome`
   for its built-in server and loads no other under it (measured: a server of that name in `--mcp-config` is refused,
   "is a reserved MCP server name and was not loaded"; in a project's `.mcp.json` it never loads, while the same server
