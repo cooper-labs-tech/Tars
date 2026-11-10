@@ -230722,8 +230722,19 @@
                               ]
                             },
                             {
+                              "type": "text",
+                              "id": "Q9Jnm",
+                              "name": "field",
+                              "fill": "$text-muted",
+                              "content": "command",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
                               "type": "frame",
-                              "id": "VKC7K",
+                              "id": "RDIwd",
                               "name": "subject",
                               "width": "fill_container",
                               "fill": "$term-bg",
@@ -230736,7 +230747,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "VH8SH",
+                                  "id": "n9inkV",
                                   "name": "cmd",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
@@ -230751,16 +230762,17 @@
                             },
                             {
                               "type": "frame",
-                              "id": "saowh",
+                              "id": "LF3Vu",
                               "name": "answers",
                               "gap": 6,
                               "alignItems": "center",
                               "children": [
                                 {
                                   "type": "frame",
-                                  "id": "SdCEV",
+                                  "id": "RBkVi",
                                   "name": "b allow",
                                   "height": 26,
+                                  "fill": "$surface",
                                   "stroke": "$border",
                                   "strokeWidth": 1,
                                   "padding": [
@@ -230772,9 +230784,9 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "yfbMB",
+                                      "id": "L5Rk2",
                                       "name": "l",
-                                      "fill": "$text-secondary",
+                                      "fill": "$text-primary",
                                       "content": "allow",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
@@ -230785,9 +230797,10 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "yc3FJ",
+                                  "id": "xDcXI",
                                   "name": "b deny",
                                   "height": 26,
+                                  "fill": "$surface",
                                   "stroke": "$border",
                                   "strokeWidth": 1,
                                   "padding": [
@@ -230799,9 +230812,9 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "G6NDqJ",
+                                      "id": "YgI0a",
                                       "name": "l",
-                                      "fill": "$text-secondary",
+                                      "fill": "$text-primary",
                                       "content": "deny",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
@@ -230812,11 +230825,10 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "qY7IQ",
+                                  "id": "CKaSV",
                                   "name": "b ask in terminal",
                                   "height": 26,
                                   "stroke": "$border",
-                                  "strokeWidth": 1,
                                   "padding": [
                                     6,
                                     12
@@ -230826,9 +230838,9 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "cXhPf",
+                                      "id": "jwg4e",
                                       "name": "l",
-                                      "fill": "$text-secondary",
+                                      "fill": "$text-muted",
                                       "content": "ask in terminal",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
@@ -233591,8 +233603,19 @@
                               ]
                             },
                             {
+                              "type": "text",
+                              "id": "DGljj",
+                              "name": "field",
+                              "fill": "$text-muted",
+                              "content": "command",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
                               "type": "frame",
-                              "id": "z5q87O",
+                              "id": "TJSjd",
                               "name": "subject",
                               "width": "fill_container",
                               "fill": "$term-bg",
@@ -233605,7 +233628,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "V6eid",
+                                  "id": "MOSxC",
                                   "name": "cmd",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
@@ -233620,16 +233643,17 @@
                             },
                             {
                               "type": "frame",
-                              "id": "aQdDp",
+                              "id": "jFAQd",
                               "name": "answers",
                               "gap": 6,
                               "alignItems": "center",
                               "children": [
                                 {
                                   "type": "frame",
-                                  "id": "BICd9",
+                                  "id": "THx2T",
                                   "name": "b allow",
                                   "height": 26,
+                                  "fill": "$surface",
                                   "stroke": "$border",
                                   "strokeWidth": 1,
                                   "padding": [
@@ -233641,9 +233665,9 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "C4pAU3",
+                                      "id": "JnG8m",
                                       "name": "l",
-                                      "fill": "$text-secondary",
+                                      "fill": "$text-primary",
                                       "content": "allow",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
@@ -233654,9 +233678,10 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "GYAOn",
+                                  "id": "P0abH7",
                                   "name": "b deny",
                                   "height": 26,
+                                  "fill": "$surface",
                                   "stroke": "$border",
                                   "strokeWidth": 1,
                                   "padding": [
@@ -233668,9 +233693,9 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "LGnaI",
+                                      "id": "jauX9",
                                       "name": "l",
-                                      "fill": "$text-secondary",
+                                      "fill": "$text-primary",
                                       "content": "deny",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
@@ -233681,11 +233706,10 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "nwNA7",
+                                  "id": "kQND5",
                                   "name": "b ask in terminal",
                                   "height": 26,
                                   "stroke": "$border",
-                                  "strokeWidth": 1,
                                   "padding": [
                                     6,
                                     12
@@ -233695,9 +233719,9 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "wkJfA",
+                                      "id": "jYq4Q",
                                       "name": "l",
-                                      "fill": "$text-secondary",
+                                      "fill": "$text-muted",
                                       "content": "ask in terminal",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",

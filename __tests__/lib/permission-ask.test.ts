@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { permissionAskLine } from '../../src/lib/permission-ask';
+import { OTHER_SPACE_MARK, TAB_MARK, lineNamesEveryField, permissionAskLine, questionFields, refusalStep } from '../../src/lib/permission-ask';
 import type { AgentStatus } from '../../src/types/electron';
 
 /**
@@ -228,3 +228,80 @@ describe('why Claude Code asks', () => {
   });
 });
 
+
+/**
+ * The question whole, field by field (2.0.7, approve-everywhere; frame `Permission asked of Tars`, its rows `approve a
+ * file, shown whole`, `a cut view, and while it is read` and `the question changed`). Written before the code. How it
+ * can fail:
+ * 12. the fields come in no set order: the main one (command, file_path, notebook_path, url, query, pattern, path) is
+ *     not first, the rest not by name;
+ * 13. a value is cut, trimmed or joined: a blank line dropped, a break read as a space, a tab, another space or a
+ *     hidden character shown as nothing (what is allowed must be what was read);
+ * 14. a field sent as JSON is shown as one line, not indented, or one that does not parse is lost;
+ * 15. a long field gives no size above it, or a short one does;
+ * 16. a refused answer is read without its code (#588 after its Audit: no-question, another-question, read-first,
+ *     withheld, not-a-decision): another question read as late, a withheld one still offered allow, a read-first not
+ *     read again, or main's sentence replaced by another; an answer with no code (an older main, a failed call) read
+ *     as anything but late.
+ */
+describe('the question whole, field by field', () => {
+  it('the main field first, then the others by name (12)', () => {
+    expect(questionFields({ content: 'x', file_path: 'src/a.ts', append: 'no' }, []).map(f => f.name)).toEqual(['file_path', 'append', 'content']);
+    expect(questionFields({ timeout: '120000', command: 'npm test', description: 'tests' }, []).map(f => f.name)).toEqual(['command', 'description', 'timeout']);
+  });
+
+  it('each value whole, every line, every mark (13)', () => {
+    const [f] = questionFields({ content: '\nfirst\r\n\tsecond x‮ \n' }, []);
+    expect(f.lines).toEqual(['', 'first', `${TAB_MARK}second${OTHER_SPACE_MARK}x�`, '', '']);
+  });
+
+  it('a JSON field indented, one that does not parse as it came (14)', () => {
+    const [edits] = questionFields({ edits: '[{"old_string":"a","new_string":"b"}]' }, ['edits']);
+    expect(edits.lines).toEqual(['[', '  {', '    "old_string": "a",', '    "new_string": "b"', '  }', ']']);
+    const [odd] = questionFields({ edits: '[not json' }, ['edits']);
+    expect(odd.lines).toEqual(['[not json']);
+  });
+
+  it('a long field says its size, a short one nothing (15)', () => {
+    const content = Array.from({ length: 400 }, (_, i) => `line ${i}`.padEnd(20, '.')).join('\n');
+    const [f] = questionFields({ content }, []);
+    expect(f.size).toBe(`${content.length.toLocaleString('en-US')} characters, 400 lines`);
+    expect(questionFields({ command: 'npm test' }, [])[0].size).toBe('');
+  });
+
+  it('a refused answer: what the card does for each code, in main\'s words (16)', () => {
+    expect(refusalStep({ code: 'another-question', error: 'E1' })).toEqual({ step: 'changed', say: 'E1', tone: 'waiting' });
+    expect(refusalStep({ code: 'read-first', error: 'E2' })).toEqual({ step: 'read', say: 'E2', tone: 'waiting' });
+    expect(refusalStep({ code: 'withheld', error: 'E3' })).toEqual({ step: 'no-allow', say: 'E3', tone: 'idle' });
+    expect(refusalStep({ code: 'not-a-decision', error: 'E4' })).toEqual({ step: 'stay', say: 'E4', tone: 'error' });
+    expect(refusalStep({ code: 'no-question', error: 'E5' })).toEqual({ step: 'late' });
+    expect(refusalStep({})).toEqual({ step: 'late' });
+    expect(refusalStep(undefined)).toEqual({ step: 'late' });
+  });
+});
+
+/**
+ * What a panel's one line may be allowed on (the Audit's M1 on #589). Written before the code. How it can fail:
+ * 17. main's line names every field but an empty one (permission-asks.ts subjectOf): a Write whose content is empty
+ *     reads as its path alone, an Edit whose new_string is empty as a replacement of nothing, and an allow on that
+ *     line empties the file or deletes the text unseen;
+ * 18. a Bash's description, which does not run, keeps a line from being allowed;
+ * 19. an empty field reads in the block as a blank box with no word.
+ */
+describe('a panel\'s line names every field', () => {
+  it('a field left empty keeps the line from being allowed (17)', () => {
+    expect(lineNamesEveryField('Write', { file_path: '/src/app/main.ts', content: '' })).toBe(false);
+    expect(lineNamesEveryField('Edit', { file_path: '/p/a.ts', old_string: 'x', new_string: '', replace_all: 'false' })).toBe(false);
+    expect(lineNamesEveryField('Write', { file_path: '/src/app/main.ts', content: '   ' })).toBe(false);
+    expect(lineNamesEveryField('Bash', { command: 'npm test' })).toBe(true);
+  });
+
+  it('a Bash\'s description, empty or not, does not count (18)', () => {
+    expect(lineNamesEveryField('Bash', { command: 'npm test', description: '' })).toBe(true);
+    expect(lineNamesEveryField('Bash', { command: '', description: 'run the tests' })).toBe(false);
+  });
+
+  it('an empty field says it is empty above its box (19)', () => {
+    expect(questionFields({ file_path: '/p/a.ts', content: '' }, [])[1]).toEqual({ name: 'content', lines: [''], size: 'empty' });
+  });
+});

@@ -50,6 +50,26 @@ vi.mock('react', async (importOriginal) => ({
  *     call shown whole, show the reason and the rule that asked under the
  *     call, each only when it was given, and the call stays above them;
  *     neither shows as an empty row.
+ *
+ * Every question approved from the window (2.0.7, approve-everywhere; frame `Permission asked of Tars`, its rows
+ * `approve a file, shown whole`, `a cut view, and while it is read`, `the question changed`). Written before the
+ * code; cases 4 to 10 now expect the fingerprint every answer names, which main requires for an allow:
+ * 12. an answer names no fingerprint, or another than the question's shown; a view that gives none (cut, or from an
+ *     older main) is allowed on what it shows;
+ * 13. a cut view is allowed from a panel's line that fits, or from the window before the whole question is read; once
+ *     read, a field is still shown cut, or the allow names the view's fingerprint and not the whole question's;
+ * 14. an allow main refused because the question changed in between (`another-question`) reads late, or hides the
+ *     new question, or allows it by itself, or says it in other words than main's;
+ * 15. ask in terminal stays a first answer: in the window it is not the ghost after deny;
+ * 16. the window shows a value without its field's name, or a long one without its size above it;
+ * 17. a refusal's code is not followed (#588 after its Audit): `read-first` not read again before allow, `withheld`
+ *     still offered allow, `not-a-decision` not said, each in other words than main's sentence;
+ * 18. a panel's line that leaves out an empty field (a Write emptying a file) is allowed from there (the Audit's M1 on
+ *     #589);
+ * 19. the question read whole is another than the one shown (asked in between) and is shown under the old head, or
+ *     one withheld is offered allow (its L1);
+ * 20. a read that failed after `another-question` says Tars holds no question, which it may still hold, and offers no
+ *     way to read it again (its L2).
  */
 
 type Tick = (items: AgentTickItem[]) => void;
@@ -57,9 +77,14 @@ type StatusEvent = (event: { agentId: string; status: string; timestamp: string;
 
 const ASK = {
   tool: 'Bash', askedAt: '2026-10-05T12:02:00.000Z', until: '2026-10-05T12:12:00.000Z',
-  subject: 'npm run build && npm test', fields: { command: 'npm run build && npm test' },
+  subject: 'npm run build && npm test', fields: { command: 'npm run build && npm test' }, fingerprint: 'fp1',
 };
 const LONG = `rm -rf build && ${'npm run build && '.repeat(12)}npm test`;
+/** Main's sentences for its refusals (electron/services/permission-asks.ts). */
+const ANOTHER = 'The agent asked about another call meanwhile: read the new question before you answer it';
+const READ_FIRST = 'An allow names the question it was given for: open the question whole, then allow it';
+const WITHHELD = 'Tars could not receive this question whole, so it cannot be allowed here: refuse it, or answer it in the terminal';
+const NOT_A_DECISION = 'An answer is allow, deny or ask';
 
 function agent(over: Partial<AgentStatus> = {}): AgentStatus {
   return {
@@ -186,11 +211,11 @@ describe('the line answers the question Tars holds', () => {
         expect(textOf(view.result as never)).toContain('npm run build && npm test');
         expect(buttons(view.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
         button(view.result, 'allow').props.onClick!();
-        expect(answer).toHaveBeenCalledWith('a1', 'allow', undefined);
+        expect(answer).toHaveBeenCalledWith('a1', 'allow', undefined, 'fp1');
 
         const other = open(() => asking({ id: 'a2' }));
         button(other.result, 'ask in terminal').props.onClick!();
-        expect(answer).toHaveBeenLastCalledWith('a2', 'ask', undefined);
+        expect(answer).toHaveBeenLastCalledWith('a2', 'ask', undefined, 'fp1');
       });
 
       it('deny asks for a reason first: Enter sends it, spaces are none, Esc goes back without answering (5)', () => {
@@ -209,14 +234,14 @@ describe('the line answers the question Tars holds', () => {
         button(view.result, 'deny').props.onClick!();
         field(view.result)!.onChange({ target: { value: '   ' } });
         button(view.result, 'deny').props.onClick!();
-        expect(answer).toHaveBeenLastCalledWith('a1', 'deny', undefined);
+        expect(answer).toHaveBeenLastCalledWith('a1', 'deny', undefined, 'fp1');
 
         a = asking({ permissionAsk: { ...ASK, askedAt: '2026-10-05T12:04:00.000Z' } });
         view.rerender();
         button(view.result, 'deny').props.onClick!();
         field(view.result)!.onChange({ target: { value: '  use the cached build  ' } });
         field(view.result)!.onKeyDown(key('Enter'));
-        expect(answer).toHaveBeenLastCalledWith('a1', 'deny', 'use the cached build');
+        expect(answer).toHaveBeenLastCalledWith('a1', 'deny', 'use the cached build', 'fp1');
       });
 
       it('the field takes no more than main keeps (9)', () => {
@@ -292,7 +317,7 @@ describe('the line answers the question Tars holds', () => {
       expect(textOf(view.result as never)).toContain(LONG);
       expect(buttons(view.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
       button(view.result, 'allow').props.onClick!();
-      expect(answer).toHaveBeenCalledWith('a1', 'allow', undefined);
+      expect(answer).toHaveBeenCalledWith('a1', 'allow', undefined, 'fp1');
     });
 
     it('the window shows it whole, and offers allow', () => {
@@ -332,6 +357,172 @@ describe('the line answers the question Tars holds', () => {
       button(view.result, 'show all').props.onClick!();
       expect(terms(view.result)).toEqual(['why', 'rule']);
       expect(said(view.result)).toEqual([REASON, 'Bash(rm:*)']);
+    });
+  });
+
+  describe('every question approved from the window', () => {
+    const WHOLE_CONTENT = Array.from({ length: 400 }, (_, i) => `const line${i} = ${i};`).join('\n');
+    const CUT = {
+      ...ASK, tool: 'Write', subject: 'Write /p/src/a.ts', fingerprint: undefined,
+      fields: { file_path: '/p/src/a.ts', content: WHOLE_CONTENT.slice(0, 2000) },
+      cut: [{ field: 'content', length: WHOLE_CONTENT.length }],
+    };
+    const WHOLE = {
+      tool: 'Write', askedAt: ASK.askedAt, until: ASK.until, subject: 'Write /p/src/a.ts',
+      fields: { file_path: '/p/src/a.ts', content: WHOLE_CONTENT }, jsonFields: [], fingerprint: 'fpW',
+    };
+    let question: ReturnType<typeof vi.fn>;
+    beforeEach(() => {
+      question = vi.fn(async () => ({ success: true, question: WHOLE }));
+      g.window = { electronAPI: { agent: { answerPermission: answer, permissionQuestion: question } } };
+    });
+
+    it('a view with no fingerprint is never allowed on what it shows (12)', () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking({ permissionAsk: { ...ASK, fingerprint: undefined } }), layout: 'panel' }));
+      measure(view, true);
+      expect(buttons(view.result).map(b => b.text)).toEqual(['show all', 'deny', 'ask in terminal']);
+    });
+
+    it('a cut view: show all in a panel even when it fits; the window allows once the whole question is read, naming its fingerprint (13)', async () => {
+      const panel = mount(() => PermissionAskNotice({ agent: asking({ permissionAsk: CUT }), layout: 'panel' }));
+      measure(panel, true);
+      expect(buttons(panel.result).map(b => b.text)).toEqual(['show all', 'deny', 'ask in terminal']);
+
+      const view = mount(() => PermissionAskNotice({ agent: asking({ permissionAsk: CUT }), layout: 'window' }));
+      expect(buttons(view.result).map(b => b.text)).toEqual(['deny', 'ask in terminal']);
+      expect(textOf(view.result as never)).toContain('reading the whole question');
+      await settle();
+      view.rerender();
+      expect(question).toHaveBeenCalledWith('a1');
+      expect(textOf(view.result as never)).toContain('const line399 = 399;');
+      expect(buttons(view.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
+      button(view.result, 'allow').props.onClick!();
+      expect(answer).toHaveBeenCalledWith('a1', 'allow', undefined, 'fpW');
+    });
+
+    it('an allow refused because the question changed: said, the new one shown, nothing allowed by itself (14)', async () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, tool: 'Bash', subject: 'npm publish', fields: { command: 'npm publish' }, fingerprint: 'fp2' } }));
+      button(view.result, 'allow').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'another-question', error: ANOTHER });
+      await settle();
+      view.rerender();
+      const text = textOf(view.result as never);
+      expect(text).toContain(ANOTHER);
+      expect(text).toContain('npm publish');
+      expect(buttons(view.result).map(b => [b.text, !!b.props.disabled])).toEqual([['allow', false], ['deny', false], ['ask in terminal', false]]);
+      expect(answer).toHaveBeenCalledTimes(1);
+      reply = deferred<{ success: boolean }>();
+      button(view.result, 'allow').props.onClick!();
+      expect(answer).toHaveBeenLastCalledWith('a1', 'allow', undefined, 'fp2');
+    });
+
+    it('read-first: said, the question read whole again, allow once it is shown (17)', async () => {
+      // The same question read again: its fingerprint is the view's (another would be another question, 19).
+      question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, fingerprint: 'fp1' } }));
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      button(view.result, 'allow').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'read-first', error: READ_FIRST });
+      await settle();
+      view.rerender();
+      await settle();
+      view.rerender();
+      expect(textOf(view.result as never)).toContain(READ_FIRST);
+      expect(question).toHaveBeenCalledWith('a1');
+      expect(textOf(view.result as never)).toContain('const line399 = 399;');
+      expect(buttons(view.result).map(b => [b.text, !!b.props.disabled])).toEqual([['allow', false], ['deny', false], ['ask in terminal', false]]);
+      expect(answer).toHaveBeenCalledTimes(1);
+    });
+
+    it('withheld: said, allow gone, deny and ask in terminal kept; not-a-decision: said in the error tone, the answers kept (17)', async () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      button(view.result, 'allow').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'withheld', error: WITHHELD });
+      await settle();
+      view.rerender();
+      expect(textOf(view.result as never)).toContain(WITHHELD);
+      expect(buttons(view.result).map(b => b.text)).toEqual(['deny', 'ask in terminal']);
+
+      reply = deferred<{ success: boolean }>();
+      const odd = mount(() => PermissionAskNotice({ agent: asking({ id: 'a2' }), layout: 'window' }));
+      button(odd.result, 'deny').props.onClick!();
+      button(odd.result, 'deny').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'not-a-decision', error: NOT_A_DECISION });
+      await settle();
+      odd.rerender();
+      expect(textOf(odd.result as never)).toContain(NOT_A_DECISION);
+      expect(buttons(odd.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
+    });
+
+    it('a panel\'s line leaving out an empty field offers show all, never allow (18)', () => {
+      const empty = mount(() => PermissionAskNotice({ agent: asking({ permissionAsk: { ...ASK, tool: 'Write', subject: 'Write /src/app/main.ts', fields: { file_path: '/src/app/main.ts', content: '' } } }), layout: 'panel' }));
+      measure(empty, true);
+      expect(buttons(empty.result).map(b => b.text)).toEqual(['show all', 'deny', 'ask in terminal']);
+      button(empty.result, 'show all').props.onClick!();
+      expect(textOf(empty.result as never)).toContain('content · empty');
+      expect(buttons(empty.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
+    });
+
+    it('the question read whole is another than the one shown: shown as a new question, under its own head; withheld, no allow (19)', async () => {
+      question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, tool: 'Edit', askedAt: '2026-10-05T12:09:00.000Z', subject: 'Edit /p/b.ts', fields: { file_path: '/p/b.ts', old_string: 'a', new_string: 'b' }, fingerprint: 'fpN' } }));
+      const view = mount(() => PermissionAskNotice({ agent: asking({ permissionAsk: CUT }), layout: 'window' }));
+      await settle();
+      view.rerender();
+      const text = textOf(view.result as never);
+      expect(text).toContain(ANOTHER);
+      expect(text).toContain('Asks to use Edit');
+      expect(text).not.toContain('Asks to use Write');
+      button(view.result, 'allow').props.onClick!();
+      expect(answer).toHaveBeenLastCalledWith('a1', 'allow', undefined, 'fpN');
+
+      question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, withheld: true, withheldWhy: 'content: past 3 MiB' } }));
+      const held = mount(() => PermissionAskNotice({ agent: asking({ id: 'a3', permissionAsk: CUT }), layout: 'window' }));
+      await settle();
+      held.rerender();
+      expect(buttons(held.result).map(b => b.text)).toEqual(['deny', 'ask in terminal']);
+    });
+
+    it('a read that failed after another-question says so and offers to read again, never that the question is gone (20)', async () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      question.mockImplementation(async () => { throw new Error('No handler registered'); });
+      button(view.result, 'allow').props.onClick!();
+      (reply.resolve as (v: unknown) => void)({ success: false, code: 'another-question', error: ANOTHER });
+      await settle();
+      view.rerender();
+      let text = textOf(view.result as never);
+      expect(text).toContain(ANOTHER);
+      expect(text).toContain('The question could not be read');
+      expect(text).not.toContain('Tars no longer holds this question');
+      expect(buttons(view.result).map(b => b.text)).toEqual(['read again', 'deny', 'ask in terminal']);
+
+      question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, tool: 'Bash', subject: 'npm publish', fields: { command: 'npm publish' }, fingerprint: 'fp2' } }));
+      button(view.result, 'read again').props.onClick!();
+      await settle();
+      view.rerender();
+      await settle();
+      view.rerender();
+      text = textOf(view.result as never);
+      expect(text).toContain('npm publish');
+      expect(buttons(view.result).map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
+      expect(answer).toHaveBeenCalledTimes(1);
+    });
+
+    it('in the window, ask in terminal is the ghost after deny (15)', () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
+      const all = buttons(view.result);
+      expect(all.map(b => b.text)).toEqual(['allow', 'deny', 'ask in terminal']);
+      expect((all[2].props as { variant?: string }).variant).toBe('ghost');
+      expect((all[0].props as { variant?: string }).variant).not.toBe('ghost');
+    });
+
+    it('each field by its name, a long one with its size above it (16)', async () => {
+      const view = mount(() => PermissionAskNotice({ agent: asking({ permissionAsk: CUT }), layout: 'window' }));
+      await settle();
+      view.rerender();
+      const text = textOf(view.result as never);
+      expect(text.indexOf('file_path')).toBeGreaterThan(-1);
+      expect(text.indexOf('file_path')).toBeLessThan(text.indexOf('content'));
+      expect(text).toContain(`${WHOLE_CONTENT.length.toLocaleString('en-US')} characters, 400 lines`);
     });
   });
 });
