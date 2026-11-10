@@ -27,6 +27,7 @@ export const CHANGELOG: Release[] = [
       'Claude Code signed out now reads signed out in New agent, with sign in beside it, instead of ready. A new agent starts in auto, as a team\'s members do, rather than asking before every edit and command.',
       'New team on a folder that is not a git repository says so, and can make it a repository or deploy every member in the folder itself, instead of failing on git\'s words for each worktree. The first run\'s folder step says what the folder still lacks for pull requests. New team\'s footer now says how many worktrees the deploy makes, from the members chosen, or that none is made now.',
       'An agent made from a template or a team keeps its role on itself, saved as it is made, instead of only in the prompt it was first started with. A template\'s role is saved only when its prompt is used, as the dialog now says. A team\'s brief is a first task, never a role: created idle, its members do not get it.',
+      'An agent keeps the role you gave it. Until now, whatever it was last started with replaced its role, which it is shown at every session start: a first task, a Restart\'s "Continue working on the previous task", or the note Tars resumes it with after stopping abruptly. A start\'s words are now only its first turn; only the agent\'s edit form and a template set its role.',
     ],
   },
   {

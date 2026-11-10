@@ -740,7 +740,7 @@ Memory is context, not a precondition. Any failure (a slow gateway, an unreadabl
 `hooks/session-start.sh` runs on every fresh Claude session and does three things in order:
 
 1. Registers the session id (`POST /api/hooks/status` with `source`), retrying once after 1 s: a lost registration would make the stale-session guard ignore every later post from that session.
-2. `GET /api/agents/:id/bootstrap`: identity, worktree, saved role prompt, the project's team roster with each teammate's status/branch/skills, orchestration or working rules, and the `## How Tars works` section with the project's folder. This is what makes the "who am I / who is my team" handshake automatic instead of a ritual at the start of every session.
+2. `GET /api/agents/:id/bootstrap`: identity, worktree, saved role prompt (`savedPrompt`, "## Your role", set only by the agent's edit form and a template: a start's prompt is a turn, never its role, since 2.0.7; until then a first task, a Restart's words or the note of a resume after an abrupt stop replaced it), the project's team roster with each teammate's status/branch/skills, orchestration or working rules, and the `## How Tars works` section with the project's folder. This is what makes the "who am I / who is my team" handshake automatic instead of a ritual at the start of every session.
 3. `GET /api/memory/context?project_path=…` for the digest.
 
 Both are concatenated and returned as `hookSpecificOutput.additionalContext`. The token is the CLI's own `CLAUDE_MGR_API_TOKEN`, passed via `-H @<(printf …)` so it never appears in the process list; a CLI Tars did not start has none and the hook reads nothing (it read `~/.dorothy/api-token` until 2.0.4).
