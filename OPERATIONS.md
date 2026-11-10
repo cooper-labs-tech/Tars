@@ -1738,7 +1738,10 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
   it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude Code's
   own dialog. What each tick carries is a view (each field at most 2,000 characters, 32 fields, `cut` naming the
   rest); the window asks for the question whole (`agent:permissionQuestion`) and its allow names the fingerprint it
-  read: `success: false` when the agent asked about another call meanwhile.
+  read: `success: false` when the agent asked about another call meanwhile. Proven with real claude by
+  `E2E_LIVE=1 npx playwright test e2e/approve-everywhere.live.spec.ts` (a Write of 8,692 characters, shown whole and
+  allowed, the file written byte for byte, no dialog); its negative witness runs #582's mod
+  (`E2E_STATE_MOD_DIR=<folder holding its tars-state>`), which withholds the content: the question never reaches Tars.
   Bash's timeout, background and sandbox fields are shown as words after the command. The
   window's line names every field an allow covers (a Grep reads `BEGIN OPENSSH in /Users/x/.ssh`). A bypass
   worker's AskUserQuestion is refused at once, telling it to ask its orchestrator with `send_message`; an
