@@ -32,6 +32,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  */
 
 const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
+const HARBOR_CHAT = 'c0ffee00-0000-4000-8000-0000000000c3';
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, {
   cwd, encoding: 'utf8',
   env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' },
@@ -147,8 +148,14 @@ for (const newInterface of [true, false]) {
     seed(home, newInterface, [
       agent('lead', 'Harbor Lead', { role: 'orchestrator', orchestratorMode: true }),
       agent('fe', 'Frontend Engineer', {}),
-      agent('chat', 'Harbor chat', { kind: 'chat', chatId: 'c-1', teamOrchestratorId: 'lead', permissionMode: 'auto' }),
+      agent('chat', 'Harbor chat', { kind: 'chat', chatId: HARBOR_CHAT, teamOrchestratorId: 'lead', permissionMode: 'auto' }),
     ], [harbor]);
+    // The chat that names its runner: without it, main makes the runner a worker at boot (chat-runners.ts
+    // startChatRunners), and the team is three.
+    fs.writeFileSync(path.join(home, '.tars', 'chats.json'), JSON.stringify({ version: 1, numbers: { [harbor]: 1 }, chats: [{
+      id: HARBOR_CHAT, projectPath: harbor, number: 1, title: 'Main', titleSource: 'user', runnerId: 'chat',
+      sessionIds: [], pinned: false, snoozedUntil: null, settledAt: null, inbox: true, createdAt: at, updatedAt: at, lastActivityAt: at,
+    }] }, null, 2));
     const seen: Record<string, unknown> = { newInterface };
     const errors: string[] = [];
     const app = await launchSandboxed(electron, home, {
