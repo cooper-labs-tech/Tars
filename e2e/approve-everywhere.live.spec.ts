@@ -9,7 +9,7 @@
 //   withheld, and for an agent not in bypass it went straight to the terminal's dialog);
 // - what the agent's status carries is a view: the content cut at 2,000 characters, `cut` naming it, no fingerprint;
 // - agent.permissionQuestion gives the window the question whole, the content byte for byte, with its fingerprint;
-// - an allow that names no fingerprint is refused (`success: false`), the question still held;
+// - an allow that names no fingerprint is refused (`success: false`, `code: 'read-first'`), the question still held;
 // - the allow naming the fingerprint is taken: the file is written with exactly that content, and the terminal's dialog
 //   never opened (no PermissionRequest in hooks.log).
 //
@@ -166,7 +166,8 @@ test('a file an agent writes is asked of Tars with its content, shown whole, and
     expect(view.fingerprint ?? null, 'a cut view names no fingerprint').toBeNull();
     expect(whole.success).toBe(true);
     expect(whole.question.fields).toEqual({ file_path: target, content: expected });
-    expect(blind).toEqual({ success: false });
+    // Refused, and said why (#588's audit, L2): an allow that names no fingerprint.
+    expect(blind).toMatchObject({ success: false, code: 'read-first' });
     expect(stillHeld.permissionAsk, 'still held after the blind allow').not.toBeNull();
     expect(allowed).toEqual({ success: true });
     expect(written, 'the file holds exactly the content the window showed').toBe(expected);
