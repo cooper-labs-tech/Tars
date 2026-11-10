@@ -17,8 +17,8 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 
 - Enter plan mode for non-trivial tasks (3+ steps or architectural decisions)
 - When the user corrects you, write the correction down in memory as a pattern, so the same mistake is not made twice
-- Never mark a task complete without proving it works
-- When given a bug report, just fix it: point at logs, errors, failing tests and resolve them
+- Never mark a task complete without proving it works: a worker runs the proof itself; an orchestrator has its agents run it (QA, audit) and reads their results
+- A worker given a bug report just fixes it: point at logs, errors, failing tests and resolve them. An orchestrator never does: it hands the bug report to one of its agents, as all the work, and never reads the code or the logs to diagnose it itself
 
 ## Core Principles
 

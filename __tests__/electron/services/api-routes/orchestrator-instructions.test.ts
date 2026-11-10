@@ -69,7 +69,7 @@ vi.mock('../../../../electron/services/memory-hub', () => ({
 import { performDispatch } from '../../../../electron/services/api-routes/agent-routes';
 import { agents } from '../../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../../electron/core/pty-manager';
-import { getSuperAgentInstructionsPath } from '../../../../electron/utils';
+import { getAgentInstructionsPath, getSuperAgentInstructionsPath } from '../../../../electron/utils';
 import { RouteContext } from '../../../../electron/services/api-routes/types';
 import { AgentStatus, AppSettings } from '../../../../electron/types';
 
@@ -165,34 +165,52 @@ describe('the rules an orchestrator is actually handed', () => {
   const read = () => fs.readFileSync(getSuperAgentInstructionsPath(), 'utf-8');
 
   /**
-   * The one thing worth asserting about the prose, because it is what makes an
-   * orchestrator open a task for a question that needed a sentence: the
-   * smallest response has to be considered before any tool is reached for, so
-   * the section that says so has to come before the tools do.
+   * The one thing worth asserting about the prose (2.0.7, the owner's rule of
+   * 10/11, which replaces the "smallest response" triage of 2026-09): the
+   * orchestrator only orchestrates. Under the triage, a fresh orchestrator
+   * asked why something was broken read the code itself and delegated nothing
+   * (reports/orchestrator-role-runs, claude 2.1.321). The rule has to come
+   * before any tool is reached for.
    */
-  it('tells the orchestrator to size the response before it reaches for a tool', () => {
+  it('tells the orchestrator it never does the work itself, before it reaches for a tool', () => {
     const text = read();
-    const triage = text.indexOf('smallest response');
+    const rule = text.indexOf('You never do the work yourself');
     const tools = text.indexOf('## Available MCP Tools');
 
-    expect(triage, 'no triage step in the instructions').toBeGreaterThan(-1);
+    expect(rule, 'no rule in the instructions').toBeGreaterThan(-1);
     expect(tools).toBeGreaterThan(-1);
-    expect(triage).toBeLessThan(tools);
+    expect(rule).toBeLessThan(tools);
   });
 
-  it('offers answering without any agent as one of the outcomes', () => {
+  it('no longer offers answering from the code without an agent', () => {
     const text = read();
-    const triage = text.slice(text.indexOf('smallest response'), text.indexOf('## Your identity'));
-
-    // All three sizes, or the smallest one is not really on the table.
-    expect(triage).toMatch(/\*\*No agent\.\*\*/);
-    expect(triage).toMatch(/\*\*One agent\.\*\*/);
-    expect(triage).toMatch(/\*\*Several agents\.\*\*/);
+    expect(text).not.toMatch(/\*\*No agent\.\*\*/);
+    expect(text).not.toContain('reading the code to check a fact');
+    // A project with no agent yet is not a reason to do the work: it creates one.
+    expect(text).toContain('create_agent');
   });
 
   it('does not tell the orchestrator it may only manage', () => {
     // "agent manager only" is what forbade it to answer at all, which is the
     // instruction this whole change exists to replace.
     expect(read()).not.toContain('agent manager only');
+  });
+
+  it('hands work with delegate_task, never the deprecated start_agent (the Audit\'s I3 on #579)', () => {
+    expect(read()).toContain('delegate_task');
+    expect(read()).not.toContain('start_agent');
+  });
+
+  /**
+   * Every agent's instructions, published as ~/.tars/CLAUDE.md and loaded by
+   * every claude session, an orchestrator's too (the Audit's M1 on #579): their
+   * "When given a bug report, just fix it: point at logs, errors, failing tests"
+   * told an orchestrator to diagnose itself, with Read and Bash left to it.
+   */
+  it('every agent\'s instructions tell a worker, never an orchestrator, to fix a bug report itself', () => {
+    const text = fs.readFileSync(getAgentInstructionsPath(), 'utf-8');
+    expect(text).not.toContain('When given a bug report, just fix it');
+    expect(text).toMatch(/A worker given a bug report just fixes it/);
+    expect(text).toMatch(/An orchestrator never does: it hands the bug report to one of its agents/);
   });
 });
