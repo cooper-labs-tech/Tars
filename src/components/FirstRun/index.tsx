@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import { BrandMark } from '@/components/Brand';
 import NewChatModal from '@/components/NewChatModal';
+import ProjectSetup from '@/components/ProjectSetup';
 import { ClaudeAccountLoginModal } from '@/components/Settings/ClaudeAccountLoginModal';
 import { Button, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
@@ -122,6 +123,9 @@ export default function FirstRun() {
               <span className="min-w-0 break-words">{gitLine.text}</span>
             </p>
           )}
+          {/* What the folder is offered for the team's workflow, read again once it is made a repository (frame
+              `First run (2.0.7) · states`, its row `what a project is offered`). */}
+          {folder && <ProjectSetup key={`${folder}:${reread}`} projectPath={folder} firstRun />}
         </Step>
         <Step
           name="team" n={3} done={false} dim={!folder}

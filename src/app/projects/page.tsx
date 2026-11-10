@@ -10,6 +10,7 @@ import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from 
 import type { ClaudeProject } from '@/lib/claude-code';
 import type { AgentStatus, AgentCharacter } from '@/types/electron';
 import NewChatModal from '@/components/NewChatModal';
+import ProjectSetup from '@/components/ProjectSetup';
 import { BrandSpinner, Button, DialogShell, ErrorState, LoadingState, MetaChip, PageHeader, Panel, PanelCaption, StatusSquare } from '@/components/ui';
 import { STATUS_COLORS, statusTone, statusWord } from '@/app/agents/constants';
 import { wakingLine } from '@/lib/asleep-line';
@@ -189,11 +190,15 @@ export default function ProjectsPage() {
       if (selectedPath) {
         const normalizedPath = selectedPath.replace(/\/+$/, '');
         const existsInCustom = customProjects.some(p => comparablePath(p.path) === comparablePath(normalizedPath));
+        const name = lastPathPart(selectedPath) || 'Unknown Project';
         if (!existsInCustom) {
-          const name = lastPathPart(selectedPath) || 'Unknown Project';
           await window.electronAPI?.fs?.addCustomProject(normalizedPath);
           setCustomProjects([...customProjects, { path: normalizedPath, name, addedAt: new Date().toISOString() }]);
         }
+        // Its panel opens, so what it is offered for the team's workflow comes at once (frame `First run (2.0.7) ·
+        // states`, its row `a project's panel, its team there`).
+        setSelectedProject(allProjects.find(p => comparablePath(p.path) === comparablePath(normalizedPath))
+          ?? { id: `custom-${normalizedPath}`, name, path: normalizedPath, sessions: [], lastActivity: new Date() });
       }
     } catch (err) {
       console.error('Failed to add project:', err);
@@ -463,6 +468,7 @@ export default function ProjectsPage() {
           return (
             <div
               key={project.id}
+              data-project-card={project.path}
               className={`flex flex-col gap-2 border bg-card p-3 transition-colors ${
                 isSelected ? 'border-border-accent' : 'border-border'
               } ${hidden ? 'opacity-50' : ''}`}
@@ -653,6 +659,25 @@ export default function ProjectsPage() {
                     <p className="text-[11px] text-muted-foreground mt-1">Last active</p>
                   </Panel>
                 </div>
+
+                {/* What it is offered for the team's workflow, and one level for its whole team. */}
+                {hasElectron && (
+                  <Panel>
+                    <ProjectSetup
+                      key={selectedProject.path}
+                      projectPath={selectedProject.path}
+                      agents={agents}
+                      tracked={isCustomProject(selectedProject.path) || agents.some(a => a.projectPath === selectedProject.path)}
+                      onAddToTars={async () => {
+                        const at = selectedProject.path;
+                        await window.electronAPI?.fs?.addCustomProject(at);
+                        setCustomProjects(list => list.some(p => p.path === at)
+                          ? list
+                          : [...list, { path: at, name: selectedProject.name, addedAt: new Date().toISOString() }]);
+                      }}
+                    />
+                  </Panel>
+                )}
 
                 {/* Project Agents */}
                 {hasElectron && projectAgents.length > 0 && (
