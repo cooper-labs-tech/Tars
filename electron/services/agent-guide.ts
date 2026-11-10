@@ -21,6 +21,7 @@ import type { AgentStatus } from '../types';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { ensureProjectFiles } from '../utils/project-files';
 import { needsPromptInjection } from './memory-hub';
+import { usableHermesConnection } from './hermes-config';
 
 export type GuideRole = 'orchestrator' | 'worker';
 
@@ -264,7 +265,10 @@ export function guideTopic(id: string, version: string, folder: string | null, w
  * folder, and where the details are. Kept to a few lines on purpose: every
  * session of every agent carries it.
  */
-export function identitySection(role: GuideRole, folder: string | null, why?: string): string[] {
+export function identitySection(role: GuideRole, folder: string | null, why?: string, opts: { hermes?: boolean } = {}): string[] {
+  // The kanban is a Hermes board: without a gateway there is none, and no agent is sent to file or claim on it
+  // (QA's fresh-install report, H3, 10/11). With one, as before.
+  const hermes = opts.hermes !== false;
   const where = folder
     ? `- Your project folder, kept by Tars outside the repository: ${folder} (tools/, reports/). Keep scripts and reports worth keeping there, never in a temporary folder, under ~/Documents or in a folder you create at the top of your home folder.`
     : `- Your project has no folder kept by Tars (${why ?? NOT_ABSOLUTE}): keep what must last in the repository or ask your requester.`;
@@ -274,21 +278,23 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
       `- Write each task as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance. tars_guide delegation says more.`,
       `- delegate_task hands a task to the agent's own terminal and returns its full final answer, tokens and cost (claude, Qwen Code; codex, pi, gemini: the answer only; opencode, amp, grok: delivered only). timeoutSeconds is how long it waits: 3600 s when you give none; the task is never stopped there. If it says the task may still be working, read it with task_status: never send it twice. start_agent is deprecated.`,
       `- send_message modes: auto, queue, steer, restart. HELD means it waits for the terminal and goes in by itself.`,
-      `- The kanban is the project's Hermes board (one lane per agent): file the work you split with create_task, so the user sees it.`,
+      hermes
+        ? `- The kanban is the project's Hermes board (one lane per agent): file the work you split with create_task, so the user sees it.`
+        : `- There is no kanban board in this Tars (no Hermes gateway is set up): keep the split in your delegations and your report, and use no kanban tool.`,
       `- ask_user puts a question to the user from your terminal and returns at once: their answer is typed in later. Do not wait for it.`,
     );
   } else {
     lines.push(
       `- Answer whoever asked you with send_message to "requester", or in your final report. HELD means your message waits for the terminal and goes in by itself.`,
       `- You hand no work to another agent and stop none: ask your orchestrator (send_message to "orchestrator"). What you send another worker is a note for information.`,
-      `- The kanban is the project's Hermes board (one lane per agent): claim a task with assign_task, finish it with mark_task_done, file a follow-up you find with create_task.`,
+      hermes
+        ? `- The kanban is the project's Hermes board (one lane per agent): claim a task with assign_task, finish it with mark_task_done, file a follow-up you find with create_task.`
+        : `- There is no kanban board in this Tars (no Hermes gateway is set up): the task you are given is the work, and your report says what is done; use no kanban tool.`,
     );
   }
-  lines.push(
-    where,
-    `- When Hermes refuses or cannot be reached, the user signs in to it in Tars (Settings, Hermes): say so once and go on.`,
-    `- tars_guide gives the details: delegation, messages, held-and-refused, kanban, project-folder, asking-the-user, limits.`,
-  );
+  lines.push(where);
+  if (hermes) lines.push(`- When Hermes refuses or cannot be reached, the user signs in to it in Tars (Settings, Hermes): say so once and go on.`);
+  lines.push(`- tars_guide gives the details: delegation, messages, held-and-refused, kanban, project-folder, asking-the-user, limits.`);
   return lines;
 }
 
@@ -302,7 +308,8 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
 export function agentGuideSection(agent: AgentStatus): string {
   const role: GuideRole = hasOrchestratorPowers(agent) ? 'orchestrator' : 'worker';
   const folder = ensureProjectFiles(agent.projectPath);
-  return identitySection(role, folder.dir, folder.why).join('\n');
+  // A gateway Tars can use, not a file that names one: a connection with no address is no board.
+  return identitySection(role, folder.dir, folder.why, { hermes: usableHermesConnection() !== null }).join('\n');
 }
 
 /**

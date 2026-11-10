@@ -2117,6 +2117,11 @@ result afterwards.
 
 ### The agents' kanban
 
+Without a Hermes gateway Tars can use (`usableHermesConnection`, `services/hermes-config.ts`), there is no
+board: since 2.0.7 every agent's guide says so, and that it uses no kanban tool, the orchestrator keeping the
+split in its delegations and its report (`services/agent-guide.ts`; until then it was sent to file on a Hermes
+board that was not there, QA's fresh-install report, H3). With one, as below.
+
 The agents' kanban tools (`mcp-kanban`: `create_task`, `list_tasks`, `get_task`, `assign_task`,
 `update_task_progress`, `mark_task_done`, `move_task`, `delete_task`) work on the Hermes board,
 the one the Kanban page shows. They go through Tars (`/api/kanban/*`, with the agent's own token)
