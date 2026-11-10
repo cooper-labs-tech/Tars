@@ -94,6 +94,12 @@ describe('the worktree routes', () => {
     expect(fs.existsSync(String(made.body.path))).toBe(true);
   });
 
+  it('WR6. pass existing on, so a PR\'s branch nowhere to be found is refused, not made from main (the Audit\'s L6 on #585)', async () => {
+    const r = await call('POST', '/api/worktrees', { branch: 'feat/pr-nowhere', existing: true }, 'w');
+    expect(r).toMatchObject({ status: 404, body: { code: 'unknown_branch' } });
+    expect(git(mine, 'branch', '--list', 'feat/pr-nowhere')).toBe('');
+  });
+
   it('WR4. say the service\'s refusal with its code', async () => {
     const bad = await call('POST', '/api/worktrees', { branch: '../escape' }, 'w');
     expect(bad).toMatchObject({ status: 400, body: { code: 'invalid_branch' } });

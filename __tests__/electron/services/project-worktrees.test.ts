@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import {
-  newWorktree, listWorktrees, removeWorktree, pruneWorktrees, WORKTREE_MAX, PRUNE_IDLE_MS,
+  newWorktree, listWorktrees, removeWorktree, pruneWorktrees, ghPrMerged, WORKTREE_MAX, PRUNE_IDLE_MS,
 } from '../../../electron/services/project-worktrees';
 
 /**
@@ -44,6 +44,14 @@ import {
  * A5. (L2) A worktree an agent's terminal was started in (ptyCwd), or one inside it, is removed or pruned.
  * A6. (L2) Two new worktrees asked at once both pass the count, or both append to .git/info/exclude: one at a time
  *     per project.
+ *
+ * From the Audit's re-check of #585 (written before the fixes, 2026-11-10):
+ * B1. (M2) A worktree a process works in (QA's shell cd'd into its gate checkout, waiting for the slot an hour) is
+ *     pruned or removed: any process whose working directory is in it keeps it, as scripts/worktree.mjs does.
+ * B2. (L1) gh is looked for on the app's own PATH, which a packaged app's is not: on the full PATH (buildFullPath).
+ * B3. (L6) Asked for an existing branch (a PR's, existing: true) that the failed fetch could not show, it is made
+ *     new from the default branch: refused, and why.
+ * B4. A new branch asked while the fetch fails is made, and the answer says the fetch failed.
  */
 
 vi.setConfig({ testTimeout: 60_000 });
@@ -290,5 +298,66 @@ describe('the Audit\'s FIX FIRST on #585', () => {
     expect(both.filter(r => 'code' in r && r.code === 'too_many')).toHaveLength(1);
     const exclude = fs.readFileSync(path.join(p.dir, '.git', 'info', 'exclude'), 'utf8');
     expect(exclude.match(/^\/\.worktrees\/$/gm)).toHaveLength(1);
+  });
+});
+
+describe('the Audit\'s re-check of #585', () => {
+  // Windows refuses to delete a folder a process works in, so git's removal fails there by itself (OPERATIONS.md):
+  // the scan is macOS's (lsof) and Linux's (/proc).
+  it.skipIf(process.platform === 'win32')('B1. keeps a gate checkout a process works in, an hour on, on a prune and a remove', async () => {
+    const worker = await newWorktree(p.dir, 'feat/gated', { freeBytes: plenty, protectedPaths: [] }) as { path: string };
+    fs.writeFileSync(path.join(worker.path, 'g.txt'), 'g');
+    git(worker.path, 'add', '.');
+    git(worker.path, 'commit', '-q', '-m', 'g');
+    const gate = await newWorktree(p.dir, 'feat/gated', { freeBytes: plenty, protectedPaths: [] }) as { path: string; kind: string };
+    expect(gate.kind).toBe('detached');
+    const inside = path.join(gate.path, 'sub');
+    fs.mkdirSync(inside);
+    // QA's shell, cd'd into its checkout while it waits for the slot.
+    const shell = spawn(process.execPath, ['-e', 'setTimeout(() => {}, 120000)'], { cwd: inside, stdio: 'ignore' });
+    try {
+      await new Promise(r => setTimeout(r, 300));
+      idle(gate.path, PRUNE_IDLE_MS * 2);
+      const pruned = await pruneWorktrees(p.dir, { protectedPaths: [] });
+      expect(pruned.removed).toEqual([]);
+      expect(pruned.kept.find(k => k.branch.startsWith('gate/'))?.why).toMatch(/process works in it/);
+      const name = path.relative(fs.realpathSync(path.join(p.dir, '.worktrees')), fs.realpathSync(gate.path)).split(path.sep).join('/');
+      const removed = await removeWorktree(p.dir, name, { protectedPaths: [] });
+      expect(removed).toMatchObject({ code: 'in_use' });
+      expect((removed as { error: string }).error).toMatch(/process works in it/);
+    } finally {
+      shell.kill();
+    }
+    expect(fs.existsSync(gate.path)).toBe(true);
+  });
+
+  it.skipIf(process.platform === 'win32')('B2. finds gh on the full PATH, not only the app\'s own', async () => {
+    // The first folder buildFullPath lists, in this test's own home: ahead of any gh the machine has.
+    const bin = path.join(os.homedir(), '.nvm', 'versions', 'node', 'v20.11.1', 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'gh'), '#!/bin/sh\necho \'[{"number":7}]\'\n', { mode: 0o755 });
+    const before = process.env.PATH;
+    process.env.PATH = '/usr/bin:/bin';
+    try {
+      expect(await ghPrMerged(p.dir)('feat/any')).toBe(true);
+    } finally {
+      process.env.PATH = before;
+      fs.rmSync(path.join(bin, 'gh'));
+    }
+  });
+
+  it('B3. refuses an existing branch the failed fetch could not show, rather than make it from main', async () => {
+    // The remote is a path, which safeGit never fetches: the fetch fails, and origin's PR branch was never fetched.
+    remoteBranch(p.origin, 'feat/pr-elsewhere');
+    const r = await newWorktree(p.dir, 'feat/pr-elsewhere', { freeBytes: plenty, protectedPaths: [], existing: true });
+    expect(r).toMatchObject({ code: 'unknown_branch' });
+    expect((r as { error: string }).error).toMatch(/fetch.*failed/);
+    expect(git(p.dir, 'branch', '--list', 'feat/pr-elsewhere')).toBe('');
+  });
+
+  it('B4. makes a new branch while the fetch fails, and says so', async () => {
+    const r = await newWorktree(p.dir, 'feat/brand-new', { freeBytes: plenty, protectedPaths: [] });
+    expect(r).toMatchObject({ kind: 'new' });
+    expect((r as { note?: string }).note).toMatch(/fetch from origin failed/);
   });
 });
