@@ -3,7 +3,9 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { buildFullPath } from '../utils/path-builder';
-import { safeGit } from '../utils/safe-git';
+import { safeGit, safeGitEnv } from '../utils/safe-git';
+import { probeVersion } from '../core/version-probe';
+import { resolveCliBinary } from '../platform';
 import { githubRepoOf } from './github-watch';
 
 /**
@@ -66,6 +68,24 @@ function identityEnv(): Record<string, string> {
   return out;
 }
 
+/**
+ * Whether git is there: its version asked through probeVersion (core/version-probe.ts), as every `--version` probe of
+ * the main process, so the quit ends it (QA's gate of the 2.0.7 train, version-probe.test.ts case 6), with the PATH
+ * safeGit hands git. Only git's absence counts, as it did through safeGit: one that answers late or badly is git all
+ * the same, and the calls after it say what is wrong.
+ */
+async function gitThere(opts: ProjectGitOptions): Promise<boolean> {
+  const env = safeGitEnv(process.env, { LC_ALL: 'C', ...(opts.env as Record<string, string> | undefined) });
+  // Windows resolves the binary before it starts (platform/cli-binary.ts): none on the PATH is git's absence.
+  if (process.platform === 'win32' && !resolveCliBinary('git', env, process.platform).ok) return false;
+  try {
+    await probeVersion('git', env, 30_000);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== 'ENOENT';
+  }
+}
+
 /** git through safeGit, its answer read as run() reads one: the exit code, the outputs, and whether git is missing. */
 function runGit(args: string[], cwd: string, opts: ProjectGitOptions, timeout = 30_000): Promise<Ran> {
   const env = { LC_ALL: 'C', ...identityEnv(), ...(opts.env as Record<string, string> | undefined) };
@@ -126,8 +146,7 @@ async function hasIdentity(cwd: string, opts: ProjectGitOptions): Promise<boolea
 export async function gitInit(projectPath: string, opts: ProjectGitOptions): Promise<GitInitResult> {
   const p = projectFolder(projectPath, opts);
   if (!p) return { success: false, code: 'not-a-project', error: `${projectPath} is not one of Tars's projects` };
-  const version = await runGit(['--version'], p, opts);
-  if (version.missing) return { success: false, code: 'git-missing', error: 'git is not installed, or not on the PATH Tars reads' };
+  if (!(await gitThere(opts))) return { success: false, code: 'git-missing', error: 'git is not installed, or not on the PATH Tars reads' };
   // A .git there, file or directory, even one git cannot read: never initialised again, never undone (the Audit's L2).
   const dotGit = path.join(p, '.git');
   let hasDotGit = false;
@@ -179,8 +198,7 @@ export async function projectReadiness(projectPath: string, opts: ProjectGitOpti
   const p = projectFolder(projectPath, opts);
   if (!p) return { success: false, code: 'not-a-project', error: `${projectPath} is not one of Tars's projects` };
   const gh = readGh(await run(opts.gh ?? 'gh', ['auth', 'status', '--hostname', 'github.com'], p, opts, 15_000));
-  const version = await runGit(['--version'], p, opts);
-  if (version.missing) {
+  if (!(await gitThere(opts))) {
     return { success: true, projectPath: p, git: { installed: false, repository: false, hasCommit: false, branch: null }, remote: null, gh, missing: ['git'] };
   }
   const inside = await runGit(['rev-parse', '--is-inside-work-tree'], p, opts);
