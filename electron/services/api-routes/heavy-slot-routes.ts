@@ -35,12 +35,13 @@ function callerAgent(req: RouteRequest, sendJson: SendJson) {
 /**
  * Who may take `gate`, a release gate's priority: the orchestrator, and a chat's runner (core/agent-role.ts), and,
  * since an orchestrator no longer runs the work itself (2.0.7, the Audit's L1 on #579), the agent its project's
- * orchestrator handed its current work to: its live link (requestedBy, on the terminal it runs in now).
+ * orchestrator handed its current work to as a gate (delegate_task's `gate`, the Audit's L4): its live link
+ * (requestedBy, on the terminal it runs in now). Work handed without it puts no run first.
  */
 function mayGate(agent: NonNullable<ReturnType<typeof agents.get>>): boolean {
   if (hasOrchestratorPowers(agent)) return true;
   const link = agent.requestedBy;
-  if (!link || link.ptyId !== agent.ptyId) return false;
+  if (!link || link.gate !== true || link.ptyId !== agent.ptyId) return false;
   const by = agents.get(link.agentId);
   return !!by && hasOrchestratorPowers(by) && by.projectPath === agent.projectPath;
 }

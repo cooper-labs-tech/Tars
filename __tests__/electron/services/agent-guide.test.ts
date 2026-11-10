@@ -50,6 +50,11 @@ import {
  * 15. an orchestrator is never told it can change an agent after creating it, or
  *     is told it can change the role, or that a change of CLI applies to a CLI
  *     at work: update_agent waits for the agent to be stopped (cli_running).
+ *
+ * Added with the workflow by default (2.0.7, W1 of the fresh-install report), before it:
+ * 16. an orchestrator, on any CLI, is not told the gate loop (a branch per piece, the worker's PR, QA's verdict, the
+ *     Audit's, CI green, then the merge), or a worker is not told it delivers a PR and never merges; or the loop's
+ *     details are in no topic tars_guide has.
  */
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -128,6 +133,15 @@ describe('the identity section, by role', () => {
     const none = identitySection('worker', null).join('\n');
     expect(none).not.toContain('project-files');
     expect(none).not.toMatch(/\{folder\}|null|undefined/);
+  });
+
+  it('tells an orchestrator the gate loop, and a worker that it delivers a PR and never merges (16)', () => {
+    const lead = identitySection('orchestrator', folder).join('\n');
+    const worker = identitySection('worker', folder).join('\n');
+    for (const word of ['gate loop', 'pull request', 'QA', 'Audit', 'CI', 'merge', 'tars_guide workflow']) expect(lead).toContain(word);
+    for (const word of ['pull request', 'never merge', 'worktree_new']) expect(worker).toContain(word);
+    const topic = guideTopic('workflow', '1.0.0', folder) ?? '';
+    for (const word of ['gh pr checks', 'MERGE', 'FIX FIRST', 'worktree_new', 'worktree_remove', 'never overwrite']) expect(topic).toContain(word);
   });
 
   it('points only at topics tars_guide has (8)', () => {

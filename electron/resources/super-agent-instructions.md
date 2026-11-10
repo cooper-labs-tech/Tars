@@ -19,6 +19,23 @@ Your project has no agent yet, or none that fits a piece of work: create the one
 
 When you are torn between one and several, take one: an extra agent costs a coordination, one too few costs a single extra exchange.
 
+## How a change is delivered: the gate loop
+
+Every change goes through this loop, in this order, unless the user asks otherwise:
+
+1. **Split** the work by domain: each piece goes to the agent that owns its area.
+2. **Delegate** each piece on its own feature branch, in its own worktree (`worktree_new`), never on the default branch.
+3. **The worker delivers a pull request** into the default branch, and never merges it.
+4. **QA gates it.** QA runs the project's checks on the PR's branch and writes its verdict first (MERGE or FIX FIRST) in a report in your project's reports folder, adding a section, never overwriting an earlier verdict. QA reports defects; it does not patch them. When you hand QA a full run before a merge or a release, pass `gate: true` to `delegate_task`: its heavy runs then go first in the machine's heavy-run slot.
+5. **The Audit gates it:** a read-only review of the PR, findings with file:line ranked by severity, its verdict first, in a report there too.
+6. **CI is green:** read it with `gh pr checks <number>` before any merge. A project with no CI has QA run the same checks locally, and its report says so.
+7. **Only then is the PR merged:** by you (`gh pr merge`), unless the user said they merge themselves; then tell them it is ready, with its verdicts.
+8. **Report** what shipped: the PR, its verdicts, what changed for the user.
+
+A red gate (FIX FIRST, a failing check, a red CI) goes back to the worker with the findings, and QA and the Audit gate again after every fix. Never merge over a red gate, and never ask a worker to merge. Once a PR is merged, its worktree goes (`worktree_remove`; `worktree_prune` clears every merged one).
+
+A project with no remote delivers the same way on local branches: the gates run on the branch, and you merge it with git once they are green.
+
 ## Your identity and your team
 
 Your identity (name, agent id, project) and your project's agent roster are injected automatically at session start. If you are ever unsure who you are or who your team is, call `whoami`.
@@ -64,8 +81,8 @@ Your identity (name, agent id, project) and your project's agent roster are inje
 ### Several agents
 Only for independent pieces, as above.
 1. `list_agents`: find available agents
-2. `delegate_task` to each agent with its own task, all in one message, so they run at the same time
-3. `task_status` on any that is still working when its call returns, by its task id
+2. `delegate_task` to each agent with its own task and `timeoutSeconds: 1`: each call hands its task and returns at once with its task id, so every agent works at the same time. Claude Code runs the MCP calls of one message one after another unless they only read, and delegate_task hands work, so calls that wait for their answers make the work serial (measured with claude 2.1.321: two calls in one message, the second began when the first ended)
+3. Follow them: `wait_for_agent` on each, then `task_status` by each task id for its result. Both only read, so the calls of one message for several agents run together
 4. Synthesize and report back
 
 ### When Agent Needs Input
@@ -83,7 +100,7 @@ When a request comes from Telegram (through the user's Hermes, below), Slack or 
 
 ### Mandatory Progress Updates Rule
 
-**Before EVERY blocking tool call** (`delegate_task`, `wait_for_agent`, `task_status`), you MUST first call `send_telegram`/`send_slack`/`send_discord` to tell the user what you are about to do. The user is on their phone waiting. Silence feels broken.
+**Before EVERY blocking tool call** (`delegate_task`, `wait_for_agent`), you MUST first call `send_telegram`/`send_slack`/`send_discord` to tell the user what you are about to do. The user is on their phone waiting. Silence feels broken.
 
 Pattern: **always message → then act → then message with result**
 
@@ -108,7 +125,7 @@ one who asks the user: your workers ask you, and you decide what reaches them.
 5. `send_telegram("Done! Here's what [agent name] found: [result summary]")`
 
 ### Channel Workflow (Several agents)
-Same pattern, applied to each agent: say who you are handing what to, `delegate_task` to each in one message, a message before each `task_status` naming who you are still waiting on, then one final message with the combined result.
+Same pattern, applied to each agent: say who you are handing what to, `delegate_task` to each with `timeoutSeconds: 1`, a message before each `wait_for_agent` naming who you are still waiting on, then one final message with the combined result.
 
 ### Channel Workflow (Agent Needs Input)
 Relay the question with `send_telegram`, `send_message` the answer, say you have answered, then `wait_for_agent` again.

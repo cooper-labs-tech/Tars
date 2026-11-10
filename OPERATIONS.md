@@ -1430,6 +1430,52 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
 
+## Orchestration: the gate loop and a worktree per task
+
+Since 2.0.7, every project gets the owner's delivery workflow without any setup (W1, W2 and W6 of the fresh-install
+report):
+
+- **The loop**, in the orchestrator's role file (`electron/resources/super-agent-instructions.md`), first in its
+  identity section on every CLI (`services/agent-guide.ts`), in the guide's `workflow` topic and in every agent's
+  instructions (`agent-instructions.md`, `~/.tars/CLAUDE.md`): each piece on its own branch; the worker delivers a
+  pull request and never merges; QA gates it, then the Audit, each a verdict first (MERGE or FIX FIRST) in the
+  project folder's `reports/`, never overwriting an earlier one, never patching; CI green (`gh pr checks`); only
+  then the merge, by the orchestrator or by the user when they said so.
+- **The built-in Full Project Team** tells each member its part: the developers their area, a PR and never a merge;
+  QA and the Audit that they are the gates. No member has a branch of its own any more. The models are the user's
+  defaults: the orchestrator at high effort, the others at their CLI's own (opus at max for every new user's
+  orchestrator, the Audit's L3 on #585, spent the team's quota where it buys least).
+- **Parallel delegation**: `delegate_task` with `timeoutSeconds: 1` to each agent, then `wait_for_agent` and
+  `task_status`. Claude Code runs the tool calls of one message one after another: measured with claude 2.1.321,
+  two waiting `delegate_task` calls in one message ran their 20 s of work in series (40 s), handed with a short
+  timeout they overlapped (`reports/workflow-runs/parallel`).
+- **A release gate**: `delegate_task` with `gate: true`, from the project's orchestrator only (`run-task` refuses it
+  from anyone else, `gate_is_the_orchestrators`). The worker's link carries it (`requestedBy.gate`), and its heavy
+  runs for that task may take `gate` in the slot; any other task's are given `normal`.
+- **Worktrees** (`services/project-worktrees.ts`, `/api/worktrees`, the tools `worktree_new`, `worktree_list`,
+  `worktree_remove`, `worktree_prune`), always in the calling agent's own project:
+  - in `<project>/.worktrees/<branch>`, kept out of git by `.git/info/exclude`, never the project's `.gitignore`;
+  - from `origin/<default>` after a fetch, as last fetched when the fetch fails (said in the answer), or the local
+    default branch with no remote. The fetch runs through `safeGit`: https, http and ssh only, no credential helper;
+  - refused under 10 GB free, past 20 per project, outside a git repository;
+  - the branch as it is (the Audit's M1 on #585): held by another worktree, the worker's, a detached checkout of its
+    head (origin's when pushed), in `.worktrees/gate/<branch>-<commit>`, which is what QA gates; a local branch,
+    itself; one only on origin, from origin; else a new branch. The answer names which (`kind`) and the commit;
+  - removed only when clean and nothing works in it: no agent (its own worktree, its terminal's folder) and no process
+    whose working directory is in it (QA's shell cd'd into its gate checkout: `/proc` on Linux, `lsof` on macOS, as
+    `scripts/worktree.mjs` reads them; on Windows, where no process's folder can be read, a rename of the folder and back,
+    which Windows refuses while a process works in it: git's own removal deletes the files first and fails only on the
+    folder, the Audit's M3 on #585; the move back is tried ten times, further apart each time, since an antivirus or an
+    indexer may hold the folder that moment, and a folder still not moved back is named where it is, kept as in use,
+    the Audit's L8; a dry run moves nothing), never forced, its branch kept;
+  - `existing: true` (QA gating a PR): a branch neither local nor on origin as last fetched is refused, never made from
+    the default branch under the PR's name (the Audit's L6 on #585). Without it, a name nowhere to be found is a new
+    branch, and a failed fetch is said;
+  - pruned before each new one, one new worktree at a time per project: clean, no agent in it, HEAD unmoved for an
+    hour, and done: a branch with a commit of its own merged into the default branch, or whose pull request GitHub
+    says is merged (`gh pr list --state merged`, on the full PATH, for a squash or a rebase), or a detached gate checkout. A branch
+    never moved since it was made (one reflog entry) is kept, however idle.
+
 ## The disk janitor
 
 A scan that proposes, by rule, what may go to give the disk back space, and deletes nothing (2.0.5, lot 3 item H;

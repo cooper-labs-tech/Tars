@@ -219,6 +219,8 @@ export interface AgentStatus {
     /** Set while the link is kept for work the agent left running in the
      *  background: its requester is owed one more note (agent-watch). */
     backgroundLeft?: string[];
+    /** The work was handed as a release gate by its project's orchestrator: its heavy runs may take `gate` (2.0.7). */
+    gate?: true;
   };
   /**
    * Who asked this agent for each piece of work still out, in order
