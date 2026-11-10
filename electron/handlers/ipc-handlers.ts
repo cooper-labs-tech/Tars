@@ -64,7 +64,7 @@ import { usageByProvider as ledgerUsageByProvider } from '../services/usage-ledg
 import { tasksReport } from '../services/task-watch';
 import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
-import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
+import { consumeResumeSessionId, launchResumes, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
@@ -88,6 +88,8 @@ import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
+import { registerFirstRunHandlers } from './first-run-handlers';
+import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -327,7 +329,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
-  ipcMain.handle('agent:create', async (_event, config: {
+  type AgentCreateConfig = {
     projectPath: string;
     skills: string[];
     worktree?: WorktreeConfig;
@@ -345,7 +347,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     /** The toggle's old name, read when `role` is absent. */
     orchestratorMode?: boolean;
     cliPath?: string;
-  }) => {
+  };
+  // The one creation of an agent from the window: agent:create, and every member of teams:deploy (first-run-handlers.ts).
+  const createAgentFromConfig = async (config: AgentCreateConfig) => {
     const id = uuidv4();
     const { shell, args: shellArgv } = agentShell({ setting: getAppSettings().terminalShell });
 
@@ -536,7 +540,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     });
 
     return { ...status, ptyId };
-  });
+  };
+  ipcMain.handle('agent:create', async (_event, config: AgentCreateConfig) => createAgentFromConfig(config));
+  // The first run's channels (2.0.7): a project's git, what it lacks for PR delivery, a team deployed whole or not at all.
+  registerFirstRunHandlers({ createAgent: createAgentFromConfig, projectPaths: () => [...readCustomProjects(), ...[...agents.values()].map(a => a.projectPath)], getAppSettings });
 
   // Start an agent with a prompt (sends command to PTY). The one launch of an
   // agent's CLI into its terminal: the handler below and the restart that
@@ -875,7 +882,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // turn that was not coming.
     if (prompt.trim()) {
       // A chat's message is a turn, not the agent's brief (AgentLaunchOptions.message).
-      if (!options?.message) agent.savedPrompt = prompt;
+      // Nor is a first task (core/first-task.ts): typed once, never the agent's role.
+      if (!options?.message && !options?.firstTask) agent.savedPrompt = prompt;
       agent.status = 'running';
       agent.currentTask = prompt.slice(0, 100);
     } else {
@@ -938,10 +946,19 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
    * session over it and lose the conversation.
    */
   const startAgentCli: AgentLauncher = async (id, prompt, options) => {
-    const launch = launchBegins(id, { withTask: !!prompt?.trim() });
+    // The agent's first task (core/first-task.ts): typed by a start that opens a new conversation, read from the one
+    // this launch resolves (a wake gives no option and continues it all the same), and spent once it launched.
+    const agent = agents.get(id);
+    const resumes = !!agent && launchResumes(agent, options?.resumeSessionId);
+    const first = withFirstTask(agent, prompt ?? '', { message: options?.message, resumes });
+    const launch = launchBegins(id, { withTask: !!first.prompt.trim() });
     try {
-      const result = await launchInTerminal(id, prompt, options);
+      const result = await launchInTerminal(id, first.prompt, first.took ? { ...options, firstTask: true } : options);
       if (!result.success) launchAbandoned(id, launch);
+      else if (first.spent) {
+        spendFirstTask(agents.get(id), first.took);
+        saveAgents();
+      }
       return result;
     } catch (err) {
       launchAbandoned(id, launch);
@@ -980,6 +997,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
   // Wake an asleep agent: its CLI started on its own conversation, nothing
   // typed (core/agent-asleep.ts). The window's `wake`.
+  // A first task kept for the agent's next fresh start (2.0.7, core/first-task.ts): typed once, never its role.
+  ipcMain.handle('agent:set-first-task', async (_event, params: { id?: unknown; task?: unknown }) => {
+    const agent = typeof params?.id === 'string' ? agents.get(params.id) : undefined;
+    const set = setFirstTask(agent, params?.task);
+    if (set.success) saveAgents();
+    return set;
+  });
+
   ipcMain.handle('agent:wake', async (_event, id: string) => {
     const agent = agents.get(id);
     if (!agent) return { success: false, error: 'Agent not found' };
