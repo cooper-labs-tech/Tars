@@ -829333,7 +829333,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 420,
-                  "content": "Each offer shows only when it applies. The workflow is committed on chore/ci in a worktree of its own and never pushed: your orchestrator delivers it as a pull request, like any change.",
+                  "content": "Each offer shows only when it applies. The workflow is committed on chore/ci in a worktree of its own and never pushed; the line tells you to ask your orchestrator to deliver it as a pull request, since nothing hands it the task by itself.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -829417,7 +829417,7 @@
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
-                          "content": "Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed: your orchestrator delivers it as a pull request.",
+                          "content": "Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed. Ask your orchestrator to deliver it as a pull request.",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 12,
@@ -829426,8 +829426,20 @@
                       ]
                     },
                     {
+                      "type": "text",
+                      "id": "h8SjS",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Before it, removed the worktrees of work already merged: feat/login, feat/api.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
                       "type": "frame",
-                      "id": "VlO1P",
+                      "id": "hQ2fI",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 8,
@@ -829435,7 +829447,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "Awftw",
+                          "id": "HIJtJ",
                           "name": "square",
                           "fill": "$status-running",
                           "width": 6,
@@ -829443,7 +829455,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "IwAOG",
+                          "id": "sCsmu",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
@@ -830395,6 +830407,159 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "Adding a project on this page opens its panel, so the offers come at once.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "OuXCv",
+          "name": "a folder Tars does not know",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "L217V",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "F7Msg",
+                  "fill": "$text-muted",
+                  "content": "Projects, a folder Claude Code has seen, never added to Tars",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "P0mxJ",
+                  "name": "unknown",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "aTaUi",
+                      "fill": "$text-muted",
+                      "content": "SET UP FOR YOUR TEAM",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.6
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DFnRv",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "zWqry",
+                          "name": "square",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "brAgv",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 440,
+                          "content": "Tars does not know this folder yet: add it to Tars, and it is offered its CI and CLAUDE.md.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "CpZhy",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "KNgL2",
+                              "name": "b add it to Tars",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ViTo1",
+                                  "fill": "$text-primary",
+                                  "content": "add it to Tars",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Th9sZ",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "f66SaT",
+                  "fill": "$text-muted",
+                  "content": "main's offers are for a project of Tars's own",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "k9ouf",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The Projects page also lists the folders Claude Code has seen. For one never added and no agent's, the panel says so and offers to add it, as + Project does, then reads the offers.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -833648,7 +833813,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 420,
-                  "content": "Each offer shows only when it applies. The workflow is committed on chore/ci in a worktree of its own and never pushed: your orchestrator delivers it as a pull request, like any change.",
+                  "content": "Each offer shows only when it applies. The workflow is committed on chore/ci in a worktree of its own and never pushed; the line tells you to ask your orchestrator to deliver it as a pull request, since nothing hands it the task by itself.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -833732,7 +833897,7 @@
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
-                          "content": "Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed: your orchestrator delivers it as a pull request.",
+                          "content": "Committed .github/workflows/ci.yml on chore/ci, in .worktrees/chore/ci, not pushed. Ask your orchestrator to deliver it as a pull request.",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 12,
@@ -833741,8 +833906,20 @@
                       ]
                     },
                     {
+                      "type": "text",
+                      "id": "EcBf4",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Before it, removed the worktrees of work already merged: feat/login, feat/api.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
                       "type": "frame",
-                      "id": "ZnLlO",
+                      "id": "R0AB2",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 8,
@@ -833750,7 +833927,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "LpGQ8",
+                          "id": "KVI3y",
                           "name": "square",
                           "fill": "$status-running",
                           "width": 6,
@@ -833758,7 +833935,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "c7vuGq",
+                          "id": "U6wp8",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
@@ -834710,6 +834887,159 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "Adding a project on this page opens its panel, so the offers come at once.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "muwgI",
+          "name": "a folder Tars does not know",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "K7vvwK",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "b0nHEc",
+                  "fill": "$text-muted",
+                  "content": "Projects, a folder Claude Code has seen, never added to Tars",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "w7HRFc",
+                  "name": "unknown",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "W3TiuH",
+                      "fill": "$text-muted",
+                      "content": "SET UP FOR YOUR TEAM",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.6
+                    },
+                    {
+                      "type": "frame",
+                      "id": "iXuAX",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "tC5Gc",
+                          "name": "square",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "l5esbO",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 440,
+                          "content": "Tars does not know this folder yet: add it to Tars, and it is offered its CI and CLAUDE.md.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "bBMnq",
+                          "name": "actions",
+                          "gap": 6,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "WciZy",
+                              "name": "b add it to Tars",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                10
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "lFe8R",
+                                  "fill": "$text-primary",
+                                  "content": "add it to Tars",
+                                  "lineHeight": 1.45,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fMW6J",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "pi8C4",
+                  "fill": "$text-muted",
+                  "content": "main's offers are for a project of Tars's own",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "E4zGDe",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The Projects page also lists the folders Claude Code has seen. For one never added and no agent's, the panel says so and offers to add it, as + Project does, then reads the offers.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
