@@ -87227,7 +87227,7 @@
                       "id": "nt6n3",
                       "name": "s",
                       "fill": "$text-secondary",
-                      "content": "Several agents on one project, each on its own branch.",
+                      "content": "Several agents on one project, working in git worktrees.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 12.5,
@@ -319612,7 +319612,7 @@
                       "id": "YrA56",
                       "name": "s",
                       "fill": "$text-secondary",
-                      "content": "Several agents on one project, each on its own branch.",
+                      "content": "Several agents on one project, working in git worktrees.",
                       "lineHeight": 1.45,
                       "fontFamily": "$font-ui",
                       "fontSize": 12.5,
@@ -827075,7 +827075,7 @@
                                   "fill": "$text-muted",
                                   "textGrowth": "fixed-width",
                                   "width": 420,
-                                  "content": "The folder your agents work in. In a git repository, each member gets its own worktree.",
+                                  "content": "The folder your agents work in. In a git repository, they work in worktrees of their own.",
                                   "lineHeight": 1.45,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -828611,6 +828611,36 @@
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pwj7Y",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "sk4s0",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "U2rmn",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The brief went to nobody: Orchestrator was already on this project. Give it the task yourself, in its chat or its terminal.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
                     }
                   ]
                 }
@@ -828914,6 +828944,104 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "With no gateway set up, the page says what the board is and how to get it, instead of an error. A gateway set up but unreachable keeps its error and Retry.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Ljku1",
+          "name": "new team from the first run",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "KKzTF",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "P90eSs",
+                  "fill": "$text-muted",
+                  "content": "New team, opened from the first run: the team alone",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "LD7aB",
+                  "name": "head",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "f4pF2",
+                      "fill": "$text-primary",
+                      "content": "New team",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-display",
+                      "fontSize": 20,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "j5pq5g",
+                      "fill": "$text-secondary",
+                      "content": "Several agents on one project, working in git worktrees.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "pVPr0",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "H0pk7q",
+                  "fill": "$text-muted",
+                  "content": "no One agent switch",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "Ob4T0",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -829906,7 +830034,7 @@
                                   "fill": "$text-muted",
                                   "textGrowth": "fixed-width",
                                   "width": 420,
-                                  "content": "The folder your agents work in. In a git repository, each member gets its own worktree.",
+                                  "content": "The folder your agents work in. In a git repository, they work in worktrees of their own.",
                                   "lineHeight": 1.45,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -831445,6 +831573,36 @@
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L00C0h",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iKFxB",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "qj9QD",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "The brief went to nobody: Orchestrator was already on this project. Give it the task yourself, in its chat or its terminal.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
                     }
                   ]
                 }
@@ -831748,6 +831906,104 @@
                   "textGrowth": "fixed-width",
                   "width": 420,
                   "content": "With no gateway set up, the page says what the board is and how to get it, instead of an error. A gateway set up but unreachable keeps its error and Retry.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "jgLTg",
+          "name": "new team from the first run",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "M9Xfw",
+              "name": "panel",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "dWtsL",
+                  "fill": "$text-muted",
+                  "content": "New team, opened from the first run: the team alone",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "DoU6C",
+                  "name": "head",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gl4pw",
+                      "fill": "$text-primary",
+                      "content": "New team",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-display",
+                      "fontSize": 20,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "nnHkr",
+                      "fill": "$text-secondary",
+                      "content": "Several agents on one project, working in git worktrees.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "bDIKa",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TEYXX",
+                  "fill": "$text-muted",
+                  "content": "no One agent switch",
+                  "lineHeight": 1.45,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "VU2nU",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
