@@ -750,6 +750,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('teamTemplate:delete', id),
   },
 
+  // What a project is offered so that the owner's workflow runs there (handlers/project-setup-handlers.ts): its CI
+  // workflow and its CLAUDE.md, written only on the owner's yes, and one permission level for its whole team.
+  projectSetup: {
+    offer: (projectPath: string) => ipcRenderer.invoke('project:setupOffer', projectPath),
+    writeCi: (projectPath: string) => ipcRenderer.invoke('project:writeCi', projectPath),
+    writeClaudeMd: (projectPath: string) => ipcRenderer.invoke('project:writeClaudeMd', projectPath),
+    setTeamPermissionMode: (projectPath: string, permissionMode: string) =>
+      ipcRenderer.invoke('project:setTeamPermissionMode', { projectPath, permissionMode }),
+  },
+
   // The heavy-run slot for the whole machine (services/heavy-slot.ts): who holds it, who waits and why, and the
   // alerts during a run (the disk filling, the swap growing fast).
   heavySlot: {
