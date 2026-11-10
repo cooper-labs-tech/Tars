@@ -1800,7 +1800,9 @@ process log says `[permission] <agent> asks Tars: Bash <command>`, then the answ
 `ask, back to its dialog`; `<agent>'s mod asks again after a failed request: <error>` when one of
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
 meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
-answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
+answers with `agent:answerPermission`; nothing else can. Ask in terminal on a chat's page (the new interface)
+then opens that orchestrator's window on its terminal, where Claude Code's dialog waits (2.0.7): the page shows no
+terminal, and the question seemed to vanish. The Dashboard's panel and an agent window already show it. Since 2.0.5 (fix-permission-dialogs-2810.md):
 - **Tars allows nothing by itself.** Every question waits for the owner, and since 2.0.7 the window can allow every
   one of them (approve-everywhere): a shell command of any length, a file tool (Write, Edit, MultiEdit,
   NotebookEdit) with its new content, any number of fields, one that is not text as its JSON (Claude in Chrome's

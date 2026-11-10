@@ -32,6 +32,7 @@ export const CHANGELOG: Release[] = [
       'A permission question can be allowed from the window whatever its fields hold: a number, a yes or no, a list or a set of values is shown whole, as text.',
       'Every permission question can now be allowed from the window, without opening the terminal: a file an agent writes or edits is shown with its new content, and a long command or a call with many fields whole. Only a question past 3 MB stays refuse or ask in terminal. An allow applies to the very question you read: if the agent asks about another call meanwhile, nothing is allowed.',
       'A new setting lets Claude in Chrome act with no question at all, for every agent of every project: off unless you turn it on, it takes away the safety review Claude Code gives each browser action (SECURITY.md says what it opens). Until Settings has a switch: quit Tars, write { "chromeActsWithoutAsking": true } into ~/.tars-private/owner-switches.json, start Tars again.',
+      'Ask in terminal on a chat\'s page now opens the orchestrator\'s window on its terminal, where Claude Code\'s own dialog waits for your answer. The chat\'s page shows no terminal, so the question seemed to vanish.',
     ],
   },
   {
