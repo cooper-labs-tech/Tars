@@ -11,7 +11,7 @@ import { restartRunnersOf } from '../services/chat-runners';
 import { diskSpace, listOrphanFolders, removeOrphanFolders } from '../services/orphan-folders';
 import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '../services/disk-janitor';
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
-import { answerPermission, type PermissionDecision } from '../services/permission-asks';
+import { decidePermission, permissionQuestionOf, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
 import { publishedWaitingOn } from '../utils/waiting-on';
 import { defaultShell } from '../utils/default-shell';
@@ -1085,10 +1085,20 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   // The window's answer to a permission question the state mod asked Tars
   // (services/permission-asks.ts): allow or deny decide the call, ask hands it
   // back to the terminal's dialog. Given as the user: the model reads it.
-  ipcMain.handle('agent:answerPermission', async (_event, id: string, decision: unknown, reason?: unknown) => {
-    // The window hears of it through the question's own event (hooks-routes).
-    const answered = answerPermission(id, decision as PermissionDecision, 'the user', typeof reason === 'string' ? reason : undefined);
-    return { success: answered };
+  ipcMain.handle('agent:answerPermission', async (_event, id: string, decision: unknown, reason?: unknown, fingerprint?: unknown) => {
+    // The window hears of it through the question's own event (hooks-routes). The fingerprint is the one it read:
+    // an answer to another question changes nothing, and every allow names it (approve-everywhere, the Audit's M1
+    // on #588). Refused, it says why, so the window can say what happened (its L2).
+    const answer = decidePermission(id, decision as PermissionDecision, 'the user', typeof reason === 'string' ? reason : undefined,
+      typeof fingerprint === 'string' ? fingerprint : undefined);
+    return answer.ok ? { success: true } : { success: false, code: answer.code, error: answer.error };
+  });
+
+  // The question Tars holds for an agent, whole: what the window shows before an allow, beyond the view every tick
+  // carries (each field at most 2,000 characters, services/permission-asks.ts).
+  ipcMain.handle('agent:permissionQuestion', async (_event, id: unknown) => {
+    const question = typeof id === 'string' ? permissionQuestionOf(id) : undefined;
+    return question ? { success: true, question } : { success: false, error: 'Tars holds no permission question for this agent' };
   });
 
   // Remove an agent

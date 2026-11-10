@@ -40,7 +40,8 @@
  *    the asked fields, sorted by name.
  * 10. (Medium 2) A field is cut to the mod's cap and the cut text is asked
  *    about while the whole call runs: a field past 2,000 characters is not
- *    asked of Tars, the terminal's dialog shows it whole.
+ *    asked of Tars, the terminal's dialog shows it whole. (Since
+ *    approve-everywhere, item 27: no field is cut, every one is sent whole.)
  * 11. (Low) Claude Code's rule is not sent: in bypass it is the only reason
  *    Tars is asked.
  * And from the Audit's recheck (GATE-PR318-320-RECHECK.md), agreed by JeanBrasse
@@ -48,7 +49,8 @@
  * 12. A tool that carries content (Edit, Write, NotebookEdit) is asked of
  *    Tars, which shows its path and never its content: an allow there would
  *    approve what nobody saw. (Since 28/10, item 15: asked by its path alone and
- *    marked withheld; anything but Tars's deny keeps the dialog.)
+ *    marked withheld; anything but Tars's deny keeps the dialog. Since
+ *    approve-everywhere, item 26: asked with its content, whole, and allowable.)
  * And from the Audit's second recheck (GATE-PR318-320-RECHECK2.md, proof
  * gate-318/mcp-content.test.ts): a call whose input held a field Tars did not
  * show reached it with `fields: {}`: a tweet's text, a message, a delegated
@@ -64,7 +66,7 @@
  * And from the orchestrator's decision of 28/10 (#538's re-check):
  * 15. A file tool's call (Write, Edit, MultiEdit, NotebookEdit) reaches Tars
  *    with its content: it is asked by its other fields alone, marked
- *    `withheld`, and only Tars's deny is taken.
+ *    `withheld`, and only Tars's deny is taken. (Reversed by item 26.)
  * And from the Audit's fourth gate of #538 (M1 at ff0e3f2d):
  * 16. A question the mod cannot show whole is left to the dialog without a word
  *    to Tars: it must be posted marked `withheld`, with the fields Tars shows
@@ -107,15 +109,29 @@
  *    that `true` never binds as `"true"`.
  * 23. A file's new content is sent: Write's content, Edit's old and new
  *    strings, MultiEdit's edits, NotebookEdit's new source are never sent,
- *    whatever their size; the file tool's other fields are.
+ *    whatever their size; the file tool's other fields are. (Reversed by item 26.)
  * 24. The route refuses a question with more than 16 fields or a field name
  *    past 64 characters, and the dialog shows: the mod withholds those instead,
- *    so the mod and the route agree.
+ *    so the mod and the route agree. (Since approve-everywhere, item 27: neither
+ *    caps them, both take them whole.)
  * 25. A refusal from Tars reaches the model as nothing: the deny's message is
  *    Tars's reason.
+ * And from the owner's question of 10/11 around 02:00 (+04), "pourquoi ouvrir le terminal et ne plutôt remplacer 'ask
+ * in terminal' par 'approve' ???" (approve-everywhere.md): the window must be able to allow every question but what
+ * cannot reach Tars at all. Written before the code:
+ * 26. A file's new content is never sent, so a file tool's question is withheld and the window can never allow it:
+ *     Write's content, Edit's old and new strings, MultiEdit's edits and NotebookEdit's new source are sent whole,
+ *     the fingerprint taken over them, and the question is not withheld.
+ * 27. A field past 2,000 characters, a 17th field or a field name past 64 characters makes the question withheld:
+ *     each is sent whole. The one bound is the request itself, at most 3 MiB of JSON (QUESTION_CAP), under the 4 MiB
+ *     the API takes of any body (api-server.ts MAX_BODY_BYTES).
+ * 28. A question past that bound is posted all the same (the API refuses it, three failures in a row, the dialog with
+ *     no word to Tars), or loses every field: its largest fields are withheld, one at a time, until the request fits,
+ *     each said with its size; the rest is sent whole, and only Tars's deny is taken.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
+import { QUESTION_CAP } from '../../mods/tars-state/hooks/register';
 
 type Hook = ($: unknown, e: unknown, next: (e: unknown) => Promise<unknown>) => unknown;
 
@@ -308,9 +324,9 @@ describe("the mod's permission questions", () => {
     expect(permissionPosts()[1].body).toMatchObject({ input: { command: 'ls', timeout: '{"ms":1}' }, json_fields: ['timeout'] });
   });
 
-  it('18. takes a deny for a withheld question, never an allow', async () => {
+  it('18, 28. takes a deny for a withheld question, never an allow', async () => {
     await start();
-    const long = { tool: 'mcp__dorothy-x__x_post_tweet', input: { text: 'x'.repeat(2001) }, tool_use_id: 'toolu_x' };
+    const long = { tool: 'mcp__dorothy-x__x_post_tweet', input: { text: 'x'.repeat(QUESTION_CAP + 1) }, tool_use_id: 'toolu_x' };
     expect(await decide(long)).toEqual(DIALOG);
     expect(permissionPosts()[0].body).toMatchObject({ withheld: true });
     answer = async () => ({ text: JSON.stringify({ decision: 'deny', reason: 'you refused it in Tars' }) });
@@ -349,29 +365,34 @@ describe("the mod's permission questions", () => {
     expect(permissionPosts().map(p => p.body.tool_use_id)).toEqual(['toolu_1', 'toolu_1', 'toolu_1']);
   });
 
-  it('15, 18, 23. asks Tars about a file tool without its new content, withheld, and keeps the dialog unless Tars refuses it', async () => {
+  it('26. asks Tars about a file tool with its new content, whole, and takes its allow', async () => {
     await start();
-    answer = async () => ({ text: JSON.stringify({ decision: 'ask' }) });
+    const file = `# Notes\n${'line\n'.repeat(2000)}`;
     const calls = [
-      { tool: 'Write', input: { file_path: '/p/notes.md', content: 'a whole file' }, tool_use_id: 'toolu_w' },
+      { tool: 'Write', input: { file_path: '/p/notes.md', content: file }, tool_use_id: 'toolu_w' },
       { tool: 'Edit', input: { file_path: '/p/a.ts', old_string: 'old text', new_string: 'new text', replace_all: true }, tool_use_id: 'toolu_e' },
       { tool: 'MultiEdit', input: { file_path: '/p/b.ts', edits: [{ old_string: 'o', new_string: 'n' }] }, tool_use_id: 'toolu_m' },
       { tool: 'NotebookEdit', input: { notebook_path: '/p/n.ipynb', new_source: 'print(1)', cell_id: 'c' }, tool_use_id: 'toolu_n' },
     ];
-    for (const call of calls) expect(await decide(call), call.tool).toEqual(DIALOG);
-    expect(permissionPosts().map(p => [p.body.tool, p.body.input, p.body.withheld, p.body.withheld_why])).toEqual([
-      ['Write', { file_path: '/p/notes.md' }, true, "content: a file's new content"],
-      ['Edit', { file_path: '/p/a.ts', replace_all: 'true' }, true, "new_string: a file's new content; old_string: a file's new content"],
-      ['MultiEdit', { file_path: '/p/b.ts' }, true, "edits: a file's new content"],
-      ['NotebookEdit', { notebook_path: '/p/n.ipynb', cell_id: 'c' }, true, "new_source: a file's new content"],
+    for (const call of calls) expect(await decide(call), call.tool).toEqual(ALLOW);
+    expect(permissionPosts().map(p => [p.body.tool, p.body.input, p.body.json_fields, p.body.withheld])).toEqual([
+      ['Write', { file_path: '/p/notes.md', content: file }, undefined, undefined],
+      ['Edit', { file_path: '/p/a.ts', old_string: 'old text', new_string: 'new text', replace_all: 'true' }, ['replace_all'], undefined],
+      ['MultiEdit', { file_path: '/p/b.ts', edits: '[{"old_string":"o","new_string":"n"}]' }, ['edits'], undefined],
+      ['NotebookEdit', { notebook_path: '/p/n.ipynb', new_source: 'print(1)', cell_id: 'c' }, undefined, undefined],
     ]);
-    const sent = JSON.stringify(permissionPosts().map(p => p.body));
-    for (const content of ['a whole file', 'old text', 'new text', '"o"', 'print(1)']) expect(sent).not.toContain(content);
-    answer = async () => ({ text: JSON.stringify({ decision: 'deny', reason: 'not now' }) });
-    expect(await decide(calls[0])).toEqual(denied('not now'));
-    // Another tool's `content` field is not a file's content: shown.
-    answer = async () => ({ text: JSON.stringify({ decision: 'allow' }) });
-    expect(await decide({ tool: 'mcp__x__post', input: { content: 'hi' }, tool_use_id: 'toolu_p' })).toEqual(ALLOW);
+  });
+
+  it('26. binds a file tool\'s allow to its content: an answer about the path alone allows nothing', async () => {
+    await start();
+    rawAnswers = true;
+    const write = { tool: 'Write', input: { file_path: '/p/notes.md', content: 'what is written' }, tool_use_id: 'toolu_w' };
+    answer = async () => ({ text: JSON.stringify({ decision: 'allow', fingerprint: fingerprint('Write', { file_path: '/p/notes.md' }) }) });
+    expect(await decide(write)).toEqual(DIALOG);
+    answer = async () => ({ text: JSON.stringify({ decision: 'allow', fingerprint: fingerprint('Write', { file_path: '/p/notes.md', content: 'something else' }) }) });
+    expect(await decide(write)).toEqual(DIALOG);
+    answer = async () => ({ text: JSON.stringify({ decision: 'allow', fingerprint: fingerprint('Write', write.input) }) });
+    expect(await decide(write)).toEqual(ALLOW);
   });
 
   it('7, 14. gives up to the dialog after a bounded number of asks', async () => {
@@ -431,44 +452,60 @@ describe("the mod's permission questions", () => {
     expect(await decide(bash)).toEqual(ALLOW);
   });
 
-  it('10, 16. sends a field whole up to the cap, and a call whose field is past it withheld, without that field', async () => {
+  it('10, 27. sends a field whole past 2,000 characters, as text or as its JSON, and the call stays allowable', async () => {
     await start();
-    const whole = `echo ${'x'.repeat(1900)}`;
-    await decide({ tool: 'Bash', input: { command: whole }, tool_use_id: 'toolu_w' });
-    expect(permissionPosts().at(-1)!.body.input).toEqual({ command: whole });
-    expect(permissionPosts().at(-1)!.body.withheld).toBeUndefined();
-    answer = async () => ({ text: JSON.stringify({ decision: 'ask' }) });
     const heredoc = `cat > /p/s.md <<'EOF'\n${'y'.repeat(3000)}\nEOF`;
-    expect(await decide({ tool: 'Bash', input: { command: heredoc, description: 'notes', timeout: 60000 }, tool_use_id: 'toolu_big' })).toEqual(DIALOG);
-    expect(permissionPosts().at(-1)!.body).toMatchObject({
-      input: { description: 'notes', timeout: '60000' }, json_fields: ['timeout'], withheld: true,
-      withheld_why: `command: ${heredoc.length.toLocaleString('en-US')} characters, past the 2,000 the window shows`,
-    });
-    expect(JSON.stringify(permissionPosts().at(-1)!.body)).not.toContain('yyyy');
-    // A field that is not text counts its JSON against the cap.
+    expect(await decide({ tool: 'Bash', input: { command: heredoc, description: 'notes', timeout: 60000 }, tool_use_id: 'toolu_big' })).toEqual(ALLOW);
+    expect(permissionPosts().at(-1)!.body).toMatchObject({ input: { command: heredoc, description: 'notes', timeout: '60000' }, json_fields: ['timeout'] });
+    expect(permissionPosts().at(-1)!.body.withheld).toBeUndefined();
     const list = Array.from({ length: 700 }, (_, i) => i);
-    await decide({ tool: 'mcp__claude-in-chrome__find', input: { query: 'q', list }, tool_use_id: 'toolu_arr' });
-    expect(permissionPosts().at(-1)!.body).toMatchObject({
-      input: { query: 'q' }, withheld: true,
-      withheld_why: `list: ${JSON.stringify(list).length.toLocaleString('en-US')} characters, past the 2,000 the window shows`,
-    });
+    expect(await decide({ tool: 'mcp__claude-in-chrome__find', input: { query: 'q', list }, tool_use_id: 'toolu_arr' })).toEqual(ALLOW);
+    expect(permissionPosts().at(-1)!.body).toMatchObject({ input: { query: 'q', list: JSON.stringify(list) }, json_fields: ['list'] });
+    expect(permissionPosts().at(-1)!.body.withheld).toBeUndefined();
   });
 
-  it('24. withholds more fields than the window takes, and a field name past 64 characters, never sending them', async () => {
+  it('24, 27. sends more than 16 fields and a field name past 64 characters, whole', async () => {
+    await start();
+    const many = Object.fromEntries(Array.from({ length: 40 }, (_, i) => [`f${String(i).padStart(2, '0')}`, `v${i}`]));
+    expect(await decide({ tool: 'mcp__any__run', input: many, tool_use_id: 'toolu_many' })).toEqual(ALLOW);
+    expect(permissionPosts().at(-1)!.body.input).toEqual(many);
+    expect(permissionPosts().at(-1)!.body.withheld).toBeUndefined();
+    const long = 'k'.repeat(300);
+    expect(await decide({ tool: 'mcp__any__run', input: { [long]: 'a value', ok: 'shown' }, tool_use_id: 'toolu_long' })).toEqual(ALLOW);
+    expect(permissionPosts().at(-1)!.body.input).toEqual({ [long]: 'a value', ok: 'shown' });
+  });
+
+  it('16, 28. withholds the largest fields until the request fits in 3 MiB, saying each one\'s size, and sends the rest whole', async () => {
     await start();
     answer = async () => ({ text: JSON.stringify({ decision: 'ask' }) });
-    const many = Object.fromEntries(Array.from({ length: 18 }, (_, i) => [`f${String(i).padStart(2, '0')}`, `v${i}`]));
-    await decide({ tool: 'mcp__any__run', input: many, tool_use_id: 'toolu_many' });
-    const body = permissionPosts().at(-1)!.body;
-    expect(Object.keys(body.input as object)).toHaveLength(16);
-    expect(body).toMatchObject({ withheld: true, withheld_why: 'f16: past the 16 fields the window shows; f17: past the 16 fields the window shows' });
-    expect(JSON.stringify(body.input)).not.toContain('v17');
-    const long = `${'k'.repeat(70)}`;
-    await decide({ tool: 'mcp__any__run', input: { [long]: 'secret value', ok: 'shown' }, tool_use_id: 'toolu_long' });
-    expect(permissionPosts().at(-1)!.body).toMatchObject({
-      input: { ok: 'shown' }, withheld: true, withheld_why: `${'k'.repeat(64)}: a field whose name is past 64 characters`,
+    const posted = () => permissionPosts().at(-1)!;
+    const bytes = () => new TextEncoder().encode(JSON.stringify(posted().body)).length;
+    // One field past the bound: it alone is withheld.
+    const huge = 'x'.repeat(QUESTION_CAP);
+    expect(await decide({ tool: 'Bash', input: { command: huge, description: 'big' }, tool_use_id: 'toolu_huge' })).toEqual(DIALOG);
+    expect(posted().body).toMatchObject({
+      input: { description: 'big' }, withheld: true,
+      withheld_why: `command: ${QUESTION_CAP.toLocaleString('en-US')} characters, past the 3 MiB a request to Tars can carry`,
     });
-    expect(JSON.stringify(permissionPosts().at(-1)!.body)).not.toContain('secret value');
+    expect(bytes()).toBeLessThanOrEqual(QUESTION_CAP);
+    // Two that do not fit together: the larger is withheld, the other sent whole.
+    const a = 'a'.repeat(2_000_000);
+    const b = 'b'.repeat(1_500_000);
+    await decide({ tool: 'mcp__any__run', input: { a, b, c: 'small' }, tool_use_id: 'toolu_two' });
+    expect(posted().body).toMatchObject({
+      input: { b, c: 'small' }, withheld: true, withheld_why: 'a: 2,000,000 characters, past the 3 MiB a request to Tars can carry',
+    });
+    expect(bytes()).toBeLessThanOrEqual(QUESTION_CAP);
+    // The bound is the request's bytes, not its characters: 1.2 million euro signs are 3.6 MB.
+    const euros = '€'.repeat(1_200_000);
+    await decide({ tool: 'mcp__any__run', input: { text: euros, ok: 'shown' }, tool_use_id: 'toolu_euro' });
+    expect(posted().body).toMatchObject({ input: { ok: 'shown' }, withheld: true });
+    expect(JSON.stringify(posted().body)).not.toContain('€€');
+    // Everything that fits is never withheld, at the bound itself.
+    const fits = 'z'.repeat(QUESTION_CAP - 2048);
+    await decide({ tool: 'mcp__any__run', input: { text: fits }, tool_use_id: 'toolu_fits' });
+    expect(posted().body.withheld).toBeUndefined();
+    expect(posted().body.input).toEqual({ text: fits });
   });
 
   it('11. sends Claude Code\'s rule with its reason', async () => {

@@ -518,6 +518,38 @@ export interface AgentTaskBanner {
   waiting: Array<{ ref: string; from: string; queuedAt: string; firstLine: string }>;
 }
 
+/**
+ * Why the window's answer to a permission question changed nothing (agent.answerPermission):
+ * - `no-question`: Tars no longer holds it (answered, ended, or the delay ran out);
+ * - `another-question`: the fingerprint named is not the held question's, the agent asked about another call meanwhile;
+ * - `read-first`: an allow that names no fingerprint;
+ * - `withheld`: a question Tars could not receive whole, which may be refused or handed to the terminal, never allowed;
+ * - `not-a-decision`: neither allow, deny nor ask.
+ */
+export type PermissionRefusal = 'no-question' | 'another-question' | 'read-first' | 'withheld' | 'not-a-decision';
+
+/**
+ * A permission question whole (agent.permissionQuestion, electron/services/permission-asks.ts): what the window shows
+ * before an allow, when the view on the agent (permissionAsk) is cut. Every field whole, a file's new content
+ * included, up to the 3 MiB a request to Tars carries.
+ */
+export interface PermissionQuestionWhole {
+  tool: string;
+  askedAt: string;
+  until: string;
+  /** Its line, made of every field whole. */
+  subject: string;
+  fields: Record<string, string>;
+  /** The fields sent as their JSON (a number, a boolean, null, an array, an object); [] when none. */
+  jsonFields: string[];
+  /** What an allow names (agent.answerPermission): an allow naming another question's changes nothing. */
+  fingerprint: string;
+  reason?: string;
+  rule?: string;
+  withheld?: true;
+  withheldWhy?: string;
+}
+
 export interface AgentStatus {
   id: string;
   /** 'stopped': ended by a stop, with stoppedBy, stoppedAt and stopReason, until it is started again.
@@ -548,21 +580,35 @@ export interface AgentStatus {
     askedAt: string;
     /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
-    /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
+    /** What is asked: the command, the path or the address (the fields' first), the tool when none, made of `fields`. */
     subject: string;
-    /** The fields the person decides on, whole (each at most 2,000 characters). */
+    /**
+     * The fields the person decides on, as every tick carries them: each at most 2,000 characters, 32 fields at most.
+     * Whole unless `cut` names them; agent.permissionQuestion gives them whole.
+     */
     fields: Record<string, string>;
+    /** The fields sent as their JSON (a number, a boolean, null, an array, an object), among `fields`. */
+    jsonFields?: string[];
+    /**
+     * The fields this view does not hold whole, each with its whole length. When set, the window shows the question
+     * whole (agent.permissionQuestion) before it offers allow, and the allow names that question's fingerprint.
+     */
+    cut?: Array<{ field: string; length: number }>;
+    /** The question's fingerprint when this view holds it whole: what an allow names (agent.answerPermission). When
+     *  `cut` is set, agent.permissionQuestion gives it with the question whole. */
+    fingerprint?: string;
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
     /**
-     * A file tool asked by its path alone, its content withheld from Tars: the window shows the path, and may refuse
-     * it or hand it back to the terminal, never allow it (agent:answerPermission answers false to an allow).
+     * A question Tars cannot show whole: a file tool asked without its content, or a call with a field the state mod
+     * could not send (one with no JSON, or past the 3 MiB a request to Tars carries). The window may refuse it or hand
+     * it back to the terminal, never allow it (agent:answerPermission answers false to an allow).
      */
     withheld?: true;
     /**
      * What was withheld and why, as the state mod says it: `<field>: <why>`, joined by `; ` (for instance
-     * `command: 3,014 characters, past the 2,000 the window shows`). Set with withheld only.
+     * `content: 3,500,000 characters, past the 3 MiB a request to Tars can carry`). Set with withheld only.
      */
     withheldWhy?: string;
   };
@@ -1616,7 +1662,13 @@ export interface ElectronAPI {
     /** savedTo: the wip/ branch its uncommitted work was saved on. worktreeKept: why its worktree was not removed (the save failed, or it holds what no commit keeps). processes: what it started outside its terminal, ended and kept, as a stop says it. */
     remove: (id: string) => Promise<{ success: boolean; savedTo?: string; worktreeKept?: string; processes?: { ended: string[]; kept: string[]; containers: string[] } }>;
     /** Answers the permission question the state mod asked Tars for this agent (AgentStatus.permissionAsk): allow or deny decide the call, ask shows it in the terminal's dialog. False when there was none. */
-    answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string) => Promise<{ success: boolean }>;
+    /**
+     * `fingerprint`: the one the window read (permissionAsk.fingerprint, or permissionQuestion's). Required for every
+     * allow; a deny or an ask may come without it. Refused, the answer says why (`code`, and `error` in words).
+     */
+    answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string) => Promise<{ success: true } | { success: false; code: PermissionRefusal; error: string }>;
+    /** The question Tars holds for the agent, whole: every field, its line and the fingerprint an allow names. */
+    permissionQuestion: (id: string) => Promise<{ success: true; question: PermissionQuestionWhole } | { success: false; error: string }>;
     /** Into the agent's terminal. Asleep, a key wakes it (`woke: true`); a lone Esc or Ctrl+C, a mouse or focus report does nothing. */
     sendInput: (params: { id: string; input: string }) => Promise<{ success: boolean; woke?: boolean; error?: string }>;
     /** An asleep agent's CLI started on its own conversation, nothing typed; refused for one that is not asleep. */

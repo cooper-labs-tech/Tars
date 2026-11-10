@@ -7,7 +7,9 @@
 // asks for one Bash call left running in the background (`sleep 600`).
 // `NESTED <tag>` asks for one Bash call that runs Claude Code inside the agent's
 // own terminal, `<FAKE_NESTED_CLI> -p "LINES 1 inner<tag>"`, whose own requests
-// come here too (the nested CLI of #380's gate).
+// come here too (the nested CLI of #380's gate). `RUNWRITE <tag> <n>` asks for one
+// Write of a new file, `<FAKE_WRITE_DIR>/written-<tag>.md`, of n numbered lines
+// (`<tag> line <i> of <n>`), its content whole in the call (approve-everywhere).
 // Every request is logged as one JSON line to FAKE_LOG, which is how a spec
 // knows a turn reached the model (`full`: the whole last user turn, 8000
 // characters at most, for messages Claude Code joins into one turn), with the effort Claude Code asked for
@@ -16,6 +18,7 @@
 // #132 proof.
 import http from 'node:http';
 import fs from 'node:fs';
+import { writtenContent } from './written-content.mjs';
 
 const PORT = Number(process.env.FAKE_PORT);
 const LOG = process.env.FAKE_LOG;
@@ -51,7 +54,7 @@ function lastToolResult(messages) {
   return null;
 }
 
-function toolUse(res, model, tag, command = `echo ${tag} > ran-${tag}.txt`, description = `Write ran-${tag}.txt`) {
+function toolUse(res, model, tag, command = `echo ${tag} > ran-${tag}.txt`, description = `Write ran-${tag}.txt`, call = { name: 'Bash', input: { command, description } }) {
   res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
   sse(res, 'message_start', {
     message: {
@@ -59,8 +62,8 @@ function toolUse(res, model, tag, command = `echo ${tag} > ran-${tag}.txt`, desc
       usage: { input_tokens: 10, output_tokens: 1 },
     },
   });
-  const input = { command, description };
-  sse(res, 'content_block_start', { index: 0, content_block: { type: 'tool_use', id: `toolu_${tag}_${Date.now()}`, name: 'Bash', input: {} } });
+  const { input } = call;
+  sse(res, 'content_block_start', { index: 0, content_block: { type: 'tool_use', id: `toolu_${tag}_${Date.now()}`, name: call.name, input: {} } });
   sse(res, 'content_block_delta', { index: 0, delta: { type: 'input_json_delta', partial_json: JSON.stringify(input) } });
   sse(res, 'content_block_stop', { index: 0 });
   sse(res, 'message_delta', { delta: { stop_reason: 'tool_use', stop_sequence: null }, usage: { output_tokens: 5 } });
@@ -138,6 +141,12 @@ http.createServer((req, res) => {
     }
     const run = !side && last.match(/RUNBASH (\w+)/);
     if (run) return toolUse(res, model, run[1]);
+    const write = !side && process.env.FAKE_WRITE_DIR && last.match(/RUNWRITE (\w+) (\d+)/);
+    if (write) {
+      const [, tag, n] = write;
+      const input = { file_path: `${process.env.FAKE_WRITE_DIR}/written-${tag}.md`, content: writtenContent(tag, Number(n)) };
+      return toolUse(res, model, tag, undefined, undefined, { name: 'Write', input });
+    }
     const nested = !side && process.env.FAKE_NESTED_CLI && last.match(/NESTED (\w+)/);
     if (nested) {
       return toolUse(res, model, nested[1], `'${process.env.FAKE_NESTED_CLI}' -p "LINES 1 inner${nested[1]}" > nested-${nested[1]}.txt 2>&1`, `Run Claude Code inside this terminal (${nested[1]})`);
