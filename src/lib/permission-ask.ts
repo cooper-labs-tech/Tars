@@ -120,9 +120,24 @@ export function questionFields(fields: Record<string, string>, jsonFields: reado
 }
 
 /**
- * What an allow main refused means: `changed` when Tars now holds a question of another fingerprint (the agent asked
- * about another call in between: the window shows it anew and allows nothing by itself), `late` otherwise.
+ * What the card does with a refused answer, from main's code (#588 after its Audit, `PermissionRefusal`), saying main's
+ * own sentence: `another-question`, the new question shown whole, nothing allowed by itself; `read-first`, the question
+ * read whole again before allow; `withheld`, allow taken away; `not-a-decision`, a fault of the window, said, the
+ * answers kept. `no-question`, or no code at all (a failed call): the line that Tars holds no question.
  */
-export function afterRefusedAllow(sent: string | undefined, now: { fingerprint: string } | null): 'changed' | 'late' {
-  return now && now.fingerprint !== sent ? 'changed' : 'late';
+export type RefusalStep =
+  | { step: 'changed' | 'read'; say: string; tone: 'waiting' }
+  | { step: 'no-allow'; say: string; tone: 'idle' }
+  | { step: 'stay'; say: string; tone: 'error' }
+  | { step: 'late' };
+
+export function refusalStep(refused: { code?: string; error?: string } | undefined): RefusalStep {
+  const say = refused?.error ?? '';
+  switch (refused?.code) {
+    case 'another-question': return { step: 'changed', say, tone: 'waiting' };
+    case 'read-first': return { step: 'read', say, tone: 'waiting' };
+    case 'withheld': return { step: 'no-allow', say, tone: 'idle' };
+    case 'not-a-decision': return { step: 'stay', say, tone: 'error' };
+    default: return { step: 'late' };
+  }
 }

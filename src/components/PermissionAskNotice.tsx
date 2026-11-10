@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Button, Input, StatusSquare } from '@/components/ui';
 import type { AgentStatus, PermissionQuestionWhole } from '@/types/electron';
-import { afterRefusedAllow, permissionAskLine, questionFields } from '@/lib/permission-ask';
+import { permissionAskLine, questionFields, refusalStep } from '@/lib/permission-ask';
 import { flat } from '@/lib/stop-line';
 import { TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 
@@ -15,7 +15,6 @@ const MAX_REASON = 200;
 
 const LATE_WHO = 'Tars no longer holds this question:';
 const LATE_REST = 'if its terminal asks, answer there.';
-const CHANGED = 'The agent asked about another call: this is the new one. Read it, then answer.';
 const TERMINAL_TITLE = 'Claude Code\'s own dialog, for what only it offers: allowing a command for the rest of the session, for instance';
 
 type Decision = 'allow' | 'deny' | 'ask';
@@ -31,8 +30,12 @@ interface State {
   shown: boolean;
   /** The question whole, read from main (agent.permissionQuestion) when the view is cut or gives no fingerprint. */
   whole?: PermissionQuestionWhole;
-  /** An allow main refused because the question changed in between: the new one is `whole`, said so. */
-  changed?: boolean;
+  /** A refused answer, said in main's words (its code's sentence), and its tone. */
+  said?: { text: string; tone: 'waiting' | 'idle' | 'error' };
+  /** Refused as withheld: allow is taken away. */
+  noAllow?: boolean;
+  /** Refused as read-first: the question is read whole again before allow. */
+  mustRead?: boolean;
   /** The askedAt an allow was refused on, while the agent's copy still carries it: this state is the new question's. */
   alias?: string;
 }
@@ -109,7 +112,7 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
 
   // The question whole, when the view does not hold it (cut, or no fingerprint to name): read once per question,
   // where it is shown whole (the window, or a panel's show all). Until then, no allow.
-  const needsWhole = !!ask && !withheld && (!!ask.cut?.length || !ask.fingerprint);
+  const needsWhole = !!ask && !withheld && (!!ask.cut?.length || !ask.fingerprint || !!state.mustRead);
   const reading = needsWhole && !state.whole && (layout === 'window' || state.shown) && state.phase !== 'late';
   useEffect(() => {
     if (!reading) return;
@@ -137,23 +140,36 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
     if (busy) return;
     update({ phase: 'sending' });
     let taken = false;
+    let refused: { code?: string; error?: string } | undefined;
     try {
       const result = await window.electronAPI?.agent?.answerPermission?.(agent.id, decision, reason, fingerprint);
       taken = result?.success === true;
+      if (result && !result.success) refused = result;
     } catch {
       taken = false;
     }
-    if (!taken && decision === 'allow') {
-      // Refused: the question changed in between (another fingerprint), or Tars holds none. A new one is shown, said
-      // so, and nothing is allowed by itself.
-      let now: PermissionQuestionWhole | null = null;
-      try {
-        const r = await window.electronAPI?.agent?.permissionQuestion?.(agent.id);
-        now = r?.success ? r.question : null;
-      } catch { now = null; }
-      if (now && afterRefusedAllow(fingerprint, now) === 'changed') {
-        const next = now;
-        setKept(prev => (holds(prev, askedAt) ? { ...fresh(next.askedAt), alias: askedAt, shown: true, whole: next, changed: true } : prev));
+    if (!taken) {
+      // Refused: main's code says why, and its sentence is said as it is (frame `Permission asked of Tars`, its rows
+      // `the question changed` and `a refusal, said`). Nothing is allowed by itself.
+      const next = refusalStep(refused);
+      if (next.step === 'changed') {
+        let now: PermissionQuestionWhole | null = null;
+        try {
+          const r = await window.electronAPI?.agent?.permissionQuestion?.(agent.id);
+          now = r?.success ? r.question : null;
+        } catch { now = null; }
+        if (now) {
+          const whole = now;
+          setKept(prev => (holds(prev, askedAt) ? { ...fresh(whole.askedAt), alias: askedAt, shown: true, whole, said: { text: next.say, tone: next.tone } } : prev));
+          return;
+        }
+      } else if (next.step !== 'late') {
+        const said = { text: next.say, tone: next.tone };
+        setKept(prev => (holds(prev, askedAt) ? {
+          ...prev, phase: 'answers', shown: true, said,
+          ...(next.step === 'read' ? { whole: undefined, mustRead: true } : {}),
+          ...(next.step === 'no-allow' ? { noAllow: true } : {}),
+        } : prev));
         return;
       }
     }
@@ -203,7 +219,7 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
     ) : null;
     // Allowed from the line only when it holds the call whole and the view gives its fingerprint; a cut view opens
     // whole first (frame `Permission asked of Tars`, its row `a cut view, and while it is read`).
-    const allowHere = state.fits && !needsWhole && !!fingerprint;
+    const allowHere = state.fits && !needsWhole && !!fingerprint && !state.noAllow;
     return (
       <div role="status" data-permission-ask={agent.id} title={late ? `${LATE_WHO} ${LATE_REST}` : line.title} className="shrink-0 flex flex-col">
       <div
@@ -265,14 +281,14 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
       <div className="shrink-0 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2">
           <StatusSquare tone="waiting" />
-          <span className="text-xs text-foreground truncate" title={line.title}>{state.whole && state.changed ? `Asks to use ${state.whole.tool}` : line.who.replace(/:$/, '')}</span>
+          <span className="text-xs text-foreground truncate" title={line.title}>{state.whole && state.alias ? `Asks to use ${flat(state.whole.tool)}` : line.who.replace(/:$/, '')}</span>
         </div>
         {line.at && <span className="shrink-0 font-mono text-[11px] text-text-muted">{line.at}</span>}
       </div>
-      {state.changed && !late && (
-        <p data-ask-changed className="shrink-0 flex items-center gap-2 text-xs text-foreground">
-          <StatusSquare tone="waiting" />
-          <span className="min-w-0 break-words">{CHANGED}</span>
+      {state.said && !late && (
+        <p data-ask-said={state.said.tone} className={`shrink-0 flex items-center gap-2 text-xs ${state.said.tone === 'idle' ? 'text-muted-foreground' : 'text-foreground'}`}>
+          <StatusSquare tone={state.said.tone} />
+          <span className="min-w-0 break-words">{state.said.text}</span>
         </p>
       )}
       <div data-ask-details className="min-h-0 flex flex-col gap-2 overflow-y-auto">
@@ -326,7 +342,7 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
         </div>
       ) : late ? lateLine : (
         <div className="shrink-0 flex items-center gap-1.5">
-          {!withheld && shown && fingerprint && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
+          {!withheld && !state.noAllow && shown && fingerprint && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
           <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title={TERMINAL_TITLE}>ask in terminal</Button>
         </div>
