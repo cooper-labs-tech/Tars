@@ -87475,7 +87475,7 @@
                           "id": "zLAxX",
                           "name": "c",
                           "fill": "$text-muted",
-                          "content": "5 of 6 selected · 5 worktrees",
+                          "content": "5 of 6 selected · 4 worktrees",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10,
@@ -90043,7 +90043,7 @@
                   "id": "JSWtC",
                   "name": "n",
                   "fill": "$text-muted",
-                  "content": "Five worktrees are created under the project. Nothing is pushed.",
+                  "content": "4 worktrees are created under the project, one for each member with a branch. Nothing is pushed.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 11.5,
@@ -319889,7 +319889,7 @@
                           "id": "q0fslA",
                           "name": "c",
                           "fill": "$text-muted",
-                          "content": "5 of 6 selected · 5 worktrees",
+                          "content": "5 of 6 selected · 4 worktrees",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10,
@@ -322457,7 +322457,7 @@
                   "id": "R8lAl",
                   "name": "n",
                   "fill": "$text-muted",
-                  "content": "Five worktrees are created under the project. Nothing is pushed.",
+                  "content": "4 worktrees are created under the project, one for each member with a branch. Nothing is pushed.",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-ui",
                   "fontSize": 11.5,
@@ -829012,6 +829012,18 @@
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yGgee",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "No worktree is made now: your agents make one for each piece of work. Nothing is pushed.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -829041,7 +829053,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 420,
-                  "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task.",
+                  "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task. The footer says what the deploy makes: a worktree for each member with a branch, or none when no member asks for one, the agents then making one for each piece of work.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -831974,6 +831986,18 @@
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
                       "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NVpj6",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "No worktree is made now: your agents make one for each piece of work. Nothing is pushed.",
+                      "lineHeight": 1.45,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -832003,7 +832027,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 420,
-                  "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task.",
+                  "content": "The first run deploys a team: its switch to One agent is not shown there. A single agent is made from New agent, on the Agents page or the Dashboard, which starts it with its task. The footer says what the deploy makes: a worktree for each member with a branch, or none when no member asks for one, the agents then making one for each piece of work.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
