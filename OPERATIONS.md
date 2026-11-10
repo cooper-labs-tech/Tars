@@ -1465,7 +1465,9 @@ report):
     whose working directory is in it (QA's shell cd'd into its gate checkout: `/proc` on Linux, `lsof` on macOS, as
     `scripts/worktree.mjs` reads them; on Windows, where no process's folder can be read, a rename of the folder and back,
     which Windows refuses while a process works in it: git's own removal deletes the files first and fails only on the
-    folder, the Audit's M3 on #585), never forced, its branch kept;
+    folder, the Audit's M3 on #585; the move back is tried ten times, further apart each time, since an antivirus or an
+    indexer may hold the folder that moment, and a folder still not moved back is named where it is, kept as in use,
+    the Audit's L8; a dry run moves nothing), never forced, its branch kept;
   - `existing: true` (QA gating a PR): a branch neither local nor on origin as last fetched is refused, never made from
     the default branch under the PR's name (the Audit's L6 on #585). Without it, a name nowhere to be found is a new
     branch, and a failed fetch is said;

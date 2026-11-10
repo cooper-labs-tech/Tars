@@ -239,29 +239,51 @@ async function processCwds(): Promise<ProcessCwd[] | null> {
   return found;
 }
 
+/** How many times, and how far apart, the Windows probe tries to move a folder back (the Audit's L8 on #585). */
+const BACK_TRIES = 10;
+const BACK_WAIT_MS = 250;
+
+type Rename = (from: string, to: string) => void;
+
 /**
  * On Windows, whether a process works in the folder: Windows refuses to rename a folder a process works in or holds a
  * file of, so it is renamed and back. Nothing is asked of git's deletion, which removes the files first and fails
- * only on the folder itself, emptying it under the process (the Audit's M3 on #585).
+ * only on the folder itself, emptying it under the process (the Audit's M3 on #585). An antivirus or an indexer may
+ * hold the folder the moment it is moved back: that move is tried BACK_TRIES times, further apart each time, and if
+ * it still fails, the folder is said where it is and kept as in use (L8).
  */
-function windowsOccupied(worktreePath: string): string | undefined {
+async function windowsOccupied(worktreePath: string, rename: Rename, waitMs: number): Promise<string | undefined> {
   const probe = `${worktreePath}.tars-in-use`;
+  const code = (err: unknown) => (err as NodeJS.ErrnoException).code ?? (err as Error).message;
   try {
-    fs.renameSync(worktreePath, probe);
+    rename(worktreePath, probe);
   } catch (err) {
-    return `a process works in it (Windows would not move it: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message})`;
+    return `a process works in it (Windows would not move it: ${code(err)})`;
   }
-  try {
-    fs.renameSync(probe, worktreePath);
-  } catch (err) {
-    return `moved to ${probe} to see whether it was in use, and not moved back (${(err as NodeJS.ErrnoException).code ?? (err as Error).message}): move it back by hand`;
+  let last: unknown;
+  for (let tries = 1; tries <= BACK_TRIES; tries++) {
+    try {
+      rename(probe, worktreePath);
+      return undefined;
+    } catch (err) {
+      last = err;
+      await new Promise(resolve => setTimeout(resolve, waitMs * tries));
+    }
   }
-  return undefined;
+  return `moved to ${probe} to see whether it was in use, and not moved back after ${BACK_TRIES} tries (${code(last)}): it stays there, kept as in use, until it is moved back by hand`;
 }
 
-/** Why a worktree is in use by a process, or undefined; on macOS and Linux, unknown counts as in use. */
-function occupiedBy(worktreePath: string, cwds: ProcessCwd[] | null): string | undefined {
-  if (process.platform === 'win32') return windowsOccupied(worktreePath);
+/**
+ * Why a worktree is in use by a process, or undefined; on macOS and Linux, unknown counts as in use. A dry run moves
+ * nothing on Windows: whether a process works in the folder is asked by the removal itself (L8).
+ */
+export async function occupiedBy(
+  worktreePath: string, cwds: ProcessCwd[] | null,
+  opts: { platform?: NodeJS.Platform; rename?: Rename; waitMs?: number; dryRun?: boolean } = {},
+): Promise<string | undefined> {
+  if ((opts.platform ?? process.platform) === 'win32') {
+    return opts.dryRun ? undefined : windowsOccupied(worktreePath, opts.rename ?? fs.renameSync, opts.waitMs ?? BACK_WAIT_MS);
+  }
   if (cwds === null) return 'Tars cannot tell which processes work in it (their working folders could not be read)';
   const wt = real(worktreePath);
   const inIt = cwds.filter(p => { const r = real(p.cwd); return r === wt || r.startsWith(wt + path.sep); });
@@ -273,7 +295,7 @@ export async function removeWorktree(projectPath: string, branchOrName: string, 
   const found = (await listWorktrees(projectPath)).find(w => w.branch === branchOrName || w.name === branchOrName);
   if (!found) return { error: `No worktree of ${branchOrName} in ${path.join(projectPath, '.worktrees')}.`, code: 'not_found' };
   if (isProtected(found.path, opts.protectedPaths)) return { error: `An agent works in ${found.path}: it is never removed from under it.`, code: 'in_use' };
-  const occupied = occupiedBy(found.path, opts.cwds !== undefined ? opts.cwds : await processCwds());
+  const occupied = await occupiedBy(found.path, opts.cwds !== undefined ? opts.cwds : await processCwds());
   if (occupied) return { error: `${found.path} is not removed: ${occupied}.`, code: 'in_use' };
   if (await isDirty(found.path)) {
     return { error: `${found.path} has uncommitted or untracked changes: commit them${found.branch ? ` on ${found.branch}` : ''} (or move them), then remove it. Nothing was removed.`, code: 'dirty' };
@@ -312,7 +334,7 @@ export async function pruneWorktrees(projectPath: string, opts: { protectedPaths
     }
     if (now - (await lastMoved(w.path)) < PRUNE_IDLE_MS) { kept.push({ branch: label, why: 'its HEAD moved in the last hour' }); continue; }
     if (await isDirty(w.path)) { kept.push({ branch: label, why: 'uncommitted or untracked changes' }); continue; }
-    const occupied = occupiedBy(w.path, await scan());
+    const occupied = await occupiedBy(w.path, await scan(), { dryRun: opts.dryRun });
     if (occupied) { kept.push({ branch: label, why: occupied }); continue; }
     if (opts.dryRun) { removed.push(label); continue; }
     const r = await removeWorktree(projectPath, label, { protectedPaths: opts.protectedPaths, cwds: await scan() });
