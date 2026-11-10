@@ -71,6 +71,7 @@ export default function NewChatModal({
   initialProjectPath,
   initialOrchestrator,
   initialMode,
+  teamOnly,
   // `initialStep`, `onManageTemplates` and `existingSuperAgent` are still
   // accepted by the props type but no longer read - see types.ts for why each
   // one lost its home in the one-screen redesign.
@@ -463,7 +464,7 @@ export default function NewChatModal({
       return;
     }
     setDeploying(false);
-    const outcome = deployOutcome(answer);
+    const outcome = deployOutcome(answer, { brief: teamBrief, lead: selectedMembers.find(m => m.role === 'orchestrator')?.name });
     if (answer.success) {
       if (answer.agentIds.length > 0) onTeamDeployed?.(answer.agentIds);
       // Said before it closes: what it skipped or did not start.
@@ -527,9 +528,9 @@ export default function NewChatModal({
         subtitle={isEditMode
           ? 'Everything about this agent, on one screen.'
           : mode === 'team'
-            ? 'Several agents on one project, each on its own branch.'
+            ? 'Several agents on one project, working in git worktrees.'
             : 'A folder, a CLI, and what you want done.'}
-        headerRight={!isEditMode && (
+        headerRight={!isEditMode && !teamOnly && (
           <SegmentedControl size="md" ariaLabel="Creation mode" options={MODE_OPTIONS} value={mode} onChange={setMode} />
         )}
         className="[&_button:not(:disabled)]:cursor-pointer"

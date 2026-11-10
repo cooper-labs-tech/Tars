@@ -41,14 +41,21 @@ export function gitInitLine(a: GitInitAnswer): { tone: StatusTone; text: string 
     : { tone: 'running', text: `${made}.` };
 }
 
-/** What New team says of a deploy, whole or not at all, and the way on it offers. */
-export function deployOutcome(a: DeployAnswer): { done: boolean; tone: StatusTone; offer: 'repository' | 'signed-out' | null; lines: string[] } {
+/**
+ * What New team says of a deploy, whole or not at all, and the way on it offers. `brief` and `lead` (the team's
+ * orchestrator member) say a brief that went to nobody: main gives it only to an orchestrator it made (team-deploy.ts),
+ * so a skipped one, already on the project, does not get it.
+ */
+export function deployOutcome(a: DeployAnswer, opts: { brief?: string; lead?: string } = {}):
+  { done: boolean; tone: StatusTone; offer: 'repository' | 'signed-out' | null; lines: string[] } {
   if (a.success) {
+    const lost = !!opts.brief?.trim() && !!opts.lead && a.skipped.some(s => s.member === opts.lead);
     return {
-      done: true, tone: 'running', offer: null,
+      done: true, tone: lost ? 'waiting' : 'running', offer: null,
       lines: [
         ...a.skipped.map(s => `Skipped: ${s.member}, ${s.reason}.`),
         ...a.notStarted.map(s => `Not started: ${s.member}, ${s.reason}.`),
+        ...(lost ? [`The brief went to nobody: ${opts.lead} was already on this project. Give it the task yourself, in its chat or its terminal.`] : []),
       ],
     };
   }

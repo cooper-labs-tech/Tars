@@ -11,6 +11,7 @@ import type { StatusTone } from '@/components/ui';
 import { useClaudeAccounts } from '@/hooks/useClaudeAccounts';
 import { useElectronAgents, useElectronFS } from '@/hooks/useElectron';
 import { lastPathPart } from '@/lib/display-path';
+import { ipcReason } from '@/lib/ipc-error';
 import { claudeStepState, gitInitLine, readinessLines } from '@/lib/first-run';
 
 type Readiness = Extract<Awaited<ReturnType<NonNullable<NonNullable<typeof window.electronAPI>['project']>['readiness']>>, { success: true }>;
@@ -28,10 +29,11 @@ export default function FirstRun() {
   const account = view?.accounts.find(a => a.id === 'default');
   const claude = claudeStepState(account);
   const { projects, openFolderDialog, refresh } = useElectronFS();
-  const { createAgent } = useElectronAgents();
+  const { createAgent, startAgent } = useElectronAgents();
   const [added, setAdded] = useState<string | null>(null);
-  // The folder this run works on: the one added here, else the first project known.
-  const folder = added ?? projects[0]?.path ?? null;
+  // The folder this run works on: the one added here, else one added to Tars before. Never a folder Claude Code has
+  // only seen: Tars's channels refuse it as not one of its projects (the Audit's M1 on PR 580).
+  const folder = added ?? projects.find(p => p.custom)?.path ?? null;
   const [ready, setReady] = useState<{ of: string; is: Readiness | null; error?: string } | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [deploying, setDeploying] = useState(false);
@@ -100,7 +102,7 @@ export default function FirstRun() {
         <Step
           name="project" n={2} done={!!folder}
           title="Add a project folder"
-          detail={folder ?? 'The folder your agents work in. In a git repository, each member gets its own worktree.'}
+          detail={folder ?? 'The folder your agents work in. In a git repository, they work in worktrees of their own.'}
           state={folderWord ? { word: folderWord, tone: known?.error ? 'error' : branch ? 'running' : 'waiting' } : addError ? { word: addError, tone: 'error' } : null}
           action={<Button size={folder ? 'sm' : undefined} onClick={() => { void addFolder(); }}>{folder ? 'Add another' : 'Add a folder'}</Button>}
         >
@@ -134,12 +136,19 @@ export default function FirstRun() {
         <NewChatModal
           open={deploying}
           onClose={() => setDeploying(false)}
-          onSubmit={async (projectPath, skills, _prompt, model, worktree, character, name, secondaryProjectPath, permissionMode, provider, localModel, obsidianVaultPaths, effort, role, cliPath) => {
-            await createAgent({ projectPath, skills, model, worktree, character, name, secondaryProjectPath, permissionMode, provider, localModel, obsidianVaultPaths, effort, role, cliPath });
+          // Unreachable with teamOnly; kept whole all the same: started with its task, as New agent does, a refusal said.
+          onSubmit={async (projectPath, skills, prompt, model, worktree, character, name, secondaryProjectPath, permissionMode, provider, localModel, obsidianVaultPaths, effort, role, cliPath) => {
+            try {
+              const agent = await createAgent({ projectPath, skills, model, worktree, character, name, secondaryProjectPath, permissionMode, provider, localModel, obsidianVaultPaths, effort, role, cliPath });
+              if (prompt) await startAgent(agent.id, prompt, { model, provider, localModel });
+            } catch (err) {
+              return { error: ipcReason(err, 'The agent could not be made.') };
+            }
           }}
           projects={projects.map(p => ({ path: p.path, name: p.name }))}
           onBrowseFolder={openFolderDialog}
           initialMode="team"
+          teamOnly
           initialProjectPath={folder}
         />
       )}
