@@ -58,14 +58,14 @@ type Verdict = { decision: 'allow' | 'ask' | 'deny'; reason?: string; rule?: str
 type Request = { session_id?: string; tool_name?: unknown; tool_input?: unknown; permission_mode?: unknown };
 /** Its answer: the decision, or the event handed on (`next`) for the dialog. */
 type Decision = { decision: { behavior: 'allow' } | { behavior: 'deny'; message: string } };
-/** The fields that carry a file's new content: never sent, whatever their size (an allow would approve what nobody saw). */
-const FILE_CONTENT: Record<string, string[]> = {
-  Write: ['content'], Edit: ['old_string', 'new_string'], MultiEdit: ['edits'], NotebookEdit: ['new_source'],
-};
-/** The window's caps, the route's too (hooks-routes.ts askedFields): one field's text, a field's name, the fields of one call. */
-const INPUT_CAP = 2000;
-const KEY_CAP = 64;
-const FIELDS_CAP = 16;
+/**
+ * The most a question to Tars carries: its request, as JSON in UTF-8 bytes. The API takes 4 MiB of any body
+ * (api-server.ts MAX_BODY_BYTES) and refuses more; 3 MiB leaves the room for the rest of the request (its ids, Claude
+ * Code's reason and rule, why a field was withheld, the error of the ask before), and is a file of some 3 million
+ * characters, past what anyone reads before allowing it. Every field goes whole within it, a file's new content
+ * included (the owner's question of 10/11, approve-everywhere.md: the window must be able to allow every question).
+ */
+export const QUESTION_CAP = 3 * 1024 * 1024;
 /** The checks that asked, latest last, for the dialog that follows to take its call id and reason from. */
 const CHECKS_KEPT = 16;
 /**
@@ -181,31 +181,53 @@ function count(n: number): string {
 }
 
 /**
- * What the call asks about, as Tars shows it: every field whole, a field that is not text (a number, a boolean,
- * null, an array, an object) as its JSON and named in `json`, so that the window can allow the call (the owner's
- * report of 10/11: Claude in Chrome's tabId, coordinate and createIfEmpty made every one of its questions withheld).
- * What cannot be shown is withheld, never sent, only its name and why: a field past the cap, a file's new content,
- * a field name past 64 characters, the fields past the 16th. A question with a field withheld still goes to Tars,
+ * What the call asks about, as Tars shows it: every field whole, a file's new content included, a field that is not
+ * text (a number, a boolean, null, an array, an object) as its JSON and named in `json`, so that the window can allow
+ * the call (the owner's report of 10/11: Claude in Chrome's tabId, coordinate and createIfEmpty made every one of its
+ * questions withheld; and his question of the same night, approve-everywhere.md: a file tool, a field past 2,000
+ * characters, a 17th field, a long field name were withheld too, and only the terminal could allow them). What cannot
+ * be shown is withheld, never sent, only its name and why: a field with no JSON, and the fields a request of
+ * QUESTION_CAP cannot hold, the largest first (see fitted). A question with a field withheld still goes to Tars,
  * marked so: the window may refuse it or hand it back to the terminal, never allow it, and a bypass agent's is refused
  * at the owner's delay instead of waiting at Claude Code's dialog all night (the Audit's M1 on #538).
  */
-function askedAbout(tool: string, input: unknown): { fields: Record<string, string>; json: string[]; withheld: string[] } {
+function askedAbout(input: unknown): { fields: Record<string, string>; json: string[]; withheld: string[] } {
   const fields: Record<string, string> = {};
   const json: string[] = [];
   const withheld: string[] = [];
   if (!input || typeof input !== 'object' || Array.isArray(input)) return { fields, json, withheld };
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (key.length > KEY_CAP) { withheld.push(`${key.slice(0, KEY_CAP)}: a field whose name is past ${KEY_CAP} characters`); continue; }
-    if (FILE_CONTENT[tool]?.includes(key)) { withheld.push(`${key}: a file's new content`); continue; }
     let text: string | undefined;
     try { text = typeof value === 'string' ? value : JSON.stringify(value); } catch { text = undefined; }
     if (typeof text !== 'string') { withheld.push(`${key}: cannot be shown`); continue; }
-    if (text.length > INPUT_CAP) { withheld.push(`${key}: ${count(text.length)} characters, past the 2,000 the window shows`); continue; }
-    if (Object.keys(fields).length >= FIELDS_CAP) { withheld.push(`${key}: past the ${FIELDS_CAP} fields the window shows`); continue; }
     fields[key] = text;
     if (typeof value !== 'string') json.push(key);
   }
   return { fields, json: json.sort(), withheld: withheld.sort() };
+}
+
+/** What an ask after a failure adds (`after_error`, at most 200 printable ASCII characters): counted in, always. */
+const AFTER_ERROR_ROOM = 512;
+const encoder = new TextEncoder();
+const bytesOf = (value: unknown): number => encoder.encode(JSON.stringify(value)).length;
+
+/**
+ * The question as it is posted, within QUESTION_CAP: while its request is past it, its largest field (in bytes, then
+ * by name) is withheld and said with its size, the others sent whole. The fingerprint is taken over what is sent: a
+ * question with a field withheld takes no allow anyway (askTars).
+ */
+function fitted(asked: { fields: Record<string, string>; json: string[]; withheld: string[] }, request: (a: typeof asked) => object): typeof asked {
+  const fields = { ...asked.fields };
+  let json = [...asked.json];
+  const withheld = [...asked.withheld];
+  const current = () => ({ fields, json, withheld: [...withheld].sort() });
+  while (bytesOf(request(current())) + AFTER_ERROR_ROOM > QUESTION_CAP && Object.keys(fields).length) {
+    const [largest] = Object.keys(fields).sort((x, y) => bytesOf(fields[y]) - bytesOf(fields[x]) || (x < y ? -1 : 1));
+    withheld.push(`${largest}: ${count(fields[largest].length)} characters, past the 3 MiB a request to Tars can carry`);
+    delete fields[largest];
+    json = json.filter(k => k !== largest);
+  }
+  return current();
 }
 
 /**
@@ -250,14 +272,15 @@ function checkFor(tool: string, input: unknown): (typeof asked)[number] | undefi
 async function askTars($: Engine, e: Check, verdict: Pick<Verdict, 'reason' | 'rule'>): Promise<Verdict | null> {
   const to = await proven($);
   if (!to || !sessionId) return null;
-  const { fields, json, withheld } = askedAbout(e.tool, e.input);
-  const mine = await fingerprint(e.tool, fields, json);
-  const question = {
+  const requestOf = (a: { fields: Record<string, string>; json: string[]; withheld: string[] }) => ({
     agent_id: to.agentId, session_id: sessionId, tool: e.tool, tool_use_id: e.tool_use_id,
-    input: fields, reason: verdict.reason, rule: verdict.rule, via: 'mod',
-    ...(json.length ? { json_fields: json } : {}),
-    ...(withheld.length ? { withheld: true, withheld_why: withheld.join('; ').slice(0, 1000) } : {}),
-  };
+    input: a.fields, reason: verdict.reason, rule: verdict.rule, via: 'mod',
+    ...(a.json.length ? { json_fields: a.json } : {}),
+    ...(a.withheld.length ? { withheld: true, withheld_why: a.withheld.join('; ').slice(0, 1000) } : {}),
+  });
+  const { fields, json, withheld } = fitted(askedAbout(e.input), requestOf);
+  const mine = await fingerprint(e.tool, fields, json);
+  const question = requestOf({ fields, json, withheld });
   // Tars says `pending` every 20 s and is asked again for the same call: a
   // request held about 30 s ended under the mod, and the dialog showed while
   // Tars still held the question (measured on 2.1.289). A request that fails
@@ -277,7 +300,7 @@ async function askTars($: Engine, e: Check, verdict: Pick<Verdict, 'reason' | 'r
     } catch (err) {
       failures++;
       if (failures >= MAX_FAILURES) return null;
-      afterError = (err instanceof Error ? err.message : String(err)).slice(0, 200);
+      afterError = (err instanceof Error ? err.message : String(err)).replace(/[^\x20-\x7e]/g, '?').slice(0, 200);
       continue;
     }
     failures = 0;

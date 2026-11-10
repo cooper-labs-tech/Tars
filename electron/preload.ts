@@ -112,8 +112,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('agent:stop', id, reason),
     remove: (id: string) =>
       ipcRenderer.invoke('agent:remove', id),
-    answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string) =>
-      ipcRenderer.invoke('agent:answerPermission', id, decision, reason),
+    answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string) =>
+      ipcRenderer.invoke('agent:answerPermission', id, decision, reason, fingerprint),
+    permissionQuestion: (id: string) =>
+      ipcRenderer.invoke('agent:permissionQuestion', id),
     sendInput: (params: { id: string; input: string }) =>
       ipcRenderer.invoke('agent:input', params),
     wake: (id: string) =>

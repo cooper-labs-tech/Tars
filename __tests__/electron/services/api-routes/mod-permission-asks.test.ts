@@ -126,8 +126,8 @@
  * 40. A field past 2,000 characters, more than 16 fields or a field name past 64 characters sends the question to the
  *     dialog (items 15 and 36): the route takes every field whole, the API's 4 MiB body being the one bound.
  * 41. A question that large rides on every agents:tick and status event, twice (its fields and its line), and on every
- *     agent's list_agents and get_agent: what Tars publishes of it is a view, each field and the line at most 2,000
- *     characters and 32 fields, `cut` naming each field it does not hold whole with its length, and the whole question
+ *     agent's list_agents and get_agent: what Tars publishes of it is a view, each field at most 2,000 characters and
+ *     32 fields, its line made of them, `cut` naming each field it does not hold whole with its length, and the whole question
  *     (its fields, its line, its fingerprint) is the window's on asking (permissionQuestionOf, agent:permissionQuestion).
  * 42. A file tool's question is withheld whatever it holds (item 28), so the window can never allow a write: one
  *     holding its content (Write's content, Edit's old and new strings, MultiEdit's edits, NotebookEdit's new source,
@@ -910,7 +910,7 @@ describe('every question allowable from the window (approve-everywhere)', () => 
     await vi.advanceTimersByTimeAsync(0);
     expect(a.permissionAsk?.fields).toEqual({ command: command.slice(0, 2000), description: 'notes', timeout: '60000' });
     expect(a.permissionAsk?.cut).toEqual([{ field: 'command', length: command.length }]);
-    expect(a.permissionAsk?.subject.length).toBeLessThanOrEqual(2000);
+    expect(a.permissionAsk?.subject).toBe(`${command.slice(0, 2000)} (timeout 60000 ms)`);
     // A cut view names no fingerprint: only the whole question gives it.
     expect(a.permissionAsk?.fingerprint).toBeUndefined();
     expect(a.permissionAsk?.jsonFields).toEqual(['timeout']);

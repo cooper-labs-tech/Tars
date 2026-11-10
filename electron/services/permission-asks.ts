@@ -55,8 +55,9 @@ export const PERMISSION_LOG = path.join(DATA_DIR, 'logs', 'permissions.log');
 
 /** One line per decision: the agent, the tool, the decision, who decided, and what was asked (masked, one line, cut at 300). */
 export function logPermission(agent: { id: string; name?: string } | undefined, agentId: string, tool: string, decision: string, by: string, subject: string): void {
-  // Masked: every agent can read the log (the Audit's L3 on #538).
-  const what = redactSecrets(subject).replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').slice(0, 300);
+  // Masked: every agent can read the log (the Audit's L3 on #538). A subject can hold a file of 3 MiB since 2.0.7:
+  // masked on its first 2,000 characters only, which hold the 300 written and any secret that reaches into them.
+  const what = redactSecrets(subject.slice(0, 2000)).replace(/[\u0000-\u001f\u007f-\u009f]+/g, ' ').slice(0, 300);
   retentionLog(`[permission] ${agent?.name || agentId} (${agentId}) ${tool} ${decision} by ${by}: ${what}`, PERMISSION_LOG);
 }
 /**
@@ -78,9 +79,9 @@ export type PermissionQuestion = {
   reason?: string;
   rule?: string;
   /**
-   * A question Tars cannot show whole (the state mod): a file tool asked by its path alone, or a call with a field the
-   * window does not show, past 2,000 characters or not text. The window may refuse it, never allow it, since it would
-   * approve what it never showed.
+   * A question Tars cannot show whole (the state mod): a file tool asked without its content, or a call with a field
+   * the mod could not send (one with no JSON, or past what a request to Tars carries, 3 MiB). The window may refuse
+   * it, never allow it, since it would approve what it never showed.
    */
   withheld?: boolean;
   /** What was withheld and why, as the mod says it: `<field>: <why>`, joined by `; `. */
@@ -133,13 +134,55 @@ export function subjectOf(tool: string, fields: Record<string, string>): string 
   return `${head}${searchIn}${words.length ? ` (${words.join(', ')})` : ''}`;
 }
 
+/**
+ * What Tars publishes of a question (approve-everywhere, 2.0.7): the window's line, every agents:tick and status
+ * event, list_agents and get_agent. Since the mod sends every field whole, a file's content and a field of 3 MiB
+ * included, a question rode whole on each tick, twice (its fields and its line). The view holds each field's first
+ * 2,000 characters and the first 32 fields, `cut` naming every field it does not hold whole with its length; the
+ * window asks for the question whole (permissionQuestionOf, agent:permissionQuestion) to show it before an allow.
+ */
+export const VIEW_FIELD_CAP = 2000;
+export const VIEW_FIELDS_CAP = 32;
+
+/** The question whole, as the window shows it before an allow: every field, its line, and the fingerprint an allow names. */
+export type PermissionQuestionWhole = {
+  tool: string;
+  askedAt: string;
+  until: string;
+  subject: string;
+  fields: Record<string, string>;
+  /** The fields sent as their JSON (a number, a boolean, null, an array, an object); [] when none. */
+  jsonFields: string[];
+  fingerprint: string;
+  reason?: string;
+  rule?: string;
+  withheld?: true;
+  withheldWhy?: string;
+};
+
+/** The view of a question's fields: each at most VIEW_FIELD_CAP, VIEW_FIELDS_CAP of them, and what it cut. */
+function viewOf(fields: Record<string, string>): { fields: Record<string, string>; cut: Array<{ field: string; length: number }> } {
+  const shown: Record<string, string> = {};
+  const cut: Array<{ field: string; length: number }> = [];
+  for (const [field, text] of Object.entries(fields)) {
+    if (Object.keys(shown).length >= VIEW_FIELDS_CAP) { cut.push({ field, length: text.length }); continue; }
+    shown[field] = text.length > VIEW_FIELD_CAP ? text.slice(0, VIEW_FIELD_CAP) : text;
+    if (text.length > VIEW_FIELD_CAP) cut.push({ field, length: text.length });
+  }
+  return { fields: shown, cut };
+}
+
 type Held = {
   agentId: string;
   toolUseId: string;
   fingerprint: string;
-  /** For the log: the tool and what it asked. */
+  /** For the log: the tool and what it asked, as the view says it. */
   tool: string;
   subject: string;
+  /** The question whole, for the window (permissionQuestionOf). */
+  whole: PermissionQuestionWhole;
+  /** The view does not hold it whole: an allow must name its fingerprint, which only its whole form gives. */
+  cut: boolean;
   /** The asks waiting on it now: one, or none between two asks. */
   waiters: Set<(answer: PermissionAnswer) => void>;
   timer: ReturnType<typeof setTimeout>;
@@ -224,12 +267,26 @@ export function holdPermissionAsk(
   if (current) close(agent, current, { decision: 'ask' }, 'its engine, which asked about another call');
 
   const minutes = Math.round(holdMs / 60_000);
+  const askedAt = new Date();
+  const until = new Date(askedAt.getTime() + holdMs).toISOString();
+  const view = viewOf(question.fields);
+  const viewSubject = subjectOf(question.tool, view.fields);
+  const jsonFields = [...(question.jsonFields ?? [])].sort();
   const entry: Held = {
     agentId: agent.id,
     toolUseId: question.toolUseId,
     fingerprint,
     tool: question.tool,
-    subject: subjectOf(question.tool, question.fields),
+    subject: viewSubject,
+    whole: {
+      tool: question.tool, askedAt: askedAt.toISOString(), until,
+      subject: subjectOf(question.tool, question.fields), fields: { ...question.fields }, jsonFields, fingerprint,
+      ...(question.reason ? { reason: question.reason } : {}),
+      ...(question.rule ? { rule: question.rule } : {}),
+      ...(question.withheld ? { withheld: true as const } : {}),
+      ...(question.withheld && question.withheldWhy ? { withheldWhy: question.withheldWhy } : {}),
+    },
+    cut: view.cut.length > 0,
     waiters: new Set(),
     // Unanswered: refused, with what the agent can do instead, and it runs on.
     // Never back to the dialog, where nobody may answer until morning.
@@ -242,17 +299,20 @@ export function holdPermissionAsk(
     withheld: question.withheld === true,
   };
   held.set(agent.id, entry);
-  const askedAt = new Date();
   agent.status = 'waiting';
   agent.waitingReason = 'permission';
   agent.dialogSince = askedAt.toISOString();
   agent.waitingOn = question.waitingOn;
+  const viewJson = jsonFields.filter(k => Object.hasOwn(view.fields, k));
   agent.permissionAsk = {
     tool: question.tool,
     askedAt: askedAt.toISOString(),
-    until: new Date(askedAt.getTime() + holdMs).toISOString(),
-    subject: subjectOf(question.tool, question.fields),
-    fields: { ...question.fields },
+    until,
+    subject: viewSubject,
+    fields: view.fields,
+    ...(viewJson.length ? { jsonFields: viewJson } : {}),
+    // Shown whole, its fingerprint is the window's to name; cut, only the whole question gives it.
+    ...(view.cut.length ? { cut: view.cut } : { fingerprint }),
     ...(question.reason ? { reason: question.reason } : {}),
     ...(question.rule ? { rule: question.rule } : {}),
     ...(question.withheld ? { withheld: true as const } : {}),
@@ -289,19 +349,31 @@ function reasonFor(decision: PermissionDecision, by: string, reason?: string): s
   return undefined;
 }
 
+/** The question held for this agent, whole, for the window to show before an allow; undefined when none is held. */
+export function permissionQuestionOf(agentId: string): PermissionQuestionWhole | undefined {
+  const whole = held.get(agentId)?.whole;
+  return whole ? { ...whole, fields: { ...whole.fields }, jsonFields: [...whole.jsonFields] } : undefined;
+}
+
 /**
  * The window's answer to the agent's held question: allow or deny decide the
  * call and the agent runs on; ask hands it back to the terminal's dialog.
  * False, and nothing changed, when the agent has no question or the decision
  * is none of the three. The window is told through the question's own
- * `changed`.
+ * `changed`. `fingerprint`, the one the window read (approve-everywhere): an
+ * answer naming another question's changes nothing, so an allow never lands on
+ * a question asked after the one read; and a question whose view is cut is
+ * allowed only by naming it, which only its whole form gives.
  */
-export function answerPermission(agentId: string, decision: PermissionDecision, by: string, reason?: string): boolean {
+export function answerPermission(agentId: string, decision: PermissionDecision, by: string, reason?: string, fingerprint?: string): boolean {
   if (decision !== 'allow' && decision !== 'deny' && decision !== 'ask') return false;
   const entry = held.get(agentId);
   if (!entry) return false;
+  const named = typeof fingerprint === 'string' ? fingerprint : undefined;
+  if (named !== undefined && named !== entry.fingerprint) return false;
   // Content the window never showed is never allowed from it: refused, or handed back to the dialog.
   if (decision === 'allow' && entry.withheld) return false;
+  if (decision === 'allow' && entry.cut && named === undefined) return false;
   const agent = agents.get(agentId);
   if (agent && decision !== 'ask') running(agent);
   const text = reasonFor(decision, by, reason);
