@@ -19,7 +19,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    CLAUDE.md naming those checks and the team's areas;
  * 2. CLAUDE.md written on the owner's yes, at the project's root, and refused the second time;
  * 3. the CI committed on chore/ci in a worktree, the project's checkout still on main and clean, nothing pushed;
- * 4. the whole team's permission level: both members in bypass in agents.json, the chat's runner as it was.
+ * 4. the whole team's permission level: the call sets the lead and the developer, never the chat's runner (a chat
+ *    in chats.json names it), which then follows its orchestrator as every runner does (chat-runners.ts
+ *    syncWithLead): all three in bypass in agents.json. A runner no chat names is a worker from Tars's start on
+ *    (chat-runners.ts), which is why the chat is seeded.
  * Red on #585's head 4c1da79fd: no projectSetup channel.
  * The artefact: values.json (the offer, what was written, each agent's mode).
  */
@@ -52,9 +55,18 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
       agent('lead', 'Shop Lead', { role: 'orchestrator', orchestratorMode: true }),
       agent('fe', 'Frontend Engineer', { savedPrompt: 'You are the frontend developer. You own the UI: components and pages.' }),
-      agent('chat', 'Shop chat', { kind: 'chat', chatId: 'c-1', teamOrchestratorId: 'lead', permissionMode: 'auto' }),
+      agent('chat', 'Shop chat', { kind: 'chat', chatId: 'c0ffee00-0000-4000-8000-0000000000a1', teamOrchestratorId: 'lead', permissionMode: 'auto' }),
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+    // A chat names the runner, as Tars writes chats.json: without it, the runner is a worker from the start.
+    const at = '2026-11-10T08:00:00.000Z';
+    const chatRecord = (id: string, number: number, title: string, runnerId: string, inbox: boolean) => ({
+      id, projectPath: project, number, title, titleSource: 'user', runnerId, sessionIds: [], pinned: false,
+      snoozedUntil: null, settledAt: null, inbox, createdAt: at, updatedAt: at, lastActivityAt: at,
+    });
+    fs.writeFileSync(path.join(dir, 'chats.json'), JSON.stringify({ version: 1, numbers: { [project]: 2 }, chats: [
+      chatRecord('c0ffee00-0000-4000-8000-0000000000a0', 1, 'Main', 'lead', true), chatRecord('c0ffee00-0000-4000-8000-0000000000a1', 2, 'Side', 'chat', false),
+    ] }, null, 2));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
 
     const app = await launchSandboxed(electron, home, {
@@ -97,12 +109,13 @@ for (const newInterface of [false, true]) {
       const team = await api('setTeamPermissionMode', project, 'bypass');
       values.team = team;
       expect(team.success, JSON.stringify(team)).toBe(true);
+      expect(team.agents?.map(a => a.id).sort(), 'set directly: the project\'s agents, never the runner').toEqual(['fe', 'lead']);
       type Saved = { id: string; permissionMode: string };
       const modes = () => {
         const file = JSON.parse(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')) as Saved[] | { agents: Saved[] };
         return Object.fromEntries((Array.isArray(file) ? file : file.agents).map(a => [a.id, a.permissionMode]));
       };
-      await expect.poll(() => modes(), { timeout: 15_000 }).toEqual({ lead: 'bypass', fe: 'bypass', chat: 'auto' });
+      await expect.poll(() => modes(), { timeout: 15_000 }).toEqual({ lead: 'bypass', fe: 'bypass', chat: 'bypass' });
       values.modes = modes();
       recordValues(values);
       expect(errors).toEqual([]);
