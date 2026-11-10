@@ -114,10 +114,24 @@ export function questionFields(fields: Record<string, string>, jsonFields: reado
     const long = value.length > LONG_CHARS || lines.length > LONG_LINES;
     return {
       name, lines,
-      size: long ? `${value.length.toLocaleString('en-US')} characters, ${lines.length.toLocaleString('en-US')} line${lines.length === 1 ? '' : 's'}` : '',
+      // An empty field says so: a blank box reads as nothing asked (the Audit's M1 on #589).
+      size: value === '' ? 'empty'
+        : long ? `${value.length.toLocaleString('en-US')} characters, ${lines.length.toLocaleString('en-US')} line${lines.length === 1 ? '' : 's'}` : '',
     };
   });
 }
+
+/**
+ * Whether main's one line names every field (the Audit's M1 on #589): it leaves out an empty one (permission-asks.ts
+ * subjectOf), so a Write emptying a file reads as its path alone. A panel allows from its line only when this holds;
+ * a Bash's description, which does not run, does not count.
+ */
+export function lineNamesEveryField(tool: string, fields: Record<string, string>): boolean {
+  return Object.entries(fields).every(([name, value]) => (tool === 'Bash' && name === 'description') || value.trim() !== '');
+}
+
+/** Main's sentence for `another-question` (permission-asks.ts), said too when the question read whole is another. */
+export const ANOTHER_QUESTION = 'The agent asked about another call meanwhile: read the new question before you answer it';
 
 /**
  * What the card does with a refused answer, from main's code (#588 after its Audit, `PermissionRefusal`), saying main's

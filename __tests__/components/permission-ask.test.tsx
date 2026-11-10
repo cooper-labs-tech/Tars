@@ -418,6 +418,8 @@ describe('the line answers the question Tars holds', () => {
     });
 
     it('read-first: said, the question read whole again, allow once it is shown (17)', async () => {
+      // The same question read again: its fingerprint is the view's (another would be another question, 19).
+      question.mockImplementation(async () => ({ success: true, question: { ...WHOLE, fingerprint: 'fp1' } }));
       const view = mount(() => PermissionAskNotice({ agent: asking(), layout: 'window' }));
       button(view.result, 'allow').props.onClick!();
       (reply.resolve as (v: unknown) => void)({ success: false, code: 'read-first', error: READ_FIRST });

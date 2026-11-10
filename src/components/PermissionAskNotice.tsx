@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Button, Input, StatusSquare } from '@/components/ui';
 import type { AgentStatus, PermissionQuestionWhole } from '@/types/electron';
-import { permissionAskLine, questionFields, refusalStep } from '@/lib/permission-ask';
+import { ANOTHER_QUESTION, lineNamesEveryField, permissionAskLine, questionFields, refusalStep } from '@/lib/permission-ask';
+import { ipcReason } from '@/lib/ipc-error';
 import { flat } from '@/lib/stop-line';
 import { TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 
@@ -36,6 +37,8 @@ interface State {
   noAllow?: boolean;
   /** Refused as read-first: the question is read whole again before allow. */
   mustRead?: boolean;
+  /** Why the last read of the question whole failed: said, with read again, never as a question gone. */
+  readFailed?: string;
   /** The askedAt an allow was refused on, while the agent's copy still carries it: this state is the new question's. */
   alias?: string;
 }
@@ -113,17 +116,33 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
   // The question whole, when the view does not hold it (cut, or no fingerprint to name): read once per question,
   // where it is shown whole (the window, or a panel's show all). Until then, no allow.
   const needsWhole = !!ask && !withheld && (!!ask.cut?.length || !ask.fingerprint || !!state.mustRead);
-  const reading = needsWhole && !state.whole && (layout === 'window' || state.shown) && state.phase !== 'late';
+  const reading = needsWhole && !state.whole && !state.readFailed && (layout === 'window' || state.shown) && state.phase !== 'late';
+  const viewFingerprint = ask?.fingerprint;
   useEffect(() => {
     if (!reading) return;
     let live = true;
     const read = window.electronAPI?.agent?.permissionQuestion;
-    if (!read) { update({ phase: 'late' }); return; }
+    if (!read) { update({ readFailed: 'this window cannot ask Tars for it' }); return; }
     read(agent.id)
-      .then(r => { if (live) update(r.success ? { whole: r.question } : { phase: 'late' }); })
-      .catch(() => { if (live) update({ phase: 'late' }); });
+      .then(r => {
+        if (!live) return;
+        if (!r.success) { update({ readFailed: r.error }); return; }
+        const whole = r.question;
+        // Read now, it may be another question than the one shown (asked in between): shown as a new question,
+        // under its own head, said so (the Audit's L1 on #589). Withheld, it is never offered allow.
+        const other = whole.askedAt !== askedAt || (!!viewFingerprint && whole.fingerprint !== viewFingerprint);
+        if (other) {
+          setKept(prev => (holds(prev, askedAt) ? {
+            ...fresh(whole.askedAt), alias: askedAt, shown: true, whole,
+            said: { text: ANOTHER_QUESTION, tone: 'waiting' }, ...(whole.withheld ? { noAllow: true } : {}),
+          } : prev));
+        } else {
+          update({ whole, ...(whole.withheld ? { noAllow: true } : {}) });
+        }
+      })
+      .catch((err: unknown) => { if (live) update({ readFailed: ipcReason(err, 'the call failed') }); });
     return () => { live = false; };
-  }, [reading, agent.id, update]);
+  }, [reading, agent.id, askedAt, viewFingerprint, update]);
 
   const line = permissionAskLine(agent);
   if (!line || !ask) return null;
@@ -154,15 +173,26 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
       const next = refusalStep(refused);
       if (next.step === 'changed') {
         let now: PermissionQuestionWhole | null = null;
+        let readError: string | undefined;
         try {
           const r = await window.electronAPI?.agent?.permissionQuestion?.(agent.id);
-          now = r?.success ? r.question : null;
-        } catch { now = null; }
+          if (r?.success) now = r.question; else readError = r?.error;
+        } catch (err) { readError = ipcReason(err, 'the call failed'); }
         if (now) {
           const whole = now;
-          setKept(prev => (holds(prev, askedAt) ? { ...fresh(whole.askedAt), alias: askedAt, shown: true, whole, said: { text: next.say, tone: next.tone } } : prev));
+          setKept(prev => (holds(prev, askedAt) ? {
+            ...fresh(whole.askedAt), alias: askedAt, shown: true, whole, said: { text: next.say, tone: next.tone },
+            ...(whole.withheld ? { noAllow: true } : {}),
+          } : prev));
           return;
         }
+        // The new question could not be read: said so, with read again, never that Tars holds none (the Audit's L2
+        // on #589). Nothing is allowed until it is read.
+        setKept(prev => (holds(prev, askedAt) ? {
+          ...prev, phase: 'answers', shown: true, whole: undefined, mustRead: true,
+          said: { text: next.say, tone: next.tone }, readFailed: readError ?? 'the call failed',
+        } : prev));
+        return;
       } else if (next.step !== 'late') {
         const said = { text: next.say, tone: next.tone };
         setKept(prev => (holds(prev, askedAt) ? {
@@ -219,7 +249,9 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
     ) : null;
     // Allowed from the line only when it holds the call whole and the view gives its fingerprint; a cut view opens
     // whole first (frame `Permission asked of Tars`, its row `a cut view, and while it is read`).
-    const allowHere = state.fits && !needsWhole && !!fingerprint && !state.noAllow;
+    // Main's line leaves out an empty field (a Write emptying a file reads as its path): allowed from the line only
+    // when it names every field (the Audit's M1 on #589); otherwise show all.
+    const allowHere = state.fits && !needsWhole && !!fingerprint && !state.noAllow && lineNamesEveryField(ask.tool, ask.fields);
     return (
       <div role="status" data-permission-ask={agent.id} title={late ? `${LATE_WHO} ${LATE_REST}` : line.title} className="shrink-0 flex flex-col">
       <div
@@ -281,7 +313,7 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
       <div className="shrink-0 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2">
           <StatusSquare tone="waiting" />
-          <span className="text-xs text-foreground truncate" title={line.title}>{state.whole && state.alias ? `Asks to use ${flat(state.whole.tool)}` : line.who.replace(/:$/, '')}</span>
+          <span className="text-xs text-foreground truncate" title={line.title}>{state.whole ? `Asks to use ${flat(state.whole.tool)}` : line.who.replace(/:$/, '')}</span>
         </div>
         {line.at && <span className="shrink-0 font-mono text-[11px] text-text-muted">{line.at}</span>}
       </div>
@@ -314,8 +346,15 @@ export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }
             </p>
           </div>
         ))}
-        {!withheld && !shown && !late && (
+        {!withheld && !shown && !late && !state.readFailed && (
           <p data-ask-reading className="font-mono text-[11px] text-text-muted">reading the whole question</p>
+        )}
+        {!withheld && !shown && !late && state.readFailed && (
+          <div data-ask-read-failed className="flex items-center gap-2 text-xs text-foreground">
+            <StatusSquare tone="error" />
+            <span className="min-w-0 flex-1 break-words">The question could not be read: {state.readFailed.replace(/[.\s]+$/, '')}.</span>
+            <Button size="sm" className={`shrink-0 ${ACTION}`} onClick={() => update({ readFailed: undefined })}>read again</Button>
+          </div>
         )}
         {(why || rule) && (
           <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
