@@ -20,7 +20,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. allow names no fingerprint, or another than the question's, so main refuses it and the file is never allowed;
  * 4. the short command, shown whole by the view, is not allowed with the view's fingerprint;
  * 5. ask in terminal is still a first answer in the block (not the ghost after deny);
- * 6. an uncaught error in the page.
+ * 6. an uncaught error in the page;
+ * 7. a Write that empties a file (its content empty, left out of main's line) is allowed from a panel's line that
+ *    shows its path alone (the Audit's M1 on #589), or the block does not say the content is empty.
  * Once on a chat's page (the new interface, its card) and once on the Dashboard's panel (the classic shell).
  * Red on the frames' commit (ee515fda4, PR 588 and 578 with no window change): allow is offered on the cut view, and
  * sent with no fingerprint.
@@ -51,6 +53,7 @@ function standIn(home: string): string {
     "  await post('/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: 'write the ledger' });",
     `  await askTars('write', { tool: 'Write', tool_use_id: 'toolu_write', input: { file_path: ${JSON.stringify('/tmp/harbor-ledger.ts')}, content: ${JSON.stringify(CONTENT)} } });`,
     "  await askTars('bash', { tool: 'Bash', tool_use_id: 'toolu_bash', input: { command: 'npm test' } });",
+    `  await askTars('empty', { tool: 'Write', tool_use_id: 'toolu_empty', input: { file_path: ${JSON.stringify('/tmp/harbor-main.ts')}, content: '' } });`,
     "})();",
     "process.stdin.resume();",
     '',
@@ -135,6 +138,20 @@ for (const newInterface of [true, false]) {
       await expect.poll(() => read('bash'), { timeout: 30_000 }).not.toBeNull();
       seen.bash = read('bash');
       expect(seen.bash).toMatchObject({ decision: 'allow' });
+
+      // 7. The Write that empties a file: never from the line; the block says the content is empty.
+      await expect(ask).toContainText('harbor-main.ts', { timeout: 30_000 });
+      if (!newInterface) {
+        await expect(ask.getByRole('button', { name: 'allow', exact: true })).toHaveCount(0);
+        await stepShot(page, `${tag}4-empty-line`);
+        await ask.getByRole('button', { name: 'show all', exact: true }).click();
+      }
+      await expect(ask.locator('[data-ask-field="content"]')).toContainText('content · empty');
+      await stepShot(page, `${tag}5-empty-whole`);
+      await ask.getByRole('button', { name: 'allow', exact: true }).click();
+      await expect.poll(() => read('empty'), { timeout: 30_000 }).not.toBeNull();
+      seen.empty = read('empty');
+      expect(seen.empty).toMatchObject({ decision: 'allow' });
 
       // 6.
       seen.errors = errors;

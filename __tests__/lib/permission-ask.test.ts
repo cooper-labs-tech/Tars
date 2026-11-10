@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { OTHER_SPACE_MARK, TAB_MARK, permissionAskLine, questionFields, refusalStep } from '../../src/lib/permission-ask';
+import { OTHER_SPACE_MARK, TAB_MARK, lineNamesEveryField, permissionAskLine, questionFields, refusalStep } from '../../src/lib/permission-ask';
 import type { AgentStatus } from '../../src/types/electron';
 
 /**
@@ -277,5 +277,31 @@ describe('the question whole, field by field', () => {
     expect(refusalStep({ code: 'no-question', error: 'E5' })).toEqual({ step: 'late' });
     expect(refusalStep({})).toEqual({ step: 'late' });
     expect(refusalStep(undefined)).toEqual({ step: 'late' });
+  });
+});
+
+/**
+ * What a panel's one line may be allowed on (the Audit's M1 on #589). Written before the code. How it can fail:
+ * 17. main's line names every field but an empty one (permission-asks.ts subjectOf): a Write whose content is empty
+ *     reads as its path alone, an Edit whose new_string is empty as a replacement of nothing, and an allow on that
+ *     line empties the file or deletes the text unseen;
+ * 18. a Bash's description, which does not run, keeps a line from being allowed;
+ * 19. an empty field reads in the block as a blank box with no word.
+ */
+describe('a panel\'s line names every field', () => {
+  it('a field left empty keeps the line from being allowed (17)', () => {
+    expect(lineNamesEveryField('Write', { file_path: '/src/app/main.ts', content: '' })).toBe(false);
+    expect(lineNamesEveryField('Edit', { file_path: '/p/a.ts', old_string: 'x', new_string: '', replace_all: 'false' })).toBe(false);
+    expect(lineNamesEveryField('Write', { file_path: '/src/app/main.ts', content: '   ' })).toBe(false);
+    expect(lineNamesEveryField('Bash', { command: 'npm test' })).toBe(true);
+  });
+
+  it('a Bash\'s description, empty or not, does not count (18)', () => {
+    expect(lineNamesEveryField('Bash', { command: 'npm test', description: '' })).toBe(true);
+    expect(lineNamesEveryField('Bash', { command: '', description: 'run the tests' })).toBe(false);
+  });
+
+  it('an empty field says it is empty above its box (19)', () => {
+    expect(questionFields({ file_path: '/p/a.ts', content: '' }, [])[1]).toEqual({ name: 'content', lines: [''], size: 'empty' });
   });
 });
