@@ -25,7 +25,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. the deploy without worktrees does not make every member, or makes one with a worktree;
  * 7. a new agent still starts in normal, where it asks before every edit and command;
  * 8. the first run stays once the team is deployed;
- * 9. an uncaught error in the page.
+ * 9. an uncaught error in the page;
+ * 10. a folder Claude Code has seen, never added to Tars, is taken as the project, which main's channels refuse as not
+ *     one of Tars's projects (the Audit's M1 on PR 580);
+ * 11. New team from the first run offers One agent, whose path drops the task typed (the Audit's M2 on PR 580).
  * Once with the new interface and once with the classic shell; the New agent dialog (2, 7) from the Agents page of
  * the classic shell.
  * Red on main (58f2863b4) with the frames: no first run.
@@ -66,6 +69,13 @@ for (const newInterface of [true, false]) {
     const project = path.join(home, 'projects', 'harbor');
     fs.mkdirSync(project, { recursive: true });
     fs.writeFileSync(path.join(project, 'README.md'), '# harbor\n');
+    // 10. A folder Claude Code has seen (its transcripts' folder), never added to Tars.
+    const seenFolder = path.join(home, 'projects', 'oldwork');
+    fs.mkdirSync(seenFolder, { recursive: true });
+    const seenReal = fs.realpathSync(seenFolder);
+    const transcripts = path.join(home, '.claude', 'projects', seenReal.replace(/[^a-zA-Z0-9]/g, '-'));
+    fs.mkdirSync(transcripts, { recursive: true });
+    fs.writeFileSync(path.join(transcripts, '00000000-0000-4000-8000-000000000001.jsonl'), '');
     const dir = path.join(home, '.tars');
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
@@ -123,6 +133,13 @@ for (const newInterface of [true, false]) {
       await expect(step('claude')).toContainText(`signed in · ${EMAIL}`, { timeout: 30_000 });
       seen.claude = (await step('claude').innerText()).replace(/\s+/g, ' ');
 
+      // 10. The folder Claude Code has seen is listed, and still the step asks for a folder of Tars's own.
+      const listed = await page.evaluate(() => window.electronAPI!.fs!.listProjects());
+      expect(listed.map(p => ({ path: p.path, custom: !!p.custom }))).toContainEqual({ path: seenReal, custom: false });
+      await expect(step('project').getByRole('button', { name: 'Add a folder' })).toBeVisible();
+      await expect(step('project')).not.toContainText('oldwork');
+      seen.seenNotAdded = (await step('project').innerText()).replace(/\s+/g, ' ');
+
       // 4. A plain folder, said so.
       await step('project').getByRole('button', { name: 'Add a folder' }).click();
       await expect(step('project')).toContainText('harbor', { timeout: 30_000 });
@@ -136,6 +153,9 @@ for (const newInterface of [true, false]) {
       // 5, 6. New team on it: deploy without worktrees, every member made.
       await step('team').getByRole('button', { name: 'Deploy the team' }).click();
       const teamDialog = page.getByRole('dialog');
+      // 11. The team alone: no switch to One agent.
+      await expect(teamDialog.getByRole('heading', { name: 'New team' })).toBeVisible({ timeout: 30_000 });
+      await expect(teamDialog.getByRole('radio', { name: 'One agent' })).toHaveCount(0);
       const notice = teamDialog.locator('[data-plain-folder]');
       await expect(notice).toContainText('harbor is not a git repository', { timeout: 30_000 });
       seen.notice = (await notice.innerText()).replace(/\s+/g, ' ');

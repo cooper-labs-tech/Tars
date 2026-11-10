@@ -14,7 +14,9 @@ import { claudeStepState, deployOutcome, gitInitLine, readinessLines } from '../
  * 5. a deploy refused for a plain folder, a signed-out Claude or a missing one does not offer its way on;
  * 6. a failed deploy does not name the member and its reason, or hides what it left;
  * 7. a success does not say what it skipped or did not start;
- * 8. a missing Claude Code reads as a failed check, or offers a sign in that cannot work.
+ * 8. a missing Claude Code reads as a failed check, or offers a sign in that cannot work;
+ * 9. a brief deployed with a team whose orchestrator was already there (skipped) goes to nobody, since main gives it
+ *    only to an orchestrator it made, and the dialog does not say so (the Audit's L1 on PR 580).
  */
 
 const ready = {
@@ -93,6 +95,26 @@ describe('what the deploy answers', () => {
     expect(deployOutcome({ success: true, agentIds: ['a', 'b'], skipped: [], notStarted: [] })).toEqual({ done: true, tone: 'running', offer: null, lines: [] });
     const out = deployOutcome({ success: true, agentIds: ['a'], skipped: [{ member: 'Orchestrator', reason: 'already on this project' }], notStarted: [{ member: 'Builder', reason: 'its CLI did not start' }] });
     expect(out.lines).toEqual(['Skipped: Orchestrator, already on this project.', 'Not started: Builder, its CLI did not start.']);
+  });
+});
+
+describe('a brief that went to nobody', () => {
+  const skippedLead = { success: true as const, agentIds: ['b'], skipped: [{ member: 'Orchestrator', reason: 'already deployed on this project' }], notStarted: [] };
+
+  it('is said when the orchestrator was skipped, and the deploy is not read as done in silence (9)', () => {
+    expect(deployOutcome(skippedLead, { brief: 'Ship the settlement rewrite.', lead: 'Orchestrator' })).toEqual({
+      done: true, tone: 'waiting', offer: null,
+      lines: [
+        'Skipped: Orchestrator, already deployed on this project.',
+        'The brief went to nobody: Orchestrator was already on this project. Give it the task yourself, in its chat or its terminal.',
+      ],
+    });
+  });
+
+  it('is not said with no brief, or when the orchestrator was made (9)', () => {
+    expect(deployOutcome(skippedLead, { lead: 'Orchestrator' }).lines).toEqual(['Skipped: Orchestrator, already deployed on this project.']);
+    expect(deployOutcome({ ...skippedLead, skipped: [{ member: 'Builder', reason: 'already deployed on this project' }] }, { brief: 'x', lead: 'Orchestrator' }).lines)
+      .toEqual(['Skipped: Builder, already deployed on this project.']);
   });
 });
 
