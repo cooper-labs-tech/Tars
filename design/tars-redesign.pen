@@ -240944,8 +240944,19 @@
                           ]
                         },
                         {
+                          "type": "text",
+                          "id": "e3hvUp",
+                          "name": "field",
+                          "fill": "$text-muted",
+                          "content": "command",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
                           "type": "frame",
-                          "id": "o2qwVk",
+                          "id": "pnRNY",
                           "name": "subject",
                           "width": "fill_container",
                           "fill": "$term-bg",
@@ -240958,7 +240969,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "MudE8",
+                              "id": "e22ua",
                               "name": "cmd",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -240973,7 +240984,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "kfMVB",
+                          "id": "frK86",
                           "name": "why",
                           "width": "fill_container",
                           "layout": "vertical",
@@ -240981,14 +240992,14 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "JST6o",
+                              "id": "PEHsu",
                               "name": "why",
                               "width": "fill_container",
                               "gap": 10,
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "p2BUU",
+                                  "id": "z8YA8i",
                                   "name": "k",
                                   "fill": "$text-muted",
                                   "textGrowth": "fixed-width",
@@ -241001,7 +241012,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "AhmRI",
+                                  "id": "VT92R",
                                   "name": "v",
                                   "fill": "$text-secondary",
                                   "textGrowth": "fixed-width",
@@ -241016,14 +241027,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "e3321P",
+                              "id": "IeIAC",
                               "name": "rule",
                               "width": "fill_container",
                               "gap": 10,
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "xGCbi",
+                                  "id": "P2WCkb",
                                   "name": "k",
                                   "fill": "$text-muted",
                                   "textGrowth": "fixed-width",
@@ -241036,7 +241047,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "Xlz8f",
+                                  "id": "D9fjbK",
                                   "name": "v",
                                   "fill": "$text-secondary",
                                   "textGrowth": "fixed-width",
@@ -241053,16 +241064,17 @@
                         },
                         {
                           "type": "frame",
-                          "id": "BedHM",
+                          "id": "R4kHM",
                           "name": "answers",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "dkMug",
+                              "id": "tx0T8",
                               "name": "b allow",
                               "height": 26,
+                              "fill": "$surface",
                               "stroke": "$border",
                               "strokeWidth": 1,
                               "padding": [
@@ -241074,9 +241086,9 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "eykNw",
+                                  "id": "Vf5Bf",
                                   "name": "l",
-                                  "fill": "$text-secondary",
+                                  "fill": "$text-primary",
                                   "content": "allow",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
@@ -241087,9 +241099,10 @@
                             },
                             {
                               "type": "frame",
-                              "id": "SRPHJ",
+                              "id": "mVUjp",
                               "name": "b deny",
                               "height": 26,
+                              "fill": "$surface",
                               "stroke": "$border",
                               "strokeWidth": 1,
                               "padding": [
@@ -241101,9 +241114,9 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "fBJCS",
+                                  "id": "G7cokh",
                                   "name": "l",
-                                  "fill": "$text-secondary",
+                                  "fill": "$text-primary",
                                   "content": "deny",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
@@ -241114,11 +241127,10 @@
                             },
                             {
                               "type": "frame",
-                              "id": "Sr7yd",
+                              "id": "jiXjQ",
                               "name": "b ask in terminal",
                               "height": 26,
                               "stroke": "$border",
-                              "strokeWidth": 1,
                               "padding": [
                                 6,
                                 12
@@ -241128,9 +241140,9 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "dWFBa",
+                                  "id": "mX4p5",
                                   "name": "l",
-                                  "fill": "$text-secondary",
+                                  "fill": "$text-muted",
                                   "content": "ask in terminal",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
@@ -243270,8 +243282,19 @@
                                   ]
                                 },
                                 {
+                                  "type": "text",
+                                  "id": "bVzD3",
+                                  "name": "field",
+                                  "fill": "$text-muted",
+                                  "content": "command",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
                                   "type": "frame",
-                                  "id": "F9S5qa",
+                                  "id": "GQn6m",
                                   "name": "subject",
                                   "width": "fill_container",
                                   "fill": "$term-bg",
@@ -243284,7 +243307,7 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "fAi9C",
+                                      "id": "pznQr",
                                       "name": "cmd",
                                       "fill": "$text-primary",
                                       "textGrowth": "fixed-width",
@@ -243299,7 +243322,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "snchl",
+                                  "id": "l6Gp4i",
                                   "name": "why",
                                   "width": "fill_container",
                                   "layout": "vertical",
@@ -243307,14 +243330,14 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "CnVq5",
+                                      "id": "FijmT",
                                       "name": "why",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "xFb7m",
+                                          "id": "BgC1u",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -243327,7 +243350,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "xOX1h",
+                                          "id": "o0u1Np",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -243342,14 +243365,14 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "C408C8",
+                                      "id": "oRSwk",
                                       "name": "rule",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "QNIMj",
+                                          "id": "OZhx9",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -243362,7 +243385,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "KEGfu",
+                                          "id": "gNPGF",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -243379,16 +243402,17 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "eADZd",
+                                  "id": "QSP8e",
                                   "name": "answers",
                                   "gap": 6,
                                   "alignItems": "center",
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "fYC0E",
+                                      "id": "pFJHr",
                                       "name": "b allow",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -243400,9 +243424,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "XunBc",
+                                          "id": "OxE24",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "allow",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -243413,9 +243437,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "e7UHcF",
+                                      "id": "Qs2bW",
                                       "name": "b deny",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -243427,9 +243452,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "EgAy5",
+                                          "id": "Ud3mV",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "deny",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -243440,11 +243465,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "lSkQf",
+                                      "id": "sCVb4",
                                       "name": "b ask in terminal",
                                       "height": 26,
                                       "stroke": "$border",
-                                      "strokeWidth": 1,
                                       "padding": [
                                         6,
                                         12
@@ -243454,9 +243478,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "X3IV9U",
+                                          "id": "By5UH",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-muted",
                                           "content": "ask in terminal",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -244687,8 +244711,19 @@
                                   ]
                                 },
                                 {
+                                  "type": "text",
+                                  "id": "V5hxU7",
+                                  "name": "field",
+                                  "fill": "$text-muted",
+                                  "content": "command",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
                                   "type": "frame",
-                                  "id": "UZBrS",
+                                  "id": "tE2rP",
                                   "name": "subject",
                                   "width": "fill_container",
                                   "fill": "$term-bg",
@@ -244701,7 +244736,7 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "mKgty",
+                                      "id": "cmazt",
                                       "name": "cmd",
                                       "fill": "$text-primary",
                                       "textGrowth": "fixed-width",
@@ -244716,7 +244751,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "TFrns",
+                                  "id": "RzlkD",
                                   "name": "why",
                                   "width": "fill_container",
                                   "layout": "vertical",
@@ -244724,14 +244759,14 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "T8dYvh",
+                                      "id": "rHMSU",
                                       "name": "why",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "gKx7e",
+                                          "id": "z6Hehg",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -244744,7 +244779,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "lUpUm",
+                                          "id": "BfUzs",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -244759,14 +244794,14 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "q2lbe",
+                                      "id": "Ao0At",
                                       "name": "rule",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "M1cCa",
+                                          "id": "TMuZy",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -244779,7 +244814,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "vIqGa",
+                                          "id": "VRasq",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -244796,7 +244831,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "srdAu",
+                                  "id": "iQKyn",
                                   "name": "answers",
                                   "width": "fill_container",
                                   "gap": 6,
@@ -244804,7 +244839,7 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "R3AeKc",
+                                      "id": "nSXwH",
                                       "name": "reason",
                                       "width": "fill_container",
                                       "height": 26,
@@ -244819,7 +244854,7 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "QscQ8",
+                                          "id": "N8g9IY",
                                           "name": "typed",
                                           "fill": "$text-primary",
                                           "content": "use the cached build: the CI runs the tests",
@@ -244832,9 +244867,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "FUGJC",
+                                      "id": "l0BlLe",
                                       "name": "b deny",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -244846,9 +244882,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "qBY6F",
+                                          "id": "R29q0",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "deny",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -244859,9 +244895,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "MFk7V",
+                                      "id": "zYlLR",
                                       "name": "b back",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -244873,9 +244910,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "Ez5nt",
+                                          "id": "f67QZe",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "back",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -248355,6 +248392,1039 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "MTHeu",
+          "name": "approve a file, shown whole",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "F4vcL",
+              "name": "window",
+              "width": 860,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "a425Yp",
+                  "fill": "$text-muted",
+                  "content": "approve · a file written, shown whole: each field by name, its size above a long one, allow first; ask in terminal is secondary",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "kgZM0",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "D17ml",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "zKIu0",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "ECUSn",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "perm2",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Write",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "x2TwB9",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RLoi3",
+                      "name": "details",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qcBv5",
+                          "fill": "$text-muted",
+                          "content": "file_path",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u7J5tQ",
+                          "name": "value",
+                          "width": "fill_container",
+                          "fill": "$term-bg",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            7,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "PnpvN",
+                              "fill": "$text-primary",
+                              "content": "src/lib/settle.ts",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "B1VEnj",
+                          "fill": "$text-muted",
+                          "content": "content · 8,692 characters, 400 lines",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "J0zuWs",
+                          "name": "value",
+                          "width": "fill_container",
+                          "fill": "$term-bg",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            7,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "I0Gxhs",
+                              "fill": "$text-primary",
+                              "content": "import { ledger } from './ledger';",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "e3JSzF",
+                              "fill": "$text-primary",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "XTC3f",
+                              "fill": "$text-primary",
+                              "content": "/** Settles every open line of a batch, oldest first. */",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Lr2Nc",
+                              "fill": "$text-primary",
+                              "content": "export function settle(batch: Batch): Settled {",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "U1HHRX",
+                              "fill": "$text-primary",
+                              "content": "⇥const open = batch.lines.filter(l => !l.settled);",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "PAMWF",
+                              "fill": "$text-primary",
+                              "content": "⇥for (const line of open) ledger.post(line);",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ipEDU",
+                              "fill": "$text-primary",
+                              "content": "⇥return { batch: batch.id, count: open.length };",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "N04wBw",
+                              "fill": "$text-primary",
+                              "content": "}",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "TCZdr",
+                          "fill": "$text-muted",
+                          "content": "the block scrolls: the 392 lines left are under these, whole",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "V58m6",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "PmCQs",
+                          "name": "b allow",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "T8Gb1O",
+                              "fill": "$text-primary",
+                              "content": "allow",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "w4UBn",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "MMUNi",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "VAT0M",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "UrOMV",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "a8Dohb",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "P1wse",
+                  "fill": "$text-muted",
+                  "content": "every question allowable from the window",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "a0b4R8",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The question whole: when the view an agent carries is cut (each field at most 2,000 characters on every tick), the window reads it with agent.permissionQuestion. Each field by name, the main one first (command, file_path, url...), its value whole in mono with the same marks (⇥ a tab, ⍽ another space, U+FFFD a hidden character); a field sent as JSON indented; a long field's size above it.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "Vnlfe",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The block scrolls between the head and the answers, which keep their place. allow names the fingerprint of the question read: if the agent asked about another call meanwhile, nothing is allowed, and the line says Tars no longer holds this question.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "RjxzF",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "ask in terminal is secondary: Claude Code's own dialog, for what only it offers, allowing a command for the rest of the session for instance.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "dVXL2",
+          "name": "a cut view, and while it is read",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "d30O3E",
+              "name": "panel and window",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "E3jxOY",
+                  "fill": "$text-muted",
+                  "content": "a cut view in a panel: show all, never allow; and the window while it reads the question whole",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "UsLzm",
+                  "name": "panel row",
+                  "width": "fill_container",
+                  "height": 26,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4,
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "L4woH",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZU6tk",
+                      "fill": "$text-primary",
+                      "content": "Asks to use Write:",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PwEoO",
+                      "fill": "$text-muted",
+                      "content": "src/lib/settle.ts",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ukE2a",
+                      "name": "spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "a9sy0",
+                      "name": "b show all",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "L1R3A",
+                          "fill": "$text-muted",
+                          "content": "show all",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "struk",
+                      "name": "b deny",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "HeSMM",
+                          "fill": "$text-muted",
+                          "content": "deny",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LtJnX",
+                      "name": "b ask in terminal",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bebb2",
+                          "fill": "$text-muted",
+                          "content": "ask in terminal",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yebxZ",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "MYLoQ",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "vwWk6",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Sv5oV",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "VibCG",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Write",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "clAzx",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "BUoVp",
+                      "fill": "$text-muted",
+                      "content": "file_path",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GZyiq",
+                      "name": "value",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "G6Ne3",
+                          "fill": "$text-primary",
+                          "content": "src/lib/settle.ts",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "TPfXc",
+                      "fill": "$text-muted",
+                      "content": "reading the whole question",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GuOA8",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "WMUdN",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "i5Peo7",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "j5BaIU",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "j9SMs7",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Oua27",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "joRJh",
+                  "fill": "$text-muted",
+                  "content": "allow only once it is read",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "tETD5",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A view Tars cut offers show all in a panel, never allow, even when its line fits. The window offers allow once the whole question is drawn; until it is read, deny and ask in terminal only. A question withheld (past 3 MiB, or a file tool without its content) keeps its row: deny and ask in terminal.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Q799fE",
+          "name": "the question changed",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "gwLWc",
+              "name": "window",
+              "width": 860,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Vsrhk",
+                  "fill": "$text-muted",
+                  "content": "allow on a question that changed in between: said, the new one shown whole, nothing allowed",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "zty1c",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "n6ZYJF",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "s9uJJ",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "aBaQH",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "O06nf",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Bash",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "jE04Q",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:03",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "khMXi",
+                      "name": "changed",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "P9D9L",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "iyt88",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 780,
+                          "content": "The agent asked about another call: this is the new one. Read it, then answer.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "PD1e8",
+                      "fill": "$text-muted",
+                      "content": "command",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "p7CHqd",
+                      "name": "value",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MdbKc",
+                          "fill": "$text-primary",
+                          "content": "npm run build && npm publish --tag next",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZzHJP",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ZRsyd",
+                          "name": "b allow",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "UwYbn",
+                              "fill": "$text-primary",
+                              "content": "allow",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RetBL",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "O1CPRo",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "vZd2Q",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "PxMTG",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "l31DO",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "VqJTf",
+                  "fill": "$text-muted",
+                  "content": "the fingerprint, on every allow",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "l92iKL",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Every allow names the fingerprint of the question shown, whole or not. When main refuses it because the question changed in between, the window says so and shows the new question whole: it allows nothing by itself. When Tars holds no question any more, the line says Tars no longer holds this question, as before.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -251688,8 +252758,19 @@
                           ]
                         },
                         {
+                          "type": "text",
+                          "id": "L4ocs",
+                          "name": "field",
+                          "fill": "$text-muted",
+                          "content": "command",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
                           "type": "frame",
-                          "id": "eDdEw",
+                          "id": "isaSk",
                           "name": "subject",
                           "width": "fill_container",
                           "fill": "$term-bg",
@@ -251702,7 +252783,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "p1Y3Pz",
+                              "id": "rkgB5",
                               "name": "cmd",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -251717,7 +252798,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "M41K4",
+                          "id": "gG6eT",
                           "name": "why",
                           "width": "fill_container",
                           "layout": "vertical",
@@ -251725,14 +252806,14 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "YyqiF",
+                              "id": "zsVDY",
                               "name": "why",
                               "width": "fill_container",
                               "gap": 10,
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "GPtM9",
+                                  "id": "U1EAu",
                                   "name": "k",
                                   "fill": "$text-muted",
                                   "textGrowth": "fixed-width",
@@ -251745,7 +252826,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "C8m5Lv",
+                                  "id": "PP7lP",
                                   "name": "v",
                                   "fill": "$text-secondary",
                                   "textGrowth": "fixed-width",
@@ -251760,14 +252841,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "ysxMM",
+                              "id": "SNoYI",
                               "name": "rule",
                               "width": "fill_container",
                               "gap": 10,
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "XqIWi",
+                                  "id": "JqR8V",
                                   "name": "k",
                                   "fill": "$text-muted",
                                   "textGrowth": "fixed-width",
@@ -251780,7 +252861,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "i7SaD",
+                                  "id": "M7m7l",
                                   "name": "v",
                                   "fill": "$text-secondary",
                                   "textGrowth": "fixed-width",
@@ -251797,16 +252878,17 @@
                         },
                         {
                           "type": "frame",
-                          "id": "Ve03Y",
+                          "id": "bKm0y",
                           "name": "answers",
                           "gap": 6,
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "frame",
-                              "id": "o1r0vg",
+                              "id": "G1l5Eg",
                               "name": "b allow",
                               "height": 26,
+                              "fill": "$surface",
                               "stroke": "$border",
                               "strokeWidth": 1,
                               "padding": [
@@ -251818,9 +252900,9 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "q63eR",
+                                  "id": "VgrLt",
                                   "name": "l",
-                                  "fill": "$text-secondary",
+                                  "fill": "$text-primary",
                                   "content": "allow",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
@@ -251831,9 +252913,10 @@
                             },
                             {
                               "type": "frame",
-                              "id": "ZCCAg",
+                              "id": "OB0qO",
                               "name": "b deny",
                               "height": 26,
+                              "fill": "$surface",
                               "stroke": "$border",
                               "strokeWidth": 1,
                               "padding": [
@@ -251845,9 +252928,9 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "zGWpI",
+                                  "id": "kCibO",
                                   "name": "l",
-                                  "fill": "$text-secondary",
+                                  "fill": "$text-primary",
                                   "content": "deny",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
@@ -251858,11 +252941,10 @@
                             },
                             {
                               "type": "frame",
-                              "id": "l5gOJz",
+                              "id": "ztCJk",
                               "name": "b ask in terminal",
                               "height": 26,
                               "stroke": "$border",
-                              "strokeWidth": 1,
                               "padding": [
                                 6,
                                 12
@@ -251872,9 +252954,9 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "KxFnV",
+                                  "id": "QDeEK",
                                   "name": "l",
-                                  "fill": "$text-secondary",
+                                  "fill": "$text-muted",
                                   "content": "ask in terminal",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
@@ -254014,8 +255096,19 @@
                                   ]
                                 },
                                 {
+                                  "type": "text",
+                                  "id": "gSztL",
+                                  "name": "field",
+                                  "fill": "$text-muted",
+                                  "content": "command",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
                                   "type": "frame",
-                                  "id": "Dtuha",
+                                  "id": "Arbwm",
                                   "name": "subject",
                                   "width": "fill_container",
                                   "fill": "$term-bg",
@@ -254028,7 +255121,7 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "keKN7",
+                                      "id": "P1fXt",
                                       "name": "cmd",
                                       "fill": "$text-primary",
                                       "textGrowth": "fixed-width",
@@ -254043,7 +255136,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "rWNcK",
+                                  "id": "Z6jPHO",
                                   "name": "why",
                                   "width": "fill_container",
                                   "layout": "vertical",
@@ -254051,14 +255144,14 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "eW4LK",
+                                      "id": "W0a2c7",
                                       "name": "why",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "j4q0O",
+                                          "id": "fQ4WQ",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -254071,7 +255164,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "R0r7I2",
+                                          "id": "nrYM3",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -254086,14 +255179,14 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "eZqfC",
+                                      "id": "j4jSg6",
                                       "name": "rule",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "q21Pp",
+                                          "id": "GIYtH",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -254106,7 +255199,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "ZnY7f",
+                                          "id": "Z5Ydq",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -254123,16 +255216,17 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "iyECn",
+                                  "id": "DYEuu",
                                   "name": "answers",
                                   "gap": 6,
                                   "alignItems": "center",
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "XlrjE",
+                                      "id": "UNqTu",
                                       "name": "b allow",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -254144,9 +255238,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "J6Qar",
+                                          "id": "U1Leo0",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "allow",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -254157,9 +255251,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "mOHrY",
+                                      "id": "B14BXD",
                                       "name": "b deny",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -254171,9 +255266,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "u6fyb",
+                                          "id": "OhmAM",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "deny",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -254184,11 +255279,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "LfPWa",
+                                      "id": "P3cEN",
                                       "name": "b ask in terminal",
                                       "height": 26,
                                       "stroke": "$border",
-                                      "strokeWidth": 1,
                                       "padding": [
                                         6,
                                         12
@@ -254198,9 +255292,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "uukgr",
+                                          "id": "OR1Z4",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-muted",
                                           "content": "ask in terminal",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -255431,8 +256525,19 @@
                                   ]
                                 },
                                 {
+                                  "type": "text",
+                                  "id": "ZSVzW",
+                                  "name": "field",
+                                  "fill": "$text-muted",
+                                  "content": "command",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                },
+                                {
                                   "type": "frame",
-                                  "id": "Rk0fw",
+                                  "id": "RMheK",
                                   "name": "subject",
                                   "width": "fill_container",
                                   "fill": "$term-bg",
@@ -255445,7 +256550,7 @@
                                   "children": [
                                     {
                                       "type": "text",
-                                      "id": "vjLot",
+                                      "id": "yGFl8",
                                       "name": "cmd",
                                       "fill": "$text-primary",
                                       "textGrowth": "fixed-width",
@@ -255460,7 +256565,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "OKaJs",
+                                  "id": "GWgmM",
                                   "name": "why",
                                   "width": "fill_container",
                                   "layout": "vertical",
@@ -255468,14 +256573,14 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "iSiHO",
+                                      "id": "N5ySOm",
                                       "name": "why",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "MXVrt",
+                                          "id": "ebaNB",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -255488,7 +256593,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "ECIjP",
+                                          "id": "Q7lKTo",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -255503,14 +256608,14 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "EYEI9",
+                                      "id": "RKqiZ",
                                       "name": "rule",
                                       "width": "fill_container",
                                       "gap": 10,
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "LNrnf",
+                                          "id": "xreSm",
                                           "name": "k",
                                           "fill": "$text-muted",
                                           "textGrowth": "fixed-width",
@@ -255523,7 +256628,7 @@
                                         },
                                         {
                                           "type": "text",
-                                          "id": "f8Qhv",
+                                          "id": "q7qh8",
                                           "name": "v",
                                           "fill": "$text-secondary",
                                           "textGrowth": "fixed-width",
@@ -255540,7 +256645,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "y1gR7",
+                                  "id": "P5B5lh",
                                   "name": "answers",
                                   "width": "fill_container",
                                   "gap": 6,
@@ -255548,7 +256653,7 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "N9nXqx",
+                                      "id": "URTtQ",
                                       "name": "reason",
                                       "width": "fill_container",
                                       "height": 26,
@@ -255563,7 +256668,7 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "t5HNw",
+                                          "id": "RdVHd",
                                           "name": "typed",
                                           "fill": "$text-primary",
                                           "content": "use the cached build: the CI runs the tests",
@@ -255576,9 +256681,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "f2w5O8",
+                                      "id": "IddBC",
                                       "name": "b deny",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -255590,9 +256696,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "M4Vku4",
+                                          "id": "gXgIh",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "deny",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -255603,9 +256709,10 @@
                                     },
                                     {
                                       "type": "frame",
-                                      "id": "Hj2mh",
+                                      "id": "lY4eX",
                                       "name": "b back",
                                       "height": 26,
+                                      "fill": "$surface",
                                       "stroke": "$border",
                                       "strokeWidth": 1,
                                       "padding": [
@@ -255617,9 +256724,9 @@
                                       "children": [
                                         {
                                           "type": "text",
-                                          "id": "xGdRp",
+                                          "id": "M9hORG",
                                           "name": "l",
-                                          "fill": "$text-secondary",
+                                          "fill": "$text-primary",
                                           "content": "back",
                                           "lineHeight": 1.4,
                                           "fontFamily": "$font-mono",
@@ -259091,6 +260198,1039 @@
                   "textGrowth": "fixed-width",
                   "width": "fill_container",
                   "content": "If Tars no longer held the question, nothing opens either: the line says so.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ctEI4",
+          "name": "approve a file, shown whole",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "SkMeT",
+              "name": "window",
+              "width": 860,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "OJWra",
+                  "fill": "$text-muted",
+                  "content": "approve · a file written, shown whole: each field by name, its size above a long one, allow first; ask in terminal is secondary",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "v1nVm",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "c2ketL",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "UTKgD",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Pw0n0",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "eMuek",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Write",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "uJrV0",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "L5iJf6",
+                      "name": "details",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Mir0x",
+                          "fill": "$text-muted",
+                          "content": "file_path",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "J8Wab",
+                          "name": "value",
+                          "width": "fill_container",
+                          "fill": "$term-bg",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            7,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "zxzN2",
+                              "fill": "$text-primary",
+                              "content": "src/lib/settle.ts",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "mn65P",
+                          "fill": "$text-muted",
+                          "content": "content · 8,692 characters, 400 lines",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "O5o1Y",
+                          "name": "value",
+                          "width": "fill_container",
+                          "fill": "$term-bg",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "vertical",
+                          "padding": [
+                            7,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "h78c2",
+                              "fill": "$text-primary",
+                              "content": "import { ledger } from './ledger';",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "UQ9EE",
+                              "fill": "$text-primary",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "qY5ag",
+                              "fill": "$text-primary",
+                              "content": "/** Settles every open line of a batch, oldest first. */",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "gl9dl",
+                              "fill": "$text-primary",
+                              "content": "export function settle(batch: Batch): Settled {",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "LDITw",
+                              "fill": "$text-primary",
+                              "content": "⇥const open = batch.lines.filter(l => !l.settled);",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "BFCXd",
+                              "fill": "$text-primary",
+                              "content": "⇥for (const line of open) ledger.post(line);",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ZlujZ",
+                              "fill": "$text-primary",
+                              "content": "⇥return { batch: batch.id, count: open.length };",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Y6Rkm",
+                              "fill": "$text-primary",
+                              "content": "}",
+                              "lineHeight": 1.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "n8rsLj",
+                          "fill": "$text-muted",
+                          "content": "the block scrolls: the 392 lines left are under these, whole",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FB1gX",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "JD9hp",
+                          "name": "b allow",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Lw5bo",
+                              "fill": "$text-primary",
+                              "content": "allow",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "r6vAdL",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "HwtFr",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "evIa2",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "L1NAX",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "sXCSL",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Got5U",
+                  "fill": "$text-muted",
+                  "content": "every question allowable from the window",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "fpgHM",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The question whole: when the view an agent carries is cut (each field at most 2,000 characters on every tick), the window reads it with agent.permissionQuestion. Each field by name, the main one first (command, file_path, url...), its value whole in mono with the same marks (⇥ a tab, ⍽ another space, U+FFFD a hidden character); a field sent as JSON indented; a long field's size above it.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "NpPWz",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "The block scrolls between the head and the answers, which keep their place. allow names the fingerprint of the question read: if the agent asked about another call meanwhile, nothing is allowed, and the line says Tars no longer holds this question.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "tKQMw",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "ask in terminal is secondary: Claude Code's own dialog, for what only it offers, allowing a command for the rest of the session for instance.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "jLj0r",
+          "name": "a cut view, and while it is read",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "IBkVD",
+              "name": "panel and window",
+              "width": 660,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "q5SrWr",
+                  "fill": "$text-muted",
+                  "content": "a cut view in a panel: show all, never allow; and the window while it reads the question whole",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "U75CX",
+                  "name": "panel row",
+                  "width": "fill_container",
+                  "height": 26,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 8,
+                  "padding": [
+                    0,
+                    4,
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "EpoNM",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "nbVJ5",
+                      "fill": "$text-primary",
+                      "content": "Asks to use Write:",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "d8uZY",
+                      "fill": "$text-muted",
+                      "content": "src/lib/settle.ts",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lFqow",
+                      "name": "spacer",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jA0oX",
+                      "name": "b show all",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VYjXl",
+                          "fill": "$text-muted",
+                          "content": "show all",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XEj8V",
+                      "name": "b deny",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "y5jwxS",
+                          "fill": "$text-muted",
+                          "content": "deny",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Tr5qk",
+                      "name": "b ask in terminal",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        8
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "H8KlT",
+                          "fill": "$text-muted",
+                          "content": "ask in terminal",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "N5Ye0X",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "V77k5",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ltb1D",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "PmIO6",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "lDCc0",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Write",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "s5AyC",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ZtU0N",
+                      "fill": "$text-muted",
+                      "content": "file_path",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ppNw6",
+                      "name": "value",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "oC7od",
+                          "fill": "$text-primary",
+                          "content": "src/lib/settle.ts",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "CE8mx",
+                      "fill": "$text-muted",
+                      "content": "reading the whole question",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VDapj",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "YPu0F",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ilgTE",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Ana00",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "fjD4V",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "k05HJ",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "QvI8j",
+                  "fill": "$text-muted",
+                  "content": "allow only once it is read",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "v8orf",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "A view Tars cut offers show all in a panel, never allow, even when its line fits. The window offers allow once the whole question is drawn; until it is read, deny and ask in terminal only. A question withheld (past 3 MiB, or a file tool without its content) keeps its row: deny and ask in terminal.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "TzIye",
+          "name": "the question changed",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "g3Wv0G",
+              "name": "window",
+              "width": 860,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "x8RoC",
+                  "fill": "$text-muted",
+                  "content": "allow on a question that changed in between: said, the new one shown whole, nothing allowed",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "P4cDjt",
+                  "name": "ask",
+                  "width": "fill_container",
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "q0dKaD",
+                      "name": "head",
+                      "width": "fill_container",
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "FVfzh",
+                          "name": "l",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "ET7vT",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "t2rub",
+                              "fill": "$text-primary",
+                              "content": "Asks to use Bash",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "X0Vna",
+                          "fill": "$text-muted",
+                          "content": "asked at 14:03",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FtmUE",
+                      "name": "changed",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "xckUQ",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Zbz0A",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 780,
+                          "content": "The agent asked about another call: this is the new one. Read it, then answer.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Wu8M9",
+                      "fill": "$text-muted",
+                      "content": "command",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "se7Gn",
+                      "name": "value",
+                      "width": "fill_container",
+                      "fill": "$term-bg",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "padding": [
+                        7,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "M2j1F",
+                          "fill": "$text-primary",
+                          "content": "npm run build && npm publish --tag next",
+                          "lineHeight": 1.5,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oWJZC",
+                      "name": "answers",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "x7RYs",
+                          "name": "b allow",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xOEIm",
+                              "fill": "$text-primary",
+                              "content": "allow",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "q24T2U",
+                          "name": "b deny",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "P72kJ7",
+                              "fill": "$text-primary",
+                              "content": "deny",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "NgQHQ",
+                          "name": "b ask in terminal",
+                          "height": 26,
+                          "stroke": "$border",
+                          "padding": [
+                            6,
+                            12
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xCmZx",
+                              "fill": "$text-muted",
+                              "content": "ask in terminal",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "t3aoZ",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "GxN7H",
+                  "fill": "$text-muted",
+                  "content": "the fingerprint, on every allow",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10.5,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "HcG9u",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 420,
+                  "content": "Every allow names the fingerprint of the question shown, whole or not. When main refuses it because the question changed in between, the window says so and shows the new question whole: it allows nothing by itself. When Tars holds no question any more, the line says Tars no longer holds this question, as before.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
