@@ -9,7 +9,10 @@ import { findOnPath } from './cli-binary';
  * installers), and its arguments. On Windows an agent gets no shell at all:
  * its CLI is the terminal's own process (see launch.ts).
  *
- * darwin/linux: exactly defaultShell() and ['-l'], as every caller has today.
+ * darwin/linux: the user's setting when it is an absolute path (Settings >
+ * Terminal: a shell /etc/shells lists, or a path typed in), else
+ * defaultShell(), $SHELL; with ['-l']. A setting that is no absolute path (a
+ * Windows path, a bare name, a relative one) is no shell there.
  * win32: the user's setting, else pwsh.exe (PowerShell 7) when it is on the
  * PATH, else Windows PowerShell 5.1, else %ComSpec%. SHELL is ignored there:
  * started from Git Bash it reads /usr/bin/bash, which node-pty cannot spawn.
@@ -17,14 +20,18 @@ import { findOnPath } from './cli-binary';
 export function resolveShell(opts: {
   env?: Env;
   platform?: NodeJS.Platform;
-  /** The user's choice (a path or a name on the PATH), win32 only. */
+  /** The user's choice: a path, or on win32 a name on the PATH too. */
   setting?: string;
   fs?: FsProbe;
 } = {}): string {
   const env = opts.env ?? process.env;
   const platform = opts.platform ?? process.platform;
-  // defaultShell reads SHELL alone; the cast only drops Next's NODE_ENV typing.
-  if (platform !== 'win32') return defaultShell(env as NodeJS.ProcessEnv, platform);
+  if (platform !== 'win32') {
+    const chosen = opts.setting?.trim();
+    if (chosen && path.posix.isAbsolute(chosen)) return chosen;
+    // defaultShell reads SHELL alone; the cast only drops Next's NODE_ENV typing.
+    return defaultShell(env as NodeJS.ProcessEnv, platform);
+  }
   const fs = opts.fs ?? realFs;
   const w = path.win32;
 
