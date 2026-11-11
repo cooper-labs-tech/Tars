@@ -2,6 +2,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { buildFullPath } from '../../utils/path-builder';
 import { refuseWhileQuitting } from '../../core/quit-state';
 import { endProbe } from '../../core/version-probe';
+import { resolveCliBinary, withPath as pathIn, type Env } from '../../platform';
 
 /**
  * Asking Claude Code about an account, never its credential.
@@ -50,8 +51,21 @@ export function accountEnv(configDir: string | null, base: NodeJS.ProcessEnv = p
 
 function withPath(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // The packaged main process has a bare PATH: a claude found by name would
-  // not be found at all.
-  return { ...env, PATH: buildFullPath() };
+  // not be found at all. Written once, under the spelling Windows already has
+  // (Path): a second key beside it, and which one a program reads is chance.
+  return pathIn(env as Env, buildFullPath(), process.platform) as NodeJS.ProcessEnv;
+}
+
+/**
+ * The program to start for `binary` and the argv before its own: on Windows
+ * as the platform layer finds it, since neither a bare name (no PATHEXT) nor
+ * an npm .cmd shim (refused without a shell) starts there: the shim is read
+ * through to node and its script (as core/version-probe.ts). Elsewhere the
+ * binary as given.
+ */
+function invocation(binary: string, env: NodeJS.ProcessEnv): { file: string; prefixArgs: string[] } | { error: Error } {
+  const cli = resolveCliBinary(binary, env as Env, process.platform);
+  return cli.ok ? { file: cli.file, prefixArgs: cli.prefixArgs } : { error: new Error(cli.detail) };
 }
 
 /**
@@ -81,11 +95,14 @@ function run(binary: string, args: string[], configDir: string | null): Promise<
   } catch (err) {
     return Promise.resolve({ code: -1, stdout: '', stderr: '', spawnError: err as Error });
   }
+  const env = withPath(accountEnv(configDir));
+  const cli = invocation(binary, env);
+  if ('error' in cli) return Promise.resolve({ code: -1, stdout: '', stderr: '', spawnError: cli.error });
   return new Promise(resolve => {
     // detached: a group of its own, which endProbe can signal whole. Not on
     // Windows, where it would open a console of its own and taskkill ends the tree.
-    const child = spawn(binary, args, {
-      env: withPath(accountEnv(configDir)), detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    const child = spawn(cli.file, [...cli.prefixArgs, ...args], {
+      env, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     running.add(child);
     let stdout = '';
@@ -148,7 +165,14 @@ export async function claudeAuthLogout(binary: string, configDir: string | null)
   }
 }
 
-/** The login terminal's program: the binary itself, no shell in between. */
+/**
+ * The login terminal's program: the binary itself, as the platform starts it
+ * (invocation), no shell in between, with the PATH a packaged Tars lacks.
+ * Throws when the binary cannot be started.
+ */
 export function loginCommand(binary: string, configDir: string | null, base: NodeJS.ProcessEnv = process.env): { file: string; args: string[]; env: NodeJS.ProcessEnv } {
-  return { file: binary, args: ['auth', 'login', '--claudeai'], env: accountEnv(configDir, base) };
+  const env = withPath(accountEnv(configDir, base));
+  const cli = invocation(binary, env);
+  if ('error' in cli) throw new Error(`claude cannot be started: ${cli.error.message}`);
+  return { file: cli.file, args: [...cli.prefixArgs, 'auth', 'login', '--claudeai'], env };
 }
