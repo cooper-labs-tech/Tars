@@ -642,7 +642,8 @@ describe('agent-routes', () => {
       expect(context).toContain('You are "Orchestrator-Alpha"');
       expect(context).toContain('Frontend-Alpha');
       expect(context).not.toContain('Tars-Worker');
-      expect(context).toContain('Delegate ONLY to the agents listed above');
+      expect(context).toContain('Delegate ONLY to your project\'s team');
+      expect(context).toContain('You never do the work yourself');
     });
 
     it('GET /:id/health reports PTY liveness and session presence', async () => {

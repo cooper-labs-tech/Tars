@@ -216,7 +216,8 @@ describe('the task reaches the CLI as its own argument', () => {
     const argv = argvOf(claude.buildInteractiveCommand(fullParams(PLAIN, false)));
     const parsed = parseLikeClaude(argv);
 
-    expect(parsed.values['--disallowed-tools']).toEqual(['Edit', 'Write', 'NotebookEdit', 'Task']);
+    // #579's ten: the tools of the work, editing, subagents, searching the code and the web.
+    expect(parsed.values['--disallowed-tools']).toEqual(['Edit', 'Write', 'NotebookEdit', 'Task', 'Workflow', 'Grep', 'Glob', 'LSP', 'WebFetch', 'WebSearch']);
     expect(parsed.operands).toEqual([PLAIN]);
   });
 });

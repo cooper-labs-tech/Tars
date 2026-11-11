@@ -189,7 +189,7 @@ describe.skipIf(claudeAccountsNotPorted())('the contract', () => {
     expect(v.accounts).toHaveLength(1);
     const a = v.accounts[0];
     expect(a).toMatchObject({ id: 'default', configDir: null, enabled: true, fiveHour: null, sevenDay: null, models: [], updatedAt: null, blockedUntil: null, agentIds: [], error: null });
-    expect(Object.keys(a).sort()).toEqual(['agentIds', 'blockedUntil', 'configDir', 'email', 'enabled', 'error', 'fiveHour', 'id', 'label', 'models', 'sevenDay', 'signedIn', 'subscriptionType', 'updatedAt'].sort());
+    expect(Object.keys(a).sort()).toEqual(['agentIds', 'blockedUntil', 'code', 'configDir', 'email', 'enabled', 'error', 'fiveHour', 'id', 'label', 'models', 'sevenDay', 'signedIn', 'subscriptionType', 'updatedAt'].sort());
   });
 
   it('asks Claude Code about accounts it has not asked yet, and tells the page', async () => {

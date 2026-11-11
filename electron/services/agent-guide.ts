@@ -21,6 +21,7 @@ import type { AgentStatus } from '../types';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { ensureProjectFiles } from '../utils/project-files';
 import { needsPromptInjection } from './memory-hub';
+import { usableHermesConnection } from './hermes-config';
 
 export type GuideRole = 'orchestrator' | 'worker';
 
@@ -52,7 +53,23 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       '`start_agent` is deprecated: it hands the task the same way and answers with its taskId without waiting. Use delegate_task. `wait_for_agent` waits on an agent\'s status, `get_agent_output` reads its terminal, `get_agent` gives its whole record.',
       '`create_agent` adds an agent to your project, on any provider; `stop_agent` stops one with a reason the user reads; `remove_agent` deletes one for good.',
       '`update_agent` changes one of your agents afterwards (name, provider, model, effort, permission mode, CLI path, skills), never its role, and never your own settings: those stay the user\'s, in the Agents page. A running turn is never cut: a new model or effort restarts a claude agent once its turn ends, on the same conversation, and another CLI takes it at its next start; a new provider or CLI path waits until you stop the agent with `stop_agent` (cli_running until then), and its next start is on a new conversation. The answer says when the change applies.',
-      'An orchestrator does not edit files: its sessions are denied the editing tools. It splits the work, delegates, and reports.',
+      'An orchestrator only orchestrates: development, research, investigation, reading code or logs to diagnose, QA and audit are its agents\' work. It splits the work, delegates, follows, and reports. Its sessions are denied the tools of that work where its CLI allows it (claude and its kin: editing, subagents, searching the code and the web; Qwen Code the same); it keeps reading files and its shell, for its agents\' reports and to merge.',
+    ].join('\n'),
+  },
+  {
+    id: 'workflow',
+    title: 'How a change is delivered: the gate loop',
+    roles: ['orchestrator', 'worker'],
+    text: [
+      'Every change goes through the same loop, on every project, unless the user asks otherwise: the orchestrator splits the work by domain and hands each piece to the agent that owns its area; the worker makes it on its own branch and delivers a pull request; QA gates it, then the Audit; CI must be green; only then is it merged; the orchestrator reports what shipped.',
+      'A branch per piece, in a worktree of its own: `worktree_new` makes one from the project\'s fresh default branch (in the project\'s .worktrees folder, kept out of git by .git/info/exclude), refusing on a disk too full or past the project\'s count; `worktree_remove` removes a clean one no agent or process works in, never by force, and keeps its branch; `worktree_prune` removes every such worktree whose work is done (its branch merged, or its pull request merged on GitHub, or a gate checkout), unmoved for an hour. `worktree_list` shows them. Never `git worktree add` by hand.',
+      'The worker: commits on its branch, pushes it, and opens the pull request into the default branch (`gh pr create`). It never merges, never commits to the default branch, and never pushes to it. Its report names the PR.',
+      'QA, the first gate: checks the PR\'s branch out with `worktree_new` and `existing: true` (its head as pushed, a detached checkout while the worker\'s worktree holds the branch, refused rather than made from the default branch when it cannot be found), runs the project\'s checks there (its build, typecheck, lint and tests, as the project\'s CLAUDE.md or CI names them), and writes its verdict first, MERGE or FIX FIRST, then why, in a report in the project folder\'s reports/ (QA-PR<number>.md). A later gate of the same PR adds a section: never overwrite an earlier verdict. QA reports defects with their exact output; it does not patch them.',
+      'The Audit, the second gate: a read-only review of the PR\'s diff, findings with file:line ranked by severity (High, Medium, Low, Info), its verdict first, in reports/ too (AUDIT-PR<number>.md). It never edits the code.',
+      'CI: read with `gh pr checks <number>` before any merge. A project with no CI has QA run the same checks locally, and its report says so.',
+      'The merge: only once QA and the Audit say MERGE and CI is green, by the orchestrator (`gh pr merge`), or by the user when they said they merge themselves, the orchestrator telling them it is ready. A red gate (FIX FIRST, a failing check, a red CI) goes back to the worker with the findings, and both gates run again after every fix. Never merge over a red gate; a worker never merges.',
+      'A full gate run before a merge or a release is handed with `delegate_task`\'s `gate: true`: that agent\'s heavy runs for it go first in the heavy-run slot. Once a PR is merged, its worktree goes (`worktree_remove`, or `worktree_prune` for all the merged ones).',
+      'A project with no remote: the same loop on local branches, the gates on the branch, and the orchestrator merges it with git once they are green.',
     ].join('\n'),
   },
   {
@@ -157,7 +174,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       'Test suites, builds, Docker and simulators take the machine\'s heavy-run slot first: every project\'s agents share it, and a further run starts only when the machine has room for it (free disk and memory, no swapping, the last run settled), up to a ceiling the user sets. A dev server started on its own does not take it (it would hold a place for hours); one a test run starts is inside that run.',
       'For one command: `tars-slot run --label "<what>" -- <command>` in your terminal waits for the slot, runs the command, gives it back and exits with its code; git hooks and scripts use it too, as `"$TARS_SLOT" run ...`, which needs no PATH (a login shell may set PATH anew). `tars-slot take`, from a script that runs the steps itself, holds it across them (until the script ends or `tars-slot give-back <ticket>`); from your own Bash tool its lease ends with that one command. `tars-slot status` shows the queue.',
       'From a tool: `heavy_slot_take` (then `heavy_slot_give_back` when the run is over; Tars gives it back when your turn ends, and the owner can from the window), `heavy_slot_status` for who holds it and who waits.',
-      'The queue: gate (a release gate, orchestrators only), then normal, then background, then arrival. A run started from inside your own run (a pre-push hook) is granted at once. A grant waits while free disk or memory is under the floor, and says so.',
+      'The queue: gate (a release gate: asked by an orchestrator, or by the agent its project\'s orchestrator handed the work to, its QA running the gate; anyone else is given normal), then normal, then background, then arrival. A run started from inside your own run (a pre-push hook) is granted at once. A grant waits while free disk or memory is under the floor, and says so.',
       'During a run Tars tells you, your orchestrator and the window when the disk fills or the swap grows fast. Tars never stops a run itself: you decide.',
     ].join('\n'),
   },
@@ -195,6 +212,10 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   send_discord: 'asking-the-user',
   tars_guide: 'limits',
   heavy_slot_take: 'heavy-runs',
+  worktree_new: 'workflow',
+  worktree_list: 'workflow',
+  worktree_remove: 'workflow',
+  worktree_prune: 'workflow',
   heavy_slot_give_back: 'heavy-runs',
   heavy_slot_status: 'heavy-runs',
   // mcp-kanban
@@ -264,31 +285,42 @@ export function guideTopic(id: string, version: string, folder: string | null, w
  * folder, and where the details are. Kept to a few lines on purpose: every
  * session of every agent carries it.
  */
-export function identitySection(role: GuideRole, folder: string | null, why?: string): string[] {
+export function identitySection(role: GuideRole, folder: string | null, why?: string, opts: { hermes?: boolean } = {}): string[] {
+  // The kanban is a Hermes board: without a gateway there is none, and no agent is sent to file or claim on it
+  // (QA's fresh-install report, H3, 10/11). With one, as before.
+  const hermes = opts.hermes !== false;
   const where = folder
     ? `- Your project folder, kept by Tars outside the repository: ${folder} (tools/, reports/). Keep scripts and reports worth keeping there, never in a temporary folder, under ~/Documents or in a folder you create at the top of your home folder.`
     : `- Your project has no folder kept by Tars (${why ?? NOT_ABSOLUTE}): keep what must last in the repository or ask your requester.`;
   const lines = [`## How Tars works`];
   if (role === 'orchestrator') {
     lines.push(
+      // The rule first, on every CLI: this section is the one text each orchestrator gets, from its bootstrap or in its
+      // first prompt (2.0.7, the owner's rule of 10/11).
+      `- You orchestrate, and only that. You never do the work yourself: development, research, investigation, reading code or logs to diagnose, QA and audit all go to your project's agents. You split the work, delegate each piece, follow it, read what your agents report, and report to the user. A question whose answer needs the code, the logs or the web is a task for an agent too.`,
+      `- No agent of your project fits a piece of work, or your project has none yet: create the one it needs with create_agent (a developer, a QA, an auditor), then delegate to it.`,
+      `- Every change goes through the gate loop: each piece on its own branch, the worker delivers a pull request and never merges it, QA's verdict, then the Audit's, CI green (gh pr checks), and only then you merge, or the user does if they said so. A red gate goes back to the worker. tars_guide workflow says more.`,
       `- Write each task as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance. tars_guide delegation says more.`,
       `- delegate_task hands a task to the agent's own terminal and returns its full final answer, tokens and cost (claude, Qwen Code; codex, pi, gemini: the answer only; opencode, amp, grok: delivered only). timeoutSeconds is how long it waits: 3600 s when you give none; the task is never stopped there. If it says the task may still be working, read it with task_status: never send it twice. start_agent is deprecated.`,
       `- send_message modes: auto, queue, steer, restart. HELD means it waits for the terminal and goes in by itself.`,
-      `- The kanban is the project's Hermes board (one lane per agent): file the work you split with create_task, so the user sees it.`,
+      hermes
+        ? `- The kanban is the project's Hermes board (one lane per agent): file the work you split with create_task, so the user sees it.`
+        : `- There is no kanban board in this Tars (no Hermes gateway is set up): keep the split in your delegations and your report, and use no kanban tool.`,
       `- ask_user puts a question to the user from your terminal and returns at once: their answer is typed in later. Do not wait for it.`,
     );
   } else {
     lines.push(
       `- Answer whoever asked you with send_message to "requester", or in your final report. HELD means your message waits for the terminal and goes in by itself.`,
       `- You hand no work to another agent and stop none: ask your orchestrator (send_message to "orchestrator"). What you send another worker is a note for information.`,
-      `- The kanban is the project's Hermes board (one lane per agent): claim a task with assign_task, finish it with mark_task_done, file a follow-up you find with create_task.`,
+      `- You deliver a change on its own branch, in its own worktree (worktree_new), as a pull request into the default branch: you never merge it and never commit to the default branch. As QA or the Audit you gate: a verdict first, in the reports folder, and you report defects, never patch them.`,
+      hermes
+        ? `- The kanban is the project's Hermes board (one lane per agent): claim a task with assign_task, finish it with mark_task_done, file a follow-up you find with create_task.`
+        : `- There is no kanban board in this Tars (no Hermes gateway is set up): the task you are given is the work, and your report says what is done; use no kanban tool.`,
     );
   }
-  lines.push(
-    where,
-    `- When Hermes refuses or cannot be reached, the user signs in to it in Tars (Settings, Hermes): say so once and go on.`,
-    `- tars_guide gives the details: delegation, messages, held-and-refused, kanban, project-folder, asking-the-user, limits.`,
-  );
+  lines.push(where);
+  if (hermes) lines.push(`- When Hermes refuses or cannot be reached, the user signs in to it in Tars (Settings, Hermes): say so once and go on.`);
+  lines.push(`- tars_guide gives the details: delegation, workflow, messages, held-and-refused, kanban, project-folder, asking-the-user, limits.`);
   return lines;
 }
 
@@ -302,7 +334,8 @@ export function identitySection(role: GuideRole, folder: string | null, why?: st
 export function agentGuideSection(agent: AgentStatus): string {
   const role: GuideRole = hasOrchestratorPowers(agent) ? 'orchestrator' : 'worker';
   const folder = ensureProjectFiles(agent.projectPath);
-  return identitySection(role, folder.dir, folder.why).join('\n');
+  // A gateway Tars can use, not a file that names one: a connection with no address is no board.
+  return identitySection(role, folder.dir, folder.why, { hermes: usableHermesConnection() !== null }).join('\n');
 }
 
 /**

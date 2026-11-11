@@ -81,3 +81,77 @@ export function permissionAskLine(
     reason: flat(agent.permissionAsk.reason), rule: flat(agent.permissionAsk.rule),
   };
 }
+
+/** The field that names what a call acts on, first (the order main's line takes, permission-asks.ts subjectOf). */
+const MAIN_FIELDS = ['command', 'file_path', 'notebook_path', 'url', 'query', 'pattern', 'path'];
+/** Past this, a field says its size above it, so the extent shows before the scrolling. */
+const LONG_CHARS = 400;
+const LONG_LINES = 10;
+
+export interface QuestionField {
+  name: string;
+  /** Every line of the value, none dropped, a break never read as a space; ⇥, ⍽ and U+FFFD for what does not show. */
+  lines: string[];
+  /** "8,692 characters, 400 lines" for a long field; '' otherwise. */
+  size: string;
+}
+
+/**
+ * The question whole, field by field, as the window shows it before an allow (2.0.7, approve-everywhere; frame
+ * `Permission asked of Tars`, its row `approve a file, shown whole`): the main field first, the others by name; each
+ * value whole, its lines kept, blank ones too; a field sent as JSON indented. What is allowed must be what was read.
+ */
+export function questionFields(fields: Record<string, string>, jsonFields: readonly string[]): QuestionField[] {
+  const names = Object.keys(fields);
+  const main = MAIN_FIELDS.filter(n => names.includes(n));
+  const rest = names.filter(n => !main.includes(n)).sort();
+  return [...main, ...rest].map(name => {
+    let value = fields[name] ?? '';
+    if (jsonFields.includes(name)) {
+      try { value = JSON.stringify(JSON.parse(value), null, 2); } catch { /* shown as it came */ }
+    }
+    const lines = value.split(BREAKS).map(l => l.replace(/\t/g, TAB_MARK).replace(OTHER_SPACE, OTHER_SPACE_MARK).replace(HIDDEN, '�'));
+    const long = value.length > LONG_CHARS || lines.length > LONG_LINES;
+    return {
+      name, lines,
+      // An empty field says so: a blank box reads as nothing asked (the Audit's M1 on #589).
+      size: value === '' ? 'empty'
+        : long ? `${value.length.toLocaleString('en-US')} characters, ${lines.length.toLocaleString('en-US')} line${lines.length === 1 ? '' : 's'}` : '',
+    };
+  });
+}
+
+/**
+ * Whether main's one line names every field (the Audit's M1 on #589): it leaves out an empty one (permission-asks.ts
+ * subjectOf), so a Write emptying a file reads as its path alone. A panel allows from its line only when this holds;
+ * a Bash's description, which does not run, does not count.
+ */
+export function lineNamesEveryField(tool: string, fields: Record<string, string>): boolean {
+  return Object.entries(fields).every(([name, value]) => (tool === 'Bash' && name === 'description') || value.trim() !== '');
+}
+
+/** Main's sentence for `another-question` (permission-asks.ts), said too when the question read whole is another. */
+export const ANOTHER_QUESTION = 'The agent asked about another call meanwhile: read the new question before you answer it';
+
+/**
+ * What the card does with a refused answer, from main's code (#588 after its Audit, `PermissionRefusal`), saying main's
+ * own sentence: `another-question`, the new question shown whole, nothing allowed by itself; `read-first`, the question
+ * read whole again before allow; `withheld`, allow taken away; `not-a-decision`, a fault of the window, said, the
+ * answers kept. `no-question`, or no code at all (a failed call): the line that Tars holds no question.
+ */
+export type RefusalStep =
+  | { step: 'changed' | 'read'; say: string; tone: 'waiting' }
+  | { step: 'no-allow'; say: string; tone: 'idle' }
+  | { step: 'stay'; say: string; tone: 'error' }
+  | { step: 'late' };
+
+export function refusalStep(refused: { code?: string; error?: string } | undefined): RefusalStep {
+  const say = refused?.error ?? '';
+  switch (refused?.code) {
+    case 'another-question': return { step: 'changed', say, tone: 'waiting' };
+    case 'read-first': return { step: 'read', say, tone: 'waiting' };
+    case 'withheld': return { step: 'no-allow', say, tone: 'idle' };
+    case 'not-a-decision': return { step: 'stay', say, tone: 'error' };
+    default: return { step: 'late' };
+  }
+}

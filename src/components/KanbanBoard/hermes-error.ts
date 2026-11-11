@@ -63,3 +63,15 @@ export function describeHermesFailure(raw: string, baseUrl: string | null): Herm
   }
   return { message: `Could not reach Hermes${where}.`, detail };
 }
+
+/**
+ * No Hermes at all, which is not a failure (2.0.7, H3; frame `First run (2.0.7) · states`, its row `Kanban, with no
+ * Hermes gateway`): main answers its not-configured sentence (hermes-handlers.ts) when no gateway is set up. A
+ * gateway set up and silent is still a failure, said by describeHermesFailure.
+ */
+export function isHermesAbsent(error: string): boolean {
+  return /^Hermes is not configured\b/.test(error);
+}
+
+export const HERMES_ABSENT_TEXT =
+  'Tars\'s kanban board is a Hermes gateway\'s, a tool installed apart. Without it, the rest of Tars works: your agents keep their split of the work in their delegations and their reports. To have the board: install Hermes, start its gateway, then connect it in Settings, Hermes.';

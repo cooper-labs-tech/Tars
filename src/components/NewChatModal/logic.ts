@@ -57,6 +57,17 @@ export function worktreeCount(members: Pick<TeamTemplateMember, 'worktreeBranch'
   return members.filter(m => !!m.worktreeBranch?.trim()).length;
 }
 
+/**
+ * New team's footer: what the deploy makes, from the members chosen. A worktree for each member with a branch, or none,
+ * the agents then making one for each piece of work (worktree_new, PR 585). Never a fixed count.
+ */
+export function teamDeployFooter(worktrees: number): string {
+  if (worktrees === 0) return 'No worktree is made now: your agents make one for each piece of work. Nothing is pushed.';
+  return worktrees === 1
+    ? '1 worktree is created under the project, for the member with a branch. Nothing is pushed.'
+    : `${worktrees} worktrees are created under the project, one for each member with a branch. Nothing is pushed.`;
+}
+
 /** "5 of 6 selected · 5 worktrees" - the count line above the member table. */
 export function teamSelectionSummary(opts: {
   totalMembers: number;

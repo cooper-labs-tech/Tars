@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -84,6 +84,25 @@ process.stdin.on('data', () => {});
 process.stdin.resume();
 `;
 
+/**
+ * Claude Code as New team's deploy asks it (#584, `claude auth status` through `cliPaths.claude`): signed out, as
+ * Claude Code answers then (exit 1, `loggedIn: false`). The spec's own, so the deploy offers "deploy anyway" whatever
+ * claude the machine has: none (the deploy would refuse it as cli-missing) or one signed in (no offer at all), as on a
+ * CI runner (the Audit's Low on #590). Nothing here starts it as an agent.
+ */
+function signedOutClaude(home: string): string {
+  return writeNodeCli(path.join(home, 'claude-signed-out.cjs'), [
+    'const args = process.argv.slice(2);',
+    "if (args.includes('--version')) { console.log('2.1.321 (Claude Code)'); process.exit(0); }",
+    "if (args[0] === 'auth' && args[1] === 'status') {",
+    "  console.log(JSON.stringify({ loggedIn: false, authMethod: 'none', apiProvider: 'firstParty' }));",
+    '  process.exit(1);',
+    '}',
+    'process.stdin.resume();',
+    '',
+  ].join('\n'));
+}
+
 test.skip(process.platform === 'win32', 'every case of this spec, not only the French one: neither of its stand-ins can run on Windows. Tars starts git there as a program the PATH names (git.exe by its full path once #358 is in, else a bare git that libuv completes with .com or .exe only), which no script can be, and the agents\' CLI here is a #! script, which Windows does not start. The refusals, the refused save and the create path wait on a .cmd stand-in. makeAgentWorktree\'s LC_ALL=C is held on every host, Windows included, by __tests__/electron/handlers/agent-worktree-locale.test.ts; whether Git for Windows honours it waits on a run there');
 
 test('a worktree git cannot make is not saved, and the answer is git\'s own reason', async () => {
@@ -111,7 +130,9 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([plain, repo]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { claude: signedOutClaude(home) },
+  }));
   // 7. A team of one, on the branch checked out in the project.
   fs.writeFileSync(path.join(dir, 'team-templates.json'), JSON.stringify({ user: [{
     id: 'checked-out', name: 'Checked out', description: '', icon: '', createdAt: '2026-10-15T08:00:00.000Z', updatedAt: '2026-10-15T08:00:00.000Z',
@@ -190,7 +211,12 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     await modal.getByRole('button', { name: 'Project', exact: true }).click();
     await page.getByRole('option').filter({ hasText: 'projects/repo' }).first().click();
     await modal.getByRole('button', { name: 'Deploy 1 agent', exact: true }).click();
-    const listed = modal.getByText(/^Builder: /);
+    // Since 2.0.7 (#584) the deploy asks Claude Code first, here the spec's own, signed out (signedOutClaude): deploy
+    // anyway, as a user who signs in later would, and the worktree git cannot make is what answers.
+    await modal.getByRole('button', { name: 'deploy anyway', exact: true }).click({ timeout: 30_000 });
+    // The deploy answers a member it could not make as #584 words it (frame `First run (2.0.7) · states`, its deploy
+    // answers): "Builder could not be made: <git's reason>".
+    const listed = modal.getByText(/^Builder could not be made: /);
     await expect(listed).toBeVisible({ timeout: 30_000 });
     values.teamLine = await listed.innerText();
     // 10. New agent, on the same branch: the dialog says why, and keeps what was chosen.
@@ -242,7 +268,7 @@ test('a worktree git cannot make is not saved, and the answer is git\'s own reas
     expect.soft(values.createNotGit, '7, 8. not a git repository').toEqual({ error: expect.stringMatching(/The worktree could not be made: not a git repository/) });
     for (const made of [values.createCheckedOut, values.createNotGit] as Made[]) expect.soft(made.error ?? '').not.toMatch(notGitsReason);
     expect.soft(values.createdByRefusals, '7. a refused create made an agent').toBe(0);
-    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(new RegExp(`^Builder: The worktree could not be made: ${CHECKED_OUT} `));
+    expect.soft(values.teamLine, '7, 10. New team lists git\'s reason, right after the member\'s name').toMatch(new RegExp(`^Builder could not be made: The worktree could not be made: ${CHECKED_OUT} `));
     expect.soft(values.teamLine).not.toMatch(notGitsReason);
     expect(values.createTaken, '7. a branch git takes').toMatchObject({ worktreePath: path.join(repo, '.worktrees', 'feat', 'new') });
     expect(fs.existsSync(path.join(repo, '.worktrees', 'feat', 'new', 'README.md'))).toBe(true);

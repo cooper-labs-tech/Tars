@@ -151,3 +151,44 @@ describe('redactSecrets', () => {
     expect(containsSecret('nothing to see here')).toBe(false);
   });
 });
+
+/**
+ * A private key (the Audit's L1 on #588): since 2.0.7 a permission question holds a file's new content, and a teammate
+ * reads its first 2,000 characters through get_agent, which an RSA 2048 key (about 1,700) or an ed25519 one (about
+ * 400) fits in. How it fails, written before the code:
+ * 1. A PEM private key block is no shape the rules know: it reads whole.
+ * 2. Its four first and last characters are kept, as for a token: a key's body is masked whole, its BEGIN and END
+ *    lines kept so the reader knows what it was.
+ * 3. A block cut before its END (a view's 2,000 characters of a longer key) is left: it is masked to the end.
+ * 4. Each kind is missed but one: RSA, EC, DSA, OPENSSH, a plain or ENCRYPTED PRIVATE KEY, a PGP PRIVATE KEY BLOCK.
+ * 5. What is between two keys, or a public key or a certificate, is masked too: only a private key's body goes.
+ */
+describe('a private key', () => {
+  const body = j('MIIEowIBAAKCAQEA', 'q'.repeat(60), '\n', 'r'.repeat(64), '\n', 's'.repeat(40));
+  const block = (kind: string) => j('-----BEGIN ', kind, '-----\n', body, '\n-----END ', kind, '-----');
+  const KINDS = ['RSA PRIVATE KEY', 'EC PRIVATE KEY', 'DSA PRIVATE KEY', 'OPENSSH PRIVATE KEY', 'PRIVATE KEY', 'ENCRYPTED PRIVATE KEY', 'PGP PRIVATE KEY BLOCK'];
+
+  it('1, 2, 4. masks the body of every kind whole, keeping its BEGIN and END lines', () => {
+    for (const kind of KINDS) {
+      const out = redactSecrets(`a key:\n${block(kind)}\nend of file`);
+      expect(out, kind).toBe(j('a key:\n-----BEGIN ', kind, '-----\n[redacted]\n-----END ', kind, '-----\nend of file'));
+    }
+  });
+
+  it('3. masks a block cut before its END to the end of the text', () => {
+    const cut = block('RSA PRIVATE KEY').slice(0, 90);
+    const out = redactSecrets(`config:\n${cut}`);
+    expect(out).toBe('config:\n-----BEGIN RSA PRIVATE KEY-----\n[redacted]');
+  });
+
+  it('5. keeps what lies between two keys, a public key and a certificate', () => {
+    const pub = j('-----BEGIN PUBLIC KEY-----\n', 'MFkwEwYHKoZIzj0CAQYI', '\n-----END PUBLIC KEY-----');
+    const cert = j('-----BEGIN CERTIFICATE-----\n', 'MIIBszCCAVmgAwIBAgIU', '\n-----END CERTIFICATE-----');
+    const out = redactSecrets([block('EC PRIVATE KEY'), 'between', pub, cert, block('OPENSSH PRIVATE KEY')].join('\n'));
+    expect(out).toContain('\nbetween\n');
+    expect(out).toContain(pub);
+    expect(out).toContain(cert);
+    expect(out).not.toContain('q'.repeat(60));
+    expect(out.match(/\[redacted\]/g)).toHaveLength(2);
+  });
+});
