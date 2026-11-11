@@ -117,7 +117,8 @@ for (const newInterface of [false, true]) for (const where of ['panel', 'window'
       expect(buttons).toContain('ask in terminal');
 
       const terminal = ask.getByRole('button', { name: 'ask in terminal' });
-      await expect(terminal).toHaveAttribute('title', "Claude Code's own dialog, which has no delay: answer it there");
+      // Since 2.0.7 ask in terminal is the quiet last answer, for what only Claude Code's dialog offers (approve-everywhere).
+      await expect(terminal).toHaveAttribute('title', "Claude Code's own dialog, for what only it offers: allowing a command for the rest of the session, for instance");
       const answered = async () => {
         await expect.poll(() => fs.existsSync(path.join(home, 'answer.json')), { timeout: 30_000 }).toBe(true);
         return JSON.parse(fs.readFileSync(path.join(home, 'answer.json'), 'utf8')) as { decision: string };
