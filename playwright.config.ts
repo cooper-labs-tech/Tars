@@ -9,10 +9,23 @@ import { DEV_PORT } from './e2e/ports.mjs';
 // E2E_RUN_DIR names it outright.
 process.env.E2E_RUN_DIR ||= path.join('test-results', 'runs', new Date().toISOString().replace(/[:.]/g, '-'));
 
+/**
+ * How many spec files run at once (E2E_WORKERS, 1 to 4; 1 unset, as always). Each spec starts its own Electron in its
+ * own sandbox home, and each worker moves its API ports by 1,000 (e2e/ports.mjs), so files run side by side; the tests
+ * of one file stay in order. Measured on 29/10 (reports/faster-e2e.md): the default suite is 62 minutes of tests one
+ * after the other, its median test 4.7 s, most of it an app's boot. Four is what this Mac's eight cores and 24 GB hold
+ * beside another run: a release gate asks for it, a developer's own run need not.
+ */
+function readWorkers(): number {
+  const raw = process.env.E2E_WORKERS;
+  if (raw === undefined || raw === '') return 1;
+  if (!/^[1-4]$/.test(raw)) throw new Error(`E2E_WORKERS must be a whole number from 1 to 4, not ${JSON.stringify(raw)}`);
+  return Number(raw);
+}
+
 export default defineConfig({
   testDir: './e2e',
-  // One Electron instance drives every surface — keep it serial.
-  workers: 1,
+  workers: readWorkers(),
   fullyParallel: false,
   timeout: 60_000,
   outputDir: process.env.E2E_RUN_DIR,
