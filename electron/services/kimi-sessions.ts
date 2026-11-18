@@ -1,8 +1,8 @@
 import * as fs from 'fs';
-import * as os from 'os';
 import * as path from 'path';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
+import { kimiHome } from '../providers/kimi-cli';
 
 export type { HookPost };
 
@@ -65,10 +65,7 @@ export function kimiEventOf(line: string): KimiEvent | null {
   return null;
 }
 
-/** Where kimi keeps its data: KIMI_CODE_HOME, else ~/.kimi-code (kimi-code 2.6.3, docs/en/configuration/data-locations.md). */
-export function kimiHome(env: NodeJS.ProcessEnv = process.env): string {
-  return env.KIMI_CODE_HOME || path.join(os.homedir(), '.kimi-code');
-}
+export { kimiHome };
 
 export interface KimiSessionWatchDeps {
   homeOf: () => string;
@@ -94,6 +91,8 @@ interface Launch {
   cwd: string;
   at: number;
   resume?: { sessionId: string; size: number };
+  /** How long each session of its folder was at the launch: one bound later is read from there, as a resume. */
+  sizes: Map<string, number>;
   bound?: Bound;
 }
 
@@ -131,9 +130,12 @@ export class KimiSessionWatch {
 
   /** A kimi terminal was spawned for the agent in `cwd`, resuming `resumeSessionId` when given. */
   noteLaunch(agentId: string, cwd: string, resumeSessionId?: string): void {
-    const launch: Launch = { cwd, at: this.deps.now() };
+    const sizes = new Map<string, number>();
+    const entries = this.index();
+    for (const e of entries) if (sameDir(e.workDir, cwd)) sizes.set(e.sessionId, sizeOf(wireOf(e.sessionDir)));
+    const launch: Launch = { cwd, at: this.deps.now(), sizes };
     if (resumeSessionId) {
-      const entry = this.index().find((e) => e.sessionId === resumeSessionId);
+      const entry = entries.find((e) => e.sessionId === resumeSessionId);
       launch.resume = { sessionId: resumeSessionId, size: entry ? sizeOf(wireOf(entry.sessionDir)) : 0 };
     }
     this.launches.set(agentId, launch);
@@ -212,9 +214,11 @@ export class KimiSessionWatch {
       if (!fs.existsSync(file)) continue;
       const holder = this.lockPid(entry.sessionId);
       const held = pids !== undefined && holder !== undefined;
-      if (held && pids!.includes(holder!)) return { sessionId: entry.sessionId, file, offset: 0, partial: '', resumed: false, registered: false };
+      const before = launch.sizes.get(entry.sessionId);
+      const bound = { sessionId: entry.sessionId, file, offset: before ?? 0, partial: '', resumed: before !== undefined, registered: false };
+      if (held && pids!.includes(holder!)) return bound;
       if (held) continue;
-      if (this.namedIn(file) === agentId) return { sessionId: entry.sessionId, file, offset: 0, partial: '', resumed: false, registered: false };
+      if (this.namedIn(file) === agentId) return bound;
     }
     return undefined;
   }

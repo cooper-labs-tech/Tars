@@ -200,9 +200,9 @@ async function commandOf(providerId: string, prompt: string, binaryPath: string)
 }
 
 describe('9. every provider round-trips', () => {
-  it('covers the 21 providers', async () => {
+  it('covers the 22 providers', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    expect(getAllProviders()).toHaveLength(21);
+    expect(getAllProviders()).toHaveLength(22);
   });
 
   it('first word the binary, last word the prompt, the rest from the grammar, for every adversarial prompt', async () => {

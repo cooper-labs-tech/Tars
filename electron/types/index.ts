@@ -22,6 +22,8 @@ export type AgentProvider =
   | 'qwen'
   /** Qwen Code, the CLI `qwen` (2.0.4); `qwen` is the Qwen API through the claude binary. */
   | 'qwen-code'
+  /** Kimi Code CLI, the binary `kimi` (MoonshotAI/kimi-code). */
+  | 'kimi-code'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -386,6 +388,7 @@ export const CLI_PATH_KEYS = [
   'qwencode',
   'opencode',
   'pi',
+  'kimi',
   'gws',
   'gcloud',
   'gh',

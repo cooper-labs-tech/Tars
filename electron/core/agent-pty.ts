@@ -17,6 +17,7 @@ import { chatsReadEnv } from './chat-inbox';
 import { cliLaunchExit, reportHandledError } from '../services/error-reports/handled';
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
+import { kimiSessionWatch } from '../services/kimi-sessions';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
 
@@ -222,6 +223,8 @@ export function spawnAgentPty(opts: {
   if (agentId && opts.binaryName === 'codex') codexLaunching(agentId, opts.cwd);
   // pi's, from the session file it writes in the agent's own folder (services/pi-sessions.ts).
   if (agentId && opts.binaryName === 'pi') piSessionWatch.noteLaunch(agentId);
+  // Kimi Code's, from its session log; the session its kimi holds is the agent's (services/kimi-sessions.ts).
+  if (agentId && opts.binaryName === 'kimi') kimiSessionWatch.noteLaunch(agentId, opts.cwd);
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {

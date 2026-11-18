@@ -40,7 +40,7 @@ const DROP_NAME = /^[A-Za-z0-9._-]{1,64}\.key$/;
 const ENDPOINT_ID = /^ep-[0-9a-f]{6}$/;
 
 /** The harnesses an endpoint can run, and how each measured. */
-export const ENDPOINT_HARNESSES = ['codex', 'pi', 'qwen-code', 'opencode'] as const;
+export const ENDPOINT_HARNESSES = ['codex', 'pi', 'qwen-code', 'opencode', 'kimi-code'] as const;
 export type EndpointHarness = typeof ENDPOINT_HARNESSES[number];
 export type ToolCallSupport = 'works' | 'failed' | 'unmeasured';
 
@@ -241,7 +241,7 @@ export function validateEndpointChoice(
   const e = endpointsOf(settings).find(x => x.id === choice.endpointId);
   if (!e) return 'There is no such endpoint.';
   if (!e.approved || e.approvedBaseUrl !== e.baseUrl) return `The owner must approve the endpoint "${e.name}" in the window first.`;
-  if (!ENDPOINT_HARNESSES.includes(choice.provider as EndpointHarness)) return 'An endpoint runs codex, pi, qwen-code or opencode.';
+  if (!ENDPOINT_HARNESSES.includes(choice.provider as EndpointHarness)) return `An endpoint runs ${ENDPOINT_HARNESSES.join(', ')}.`;
   if (support[choice.provider!] === 'failed') return `${choice.provider} was measured failing tool calls on an endpoint, so it is not offered.`;
   if (!choice.model || !(e.models ?? []).includes(choice.model)) return `The endpoint "${e.name}" does not list the model "${choice.model ?? ''}". Refresh its models first.`;
   return null;

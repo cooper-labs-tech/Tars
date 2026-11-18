@@ -13,6 +13,7 @@ import { MiMoProvider } from './mimo-provider';
 import { MoonshotProvider } from './moonshot-provider';
 import { QwenProvider } from './qwen-provider';
 import { QwenCodeProvider } from './qwen-code-provider';
+import { KimiCodeProvider } from './kimi-code-provider';
 import { ZhipuProvider } from './zhipu-provider';
 import { MiniMaxProvider } from './minimax-provider';
 import { NvidiaProvider } from './nvidia-provider';
@@ -46,6 +47,8 @@ const providers: Record<string, CLIProvider> = {
   qwen: new QwenProvider(),
   // Qwen Code, the CLI qwen: not the Qwen API above, which runs the claude binary.
   'qwen-code': new QwenCodeProvider(),
+  // Kimi Code CLI, the binary kimi: not moonshot above, which runs the claude binary on Moonshot's API.
+  'kimi-code': new KimiCodeProvider(),
   zhipu: new ZhipuProvider(),
   minimax: new MiniMaxProvider(),
   nvidia: new NvidiaProvider(),

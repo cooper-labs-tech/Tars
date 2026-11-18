@@ -34,6 +34,7 @@ export const HARNESS_SUPPORT: Array<{ harness: string; toolCalls: ToolCallSuppor
   { harness: 'qwen-code', toolCalls: 'works', api: 'chat', measuredOn: '0.25.2' },
   { harness: 'pi', toolCalls: 'works', api: 'chat', measuredOn: '1.5.2' },
   { harness: 'opencode', toolCalls: 'works', api: 'chat', measuredOn: '1.19.6' },
+  { harness: 'kimi-code', toolCalls: 'unmeasured', api: 'chat', measuredOn: '2.6.3', note: 'A tool call measured through its own config.toml; the KIMI_MODEL_* path Tars hands it is not measured yet.' },
 ];
 
 export const harnessSupportMap = (): Record<string, ToolCallSupport> =>

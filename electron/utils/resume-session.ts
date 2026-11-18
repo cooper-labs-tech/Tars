@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { transcriptProjectDirName } from '../platform/claude-project-dir';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
+import { kimiHome, kimiSessionDir } from '../providers/kimi-cli';
 
 /**
  * Whether an agent's last session can actually be resumed.
@@ -86,6 +87,11 @@ export function resolveResumeSessionId(
   for (const candidate of [agent.resumableSessionId, agent.forkedFromSessionId]) {
     const sessionId = candidate?.trim();
     if (!sessionId) continue;
+    // Kimi Code's ids are its own (`session_<uuid>`), listed in its index (providers/kimi-cli.ts).
+    if (agent.provider === 'kimi-code') {
+      if (kimiSessionDir(sessionId, kimiHome(process.env, homeDir))) return sessionId;
+      continue;
+    }
     // A UUID and nothing else. This value reaches a command line, and the
     // shape check is what keeps it from being anything but an id.
     if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(sessionId)) continue;
