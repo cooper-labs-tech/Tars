@@ -20,7 +20,7 @@ type Project = {
 function describe(p: Project): string {
   const lines = [`${p.projectPath}:`];
   if (p.schedule) {
-    lines.push(`- hours: ${p.schedule.line}, set by ${p.schedule.setBy}; at the start: ${p.schedule.onStart === "start-agents" ? "the queues resume and each agent at rest is started" : "the queues resume, and the agents start as their work comes"}.`);
+    lines.push(`- hours: ${p.schedule.line}, set by ${p.schedule.setBy}; at the start: ${p.schedule.onStart === "start-agents" ? "the queues resume and each worker at rest is started" : "the queues resume, and the workers start as their work comes"}.`);
     lines.push(p.schedule.next.open ? `- open now, until ${p.schedule.next.end}.` : `- next window: ${p.schedule.next.start} to ${p.schedule.next.end}.`);
   } else {
     lines.push("- no hours: its agents work whenever they are handed work.");
@@ -49,14 +49,14 @@ export function registerFleetTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "project_schedule",
-      description: "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each agent at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+      description: "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
       schema: {
         action: z.enum(["get", "set", "clear"]).optional().describe("'get' (default), 'set' or 'clear'"),
         project: z.string().optional().describe("The project's folder, as list_agents gives it. Omitted: your own project (for 'get' with no project and no own project: every project)."),
         start: z.string().optional().describe("With 'set': the start of the window, HH:MM on 24 hours, e.g. '22:00'"),
         stop: z.string().optional().describe("With 'set': its stop, HH:MM; before the start, it ends the next day, e.g. '06:00'"),
         timeZone: z.enum(["UTC", "local"]).optional().describe("With 'set', required: 'UTC', or 'local' for the computer's own time. Tars never guesses it."),
-        onStart: z.enum(["resume-queues", "start-agents"]).optional().describe("With 'set': 'resume-queues' (default: the agents start as their work comes) or 'start-agents' (each agent at rest is started too)"),
+        onStart: z.enum(["resume-queues", "start-agents"]).optional().describe("With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"),
       },
       failure: "reading or setting the project's hours",
       async run({ action = "get", project, start, stop, timeZone, onStart }) {
