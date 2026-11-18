@@ -114,7 +114,9 @@ function sse(res, data, event) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-function answerChat(body, res, marker) {
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function answerChat(body, res, marker, chunkDelayMs = 0) {
   const d = decide(body, chatToolResult(body.messages), marker);
   const id = `chatcmpl-${randomBytes(6).toString('hex')}`;
   const finish = d.call ? 'tool_calls' : 'stop';
@@ -129,6 +131,9 @@ function answerChat(body, res, marker) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Request-Id': `standin-${id}` });
   const base = { id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: MODEL_ID };
   sse(res, { ...base, choices: [{ index: 0, delta: { role: 'assistant', reasoning_content: 'Thinking about the probe.' }, finish_reason: null }] });
+  // A model takes its time between tokens: with a delay, a relay that buffers shows (the first chunk would reach the
+  // client only once the last is sent).
+  if (chunkDelayMs) await pause(chunkDelayMs);
   if (d.call) {
     sse(res, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: d.call.id, type: 'function', function: { name: d.call.name, arguments: '' } }] }, finish_reason: null }] });
     const half = Math.floor(d.call.arguments.length / 2);
@@ -141,6 +146,7 @@ function answerChat(body, res, marker) {
   sse(res, { ...base, choices: [{ index: 0, delta: {}, finish_reason: finish }] });
   sse(res, { ...base, choices: [], usage: USAGE });
   res.end('data: [DONE]\n\n');
+  return { lastChunkAt: Date.now(), requestId: `standin-${id}` };
 }
 
 function answerResponses(body, res, marker) {
@@ -168,13 +174,20 @@ function answerResponses(body, res, marker) {
   res.end();
 }
 
-/** Starts the stand-in. `key` set: any other Bearer gets a 401. Resolves with its base URL and a close(). */
-export function startStandIn({ port = 0, key = '', log = '' } = {}) {
+/**
+ * Starts the stand-in. `key` set: any other Bearer gets a 401. `failFirst`: the statuses the first model calls get
+ * (503 endpoint_busy, 429 rate_limited, 502), each with `Retry-After: 1`, before any is served, as a remote host
+ * outside its window or at its cap answers. `chunkDelayMs`: the pause between a stream's first and next chunks.
+ * Resolves with its base URL and a close().
+ */
+export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0 } = {}) {
   const marker = `TARS-PROBE-${randomBytes(4).toString('hex')}`;
+  const failing = [...failFirst];
+  const note = (entry) => { if (log) fs.appendFileSync(log, `${JSON.stringify({ at: Date.now(), ...entry })}\n`); };
   const server = http.createServer((req, res) => {
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
-    req.on('end', () => {
+    req.on('end', async () => {
       const raw = Buffer.concat(chunks).toString();
       let body = {};
       try { body = raw ? JSON.parse(raw) : {}; } catch { body = { unparsed: raw.slice(0, 200) }; }
@@ -188,8 +201,15 @@ export function startStandIn({ port = 0, key = '', log = '' } = {}) {
       if (req.method === 'GET' && url === '/v1/models') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ object: 'list', data: [{ id: MODEL_ID, object: 'model', owned_by: 'stand-in' }] }));
+      } else if (req.method === 'POST' && (url === '/v1/chat/completions' || url === '/v1/responses') && failing.length) {
+        const status = failing.shift();
+        const type = status === 503 ? 'endpoint_busy' : status === 429 ? 'rate_limited' : 'engine_unreachable';
+        res.writeHead(status, { 'Content-Type': 'application/json', 'Retry-After': '1', 'X-Request-Id': `standin-fail-${status}` });
+        res.end(JSON.stringify({ error: { type, message: `stand-in ${type}` } }));
+        note({ answered: status });
       } else if (req.method === 'POST' && url === '/v1/chat/completions') {
-        answerChat(asObj(body), res, marker);
+        const done = await answerChat(asObj(body), res, marker, chunkDelayMs);
+        note({ answered: 200, ...(done ?? {}) });
       } else if (req.method === 'POST' && url === '/v1/responses') {
         answerResponses(asObj(body), res, marker);
       } else {

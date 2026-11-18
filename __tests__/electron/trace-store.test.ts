@@ -199,6 +199,7 @@ describe('the trace store', () => {
     expect(ids({ from: 150 })).toEqual(['b']);
     expect(ids({ to: 150 })).toEqual(['a']);
     expect(ids({})).toEqual(['b', 'a']);
+    expect(ids({ traceId: 'a' })).toEqual(['a']);
   });
 
   it('15: the list carries its totals and its per-project sums for the whole filter, not the page', () => {
