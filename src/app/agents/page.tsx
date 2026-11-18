@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Bot } from 'lucide-react';
 import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from '@/hooks/useElectron';
 import { useElectronTemplates } from '@/hooks/useElectronTemplates';
@@ -60,6 +60,11 @@ export default function AgentsPage() {
   const [newChatMode, setNewChatMode] = useState<CreationMode>('agent');
   const [showTemplatesDialog, setShowTemplatesDialog] = useState(false);
   const [viewAgentId, setViewAgentId] = useState<string | null>(null);  // terminal dialog
+  // ?agent=<id> opens its window, as a retune notice's "show" asks (2.0.7). Read once, from the address itself.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('agent');
+    if (id) setViewAgentId(id);
+  }, []);
   const [editAgentId, setEditAgentId] = useState<string | null>(null);  // edit dialog
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
