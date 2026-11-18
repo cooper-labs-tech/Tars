@@ -65,11 +65,11 @@ import { turnInterruptedAt } from '../task-watch';
 import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
 import { cliAtWork, type AgentUpdate } from '../../core/agent-update';
 import { randomUUID } from 'crypto';
-import { safeGit } from '../../utils/safe-git';
 import { retune, askedFields, isRetuneOnly, setRetuneDeps, changesToRevert, revertAskOf, cancelQueued, RETUNE_FIELDS, WAITING_TEXT, type RetuneAsk } from '../../core/agent-retune';
 import { listChanges, type ChangeBy } from '../agent-changes';
 import { grantFor } from '../cross-project-grants';
-import { listWorktrees, newWorktree, turnPushOff } from '../project-worktrees';
+import { listWorktrees } from '../project-worktrees';
+import { readyWorktree, takeBackWorktree, uncommittedWork as worktreeWork, type ReadyWorktree } from '../agent-worktree';
 import { isValidBranchName, resolveWorktreePath } from '../../utils/worktree-path';
 import { restartRunnersOf } from '../chat-runners';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
@@ -2047,48 +2047,9 @@ async function uncommittedWork(agent: AgentStatus): Promise<string[]> {
   if (!agent.worktreePath || !agent.branchName || !fs.existsSync(agent.worktreePath)) return [];
   if (Array.from(agents.values()).some((a) => a.id !== agent.id && a.worktreePath === agent.worktreePath)) return [];
   try {
-    const { stdout } = await safeGit(agent.worktreePath, ['status', '--porcelain', '--untracked-files=all'], { env: { LC_ALL: 'C' } });
-    return stdout.split('\n').filter((l) => l.trim()).map((l) => l.slice(3).trim());
+    return await worktreeWork(agent.worktreePath);
   } catch (err) {
     return [`its state could not be read (${err instanceof Error ? err.message : String(err)})`];
-  }
-}
-
-/**
- * A worktree made for a new agent (create_agent with worktree, 2.0.7), ready to work in: a branch of its own, new or
- * as it stands, in the project's .worktrees/, never a checkout another worktree holds; its push off on request; the
- * project's own .mcp.json carried in when the main checkout has one git does not track. A step that fails takes the
- * worktree back, and the branch with it when it was made new here.
- */
-async function readyWorktree(projectPath: string, branch: string, noPush: boolean): Promise<{ path: string; branch: string; madeBranch: boolean } | { status: number; error: string; code?: string }> {
-  const protectedPaths = Array.from(agents.values()).flatMap((a) => [a.worktreePath, a.ptyCwd]).filter((p): p is string => !!p);
-  const made = await newWorktree(projectPath, branch, { protectedPaths });
-  if ('code' in made) return { status: made.code === 'disk_full' ? 507 : made.code === 'invalid_branch' || made.code === 'not_a_repository' ? 400 : 409, error: made.error, code: made.code };
-  const taken = { path: made.path, branch: made.branch, madeBranch: made.kind === 'new' || made.kind === 'from-origin' };
-  if (made.kind === 'detached') {
-    await takeBackWorktree(projectPath, { ...taken, madeBranch: false });
-    return { status: 409, error: `${made.heldBy ?? 'another worktree'} holds branch ${branch}: an agent works on a branch of its own. Name another.`, code: 'branch_held' };
-  }
-  try {
-    if (noPush) await turnPushOff(made.path);
-    const source = path.join(projectPath, '.mcp.json');
-    const target = path.join(made.path, '.mcp.json');
-    if (fs.existsSync(source) && !fs.existsSync(target)) fs.copyFileSync(source, target);
-  } catch (err) {
-    await takeBackWorktree(projectPath, taken);
-    return { status: 500, error: `its worktree could not be made ready (${err instanceof Error ? err.message : String(err)}), and was taken back` };
-  }
-  // Inside the project's .worktrees/, as the path the record keeps (utils/worktree-path.ts).
-  return { ...taken, path: resolveWorktreePath(projectPath, made.branch) ?? made.path };
-}
-
-/** A worktree just made for a creation that did not finish: removed, and its branch with it when it was new. */
-async function takeBackWorktree(projectPath: string, made: { path: string; branch: string; madeBranch?: boolean }): Promise<void> {
-  try {
-    await safeGit(projectPath, ['worktree', 'remove', '--force', made.path], { env: { LC_ALL: 'C' } });
-    if (made.madeBranch) await safeGit(projectPath, ['branch', '-D', made.branch], { env: { LC_ALL: 'C' } });
-  } catch (err) {
-    console.warn(`[create_agent] the worktree ${made.path} could not be taken back:`, err);
   }
 }
 
@@ -2098,9 +2059,11 @@ async function takeBackWorktree(projectPath: string, made: { path: string; branc
  * a revert's ask, its worktree given as the folder the log kept.
  */
 async function retuneOne(
-  agent: AgentStatus, body: unknown, driver: Driver, opts: { batchId?: string; revertOf?: string; fromLog?: boolean }, ctx: RouteContext,
+  agent: AgentStatus, body: unknown, driver: Driver, opts: { batchId?: string; revertOf?: string; fromLog?: boolean; asked?: string[] }, ctx: RouteContext,
 ): Promise<{ status: number; answer: Record<string, unknown> }> {
   const raw = { ...((body ?? {}) as Record<string, unknown>) };
+  // What the caller named, as the log keeps it for a revert to be judged by (the Audit's M2 on #595).
+  const asked = opts.asked ?? namedFields(raw);
   const worktreeAsked = raw.worktree;
   delete raw.worktree;
   let worktree: { worktreePath: string; branchName: string } | null | undefined;
@@ -2120,7 +2083,7 @@ async function retuneOne(
   const binaryBefore = getProvider(agent.provider).binaryName;
   const cliWasUp = cliAtWork(agent);
   const ask: RetuneAsk = { ...update, ...(worktree !== undefined ? { worktree } : {}) };
-  const done = await retune(agent.id, ask, changeByOf(driver), { batchId: opts.batchId, revertOf: opts.revertOf });
+  const done = await retune(agent.id, ask, changeByOf(driver), { batchId: opts.batchId, revertOf: opts.revertOf, asked });
   if (done.state === 'refused') return { status: done.status, answer: { error: done.error, ...(done.code ? { code: done.code } : {}) } };
   // Its answers are not read here: update_agent answers with the record, never with what the agent said.
   const shown: Record<string, unknown> = { ...projectAgent(agents.get(agent.id) ?? agent) };
@@ -2374,8 +2337,11 @@ function noteToLead(agent: AgentStatus, text: string, ctx: RouteContext): void {
 function tellOutside(agent: AgentStatus, req: RouteRequest, what: string, ctx: RouteContext, detail?: string): void {
   const caller = callerAgentOf(req);
   if (!caller || caller.projectPath === agent.projectPath) return;
+  // The orchestrator itself gets what was sent to it: no note about it besides (the Audit's I2 on #595).
+  if (isProjectLead(agent)) return;
+  const how = grantFor(caller, agent.projectPath) ? "through the owner's allowlist" : 'with allowCrossProject';
   const line = detail ? `: ${detail.split('\n')[0].slice(0, 120)}` : '';
-  noteToLead(agent, `${envelopeValue(caller.name || caller.id)} (${caller.id}), of project ${caller.projectPath}, ${what} ${envelopeValue(agent.name || agent.id)} (${agent.id}) through the owner's allowlist${line}.`, ctx);
+  noteToLead(agent, `${envelopeValue(caller.name || caller.id)} (${caller.id}), of project ${caller.projectPath}, ${what} ${envelopeValue(agent.name || agent.id)} (${agent.id}) ${how}${line}.`, ctx);
 }
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
@@ -2838,9 +2804,10 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // Its worktree, last of the checks and first of what is made (2.0.7): a branch of its own, in its project's
     // .worktrees/, its push off on request, the project's .mcp.json carried in when git does not. A part that fails
     // takes back what was made before it: nothing is left half-made.
-    let made: { path: string; branch: string; madeBranch: boolean } | undefined;
+    let made: ReadyWorktree | undefined;
+    const protectedPaths = Array.from(agents.values()).flatMap((a) => [a.worktreePath, a.ptyCwd]).filter((p): p is string => !!p);
     if (worktreeBranch) {
-      const ready = await readyWorktree(projectPath, worktreeBranch, (worktreeAsked as { noPush?: boolean }).noPush === true);
+      const ready = await readyWorktree(projectPath, worktreeBranch, { noPush: (worktreeAsked as { noPush?: boolean }).noPush === true, protectedPaths });
       if ('error' in ready) {
         sendJson({ error: `Not created: ${ready.error}`, ...(ready.code ? { code: ready.code } : {}) }, ready.status);
         return;
@@ -2872,8 +2839,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       saveAgents();
     } catch (err) {
       agents.delete(id);
-      if (made) await takeBackWorktree(projectPath, made);
-      sendJson({ error: `Not created: the agents could not be saved (${err instanceof Error ? err.message : String(err)}); its worktree was taken back.` }, 500);
+      const back = made ? await takeBackWorktree(projectPath, made, protectedPaths) : true;
+      sendJson({ error: `Not created: the agents could not be saved (${err instanceof Error ? err.message : String(err)}); ${back ? 'its worktree was taken back' : `its worktree was kept at ${made?.path}`}.` }, 500);
       return;
     }
     tellOutside(agent, req, 'created', ctx, made ? `on branch ${made.branch}` : undefined);
@@ -2885,7 +2852,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   });
 
   // POST /api/agents/:id/update: an agent's settings, changed over the API (update_agent), applied at once when it is
-  // free, queued behind its turn otherwise, and logged (core/agent-retune.ts). Who may, by what the call names:
+  // free, queued behind its turn otherwise, and logged (core/agent-retune.ts). It no longer takes the agent's lock: a
+  // start under way reads busy (`launch`, busyReason), so a change waits for it rather than for the lock. Who may, by what the call names:
   // mayUpdate. The answer says applied or queued, the change's id, and when it applies and whether the conversation
   // is kept.
   app_.post(/^\/api\/agents\/([^/]+)\/update$/, async (req, sendJson) => {
@@ -2951,11 +2919,24 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   });
 
   // GET /api/agent-changes?agentId=&project=&batchId=&limit=: the change log (services/agent-changes.ts), newest
-  // first, for any caller the server let in. Settings and references only: no key, no task, no output.
+  // first. Settings and references only: no key, no task, no output. The caller's own project's changes whole, and
+  // those of a project the owner's grant opens to it; another project's by their inference settings only, as
+  // list_agents shows that project (the Audit's L3 on #595). A caller with no project (the owner's own token) reads all.
   app_.get('/api/agent-changes', (req, sendJson) => {
     const q = req.url.searchParams;
     const limit = q.get('limit') ? Number(q.get('limit')) : undefined;
-    sendJson({ changes: listChanges({ agentId: q.get('agentId') || undefined, projectPath: q.get('project') || undefined, batchId: q.get('batchId') || undefined, limit }) });
+    const all = listChanges({ agentId: q.get('agentId') || undefined, projectPath: q.get('project') || undefined, batchId: q.get('batchId') || undefined, limit });
+    const caller = callerProject(req);
+    const me = callerAgentOf(req);
+    const open = (projectPath: string) => !caller || projectPath === caller || (!!me && !!grantFor(me, projectPath));
+    const inference = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).filter(([f]) => (RETUNE_FIELDS as readonly string[]).includes(f)));
+    const changes = all.flatMap((c) => {
+      if (open(c.projectPath)) return [c];
+      const fields = c.fields.filter((f) => (RETUNE_FIELDS as readonly string[]).includes(f));
+      if (fields.length === 0) return [];
+      return [{ ...c, fields, ...(c.asked ? { asked: c.asked.filter((f) => fields.includes(f)) } : {}), before: inference(c.before), after: inference(c.after) }];
+    });
+    sendJson({ changes });
   });
 
   // POST /api/agent-changes/revert, `{ changeId } | { batchId } | { agentId }`: a change, a batch, or an agent's last
@@ -2989,7 +2970,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         results.push({ changeId: change.id, agentId: change.agentId, state: 'nothing', why: 'the agent was removed' });
         continue;
       }
-      const refusal = updateRefusal(driver, agent, change.fields);
+      // Judged as the change was: by what its caller named, not by the model and CLI path a provider change cleared.
+      const named = change.asked ?? change.fields;
+      const refusal = updateRefusal(driver, agent, named);
       if (refusal) {
         results.push({ changeId: change.id, agentId: agent.id, state: 'refused', error: refusal.error, code: refusal.code });
         continue;
@@ -3003,7 +2986,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         results.push({ changeId: change.id, agentId: agent.id, state: 'nothing', why: `${plan.movedSince.join(', ')} moved since, by another change` });
         continue;
       }
-      const one = await retuneOne(agent, plan.ask, driver, { revertOf: change.id, ...(revertBatch ? { batchId: revertBatch } : {}), fromLog: true }, ctx);
+      const one = await retuneOne(agent, plan.ask, driver, { revertOf: change.id, ...(revertBatch ? { batchId: revertBatch } : {}), fromLog: true, asked: named }, ctx);
       const a = one.answer as Record<string, unknown>;
       results.push({
         changeId: change.id, agentId: agent.id,

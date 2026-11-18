@@ -11,7 +11,8 @@ import { oneTaskQueue, terminalTurnOf } from './one-task';
 import { hasOrchestratorPowers } from './agent-role';
 import { holdsFor } from '../services/agent-watch';
 import { pendingBackgroundWork } from '../services/agent-truth';
-import { recordChange, updateChange, changeById, listChanges, queuedChanges, type AgentChange, type ChangeBy } from '../services/agent-changes';
+import { recordChange, updateChange, changeById, listChanges, queuedChanges, keptProblem, type AgentChange, type ChangeBy } from '../services/agent-changes';
+import { isValidProvider } from '../providers';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { newConversationOnNextStart } from '../utils/resume-session';
 import { getProvider } from '../providers';
@@ -124,8 +125,15 @@ export const WAITING_TEXT: Record<string, string> = {
   'earlier change': 'the change queued before it is applied',
 };
 
-/** Changes held for an agent, oldest first: what Tars applies once the agent is free. */
+/**
+ * Changes held for an agent, oldest first: what Tars applies once the agent is free. Every writer replaces the array,
+ * and settle reads it live at each step, by change id: an apply awaits, and meanwhile a revert may cancel a change
+ * further in line or a new one may join it (the Audit's M1 on #595). The change being applied stays first in line
+ * until it is done, so a change asked meanwhile queues behind it, and its revert waits for it.
+ */
 const held = new Map<string, Array<{ changeId: string; ask: RetuneAsk }>>();
+/** The change being applied now, per agent: never cancelled under its apply. */
+const inFlight = new Map<string, string>();
 
 /** What the routes hand in: telling the target project's orchestrator, and its chats' runners taking its settings. */
 interface RetuneDeps {
@@ -204,7 +212,7 @@ async function applyNow(agent: AgentStatus, ask: RetuneAsk): Promise<{ ok: true;
  * Change an agent's settings now or once it is free, and log it. The route has checked who may and every value; the
  * caller is named in `by`.
  */
-export async function retune(agentId: string, ask: RetuneAsk, by: ChangeBy, opts: { batchId?: string; revertOf?: string } = {}): Promise<RetuneOutcome> {
+export async function retune(agentId: string, ask: RetuneAsk, by: ChangeBy, opts: { batchId?: string; revertOf?: string; asked?: string[] } = {}): Promise<RetuneOutcome> {
   const agent = agents.get(agentId);
   if (!agent) return { state: 'refused', status: 404, error: 'Agent not found' };
   const fields = askedFields(ask as Record<string, unknown>);
@@ -213,7 +221,13 @@ export async function retune(agentId: string, ask: RetuneAsk, by: ChangeBy, opts
     agentId: agent.id, agentName: agent.name || agent.id, projectPath: agent.projectPath, by, fields,
     before: snapshot(agent, fields), after: Object.fromEntries(fields.map((f) => [f, (ask as Record<string, unknown>)[f] ?? null])),
     askedAt: new Date().toISOString(), ...(opts.batchId ? { batchId: opts.batchId } : {}), ...(opts.revertOf ? { revertOf: opts.revertOf } : {}),
+    // What the caller named, which a revert is judged by: a provider change also clears the model and CLI path it
+    // was not given, which are logged, and are no setting the caller asked for (the Audit's M2 on #595).
+    asked: [...(opts.asked ?? fields)].sort(),
   };
+  // A value the log does not keep is refused before anything is written (the Audit's L5 on #595).
+  const unkept = keptProblem(base.before) ?? keptProblem(base.after);
+  if (unkept) return { state: 'refused', status: 400, error: `Not changed: ${unkept}.` };
   const waits = fields.some((f) => WAITS_FOR_REST.has(f));
   const endsTerminal = fields.some((f) => ENDS_TERMINAL.has(f));
   const ahead = held.get(agent.id)?.length ? 'earlier change' : null;
@@ -241,32 +255,43 @@ export async function retune(agentId: string, ask: RetuneAsk, by: ChangeBy, opts
 /** A queued change's agent is free, or has started its CLI again: apply it, or mark it taken. */
 async function settle(agentId: string): Promise<void> {
   const agent = agents.get(agentId);
-  const line = held.get(agentId) ?? [];
   if (!agent) {
-    for (const item of line) updateChange(item.changeId, { state: 'failed', error: 'the agent was removed before it was free', waitingFor: undefined });
+    for (const item of held.get(agentId) ?? []) updateChange(item.changeId, { state: 'failed', error: 'the agent was removed before it was free', waitingFor: undefined });
     held.delete(agentId);
     return;
   }
-  while (line.length > 0) {
-    const { changeId, ask } = line[0];
-    const fields = askedFields(ask as Record<string, unknown>);
-    const busy = busyReason(agent, fields.some((f) => ENDS_TERMINAL.has(f)));
-    if (busy) {
-      const entry = changeById(changeId);
-      if (entry && entry.waitingFor !== busy) updateChange(changeId, { waitingFor: busy });
+  for (;;) {
+    // The live line, at each step: what a revert took out, or a new change put in, while the last apply awaited.
+    const head = held.get(agentId)?.[0];
+    if (!head) {
+      held.delete(agentId);
       return;
     }
-    line.shift();
-    const applied = await applyNow(agent, ask);
+    const fields = askedFields(head.ask as Record<string, unknown>);
+    const busy = busyReason(agent, fields.some((f) => ENDS_TERMINAL.has(f)));
+    if (busy) {
+      const entry = changeById(head.changeId);
+      if (entry && entry.waitingFor !== busy) updateChange(head.changeId, { waitingFor: busy });
+      return;
+    }
+    inFlight.set(agentId, head.changeId);
+    let applied: Awaited<ReturnType<typeof applyNow>>;
+    try {
+      applied = await applyNow(agent, head.ask);
+    } finally {
+      inFlight.delete(agentId);
+      const rest = (held.get(agentId) ?? []).filter((h) => h.changeId !== head.changeId);
+      if (rest.length) held.set(agentId, rest);
+      else held.delete(agentId);
+    }
     const now = new Date().toISOString();
     const change = applied.ok
       ? (applied.nextStart
-        ? updateChange(changeId, { waitingFor: 'next start', how: `Written; taken at ${WAITING_TEXT['next start']}.` })
-        : updateChange(changeId, { state: 'applied', effectiveAt: now, waitingFor: undefined }))
-      : updateChange(changeId, { state: 'failed', error: applied.error, waitingFor: undefined });
+        ? updateChange(head.changeId, { waitingFor: 'next start', how: `Written; taken at ${WAITING_TEXT['next start']}.` })
+        : updateChange(head.changeId, { state: 'applied', effectiveAt: now, waitingFor: undefined }))
+      : updateChange(head.changeId, { state: 'failed', error: applied.error, waitingFor: undefined });
     if (change) announce(agent, change);
   }
-  held.delete(agentId);
 }
 
 /** A change written and taken at the CLI's next start: taken once a CLI was launched after it was asked. */
@@ -323,6 +348,16 @@ export async function resumeQueuedChanges(): Promise<void> {
       continue;
     }
     const ask = Object.fromEntries(change.fields.map((f) => [f, change.after[f]])) as RetuneAsk;
+    // Checked again, as the file is no witness (the Audit's L4 on #595): a provider Tars knows, a worktree still there.
+    const wt = ask.worktree as { worktreePath?: string } | null | undefined;
+    const why = !agents.has(change.agentId) ? 'the agent was removed while Tars was down'
+      : ask.provider !== undefined && (typeof ask.provider !== 'string' || !isValidProvider(ask.provider)) ? `the provider ${JSON.stringify(ask.provider)} is no provider Tars knows`
+        : wt && (!wt.worktreePath || !fs.existsSync(wt.worktreePath)) ? 'its worktree is gone'
+          : null;
+    if (why) {
+      updateChange(change.id, { state: 'failed', error: `${why}, so it was not applied at the start`, waitingFor: undefined });
+      continue;
+    }
     held.set(change.agentId, [...(held.get(change.agentId) ?? []), { changeId: change.id, ask }]);
   }
   await checkQueued();
@@ -353,6 +388,7 @@ export function changesToRevert(sel: RevertSelector): AgentChange[] {
  * leaves alone.
  */
 export function revertAskOf(change: AgentChange): { cancel: true } | { ask: Record<string, unknown>; movedSince: string[] } | { nothing: string } {
+  if (inFlight.get(change.agentId) === change.id) return { nothing: 'it is being applied at this moment: take it back once it is' };
   if (change.state === 'queued' && held.get(change.agentId)?.some((h) => h.changeId === change.id)) return { cancel: true };
   if (change.state !== 'applied' && change.state !== 'queued') return { nothing: `it was ${change.state}` };
   const agent = agents.get(change.agentId);
@@ -360,14 +396,19 @@ export function revertAskOf(change: AgentChange): { cancel: true } | { ask: Reco
   const ask: Record<string, unknown> = {};
   const movedSince: string[] = [];
   for (const field of change.fields) {
-    if (JSON.stringify(valueOf(agent, field)) === JSON.stringify(change.after[field])) ask[field] = change.before[field];
-    else movedSince.push(field);
+    if (JSON.stringify(valueOf(agent, field)) !== JSON.stringify(change.after[field])) {
+      movedSince.push(field);
+      continue;
+    }
+    // No provider on the record is claude's, which a request names.
+    ask[field] = field === 'provider' && change.before[field] === null ? 'claude' : change.before[field];
   }
   return { ask, movedSince };
 }
 
 /** A queued change taken back before it was applied. */
 export function cancelQueued(change: AgentChange): AgentChange | undefined {
+  if (inFlight.get(change.agentId) === change.id) return undefined;
   const line = held.get(change.agentId) ?? [];
   const rest = line.filter((h) => h.changeId !== change.id);
   if (rest.length === line.length) return undefined;
@@ -409,7 +450,7 @@ export async function revertAsWindow(sel: { changeId?: unknown; agentId?: unknow
   if (Object.keys(ask).length === 0) {
     return { ok: false, error: `Nothing to undo: ${leftAlone.includes('worktree') && !plan.movedSince.includes('worktree') ? 'the worktree it was in is gone' : `${leftAlone.join(', ')} moved since, by another change`}.` };
   }
-  const done = await retune(change.agentId, ask as RetuneAsk, { kind: 'window' }, { revertOf: change.id });
+  const done = await retune(change.agentId, ask as RetuneAsk, { kind: 'window' }, { revertOf: change.id, asked: change.asked ?? change.fields });
   if (done.state === 'refused') return { ok: false, error: done.error };
   return { ok: true, state: done.state, revertChangeId: done.change.id, ...(leftAlone.length ? { leftAlone } : {}) };
 }
@@ -422,6 +463,7 @@ export function heldFor(agentId: string): string[] {
 /** Test seam. */
 export function resetRetune(): void {
   held.clear();
+  inFlight.clear();
   if (watch) clearInterval(watch);
   watch = null;
   settling = false;

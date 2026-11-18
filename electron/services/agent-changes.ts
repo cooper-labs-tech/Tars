@@ -36,8 +36,10 @@ export interface AgentChange {
   agentName: string;
   projectPath: string;
   by: ChangeBy;
-  /** The settings asked for, in the order the record keeps them. */
+  /** The settings changed, in the order the record keeps them: what the caller named, and what that implied. */
   fields: string[];
+  /** The settings the caller named (2.0.7): a revert is judged by these, as the change was. Older entries have none. */
+  asked?: string[];
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   askedAt: string;
@@ -87,6 +89,16 @@ function keptValue(value: unknown, field: string): unknown {
     }
   }
   throw new Error(`${field}: a value of type ${Array.isArray(value) ? 'array' : typeof value} is no setting the log keeps`);
+}
+
+/** Why the log would not keep these values, or null: checked before a change is applied (the Audit's L5 on #595). */
+export function keptProblem(values: Record<string, unknown>): string | null {
+  try {
+    keptValues(values);
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
 }
 
 function keptValues(values: Record<string, unknown>): Record<string, unknown> {
@@ -175,6 +187,7 @@ export function recordChange(change: Omit<AgentChange, 'id'>): AgentChange {
     ...change,
     id: `chg-${randomBytes(4).toString('hex')}`,
     fields: [...change.fields],
+    ...(change.asked ? { asked: [...change.asked] } : {}),
     before: keptValues(change.before),
     after: keptValues(change.after),
   };
