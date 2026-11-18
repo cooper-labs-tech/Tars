@@ -1262,7 +1262,8 @@ agent died.
     build host). It is granted at once, takes none of this machine's slots, counts in no ceiling, settle time or disk
     reserve, is held by none of its floors and alerted on none of its readings, and is listed apart: `remote` in
     `tars-slot status`, `heavy_slot_status` and the window's `heavySlot.status().remote`. Its lease is still its local
-    process's. The host name is masked, on one line, 60 characters at most. It is the agent's word: a run said remote
+    process's. The host name is masked, on one line, 60 characters at most; a remote run that names none (`--remote` alone,
+    a blank `remote`) is refused, since it would take no slot unseen. It is the agent's word: a run said remote
     that works here takes this machine's room unseen. `heavy_slot_take` takes `remote` too.
   - The MCP tools `heavy_slot_take`, `heavy_slot_give_back`, `heavy_slot_status`: the lease is then the agent's CLI's,
     for the turn. Tars gives it back when the agent's turn ends (its Stop, or `idle` on record), granted or still

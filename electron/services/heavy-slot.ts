@@ -139,11 +139,16 @@ export interface SlotSnapshot { slots: number; holders: SlotTicket[]; waiting: S
 /** The longest host name a remote run shows. */
 const REMOTE_HOST_MAX = 60;
 
-/** A remote run's host as every agent and the window read it: masked, on one line, at most 60 characters. */
+/**
+ * A remote run's host as every agent and the window read it: masked, on one line, at most 60 characters. Empty when it
+ * names nothing, which ask refuses (the Audit's L1 on #598: a blank one went through as "a remote host").
+ */
 function remoteHost(raw: string): string {
-  const host = redactSecrets(raw).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, REMOTE_HOST_MAX).trim();
-  return host || 'a remote host';
+  return redactSecrets(raw).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, REMOTE_HOST_MAX).trim();
 }
+
+/** Why a remote run that names no host is refused: it would take no slot, unseen. */
+export const REMOTE_NEEDS_HOST = 'a remote run names no host: say which machine it runs on (tars-slot run --remote <host> -- <command>); a run with none takes this machine\'s slot as any other';
 
 /** What a waiter is told before the queue has been read for it, and when nothing holds it back but its turn. */
 const NEXT_LOOK = 'in the queue: it is read for at the next look, within seconds';
@@ -238,6 +243,7 @@ export class HeavySlot {
     if (a.terminalPid === undefined) {
       throw new Error('you have no terminal to hold the lease under: a heavy run is asked for from an agent\'s terminal');
     }
+    if (a.remote !== undefined && !remoteHost(a.remote)) throw new Error(REMOTE_NEEDS_HOST);
     const table = await this.world.processes();
     const parentOf = table ? new Map(table.map(r => [r.pid, r.ppid])) : undefined;
     const tars = new Set(this.world.tars());

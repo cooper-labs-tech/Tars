@@ -53,8 +53,9 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
     if (!agent) return;
     const { priority, label, untilTurnEnds, remote } = req.body as { pid?: unknown; priority?: unknown; label?: unknown; untilTurnEnds?: unknown; remote?: unknown };
     // A run that executes on another machine (2.0.7): the host it names, taken at the asker's word (heavy-slot.ts).
-    if (remote !== undefined && (typeof remote !== 'string' || remote.length > 500)) {
-      sendJson({ error: 'remote is the name of the host the run executes on, as text.' }, 400);
+    // One that names nothing is refused (the Audit's L1 on #598): it would take no slot, unseen.
+    if (remote !== undefined && (typeof remote !== 'string' || !remote.trim() || remote.length > 500)) {
+      sendJson({ error: 'remote names the host the run executes on, as text: a run with none takes this machine\'s slot as any other.' }, 400);
       return;
     }
     const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;

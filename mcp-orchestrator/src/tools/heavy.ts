@@ -43,7 +43,7 @@ export function registerHeavySlotTools(server: McpServer): void {
         priority: z.enum(["gate", "normal", "background"]).optional().describe("gate: a release gate (an orchestrator, or the agent its orchestrator handed a task as a gate, delegate_task's gate; others get normal). normal by default; background for what can wait."),
         ticket: z.string().optional().describe("A ticket a previous call returned waiting: wait on it again instead of asking anew."),
         wait_seconds: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(`How long to wait for the grant in this call (default ${WAIT_DEFAULT_S}).`),
-        remote: z.string().max(200).optional().describe("The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."),
+        remote: z.string().trim().min(1).max(200).optional().describe("The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."),
       },
       failure: "taking the heavy-run slot",
       async run({ label, priority, ticket, wait_seconds, remote }) {

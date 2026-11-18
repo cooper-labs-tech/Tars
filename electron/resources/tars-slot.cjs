@@ -70,7 +70,11 @@ function parse(argv) {
     if (a === '--') { opts.rest = argv.slice(i + 1); break; }
     if (a === '--priority') opts.priority = argv[++i];
     else if (a === '--label') opts.label = argv[++i];
-    else if (a === '--remote') opts.remote = argv[i + 1] !== undefined && argv[i + 1] !== '--' ? argv[++i] : '';
+    else if (a === '--remote') {
+      // A remote run names its host (the Audit's L1 on #598): with none, it would take no slot, unseen.
+      if (argv[i + 1] === undefined || argv[i + 1] === '--' || !argv[i + 1].trim()) fail(2, 'a remote run names its host: tars-slot run --remote <host> -- <command>');
+      opts.remote = argv[++i];
+    }
     else if (a === '--wait-seconds') opts.waitSeconds = Number(argv[++i]);
     else opts.rest.push(a);
   }
