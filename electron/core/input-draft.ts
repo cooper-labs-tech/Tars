@@ -319,6 +319,34 @@ export function feedDraft(d: Draft, data: string): Draft {
 }
 
 /**
+ * The lines one chunk of the owner's keys submits, as the owner's own writing (2.0.7; SECURITY.md §8, "Typed in a
+ * terminal"), and whether the field holds keys only after it. It reads: the field moves by feedDraft, as before.
+ *
+ * A line counts when its Enter submits a field this model holds as known, built since it was last empty by single
+ * keys alone: never a paste, bracketed or not (a chunk of several characters at once, which xterm sends for a paste a
+ * CLI asked no brackets for, and an input method for a composed word), never a field the CLI may have refilled after
+ * a cut turn, never a line that begins with `/` (a command to the CLI), never a blank one. The CLI's own
+ * UserPromptSubmit still has to confirm it (services/owner-words.ts confirmTyped).
+ */
+export function typedLines(d: Draft, keysOnly: boolean, data: string): { lines: string[]; keysOnly: boolean } {
+  const lines: string[] = [];
+  let only = keysOnly;
+  let draft = d;
+  for (const t of tokenize(data)) {
+    // An empty field the model knows holds nothing pasted; one the CLI may have refilled holds Tars's message.
+    if (draft.state === 'known' && !draft.text && draft.refilled === undefined) only = true;
+    if (draft.refilled !== undefined || t.k === 'paste' || (t.k === 'text' && Array.from(t.s).length > 1)) only = false;
+    if (t.k === 'enter' && draft.state === 'known' && only && draft.text.trim() && !draft.text.startsWith('/')
+      && !(draft.cursor === draft.text.length && draft.text.endsWith('\\'))) {
+      lines.push(draft.text);
+    }
+    draft = apply(draft, t);
+  }
+  if (draft.state === 'known' && !draft.text && draft.refilled === undefined) only = true;
+  return { lines, keysOnly: only };
+}
+
+/**
  * A submission was seen (UserPromptSubmit): the field did empty.
  *
  * `pending` is the ordinary case, an Enter this could not vouch for, and the

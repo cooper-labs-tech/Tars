@@ -136,6 +136,11 @@ export interface OneTaskQueue {
    * a CLI whose turns Tars cannot see.
    */
   delivered(ref: string, how: Delivered['how'], note?: string, now?: number): void;
+  /**
+   * A task delivered into the agent's terminal opened this turn, the ledger's task `taskId` (2.0.7): followed by its
+   * id from now, to its end and its answer, as a delegation's is. Once; never for one that failed or never left the line.
+   */
+  named(ref: string, taskId: string): void;
   queued(agentId: string): QueuedTask[];
   /** Out of the line, never to start: still known by its ref, as failed with `why`, to whoever follows it. */
   cancel(ref: string, why?: string): QueuedTask | undefined;
@@ -276,6 +281,10 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
     delivered(ref, how, note, now = Date.now()) {
       const was = taken.get(ref);
       if (was && !was.taskId && was.error === undefined) was.delivered = { how, at: now, ...(note ? { note } : {}) };
+    },
+    named(ref, taskId) {
+      const was = taken.get(ref);
+      if (was && was.delivered && !was.taskId && was.error === undefined) was.taskId = taskId;
     },
     queued(agentId) {
       return [...lineOf(agentId)];

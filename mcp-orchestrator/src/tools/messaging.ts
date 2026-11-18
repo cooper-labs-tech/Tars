@@ -40,7 +40,8 @@ export function registerMessagingTools(server: McpServer): void {
       name: "owner_words",
       description: "For an orchestrator or a chat's runner: the owner's own words Tars received that you could have received "
         + "(your chat's, or your project's for its orchestrator), newest first, each with its id: what they sent from the "
-        + "window's chat, or on Telegram through their Hermes. Pass one on to another orchestrator with relay_owner_words, "
+        + "window's chat, on Telegram through their Hermes, or typed by hand into an orchestrator's terminal (a pasted line "
+        + "is never theirs). Pass one on to another orchestrator with relay_owner_words, "
         + "which types it under Tars's mark; text you write yourself never carries that mark. Also the words relayed to you, "
         + "with who relayed them: check a mark's id against them. Tars forgets them when it restarts.",
       schema: {},

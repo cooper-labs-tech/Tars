@@ -1592,8 +1592,13 @@ Six servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and c
 
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
 `tasmaniaServerPath` exists on disk. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
-2.0.5: it sent with Tars's own bot's token, and every start takes it out of each CLI a 2.0.4 registered it in
-(`retireTelegramMcp`, `electron/services/hermes-relay-switch.ts`), relay on or off.
+2.0.5: it sent with Tars's own bot's token. Every start takes it out of each CLI a 2.0.4 registered it in, and
+Dorothy's world server (`dorothy-world`, `mcp-world`) with it (`retireOldMcpServers`,
+`electron/services/hermes-relay-switch.ts`), relay on or off, recognised by its bundle's last parts. Since 2.0.7 that
+includes Claude Code's user scope, `~/.claude.json`, which every claude session loads, cleaned through the shared file
+writer: 2.0.5 asked claude's provider, which answers no for an entry there, and both stayed, failing at every session's
+start (`CONNECTION_CLOSED`). A server of the owner's under those names, running anything else, stays; so does a
+`tasmania` entry, the owner's to remove (`claude mcp remove -s user tasmania`) when its file is gone.
 
 **Shared between agents** (2.0.5, `services/mcp-shared.ts`). The six run once for every agent: orchestrator, memory,
 kanban, vault, socialdata and x (mcp-telegram, which stayed per agent, is gone in 2.0.5).

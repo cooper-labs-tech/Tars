@@ -7,6 +7,10 @@ import { pendingBackgroundWork } from './agent-truth';
 import { createTaskLedger, endingOf, setLiveTaskLedger, liveTaskLedger, type TaskRecord } from './task-ledger';
 import { tellDelegationCut } from './agent-watch';
 import { readTaskCosts, selectTasks, taskReport, withDescendants, type TaskQuery, type TaskReport } from './task-cost';
+import { hasClaudeHooks } from '../core/end-of-turn';
+import { accountDir } from './claude-accounts/registry';
+import { answerOfTask } from './task-answers';
+import type { AgentStatus } from '../types';
 
 /**
  * The ledger of tasks, live: started by main.ts with the rest of the watches.
@@ -38,12 +42,40 @@ function onFleetChange(agentId: string): void {
   ledger.stateChanged(agent, { backgroundLeft });
 }
 
+/** The folder of the Claude account a task ran on, after the first; undefined for account 1 (~/.claude). */
+function accountFolderOf(accountId: string | null): string | undefined {
+  if (!accountId || accountId === 'default') return undefined;
+  try {
+    return accountDir(accountId);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * An ended task's answer, read once (task-answers.ts): from its CLI's transcript where Tars reads one (the provider it
+ * ran on, its Claude account's folder), else what its watcher or hook posted during it. What its end keeps, and what
+ * the delegation that follows it returns (agent-routes.ts runInTerminal).
+ */
+export function readAnswerOf(task: TaskRecord): Promise<string | null> {
+  const provider = (task.provider ?? agents.get(task.agentId)?.provider) as AgentStatus['provider'];
+  return answerOfTask(task, { transcript: hasClaudeHooks({ provider }), configDir: accountFolderOf(task.accountId) });
+}
+
+/** Every terminal task's answer kept at its end (2.0.7): a turn the owner typed, a message, a queued one alike. */
+function keepAnswerOf(task: TaskRecord): void {
+  void readAnswerOf(task).then((answer) => {
+    if (answer) liveTaskLedger()?.keepAnswer(task.id, answer);
+  });
+}
+
 export function startTaskWatch(file = TASK_LEDGER_FILE, textFile = TASK_TEXT_FILE, resultFile = TASK_RESULT_FILE): void {
   if (liveTaskLedger()) return;
   const ledger = createTaskLedger({
     file,
     textFile,
     resultFile,
+    onEnded: keepAnswerOf,
     // As recordRequester has it (#302): a sender writing to the agent that
     // handed it its work, or to one of its project's with the orchestrator's
     // powers (the orchestrator, a chat's runner: core/agent-role.ts), reports.

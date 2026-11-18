@@ -44,7 +44,12 @@ const TARS_BUNDLE_DIRS: Readonly<Record<string, string>> = {
  */
 export function isTarsBundleEntry(name: string, entry: unknown): boolean {
   const dir = Object.prototype.hasOwnProperty.call(TARS_BUNDLE_DIRS, name) ? TARS_BUNDLE_DIRS[name] : undefined;
-  if (!dir || !entry || typeof entry !== 'object') return false;
+  return !!dir && runsBundle(entry, dir);
+}
+
+/** Whether a server entry's command runs `<dir>/dist/bundle.js`, by its last three parts, either separator. */
+export function runsBundle(entry: unknown, dir: string): boolean {
+  if (!entry || typeof entry !== 'object') return false;
   const { command, args } = entry as { command?: unknown; args?: unknown };
   const words = [command, ...(Array.isArray(args) ? args : [])].filter((w): w is string => typeof w === 'string');
   return words.some(word => word.split(/[\\/]/).slice(-3).join('/') === `${dir}/dist/bundle.js`);
