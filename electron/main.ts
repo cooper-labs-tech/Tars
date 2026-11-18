@@ -171,6 +171,9 @@ import { loadChromeSwitch } from './services/chrome-without-asking';
 import { retireTelegramBot, withoutRetiredSettings } from './services/telegram-retired';
 import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
 import { createKeepAwake } from './services/keep-awake';
+import { fleetOperations } from './services/fleet-operations';
+import { startFleetOperations } from './services/fleet-runtime';
+import { registerFleetHandlers } from './handlers/fleet-handlers';
 import { endAcpRunsOnQuit, agentsRunningOverAcp } from './services/acp/delegate';
 import { retentionLog, startTmpRetention } from './services/agent-tmp';
 import { sweepRunTokenFolders } from './services/acp/run-token-file';
@@ -211,8 +214,11 @@ Object.assign(process.env, currentFolderLookupsOff());
 
 let appSettings: AppSettings = loadAppSettings();
 
-/** The computer kept awake while an agent works, per keepAwake (services/keep-awake.ts). */
-const keepAwake = createKeepAwake({ blocker: powerSaveBlocker, settings: () => appSettings, agents: () => agents.values() });
+/** The computer kept awake while an agent works, per keepAwake, and while a project's hours are open (services/keep-awake.ts). */
+const keepAwake = createKeepAwake({
+  blocker: powerSaveBlocker, settings: () => appSettings, agents: () => agents.values(),
+  windows: () => fleetOperations()?.openWindows() ?? [],
+});
 
 function startKeepAwake(): void {
   // Every status change the fleet announces, and every 30 s for a path that announces none.
@@ -808,6 +814,9 @@ app.whenReady().then(async () => {
     tell: tellOrchestratorAsTars,
   }));
   startKeepAwake();
+  // Each project's hours and its cap on workers at work (services/fleet-operations.ts, 2.0.7), and the window's hold on them.
+  startFleetOperations(keepAwake);
+  registerFleetHandlers();
   // The heavy-run slot for the whole machine (services/heavy-slot.ts): its shims in ~/.tars/bin for `tars-slot`, its
   // passes, and the window's read of who holds it and who waits.
   installSlotShims();

@@ -111,7 +111,14 @@ export interface OneTaskQueue {
   /** Told of every change of the lines or the pauses, to keep them (services/agent-queues.ts). */
   onChange(listener: () => void): () => void;
   /**
-   * Its turn: first in line and the agent free (no run, and `turn` undefined).
+   * A hold besides the agent's own work (2.0.7: its project's cap, core/project-cap.ts): why the item `ref` of the
+   * agent's line may not go in now, or undefined. Asked by takeTurn; one for the process (api-routes/agent-routes.ts).
+   */
+  setGate(gate: ((agentId: string, ref: string | undefined) => string | undefined) | undefined): void;
+  /** Why the gate holds the agent's item `ref` (or work not queued yet), or undefined. */
+  heldBy(agentId: string, ref?: string): string | undefined;
+  /**
+   * Its turn: first in line, the agent free (no run, and `turn` undefined), and the gate letting it in.
    * Taken, it leaves the line and its run is on record at once.
    */
   takeTurn(agentId: string, ref: string, turn: Busy | undefined, now?: number): boolean;
@@ -150,6 +157,10 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
   const taken = new Map<string, Taken>();
   const pauses = new Map<string, QueuePause>();
   const listeners = new Set<() => void>();
+  let gate: ((agentId: string, ref: string | undefined) => string | undefined) | undefined;
+  const heldBy = (agentId: string, ref?: string) => {
+    try { return gate?.(agentId, ref); } catch (err) { console.warn('[one-task] the gate failed, and holds nothing:', err); return undefined; }
+  };
   const changed = () => {
     for (const listener of listeners) {
       try { listener(); } catch (err) { console.warn('[one-task] a listener of the queue failed:', err); }
@@ -248,9 +259,14 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
+    setGate(next) {
+      gate = next;
+    },
+    heldBy,
     takeTurn(agentId, ref, turn, now = Date.now()) {
       const line = lineOf(agentId);
       if (line[0]?.ref !== ref || runs.has(agentId) || turn || pauses.has(agentId)) return false;
+      if (heldBy(agentId, ref)) return false;
       const task = line[0];
       leave(task);
       remember(ref, { task });

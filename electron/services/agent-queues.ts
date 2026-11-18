@@ -20,6 +20,9 @@ import type { MessageSender } from '../core/pty-manager';
 
 export const QUEUES_FILE = () => privatePath('agent-queues.json');
 
+/** Why a kept queue waits after a restart of Tars; a project's open hours resume it (services/fleet-operations.ts). */
+export const RESTART_PAUSE = 'Tars restarted';
+
 const VERSION = 1;
 
 /** Only what can be handed over again: an item with no replay died with the run that queued it. */
@@ -84,7 +87,7 @@ export function restoreQueues(queue: OneTaskQueue, replay: (item: QueuedTask) =>
   const kept = readKept();
   const restored = queue.restore(kept);
   for (const agentId of new Set(restored.map((item) => item.agentId))) {
-    if (!queue.pausedOf(agentId)) queue.pause(agentId, 'Tars restarted', now);
+    if (!queue.pausedOf(agentId)) queue.pause(agentId, RESTART_PAUSE, now);
   }
   for (const item of restored) {
     try { replay(item); } catch (err) { console.warn(`[agent-queues] ${item.ref} could not be handed over again:`, err); }
@@ -135,15 +138,20 @@ export interface QueueItemView {
 export interface QueueView {
   agentId: string;
   paused?: { since: string; why: string };
+  /** 2.0.7: why its first item waits besides the agent's own work, its project's cap ("its project's cap: 3 of 3 agents at work"). */
+  waitingFor?: string;
   items: QueueItemView[];
 }
 
 /** An agent's queue as the window, the API and get_agent show it; `only`: the items one requester sent. */
 export function queueView(queue: OneTaskQueue, agentId: string, only?: string): QueueView {
   const pause = queue.pausedOf(agentId);
+  const head = queue.queued(agentId)[0];
+  const held = !pause && head ? queue.heldBy(agentId, head.ref) : undefined;
   return {
     agentId,
     ...(pause ? { paused: { since: new Date(pause.since).toISOString(), why: pause.why } } : {}),
+    ...(held ? { waitingFor: held } : {}),
     items: queue.queued(agentId)
       .map((t, i) => ({ t, position: i + 1 }))
       .filter(({ t }) => only === undefined || t.requesterId === only)

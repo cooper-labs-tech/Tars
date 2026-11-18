@@ -19,6 +19,7 @@ import { registerMcpRoutes } from './mcp-routes';
 import { registerJanitorRoutes } from './janitor-routes';
 import { registerOwnerWordsRoutes } from './owner-words-routes';
 import { registerWorktreeRoutes } from './worktree-routes';
+import { registerFleetRoutes } from './fleet-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -45,6 +46,8 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerOwnerWordsRoutes(app, ctx);
   // A worktree per task, for any project (services/project-worktrees.ts).
   registerWorktreeRoutes(app);
+  // A project's hours and its cap on workers at work (services/fleet-operations.ts, 2.0.7).
+  registerFleetRoutes(app);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';

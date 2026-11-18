@@ -171,8 +171,12 @@ function queuedText(task: TaskView): string {
   if (task.outcome === "starting") {
     return `Task ${task.id} is going into agent ${task.agentId}'s terminal: its turn has not begun yet. Follow it with task_status({ taskId: "${task.id}" }).`;
   }
+  // A project's cap (2.0.7): the agent is free, and a place among the project's workers at work is what it waits for.
+  const cap = task.queuedBehind?.startsWith("its project's cap");
   return `Task ${task.id} is queued on agent ${task.agentId}${task.queuedAt ? ` since ${task.queuedAt}` : ""}`
-    + `${task.queuedBehind ? `, behind ${task.queuedBehind}` : ""}: an agent runs one task at a time, and this one starts once it is free. `
+    + (cap
+      ? `, waiting for ${task.queuedBehind}: it starts once a place frees, the oldest of the project first. `
+      : `${task.queuedBehind ? `, behind ${task.queuedBehind}` : ""}: an agent runs one task at a time, and this one starts once it is free. `)
     + `Follow it with task_status({ taskId: "${task.id}" }), or take it back with task_cancel({ taskId: "${task.id}" }).`;
 }
 

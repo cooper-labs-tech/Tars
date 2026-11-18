@@ -1094,6 +1094,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     state: () => ipcRenderer.invoke('keepAwake:state'),
   },
 
+  // Each project's hours and its cap on workers at work, with what the last window did (2.0.7, services/fleet-operations.ts).
+  fleet: {
+    state: () => ipcRenderer.invoke('fleet:state'),
+    setSchedule: (projectPath: string, schedule: unknown) => ipcRenderer.invoke('fleet:setSchedule', projectPath, schedule),
+    clearSchedule: (projectPath: string) => ipcRenderer.invoke('fleet:clearSchedule', projectPath),
+    setCap: (projectPath: string, cap: number | null) => ipcRenderer.invoke('fleet:setCap', projectPath, cap),
+    onChanged: (callback: (state: unknown) => void) => {
+      const listener = (_: unknown, state: unknown) => callback(state);
+      ipcRenderer.on('fleet:changed', listener);
+      return () => ipcRenderer.removeListener('fleet:changed', listener);
+    },
+  },
+
   // Platform info
   platform: process.platform,
 });
