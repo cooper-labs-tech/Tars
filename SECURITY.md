@@ -33,6 +33,38 @@ places:
 Confusing the two is how a defence becomes theatre. The rest of this file keeps
 them apart.
 
+### Signed, the app lends its signature to any script
+
+Since #591 a macOS release is signed with the team's Developer ID and notarized.
+Electron's RunAsNode fuse is on (Tars does not turn it off): its binary run with
+`ELECTRON_RUN_AS_NODE=1` is a plain Node, and that is how `~/.tars/bin/tars-mcp-node`
+runs every Tars MCP server and how `tars-slot` runs. So any process of the user
+can run any JavaScript as Tars, under its Developer ID signature and its
+entitlements (`allow-jit` alone). Library validation is on, so that JavaScript
+loads the app's own native modules and no other.
+
+What it would reach, and why nothing is exposed today:
+
+- **Keychain items** whose access list trusts Tars's designated requirement (its
+  identifier and team) would be readable without a prompt. Tars keeps none: no
+  `safeStorage`, no `keytar`, no item of its own. Every secret it holds is a
+  file under `~/.tars-private`, which code of the same user reads anyway.
+- **TCC grants** the user gave Tars (folders, automation) follow the same
+  requirement. The agents it starts already run as children of Tars and inherit
+  that "responsible process", so a script gains nothing an agent
+  does not have.
+
+The fuse stays on: the MCP servers and `tars-slot` need it, and turning it off
+means giving them another runtime first (`electron/utils/mcp-node.ts`). Before
+anything goes into the Keychain under Tars's identity, this paragraph is the one
+to revisit: put the secret behind a requirement that names more than the team, or
+turn the fuse off.
+
+A server the user names (Settings, Tasmania) is not Tars's code: it runs on
+`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first (22 or newer), so
+that its own native modules load, and on the app's binary only when there is no
+such `node`.
+
 ---
 
 ## 2. What the local API decides (and what it cannot)

@@ -6,17 +6,48 @@
       Referenced by package.json build.mac as both `entitlements` and
       `entitlementsInherit`, on top of `hardenedRuntime: true`. Every key here
       switches OFF a hardened-runtime protection, so nothing gets added without
-      a reason written down next to it.
+      a reason written down next to it, and a measurement behind it. No double
+      hyphen in a comment: XML forbids it, and codesign refuses the whole file
+      (__tests__/scripts/entitlements.test.ts).
+
+      Measured on the first signed build (18/11, Electron 44.10, Developer ID,
+      hardened runtime; OPERATIONS.md "The first signed build", step 2), each
+      variant started on a throwaway HOME: node-pty spawning a shell through its
+      spawn-helper and better-sqlite3 opening a database in the main process, the
+      vault answering over the local API, the window rendering, and the binary
+      run as Node (ELECTRON_RUN_AS_NODE=1, as the shared MCP servers and
+      tars-slot run it) loading both modules and answering an MCP initialize:
+
+      - no key at all: the binary aborts before any JavaScript runs, "Fatal
+        process out of memory: Failed to reserve virtual memory for CodeRange"
+        (V8 is refused its JIT region), exit 133;
+      - allow-jit and allow-unsigned-executable-memory (library validation
+        on): everything above passes;
+      - allow-jit alone: everything above passes. This is the set kept.
     -->
 
-    <!-- Required by Electron/V8: the JIT writes then executes generated code.
-         https://github.com/electron/notarize#prerequisites -->
+    <!-- Required by Electron/V8: the JIT writes then executes generated code
+         (MAP_JIT). Without it V8 cannot reserve its code range: measured above. -->
     <key>com.apple.security.cs.allow-jit</key>
-    <true/>
-    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
     <true/>
 
     <!--
+      NOT present: com.apple.security.cs.allow-unsigned-executable-memory.
+      Kept until the first signed build "until measured"; measured then: removed
+      together with disable-library-validation, everything above passes. V8 on
+      Apple silicon takes MAP_JIT memory, which allow-jit covers.
+
+      NOT present: com.apple.security.cs.disable-library-validation.
+      It was kept because the ad hoc builds had no Team ID to validate against.
+      Every Mach-O of the signed app, node-pty's pty.node and spawn-helper and
+      better-sqlite3's .node included, is signed by electron-builder with the
+      same Developer ID, so library validation lets them load: measured above.
+      The check bites: the same app with pty.node and better_sqlite3.node
+      re-signed ad hoc fails both requires, "mapping process and mapped file
+      (non-platform) have different Team IDs", and opens no window. A native
+      module that fails to load is fixed in its signature, never by restoring
+      this key.
+
       NOT present: com.apple.security.cs.allow-dyld-environment-variables.
 
       It was granted here from the file's first commit (4240be1) with no
@@ -24,37 +55,13 @@
       template. Failure it caused: with that entitlement, DYLD_INSERT_LIBRARIES
       still works against the signed, hardened app, so anyone with plain
       user-level code execution (a malicious npm postinstall in a project the
-      user opens, an agent spawned with --dangerously-skip-permissions) could
-      drop an unsigned dylib and have it loaded into the Tars process — which
+      user opens, an agent spawned with the dangerously-skip-permissions flag) could
+      drop an unsigned dylib and have it loaded into the Tars process, which
       then runs with Tars's bundle identity and whatever TCC grants the user has
       approved for it. Nothing in this app reads or sets any DYLD_* variable
       (grep the tree), so the entitlement bought us nothing and cost us the
       protection. Do not re-add it; if a profiler or sanitizer build ever needs
       DYLD_*, use a separate dev-only entitlements file and never ship it.
     -->
-
-    <!--
-      Kept deliberately. This is electron-builder's own default for apps that
-      ship third-party prebuilt native code:
-      https://github.com/electron-userland/electron-builder/issues/3940
-
-      package.json asarUnpacks node_modules/better-sqlite3 (which loads a
-      downloaded prebuilds/darwin-*.node, not a locally compiled one) and
-      node_modules/node-pty (pty.node plus the separate spawn-helper binary).
-      Under library validation the main binary may only load code signed by the
-      same Team ID, and this repo has no signing identity configured at all —
-      `codesign -dvvv release/mac-arm64/Tars.app` reports
-      flags=0x20002(adhoc,linker-signed), TeamIdentifier=not set — so there is
-      currently no signed build in which dropping this key could be verified.
-      Removing it blind is a launch-time crash in a native require, not a
-      hardening win.
-
-      TODO: once a real Developer ID identity and the notarize step are wired
-      into the release build, do a `--dir` build with this key removed and
-      confirm better-sqlite3 and node-pty still load. If a nested binary fails,
-      fix that binary's signature rather than restoring this entitlement.
-    -->
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
 </dict>
 </plist>

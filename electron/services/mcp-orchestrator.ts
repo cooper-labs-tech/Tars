@@ -7,7 +7,7 @@ import { getAllProviders } from '../providers';
 import { execCli, cliFailureText, nodeServerCommand, CliNotRunnableError } from '../providers/cli-exec';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
-import { mcpNodeCommand, isTransientAppPath } from '../utils/mcp-node';
+import { mcpNodeCommand, userMcpNodeCommand, isTransientAppPath } from '../utils/mcp-node';
 import { writeAtomicSync } from '../utils/secret-file';
 import { bundledMcpServers, retireTelegramMcp } from './hermes-relay-switch';
 import { API_PORT, DATA_DIR } from '../constants';
@@ -112,13 +112,14 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
       'dorothy-socialdata': getMcpSocialDataPath,
       'dorothy-x': getMcpXPath,
     };
-    const mcpServers: Array<{ name: string; serverPath: string }> =
+    // `user`: a server the user named, outside the app, which runs on its own launcher (userMcpNodeCommand).
+    const mcpServers: Array<{ name: string; serverPath: string; user?: boolean }> =
       bundledMcpServers().map(name => ({ name, serverPath: bundled[name]() }));
 
     // Add Tasmania if enabled
     if (appSettings?.tasmaniaEnabled && appSettings.tasmaniaServerPath) {
       if (fs.existsSync(appSettings.tasmaniaServerPath)) {
-        mcpServers.push({ name: 'tasmania', serverPath: appSettings.tasmaniaServerPath });
+        mcpServers.push({ name: 'tasmania', serverPath: appSettings.tasmaniaServerPath, user: true });
       } else {
         console.log('Tasmania MCP server not found at', appSettings.tasmaniaServerPath);
       }
@@ -160,6 +161,9 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
     // program would be left on it: when the program changes, which the file
     // below records, every server is registered again, once.
     const nodeCommand = mcpNodeCommand();
+    // A server the user named runs on the machine's node first: signed, the app's binary refuses its native modules.
+    // Recorded with the other, so that one registered on the app's launcher by an earlier start moves over, once.
+    const userCommand = userMcpNodeCommand();
     // Which providers have every server on that program, recorded per
     // provider: one that fails (a config file it cannot write) is tried again
     // at the next start, and the others are not moved again (the Audit's gate
@@ -167,15 +171,16 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
     // the claude CLI run on the main thread each time). Only a packaged Tars
     // moves anything over: another names the launcher it found, or `node`.
     const runtimeFile = path.join(DATA_DIR, 'mcp-servers-runtime.json');
-    let recorded: { command?: string; providers?: string[] } = {};
+    let recorded: { command?: string; userCommand?: string; providers?: string[] } = {};
     try { recorded = JSON.parse(fs.readFileSync(runtimeFile, 'utf-8')); } catch { /* none yet */ }
-    const movedBefore = new Set(recorded.command === nodeCommand && Array.isArray(recorded.providers) ? recorded.providers : []);
+    const sameProgram = recorded.command === nodeCommand && recorded.userCommand === userCommand;
+    const movedBefore = new Set(sameProgram && Array.isArray(recorded.providers) ? recorded.providers : []);
     const mayMove = app.isPackaged === true;
     const failed = new Set<string>();
     let foundAny = false;
 
     // For each server × each provider: register if not already present
-    for (const { name, serverPath } of mcpServers) {
+    for (const { name, serverPath, user } of mcpServers) {
       if (!fs.existsSync(serverPath)) {
         console.log(`MCP server ${name} not found at ${serverPath}`);
         continue;
@@ -189,7 +194,7 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
       const isTypeScript = serverPath.endsWith('.ts');
       const { command, args } = isTypeScript
         ? nodeServerCommand(serverPath, name)
-        : { command: nodeCommand, args: [serverPath] };
+        : { command: user ? userCommand : nodeCommand, args: [serverPath] };
 
       for (const provider of providers) {
         // Claude's own binary reaches this one through the shared process (above).
@@ -218,11 +223,11 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
     await retireTelegramMcp(providers);
 
     const moved = providers.map(p => p.id).filter(id => !failed.has(id));
-    const unchanged = recorded.command === nodeCommand
+    const unchanged = sameProgram
       && moved.length === movedBefore.size && moved.every(id => movedBefore.has(id));
     if (mayMove && foundAny && !unchanged) {
       try {
-        writeAtomicSync(runtimeFile, JSON.stringify({ command: nodeCommand, providers: moved }));
+        writeAtomicSync(runtimeFile, JSON.stringify({ command: nodeCommand, userCommand, providers: moved }));
       } catch (err) {
         console.warn('[mcp] could not record the program the MCP servers were registered on:', err);
       }

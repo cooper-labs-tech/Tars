@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach, afterAll } from 'vites
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { hasPosixModes, skipOnWindows } from '../setup/platform-limits';
 import { cannotSymlink } from '../setup/symlink-privilege';
 import { Leftovers, RECORDS_ITS_PID, endLeftUnder, processesUnder, takePidsRecordedIn } from '../setup/leftover-processes';
@@ -93,6 +93,29 @@ import { Leftovers, RECORDS_ITS_PID, endLeftUnder, processesUnder, takePidsRecor
  *     ~/.claude/mcp.json, the guard refused it, and `npm test` exited 1 with
  *     every test passed. A server that does not end on its own outlives the
  *     file as well.
+ * The Audit's I8 on #591, the signed release (2026-11-18), written before the fix:
+ * 23. A server the user names (Settings, Tasmania: any path, outside the app)
+ *     runs on the launcher, the app's binary as Node. Signed with the hardened
+ *     runtime, that binary refuses a native module that is not the app's own
+ *     (library validation): measured on the first signed build, an N-API module
+ *     of the server's own node_modules failed ("different Team IDs") where the
+ *     ad hoc 2.0.6 loaded it, and where the system's node loads it.
+ * 24. Over-correction: Tars's own bundles leave the app's binary; or a user's
+ *     server on a machine with no node runs nothing (it ran on the app's binary).
+ * 25. A user's server registered on the launcher by an earlier start stays on
+ *     it, since the registration check compares the server's path only.
+ * 26. On Windows, which runs no sh script: `node`, as Tars's own servers.
+ * The Audit's L6 on #591 (2026-11-18), written before the fix:
+ * 27. The PATH's first node runs the server whatever its version: an old one
+ *     (/usr/local/bin's Node 18, measured on 2026-09-24, case 1) fails a server
+ *     that ran on the app's Node 24, and the user sees only a failed server.
+ *     The floor is 22, the project's own (.nvmrc, engines), the oldest LTS
+ *     maintained: Electron's 24 would pass a Node 22 LTS over for the app's
+ *     binary, where the server's native modules do not load.
+ * 28. Passing it over says nothing: the CLI's MCP log must show which runtime
+ *     ran the server and why, on stderr (stdout is the protocol).
+ * 29. A node that answers no version (broken, or not Node) is taken.
+ *     macOS and Linux run the same script; Windows is unchanged (26).
  */
 
 const home = () => os.homedir();
@@ -520,6 +543,105 @@ function handle(msg) {
     const servers = JSON.parse(fs.readFileSync(report, 'utf-8')) as { name: string; command: string }[];
     expect(servers.length).toBeGreaterThan(0);
     for (const server of servers) expect(server.command, server.name).toBe(program());
+  });
+});
+
+describe('a server the user names (Settings, Tasmania)', { timeout: 30_000 }, () => {
+  const resources = path.join(scratch, 'resources');
+  const runtimeFile = () => path.join(home(), '.tars', 'mcp-servers-runtime.json');
+  const userLauncher = () => path.join(home(), '.tars', 'bin', 'tars-user-mcp-node');
+  /** What a user's server is registered on from this host: its own launcher, or `node` on Windows (26). */
+  const userProgram = () => (process.platform === 'win32' ? 'node' : userLauncher());
+  const userServer = path.join(scratch, 'user-server', 'index.js');
+  const tasmania = { tasmaniaEnabled: true, tasmaniaServerPath: userServer } as never;
+
+  beforeEach(() => {
+    (process as unknown as { resourcesPath: string }).resourcesPath = resources;
+    for (const dir of ['mcp-orchestrator', 'mcp-memory', 'mcp-kanban']) {
+      fs.mkdirSync(path.join(resources, dir, 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(resources, dir, 'dist', 'bundle.js'), '');
+    }
+    fs.mkdirSync(path.dirname(userServer), { recursive: true });
+    fs.writeFileSync(userServer, '');
+    registry.clear(); calls.length = 0; providerList.value = 'one'; appState.isPackaged = true;
+    fs.rmSync(runtimeFile(), { force: true });
+  });
+
+  /**
+   * A `node` on a PATH of its own that says `major` for `-p` (what the launcher asks it) and otherwise prints what it was
+   * run with; `major` null: a node that answers no version (broken, or not Node at all).
+   */
+  const systemNodeSaying = (dir: string, major: string | null) => {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'node'), [
+      `#!${process.execPath}`,
+      `if (process.argv[2] === '-p') { ${major === null ? 'process.exit(1);' : `console.log(${JSON.stringify(major)}); process.exit(0);`} }`,
+      'console.log(JSON.stringify({ systemNode: true, args: process.argv.slice(2) }));',
+      '',
+    ].join('\n'), { mode: 0o755 });
+    return dir;
+  };
+  const runUser = (command: string, PATH: string) => {
+    const r = spawnSync(command, ['/user/server.js', '--flag'], { env: { PATH }, encoding: 'utf8' });
+    return { out: JSON.parse(r.stdout), err: r.stderr.trim() };
+  };
+
+  it.skipIf(skipOnWindows(LAUNCHER_NOT_RUNNABLE))('23. runs on the node on the PATH, which loads the native modules of its own node_modules', () => {
+    const app = fakeApp(path.join(scratch, 'user-one'));
+    const command = mcpNode.userMcpNodeCommand(app, 'darwin', true);
+
+    expect(command).toBe(userLauncher());
+    for (const major of ['22', '24']) {
+      const { out, err } = runUser(command, systemNodeSaying(path.join(scratch, `system-node-${major}`), major));
+      expect(out, major).toEqual({ systemNode: true, args: ['/user/server.js', '--flag'] });
+      expect(err, major).toBe('');
+    }
+  });
+
+  it.skipIf(skipOnWindows(LAUNCHER_NOT_RUNNABLE))('24, 28. runs on the app binary as Node when the PATH has no node, as before, and says so on stderr', () => {
+    const app = fakeApp(path.join(scratch, 'user-two'));
+    const { out, err } = runUser(mcpNode.userMcpNodeCommand(app, 'darwin', true), '/nonexistent');
+    expect(out).toEqual({ runAsNode: '1', args: ['/user/server.js', '--flag'] });
+    expect(err).toMatch(/^tars-user-mcp-node: .*Tars's own Node.*no node on the PATH/);
+  });
+
+  it.skipIf(skipOnWindows(LAUNCHER_NOT_RUNNABLE))('27, 28. a node under 22 on the PATH is passed over for the app binary, and stderr says which and why', () => {
+    const app = fakeApp(path.join(scratch, 'user-three'));
+    const command = mcpNode.userMcpNodeCommand(app, 'linux', true);
+    for (const major of ['18', '21']) {
+      const { out, err } = runUser(command, systemNodeSaying(path.join(scratch, `system-node-${major}`), major));
+      expect(out, major).toEqual({ runAsNode: '1', args: ['/user/server.js', '--flag'] });
+      expect(err, major).toMatch(new RegExp(`Tars's own Node.*the node on the PATH is ${major}, under 22`));
+    }
+  });
+
+  it.skipIf(skipOnWindows(LAUNCHER_NOT_RUNNABLE))('29. a node that answers no version is passed over too', () => {
+    const app = fakeApp(path.join(scratch, 'user-four'));
+    const { out, err } = runUser(mcpNode.userMcpNodeCommand(app, 'darwin', true), systemNodeSaying(path.join(scratch, 'system-node-broken'), null));
+    expect(out).toEqual({ runAsNode: '1', args: ['/user/server.js', '--flag'] });
+    expect(err).toMatch(/Tars's own Node/);
+  });
+
+  it('23, 24, 26. is registered on its own launcher, and Tars\'s own bundles stay on theirs', async () => {
+    await setupMcpOrchestrator(tasmania);
+
+    expect(registry.get('tasmania')?.command).toBe(userProgram());
+    for (const name of ['claude-mgr-orchestrator', 'tars-memory', 'claude-mgr-kanban']) {
+      expect(registry.get(name)?.command, name).toBe(program());
+    }
+  });
+
+  it('25. one an earlier start registered on the app\'s launcher is moved over, once', async () => {
+    registry.set('tasmania', { command: program(), args: [userServer] });
+    fs.mkdirSync(path.dirname(runtimeFile()), { recursive: true });
+    fs.writeFileSync(runtimeFile(), JSON.stringify({ command: program(), providers: ['fake'] }));
+
+    await setupMcpOrchestrator(tasmania);
+    expect(registry.get('tasmania')?.command).toBe(userProgram());
+
+    calls.length = 0;
+    await setupMcpOrchestrator(tasmania);
+    expect(calls).toEqual([]);
   });
 });
 

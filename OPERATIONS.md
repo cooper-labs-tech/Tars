@@ -608,7 +608,8 @@ npm run electron:build
 ```
 
 `build:renderer` + `tsc` + all six MCP bundles + `electron-builder --mac`
-(targets `dmg` and `zip`), then `scripts/prune-releases.mjs`. Output: `release/` of the checkout
+(targets `dmg` and `zip`), then `scripts/prune-releases.mjs`. It needs a Developer ID
+Application identity in the keychain (*Signing and notarization*): without one it fails. Output: `release/` of the checkout
 it runs in. To publish, do not stop here: `npm run release` runs this build itself, see
 *Cut a release*.
 
@@ -630,44 +631,134 @@ app would boot with no hooks and a blank window.
 
 ### Signing and notarization
 
-`build.mac` sets `hardenedRuntime: true`, `gatekeeperAssess: false`, and points both
-`entitlements` and `entitlementsInherit` at `build/entitlements.mac.plist`:
+A macOS release is signed with a **Developer ID Application** identity, notarized by Apple and
+stapled, the app and the dmg, so that a copy downloaded through Safari (quarantined) opens
+without Gatekeeper's "damaged" or "could not verify". It is that or nothing: there is no ad hoc
+release (until 2.0.6 every release was ad hoc, and a quarantined download was refused).
+
+What it needs, on the Mac that cuts the release, and only the owner sets it up (nothing in the
+repository creates or changes a credential or a keychain item):
+
+1. a **Developer ID Application** certificate of the team's Apple Developer account, with its
+   private key, in the login keychain: `security find-identity -v -p codesigning` lists it.
+   With several, `CSC_NAME` names the one that signs (its hash, or a part of its name);
+2. the notarytool keychain profile named `Tars`, stored once, which asks for the app-specific
+   password at a prompt (never `--password`: it would stay in the shell's history and show in `ps`
+   while it runs):
+
+   ```bash
+   xcrun notarytool store-credentials Tars --apple-id <apple-id> --team-id <team-id>
+   ```
+
+   The profile is the only way. `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` and
+   `APPLE_APP_SPECIFIC_PASSWORD` are refused by the preflight: `@electron/notarize` 3.1.1 would put
+   the password on `notarytool`'s command line (`--password`), readable through `ps` by every
+   process of the user, every agent included, for the minutes of each notarization.
+
+`node scripts/mac-signing.mjs check` says whether both are there, without building anything.
+
+`build.mac` in `package.json` sets `hardenedRuntime: true`, `forceCodeSigning: true` (no
+identity, no build: electron-builder fails instead of signing ad hoc), `notarize: true`,
+`gatekeeperAssess: false`, and points both `entitlements` and `entitlementsInherit` at
+`build/entitlements.mac.plist`:
 
 ```xml
-com.apple.security.cs.allow-jit                      true
-com.apple.security.cs.allow-unsigned-executable-memory true
-com.apple.security.cs.disable-library-validation      true
-com.apple.security.cs.allow-dyld-environment-variables true
+com.apple.security.cs.allow-jit                        true
 ```
 
-All four are load-bearing: V8 needs JIT and unsigned executable memory, `better-sqlite3` and
-`node-pty` are unsigned native `.node` files (library validation), and `node-pty` spawns login
-shells that inherit `DYLD_*` from the environment.
+That one key and no other, measured on the first signed build (18/11, below): without it V8 cannot
+reserve its code range and the binary aborts before any JavaScript runs; with it alone, the signed
+app starts, node-pty and better-sqlite3 load in the main process and in the binary run as Node (the
+shared MCP servers, tars-slot), and the window renders. `allow-unsigned-executable-memory` and
+`disable-library-validation` were removed then: every native module is signed with the same
+Developer ID, so library validation lets them load, and refuses one re-signed ad hoc ("different
+Team IDs"). `allow-dyld-environment-variables` was removed earlier (the plist says why). A native
+module that fails to load is fixed in its signature, never by restoring a key.
 
-`scripts/notarize.js` exports an `afterSign` hook that calls `@electron/notarize`: using the
-keychain profile named `Tars` when `APPLE_ID` is unset, otherwise
-`APPLE_ID`/`APPLE_APP_PASSWORD`/`APPLE_TEAM_ID`.
+How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`):
 
-> **It is not wired up, and there is nothing to sign with.** There is no `afterSign` key in the
-> `build` block of `package.json`, so `electron-builder` never calls it, and this machine has no
-> Developer ID identity (`security find-identity -v -p codesigning` reports 0). So
-> `npm run electron:build` produces an app signed **ad hoc** (`codesign -dv` gives
-> `Signature=adhoc`, `TeamIdentifier=not set`), not a signed one: on another Mac Gatekeeper
-> warns on first open, which is what the footer of every release note says. With an identity,
-> either add `"afterSign": "scripts/notarize.js"` to `build`, or notarize by hand:
+- **before anything is built**, the preflight: an identity and notary credentials that answer
+  (`notarytool history --keychain-profile Tars`), or the release stops there. It hands the build
+  `CSC_NAME` and `APPLE_KEYCHAIN_PROFILE`, and none of what would sign or notarize otherwise: no
+  `APPLE_ID` or password, no `APPLE_API_KEY` (it would win over the profile), no `CSC_LINK` or
+  `CSC_KEY_PASSWORD` (a certificate file instead of the identity chosen);
+- **the build**: electron-builder signs every Mach-O of the app (Electron's frameworks and
+  helpers, node-pty's `pty.node` and `spawn-helper`, better-sqlite3's `.node` files, in
+  `app.asar.unpacked`; 26 Mach-O files on the first signed build) with the hardened runtime and a secure timestamp, then notarizes and
+  staples the app before it makes the dmg and the zip;
+- **after the build**, the dmg: signed with a secure timestamp (electron-builder's own `dmg.sign`
+  gives none, so it is off), notarized and stapled, then its `.blockmap` and its entry in
+  `latest-mac.yml` recomputed by electron-builder's own block map (the staple changes its bytes);
+- **before anything is published**, a quarantined copy of the dmg and of its app, judged as a
+  download is: `codesign --verify --deep --strict` on the app, `spctl --assess --type exec`
+  accepted as `source=Notarized Developer ID`, `spctl -t open --context
+  context:primary-signature` on the dmg likewise, `xcrun stapler validate` on both, and every
+  Mach-O signed with a Developer ID Application identity, a secure timestamp and the hardened
+  runtime. Then the app is started once: its binary run as Node (`ELECTRON_RUN_AS_NODE=1`, in a
+  clean environment) loads better-sqlite3 and spawns a shell through node-pty from its own
+  `app.asar`, the one check that starts it (a plist without `allow-jit` passes all the others and
+  aborts at launch, exit 133; `__tests__/scripts/entitlements.test.ts` also pins the plist to
+  `allow-jit` alone). Every signature is pinned to the Team ID of the identity that signed, read at run time
+  from it (never written in the repository): another team's Developer ID fails. One failure stops
+  the release before `gh release create`. The same checks run on any dmg with `node
+  scripts/mac-signing.mjs verify <dmg> [--team <Team ID>]`, the team defaulting to the keychain's
+  identity's (2.0.6's: 31 failures; a dmg holding a notarized Electron app: the app passes, the
+  unsigned dmg does not).
 
-```bash
-xcrun notarytool submit release/Tars-1.5.0-arm64.dmg --keychain-profile Tars --wait
-xcrun stapler staple release/Tars-1.5.0-arm64.dmg
-spctl -a -vvv -t install release/mac-arm64/Tars.app
-```
+`npm run electron:build` alone (outside `npm run release`) also fails without an identity; with
+one and no notary variables, electron-builder signs and skips notarization with a warning, and
+leaves the dmg unsigned: only `npm run release` makes a distributable build. `npm run
+electron:pack` (the sandbox) stays unsigned on purpose (`-c.mac.identity=null`).
 
-To create the keychain profile once:
+#### The first signed build
 
-```bash
-xcrun notarytool store-credentials Tars \
-  --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
-```
+Once `node scripts/mac-signing.mjs check` passes, before the first signed version is published,
+and nothing published on the way (no `npm run release`, no `gh release`):
+
+1. `npm run electron:build` with the variables `check` names (`CSC_NAME`, `APPLE_KEYCHAIN_PROFILE`);
+   then sign, notarize and staple the dmg as step 2b does, and `node scripts/mac-signing.mjs
+   verify release/Tars-<version>-arm64.dmg`: ALL PASS, or the release is not cut;
+2. **the entitlements, measured** (done on 18/11: `allow-jit` alone, the plist says what each
+   variant did). To measure again after an Electron or native-module upgrade: build signed with
+   `--dir` and `-c.mac.notarize=false`, with a variant passed as `-c.mac.entitlements` and
+   `-c.mac.entitlementsInherit`, start it on a throwaway HOME (the e2e fixture's `launchSandboxed`
+   with `executablePath`), and in the main process spawn a shell through node-pty and open a
+   better-sqlite3 database; then run the binary with `ELECTRON_RUN_AS_NODE=1`, as the MCP servers
+   run, and load both modules there too. Witness that the check bites: the same app with
+   `pty.node` re-signed ad hoc must fail. A key that is still needed stays, with what failed written
+   next to it in the plist; a nested binary that fails is fixed in its signature, not by restoring a
+   key;
+3. **the update path, measured**, below: install the previous version, update it in the app from the
+   signed build served locally (a generic feed with `latest-mac.yml` and the zip), and write what it
+   shows.
+
+#### Updating a 2.0.x Mac to the first signed version
+
+`electron-updater` hands the downloaded zip to Squirrel.Mac, which swaps it in only if it satisfies
+the running app's designated requirement (`SecStaticCodeCheckValidityWithErrors`, nested code and
+strict). An ad hoc build's requirement is its own cdhash, `cdhash H"..."`, which no other build can
+satisfy. Measured on 18/11 with those same calls (`apple-signing-runs/squirrel-check.swift` in the
+reports, on 2.0.5 from GitHub, the installed 2.0.6 and a notarized app):
+
+| running app | update | Squirrel's check |
+|---|---|---|
+| 2.0.5 (ad hoc) | 2.0.6 (ad hoc) | refused, -67050 (requirement not satisfied) |
+| 2.0.6 (ad hoc) | the same 2.0.6 | refused, -67056 (no sealed resources) |
+| 2.0.6 (ad hoc) | a notarized Developer ID app | refused, -67050 |
+| a notarized app | the same app | accepted (its requirement is its identifier and team) |
+| 2.0.6 (ad hoc, installed) | the first signed build, from its quarantined dmg | refused, -67050 (measured on that build, 18/11) |
+| the first signed build | the same build, from its quarantined dmg | accepted: `identifier "xyz.cooperlabs.tars"` and the team's Developer ID |
+
+So no in-app update has ever installed on macOS for an ad hoc build, and 2.0.6 or older will not
+install the first signed version either. What the window of 2.0.6 does: the download finishes,
+`update-downloaded` is sent before Squirrel has checked anything, the panel says "Restart to Apply";
+Squirrel's refusal (`Code signature at URL ... did not pass validation`) only reaches the main
+process's log; on Restart, nothing happens, and after 8 s the panel says the update could not be
+installed and offers **Download it instead**, which opens the release (since 1.6.10). That sequence
+is read in the code (`update-checker.ts`, `electron-updater`'s `MacUpdater`, `ClientLayout.tsx`),
+not run live: step 3 above runs it. No loop, no silent failure: one wasted click, then the dmg. The release notes say it (`NOTES_FOOTER`: download
+the `.dmg` once and replace Tars in Applications). From the first signed version on, an update is
+checked against the team's requirement, which the next signed build satisfies (the last row).
 
 ### The two update paths
 
@@ -735,9 +826,12 @@ a build of the version being released.
    installed under a `^44.4.4`; the fix is `npm ci` then `npx install-electron`),
    `v<version>` exists on GitHub neither as a release nor as a tag, the top entry of the
    changelog is that version, and no newer version is published. A GitHub it cannot ask is a
-   refusal, not a pass;
+   refusal, not a pass. Then the signing preflight (*Signing and notarization*): a Developer ID
+   Application identity and notary credentials that answer, or it stops before building;
 2. runs `npm run electron:build` in this checkout (a worktree is fine), without `CI`, `GH_TOKEN`
-   or `GITHUB_TOKEN`, so `electron-builder` never publishes anything by itself. **Not before**
+   or `GITHUB_TOKEN`, so `electron-builder` never publishes anything by itself, and with the
+   preflight's signing variables; then signs, notarizes and staples the dmg and rewrites its entry
+   in `latest-mac.yml`. **Not before**
    checking what the build writes over: `latest-mac.yml`, `builder-debug.yml` and `mac-arm64` in
    `release/` belong to the last build put there. They may go only if that build is an earlier
    attempt at this same version, or an older version GitHub proves published with that very
@@ -745,9 +839,10 @@ a build of the version being released.
    7: no file of this version in it, and the same proof for the build it holds, or the release
    would be public before the move is refused. The dry run makes the same checks;
 3. checks the artifacts: `version` of `latest-mac.yml`, the size and sha512 (base64 of the whole
-   file) it gives the dmg and the zip, and `CFBundleShortVersionString` of the built app;
-4. writes the notes from that changelog entry, with the footer on the ad hoc signature, in the
-   form of `v1.7.1`. A long dash stops it;
+   file) it gives the dmg and the zip, and `CFBundleShortVersionString` of the built app; then a
+   quarantined copy of the dmg and of its app, as Gatekeeper judges a download;
+4. writes the notes from that changelog entry, with the footer saying the dmg and the zip are
+   signed and notarized, in the form of `v1.7.1`. A long dash stops it;
 5. `gh release create v<version>` with the dmg, the zip and `latest-mac.yml`, on the exact commit
    built (`--target`), as the latest release;
 6. reads back what GitHub serves: the tag on that commit, the `sha256` digest of every asset
@@ -1518,7 +1613,12 @@ Six servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and c
 | `mcp-x` | `dorothy-x` | `getMcpXPath()` |
 
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
-`tasmaniaServerPath` exists on disk. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
+`tasmaniaServerPath` exists on disk. The six run on `~/.tars/bin/tars-mcp-node`, the app's own binary
+as Node; `tasmania`, a server outside the app with its own `node_modules`, runs on
+`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first when it is 22 or newer (the project's floor),
+and otherwise the app's binary, with one line on stderr, in the CLI's MCP log, saying which and why
+(`electron/utils/mcp-node.ts`): signed (#591), the app's binary refuses any native module but its own, and
+on the first signed build an N-API module of such a server failed there and loaded on `node`. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
 2.0.5: it sent with Tars's own bot's token, and every start takes it out of each CLI a 2.0.4 registered it in
 (`retireTelegramMcp`, `electron/services/hermes-relay-switch.ts`), relay on or off.
 

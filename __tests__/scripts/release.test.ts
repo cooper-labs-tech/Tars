@@ -18,7 +18,25 @@ import { skipOnWindows } from '../setup/platform-limits';
  * so a refusal is that check and not the setup. No test runs electron-builder
  * or reaches the real release/ or GitHub: a build is a script of the harness
  * that lays out files, and a release is made in the fake gh only by a test that
- * calls allowPublishing().
+ * calls allowPublishing(). Nor does any sign or notarize: the mac signing steps
+ * (scripts/mac-signing.mjs, tested in mac-signing.test.ts) are a stand-in here,
+ * `signing`, which passes unless a case breaks it.
+ *
+ * How the signing steps fail inside the release, written before the code (18/11):
+ * S1. The preflight refuses (no Developer ID identity, no notary credentials), and
+ *     the release builds anyway, or the dry run says nothing of it.
+ * S2. The build does not get the preflight's environment (CSC_NAME and the notary
+ *     variables), or gets CI, GH_TOKEN or GITHUB_TOKEN back through it.
+ * S3. The dmg is finished (signed, notarized, stapled) after the artifacts are
+ *     checked, so the manifest checked is not the one published; or a finish that
+ *     fails is published past.
+ * S4. A quarantined copy that Gatekeeper would refuse is published.
+ * S5. The notes still say the dmg is not signed.
+ * Written before the code of the second round (the Audit's FIX FIRST on #591, 18/11):
+ * S6. The quarantined copy is judged without the Team ID of the identity the
+ *     preflight chose, so another team's signature passes (L2).
+ * S7. The notes say nothing to a mac user of 2.0.6 or older, whose in-app update
+ *     Squirrel.Mac refuses (M2, measured 18/11): download the dmg once.
  */
 
 const VERSION = '2.0.1';
@@ -31,6 +49,25 @@ const BEFORE: FakeGhState = { releases: { 'v2.0.0': { assets: publishedAssets('2
 
 let gh: FakeGh;
 let removePlutil: () => void;
+
+const STUB_HASH = 'C'.repeat(40);
+type Signing = NonNullable<Parameters<typeof main>[1]>['signing'];
+/** The signing steps of a Mac that has its identity and its notary profile, doing nothing. */
+function passingSigning(): NonNullable<Signing> {
+  return {
+    preflight: async (env: NodeJS.ProcessEnv) => ({
+      identity: { hash: STUB_HASH, name: 'Developer ID Application: Stand-in (STANDIN000)', team: 'STANDIN000' },
+      credentials: { kind: 'profile', profile: 'Tars' },
+      env: { ...env, CSC_NAME: STUB_HASH, APPLE_KEYCHAIN_PROFILE: 'Tars' },
+    }),
+    finish: async () => undefined,
+    // S6: passes only when the release pins the team of the identity the preflight chose.
+    verify: async ({ team }: { team?: string }) => (team === 'STANDIN000'
+      ? { ok: true, failures: [], passed: ['stand-in'] }
+      : { ok: false, failures: [`judged with the Team ID ${team ?? 'none'}, not the signing identity's`], passed: [] }),
+  };
+}
+let signing: NonNullable<Signing>;
 
 /**
  * plutil, where the machine has none. release.mjs reads the built app's version
@@ -75,6 +112,7 @@ function standInPlutil(): () => void {
 }
 
 beforeEach(() => {
+  signing = passingSigning();
   gh = fakeGh(BEFORE);
   gh.install();
   removePlutil = standInPlutil();
@@ -198,6 +236,7 @@ function buildable(dir: string) {
     "const fs = require('fs');",
     `fs.cpSync(${JSON.stringify(staged)}, 'release', { recursive: true });`,
     "fs.writeFileSync('BUILD_ENV', JSON.stringify(['CI', 'GH_TOKEN', 'GITHUB_TOKEN'].filter(key => key in process.env)));",
+    "fs.writeFileSync('BUILD_SIGNING', JSON.stringify({ CSC_NAME: process.env.CSC_NAME ?? null, APPLE_KEYCHAIN_PROFILE: process.env.APPLE_KEYCHAIN_PROFILE ?? null }));",
     '',
   ].join('\n'));
   const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
@@ -210,7 +249,7 @@ function buildable(dir: string) {
 
 async function release(cwd: string, ...argv: string[]): Promise<{ code: number; out: string }> {
   const lines: string[] = [];
-  const code = await main(argv, { cwd, log: (line: string) => lines.push(line) });
+  const code = await main(argv, { cwd, log: (line: string) => lines.push(line), signing });
   return { code, out: lines.join('\n') };
 }
 
@@ -560,10 +599,16 @@ describe('npm run release, publishing', { timeout: 30_000 }, () => {
     expect(result.out).toContain('6. GitHub serves exactly what was built');
     expect(result.code).toBe(0);
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'BUILD_ENV'), 'utf8')), 'the build was given what lets it publish').toEqual([]);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'BUILD_SIGNING'), 'utf8')), 'S2: the build signs with the identity the preflight chose')
+      .toEqual({ CSC_NAME: STUB_HASH, APPLE_KEYCHAIN_PROFILE: 'Tars' });
     const published = gh.state().releases?.[`v${VERSION}`];
     expect(published?.assets).toEqual(releasedFrom(kept, VERSION).assets.map(asset => ({ ...asset, state: 'uploaded' })));
     expect(published?.target).toBe(git(dir, 'rev-parse', 'HEAD').trim());
     expect(published?.notes).toContain("- An agent's change, said the way the app says it");
+    expect(published?.notes, 'S5').toContain('notarises');
+    expect(published?.notes, 'S5').not.toContain('ne sont pas signes');
+    expect(published?.notes, 'S7').toMatch(/2\.0\.6 ou plus ancienne/);
+    expect(published?.notes, 'S7').toMatch(/telecharge le `\.dmg` une fois/);
     expect(result.out).toContain(`9. ${path.join(fs.realpathSync(kept), `Tars-${VERSION}-arm64.dmg`)}`);
   });
 
@@ -624,6 +669,68 @@ describe('npm run release, publishing', { timeout: 30_000 }, () => {
     expect(out).toContain(refusal);
     expect(code).toBe(1);
     expect(out).not.toMatch(/^[6-9]\. /m);
+  });
+});
+
+describe('npm run release, signed and notarized on a Mac', { timeout: 30_000 }, () => {
+  it('S1. refuses before anything is built when the signing preflight refuses, and the dry run says so', async () => {
+    const { dir } = checkout();
+    buildable(dir);
+    signing.preflight = async () => { throw new Refusal('no valid "Developer ID Application" identity in the keychain'); };
+    gh.allowPublishing();
+
+    const dry = await release(dir, '--dry-run');
+    expect(dry.out).toContain('Developer ID Application');
+    expect(dry.code).toBe(1);
+
+    const real = await release(dir);
+    expect(real.out).toContain('Developer ID Application');
+    expect(real.code).toBe(1);
+    expect(fs.existsSync(path.join(dir, 'BUILD_ENV')), 'nothing was built').toBe(false);
+    expect(writesToGitHub()).toEqual([]);
+  });
+
+  it.skipIf(noPlutil())('S3. finishes the dmg before the artifacts are checked: a finish that leaves the manifest behind is caught, nothing published', async () => {
+    const { dir } = checkout();
+    buildable(dir);
+    signing.finish = async ({ releaseDir, version }) => {
+      // A staple appends a ticket to the dmg; this finish forgets the manifest.
+      fs.appendFileSync(path.join(releaseDir, `Tars-${version}-arm64.dmg`), 'ticket');
+    };
+    gh.allowPublishing();
+
+    const { code, out } = await release(dir);
+
+    // The staple adds bytes: the size is the first thing step 3 finds different.
+    expect(out).toContain(`latest-mac.yml gives Tars-${VERSION}-arm64.dmg 12 bytes, the file has 18`);
+    expect(code).toBe(1);
+    expect(writesToGitHub()).toEqual([]);
+  });
+
+  it.skipIf(noPlutil())('S3. a finish that fails stops the release, nothing published', async () => {
+    const { dir } = checkout();
+    buildable(dir);
+    signing.finish = async () => { throw new Refusal('notarization of the dmg failed: Invalid'); };
+    gh.allowPublishing();
+
+    const { code, out } = await release(dir);
+
+    expect(out).toContain('notarization of the dmg failed');
+    expect(code).toBe(1);
+    expect(writesToGitHub()).toEqual([]);
+  });
+
+  it.skipIf(noPlutil())('S4. a quarantined copy Gatekeeper would refuse is not published, and what failed is said', async () => {
+    const { dir } = checkout();
+    buildable(dir);
+    signing.verify = async () => ({ ok: false, failures: ['spctl on the app: rejected, source=Unnotarized Developer ID'], passed: [] });
+    gh.allowPublishing();
+
+    const { code, out } = await release(dir);
+
+    expect(out).toContain('source=Unnotarized Developer ID');
+    expect(code).toBe(1);
+    expect(writesToGitHub()).toEqual([]);
   });
 });
 
