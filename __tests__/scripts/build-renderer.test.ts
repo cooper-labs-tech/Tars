@@ -27,7 +27,8 @@ import { nextBuild } from '../../scripts/build-renderer.mjs';
  *     POSIX, Ctrl+C on Windows; or the script dying while next build still runs;
  *     or, on Windows, a next build the Ctrl+C never reached left to run to its end;
  *  5. what comes back not what went away: a file changed, a folder nested;
- *  6. .next and out of an earlier build left for next build to mix in;
+ *  6. out, and next dev's .next/dev, of an earlier build left for next build to mix in (tsconfig includes
+ *     .next/dev/types, whose validators name the routes moved aside: "Failed to type check", bbfff6e70);
  *  7. next build run without ELECTRON_BUILD=1, elsewhere than the checkout, with
  *     other arguments, or another next than this checkout's;
  *  8. a checkout with no icon.tsx refused, or given one afterwards;
@@ -36,6 +37,12 @@ import { nextBuild } from '../../scripts/build-renderer.mjs';
  *     into or overwritten: the shell version put src/app/api inside it. This
  *     one stops, touches nothing, and says how to recover;
  * 11. a restore that failed reported as a success.
+ * And from the 2.0.7 release build (18/11, next-security-fatal.md), written before the fix:
+ * 12. all of .next wiped. next build cleans its own .next and keeps its cache (cleanDistDir), and the wipe took that
+ *     cache with the rest, Next's retry receipt among it: under an agent, Next 16.4 stops a build once on a security
+ *     advisory (SecurityFatalError) and lets the same command through when it is run again within 5 minutes, on a
+ *     receipt in .next/cache/next-agentic-upgrade-retries. The wipe threw it away, so every retry stopped again. The
+ *     script clears out and .next/dev, and leaves .next/cache to Next.
  */
 
 const SCRIPT = path.join(__dirname, '../../scripts/build-renderer.mjs');
@@ -55,7 +62,8 @@ const at = p => fs.existsSync(p);
 fs.writeFileSync(process.env.FAKE_SAW, JSON.stringify({
   api: at('src/app/api'), apiBackup: at('src/app/_api_backup'),
   icon: at('src/app/icon.tsx'), iconBackup: at('src/app/_icon_backup.tsx'),
-  next: at('.next'), out: at('out'),
+  cache: at('.next/cache/stale'), retry: at('.next/cache/next-agentic-upgrade-retries/receipt.json'),
+  dev: at('.next/dev'), out: at('out'),
   electronBuild: process.env.ELECTRON_BUILD, argv: process.argv.slice(2), cwd: process.cwd(),
 }));
 const mode = process.env.FAKE_MODE;
@@ -81,6 +89,8 @@ function checkout({ icon = true, api = true, mode = '0' } = {}): Checkout {
   if (api) put('src/app/api/health/route.ts', ROUTE);
   if (icon) put('src/app/icon.tsx', ICON);
   put('.next/cache/stale', 'an earlier build');
+  put('.next/cache/next-agentic-upgrade-retries/receipt.json', '{"issuedAt":0}');
+  put('.next/dev/types/validator.ts', 'import "../../../src/app/api/health/route";\n');
   put('out/index.html', 'an earlier export');
   const fake = path.join(dir, 'fake-next.cjs');
   fs.writeFileSync(fake, FAKE_NEXT);
@@ -117,13 +127,13 @@ function expectPutBack(c: Checkout, { icon = true } = {}) {
 }
 
 describe.concurrent('npm run build:renderer', { timeout: 60_000 }, () => {
-  it('builds with the routes and the icon moved aside, in a clean checkout, then puts them back', async ({ expect }) => {
+  it('6, 12. builds with the routes and the icon moved aside, out and next dev\'s types cleared, Next\'s cache kept, then puts them back', async ({ expect }) => {
     const c = checkout();
 
     const result = await run(c);
 
     expect(saw(c)).toEqual({
-      api: false, apiBackup: true, icon: false, iconBackup: true, next: false, out: false,
+      api: false, apiBackup: true, icon: false, iconBackup: true, cache: true, retry: true, dev: false, out: false,
       electronBuild: '1', argv: ['build'], cwd: fs.realpathSync(c.root),
     });
     expectPutBack(c);
