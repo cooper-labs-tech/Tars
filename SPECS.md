@@ -231,12 +231,14 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
 
 The proxy:
-- swaps the token for the endpoint's key and adds `X-Session-Id` (the trace id) and `X-Agent-Id`;
+- swaps the token for the endpoint's key;
+- adds `X-Session-Id` (the trace id) and `X-Agent-Id` when the endpoint's "send session headers" is on (off by
+  default);
 - passes chat completions, Responses, Anthropic Messages and `/v1/models` unchanged, streams included, chunk by chunk.
 
 **Pause, not fail.** Before any byte has reached the harness, a 503, 429, 502 or refused connection is held. It is
-tried again as `Retry-After` says, up to the endpoint's `holdMaxSeconds` (600 by default), and the window shows the
-wait.
+tried again as `Retry-After` says, up to the endpoint's `holdMaxSeconds` (120 by default: several standard 503 or 429
+answers, under the harnesses' own request timeouts), and the window shows the wait.
 
 **Endpoints and approval.** The user adds endpoints in Settings, and agents add them through `endpoint_*`. A new or
 re-pointed base URL from an agent waits for the owner's approval in the window. Keys come from the window, or from an
@@ -245,8 +247,9 @@ agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
 **Traces.** A session is traced only when all of these hold (`trace-gate.ts`):
 - the project's switch and the agent's are both on (both off by default);
 - the endpoint is approved and allows traces;
-- the harness and model pair is on the owner's list;
-- the model is not a closed one (Claude, GPT, o-series, Gemini), which is never traced.
+- the harness and model pair is on the owner's list (empty as Tars ships, or imported from a file);
+- with the default on, the model is not a closed one (Claude, GPT, o-series, Gemini). The owner can turn it off,
+  warned that the providers' terms may forbid training on their outputs.
 
 `~/.tars/traces/traces.db` holds one row per terminal session:
 - turns open on a user instruction, never on a tool result or a harness's reminder, and side calls (a title, a memory
@@ -259,6 +262,16 @@ agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
+
+**Upload** (`trace-upload.ts`, `trace-scrub.ts`). With a back-office address set (empty by default) and the user's
+consent, opted-in sessions are uploaded:
+- each string scrubbed;
+- projects and endpoints as HMAC keys;
+- blobs by the hash of their scrubbed content, sent once;
+- one idempotent batch per session state;
+- resumed after a restart, with backoff.
+
+`deleteEverywhere` asks the back-office to delete all of it.
 
 ### Alt-provider safety gate
 

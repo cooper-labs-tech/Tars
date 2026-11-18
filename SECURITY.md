@@ -1116,14 +1116,31 @@ else.
 **Who is traced** (`services/trace-gate.ts`). A session is traced only when all of these hold:
 - an approved endpoint that allows traces;
 - the project's switch and the agent's both on;
-- the harness and model pair on the owner's list.
+- the harness and model pair on the owner's list, which ships empty;
+- with the default on, the model is not a closed one (Claude, GPT, o-series, Gemini).
 
-One rule is above the list, in code: a Claude, GPT, o-series or Gemini model is never traced. The claude binary is not
-on the seeded list.
+The owner can turn that default off in Settings. The window warns that the providers' terms may forbid training on
+their outputs.
+
+**Session headers.** `X-Session-Id` and `X-Agent-Id` name the agent and its session to the endpoint. The proxy adds
+them only for an endpoint whose "send session headers" option is on, which is off by default.
+
+**The upload** (`services/trace-upload.ts`). Opted-in sessions go to the back-office address the user sets, empty by
+default. Nothing goes before the user has read, in the window, what leaves the machine, with one session shown as it
+would be sent.
+- Every string is scrubbed first (`services/trace-scrub.ts`, whose header says what it catches and what it cannot).
+- Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
+- A turn's author goes by kind (user, orchestrator, agent), never a name.
+- The install's token and that secret are in `~/.tars-private/traces-install.json` (0600).
+- Only sessions whose project and agent are opted in at the moment of sending go.
+- One action in the window asks the back-office to delete everything the install sent, then forgets the install.
+- The scrubbing applies to what is uploaded only: the endpoint the agent talked to, and the local store, saw the
+  session as it was.
 
 Measured by:
 - `__tests__/electron/endpoint-proxy.test.ts` (the token swap, both ids, no buffering, the holds);
 - `inference-endpoints.test.ts` (the approval guard, the drop file);
 - `services/trace-reader-token.test.ts` (the door);
 - `trace-gate.test.ts`;
+- `trace-scrub.test.ts` and `trace-upload.test.ts` (the upload, against a stand-in back-office);
 - `e2e/traces-native.spec.ts` (the whole chain against a stand-in endpoint on loopback).

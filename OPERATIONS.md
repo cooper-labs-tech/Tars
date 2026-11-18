@@ -1271,18 +1271,29 @@ one carries the new session.
 - An endpoint an agent adds, or re-points, shows Approve in Settings: nothing reaches it before the owner approves.
 
 **When the endpoint pauses.** The proxy holds a request on 503, 429, 502 or a refused connection, as `Retry-After`
-says (60 s at most per wait), up to the endpoint's hold ceiling (600 s by default, 0 to 3600). The agent shows
+says (60 s at most per wait), up to the endpoint's hold ceiling (120 s by default, 0 to 3600). The agent shows
 "waiting on <endpoint>". Past the ceiling, the last error reaches the harness as it came. For hours-long gaps, stop
 the agents rather than raising the ceiling.
 
 **Traces.**
-- Off by default. Turn a project on in the back-office, then an agent in its panel. Both are needed, and only for a
-  pair on the list (Settings), never a closed model.
+- Off by default. Turn a project on in the back-office, then an agent in its panel. Both are needed.
+- Only for a pair on the list in Settings. The list ships empty; add pairs, or import a JSON file of
+  `{ harness, models }`.
+- Closed models (Claude, GPT, o-series, Gemini) are left out by default. The switch is in Settings, with the warning
+  about their terms.
+- Session headers (`X-Session-Id`, `X-Agent-Id`) are an endpoint's option, off by default.
 - The cap and the retention are swept every hour and after any write that crosses the cap: the oldest ended sessions
   go first, and open sessions are never deleted by retention. Past the cap with only open sessions left, request
   metadata is still written and bodies are not (`bodiesDropped`).
 - Export: the back-office writes JSONL in the reader's trace format tables (`traces`, `turns`, `requests`,
   `request_messages`, `messages`), each message once.
+
+**Upload to a back-office.**
+- Set its address in the back-office page (any server that speaks the trace back-office's HTTP API v1), and read the
+  notice of what leaves the machine, with a preview.
+- Opted-in sessions then go every 5 minutes, and 30 s after a change: scrubbed, keyed, resumable.
+- The install is in `~/.tars-private/traces-install.json`.
+- "Delete everything sent" calls the back-office's `DELETE /v1/installs/me`, then forgets the install.
 
 **The external reader.** Rotate its token in the back-office (shown once), then read on loopback:
 
