@@ -291,6 +291,8 @@ for (const newInterface of [false, true]) {
       // Worker One's turn ends: it is stopped, after it.
       fs.writeFileSync(path.join(home, 'release-three'), '');
       await expect.poll(() => w.status(A_W1), { timeout: 30_000 }).toBe('stopped');
+      // The record is written once the stop is over (its terminal and what it started ended), a moment after the status.
+      await expect.poll(async () => (await w.fleet(projectA))?.window?.stopping, { timeout: 30_000 }).toEqual([]);
       const closed = await w.fleet(projectA);
       keep({ closed, awakeClosed: await w.awake(), blockerCalls: await blocker() });
       expect(said(home, A_W1, 'answer', 'held three')).toBeDefined();
