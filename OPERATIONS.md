@@ -742,6 +742,8 @@ reports, on 2.0.5 from GitHub, the installed 2.0.6 and a notarized app):
 | 2.0.6 (ad hoc) | the same 2.0.6 | refused, -67056 (no sealed resources) |
 | 2.0.6 (ad hoc) | a notarized Developer ID app | refused, -67050 |
 | a notarized app | the same app | accepted (its requirement is its identifier and team) |
+| 2.0.6 (ad hoc, installed) | the first signed build, from its quarantined dmg | refused, -67050 (measured on that build, 18/11) |
+| the first signed build | the same build, from its quarantined dmg | accepted: `identifier "xyz.cooperlabs.tars"` and the team's Developer ID |
 
 So no in-app update has ever installed on macOS for an ad hoc build, and 2.0.6 or older will not
 install the first signed version either. What the window of 2.0.6 does: the download finishes,
