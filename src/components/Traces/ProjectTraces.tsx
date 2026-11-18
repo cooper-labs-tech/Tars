@@ -17,12 +17,14 @@ import { tracesApi } from './hooks';
 export function ProjectTraces({ projectPath, agents }: { projectPath: string; agents: AgentStatus[] }) {
   const router = useRouter();
   const [projects, setProjects] = useState<string[] | null>(null);
+  const [upload, setUpload] = useState<{ url: string; consent: boolean }>({ url: '', consent: false });
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const api = tracesApi();
     if (!api) return;
-    void api.settings().then(s => setProjects(s.projects)).catch(e => setError(e instanceof Error ? e.message : String(e)));
+    void api.settings().then(s => { setProjects(s.projects); setUpload({ url: s.uploadUrl, consent: !!s.uploadConsentAt }); })
+      .catch(e => setError(e instanceof Error ? e.message : String(e)));
   }, []);
 
   if (!tracesApi()) return null;
@@ -30,6 +32,9 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
   const on = !!projects?.some(p => comparablePath(p) === key);
   const recording = agents.filter(a => a.traces === true).length;
   const name = lastPathPart(projectPath) || projectPath;
+  /** The back-office's host, as the line names it. */
+  const host = (() => { try { return new URL(upload.url).host; } catch { return upload.url; } })();
+  const uploads = !!upload.url && upload.consent;
 
   const toggle = async () => {
     const api = tracesApi();
@@ -44,9 +49,13 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
       <PanelCaption className="mb-2">TRACES</PanelCaption>
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-[12.5px] text-foreground">Record traces for this project</p>
+          <p className="text-[12.5px] text-foreground">{uploads ? 'Record and upload traces for this project' : 'Record traces for this project'}</p>
           <p className="mt-0.5 text-[11px] leading-snug text-muted-foreground">
-            {on
+            {on && uploads
+              ? `Its sessions are recorded on this computer and uploaded, scrubbed, to ${host}, for the agents that say so.`
+              : on && upload.url
+                ? 'Its sessions are recorded on this computer. Uploading waits for you to read what leaves it.'
+                : on
               ? 'Its agents on an endpoint that allows traces may record their sessions, each agent saying so in its own settings, for the pairs you allow.'
               : `No agent of ${name} records traces. Turning it on records nothing by itself: each agent on an endpoint that allows traces then says so in its own settings.`}
           </p>
@@ -56,9 +65,11 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
       {error && <p className="mt-2 font-mono text-[10.5px] text-status-error">{error}</p>}
       {on && (
         <div className="mt-2.5 flex items-center gap-2">
-          <StateLine word={`${recording} agent${recording === 1 ? '' : 's'} record${recording === 1 ? 's' : ''} traces`} tone={recording > 0 ? 'running' : 'idle'} />
+          {upload.url && !upload.consent
+            ? <StateLine word="not uploaded: read what leaves this computer first" tone="waiting" />
+            : <StateLine word={`${recording} agent${recording === 1 ? '' : 's'} record${recording === 1 ? 's' : ''} traces${uploads ? ` · uploaded to ${host}` : ''}`} tone={recording > 0 ? 'running' : 'idle'} />}
           <span className="flex-1" />
-          <Button size="sm" variant="ghost" className="font-mono" onClick={() => router.push('/traces')}>open Traces</Button>
+          <Button size="sm" variant="ghost" className="font-mono" onClick={() => router.push(upload.url && !upload.consent ? '/traces?view=upload' : '/traces')}>open Traces</Button>
         </div>
       )}
     </Panel>

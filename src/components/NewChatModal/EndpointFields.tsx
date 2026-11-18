@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { AgentProvider, EndpointView, HarnessId, HarnessSupport } from '@/types/electron';
+import type { AgentProvider, EndpointView, HarnessId, HarnessSupport, TraceOfferCode } from '@/types/electron';
 import { Button, Dropdown, PanelCaption, SegmentedControl, StatusSquare } from '@/components/ui';
 import type { SegmentedOption, StatusTone } from '@/components/ui';
 import { lastPathPart } from '@/lib/display-path';
@@ -22,18 +22,15 @@ const RUNS_ON: readonly SegmentedOption<RunsOn>[] = [
 
 const labelOf = (p: AgentProvider) => PROVIDER_REGISTRY.find(r => r.id === p)?.label ?? p;
 
-/**
- * Main's gate says why in its own sentence (services/trace-gate.ts traceDecision); the window says it as the frames
- * do. A sentence it does not know is shown as main wrote it.
- */
+/** Main's gate says why with a stable code (TraceOfferCode); the window words it as the frames do. */
 type OfferReason = 'own-account' | 'closed-model' | 'not-on-list' | 'endpoint-not-approved' | 'endpoint-disallows' | 'project-off' | 'other';
-const GATE_REASONS: Record<string, OfferReason> = {
-  'not on an inference endpoint': 'own-account',
-  'the endpoint is not approved': 'endpoint-not-approved',
-  'the endpoint does not allow traces': 'endpoint-disallows',
-  'the project is not opted in': 'project-off',
-  'a closed model is never traced': 'closed-model',
-  'this harness and model pair is not on the list': 'not-on-list',
+const GATE_CODES: Partial<Record<TraceOfferCode, OfferReason>> = {
+  'no-endpoint': 'own-account',
+  'endpoint-not-approved': 'endpoint-not-approved',
+  'endpoint-disallows': 'endpoint-disallows',
+  'project-off': 'project-off',
+  'closed-model': 'closed-model',
+  'not-on-list': 'not-on-list',
 };
 
 /** What a closed model's id names, for the sentence that says it is not recorded (a default of Settings). */
@@ -99,7 +96,7 @@ export function EndpointFields({ provider, model, onModelChange, projectPath, ch
         // offered counts only the agent's own switch: a project not opted in is still a reason, as the frame draws it
         // (not offered: <project> does not record traces, open Projects), since nothing would be recorded.
         if (r.offered && !r.projectOptedIn) setOffer({ offered: false, reason: 'project-off', said: r.reason });
-        else setOffer({ offered: r.offered, reason: GATE_REASONS[r.reason] ?? 'other', said: r.reason });
+        else setOffer({ offered: r.offered, reason: GATE_CODES[r.code] ?? 'other', said: r.reason });
       })
       .catch(() => { if (!cancelled) setOffer(null); });
     return () => { cancelled = true; };
