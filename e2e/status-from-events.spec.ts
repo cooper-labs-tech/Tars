@@ -13,7 +13,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * - Kotsna-QA's Stop reached Tars at 19:23:30.659Z, Tars typed the next queued task in the same millisecond and
  *   read it `running`; the CLI never took it (no UserPromptSubmit, nothing in its transcript). Tars showed it
  *   running at its prompt for 42 minutes and its six queued tasks waited for an end of turn that had come.
- * - Parallel-Frontend's claude exited mid-turn on 25/10 23:24:26Z (no Stop; SessionEnd's post never landed) and
+ * - another project's Frontend agent's claude exited mid-turn on 25/10 23:24:26Z (no Stop; SessionEnd's post never landed) and
  *   left its shell in the terminal: Tars read it `running` for two days.
  * - agents.json writes every `running` agent as `idle` with the running's own statusSince: 15 of 19 working
  *   agents read idle there, and an orchestrator nearly stopped them on it.

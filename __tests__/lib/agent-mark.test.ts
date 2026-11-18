@@ -22,8 +22,11 @@ import { agentMarkBits, agentMarkCells } from '../../src/lib/agent-mark';
  */
 
 const TARS = ['Tars-Orchestrator', 'Tars-Frontend', 'Tars-Backend', 'Tars-QA', 'Tars - Audit Engineer', 'Tars - Database Engineer'];
-/** The legend of the frame, in its order. */
-const FLEET = ['Sak-Orchestrator', 'Sak-Database', 'Sak-Scrapers', 'Sak-QA', '1212-Frontend', '1212-Backend', 'Parallel-QA', 'Drone-Orchestrator', 'Avionics & Autonomy'];
+/**
+ * The legend of the frame, in its order. Five of its names were real agents of other projects; since 2.0.7 they are
+ * generic names chosen to light the very same squares (the frame's drawing is unchanged).
+ */
+const FLEET = ['Project12-Orchestrator', 'Project84-Database', 'Project84-Scrapers', 'Fable-QA', '1212-Frontend', '1212-Backend', 'Kappa-QA', 'Drone-Orchestrator', 'Avionics & Autonomy'];
 const MANY = [...TARS, ...FLEET, '', 'a', 'Agent 🦊', '𝒜gent', 'エージェント', ...Array.from({ length: 4000 }, (_, i) => `agent-${i}`)];
 
 type PenNode = { type?: string; name?: string; content?: string; children?: PenNode[] };

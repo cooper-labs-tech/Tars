@@ -329,7 +329,7 @@ export async function delegateOverAcp(opts: {
       const message = err instanceof Error ? err.message : String(err);
       if (!/session\/prompt timed out/.test(message)) throw err;
       // Stopped at its limit, mid-work: the stop below kills whatever command
-      // was running (QA and Database of the Parallel project, 2026-09-23, at
+      // was running (QA and Database of another project, 2026-09-23, at
       // exactly 3600 s). What it said and did by then is all there is.
       const partial = session.partialTurn();
       const seconds = Math.round((opts.timeoutMs ?? 0) / 1000);

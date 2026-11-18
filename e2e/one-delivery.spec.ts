@@ -15,7 +15,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *   ..."), 300 s, 894 s and 3899 s after the first: the delivery check typed it again 15 s after the session
  *   registered, while the CLI's UserPromptSubmit hooks still ran (36 s under load on 27/10), and the CLI queued the
  *   copy and ran it later as a second turn; then it read the agent `error`, "never began";
- * - a note "has ended its turn with background work still running" typed twice into Parallel's orchestrator,
+ * - a note "has ended its turn with background work still running" typed twice into another project's orchestrator,
  *   18 times in 4 days, the second each time on the worker's idle prompt (Claude Code's, 60 s after its rest).
  *
  * The ways this fails, each checked on its own (soft):

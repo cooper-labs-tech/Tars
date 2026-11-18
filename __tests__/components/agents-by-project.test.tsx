@@ -56,7 +56,7 @@ vi.mock('../../src/components/Templates/TemplatesManagerDialog', () => ({ Templa
 
 const TARS = '/Users/you/tars';
 const CAPITAL = '/Users/you/1212-Capital';
-const SAKARTVELO = '/Users/you/sakartvelo';
+const PROJECT_A = '/Users/you/project-a';
 
 let created = 0;
 function agent(name: string, projectPath: string, over: Partial<AgentStatus> = {}): AgentStatus {
@@ -218,7 +218,7 @@ describe('the Agents page', () => {
     agent('QA Engineer', TARS, { status: 'completed' }),
     agent('Analyst', CAPITAL, { status: 'error' }),
     agent('Modeller', CAPITAL, { status: 'idle' }),
-    agent('Writer', SAKARTVELO, { status: 'running' }),
+    agent('Writer', PROJECT_A, { status: 'running' }),
   ];
 
   it('gives each project a section, in the order the agents arrive when the tabs were never arranged', () => {
@@ -226,15 +226,15 @@ describe('the Agents page', () => {
     expect(sections().map(s => s.heading)).toEqual([
       ['tars', '~/tars', '4 agents'],
       ['1212-Capital', '~/1212-Capital', '2 agents'],
-      ['sakartvelo', '~/sakartvelo', '1 agent'],
+      ['project-a', '~/project-a', '1 agent'],
     ]);
   });
 
   it('follows the order stored by the Dashboard tabs, for the sections and the picker alike', () => {
-    storedOrder = JSON.stringify([SAKARTVELO, TARS, CAPITAL]);
+    storedOrder = JSON.stringify([PROJECT_A, TARS, CAPITAL]);
     open(seven());
-    expect(sections().map(s => s.path)).toEqual([SAKARTVELO, TARS, CAPITAL]);
-    expect(pickerRows().map(r => r[0])).toEqual(['all', SAKARTVELO, TARS, CAPITAL]);
+    expect(sections().map(s => s.path)).toEqual([PROJECT_A, TARS, CAPITAL]);
+    expect(pickerRows().map(r => r[0])).toEqual(['all', PROJECT_A, TARS, CAPITAL]);
   });
 
   it('keeps each section\'s cards in the page\'s order: an orchestrator first, then newest first', () => {
@@ -279,7 +279,7 @@ describe('the Agents page', () => {
       ['all', 'All projects', '7 agents'],
       [TARS, 'tars', '4 agents'],
       [CAPITAL, '1212-Capital', '2 agents'],
-      [SAKARTVELO, 'sakartvelo', '1 agent'],
+      [PROJECT_A, 'project-a', '1 agent'],
     ]);
     expect(picker().props.value).toBe('all');
   });
@@ -298,11 +298,11 @@ describe('the Agents page', () => {
 
   it('goes back to every project when the one on screen loses its last agent', () => {
     open(seven());
-    pick(SAKARTVELO);
-    expect(sections().map(s => s.path)).toEqual([SAKARTVELO]);
-    expect(picker().props.value).toBe(SAKARTVELO);
+    pick(PROJECT_A);
+    expect(sections().map(s => s.path)).toEqual([PROJECT_A]);
+    expect(picker().props.value).toBe(PROJECT_A);
 
-    fleet.agents = fleet.agents.filter(a => a.projectPath !== SAKARTVELO);
+    fleet.agents = fleet.agents.filter(a => a.projectPath !== PROJECT_A);
     page.rerender();
 
     expect(picker().props.value).toBe('all');
@@ -315,16 +315,16 @@ describe('the Agents page', () => {
     // Added at the QA gate of #130: the pick was only ignored while its project
     // had no agent, and came back by itself with the project's next agent.
     open(seven());
-    pick(SAKARTVELO);
-    fleet.agents = fleet.agents.filter(a => a.projectPath !== SAKARTVELO);
+    pick(PROJECT_A);
+    fleet.agents = fleet.agents.filter(a => a.projectPath !== PROJECT_A);
     page.rerender();
     expect(picker().props.value).toBe('all');
 
-    fleet.agents = [...fleet.agents, agent('Newcomer', SAKARTVELO)];
+    fleet.agents = [...fleet.agents, agent('Newcomer', PROJECT_A)];
     page.rerender();
 
     expect(picker().props.value).toBe('all');
-    expect(sections().map(s => s.path).sort()).toEqual([TARS, CAPITAL, SAKARTVELO].sort());
+    expect(sections().map(s => s.path).sort()).toEqual([TARS, CAPITAL, PROJECT_A].sort());
   });
 
   it('clears the status, the search and the project together', () => {
@@ -336,7 +336,7 @@ describe('the Agents page', () => {
     const clear = ofType(tree(), 'button').find(b => textOf(b.props.children as never) === 'Clear filters')!;
     (clear.props.onClick as () => void)();
 
-    expect(sections().map(s => s.path)).toEqual([TARS, CAPITAL, SAKARTVELO]);
+    expect(sections().map(s => s.path)).toEqual([TARS, CAPITAL, PROJECT_A]);
     expect(picker().props.value).toBe('all');
     expect(chip('All').props.active).toBe(true);
     expect(ofType(tree(), 'input').find(i => i.props.placeholder === 'filter by name or branch')!.props.value).toBe('');

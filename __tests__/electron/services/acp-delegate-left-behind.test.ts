@@ -9,7 +9,7 @@ import { Leftovers, RECORDS_ITS_PID, takePidsRecordedIn } from '../../setup/left
  * finish (sessions that died while they waited, 2026-09-23).
  *
  * A run is one turn, and Tars stops the agent when the turn ends. In the
- * Parallel project, Frontend ended its turn with builds, a Monitor and a
+ * other project, its Frontend ended its turn with builds, a Monitor and a
  * wakeup running: all stopped two seconds later, and its orchestrator read
  * "done". QA and Database were stopped at the one-hour limit mid-command, and
  * the run answered an empty text and "session/prompt timed out after 3600s".
