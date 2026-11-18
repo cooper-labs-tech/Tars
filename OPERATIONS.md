@@ -1615,7 +1615,8 @@ Six servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and c
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
 `tasmaniaServerPath` exists on disk. The six run on `~/.tars/bin/tars-mcp-node`, the app's own binary
 as Node; `tasmania`, a server outside the app with its own `node_modules`, runs on
-`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first and the app's binary when there is none
+`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first when it is 22 or newer (the project's floor),
+and otherwise the app's binary, with one line on stderr, in the CLI's MCP log, saying which and why
 (`electron/utils/mcp-node.ts`): signed (#591), the app's binary refuses any native module but its own, and
 on the first signed build an N-API module of such a server failed there and loaded on `node`. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
 2.0.5: it sent with Tars's own bot's token, and every start takes it out of each CLI a 2.0.4 registered it in

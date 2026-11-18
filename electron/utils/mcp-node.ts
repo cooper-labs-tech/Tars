@@ -57,6 +57,12 @@ export function mcpNodeCommand(
 }
 
 /**
+ * 22: the project's own floor (.nvmrc, package.json engines), the oldest LTS still maintained. Electron's own major
+ * (24) would pass a Node 22 LTS over for the app's binary, where the server's native modules do not load.
+ */
+const USER_NODE_FLOOR = 22;
+
+/**
  * The program a server the user names runs on (Settings, Tasmania: a path anywhere, with its own node_modules):
  * ~/.tars/bin/tars-user-mcp-node, the node on the PATH first, the Node inside the app when there is none.
  *
@@ -66,6 +72,11 @@ export function mcpNodeCommand(
  * against Node's own ABI (NAN, better-sqlite3 installed with npm) never loaded in the app's binary anyway. Tars's own
  * bundles stay on mcpNodeCommand: they carry no native code of their own, and must not depend on the machine's Node.
  * The same rules of writing as that launcher; on Windows, `node`.
+ *
+ * The PATH's node is taken only from USER_NODE_FLOOR up (the Audit's L6): an older one, such as the Node 18 in
+ * /usr/local/bin measured on 2026-09-24, would fail a server that ran on the app's Node 24 with nothing but a failed
+ * server to show. Below it, or when node answers no version, the app's binary runs it, and one line on stderr (which
+ * the CLI keeps in its MCP log; stdout is the protocol) says which runtime and why.
  */
 export function userMcpNodeCommand(
   appBinary: string = lastingAppBinary(),
@@ -73,12 +84,21 @@ export function userMcpNodeCommand(
   mayWrite: boolean = isPackaged() && !isTransientAppPath(appBinary),
 ): string {
   return launcherCommand('tars-user-mcp-node', app => [
-    '# Written by a packaged Tars: a server the user named runs on the node on the PATH,',
-    '# which loads the native modules of its own node_modules, or on the Node inside the app',
-    '# when there is none (signed, the app loads no native module but its own).',
-    'command -v node >/dev/null 2>&1 && exec node "$@"',
+    `# Written by a packaged Tars: a server the user named runs on the node on the PATH when it is ${USER_NODE_FLOOR}`,
+    '# or newer, which loads the native modules of its own node_modules; otherwise on the Node',
+    '# inside the app (signed, it loads no native module but its own), said on stderr.',
+    'MAJOR=$(node -p \'process.versions.node.split(".")[0]\' 2>/dev/null)',
+    'case "$MAJOR" in \'\'|*[!0-9]*) MAJOR=0 ;; esac',
+    `[ "$MAJOR" -ge ${USER_NODE_FLOOR} ] && exec node "$@"`,
+    `if [ "$MAJOR" -gt 0 ]; then WHY="the node on the PATH is $MAJOR, under ${USER_NODE_FLOOR}"`,
+    'elif command -v node >/dev/null 2>&1; then WHY="the node on the PATH answers no version"',
+    'else WHY="no node on the PATH"; fi',
     `APP=${app}`,
-    '[ -x "$APP" ] && ELECTRON_RUN_AS_NODE=1 exec "$APP" "$@"',
+    'if [ -x "$APP" ]; then',
+    '  echo "tars-user-mcp-node: running on Tars\'s own Node ($WHY): native modules of the server\'s own node_modules will not load" >&2',
+    '  ELECTRON_RUN_AS_NODE=1 exec "$APP" "$@"',
+    'fi',
+    'echo "tars-user-mcp-node: Tars is gone, running on the node on the PATH ($WHY)" >&2',
     'exec node "$@"',
   ], appBinary, platform, mayWrite);
 }

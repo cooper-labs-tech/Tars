@@ -61,8 +61,9 @@ to revisit: put the secret behind a requirement that names more than the team, o
 turn the fuse off.
 
 A server the user names (Settings, Tasmania) is not Tars's code: it runs on
-`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first, so that its own
-native modules load, and on the app's binary only when there is no `node`.
+`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first (22 or newer), so
+that its own native modules load, and on the app's binary only when there is no
+such `node`.
 
 ---
 
