@@ -1314,8 +1314,9 @@ agent died.
 `electron/services/api-routes/agent-routes.ts` scopes agent actions to the caller's project so
 an orchestrator cannot pick another project's agent ID out of a global listing.
 `mayActIn()` gates `start`, `dispatch`, `run-task`, `stop`, `message`, `DELETE` and the project a
-created agent joins. Another project's agents are reached only through the owner's grant across
-projects (2.0.7, below); retuning their inference settings needs none.
+created agent joins. Another project's workers are reached only through the owner's grant across
+projects (2.0.7, below); its orchestrator takes a message or a task with `allowCrossProject: true`, as
+projects' orchestrators talk to each other; retuning inference settings needs no grant.
 
 The identity comes from the token the MCP client presents, and from nothing else:
 `spawnAgentPty` mints one per agent terminal and `delegateOverAcp` one per delegated run, into
@@ -1342,8 +1343,8 @@ ps -Eww -o command= -p <pid of the mcp-orchestrator bundle> | tr ' ' '\n' | grep
 **What this guard is not.** A caller with no agent token and no `X-Tars-Client: mcp` header is
 not scoped at all: that is how the super chat dispatches to every project, and it is also what
 any process that reads `~/.tars-private/api-token` gets. Since 2.0.7 `allowCrossProject: true`
-alone opens a note and nothing more; the owner's grant opens the rest (SECURITY.md, "Retuning any
-agent, and the allowlist across projects").
+alone opens a note to any agent, and a message or a task to the other project's orchestrator; the
+owner's grant opens the rest (SECURITY.md, "Retuning any agent, and the allowlist across projects").
 
 `mcp-kanban` presents the agent's own token too, since its tools moved to the Hermes board (`/api/kanban/*`). It acts on its own project's tasks and no other. It has no `allowCrossProject`: its schemas have no such field.
 
@@ -1364,7 +1365,10 @@ developer tools of a window: `await window.electronAPI.crossProject.list()`,
 `.remove({ from, to })`. The file, `~/.tars-private/cross-project-grants.json`, is read at Tars's
 start only: an edit by hand while Tars runs is taken at its next start.
 
-Without a grant a note still crosses: `send_message` with `mode: 'note'` and `allowCrossProject: true`.
+Without a grant, with `allowCrossProject: true`, a note still crosses to any agent (`send_message`
+with `mode: 'note'`), and a message or a task (`delegate_task`) to the other project's orchestrator,
+whose answers the asker reads (`task_status`, `get_agent_output`, `wait_for_agent`); a restart, a
+stop or a start does not.
 
 `GET /api/agents` filters to the caller's project unless `?all=true` (or `?project=<path>`), and
 echoes `scopedToProject` in the response so you can see which way it went. Another project's

@@ -45,7 +45,7 @@ alone:
 
 | Credential | Who it is | What it opens |
 |---|---|---|
-| An agent's token (`CLAUDE_MGR_API_TOKEN`, minted in memory per terminal and per ACP run) | that agent | its own project's agents, and a new agent in its own project, never an orchestrator (`POST /api/agents` refuses the role to every caller: only the Agents page makes one); another project's only through the owner's grant from its project to that one (2.0.7, "Retuning any agent, and the allowlist across projects" below), `allowCrossProject` alone opening a note and nothing more. It changes any agent's inference settings, of any project (provider, model, effort; 2.0.7), and the rest of another agent's settings (`POST /api/agents/:id/update`, 2.0.4) only with the orchestrator's powers, in its own project, never the role, and never an orchestrator's or a chat's runner's. Not the webhook |
+| An agent's token (`CLAUDE_MGR_API_TOKEN`, minted in memory per terminal and per ACP run) | that agent | its own project's agents, and a new agent in its own project, never an orchestrator (`POST /api/agents` refuses the role to every caller: only the Agents page makes one); another project's only through the owner's grant from its project to that one (2.0.7, "Retuning any agent, and the allowlist across projects" below), `allowCrossProject` alone opening a note, and a message or a task to that project's orchestrator. It changes any agent's inference settings, of any project (provider, model, effort; 2.0.7), and the rest of another agent's settings (`POST /api/agents/:id/update`, 2.0.4) only with the orchestrator's powers, in its own project, never the role, and never an orchestrator's or a chat's runner's. Not the webhook |
 | Tars's own pass (minted in memory, written nowhere) | the main process | every agent of every project: it is JeanBrasse's super chat, which drives every project by design. Not the webhook |
 | A Hermes gateway's secret: `~/.tars-private/hermes-webhook-secret` for the default gateway, `hermes-webhook-<id>.secret` for another (2.0.4) | that gateway | its own webhook route and nothing else, and through it the agents of the projects the user allowed that gateway, none until they do, in their own mode or a narrower one |
 | `~/.tars-private/api-token`, the shared token | nobody | reads, and the exempt routes. It drives no agent, and does not open the webhook |
@@ -370,9 +370,12 @@ ones (never an orchestrator's), remove them, make, list and remove worktrees in 
 removal over the API never deletes a worktree holding uncommitted work: it is refused, naming the files, and nothing
 is removed. One way: nothing of A
 opens to B. Without a grant, across projects, an agent lists another project's agents with their status and inference
-settings (never their tasks), retunes them as above, and leaves a note (mode note, `allowCrossProject: true`): it hands
-no work, starts and stops nothing, and reads no answer. Before 2.0.7 `allowCrossProject: true` opened every drive route
-to any agent: it no longer does. A prompt-injected agent a grant names can do to B what B's orchestrator can; the grant
+settings (never their tasks), retunes them as above, and leaves a note (mode note, `allowCrossProject: true`); and,
+with `allowCrossProject: true`, it messages or hands a task to that project's orchestrator and reads that task's
+answer, as the projects' orchestrators talk to each other (what an orchestrator then does with it is its own
+judgement, under its own instructions). It hands that project's workers no work, starts, stops, creates and removes
+nothing, and reads no other answer. Before 2.0.7 `allowCrossProject: true` opened every drive route to any agent: it no
+longer does. A prompt-injected agent a grant names can do to B what B's orchestrator can; the grant
 is the owner's choice, and Tars notes each outside delegation, start, stop and retune to B's orchestrator.
 
 **A worktree's push turned off.** `worktree_new` with `noPush` turns push off for that worktree only (`extensions.worktreeConfig`,
