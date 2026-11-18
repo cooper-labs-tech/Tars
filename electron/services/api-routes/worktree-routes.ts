@@ -1,6 +1,8 @@
 import { agents } from '../../core/agent-manager';
 import * as path from 'path';
+import * as fs from 'fs';
 import { listWorktrees, newWorktree, pruneWorktrees, removeWorktree, turnPushOff, type WorktreeRefusal } from '../project-worktrees';
+import { takeBackWorktree } from '../agent-worktree';
 import { grantFor } from '../cross-project-grants';
 import type { AgentStatus } from '../../types';
 import type { RouteApp, RouteRequest, SendJson } from './types';
@@ -81,6 +83,9 @@ export function registerWorktreeRoutes(app: RouteApp): void {
       sendJson({ error: 'noPush is true or false.', code: 'invalid_no_push' }, 400);
       return;
     }
+    // What was there before this call: a gate checkout newWorktree hands back again is no worktree this call made.
+    const real = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+    const before = noPush === true ? new Set((await listWorktrees(project)).map((w) => real(w.path))) : new Set<string>();
     // existing: a PR's branch, never made new from the default branch when it cannot be found (the Audit's L6 on #585).
     const made = await newWorktree(project, branch.trim(), { protectedPaths: agentWorktrees(), existing: existing === true });
     if ('code' in made) {
@@ -91,7 +96,17 @@ export function registerWorktreeRoutes(app: RouteApp): void {
       try {
         await turnPushOff(made.path);
       } catch (err) {
-        sendJson({ success: true, ...made, project, pushOff: false, note: `Made, but its push could not be turned off: ${(err as Error).message}. Remove it with worktree_remove if it must not push.` });
+        // A push that fails loudly is the promise (the re-audit's L1 on #595): refused, and what this call made taken
+        // back, never by force, never a checkout that was already there.
+        const ours = !before.has(real(made.path));
+        const back = ours && await takeBackWorktree(project, {
+          path: made.path, gitPath: made.path, branch: made.branch, head: made.head,
+          madeBranch: made.kind === 'new' || made.kind === 'from-origin',
+        }, agentWorktrees());
+        sendJson({
+          error: `Its push could not be turned off (${(err as Error).message}), so it is not handed out: ${back ? 'the worktree this call made was taken back' : ours ? `the worktree was kept at ${made.path}, as git would not remove it clean` : `${made.path} was there before this call, and is left as it was`}.`,
+          code: 'push_not_off',
+        }, 409);
         return;
       }
     }

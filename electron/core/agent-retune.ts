@@ -134,6 +134,11 @@ export const WAITING_TEXT: Record<string, string> = {
 const held = new Map<string, Array<{ changeId: string; ask: RetuneAsk }>>();
 /** The change being applied now, per agent: never cancelled under its apply. */
 const inFlight = new Map<string, string>();
+/**
+ * Agents a change is being applied to directly, not from the queue: a second change asked meanwhile queues behind it
+ * rather than apply over it (the re-audit's I1 on #595), and settle waits for it.
+ */
+const applyingNow = new Set<string>();
 
 /** What the routes hand in: telling the target project's orchestrator, and its chats' runners taking its settings. */
 interface RetuneDeps {
@@ -230,7 +235,7 @@ export async function retune(agentId: string, ask: RetuneAsk, by: ChangeBy, opts
   if (unkept) return { state: 'refused', status: 400, error: `Not changed: ${unkept}.` };
   const waits = fields.some((f) => WAITS_FOR_REST.has(f));
   const endsTerminal = fields.some((f) => ENDS_TERMINAL.has(f));
-  const ahead = held.get(agent.id)?.length ? 'earlier change' : null;
+  const ahead = held.get(agent.id)?.length || applyingNow.has(agent.id) ? 'earlier change' : null;
   const busy = ahead ?? (waits ? busyReason(agent, endsTerminal) : null);
   if (busy) {
     const change = recordChange({ ...base, state: 'queued', waitingFor: busy, how: `Queued: applied once ${WAITING_TEXT[busy] ?? busy}. A running turn is never cut.` });
@@ -240,7 +245,15 @@ export async function retune(agentId: string, ask: RetuneAsk, by: ChangeBy, opts
     ensureWatch();
     return { state: 'queued', change, waitingFor: busy };
   }
-  const applied = await applyNow(agent, ask);
+  applyingNow.add(agent.id);
+  let applied: Awaited<ReturnType<typeof applyNow>>;
+  try {
+    applied = await applyNow(agent, ask);
+  } finally {
+    applyingNow.delete(agent.id);
+    // What queued behind it meanwhile goes in once it is done.
+    if (held.get(agent.id)?.length) ensureWatch();
+  }
   if (!applied.ok) return { state: 'refused', status: 400, error: applied.error };
   const now = new Date().toISOString();
   const change = applied.nextStart
@@ -261,6 +274,8 @@ async function settle(agentId: string): Promise<void> {
     return;
   }
   for (;;) {
+    // A change applied directly is under way: what waits goes in after it.
+    if (applyingNow.has(agentId)) return;
     // The live line, at each step: what a revert took out, or a new change put in, while the last apply awaited.
     const head = held.get(agentId)?.[0];
     if (!head) {
@@ -464,6 +479,7 @@ export function heldFor(agentId: string): string[] {
 export function resetRetune(): void {
   held.clear();
   inFlight.clear();
+  applyingNow.clear();
   if (watch) clearInterval(watch);
   watch = null;
   settling = false;
