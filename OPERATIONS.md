@@ -1313,7 +1313,9 @@ agent died.
 
 `electron/services/api-routes/agent-routes.ts` scopes agent actions to the caller's project so
 an orchestrator cannot pick another project's agent ID out of a global listing.
-`assertSameProject()` gates `start`, `dispatch`, `run-task`, `stop`, `message` and `DELETE`.
+`mayActIn()` gates `start`, `dispatch`, `run-task`, `stop`, `message`, `DELETE` and the project a
+created agent joins. Another project's agents are reached only through the owner's grant across
+projects (2.0.7, below); retuning their inference settings needs none.
 
 The identity comes from the token the MCP client presents, and from nothing else:
 `spawnAgentPty` mints one per agent terminal and `delegateOverAcp` one per delegated run, into
@@ -1339,25 +1341,68 @@ ps -Eww -o command= -p <pid of the mcp-orchestrator bundle> | tr ' ' '\n' | grep
 
 **What this guard is not.** A caller with no agent token and no `X-Tars-Client: mcp` header is
 not scoped at all: that is how the super chat dispatches to every project, and it is also what
-any process that reads `~/.tars-private/api-token` gets. `allowCrossProject: true` lets any agent
-through. The guard stops an orchestrator from acting on the wrong project by mistake; it does not
-stop an agent that means to.
+any process that reads `~/.tars-private/api-token` gets. Since 2.0.7 `allowCrossProject: true`
+alone opens a note and nothing more; the owner's grant opens the rest (SECURITY.md, "Retuning any
+agent, and the allowlist across projects").
 
 `mcp-kanban` presents the agent's own token too, since its tools moved to the Hermes board (`/api/kanban/*`). It acts on its own project's tasks and no other. It has no `allowCrossProject`: its schemas have no such field.
 
 Genuine cross-project denials read differently and are recoverable:
 
 ```
-403 Cross-project access denied: agent "X" belongs to project /a, but you are the
-    orchestrator of /b. Use list_agents to see YOUR project's agents, or pass
-    allowCrossProject: true if this is intentional.
+403 cross_project_not_granted: Cross-project access denied: agent "X" belongs to project /b,
+    and you are of /a. Handing work to, starting, stopping or messaging another project's agents
+    takes the owner's grant from your project to that one (Settings, the allowlist across
+    projects), ...
 ```
 
-Override with `allowCrossProject: true` in the body, or `?allowCrossProject=true` on `DELETE`
-(which has no parsed body).
+The fix is the owner's: a grant in the window, from the caller's project to the target's, naming
+the workers of the caller's project it opens to (its orchestrator and its chats' runners always
+have it). It holds at once. To read or set the grants without the window's page, from the
+developer tools of a window: `await window.electronAPI.crossProject.list()`,
+`.set({ from: '/abs/project-a', to: '/abs/project-b', workers: ['<agent id>'] })`,
+`.remove({ from, to })`. The file, `~/.tars-private/cross-project-grants.json`, is read at Tars's
+start only: an edit by hand while Tars runs is taken at its next start.
 
-`GET /api/agents` filters to the caller's project unless `?all=true`, and echoes
-`scopedToProject` in the response so you can see which way it went.
+Without a grant a note still crosses: `send_message` with `mode: 'note'` and `allowCrossProject: true`.
+
+`GET /api/agents` filters to the caller's project unless `?all=true` (or `?project=<path>`), and
+echoes `scopedToProject` in the response so you can see which way it went. Another project's
+agents show their status and inference settings, never their tasks.
+
+### Retuning agents, and reading what changed (2.0.7)
+
+Any agent changes any agent's provider, model and effort with `update_agent`; several at once with
+`ids` or `project`. Each answer says `applied` or `queued` and the change's id. What changed, by
+whom, and when it took effect:
+
+```bash
+TOKEN=$(cat ~/.tars-private/api-token)   # reads only; any agent's own token reads it too
+curl -s -H "Authorization: Bearer $TOKEN" 'http://127.0.0.1:31415/api/agent-changes?limit=20' | jq '.changes[] | {id, agentName, by, before, after, state, askedAt, effectiveAt}'
+```
+
+The log is `~/.tars-private/agent-changes.jsonl`, one line per change and per update of one. A
+change queued behind a turn shows `state: "queued"` and `waitingFor`; it is applied once the agent
+is free, and a quit of Tars applies it at the next start. `revert_agent_change` (or
+`POST /api/agent-changes/revert` with `changeId`, `batchId` or `agentId`, from an agent) takes one
+back; a queued one is cancelled.
+
+### A worktree for another project's agent, with its push off (2.0.7)
+
+With the owner's grant, an agent of project A makes a worktree in project B on a branch name it
+chooses, with its push off, and moves one of B's agents onto it once its turn is over:
+`worktree_new({ project: B, branch, noPush: true })`, then `update_agent({ id, worktree: branch })`,
+and back with `worktree: null` before `worktree_remove({ project: B, branch })`. B's main checkout
+is never checked out, moved or reset. A push from that worktree fails at once:
+
+```
+fatal: 'push-turned-off-by-tars-for-this-worktree' does not appear to be a git repository
+```
+
+The worktree's own settings say so (`git -C <worktree> config --worktree --list`); the
+repository's other checkouts push as before. To turn it back on for that worktree only:
+`git -C <worktree> config --worktree --unset-all url.push-turned-off-by-tars-for-this-worktree/.pushInsteadOf`
+and `git -C <worktree> config --worktree --unset remote.origin.pushurl` (per remote).
 
 ### Dispatch semantics
 
