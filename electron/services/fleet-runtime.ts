@@ -7,6 +7,7 @@ import { hasClaudeHooks, hasEndOfTurn } from '../core/end-of-turn';
 import { oneTaskQueue } from '../core/one-task';
 import { stopAgent } from '../core/agent-stop';
 import { launchAgent } from '../core/agent-launch';
+import { hasOrchestratorPowers } from '../core/agent-role';
 import { pendingBackgroundWork } from './agent-truth';
 import { agentStatusEmitter } from './agent-events';
 import { announceTask } from './task-banner';
@@ -68,7 +69,7 @@ function atWork(a: AgentStatus, cliUp: boolean): boolean {
 function fleetAgentOf(a: AgentStatus): FleetAgent {
   const cliUp = cliRunningIn(a.ptyId ? ptyProcesses.get(a.ptyId) : undefined);
   return {
-    id: a.id, name: a.name || a.id, projectPath: a.projectPath, status: a.status,
+    id: a.id, name: a.name || a.id, projectPath: a.projectPath, status: a.status, leads: hasOrchestratorPowers(a),
     atWork: atWork(a, cliUp), endOfTurn: hasEndOfTurn(a), cliUp, queued: oneTaskQueue.queued(a.id).length,
     ...(a.stoppedBy ? { stoppedBy: a.stoppedBy } : {}), ...(a.stoppedAt ? { stoppedAt: a.stoppedAt } : {}),
   };

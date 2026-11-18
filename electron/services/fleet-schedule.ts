@@ -1,6 +1,5 @@
 /**
- * A project's hours (2.0.7, for an orchestrator that runs another project's agents in a nightly window on an
- * OpenAI-compatible endpoint): a window every day, from a start to a stop in HH:MM on 24 hours, in UTC or in the computer's local time, always said
+ * A project's hours (2.0.7, for long work kept to a window of the day): a window every day, from a start to a stop in HH:MM on 24 hours, in UTC or in the computer's local time, always said
  * (no zone is guessed: a schedule set from another country's habits would open at the wrong hour), and what the start
  * does: resume the queues the last stop paused, or start the agents as well. A stop at or before its start crosses
  * midnight (22:00 to 06:00 is eight hours, ending the next morning); a stop equal to its start is refused.

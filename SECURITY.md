@@ -241,8 +241,8 @@ further out of reach than the rest of `~/.tars-private` (§5).
   missing from the machine, for every agent: a `gemini` placed there runs where gemini is not installed. A login
   shell that sets PATH anew drops the folder; `"$TARS_SLOT"` names the shim without it.
 
-**A project's hours and its cap (2.0.7, `/api/fleet/*`, `services/fleet-operations.ts`).** For an orchestrator that runs another project's agents
-in a nightly window on an OpenAI-compatible endpoint.
+**A project's hours and its cap (2.0.7, `/api/fleet/*`, `services/fleet-operations.ts`).** Long work kept to a window of the day, and
+no more of a project's workers at work at once than its inference endpoint serves.
 - **The routes.** `GET /api/fleet/projects` and `GET /api/fleet/project` give every project's hours, cap and last
   window to any authenticated caller (project folder names, agent names, who set them): nothing in them is secret,
   and an orchestrator reads the hours of a project it hands work to. `POST /api/fleet/schedule`,
@@ -250,16 +250,18 @@ in a nightly window on an OpenAI-compatible endpoint.
   Tars's own pass (the owner's super chat) or the project's own orchestrator by its own token. A worker, a chat's
   runner, another project's orchestrator and the shared token are refused `403 not_your_project`.
   `allowCrossProject`, a guard against mistakes and not a right (§2 above), is not read there. The window sets them
-  over IPC (`fleet:*`). Until the owner's allowlist of caller projects exists (Settings, being built beside it), no
-  other project's orchestrator sets them: its check is the one place it plugs in.
+  over IPC (`fleet:*`). No other project's orchestrator sets them: the owner's grants between projects (Settings, 2.0.7, a
+  PR of their own) plug into `governRight`, the one place to read them, once both are in.
 - **Where they live.** `~/.tars-private/fleet-operations.json` (`0600`): in `~/.tars` any agent could write its
   project a cap of 64, move its hours, or erase a window's record.
-- **What the hours do to agents.** At the stop every agent of the project is stopped as the window stops it (its CLI and
+- **What the hours do to agents.** At the stop every worker of the project is stopped as the window stops it (its CLI and
   what it started ended, `stopped by Tars`), but only once its turn has ended: never a turn, a task being handed, a
   dialog, or background work its claude left. A CLI that never says its turn ended is left running. A queue somebody
   else paused keeps that pause and its reason (a stop no longer replaces it), and the next start resumes only the
   queues still paused for the hours' own reason, and those a restart of Tars paused. So whoever may set a project's
-  hours may stop its agents every day and resume its queues: the project's orchestrator could already do both.
+  hours may stop its workers every day and resume their queues: the project's orchestrator could already do both. The
+  orchestrator and its chats' runners are left out: never stopped or paused by the hours, so the owner's messages to
+  them never wait for a window.
 - **What the cap is not.** A cap on the work Tars hands a worker (a task, a message that would start a session), not
   on what runs: a person typing into a terminal, a message typed into a session up, and an agent whose CLI never says
   its turn ended once its task is in, are not counted or held. It is no limit an agent can be held to: an agent that

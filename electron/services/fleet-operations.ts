@@ -11,16 +11,20 @@ import type { KeepAwakeMode } from '../types';
 export { RESTART_PAUSE };
 
 /**
- * A project's hours and its cap, run by Tars (2.0.7, for an orchestrator that runs another project's agents in a
- * nightly window on an OpenAI-compatible endpoint).
+ * A project's hours and its cap, run by Tars (2.0.7): long work kept to a window of the day, and no more of its workers
+ * at work at once than its inference endpoint serves.
+ *
+ * The hours act on the project's workers. Its orchestrator and its chats' runners lead the project and are left out, as
+ * the cap leaves them out: an orchestrator never sleeps, and what the owner or another project sends it does not wait
+ * for the next window (the Audit's M1 on #593).
  *
  * The hours (services/fleet-schedule.ts): a window every day.
  * - At its start, the queues the last stop paused go again (and those a restart of Tars paused, at any moment of the
  *   window: a night's work never waits for a person), so the agents start as their work comes; with `start-agents`,
- *   each agent of the project at rest is started as well (never one somebody else stopped, never one whose queue
+ *   each worker of the project at rest is started as well (never one somebody else stopped, never one whose queue
  *   holds work, which starts it, never one whose CLI is up).
- * - At its stop, every agent's queue is paused, so work handed during the day waits for the next window, never
- *   refused and never lost, and every agent is stopped: at once when at rest, and once its turn ends when at work
+ * - At its stop, every worker's queue is paused, so work handed during the day waits for the next window, never
+ *   refused and never lost, and every worker is stopped: at once when at rest, and once its turn ends when at work
  *   (never in the middle of a turn, a task being handed, a dialog or background work). A CLI that never says its turn
  *   ended (amp, grok, opencode, pi) is left running, its queue paused, and the window says why. A stop still waiting
  *   on a turn when the next window begins is given up. A queue somebody else paused keeps that pause and its reason,
@@ -32,8 +36,8 @@ export { RESTART_PAUSE };
  * The cap (core/project-cap.ts): the most workers of the project at work at once.
  *
  * Who sets them (governRight): the window, Tars's own pass (the owner's super chat), and the project's own
- * orchestrator. An orchestrator of another project does not, until the owner's allowlist of caller projects (Settings)
- * exists: its check plugs into governRight.
+ * orchestrator. Another project's orchestrator is refused here: the owner's grants between projects (2.0.7, a PR of
+ * their own) plug into governRight once both are in.
  *
  * Kept in ~/.tars-private (0600), not ~/.tars: every agent is handed ~/.tars, and a worker could otherwise write its
  * project a cap of 64 or move its hours.
@@ -56,6 +60,8 @@ export interface FleetAgent {
   endOfTurn: boolean;
   /** A CLI runs in its terminal. */
   cliUp: boolean;
+  /** It leads the project (core/agent-role.ts hasOrchestratorPowers: its orchestrator, a chat's runner): out of the hours. */
+  leads?: boolean;
   /** Items in its queue. */
   queued: number;
   stoppedBy?: string;
@@ -176,7 +182,10 @@ export function createFleetOperations(deps: FleetDeps) {
     save();
     try { deps.changed(); } catch (err) { console.warn('[fleet] a listener failed:', err); }
   };
-  const teamOf = (project: string) => deps.agents().filter((a) => a.projectPath === project);
+  // The project's agents the hours act on: its workers. Its orchestrator and its chats' runners lead the project and
+  // are left out, as the cap leaves them out: an orchestrator never sleeps, and what the owner or another project
+  // sends it must not wait for the next window (the Audit's M1 on #593).
+  const teamOf = (project: string) => deps.agents().filter((a) => a.projectPath === project && !a.leads);
   const isOpen = (rec: WindowRecord | undefined): rec is WindowRecord => !!rec && !rec.closedAt;
 
   const stopOne = async (a: FleetAgent, rec: WindowRecord, afterTurn: boolean, now: number) => {
@@ -436,14 +445,14 @@ export type GovernCaller = { kind: 'tars' } | { kind: 'agent'; agent: { id: stri
  * Who sets a project's hours and cap: Tars's own pass (the owner's super chat) and the project's own orchestrator; the
  * window reaches them over IPC with nobody's right to check. Never a worker, a chat's runner, another project's
  * orchestrator (allowCrossProject is a guard against mistakes, not a right: SECURITY.md), or a caller with no identity.
- * The owner's allowlist of caller projects (Settings, being built) is the one way another project's orchestrator will.
+ * The owner's grants between projects (Settings) are the one way another project's orchestrator ever will: they plug in
+ * here once both changes are in.
  */
 export function governRight(caller: GovernCaller | undefined, projectPath: string): { ok: true } | { ok: false; reason: string } {
   if (caller?.kind === 'tars') return { ok: true };
   if (caller?.kind === 'agent' && isProjectOrchestrator(caller.agent) && caller.agent.projectPath === projectPath) return { ok: true };
   return {
     ok: false,
-    reason: "Only the project's own orchestrator, and the owner in the window, set a project's hours and its cap. "
-      + "An orchestrator of another project cannot yet: the owner's allowlist of caller projects, in Settings, is not in this version.",
+    reason: "Only the project's own orchestrator, and the owner in the window, set a project's hours and its cap.",
   };
 }
