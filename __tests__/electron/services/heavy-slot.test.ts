@@ -7,7 +7,7 @@ import {
 /**
  * One heavy-run slot for the whole machine (2.0.5, lot 2 item A of ressources-agents-proposition-2810.md, the
  * owner's go of 28/10): test suites, builds, dev servers, Docker and simulators of every project's agents take it in
- * turn. Each project's orchestrator had built its own lock (kotsna's mkdir, parallel's heavy-run.lock, 1212's rule
+ * turn. Each project's orchestrator had built its own lock (kotsna's mkdir, another project's lock file, 1212's rule
  * 198): nothing coordinated the projects, a dead agent left its lock taken, and 1212 read the free space at the start
  * only, while the swap grew during the run (a `next dev` takes 6 to 7 GB of it).
  *
@@ -28,7 +28,7 @@ import {
  *  H8. A figure the system cannot give (null: Windows's swap) blocks every grant forever.
  *  H9. During a run nothing is said as the disk fills (10, 6 and 3 GB) or the swap grows fast; or the same alert is
  *      repeated at every read.
- * H10. Tars stops a run by itself (an ansible run or a build talking to the Sparks must never be ended by anything
+ * H10. Tars stops a run by itself (an ansible run or a build talking to a remote inference host must never be ended by anything
  *      automatic): the world gives the slot no way to end a process, and an alert changes nothing of the lease.
  * H11. A ticket is given back, or read, by another agent than the one that asked.
  * H12. The slot count is a setting: two slots grant two asks; a setting that is not a number in range is 1.
@@ -78,6 +78,21 @@ import {
  *      machine, then grants its own head, so two runs start together, past the ceiling (1 included) and inside the
  *      settle window. Passes run one at a time, a pass asked for while one runs joins the next, and the head is the
  *      queue's after the reading (a gate that came during it goes first).
+ * And for runs that execute on another machine (2.0.7, a command this machine only starts, `tars-slot run --remote`),
+ * written before the code:
+ * H31. A remote run waits in this machine's queue: behind the ceiling, the settle time, the disk or memory floor, or
+ *      the reserve, though none of them is its.
+ * H32. A remote run takes this machine's room: counted in the ceiling, the reserve per run held, or the settle time,
+ *      so a local run waits behind it; or it is alerted on this machine's disk.
+ * H33. A remote run is not seen: not in the snapshot, so nobody knows the remote host is busy; or it is listed as a
+ *      holder of this machine's slot.
+ * H34. A remote run's lease outlives its process (the local command that drives it), or is given back by another
+ *      agent; or its host name carries a secret, a line break, or runs past 60 characters.
+ * And on why each waiter waits (the orchestrator's item 15, 19/11), written before the code:
+ * H35. A waiter behind others is told the head's reason as its own (position 2 reads "waiting for free disk" while it
+ *      also waits behind the head), and not whom it waits behind.
+ * H36. An ask made between two passes reads no reason at all until the next pass; or a waiter keeps a reason that was
+ *      true at an earlier pass and no longer is.
  */
 
 type World = SlotWorld & { set: (m: Partial<SlotMachine>) => void; dead: Set<number>; t: number; alerts: Array<{ ticket: string; text: string }>; table: Array<{ pid: number; ppid: number }> | undefined };
@@ -591,5 +606,104 @@ describe('one pass at a time (the Audit\'s M1 on #573)', () => {
     for (let i = 0; i < 5; i++) await release();
     await Promise.all([one, two]);
     expect(slot.snapshot().holders).toHaveLength(2);
+  });
+});
+
+describe('remote runs (2.0.7): a command this machine only starts', () => {
+  const remote = (pid: number, agentId: string, host = 'build-host') => ({ ...ask(pid, agentId), remote: host });
+
+  it('H31. a remote run is granted at once, whatever holds this machine or its floors', async () => {
+    const w = world({ slots: 1 });
+    const slot = new HeavySlot(w);
+    const local = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    expect(slot.get(local.id)?.grantedAt).toBeDefined();
+    w.set({ diskFreeGb: 3, memFreePct: 2, swapOutMbPer10s: 500 });
+    const r = await slot.ask(remote(202, 'b'));
+    expect(slot.get(r.id)?.grantedAt).toBeDefined();
+    expect(slot.get(r.id)?.why).toBeUndefined();
+  });
+
+  it('H32. a remote run takes none of this machine\'s room, and is not alerted on its disk', async () => {
+    const w = world({ slots: 1 });
+    const slot = new HeavySlot(w);
+    const r = await slot.ask(remote(202, 'b'));
+    await slot.pump();
+    // The ceiling of 1 is still free for a local run, with no settle time after the remote grant.
+    const local = await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    expect(slot.get(local.id)?.grantedAt).toBeDefined();
+    // With the local run holding past its settle time, the reserve counts one run held, not two.
+    w.t += SETTLE_MS;
+    w.set({ diskFreeGb: 15 + DISK_RESERVE_GB_PER_RUN });
+    await slot.ask(ask(302, 'o'));
+    await slot.pump();
+    expect(slot.snapshot().holders).toHaveLength(1);
+    w.set({ diskFreeGb: 2 });
+    await slot.watch();
+    expect(w.alerts.filter(x => x.ticket === r.id)).toEqual([]);
+  });
+
+  it('H33. a remote run is listed apart, never as a holder of this machine\'s slot', async () => {
+    const w = world();
+    const slot = new HeavySlot(w);
+    const r = await slot.ask(remote(202, 'b', 'gpu-box'));
+    const snap = slot.snapshot();
+    expect(snap.holders).toEqual([]);
+    expect(snap.waiting).toEqual([]);
+    expect(snap.remote.map(t => [t.id, t.remote])).toEqual([[r.id, 'gpu-box']]);
+    expect(slot.busy()).toBe(true);
+  });
+
+  it('H34. its lease ends with its local process, is its own agent\'s, and its host name is clean', async () => {
+    const w = world();
+    const slot = new HeavySlot(w);
+    const r = await slot.ask(remote(202, 'b'));
+    expect(slot.giveBack(r.id, 'a')).toBe(false);
+    w.dead.add(202);
+    await slot.pump();
+    expect(slot.get(r.id)).toBeUndefined();
+    const odd = await slot.ask(remote(102, 'a', `ssh://user:hunter2@host-${'x'.repeat(80)}\nnext`));
+    const host = slot.get(odd.id)!.remote!;
+    expect(host).not.toMatch(/hunter2|\n/);
+    expect(host.length).toBeLessThanOrEqual(60);
+    const blank = await slot.ask(remote(104, 'a', '   '));
+    expect(slot.get(blank.id)!.remote).toBe('a remote host');
+  });
+});
+
+describe('why each waiter waits (2.0.7)', () => {
+  it('H35. a waiter behind others is told whom it waits behind, and why the first one waits', async () => {
+    const w = world({ slots: 1 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    w.t += 1;
+    const b = await slot.ask(ask(202, 'b'));
+    w.t += 1;
+    const o = await slot.ask(ask(302, 'o'));
+    await slot.pump();
+    expect(slot.get(b.id)?.why).toMatch(/^held by A \(a's run\)/);
+    const second = slot.get(o.id)?.why ?? '';
+    expect(second).toMatch(/behind 1 run in the queue/);
+    expect(second).toMatch(/B \(b's run\)/);
+    expect(second).toMatch(/held by A \(a's run\)/);
+  });
+
+  it('H36. an ask between two passes has a reason at once, and a reason is never stale', async () => {
+    const w = world({ slots: 1 });
+    const slot = new HeavySlot(w);
+    await slot.ask(ask(102, 'a'));
+    await slot.pump();
+    const b = await slot.ask(ask(202, 'b'));
+    expect(slot.get(b.id)?.why).toBeTruthy();
+    await slot.pump();
+    expect(slot.get(b.id)?.why).toMatch(/held by A/);
+    // A ceiling of 2 now, the first run past its settle time, the disk short: the reason becomes the disk's.
+    w.slots = () => 2;
+    w.t += SETTLE_MS;
+    w.set({ diskFreeGb: 16 });
+    await slot.pump();
+    expect(slot.get(b.id)?.why).toMatch(/^waiting for free disk/);
   });
 });
