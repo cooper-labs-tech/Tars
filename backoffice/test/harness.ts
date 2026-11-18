@@ -2,7 +2,7 @@
 // folder that exists outside the run: initdb writes into a fresh temporary folder, the server
 // listens on a free loopback port, and stop() removes both.
 import { spawn, execFileSync, type ChildProcess } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createServer } from 'node:net';
@@ -40,14 +40,23 @@ export async function startPostgres(): Promise<Pg> {
   const dir = mkdtempSync(join(tmpdir(), 'tbo-pg-'));
   const data = join(dir, 'data');
   const port = await freePort();
-  execFileSync(join(bin, 'initdb'), ['-D', data, '-U', 'postgres', '--auth=trust', '-E', 'UTF8', '--no-locale'], { stdio: 'ignore' });
-  // No TCP: the server listens on a unix socket in the run's own folder only.
-  execFileSync(join(bin, 'pg_ctl'), ['-D', data, '-l', join(dir, 'pg.log'), '-w', '-o', `-k ${dir} -p ${port} -c listen_addresses=`, 'start'], { stdio: 'ignore' });
+  // On macOS the postmaster aborts at start ("became multithreaded") unless LC_ALL names a locale.
+  const env = { ...process.env, LC_ALL: 'C' };
+  try {
+    execFileSync(join(bin, 'initdb'), ['-D', data, '-U', 'postgres', '--auth=trust', '-E', 'UTF8', '--no-locale'], { stdio: 'ignore', env });
+    // No TCP: the server listens on a unix socket in the run's own folder only.
+    execFileSync(join(bin, 'pg_ctl'), ['-D', data, '-l', join(dir, 'pg.log'), '-w', '-o', `-k ${dir} -p ${port} -c listen_addresses=`, 'start'], { stdio: 'ignore', env });
+  } catch (e) {
+    let log = '';
+    try { log = readFileSync(join(dir, 'pg.log'), 'utf8').slice(-2000); } catch { /* no log yet */ }
+    rmSync(dir, { recursive: true, force: true });
+    throw new Error(`postgres did not start: ${(e as Error).message}\n${log}`);
+  }
   return {
     dir,
     env: { PGHOST: dir, PGPORT: String(port), PGUSER: 'postgres', PGDATABASE: 'postgres' },
     stop() {
-      try { execFileSync(join(bin, 'pg_ctl'), ['-D', data, '-m', 'immediate', '-w', 'stop'], { stdio: 'ignore' }); } catch { /* already down */ }
+      try { execFileSync(join(bin, 'pg_ctl'), ['-D', data, '-m', 'immediate', '-w', 'stop'], { stdio: 'ignore', env }); } catch { /* already down */ }
       rmSync(dir, { recursive: true, force: true });
     },
   };

@@ -58,7 +58,7 @@ const PROJECT = 'a'.repeat(64);
 
 function session(over: Record<string, unknown> = {}) {
   return {
-    sessionId: 'sess-1', agentId: 'agent-1', agentName: 'Worker', projectKey: PROJECT, harness: 'codex', harnessVersion: '0.163.0',
+    sessionId: 'sess-1', agentId: 'agent-1', projectKey: PROJECT, harness: 'codex', harnessVersion: '0.163.0',
     endpointKey: 'e'.repeat(16), endpointName: 'Lab', model: 'open-model-a', startedAt: T0, finalStatus: 'open',
     turnCount: 1, requestCount: 2, tokensIn: 300, tokensCached: 100, tokensOut: 40, mixed: false, unknownTurns: 0, ...over,
   };
@@ -138,6 +138,26 @@ describe('trace back-office, end to end', () => {
     assert.equal(note('health.status', r.status), 200);
   });
 
+  it('keeps registration closed until the owner, signed in, opens it', async () => {
+    // A fresh deploy takes no anonymous install (the Audit's M1 on #597).
+    const closed = await call('POST', '/v1/installs', { body: { client: { name: 'tars' } } });
+    assert.deepEqual(note('register.byDefault', [closed.status, closed.json.error]), [403, 'registration_closed']);
+    const outside = await page('/admin');
+    assert.equal(note('admin.withoutLogin', outside.status), 303);
+    const login = await page('/admin/login');
+    const bad = await form('/admin/login', { password: 'wrong', csrf: csrfOf(login.html) });
+    assert.equal(note('admin.badPassword', bad.status), 401);
+    const ok = await form('/admin/login', { password: OWNER_PASSWORD, csrf: csrfOf(login.html) });
+    assert.equal(ok.status, 303);
+    const s = await page('/admin/settings');
+    assert.equal(s.status, 200);
+    assert.match(s.html, /<option value="closed" selected>/);
+    const noCsrf = await form('/admin/settings', { registration: 'open' });
+    assert.equal(note('admin.postWithoutCsrf', noCsrf.status), 403);
+    const open = await form('/admin/settings', { csrf: csrfOf(s.html), registration: 'open' });
+    assert.equal(open.status, 303);
+  });
+
   it('registers two installs, each with a token shown once and kept only as a hash', async () => {
     const a = await call('POST', '/v1/installs', { body: { client: { name: 'tars', version: '2.0.7', platform: 'darwin' } } });
     assert.equal(a.status, 201);
@@ -197,6 +217,9 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual([orphan.status, orphan.json.error], [422, 'unknown_session']);
     const unknownField = await call('PUT', '/v1/batches/batch-y', { token: installA.token, body: { schema: 1, sessions: [{ ...session(), projectPath: '/Users/someone/secret' }] } });
     assert.deepEqual(note('batch.unknownField', [unknownField.status, unknownField.json.error]), [422, 'invalid_batch']);
+    // An agent's name is free text a person typed: not taken (the Audit's I1 on #597).
+    const named = await call('PUT', '/v1/batches/batch-z', { token: installA.token, body: { schema: 1, sessions: [{ ...session(), agentName: 'Someone' }] } });
+    assert.deepEqual(note('batch.agentNameRefused', [named.status, named.json.error]), [422, 'invalid_batch']);
     const t = await call('PUT', `/v1/blobs/${toolsHash}`, { token: installA.token, raw: zstdCompressSync(tools), encoding: 'zstd' });
     assert.equal(t.status, 201);
     const me = await call('GET', '/v1/installs/me', { token: installA.token });
@@ -204,18 +227,11 @@ describe('trace back-office, end to end', () => {
     note('install.me.usage', me.json.usage);
   });
 
-  it('lets the owner in through the login only, and issues a reader token shown once', async () => {
-    const outside = await page('/admin');
-    assert.equal(note('admin.withoutLogin', outside.status), 303);
-    const login = await page('/admin/login');
-    const bad = await form('/admin/login', { password: 'wrong', csrf: csrfOf(login.html) });
-    assert.equal(note('admin.badPassword', bad.status), 401);
-    const ok = await form('/admin/login', { password: OWNER_PASSWORD, csrf: csrfOf(login.html) });
-    assert.equal(ok.status, 303);
+  it('issues a reader token, shown once, to the signed-in owner', async () => {
     const readers = await page('/admin/readers');
     assert.equal(readers.status, 200);
     const noCsrf = await form('/admin/readers', { name: 'lab reader' });
-    assert.equal(note('admin.postWithoutCsrf', noCsrf.status), 403);
+    assert.equal(note('admin.readerPostWithoutCsrf', noCsrf.status), 403);
     const made = await form('/admin/readers', { name: 'lab reader', csrf: csrfOf(readers.html) });
     assert.equal(made.status, 200);
     const token = /<code id="new-token">(tbr_[A-Za-z0-9_-]{43})<\/code>/.exec(made.html)?.[1];
@@ -288,6 +304,24 @@ describe('trace back-office, end to end', () => {
     note('rate.codes', codes);
     const s3 = await page('/admin/settings');
     await form('/admin/settings', { csrf: csrfOf(s3.html), retentionDays: '90', registration: 'open', maxStoredMiB: '2048', ratePerMinute: '600', burst: '600' });
+  });
+
+  it('refuses every write under the free-disk floor, says why, and keeps reading', async () => {
+    // The floor is set above what the disk has free (1 TiB), as a disk filled to its floor would be.
+    const s = await page('/admin/settings');
+    assert.match(s.html, /name="minFreeMiB"/);
+    await form('/admin/settings', { csrf: csrfOf(s.html), minFreeMiB: String(1024 * 1024) });
+    const extra = Buffer.from('{"role":"user","content":"floor"}');
+    const blob = await call('PUT', `/v1/blobs/${sha(extra)}`, { token: installB.token, raw: extra });
+    const batch = await call('PUT', '/v1/batches/floor-1', { token: installB.token, body: { schema: 1 } });
+    const reg = await call('POST', '/v1/installs', { body: { client: { name: 'tars' } } });
+    const codes = note('floor.writes', [blob.status, blob.json.error, batch.status, batch.json.error, reg.status, reg.json.error]);
+    assert.deepEqual(codes, [507, 'disk_full', 507, 'disk_full', 507, 'disk_full']);
+    assert.ok(Number(blob.headers.get('retry-after')) > 0, 'a Retry-After tells the uploader when to try again');
+    assert.equal((await call('GET', '/v1/read/sessions', { token: reader.token })).status, 200);
+    const s2 = await page('/admin/settings');
+    await form('/admin/settings', { csrf: csrfOf(s2.html), minFreeMiB: '1' });
+    assert.equal((await call('PUT', `/v1/blobs/${sha(extra)}`, { token: installB.token, raw: extra })).status, 201);
   });
 
   it('applies the retention the owner set, and tells readers what went', async () => {
