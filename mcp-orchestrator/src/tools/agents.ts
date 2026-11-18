@@ -671,7 +671,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "create_agent",
-    description: "Create a new agent, on any provider Tars runs or on a CLI binary of your choosing. Defaults to YOUR project when projectPath is omitted; another project is refused unless allowCrossProject is true. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
+    description: "Create a new agent, on any provider Tars runs or on a CLI binary of your choosing. Defaults to YOUR project when projectPath is omitted; another project takes the owner's grant from your project to that one (Settings, the allowlist across projects). worktree makes it ready in one call: a worktree of its own in its project's .worktrees, on the branch you name, its push off with noPush, the project's .mcp.json carried in; if any part fails, nothing is left made (no agent, no worktree, no new branch), and a branch another worktree holds is refused. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
     schema: {
       projectPath: z.string().optional().describe("Absolute path to the project directory (defaults to your own project)"),
       name: z.string().optional().describe("Name for the agent (e.g., 'Backend Worker', 'Test Runner')"),
@@ -692,14 +692,19 @@ const AGENT_TOOLS: Tool[] = [
         .optional()
         .describe("plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing). Omit for auto."),
       cliPath: z.string().optional().describe("Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."),
+      worktree: z.object({
+        branch: z.string().max(200).describe("The branch, as you choose it: letters, digits, . _ - and /. New from the default branch, or as it stands when it exists; never one another worktree holds."),
+        noPush: z.boolean().optional().describe("Turn push off for this worktree only: any git push from it fails, naming why."),
+      }).optional().describe("A worktree of its own, made in its project's .worktrees before the agent is"),
     },
     failure: "creating agent",
-    async run({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath, allowCrossProject, provider, model, effort, permissionMode, cliPath }) {
+    async run({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath, allowCrossProject, provider, model, effort, permissionMode, cliPath, worktree }) {
       const resolvedProjectPath = projectPath || getCallerIdentity().projectPath;
       if (!resolvedProjectPath) {
         return problem("Error: projectPath is required (no caller project identity available).");
       }
       const data = (await apiRequest("/api/agents", "POST", {
+        ...(worktree ? { worktree } : {}),
         projectPath: resolvedProjectPath,
         name,
         skills,
@@ -972,7 +977,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "remove_agent",
-    description: "Permanently remove an agent. This will stop the agent if running and delete it from the system. Only Tars, the user and the project's orchestrator remove an agent, and an agent may remove itself: a worker calling this on another agent is refused, and asks its orchestrator instead.",
+    description: "Permanently remove an agent. This will stop the agent if running and delete it from the system, with its own worktree. Refused, and nothing removed, while that worktree holds uncommitted work (worktree_has_work, naming the files): commit it or move it out first. Only Tars, the user and the project's orchestrator remove an agent, or an agent the owner's grant across projects opens that project to, and an agent may remove itself: a worker calling this on another agent is refused, and asks its orchestrator instead.",
     schema: {
       id: z.string().describe("The agent ID"),
       allowCrossProject: z.boolean().optional().describe("Acting on an agent of ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects); without one, this flag lets a note through (send_message with mode note) and nothing more"),

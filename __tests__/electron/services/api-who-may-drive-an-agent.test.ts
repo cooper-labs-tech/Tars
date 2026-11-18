@@ -81,7 +81,6 @@ vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.
 
 import * as pty from 'node-pty';
 import type { AgentStatus } from '../../../electron/types';
-import { setGrant, resetGrants } from '../../../electron/services/cross-project-grants';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -840,6 +839,8 @@ describe('an agent keeps exactly the rights it had', () => {
     expect(refused.status, JSON.stringify(refused.body)).toBe(403);
     expect(refused.body.code).toBe('cross_project_not_granted');
 
+    // Imported here: its constants are this file's mocked ones, set once its home is.
+    const { setGrant, resetGrants } = await import('../../../electron/services/cross-project-grants');
     setGrant({ from: ALPHA.projectPath, to: BETA.projectPath, workers: [ALPHA.id] });
     try {
       const { status, body } = await call('POST', '/api/agents', bearer(alphaToken), { projectPath: BETA.projectPath, name: 'deliberate' });

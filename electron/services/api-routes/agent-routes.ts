@@ -65,10 +65,11 @@ import { turnInterruptedAt } from '../task-watch';
 import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
 import { cliAtWork, type AgentUpdate } from '../../core/agent-update';
 import { randomUUID } from 'crypto';
+import { safeGit } from '../../utils/safe-git';
 import { retune, askedFields, isRetuneOnly, setRetuneDeps, changesToRevert, revertAskOf, cancelQueued, RETUNE_FIELDS, WAITING_TEXT, type RetuneAsk } from '../../core/agent-retune';
 import { listChanges, type ChangeBy } from '../agent-changes';
 import { grantFor } from '../cross-project-grants';
-import { listWorktrees } from '../project-worktrees';
+import { listWorktrees, newWorktree, turnPushOff } from '../project-worktrees';
 import { isValidBranchName, resolveWorktreePath } from '../../utils/worktree-path';
 import { restartRunnersOf } from '../chat-runners';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
@@ -1950,18 +1951,20 @@ function updateRefusal(driver: Driver, agent: AgentStatus, fields: readonly stri
     };
   }
   const other = fields.filter((f) => f !== 'worktree' && !(RETUNE_FIELDS as readonly string[]).includes(f));
-  if (!callerHasPowers) {
+  // The owner's grant from the caller's project to the agent's gives it that project's orchestrator's powers here too.
+  const granted = !sameProject && !!grantFor(caller, agent.projectPath);
+  if (!callerHasPowers && !granted) {
     return {
       status: 403, code: 'worker_may_not_update',
       error: `A worker changes another agent's inference settings only (${RETUNE_FIELDS.join(', ')}); ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} its orchestrator's and the user's to change. `
         + 'Ask your orchestrator for it (send_message to "orchestrator"), saying what to change and why.',
     };
   }
-  if (!sameProject) {
+  if (!sameProject && !granted) {
     return {
       status: 403, code: 'other_project',
       error: `${envelopeValue(agent.name || agent.id)} belongs to project ${agent.projectPath}, and you are the orchestrator of ${caller.projectPath}: `
-        + `across projects only the inference settings (${RETUNE_FIELDS.join(', ')}) change, and ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} not among them.`,
+        + `across projects only the inference settings (${RETUNE_FIELDS.join(', ')}) change without the owner's grant from your project to that one, and ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} not among them.`,
     };
   }
   if (targetHasPowers) {
@@ -2019,6 +2022,60 @@ async function worktreeNamed(agent: AgentStatus, asked: unknown): Promise<{ work
     return { status: 400, error: `${agent.projectPath} has no worktree of branch ${JSON.stringify(branch)} under its .worktrees/: make it first with worktree_new (project ${JSON.stringify(agent.projectPath)}).` };
   }
   return { worktree: { worktreePath: path.resolve(inside), branchName: branch } };
+}
+
+/**
+ * What an agent's own worktree holds that no commit has: changed, staged or untracked files, as `git status` names
+ * them (ignored ones aside, which a removal keeps the worktree for anyway). None when it has no worktree, one another
+ * agent works in too (a removal keeps it), or one gone.
+ */
+async function uncommittedWork(agent: AgentStatus): Promise<string[]> {
+  if (!agent.worktreePath || !agent.branchName || !fs.existsSync(agent.worktreePath)) return [];
+  if (Array.from(agents.values()).some((a) => a.id !== agent.id && a.worktreePath === agent.worktreePath)) return [];
+  try {
+    const { stdout } = await safeGit(agent.worktreePath, ['status', '--porcelain', '--untracked-files=all'], { env: { LC_ALL: 'C' } });
+    return stdout.split('\n').filter((l) => l.trim()).map((l) => l.slice(3).trim());
+  } catch (err) {
+    return [`its state could not be read (${err instanceof Error ? err.message : String(err)})`];
+  }
+}
+
+/**
+ * A worktree made for a new agent (create_agent with worktree, 2.0.7), ready to work in: a branch of its own, new or
+ * as it stands, in the project's .worktrees/, never a checkout another worktree holds; its push off on request; the
+ * project's own .mcp.json carried in when the main checkout has one git does not track. A step that fails takes the
+ * worktree back, and the branch with it when it was made new here.
+ */
+async function readyWorktree(projectPath: string, branch: string, noPush: boolean): Promise<{ path: string; branch: string; madeBranch: boolean } | { status: number; error: string; code?: string }> {
+  const protectedPaths = Array.from(agents.values()).flatMap((a) => [a.worktreePath, a.ptyCwd]).filter((p): p is string => !!p);
+  const made = await newWorktree(projectPath, branch, { protectedPaths });
+  if ('code' in made) return { status: made.code === 'disk_full' ? 507 : made.code === 'invalid_branch' || made.code === 'not_a_repository' ? 400 : 409, error: made.error, code: made.code };
+  const taken = { path: made.path, branch: made.branch, madeBranch: made.kind === 'new' || made.kind === 'from-origin' };
+  if (made.kind === 'detached') {
+    await takeBackWorktree(projectPath, { ...taken, madeBranch: false });
+    return { status: 409, error: `${made.heldBy ?? 'another worktree'} holds branch ${branch}: an agent works on a branch of its own. Name another.`, code: 'branch_held' };
+  }
+  try {
+    if (noPush) await turnPushOff(made.path);
+    const source = path.join(projectPath, '.mcp.json');
+    const target = path.join(made.path, '.mcp.json');
+    if (fs.existsSync(source) && !fs.existsSync(target)) fs.copyFileSync(source, target);
+  } catch (err) {
+    await takeBackWorktree(projectPath, taken);
+    return { status: 500, error: `its worktree could not be made ready (${err instanceof Error ? err.message : String(err)}), and was taken back` };
+  }
+  // Inside the project's .worktrees/, as the path the record keeps (utils/worktree-path.ts).
+  return { ...taken, path: resolveWorktreePath(projectPath, made.branch) ?? made.path };
+}
+
+/** A worktree just made for a creation that did not finish: removed, and its branch with it when it was new. */
+async function takeBackWorktree(projectPath: string, made: { path: string; branch: string; madeBranch?: boolean }): Promise<void> {
+  try {
+    await safeGit(projectPath, ['worktree', 'remove', '--force', made.path], { env: { LC_ALL: 'C' } });
+    if (made.madeBranch) await safeGit(projectPath, ['branch', '-D', made.branch], { env: { LC_ALL: 'C' } });
+  } catch (err) {
+    console.warn(`[create_agent] the worktree ${made.path} could not be taken back:`, err);
+  }
 }
 
 /**
@@ -2627,14 +2684,16 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   });
 
   // POST /api/agents
-  app_.post('/api/agents', (req, sendJson) => {
+  app_.post('/api/agents', async (req, sendJson) => {
     // Adding to the fleet is driving it: a caller that is nobody enrolled an
     // agent in any project it named, and that agent is then started, given
     // tasks and billed. Only the MCP calls this route, always as an agent.
     const driver = resolveDriver(req, sendJson);
     if (!driver) return;
 
-    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath, provider, model, effort, cliPath } = req.body as {
+    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath, provider, model, effort, cliPath, worktree: worktreeAsked } = req.body as {
+      /** 2.0.7: a worktree of its own, made in its project on the branch named, its push off on request. */
+      worktree?: { branch?: unknown; noPush?: unknown };
       projectPath: string;
       name?: string;
       skills?: string[];
@@ -2661,6 +2720,24 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // the audit of lot 4; the code was brought to the document, since
     // creating in the wrong project is the mistake this guard exists for.
     if (!mayActIn(req, driver, projectPath, `a new agent would belong to project ${projectPath}`, sendJson)) return;
+    // The endpoint and the traces come with the endpoints' own fields (feat/traces-native): refused until then rather
+    // than dropped, so that an agent is never made without what its call asked.
+    for (const later of ['endpointId', 'traces']) {
+      if ((req.body as Record<string, unknown>)[later] !== undefined) {
+        sendJson({ error: `${later} is not taken yet: it comes with the inference endpoints. Nothing was created.`, code: 'not_taken_yet' }, 400);
+        return;
+      }
+    }
+    let worktreeBranch: string | undefined;
+    if (worktreeAsked !== undefined) {
+      const branch = worktreeAsked && typeof worktreeAsked === 'object' ? worktreeAsked.branch : undefined;
+      if (typeof branch !== 'string' || !isValidBranchName(branch.trim())
+        || (worktreeAsked.noPush !== undefined && typeof worktreeAsked.noPush !== 'boolean')) {
+        sendJson({ error: 'worktree is { branch, noPush? }: a branch name of letters, digits, . _ - and /, and true to turn its push off.' }, 400);
+        return;
+      }
+      worktreeBranch = branch.trim();
+    }
     // The folder it is handed besides its project: never ~/.tars-private (the Audit's L1 on #480), as update_agent.
     if (secondaryProjectPath !== undefined && secondaryProjectPath !== null && secondaryProjectPath !== '') {
       const handed = typeof secondaryProjectPath === 'string'
@@ -2744,6 +2821,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     const resolvedName = name || `Agent ${id.slice(0, 6)}`;
+    // Its worktree, last of the checks and first of what is made (2.0.7): a branch of its own, in its project's
+    // .worktrees/, its push off on request, the project's .mcp.json carried in when git does not. A part that fails
+    // takes back what was made before it: nothing is left half-made.
+    let made: { path: string; branch: string; madeBranch: boolean } | undefined;
+    if (worktreeBranch) {
+      const ready = await readyWorktree(projectPath, worktreeBranch, (worktreeAsked as { noPush?: boolean }).noPush === true);
+      if ('error' in ready) {
+        sendJson({ error: `Not created: ${ready.error}`, ...(ready.code ? { code: ready.code } : {}) }, ready.status);
+        return;
+      }
+      made = ready;
+    }
     const agent: AgentStatus = {
       id,
       status: 'idle',
@@ -2759,12 +2848,21 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       model,
       effort,
       cliPath,
+      ...(made ? { worktreePath: made.path, branchName: made.branch } : {}),
     };
     // The role asked for, never the name; an orchestrator takes the role from
     // its project's current one, whoever creates it (core/agent-role.ts).
     const demoted = assignRole(agent, role, agents.values());
     agents.set(id, agent);
-    saveAgents();
+    try {
+      saveAgents();
+    } catch (err) {
+      agents.delete(id);
+      if (made) await takeBackWorktree(projectPath, made);
+      sendJson({ error: `Not created: the agents could not be saved (${err instanceof Error ? err.message : String(err)}); its worktree was taken back.` }, 500);
+      return;
+    }
+    tellOutside(agent, req, 'created', ctx, made ? `on branch ${made.branch}` : undefined);
     // An orchestrator made here: its project's Main follows it (core/chat-identity.ts).
     orchestratorMoved();
     for (const other of demoted) restartForSettings(other.id, ['orchestrator']);
@@ -3459,6 +3557,17 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayStop(req, agent, sendJson)) return;
+    // Never a worktree with uncommitted work (2.0.7): over the API the removal is refused, saying which files, and
+    // nothing is removed. The window's removal saves such work on wip/<name> first, the owner's choice of 05/10.
+    const work = await uncommittedWork(agent);
+    if (work.length) {
+      sendJson({
+        error: `${envelopeValue(agent.name || agent.id)} was not removed: its worktree ${agent.worktreePath} holds uncommitted work (${work.slice(0, 10).join(', ')}${work.length > 10 ? ` and ${work.length - 10} more` : ''}). Commit it, or move it out, then remove the agent. Nothing was removed.`,
+        code: 'worktree_has_work', files: work.slice(0, 50),
+      }, 409);
+      return;
+    }
+    tellOutside(agent, req, 'removed', ctx);
     // The window's removal, the one path (core/agent-remove.ts): its runs and questions ended, its terminal's whole
     // tree ended as a stop ends it, its uncommitted work saved, its worktree removed or kept with why, its requesters
     // told (the Audit's L4 on #523: this route sent the hangup alone, and a deaf CLI outlived the agent).

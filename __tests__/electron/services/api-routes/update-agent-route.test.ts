@@ -25,6 +25,9 @@ import { EventEmitter } from 'events';
  *    settings, allowCrossProject or not (other_project, nothing written); and
  *    another project's inference settings are refused: they must be taken, from
  *    a worker as from an orchestrator.
+ * 3c. The owner's grant from the caller's project to the agent's leaves its
+ *    settings beyond the inference ones refused: they must be taken from the
+ *    project's orchestrator and the workers the grant names, and from no other.
  * 4. An orchestrator's settings beyond the inference ones change over the API:
  *    its own, or any by Tars's pass (orchestrator_settings). Its inference ones
  *    are refused: they must be taken, by any agent, and its live chats' runners
@@ -156,6 +159,7 @@ import { restartForSettings } from '../../../../electron/core/agent-restart';
 import { updateAgent } from '../../../../electron/core/agent-update';
 import { checkQueued, resetRetune } from '../../../../electron/core/agent-retune';
 import { changeById, resetChanges, type AgentChange } from '../../../../electron/services/agent-changes';
+import { setGrant, resetGrants } from '../../../../electron/services/cross-project-grants';
 import { consumeResumeSessionId, resetResumeTracking, transcriptPath } from '../../../../electron/utils/resume-session';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../../electron/types';
@@ -330,6 +334,22 @@ describe('who may change an agent', () => {
     expect((await update('far', { model: 'opus' })).status).toBe(200);
     expect((await update('far', { effort: 'max' }, { callerAgentId: 'w1' })).status).toBe(200);
     expect(agents.get('far')).toMatchObject({ model: 'opus', effort: 'max' });
+  });
+
+  it("3c. takes another project's settings beyond the inference ones through the owner's grant, from those it names only", async () => {
+    agents.set('w3', agent({ id: 'w3', name: 'Other worker', role: 'worker' }));
+    setGrant({ from: PROJECT, to: '/other/project', workers: ['w1'] });
+    try {
+      expect((await update('far', { permissionMode: 'normal' }, { callerAgentId: 'w1' })).status).toBe(200);
+      expect((await update('far', { skills: ['testing'] })).status).toBe(200);
+      const refused = await update('far', { permissionMode: 'plan' }, { callerAgentId: 'w3' });
+      expect(refused.status).toBe(403);
+      expect(agents.get('far')).toMatchObject({ permissionMode: 'normal', skills: ['testing'] });
+      // Never an orchestrator's, grant or not.
+      expect((await update('far-lead', { permissionMode: 'normal' }, { callerAgentId: 'w1' })).answer.code).toBe('orchestrator_settings');
+    } finally {
+      resetGrants();
+    }
   });
 
   it("4. refuses an orchestrator's settings beyond the inference ones, its own and Tars's pass's", async () => {
