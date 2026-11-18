@@ -239,6 +239,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('agent:retuned', listener);
       return () => ipcRenderer.removeListener('agent:retuned', listener);
     },
+    /**
+     * Undo a retune (2.0.7): one change by its id, or the agent's last, set back as revert_agent_change does and filed
+     * under the window. A queued change is cancelled; an applied one asks its values before back, applied or queued,
+     * for the settings still at its values after, naming the rest (`leftAlone`).
+     */
+    revertChange: (sel: { changeId: string } | { agentId: string }) =>
+      ipcRenderer.invoke('agent:revertChange', sel),
   },
 
   // Skills management

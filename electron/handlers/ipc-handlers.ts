@@ -93,6 +93,7 @@ import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task'
 import { registerChromeSwitchHandlers } from '../services/chrome-without-asking';
 import { registerCrossProjectHandlers } from '../services/cross-project-grants';
 import { recordChange } from '../services/agent-changes';
+import { revertAsWindow } from '../core/agent-retune';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -231,6 +232,8 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   // The owner's switch, Claude in Chrome acts without asking (2.0.7): the window's own channel, kept in ~/.tars-private.
   registerChromeSwitchHandlers(ipcMain);
   registerCrossProjectHandlers(ipcMain);
+  // The window's undo of a retune (2.0.7): the engine of revert_agent_change, filed under the window.
+  ipcMain.handle('agent:revertChange', (_event, sel: unknown) => revertAsWindow((sel ?? {}) as { changeId?: unknown; agentId?: unknown }));
   registerTrayHandlers(deps);
 }
 

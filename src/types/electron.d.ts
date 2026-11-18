@@ -1755,6 +1755,13 @@ export interface ElectronAPI {
      *  cancelled or fails: who asked, the values before and after, its state and when it took effect. The agent's
      *  record keeps the last (`lastRetune`). Mirror of `agent:retuned` in electron/preload.ts. */
     onRetuned?: (callback: (event: AgentRetuned) => void) => () => void;
+    /** Undo a retune (2.0.7): one change by its id, or the agent's last, set back as revert_agent_change does, filed
+     *  under the window. A queued change is cancelled (`state: 'cancelled'`); an applied one asks its values before
+     *  back for the settings still at its values after, applied or queued, naming the rest (`leftAlone`). */
+    revertChange?: (sel: { changeId: string } | { agentId: string }) => Promise<
+      | { ok: true; state: 'cancelled' | 'applied' | 'queued'; revertChangeId?: string; leftAlone?: string[] }
+      | { ok: false; error: string }
+    >;
   };
 
   // Skills management

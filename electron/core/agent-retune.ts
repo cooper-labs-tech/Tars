@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import { agents, saveAgents } from './agent-manager';
 import { ptyProcesses, fieldInUse } from './pty-manager';
 import { killPty } from './pty-kill';
@@ -376,6 +377,41 @@ export function cancelQueued(change: AgentChange): AgentChange | undefined {
   const agent = agents.get(change.agentId);
   if (done && agent) announce(agent, done);
   return done;
+}
+
+/**
+ * The window's undo of a change (agent.revertChange, 2.0.7): one change by its id, or an agent's last, set back
+ * through this engine as revert_agent_change sets it back, filed under the window, the owner's own. A change still
+ * queued is cancelled; an applied one asks its `before` back for the settings still at its `after`, applied or queued
+ * as any change, and names those another change moved since; a worktree that is gone is left alone. Nothing to undo
+ * is said, nothing written.
+ */
+export async function revertAsWindow(sel: { changeId?: unknown; agentId?: unknown }):
+  Promise<{ ok: true; state: 'cancelled' | 'applied' | 'queued'; revertChangeId?: string; leftAlone?: string[] } | { ok: false; error: string }> {
+  const named = [sel?.changeId, sel?.agentId].filter((v) => v !== undefined);
+  if (named.length !== 1 || typeof named[0] !== 'string' || !named[0]) return { ok: false, error: 'Name one change (changeId) or one agent (agentId).' };
+  const found = changesToRevert(sel.changeId !== undefined ? { changeId: sel.changeId as string } : { agentId: sel.agentId as string });
+  if (found.length === 0) return { ok: false, error: sel.changeId !== undefined ? 'No such change in the log.' : 'This agent has no change to undo.' };
+  const change = found[0];
+  const plan = revertAskOf(change);
+  if ('nothing' in plan) return { ok: false, error: `Nothing to undo: ${plan.nothing}.` };
+  if ('cancel' in plan) {
+    cancelQueued(change);
+    return { ok: true, state: 'cancelled' };
+  }
+  const ask: Record<string, unknown> = { ...plan.ask };
+  const leftAlone = [...plan.movedSince];
+  const wt = ask.worktree as { worktreePath?: string } | null | undefined;
+  if (wt && (!wt.worktreePath || !fs.existsSync(wt.worktreePath))) {
+    delete ask.worktree;
+    leftAlone.push('worktree');
+  }
+  if (Object.keys(ask).length === 0) {
+    return { ok: false, error: `Nothing to undo: ${leftAlone.includes('worktree') && !plan.movedSince.includes('worktree') ? 'the worktree it was in is gone' : `${leftAlone.join(', ')} moved since, by another change`}.` };
+  }
+  const done = await retune(change.agentId, ask as RetuneAsk, { kind: 'window' }, { revertOf: change.id });
+  if (done.state === 'refused') return { ok: false, error: done.error };
+  return { ok: true, state: done.state, revertChangeId: done.change.id, ...(leftAlone.length ? { leftAlone } : {}) };
 }
 
 /** The changes held for an agent, for its record and the answer. */
