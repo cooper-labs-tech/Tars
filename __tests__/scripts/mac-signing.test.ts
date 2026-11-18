@@ -21,8 +21,10 @@ import {
  * Notary credentials:
  * 5. Neither APPLE_ID nor a keychain profile, and notarization is skipped (electron-builder only warns, measured in
  *    app-builder-lib 26.15.3 notarizeIfProvided): the release would ship signed but not notarized.
- * 6. APPLE_ID set without APPLE_APP_PASSWORD or APPLE_TEAM_ID, and the keychain profile is used silently instead, or
- *    the refusal prints a value: it names the missing variables only.
+ * 6. (replaced by the Audit's M1 on #591, 18/11) APPLE_ID, APPLE_APP_PASSWORD, APPLE_TEAM_ID or
+ *    APPLE_APP_SPECIFIC_PASSWORD set, and notarization runs with them: @electron/notarize 3.1.1 puts the
+ *    app-specific password on notarytool's command line (lib/notarytool.js authorizationArgs), which every process of
+ *    the user reads through ps for the minutes of a notarization. Refused, naming the profile to store and no value.
  * 7. The keychain profile "Tars" does not exist (notarytool history fails), and the build starts anyway: an hour of
  *    building lost at the notarization, or worse, skipped.
  * 8. The build is handed the wrong variables: electron-builder reads APPLE_APP_SPECIFIC_PASSWORD (not
@@ -40,6 +42,11 @@ import {
  *     timestamp, or without the hardened runtime, and nothing says so.
  * 13. stapler validate's failure reads as a pass.
  * 14. The verification passes when one of its steps could not run (hdiutil, ditto, xattr, codesign missing).
+ * Written before the code of the second round (the Audit's L2 on #591, 18/11):
+ * 15. A nested binary, or the app or the dmg, signed with another team's Developer ID passes: the Team ID is the
+ *     signing identity's, read at run time from it (the parenthesis of its name), never written in the repository.
+ * 16. A CSC_LINK or CSC_KEY_PASSWORD left in the shell reaches the build, which would sign with that p12 instead.
+ * 17. The checks run with no Team ID to pin, and pass any team.
  */
 
 type Answer = { code: number; stdout?: string; stderr?: string; missing?: boolean };
@@ -72,7 +79,7 @@ describe('the signing identity', () => {
       `${'E'.repeat(40)} "Developer ID Installer: Example One (TEAMONE111)"`,
       `${HASH_A} "${ID_A}"`,
     ]);
-    expect(parseIdentities(out)).toEqual([{ hash: HASH_A, name: ID_A }]);
+    expect(parseIdentities(out)).toEqual([{ hash: HASH_A, name: ID_A, team: 'TEAMONE111' }]);
   });
 
   it('2. a revoked or expired identity, and the count line, are not identities', () => {
@@ -91,7 +98,7 @@ describe('the signing identity', () => {
   });
 
   it('4. several: refused without CSC_NAME, refused when CSC_NAME names none of them, else the one it names', () => {
-    const ids = [{ hash: HASH_A, name: ID_A }, { hash: HASH_B, name: ID_B }];
+    const ids = [{ hash: HASH_A, name: ID_A, team: 'TEAMONE111' }, { hash: HASH_B, name: ID_B, team: 'TEAMTWO222' }];
     expect(() => chooseIdentity(ids, undefined)).toThrow(/CSC_NAME/);
     expect(() => chooseIdentity(ids, 'Nobody')).toThrow(Refusal);
     expect(chooseIdentity(ids, HASH_B)).toEqual(ids[1]);
@@ -107,30 +114,29 @@ describe('the notary credentials', () => {
     expect(notaryCredentials({})).toEqual({ kind: 'profile', profile: 'Tars' });
   });
 
-  it('6. APPLE_ID with its two companions: those; with one missing: refused, naming the variables and no value', () => {
-    const full = { APPLE_ID: 'someone@example.invalid', APPLE_APP_PASSWORD: 'secret-value', APPLE_TEAM_ID: 'TEAMONE111' };
-    expect(notaryCredentials(full)).toEqual({ kind: 'apple-id' });
-    for (const missing of ['APPLE_ID', 'APPLE_APP_PASSWORD', 'APPLE_TEAM_ID'] as const) {
-      const partial: Record<string, string> = { ...full };
-      delete partial[missing];
+  it('6. any of the password variables: refused, saying why and how to store the profile, and naming no value', () => {
+    const values = { APPLE_ID: 'someone@example.invalid', APPLE_APP_PASSWORD: 'secret-value', APPLE_TEAM_ID: 'TEAMONE111', APPLE_APP_SPECIFIC_PASSWORD: 'other-secret' };
+    for (const set of [['APPLE_ID', 'APPLE_APP_PASSWORD', 'APPLE_TEAM_ID'], ['APPLE_ID'], ['APPLE_APP_PASSWORD'], ['APPLE_TEAM_ID'], ['APPLE_APP_SPECIFIC_PASSWORD']] as const) {
+      const env = Object.fromEntries(set.map(k => [k, values[k]]));
       let message = '';
-      try { notaryCredentials(partial); } catch (err) { message = (err as Error).message; expect(err).toBeInstanceOf(Refusal); }
-      expect(message).toContain(missing);
-      for (const value of Object.values(full)) expect(message).not.toContain(value);
+      try { notaryCredentials(env); } catch (err) { message = (err as Error).message; expect(err).toBeInstanceOf(Refusal); }
+      expect(message, set.join(',')).toMatch(/command line/);
+      expect(message).toMatch(/notarytool store-credentials Tars/);
+      for (const value of Object.values(values)) expect(message).not.toContain(value);
     }
   });
 
-  it('8. the build gets CSC_NAME and the names electron-builder reads, and no API key that would win over them', () => {
-    const id = { hash: HASH_A, name: ID_A };
-    const base = { PATH: '/bin', APPLE_API_KEY: '/k.p8', APPLE_API_KEY_ID: 'K', APPLE_API_ISSUER: 'I', APPLE_APP_SPECIFIC_PASSWORD: 'stale' };
-    const withProfile = signingEnv(base, id, { kind: 'profile', profile: 'Tars' });
-    expect(withProfile).toMatchObject({ PATH: '/bin', CSC_NAME: HASH_A, CSC_IDENTITY_AUTO_DISCOVERY: 'true', APPLE_KEYCHAIN_PROFILE: 'Tars' });
-    for (const k of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_ID']) expect(withProfile).not.toHaveProperty(k);
-
-    const env = { ...base, APPLE_ID: 'someone@example.invalid', APPLE_APP_PASSWORD: 'pw', APPLE_TEAM_ID: 'TEAMONE111' };
-    const withId = signingEnv(env, id, { kind: 'apple-id' });
-    expect(withId).toMatchObject({ CSC_NAME: HASH_A, APPLE_ID: 'someone@example.invalid', APPLE_APP_SPECIFIC_PASSWORD: 'pw', APPLE_TEAM_ID: 'TEAMONE111' });
-    for (const k of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_KEYCHAIN_PROFILE']) expect(withId).not.toHaveProperty(k);
+  it('8, 16. the build gets CSC_NAME and the profile, and nothing that would sign or notarize with something else', () => {
+    const id = { hash: HASH_A, name: ID_A, team: 'TEAMONE111' };
+    const base = {
+      PATH: '/bin', APPLE_API_KEY: '/k.p8', APPLE_API_KEY_ID: 'K', APPLE_API_ISSUER: 'I', APPLE_APP_SPECIFIC_PASSWORD: 'stale',
+      CSC_LINK: '/somewhere/cert.p12', CSC_KEY_PASSWORD: 'p12-secret',
+    };
+    const env = signingEnv(base, id, { kind: 'profile', profile: 'Tars' });
+    expect(env).toMatchObject({ PATH: '/bin', CSC_NAME: HASH_A, CSC_IDENTITY_AUTO_DISCOVERY: 'true', APPLE_KEYCHAIN_PROFILE: 'Tars' });
+    for (const k of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_ID', 'APPLE_APP_PASSWORD', 'APPLE_TEAM_ID', 'CSC_LINK', 'CSC_KEY_PASSWORD']) {
+      expect(env, k).not.toHaveProperty(k);
+    }
     expect(base).not.toHaveProperty('CSC_NAME');
   });
 });
@@ -174,17 +180,17 @@ describe('the preflight, before anything is built', () => {
       'xcrun notarytool history --keychain-profile Tars': { code: 0, stdout: 'Successfully received submission history.' },
     });
     const got = await preflight({ run: m.run, env: { PATH: '/bin' }, platform: 'darwin' });
-    expect(got.identity).toEqual({ hash: HASH_A, name: ID_A });
+    expect(got.identity).toEqual({ hash: HASH_A, name: ID_A, team: 'TEAMONE111' });
     expect(got.credentials).toEqual({ kind: 'profile', profile: 'Tars' });
     expect(got.env).toMatchObject({ CSC_NAME: HASH_A, APPLE_KEYCHAIN_PROFILE: 'Tars', PATH: '/bin' });
   });
 
-  it('6. with APPLE_ID and its companions, notarytool is not asked with the password on its command line', async () => {
+  it('6. with the password variables set, refused, and nothing is asked with them', async () => {
     const m = machine({ 'security find-identity -v -p codesigning': findOne });
     const env = { APPLE_ID: 'someone@example.invalid', APPLE_APP_PASSWORD: 'secret-value', APPLE_TEAM_ID: 'TEAMONE111' };
-    const got = await preflight({ run: m.run, env, platform: 'darwin' });
-    expect(got.credentials).toEqual({ kind: 'apple-id' });
+    await expect(preflight({ run: m.run, env, platform: 'darwin' })).rejects.toThrow(/command line/);
     expect(m.asked.join('\n')).not.toContain('secret-value');
+    expect(m.asked.some(l => l.includes('notarytool'))).toBe(false);
   });
 });
 
@@ -217,26 +223,31 @@ describe('the manifest after the dmg is stapled', () => {
 });
 
 describe('what a quarantined copy is judged', () => {
-  it('11. accepted only as Notarized Developer ID', () => {
-    expect(spctlVerdict(0, 'Tars.app: accepted\nsource=Notarized Developer ID\norigin=Developer ID Application: X (T)')).toEqual({ ok: true });
-    expect(spctlVerdict(0, 'Tars.app: accepted\nsource=Developer ID\n').ok).toBe(false);
-    expect(spctlVerdict(3, 'Tars.app: rejected\nsource=Unnotarized Developer ID\n').ok).toBe(false);
-    expect(spctlVerdict(3, 'Tars.app: accepted\nsource=Notarized Developer ID\n').ok).toBe(false);
-    expect(spctlVerdict(0, '').ok).toBe(false);
+  it('11, 15. accepted only as Notarized Developer ID, signed by the signing identity\'s team', () => {
+    const ours = 'Tars.app: accepted\nsource=Notarized Developer ID\norigin=Developer ID Application: Example One (TEAMONE111)';
+    expect(spctlVerdict(0, ours, 'TEAMONE111')).toEqual({ ok: true });
+    expect(spctlVerdict(0, ours, 'TEAMTWO222').ok).toBe(false);
+    expect(spctlVerdict(0, 'Tars.app: accepted\nsource=Notarized Developer ID\n', 'TEAMONE111').ok).toBe(false);
+    expect(spctlVerdict(0, 'Tars.app: accepted\nsource=Developer ID\norigin=Developer ID Application: Example One (TEAMONE111)', 'TEAMONE111').ok).toBe(false);
+    expect(spctlVerdict(3, 'Tars.app: rejected\nsource=Unnotarized Developer ID\n', 'TEAMONE111').ok).toBe(false);
+    expect(spctlVerdict(3, ours, 'TEAMONE111').ok).toBe(false);
+    expect(spctlVerdict(0, '', 'TEAMONE111').ok).toBe(false);
   });
 
-  it('12. a binary signed ad hoc, without a timestamp or without the hardened runtime is named', () => {
+  it('12, 15. a binary signed ad hoc, without a timestamp, without the hardened runtime, or by another team is named', () => {
     const good = [
       'Executable=/x/spawn-helper', 'CodeDirectory v=20500 size=1 flags=0x10000(runtime) hashes=1+2 location=embedded',
       'Authority=Developer ID Application: Example One (TEAMONE111)', 'Authority=Developer ID Certification Authority',
       'Authority=Apple Root CA', 'Timestamp=18 Nov 2026 at 08:00:00', 'TeamIdentifier=TEAMONE111',
     ].join('\n');
-    expect(signatureProblems(good)).toEqual([]);
-    expect(signatureProblems(good.replace(/Timestamp=.*\n/, ''))).toEqual(['no secure timestamp']);
-    expect(signatureProblems(good.replace('flags=0x10000(runtime)', 'flags=0x0(none)'))).toEqual(['no hardened runtime']);
-    const adhoc = 'Executable=/x/pty.node\nCodeDirectory v=20400 size=1 flags=0x20002(adhoc,linker-signed) hashes=1+0 location=embedded\nSignature=adhoc\n';
-    expect(signatureProblems(adhoc)).toEqual(expect.arrayContaining(['not signed with a Developer ID Application identity']));
-    expect(signatureProblems('/x/pty.node: code object is not signed at all')).toEqual(['not signed']);
+    expect(signatureProblems(good, 'TEAMONE111')).toEqual([]);
+    expect(signatureProblems(good, 'TEAMTWO222')).toEqual(['signed by team TEAMONE111, not TEAMTWO222']);
+    expect(signatureProblems(good.replace('TeamIdentifier=TEAMONE111', ''), 'TEAMONE111')).toEqual(['signed by team none, not TEAMONE111']);
+    expect(signatureProblems(good.replace(/Timestamp=.*\n/, ''), 'TEAMONE111')).toEqual(['no secure timestamp']);
+    expect(signatureProblems(good.replace('flags=0x10000(runtime)', 'flags=0x0(none)'), 'TEAMONE111')).toEqual(['no hardened runtime']);
+    const adhoc = 'Executable=/x/pty.node\nCodeDirectory v=20400 size=1 flags=0x20002(adhoc,linker-signed) hashes=1+0 location=embedded\nSignature=adhoc\nTeamIdentifier=not set\n';
+    expect(signatureProblems(adhoc, 'TEAMONE111')).toEqual(expect.arrayContaining(['not signed with a Developer ID Application identity']));
+    expect(signatureProblems('/x/pty.node: code object is not signed at all', 'TEAMONE111')).toEqual(['not signed']);
   });
 
   it('13. stapler validate passes only on its success line and exit 0', () => {
@@ -249,15 +260,23 @@ describe('what a quarantined copy is judged', () => {
 
   it('14. a check that could not run fails the verification, and says which', async () => {
     const m = machine({});
-    const result = await verifyQuarantined({ dmg: '/nowhere/Tars-2.0.7-arm64.dmg', run: m.run, platform: 'darwin' });
+    const result = await verifyQuarantined({ dmg: '/nowhere/Tars-2.0.7-arm64.dmg', team: 'TEAMONE111', run: m.run, platform: 'darwin' });
     expect(result.ok).toBe(false);
     expect(result.failures.join('\n')).toMatch(/hdiutil|ditto|could not/);
   });
 
   it('9. refused off macOS', async () => {
     const m = machine({});
-    const result = await verifyQuarantined({ dmg: '/nowhere/x.dmg', run: m.run, platform: 'linux' });
+    const result = await verifyQuarantined({ dmg: '/nowhere/x.dmg', team: 'TEAMONE111', run: m.run, platform: 'linux' });
     expect(result.ok).toBe(false);
+    expect(m.asked).toEqual([]);
+  });
+
+  it('17. no Team ID to pin: refused before anything runs', async () => {
+    const m = machine({});
+    const result = await verifyQuarantined({ dmg: '/nowhere/x.dmg', run: m.run, platform: 'darwin' });
+    expect(result.ok).toBe(false);
+    expect(result.failures.join('\n')).toMatch(/Team ID/);
     expect(m.asked).toEqual([]);
   });
 });

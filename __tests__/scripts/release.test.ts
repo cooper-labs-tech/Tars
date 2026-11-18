@@ -32,6 +32,11 @@ import { skipOnWindows } from '../setup/platform-limits';
  *     fails is published past.
  * S4. A quarantined copy that Gatekeeper would refuse is published.
  * S5. The notes still say the dmg is not signed.
+ * Written before the code of the second round (the Audit's FIX FIRST on #591, 18/11):
+ * S6. The quarantined copy is judged without the Team ID of the identity the
+ *     preflight chose, so another team's signature passes (L2).
+ * S7. The notes say nothing to a mac user of 2.0.6 or older, whose in-app update
+ *     Squirrel.Mac refuses (M2, measured 18/11): download the dmg once.
  */
 
 const VERSION = '2.0.1';
@@ -51,12 +56,15 @@ type Signing = NonNullable<Parameters<typeof main>[1]>['signing'];
 function passingSigning(): NonNullable<Signing> {
   return {
     preflight: async (env: NodeJS.ProcessEnv) => ({
-      identity: { hash: STUB_HASH, name: 'Developer ID Application: Stand-in (STANDIN000)' },
+      identity: { hash: STUB_HASH, name: 'Developer ID Application: Stand-in (STANDIN000)', team: 'STANDIN000' },
       credentials: { kind: 'profile', profile: 'Tars' },
       env: { ...env, CSC_NAME: STUB_HASH, APPLE_KEYCHAIN_PROFILE: 'Tars' },
     }),
     finish: async () => undefined,
-    verify: async () => ({ ok: true, failures: [], passed: ['stand-in'] }),
+    // S6: passes only when the release pins the team of the identity the preflight chose.
+    verify: async ({ team }: { team?: string }) => (team === 'STANDIN000'
+      ? { ok: true, failures: [], passed: ['stand-in'] }
+      : { ok: false, failures: [`judged with the Team ID ${team ?? 'none'}, not the signing identity's`], passed: [] }),
   };
 }
 let signing: NonNullable<Signing>;
@@ -599,6 +607,8 @@ describe('npm run release, publishing', { timeout: 30_000 }, () => {
     expect(published?.notes).toContain("- An agent's change, said the way the app says it");
     expect(published?.notes, 'S5').toContain('notarises');
     expect(published?.notes, 'S5').not.toContain('ne sont pas signes');
+    expect(published?.notes, 'S7').toMatch(/2\.0\.6 ou plus ancienne/);
+    expect(published?.notes, 'S7').toMatch(/telecharge le `\.dmg` une fois/);
     expect(result.out).toContain(`9. ${path.join(fs.realpathSync(kept), `Tars-${VERSION}-arm64.dmg`)}`);
   });
 
