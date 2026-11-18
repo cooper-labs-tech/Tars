@@ -54,11 +54,24 @@ export function byWords(by: AgentChangeBy): string {
   return project ? `${by.name} (${project})` : by.name;
 }
 
-const valueWords = (v: unknown): string => (v === undefined || v === null || v === '' ? 'none' : typeof v === 'object' ? JSON.stringify(v) : String(v));
+/**
+ * A setting's value as the change log keeps it: null is the CLI's own default (no model or effort set); a worktree is
+ * { worktreePath, branchName }, or null for the project's folder; skills are a list of names.
+ */
+function valueWords(field: string, v: unknown): string {
+  if (field === 'worktree') {
+    if (v === null || v === undefined) return "the project's folder";
+    const w = v as { branchName?: string; worktreePath?: string };
+    return w.branchName ? `worktree ${w.branchName}` : w.worktreePath ?? 'a worktree';
+  }
+  if (v === undefined || v === null || v === '') return "the CLI's default";
+  if (Array.isArray(v)) return v.length ? v.join(', ') : 'none';
+  return typeof v === 'object' ? JSON.stringify(v) : String(v);
+}
 
 /** "model glm-4.6 to kimi-k2, effort medium to high", or the fields alone when the values are not known. */
 export function whatWords(fields: string[], before?: Record<string, unknown>, after?: Record<string, unknown>): string {
-  return fields.map(f => (before && after && (f in before || f in after) ? `${f} ${valueWords(before[f])} to ${valueWords(after[f])}` : f)).join(', ');
+  return fields.map(f => (before && after && (f in before || f in after) ? `${f} ${valueWords(f, before[f])} to ${valueWords(f, after[f])}` : f)).join(', ');
 }
 
 /** 14:02 */
