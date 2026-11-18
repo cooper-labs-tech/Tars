@@ -184,6 +184,7 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 | Memory base path | `<configDir>/projects` for the claude-binary family; `codex`, `gemini`, `grok`, `opencode` and `pi` return `configDir` itself, a placeholder; they have no Claude-like memory tree |
 | Prompt-injected memory | every provider whose `configDir` is not `~/.claude` (see §5) |
 | ACP mode | `claude`, `codex`, `gemini`, `grok`, `opencode`, `pi` (see §4), no longer used to delegate since 2.0.4 |
+| A note typed during a turn (`noteDuringTurn`) | `claude`: reaches the model at the turn's next tool round; `kimi-code` (2.6.3): held by the CLI and sent as its own next turn once the turn ends; not measured yet for the others. send_message's `auto` types it at once in every case |
 | Orchestrator tool block | a CLI flag on the claude-binary family (`--disallowed-tools`) and on `qwen-code` (`--exclude-tools`); `codex`, `gemini`, `grok`, `opencode`, `pi` and `amp` get none, so their orchestrator is told and not stopped. ACP permission arbitration denied the same tools to a delegated run until 2.0.4, when delegation left ACP |
 
 ### Qwen Code (2.0.4): `providers/qwen-code-provider.ts`, `services/qwen-code.ts`

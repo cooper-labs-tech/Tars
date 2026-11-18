@@ -69,6 +69,9 @@ export class KimiCodeProvider implements CLIProvider {
 
   readonly taskTypedAfterLaunch = true;
 
+  /** Measured on 2.6.3: a note typed with Enter during a slow tool call went out as its own next turn. */
+  readonly noteDuringTurn = 'after-the-turn' as const;
+
   /** What a launch types into the TUI: the task, with the skills line before it. No task, nothing. */
   typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {
     if (!params.prompt?.trim()) return '';

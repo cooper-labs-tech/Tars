@@ -126,6 +126,14 @@ export interface CLIProvider {
   /** With taskTypedAfterLaunch: the text a launch types in for this task ('' for none). */
   typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;
 
+  /**
+   * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured
+   * on the CLI itself: `next-tool-round`, it reaches the model at the turn's next tool round (Claude Code);
+   * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3).
+   * Absent: not measured.
+   */
+  readonly noteDuringTurn?: 'next-tool-round' | 'after-the-turn';
+
   /** Build command string for quick one-shot prompts */
   buildOneShotCommand(params: OneShotCommandParams): string;
 
