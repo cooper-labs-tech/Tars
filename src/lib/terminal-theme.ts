@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import type { ITheme } from 'xterm';
+import type { ILinkHandler, ITheme } from 'xterm';
+import { terminalLinkHandler } from './terminal-links';
 
 /**
  * Single source of truth for every xterm surface in the app.
@@ -158,8 +159,9 @@ export function getTerminalFontFamily(): string {
 export function createXtermOptions(mode: TerminalMode = getTerminalMode()): {
   theme: ITheme;
   fontFamily: string;
+  linkHandler: ILinkHandler;
 } {
-  return { theme: createXtermTheme(mode), fontFamily: getTerminalFontFamily() };
+  return { theme: createXtermTheme(mode), fontFamily: getTerminalFontFamily(), linkHandler: terminalLinkHandler };
 }
 
 /**

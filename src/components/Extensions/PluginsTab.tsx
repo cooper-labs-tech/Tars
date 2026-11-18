@@ -30,6 +30,7 @@ import { disposeTerminalSafely, stopWheelTyping, stripTerminalReplies } from '@/
 import { BrandSpinner, Button, DialogShell, ErrorState, LoadingPanel } from '@/components/ui';
 // Import xterm CSS
 import 'xterm/css/xterm.css';
+import { addWebLinks } from '@/lib/terminal-links';
 
 const CATEGORY_ICONS: Record<string, typeof Code2> = {
   'Code Intelligence': Code2,
@@ -237,6 +238,7 @@ export default function PluginsTab() {
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
       term.open(terminalRef.current!);
       stopWheelTyping(term);
       fitAddon.fit();

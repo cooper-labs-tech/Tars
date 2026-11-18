@@ -7,6 +7,7 @@ import { useClaudeAccounts } from '@/hooks/useClaudeAccounts';
 import { suggestLabel } from '@/lib/claude-accounts';
 import { createXtermOptions, TERMINAL_SURFACE_CLASS, useTerminalTheme } from '@/lib/terminal-theme';
 import { disposeTerminalSafely, stopWheelTyping, stripTerminalReplies } from '@/lib/terminal';
+import { addWebLinks } from '@/lib/terminal-links';
 
 type LoginBridge = Pick<NonNullable<ElectronAPI['claudeAccounts']>,
   'loginStart' | 'loginWrite' | 'loginResize' | 'loginKill' | 'onLoginData' | 'onLoginExit'>;
@@ -127,6 +128,7 @@ export function ClaudeAccountLoginModal({ accountId, onClose }: {
       const term = new Terminal({ ...createXtermOptions(), theme: themeRef.current, fontSize: 13, cursorBlink: true, cursorStyle: 'bar', scrollback: 2000 });
       const fit = new FitAddon();
       term.loadAddon(fit);
+      void addWebLinks(term);
       term.open(container.current);
       stopWheelTyping(term);
       fit.fit();

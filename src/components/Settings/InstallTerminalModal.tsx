@@ -9,6 +9,7 @@ import {
   useTerminalTheme,
 } from '@/lib/terminal-theme';
 import { disposeTerminalSafely, stopWheelTyping, stripTerminalReplies } from '@/lib/terminal';
+import { addWebLinks } from '@/lib/terminal-links';
 
 interface InstallTerminalModalProps {
   show: boolean;
@@ -45,6 +46,7 @@ export const InstallTerminalModal = ({ show, command, onClose, onComplete }: Ins
 
       const fitAddon = new FitAddon();
       term.loadAddon(fitAddon);
+      void addWebLinks(term);
       term.open(terminalRef.current!);
       stopWheelTyping(term);
       fitAddon.fit();
