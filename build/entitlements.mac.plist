@@ -49,8 +49,9 @@
       Removing it blind is a launch-time crash in a native require, not a
       hardening win.
 
-      TODO: once a real Developer ID identity and the notarize step are wired
-      into the release build, do a `--dir` build with this key removed and
+      The notarize step is wired into the release build (scripts/mac-signing.mjs,
+      package.json build.mac.notarize). TODO, on the first Mac that has the
+      Developer ID identity: do a signed `--dir` build with this key removed and
       confirm better-sqlite3 and node-pty still load. If a nested binary fails,
       fix that binary's signature rather than restoring this entitlement.
     -->

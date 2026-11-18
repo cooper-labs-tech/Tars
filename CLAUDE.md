@@ -84,9 +84,10 @@ DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a st
 ELECTRON_BUILD        # '1' switches next.config.ts to output: 'export' for packaging
 PATH SHELL HOME       # read when composing the PTY environment (buildFullPath, cli-paths detection)
 CODEX_HOME            # where codex keeps its config, sessions and model cache (else ~/.codex): Tars reads its sessions and model list there, writes its MCP servers and the agents' folder trust into its config.toml, and hands it to the codex it starts (in the command line on macOS and Linux, in the terminal's environment on Windows), whatever an rc file sets; the one a login shell sets is read once per run, only to say why a codex agent is not signed in
-APPLE_ID              # notarization; unset → scripts/notarize.js uses the 'Tars' keychain profile
-APPLE_APP_PASSWORD
+APPLE_ID              # notarization of a mac release, all three or none; none → the notarytool keychain profile 'Tars' (scripts/mac-signing.mjs, OPERATIONS.md "Signing and notarization")
+APPLE_APP_PASSWORD    # handed to electron-builder as APPLE_APP_SPECIFIC_PASSWORD; never in the repository or a log
 APPLE_TEAM_ID
+CSC_NAME              # with several Developer ID Application identities in the keychain, the one a mac release signs with (hash or part of its name)
 ```
 
 Injected by Tars **into** the processes it spawns, never set them yourself:

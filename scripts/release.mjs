@@ -14,15 +14,20 @@
  *      clean, the electron installed is the one package.json and the lockfile
  *      ask for (package and binary), v<version> exists on GitHub neither as a release nor as a tag,
  *      the top entry of src/data/changelog.ts is that version, and no newer
- *      version is already published;
+ *      version is already published; then the mac signing preflight
+ *      (scripts/mac-signing.mjs): a Developer ID Application identity and
+ *      notary credentials that answer, or nothing is built (never ad hoc);
  *   2. npm run electron:build, without CI, GH_TOKEN or GITHUB_TOKEN, so
  *      electron-builder never publishes anything by itself, and only once
  *      nothing it would write over is a build GitHub does not prove published:
  *      neither in release/ here, nor, from a worktree, in the folder step 7
- *      moves the build into;
+ *      moves the build into; electron-builder signs, notarizes and staples the
+ *      app, and the dmg is then signed, notarized and stapled, its manifest
+ *      entry recomputed;
  *   3. check the artifacts: latest-mac.yml names this version, the size and
  *      sha512 it gives the dmg and the zip are the files', and the built app
- *      says this version;
+ *      says this version; then a quarantined copy of the dmg and of its app,
+ *      judged as Gatekeeper judges a download;
  *   4. write the notes from that changelog entry;
  *   5. gh release create, on the exact commit built;
  *   6. read back what GitHub serves: the tag on that commit, the digest of every
@@ -50,13 +55,24 @@ import vm from 'node:vm';
 import {
   canonicalReleaseDir, compareVersions, prune, publicationOf, publishRepo, run, sha256Of, versionOf,
 } from './prune-releases.mjs';
+import { finishDmg, preflight as macPreflight, Refusal, verifyQuarantined } from './mac-signing.mjs';
 
-/** A reason to stop. Everything else thrown is a bug and is left to crash. */
-export class Refusal extends Error {}
+/** A reason to stop (scripts/mac-signing.mjs). Everything else thrown is a bug and is left to crash. */
+export { Refusal };
 
-/** The line every set of notes ends on, as on v1.7.1. */
-export const NOTES_FOOTER = 'Le `.dmg` et le `.zip` ne sont pas signes: macOS affichera un avertissement '
-  + 'Gatekeeper a la premiere ouverture, comme pour les versions precedentes.';
+/** The line every set of notes ends on. */
+export const NOTES_FOOTER = 'Le `.dmg` et le `.zip` sont signes avec une identite Developer ID et notarises par Apple: '
+  + 'macOS les ouvre sans avertissement Gatekeeper.';
+
+/**
+ * The mac signing steps (scripts/mac-signing.mjs). A test hands its own: no test signs, notarizes or asks the
+ * keychain.
+ */
+const MAC_SIGNING = {
+  preflight: env => macPreflight({ env }),
+  finish: finishDmg,
+  verify: ({ dmg, log }) => verifyQuarantined({ dmg, log }),
+};
 
 const firstLine = text => text.trim().split('\n')[0] ?? '';
 
@@ -411,7 +427,7 @@ async function readBack({ repo, version, head, dmg, zip, yml }) {
   if (latest.tag_name !== `v${version}`) throw new Refusal(`/releases/latest is ${latest.tag_name}, not v${version}`);
 }
 
-export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), log = console.log } = {}) {
+export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), log = console.log, signing = MAC_SIGNING } = {}) {
   const dryRun = argv.includes('--dry-run');
   try {
     const toplevel = await run('git', ['rev-parse', '--show-toplevel'], { cwd });
@@ -429,6 +445,15 @@ export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), 
 
     const { head, top: entry, electron } = await checkPreconditions({ root, repo, version });
     log(`1. checks passed: HEAD ${head.slice(0, 7)} is origin/main, tracked tree clean, electron ${electron} installed as locked, v${version} not on GitHub, changelog top entry ${version}, nothing newer published`);
+
+    // Signed or not at all: without a Developer ID identity and notary credentials electron-builder signs ad hoc
+    // and skips notarization with a warning, and Gatekeeper refuses the download. Never a name or a team ID in
+    // the log: the identity's hash, cut.
+    const env = { ...process.env };
+    for (const key of ['CI', 'GH_TOKEN', 'GITHUB_TOKEN']) delete env[key];
+    const signed = await signing.preflight(env);
+    for (const key of ['CI', 'GH_TOKEN', 'GITHUB_TOKEN']) delete signed.env[key];
+    log(`1b. signing: a valid Developer ID Application identity (${signed.identity.hash.slice(0, 8)}...), notary credentials: ${signed.credentials.kind === 'profile' ? `the keychain profile "${signed.credentials.profile}"` : 'APPLE_ID, APPLE_APP_PASSWORD and APPLE_TEAM_ID'}`);
 
     // Before anything is built, and in a dry run too, so that it says what the
     // real run would refuse. The build writes over the build release/ holds.
@@ -449,10 +474,10 @@ export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), 
       log(`2. would run npm run electron:build, without CI, GH_TOKEN or GITHUB_TOKEN${over}`);
     } else {
       log(`2. npm run electron:build, without CI, GH_TOKEN or GITHUB_TOKEN${over}`);
-      const env = { ...process.env };
-      for (const key of ['CI', 'GH_TOKEN', 'GITHUB_TOKEN']) delete env[key];
-      const build = spawnSync('npm', ['run', 'electron:build'], { cwd: root, env, stdio: 'inherit' });
+      const build = spawnSync('npm', ['run', 'electron:build'], { cwd: root, env: signed.env, stdio: 'inherit' });
       if (build.status !== 0) throw new Refusal('npm run electron:build failed');
+      // The staple changes the dmg's bytes: finished before step 3 reads the manifest against the files.
+      await signing.finish({ releaseDir, version, ...signed, log: line => log(`2b. ${line}`) });
     }
 
     let artifacts;
@@ -467,6 +492,10 @@ export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), 
     } else {
       artifacts = await verifyArtifacts(releaseDir, version);
       log(`3. artifacts checked: ${basename(artifacts.dmg)}, ${basename(artifacts.zip)} and latest-mac.yml agree, and the app says ${version}`);
+      const judged = await signing.verify({ dmg: artifacts.dmg, log: line => log(`3b. ${line}`) });
+      for (const line of judged.passed) log(`3b. ${line}`);
+      if (!judged.ok) throw new Refusal(`a quarantined copy would not pass Gatekeeper:\n${judged.failures.map(f => `  - ${f}`).join('\n')}`);
+      log('3b. a quarantined copy of the dmg and of its app passes Gatekeeper as a notarized Developer ID');
     }
 
     const notes = composeNotes(entry);

@@ -608,7 +608,8 @@ npm run electron:build
 ```
 
 `build:renderer` + `tsc` + all six MCP bundles + `electron-builder --mac`
-(targets `dmg` and `zip`), then `scripts/prune-releases.mjs`. Output: `release/` of the checkout
+(targets `dmg` and `zip`), then `scripts/prune-releases.mjs`. It needs a Developer ID
+Application identity in the keychain (*Signing and notarization*): without one it fails. Output: `release/` of the checkout
 it runs in. To publish, do not stop here: `npm run release` runs this build itself, see
 *Cut a release*.
 
@@ -630,44 +631,71 @@ app would boot with no hooks and a blank window.
 
 ### Signing and notarization
 
-`build.mac` sets `hardenedRuntime: true`, `gatekeeperAssess: false`, and points both
-`entitlements` and `entitlementsInherit` at `build/entitlements.mac.plist`:
+A macOS release is signed with a **Developer ID Application** identity, notarized by Apple and
+stapled, the app and the dmg, so that a copy downloaded through Safari (quarantined) opens
+without Gatekeeper's "damaged" or "could not verify". It is that or nothing: there is no ad hoc
+release (until 2.0.6 every release was ad hoc, and a quarantined download was refused).
+
+What it needs, on the Mac that cuts the release, and only the owner sets it up (nothing in the
+repository creates or changes a credential or a keychain item):
+
+1. a **Developer ID Application** certificate of the team's Apple Developer account, with its
+   private key, in the login keychain: `security find-identity -v -p codesigning` lists it.
+   With several, `CSC_NAME` names the one that signs (its hash, or a part of its name);
+2. notary credentials: the notarytool keychain profile named `Tars`, stored once with
+
+   ```bash
+   xcrun notarytool store-credentials Tars \
+     --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
+   ```
+
+   or, instead, `APPLE_ID`, `APPLE_APP_PASSWORD` and `APPLE_TEAM_ID`, all three, in the shell
+   that runs the release.
+
+`node scripts/mac-signing.mjs check` says whether both are there, without building anything.
+
+`build.mac` in `package.json` sets `hardenedRuntime: true`, `forceCodeSigning: true` (no
+identity, no build: electron-builder fails instead of signing ad hoc), `notarize: true`,
+`gatekeeperAssess: false`, and points both `entitlements` and `entitlementsInherit` at
+`build/entitlements.mac.plist`:
 
 ```xml
-com.apple.security.cs.allow-jit                      true
+com.apple.security.cs.allow-jit                        true
 com.apple.security.cs.allow-unsigned-executable-memory true
-com.apple.security.cs.disable-library-validation      true
-com.apple.security.cs.allow-dyld-environment-variables true
+com.apple.security.cs.disable-library-validation       true
 ```
 
-All four are load-bearing: V8 needs JIT and unsigned executable memory, `better-sqlite3` and
-`node-pty` are unsigned native `.node` files (library validation), and `node-pty` spawns login
-shells that inherit `DYLD_*` from the environment.
+V8 needs JIT and unsigned executable memory. Library validation stays disabled until a signed
+build has shown `better-sqlite3` and `node-pty` load without it (the comment in the plist says how
+to try). `allow-dyld-environment-variables` was removed on purpose (the plist says why).
 
-`scripts/notarize.js` exports an `afterSign` hook that calls `@electron/notarize`: using the
-keychain profile named `Tars` when `APPLE_ID` is unset, otherwise
-`APPLE_ID`/`APPLE_APP_PASSWORD`/`APPLE_TEAM_ID`.
+How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`):
 
-> **It is not wired up, and there is nothing to sign with.** There is no `afterSign` key in the
-> `build` block of `package.json`, so `electron-builder` never calls it, and this machine has no
-> Developer ID identity (`security find-identity -v -p codesigning` reports 0). So
-> `npm run electron:build` produces an app signed **ad hoc** (`codesign -dv` gives
-> `Signature=adhoc`, `TeamIdentifier=not set`), not a signed one: on another Mac Gatekeeper
-> warns on first open, which is what the footer of every release note says. With an identity,
-> either add `"afterSign": "scripts/notarize.js"` to `build`, or notarize by hand:
+- **before anything is built**, the preflight: an identity and notary credentials that answer
+  (`notarytool history --keychain-profile Tars`), or the release stops there. It hands the build
+  `CSC_NAME` and the variables electron-builder's notarization reads (`APPLE_KEYCHAIN_PROFILE`, or
+  `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` from `APPLE_APP_PASSWORD`, and `APPLE_TEAM_ID`), and
+  no `APPLE_API_KEY` that would win over them;
+- **the build**: electron-builder signs every Mach-O of the app (Electron's frameworks and
+  helpers, node-pty's `pty.node` and `spawn-helper`, better-sqlite3's and sharp's `.node` files,
+  in `app.asar.unpacked`) with the hardened runtime and a secure timestamp, then notarizes and
+  staples the app before it makes the dmg and the zip;
+- **after the build**, the dmg: signed with a secure timestamp (electron-builder's own `dmg.sign`
+  gives none, so it is off), notarized and stapled, then its `.blockmap` and its entry in
+  `latest-mac.yml` recomputed by electron-builder's own block map (the staple changes its bytes);
+- **before anything is published**, a quarantined copy of the dmg and of its app, judged as a
+  download is: `codesign --verify --deep --strict` on the app, `spctl --assess --type exec`
+  accepted as `source=Notarized Developer ID`, `spctl -t open --context
+  context:primary-signature` on the dmg likewise, `xcrun stapler validate` on both, and every
+  Mach-O signed with a Developer ID Application identity, a secure timestamp and the hardened
+  runtime. One failure stops the release before `gh release create`. The same checks run on any
+  dmg with `node scripts/mac-signing.mjs verify <dmg>` (2.0.6's: 31 failures; a dmg holding a
+  notarized Electron app: the app passes, the unsigned dmg does not).
 
-```bash
-xcrun notarytool submit release/Tars-1.5.0-arm64.dmg --keychain-profile Tars --wait
-xcrun stapler staple release/Tars-1.5.0-arm64.dmg
-spctl -a -vvv -t install release/mac-arm64/Tars.app
-```
-
-To create the keychain profile once:
-
-```bash
-xcrun notarytool store-credentials Tars \
-  --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
-```
+`npm run electron:build` alone (outside `npm run release`) also fails without an identity; with
+one and no notary variables, electron-builder signs and skips notarization with a warning, and
+leaves the dmg unsigned: only `npm run release` makes a distributable build. `npm run
+electron:pack` (the sandbox) stays unsigned on purpose (`-c.mac.identity=null`).
 
 ### The two update paths
 
@@ -735,9 +763,12 @@ a build of the version being released.
    installed under a `^44.4.4`; the fix is `npm ci` then `npx install-electron`),
    `v<version>` exists on GitHub neither as a release nor as a tag, the top entry of the
    changelog is that version, and no newer version is published. A GitHub it cannot ask is a
-   refusal, not a pass;
+   refusal, not a pass. Then the signing preflight (*Signing and notarization*): a Developer ID
+   Application identity and notary credentials that answer, or it stops before building;
 2. runs `npm run electron:build` in this checkout (a worktree is fine), without `CI`, `GH_TOKEN`
-   or `GITHUB_TOKEN`, so `electron-builder` never publishes anything by itself. **Not before**
+   or `GITHUB_TOKEN`, so `electron-builder` never publishes anything by itself, and with the
+   preflight's signing variables; then signs, notarizes and staples the dmg and rewrites its entry
+   in `latest-mac.yml`. **Not before**
    checking what the build writes over: `latest-mac.yml`, `builder-debug.yml` and `mac-arm64` in
    `release/` belong to the last build put there. They may go only if that build is an earlier
    attempt at this same version, or an older version GitHub proves published with that very
@@ -745,9 +776,10 @@ a build of the version being released.
    7: no file of this version in it, and the same proof for the build it holds, or the release
    would be public before the move is refused. The dry run makes the same checks;
 3. checks the artifacts: `version` of `latest-mac.yml`, the size and sha512 (base64 of the whole
-   file) it gives the dmg and the zip, and `CFBundleShortVersionString` of the built app;
-4. writes the notes from that changelog entry, with the footer on the ad hoc signature, in the
-   form of `v1.7.1`. A long dash stops it;
+   file) it gives the dmg and the zip, and `CFBundleShortVersionString` of the built app; then a
+   quarantined copy of the dmg and of its app, as Gatekeeper judges a download;
+4. writes the notes from that changelog entry, with the footer saying the dmg and the zip are
+   signed and notarized, in the form of `v1.7.1`. A long dash stops it;
 5. `gh release create v<version>` with the dmg, the zip and `latest-mac.yml`, on the exact commit
    built (`--target`), as the latest release;
 6. reads back what GitHub serves: the tag on that commit, the `sha256` digest of every asset
