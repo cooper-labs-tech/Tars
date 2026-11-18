@@ -1058,9 +1058,24 @@ holds, and records a line only when both agree:
   Qwen Code, codex's and pi's own session logs), from the agent's current
   session, with a prompt that is that same text (the first 200 characters the
   hook carries). An Enter that answered a dialog, opened a slash command or
-  went nowhere is never confirmed. The hook can confirm a line, never supply
-  one: what is recorded is the text the keys built, and a forged hook with no
-  such line pending records nothing.
+  went nowhere is never confirmed by the CLI. The hook can confirm a line,
+  never supply one: what is recorded is the text the keys built, and a forged
+  hook with no such line pending records nothing.
+- *At rest, briefly* (the Audit's L1 on #594). The hook is posted with the
+  agent's own token, which the agent itself holds: a prompt-injected
+  orchestrator can post a UserPromptSubmit naming a line its owner typed that
+  its CLI never took as a prompt, a "yes" or a "2" typed to a dialog or to an
+  AskUserQuestion's free text Tars did not see. So a line waits for its
+  confirmation only when the owner submitted it with the CLI at rest at its
+  prompt: the agent idle, completed or failed, or waiting at its idle prompt;
+  never in a turn (a line typed then is queued by the CLI, or answers what the
+  turn shows), never with a dialog or question open (the PermissionRequest
+  hook, the screen) or a permission question held by Tars. Keys typed into a
+  dialog Tars sees never reach the key model at all. And a line waits 60
+  seconds at most: the hook comes some 40 ms after an Enter at rest. What an
+  agent can still do is confirm, within that minute, a line its owner typed at
+  rest that a completion swallowed: the owner's own words, at rest, in that
+  terminal, which is what the mark says.
 
 Recorded so, with `via: 'terminal'`, for the agent's project, and its chat when
 the agent is a chat's runner, as the window's chat words are: then the same
