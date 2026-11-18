@@ -693,6 +693,10 @@ export interface AgentStatus {
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
+  /** The inference endpoint its harness (codex, pi, qwen-code, opencode) runs on, with `model` one of its models. */
+  endpointId?: string;
+  /** Its own trace switch, off by default: a session is traced only with its project's on too. */
+  traces?: boolean;
 }
 
 export interface AgentTemplate {
@@ -1583,6 +1587,12 @@ export interface ElectronAPI {
       role?: 'orchestrator' | 'worker';
       /** @deprecated Send `role`. Read only when `role` is absent. */
       orchestratorMode?: boolean;
+      model?: string;
+      /** The inference endpoint its harness runs on, with `model` one of its models. Refused (thrown) when the
+       *  endpoint is not approved, the provider is not one of the four, or the model is not listed. */
+      endpointId?: string;
+      /** Its own trace switch, off by default. */
+      traces?: boolean;
     }) => Promise<AgentStatus & { ptyId: string }>;
     update: (params: {
       id: string;
@@ -1605,6 +1615,11 @@ export interface ElectronAPI {
       /** @deprecated Send `role`. Read only when `role` is absent. */
       orchestratorMode?: boolean;
       cliPath?: string | null;
+      /** The inference endpoint its harness runs on, or null for none: validated with the provider and model. A
+       *  change of endpoint, model or traces on an endpoint ends the agent's terminal (a new one carries the new
+       *  session). */
+      endpointId?: string | null;
+      traces?: boolean;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     /** `{ success: false, cliRunning: true }` when a CLI still runs in the agent's terminal: nothing was typed. */
     /** `code: 'no_terminal'` when the machine had no terminal left: `error` says how many of how many and what frees one, and the agent reads 'error' with it (asleep, it stays asleep with it). */
@@ -2853,8 +2868,225 @@ export interface ElectronAPI {
     last: () => Promise<ErrorReportsLast | null>;
   };
 
+  /** Inference endpoints (services/inference-endpoints.ts). The window is the one place an endpoint is approved. */
+  endpoints?: {
+    list: () => Promise<EndpointView[]>;
+    /** From the window: approved by the act. */
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    approve: (id: string) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    /** Write-only: no channel returns a key. null clears it. */
+    setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
+    /** Refused while agents run on it (`agents` names them). */
+    remove: (id: string) => Promise<{ ok: true } | { ok: false; error: string; agents?: string[] }>;
+    refreshModels: (id: string) => Promise<{ ok: true; models: string[] } | { ok: false; error: string }>;
+    /** A /v1/models probe: status, latency, time. */
+    check: (id: string) => Promise<EndpointHealth>;
+    harnesses: () => Promise<HarnessSupport[]>;
+    waits: () => Promise<EndpointWait[]>;
+    /** An endpoint added, changed, approved or removed; `by` when an agent did it, `needsApproval` when it now waits. */
+    onChanged: (cb: (e: { id: string; by?: { agentId: string; agentName?: string }; needsApproval: boolean }) => void) => () => void;
+    /** The requests held while their endpoint pauses, every time that changes. */
+    onWaiting: (cb: (waits: EndpointWait[]) => void) => () => void;
+  };
+
+  /** Native traces (services/trace-store.ts), the back-office page. */
+  traces?: {
+    settings: () => Promise<TraceSettingsView>;
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number }) => Promise<{ ok: true; settings: TraceSettingsView } | { ok: false; error: string }>;
+    /** The harness and model pairs that may be traced, and the rule no pair can open. */
+    pairs: () => Promise<TracePairsView>;
+    addPair: (pair: TracePair) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
+    removePair: (pair: { harness: string; models: string }) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
+    /** Back to the seed: the four open harnesses on any model (a vetted list will replace the seed). */
+    reseedPairs: () => Promise<{ ok: true } & TracePairsView>;
+    stats: () => Promise<TraceStats>;
+    list: (f: TraceFilter) => Promise<TraceList>;
+    session: (traceId: string) => Promise<{ session: TraceSessionSummary; outcome?: TraceOutcome; turns: TraceTurnView[] } | null>;
+    requestMessages: (requestId: string) => Promise<{ system?: unknown; tools?: unknown[]; input: TraceMessageView[]; output: TraceMessageView[] } | null>;
+    /** A save dialog in main; JSONL in the reader's trace format tables. */
+    exportTo: (f: TraceFilter) => Promise<{ ok: true; path: string; sessions: number } | { ok: false; error: string; cancelled?: true }>;
+    remove: (sel: { traceIds: string[] } | { filter: TraceFilter }) => Promise<{ deleted: number; bytesFreed: number }>;
+    readerToken: () => Promise<{ exists: boolean; createdAt?: string; lastUsedAt?: string; route: string; listen: 'loopback' }>;
+    /** Shown once: the one before opens nothing from now on. */
+    rotateReaderToken: () => Promise<{ token: string }>;
+    revokeReaderToken: () => Promise<{ ok: true }>;
+    /** Throttled to once a second. */
+    onChanged: (cb: () => void) => () => void;
+  };
+
   // Platform info
   platform: string;
+}
+
+export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode';
+
+export interface EndpointHealth { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string }
+
+export interface EndpointView {
+  id: string;
+  name: string;
+  baseUrl: string;
+  allowTraces: boolean;
+  /** Never the key. */
+  keySet: boolean;
+  models: string[];
+  modelsReadAt?: string;
+  modelsError?: string;
+  /** Who runs on it. */
+  agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }>;
+  /** false: an agent added it or changed its base URL; the window shows Approve. */
+  approved: boolean;
+  /** Differs from baseUrl while a change waits for approval: show both. */
+  approvedBaseUrl?: string;
+  /** The change notice: which agent, when. */
+  changedBy?: { agentId: string; agentName?: string; at: string };
+  /** How long a request is held while the endpoint pauses (503, 429, 502): 0 to 3600, default 600. */
+  holdMaxSeconds: number;
+  health?: EndpointHealth;
+}
+
+export interface HarnessSupport {
+  harness: HarnessId;
+  toolCalls: 'works' | 'failed' | 'unmeasured';
+  api: 'chat' | 'responses';
+  /** The version measured against a stand-in endpoint. */
+  measuredOn: string;
+  note?: string;
+}
+
+/** An agent's request held by the proxy while its endpoint pauses. */
+export interface EndpointWait {
+  agentId: string;
+  endpointId: string;
+  since: number;
+  attempts: number;
+  lastStatus?: number;
+  lastError?: string;
+  nextTryAt: number;
+  giveUpAt: number;
+}
+
+export interface TracePair { harness: string; models: string; note?: string }
+export interface TracePairsView { pairs: TracePair[]; hardRule: string }
+export interface TraceSettingsView { projects: string[]; capBytes: number; retentionDays: number; pairs: TracePair[] }
+
+export interface TraceStats {
+  bytes: number;
+  capBytes: number;
+  retentionDays: number;
+  sessions: number;
+  requests: number;
+  oldest?: number;
+  /** Past the cap with only open sessions: metadata kept, bodies dropped. */
+  bodiesDropped: boolean;
+  byProject: Array<{ projectPath: string; sessions: number; bytes: number }>;
+}
+
+export interface TraceFilter {
+  project?: string;
+  agentId?: string;
+  harness?: string;
+  model?: string;
+  endpointId?: string;
+  /** ms UTC, on the start. */
+  from?: number;
+  to?: number;
+  cursor?: string;
+  /** 1 to 200, 50 by default; newest first. */
+  limit?: number;
+}
+
+export interface TraceTotals { count: number; bytes: number; tokensIn: number; tokensCached: number; tokensOut: number }
+
+export interface TraceList {
+  sessions: TraceSessionSummary[];
+  nextCursor?: string;
+  /** For the whole filter, not the page. */
+  totals: TraceTotals;
+  byProject: Array<TraceTotals & { projectPath: string }>;
+}
+
+export interface TraceSessionSummary {
+  traceId: string;
+  projectPath: string;
+  agentId: string;
+  agentName?: string;
+  harness: string;
+  harnessVersion?: string;
+  endpointId: string;
+  endpointName?: string;
+  model: string;
+  startedAt: number;
+  endedAt?: number;
+  finalStatus: 'done' | 'failed' | 'abandoned' | 'open';
+  turnCount: number;
+  requestCount: number;
+  tokensIn: number;
+  tokensCached: number;
+  tokensOut: number;
+  bytes: number;
+  /** A closed model's words entered the session. */
+  mixed: boolean;
+  /** Turns whose author Tars could not attribute. */
+  unknownTurns: number;
+}
+
+/** What Tars knows of how a session ended: what is not known is absent. */
+export interface TraceOutcome {
+  task?: { id: string; status: string; from?: string; endedAt?: number };
+  branch?: string;
+  head?: string;
+  tests?: { command?: string; passed?: number; failed?: number; at?: number };
+  gates?: Array<{ kind: string; verdict: string; at?: number }>;
+  heldRequests?: number;
+  requestErrors?: number;
+}
+
+export interface TraceRequestView {
+  requestId: string;
+  upstreamRequestId?: string;
+  seq: number;
+  surface: string;
+  /** A side call (a title, a memory summary): no turn of its own. */
+  side: boolean;
+  startedAt: number;
+  ttftMs?: number;
+  totalMs?: number;
+  status: number;
+  finishReason?: string;
+  error?: string;
+  tokensIn?: number;
+  tokensCached?: number;
+  tokensOut?: number;
+  reqBytes: number;
+  respBytes: number;
+  newMessages: number;
+  attempts: number;
+  heldMs: number;
+  bodiesDropped: boolean;
+}
+
+export interface TraceTurnView {
+  turnId: string;
+  index: number;
+  startedAt: number;
+  endedAt?: number;
+  gapBeforeMs?: number;
+  /** user | orchestrator | agent | chat | relay | tars | unknown */
+  author: string;
+  authorDetail?: string;
+  finalStatus?: string;
+  toolCalls: number;
+  toolErrors: number;
+  modelMs: number;
+  toolMs: number;
+  requests: TraceRequestView[];
+}
+
+export interface TraceMessageView {
+  hash: string;
+  role: string;
+  parts: Array<{ kind: 'text' | 'thinking' | 'tool_call' | 'tool_result' | 'image'; text?: string; toolName?: string; toolCallId?: string; isError?: boolean; size: number }>;
 }
 
 declare global {
