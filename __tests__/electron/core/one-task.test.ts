@@ -57,6 +57,14 @@
  * 18. The task in hand loses who asked, its first line or when it was taken, and
  *     the window's banner cannot say them; or a task given straight, with no
  *     wait, has none of them.
+ *
+ * 2.0.7, a project's cap (core/project-cap.ts), the queue's gate:
+ * 19. An item the gate holds takes its turn anyway, or one it lets in is held;
+ *     the gate is not asked with the item's own id, or asked for nothing but
+ *     the head of the line.
+ * 20. A gate that throws holds the queue for ever (or crashes the caller).
+ * 21. Why the gate holds an item cannot be read (the window and the asker say
+ *     it), or the gate is still asked once it is removed.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -308,5 +316,39 @@ describe('a delegation into the agent\'s terminal (2.0.4)', () => {
     q.runEnded('a');
     q.runStarted('a', { since: T0 + 2_000, title: 'straight in' });
     expect(q.busyRun('a')).toMatchObject({ title: 'straight in', since: T0 + 2_000 });
+  });
+});
+
+describe("the queue's gate (2.0.7, a project's cap)", () => {
+  it('19. an item the gate holds waits, and takes its turn once the gate lets it in', () => {
+    const q = createOneTaskQueue();
+    const asked: Array<[string, string | undefined]> = [];
+    let full = true;
+    q.setGate((agentId, ref) => { asked.push([agentId, ref]); return full ? "its project's cap: 3 of 3 agents at work" : undefined; });
+    const t = q.enqueue('a', { title: 'night task' }, T0);
+    expect(q.takeTurn('a', t.ref, undefined, T0 + 1)).toBe(false);
+    expect(q.find(t.ref)).toBeDefined();
+    expect(asked).toContainEqual(['a', t.ref]);
+    full = false;
+    expect(q.takeTurn('a', t.ref, undefined, T0 + 2)).toBe(true);
+    expect(q.busyRun('a')).toMatchObject({ taskRef: t.ref });
+  });
+
+  it('20. a gate that throws holds nothing', () => {
+    const q = createOneTaskQueue();
+    q.setGate(() => { throw new Error('broken'); });
+    const t = q.enqueue('a', { title: 'x' }, T0);
+    expect(q.takeTurn('a', t.ref, undefined, T0 + 1)).toBe(true);
+  });
+
+  it('21. why it holds is read, and a removed gate holds nothing', () => {
+    const q = createOneTaskQueue();
+    q.setGate(() => "its project's cap: 1 of 1 agents at work");
+    const t = q.enqueue('a', { title: 'x' }, T0);
+    expect(q.heldBy('a', t.ref)).toBe("its project's cap: 1 of 1 agents at work");
+    expect(q.heldBy('a')).toBe("its project's cap: 1 of 1 agents at work");
+    q.setGate(undefined);
+    expect(q.heldBy('a', t.ref)).toBeUndefined();
+    expect(q.takeTurn('a', t.ref, undefined, T0 + 1)).toBe(true);
   });
 });
