@@ -2909,6 +2909,12 @@ its first line. Take a backup before an update that carries a migration.
 
 ### 9. Day to day
 
+- **Registration** is closed on a fresh deploy: no install can register until the operator opens
+  it in Settings. Open it once the privacy notice the installs' users read is published.
+- **Free-disk floor** (Settings, default 5 GiB): under it, every write (blobs, batches,
+  registrations) gets `507 disk_full` with a `Retry-After`, and reads go on. Postgres shares the
+  disk in this deploy, so the floor keeps it writable. Raise the floor with the disk, or move the
+  blobs to a disk of their own.
 - **Overview page:** installs, sessions, disk, the last 14 days.
 - **Readers:** create a token (shown once), revoke one. `node src/cli.ts reader create <name>`
   does the same from the shell.

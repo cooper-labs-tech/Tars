@@ -14,7 +14,7 @@ const id = { t: 'id' } as const, hash = { t: 'hash' } as const, int = { t: 'int'
 const str = (max: number) => ({ t: 'str', max }) as const;
 
 const SESSION: Shape = {
-  sessionId: r(id), agentId: id, agentName: str(120), projectKey: { t: 'hex', max: 64 }, harness: r(str(40)), harnessVersion: str(40),
+  sessionId: r(id), agentId: id, projectKey: { t: 'hex', max: 64 }, harness: r(str(40)), harnessVersion: str(40),
   nativeSessionId: str(128), endpointKey: str(64), endpointName: str(60), model: r(str(200)), startedAt: r(int), endedAt: int,
   finalStatus: r({ t: 'enum', of: ['open', 'done', 'failed', 'abandoned'] }), turnCount: r(int), requestCount: r(int),
   tokensIn: r(int), tokensCached: r(int), tokensOut: r(int), mixed: bool, unknownTurns: int, outcome: { t: 'obj', maxBytes: 16 * 1024 },

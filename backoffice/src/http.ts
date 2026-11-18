@@ -8,6 +8,7 @@ import { readSettings, type Settings } from './settings.ts';
 import { bearerHash } from './tokens.ts';
 import { HttpError, readRaw, decodeBody } from './body.ts';
 import { LIMITS } from './config.ts';
+import { clientAddress } from './addr.ts';
 
 export interface Ctx {
   db: Db;
@@ -39,11 +40,20 @@ export function json(res: ServerResponse, status: number, body: unknown, headers
 }
 
 export function clientAddr(ctx: Ctx, req: IncomingMessage): string {
-  // Behind the local proxy, X-Real-IP is what it set from the edge's client address header. Not
-  // trusted otherwise: anyone can send it.
   const real = req.headers['x-real-ip'];
-  if (ctx.cfg.trustProxy && typeof real === 'string' && real.length <= 64) return real;
-  return req.socket.remoteAddress ?? 'unknown';
+  return clientAddress(ctx.cfg.trustProxy, req.socket.remoteAddress ?? 'unknown', typeof real === 'string' ? real : undefined);
+}
+
+/**
+ * Writes stop under the free-disk floor (the Audit's M1 on #597): Postgres shares the disk in the
+ * documented deploy, so a full disk would take reads down too. 507 with Retry-After, which Tars's
+ * uploader reads as "back off".
+ */
+export async function assertRoom(ctx: Ctx): Promise<void> {
+  const { minFreeBytes } = await ctx.settings();
+  if (ctx.blobs.free() < minFreeBytes) {
+    throw new HttpError(507, 'disk_full', 'the server is below its free-disk floor and takes no writes for now', { retryAfter: 3600 });
+  }
 }
 
 export async function readJson(req: IncomingMessage, wire: number, decoded: number): Promise<{ value: unknown; bytes: Buffer }> {

@@ -12,13 +12,13 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const HASH = /^[0-9a-f]{64}$/;
 
-const SESSION_SELECT = `install_id, session_id, agent_id, agent_name, project_key, harness, harness_version, native_session_id,
+const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
   tokens_out, mixed, unknown_turns, outcome, received_at`;
 
 function session(r: QueryResultRow) {
   return {
-    install: r.install_id, sessionId: r.session_id, agentId: r.agent_id ?? undefined, agentName: r.agent_name ?? undefined,
+    install: r.install_id, sessionId: r.session_id, agentId: r.agent_id ?? undefined,
     projectKey: r.project_key ?? undefined, harness: r.harness, harnessVersion: r.harness_version ?? undefined,
     nativeSessionId: r.native_session_id ?? undefined, endpointKey: r.endpoint_key ?? undefined, endpointName: r.endpoint_name ?? undefined,
     model: r.model, startedAt: ms(r.started_at), endedAt: ms(r.ended_at), finalStatus: r.final_status, turnCount: r.turn_count,

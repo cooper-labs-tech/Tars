@@ -1061,9 +1061,13 @@ opted in send it their agent traces, and readers its operator trusts read them. 
 - **A token opens only its prefix:** an install token on a read route, a reader token on a write,
   is `401`. A revoked reader token is refused at its next request (no cache).
 - **Every write is authenticated, but one:** registration. An install cannot hold a token
-  before it has one. It is limited per source address and in all, and the operator can close
-  it. An install that uploads nothing within 7 days is removed. Registration gets an install
-  nothing but its own empty space.
+  before it has one. It is **closed on a fresh deploy** until the operator opens it, then
+  limited per source address and in all. An install that uploads nothing within 7 days is
+  removed. Registration gets an install nothing but its own empty space.
+- **The disk is bounded:** each install has a quota, and every write (blob, batch, registration)
+  is refused with `507 disk_full` while the blob disk has less free than the operator's floor
+  (default 5 GiB). Postgres shares that disk in the documented deploy, so a filler cannot take
+  the database, and the readers, down with it. Reads go on under the floor.
 - **Content is checked against its name:** a blob whose decoded bytes do not hash to the name it
   was sent under is refused (`422`). So no install can plant other content under a hash another
   install will later send, even though identical content is stored once.
@@ -1084,8 +1088,12 @@ opted in send it their agent traces, and readers its operator trusts read them. 
    environment file, never in the repository. The session cookie is random and stored hashed.
    It is `HttpOnly`, `SameSite=Strict`, `Secure` and `__Host-` over https, and lasts 12 hours.
    Every form carries a CSRF token, and every POST must come from the configured origin. Logins
-   are limited to 5 tries, then one every 3 minutes per address. The pages send a strict CSP and
-   load no script.
+   are limited per address (5 tries, then one every 3 minutes) and in all (10, then one every 2
+   minutes), so no supply of addresses gets more than about 40 tries an hour. The address is
+   nginx's `X-Real-IP`, which it sets from `CF-Connecting-IP` only for connections from
+   Cloudflare's ranges, and which the process believes only from a loopback peer (`src/addr.ts`).
+   A client that reached the process around nginx cannot name a new address per request. The
+   pages send a strict CSP and load no script.
 
 Either lock holds if the other fails: a leaked password is useless without the Access identity,
 and an Access misconfiguration still meets the password.

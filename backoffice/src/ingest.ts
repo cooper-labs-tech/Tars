@@ -2,7 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { zstdCompressSync } from 'node:zlib';
-import { type Ctx, json, clientAddr, smallJson, readJson, authInstall, type Install } from './http.ts';
+import { type Ctx, json, clientAddr, smallJson, readJson, authInstall, assertRoom, type Install } from './http.ts';
 import { HttpError, readRaw, decodeBody } from './body.ts';
 import { validateBatch, type Batch } from './batch.ts';
 import { inTx, type Tx } from './db.ts';
@@ -32,6 +32,7 @@ async function addrSalt(ctx: Ctx): Promise<Buffer> {
 export async function register(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promise<void> {
   const s = await ctx.settings();
   if (s.registration !== 'open') throw new HttpError(403, 'registration_closed');
+  await assertRoom(ctx);
   const { value } = await smallJson(req);
   const client = isRecord(value) && isRecord(value.client) ? value.client : {};
   const field = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9._+-]{1,40}$/.test(v) ? v : null);
@@ -98,6 +99,7 @@ function quota(inst: Install, s: Awaited<ReturnType<Ctx['settings']>>) {
 export async function putBlob(ctx: Ctx, req: IncomingMessage, res: ServerResponse, hash: string): Promise<void> {
   if (!HASH.test(hash)) throw new HttpError(400, 'bad_hash');
   const inst = await authInstall(ctx, req);
+  await assertRoom(ctx);
   const raw = await readRaw(req, LIMITS.blobWire);
   const data = decodeBody(raw, req.headers['content-encoding'], { wire: LIMITS.blobWire, decoded: LIMITS.blobDecoded });
   if (createHash('sha256').update(data).digest('hex') !== hash) throw new HttpError(422, 'hash_mismatch', 'the decoded body does not hash to the name it was sent under');
@@ -127,7 +129,7 @@ export async function putBlob(ctx: Ctx, req: IncomingMessage, res: ServerRespons
 type Col = [string, string, string];
 const T = (f: string, c: string): Col => [f, c, 'time'];
 const SESSION_COLS: Col[] = [
-  ['agentId', 'agent_id', 'text'], ['agentName', 'agent_name', 'text'], ['projectKey', 'project_key', 'text'], ['harness', 'harness', 'text'],
+  ['agentId', 'agent_id', 'text'], ['projectKey', 'project_key', 'text'], ['harness', 'harness', 'text'],
   ['harnessVersion', 'harness_version', 'text'], ['nativeSessionId', 'native_session_id', 'text'], ['endpointKey', 'endpoint_key', 'text'],
   ['endpointName', 'endpoint_name', 'text'], ['model', 'model', 'text'], T('startedAt', 'started_at'), T('endedAt', 'ended_at'),
   ['finalStatus', 'final_status', 'text'], ['turnCount', 'turn_count', 'int'], ['requestCount', 'request_count', 'int'],
@@ -178,6 +180,7 @@ function lastById<R extends Record<string, unknown>>(rows: R[], key: keyof R & s
 export async function putBatch(ctx: Ctx, req: IncomingMessage, res: ServerResponse, batchId: string): Promise<void> {
   if (!ID.test(batchId)) throw new HttpError(400, 'bad_id');
   const inst = await authInstall(ctx, req);
+  await assertRoom(ctx);
   const { value, bytes } = await readJson(req, LIMITS.batchWire, LIMITS.batchDecoded);
   const v = validateBatch(value);
   if ('errors' in v) throw new HttpError(422, 'invalid_batch', 'the batch does not match API.md § 5', { details: v.errors });

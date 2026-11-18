@@ -37,13 +37,14 @@ Every error is `{"error": "<code>", "message"?: "<text>", ...}` with these statu
 |---|---|---|
 | 400 | `bad_request`, `bad_json`, `bad_encoding`, `bad_id`, `bad_hash` | Malformed request |
 | 401 | `unauthorized` | No token, an unknown or revoked one, or the wrong kind |
-| 403 | `install_blocked`, `registration_closed` | The operator blocked the install, or closed registration |
+| 403 | `install_blocked`, `registration_closed` | The operator blocked the install, or registration is closed (it is, on a fresh deploy, until the operator opens it) |
 | 404 | `not_found` | |
 | 409 | `batch_conflict` | A `batchId` already applied with a different body |
 | 413 | `too_large` | Body over the limit, before or after decompression |
 | 422 | `hash_mismatch`, `unknown_session`, `invalid_batch` | The content does not match its hash, a row names a session the install never sent, or a field fails validation (`details` lists them) |
 | 429 | `rate_limited`, `quota_exceeded` | Too many requests (`Retry-After` in seconds), or the install's stored bytes are at its quota |
-| 503 | `unavailable` | The server is shutting down or its disk is full (`Retry-After`) |
+| 503 | `unavailable` | The server is shutting down (`Retry-After`) |
+| 507 | `disk_full` | The server is below its free-disk floor and takes no write, registrations included (`Retry-After`). Reads go on |
 
 Default limits, each set by the operator (`GET /v1/installs/me` returns the ones that apply):
 
@@ -53,9 +54,10 @@ Default limits, each set by the operator (`GET /v1/installs/me` returns the ones
 | Batch body | 8 MiB on the wire, 64 MiB decompressed |
 | Blob | 16 MiB on the wire, 64 MiB decompressed |
 | Stored bytes per install | 2 GiB (its blobs as stored, plus the batch bodies kept 30 days for replays) |
-| Registrations | 10 per hour per source address, 500 per hour in all |
+| Registrations | closed by default; once opened, 10 per hour per source address, 500 per hour in all |
+| Free disk | writes stop under 5 GiB free on the blob disk (`507`) |
 
-A client retries `429` and `503` after `Retry-After`, and retries network errors and other `5xx`
+A client retries `429`, `503` and `507` after `Retry-After`, and retries network errors and other `5xx`
 with backoff. Every write below is idempotent, so a retry never duplicates anything.
 
 ## 3. Register
@@ -73,8 +75,9 @@ with backoff. Every write below is idempotent, so a retry never duplicates anyth
 ```
 
 - The token is returned once. Tars keeps it in `~/.tars-private`.
-- This is the only write without a token. It is limited per source address and in all, and the
-  operator can close it (`403 registration_closed`). An install that has uploaded nothing 7 days
+- This is the only write without a token. It is limited per source address and in all, and
+  stays closed until the operator opens it (`403 registration_closed`): a fresh deploy takes no
+  install. An install that has uploaded nothing 7 days
   after registering is removed.
 
 ### `GET /v1/installs/me`
@@ -172,7 +175,6 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 |---|---|---|---|
 | `sessionId` | id | yes | The trace session id. When the client sent it upstream as a session header, the same value |
 | `agentId` | id | no | The agent's id, as the client sent it upstream, if it did |
-| `agentName` | string ≤ 120 | no | |
 | `projectKey` | hex ≤ 64 | no | An opaque key of the project, never its path (§ 7) |
 | `harness` | string ≤ 40 | yes | The agent CLI: `codex`, `pi`, `qwen-code`, `opencode`, ... |
 | `harnessVersion` | string ≤ 40 | no | |
@@ -309,7 +311,9 @@ The server stores what it is given, so privacy is decided on the client:
   on two installs gets two unrelated keys.
 - **Endpoints:** an `endpointKey` of the same kind, and a display name. Never a base URL or a key.
 - **Content:** message and tool blobs, after the client's own scrubbing of secrets.
-- **Never:** API keys, tokens, environment variables, user names or email addresses as metadata.
+- **Never:** API keys, tokens, environment variables, user names or email addresses as metadata,
+  nor an agent's name (free text a person typed; the `agentId` is enough to join on, and a
+  session that sends `agentName` is refused).
 
 ## 8. Versioning
 

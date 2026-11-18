@@ -161,6 +161,7 @@ export async function admin(ctx: Ctx, req: IncomingMessage, res: ServerResponse,
       retentionDays: num('retentionDays', cur.retentionDays),
       registration: (f.get('registration') ?? cur.registration) as Settings['registration'],
       maxStoredBytes: f.get('maxStoredMiB') === null ? cur.maxStoredBytes : Number(f.get('maxStoredMiB')) * 1024 * 1024,
+      minFreeBytes: f.get('minFreeMiB') === null ? cur.minFreeBytes : Number(f.get('minFreeMiB')) * 1024 * 1024,
       ratePerMinute: num('ratePerMinute', cur.ratePerMinute),
       burst: num('burst', cur.burst),
       registrationsPerHourPerAddress: num('registrationsPerHourPerAddress', cur.registrationsPerHourPerAddress),
@@ -182,7 +183,10 @@ async function login(ctx: Ctx, req: IncomingMessage, res: ServerResponse, post: 
     <form method="post" action="/admin/login">${hidden(randomBytes(16).toString('base64url'))}
     <label>Password <input type="password" name="password" autocomplete="current-password" autofocus required></label> <button>Sign in</button></form>`);
   if (!post) return send(res, 200, page());
-  const t = ctx.limiter.take(`login:${clientAddr(ctx, req)}`, { perMinute: 1 / 3, burst: 5 });
+  // Per address (clientAddr believes X-Real-IP from the local proxy only, addr.ts), and in all,
+  // so that no source of addresses, however many, gets more than 30 tries an hour.
+  const mine = ctx.limiter.take(`login:${clientAddr(ctx, req)}`, { perMinute: 1 / 3, burst: 5 });
+  const t = mine.ok ? ctx.limiter.take('login:*', { perMinute: 0.5, burst: 10 }) : mine;
   if (!t.ok) return send(res, 429, page(`Too many attempts. Try again in ${t.retryAfter} s.`), { 'retry-after': String(t.retryAfter) });
   const f = await form(req);
   if (!(await verifyPassword(f.get('password') ?? '', ctx.cfg.ownerPasswordHash!))) return send(res, 401, page('Wrong password.'));
@@ -257,6 +261,7 @@ async function settingsPage(ctx: Ctx, csrf: string): Promise<string> {
     <p><label>Registration <select name="registration"><option value="open"${s.registration === 'open' ? ' selected' : ''}>open</option>
       <option value="closed"${s.registration === 'closed' ? ' selected' : ''}>closed</option></select></label></p>
     ${field('maxStoredMiB', 'Default quota per install (MiB)', Math.round(s.maxStoredBytes / 1024 / 1024))}
+    ${field('minFreeMiB', 'Stop writes when the disk has less free than (MiB)', Math.round(s.minFreeBytes / 1024 / 1024))}
     ${field('ratePerMinute', 'Requests per minute per install', s.ratePerMinute)}
     ${field('burst', 'Burst', s.burst)}
     ${field('registrationsPerHourPerAddress', 'Registrations per hour per address', s.registrationsPerHourPerAddress)}

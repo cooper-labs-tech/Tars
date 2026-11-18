@@ -60,7 +60,7 @@ CREATE TABLE batches (
 CREATE TABLE sessions (
   install_id uuid NOT NULL REFERENCES installs(id) ON DELETE CASCADE,
   session_id text NOT NULL,
-  agent_id text, agent_name text, project_key text,
+  agent_id text, project_key text,
   harness text NOT NULL, harness_version text, native_session_id text,
   endpoint_key text, endpoint_name text,
   model text NOT NULL,
