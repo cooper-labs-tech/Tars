@@ -831226,7 +831226,7 @@
                               "type": "text",
                               "id": "lLOG9",
                               "fill": "$text-primary",
-                              "content": "Ollama on this Mac",
+                              "content": "Ollama on this computer",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 12.5,
@@ -831475,7 +831475,7 @@
                               "type": "text",
                               "id": "oEIiX",
                               "fill": "$text-primary",
-                              "content": "Ollama on this Mac",
+                              "content": "Ollama on this computer",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 12.5,
@@ -836246,7 +836246,7 @@
                               "type": "text",
                               "id": "PpZZR",
                               "fill": "$text-primary",
-                              "content": "Ollama on this Mac",
+                              "content": "Ollama on this computer",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 12.5,
@@ -836495,7 +836495,7 @@
                               "type": "text",
                               "id": "WMbCV",
                               "fill": "$text-primary",
-                              "content": "Ollama on this Mac",
+                              "content": "Ollama on this computer",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 12.5,
@@ -846673,7 +846673,7 @@
                       "fill": "$status-waiting",
                       "textGrowth": "fixed-width",
                       "width": 700,
-                      "content": "opencode was not measured on this Mac: it may work, Tars does not say it does.",
+                      "content": "opencode was not measured on this computer: it may work, Tars does not say it does.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-mono",
                       "fontSize": 10.5,
@@ -850042,7 +850042,7 @@
                       "fill": "$status-waiting",
                       "textGrowth": "fixed-width",
                       "width": 700,
-                      "content": "opencode was not measured on this Mac: it may work, Tars does not say it does.",
+                      "content": "opencode was not measured on this computer: it may work, Tars does not say it does.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-mono",
                       "fontSize": 10.5,
@@ -857365,7 +857365,7 @@
                           "id": "p4eJJg",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -860463,7 +860463,7 @@
                           "id": "i0TZ0n",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -863561,7 +863561,7 @@
                           "id": "pdqY0",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -866188,7 +866188,7 @@
                           "id": "SrdUU",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -868815,7 +868815,7 @@
                           "id": "G2XyQU",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -869475,7 +869475,7 @@
                                       "type": "text",
                                       "id": "YMth1",
                                       "fill": "$text-primary",
-                                      "content": "GET /api/traces/ · 127.0.0.1:31415, this Mac only",
+                                      "content": "GET /api/traces/ · 127.0.0.1, this computer only",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
                                       "fontSize": 11.5,
@@ -870385,7 +870385,7 @@
                           "id": "ADqSf",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -871045,7 +871045,7 @@
                                       "type": "text",
                                       "id": "R0rjir",
                                       "fill": "$text-primary",
-                                      "content": "GET /api/traces/ · 127.0.0.1:31415, this Mac only",
+                                      "content": "GET /api/traces/ · 127.0.0.1, this computer only",
                                       "lineHeight": 1.4,
                                       "fontFamily": "$font-mono",
                                       "fontSize": 11.5,
@@ -872438,7 +872438,7 @@
                           "type": "text",
                           "id": "V5QZTE",
                           "fill": "$text-primary",
-                          "content": "GET /api/traces/ · 127.0.0.1:31415, this Mac only",
+                          "content": "GET /api/traces/ · 127.0.0.1, this computer only",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11.5,
@@ -875771,7 +875771,7 @@
                           "type": "text",
                           "id": "eAdtC",
                           "fill": "$text-primary",
-                          "content": "GET /api/traces/ · 127.0.0.1:31415, this Mac only",
+                          "content": "GET /api/traces/ · 127.0.0.1, this computer only",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11.5,
@@ -878621,7 +878621,7 @@
                           "id": "uB10o",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -880139,7 +880139,7 @@
                           "id": "r4kBR3",
                           "name": "Subtitle",
                           "fill": "$text-secondary",
-                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this Mac. An external reader reads them with the reader token.",
+                          "content": "Sessions your agents recorded on endpoints that allow it, kept on this computer. An external reader reads them with the reader token.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12.5,
@@ -882387,8 +882387,8 @@
                         {
                           "type": "text",
                           "id": "JkV3e",
-                          "fill": "$status-waiting",
-                          "content": "gpt-* names GPT, and closed models are not recorded (Settings): this pair would record nothing.",
+                          "fill": "$status-error",
+                          "content": "a glob holds no space: qwen3 * matches no model id. Main's words, as addPair gives them.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -882468,7 +882468,7 @@
                               "type": "text",
                               "id": "L0tWAZ",
                               "fill": "$text-primary",
-                              "content": "gpt-*",
+                              "content": "qwen3 *",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -883267,7 +883267,7 @@
           "children": [
             {
               "type": "frame",
-              "id": "hvbjd",
+              "id": "hkLQt",
               "name": "dialogs",
               "width": 760,
               "layout": "vertical",
@@ -883275,9 +883275,9 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "zK4Jf",
+                  "id": "PJFXw",
                   "fill": "$text-muted",
-                  "content": "import from a file: what it adds, before it does",
+                  "content": "import from a file: a JSON file you pick, then how many pairs it added",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -883285,225 +883285,73 @@
                 },
                 {
                   "type": "frame",
-                  "id": "T06CTt",
-                  "name": "dialog Import pairs from pairs.json?",
+                  "id": "imefy",
+                  "name": "imported",
                   "width": 620,
-                  "fill": "$surface-elevated",
-                  "stroke": "$border-strong",
+                  "fill": "$surface",
+                  "stroke": "$border",
                   "strokeWidth": 1,
                   "layout": "vertical",
-                  "gap": 12,
+                  "gap": 10,
                   "padding": [
-                    16,
-                    18
+                    12,
+                    14
                   ],
                   "children": [
                     {
-                      "type": "text",
-                      "id": "LCpbB",
-                      "fill": "$text-primary",
-                      "content": "Import pairs from pairs.json?",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 15,
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "text",
-                      "id": "blRfL",
-                      "fill": "$text-secondary",
-                      "textGrowth": "fixed-width",
-                      "width": 580,
-                      "content": "A JSON list of { harness, models, note }, or one pair a line: harness, models, note. What it adds to your list:",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 12,
-                      "fontWeight": "normal"
-                    },
-                    {
                       "type": "frame",
-                      "id": "w2oaT",
-                      "name": "diff",
-                      "width": "fill_container",
-                      "fill": "$bg",
-                      "stroke": "$border",
-                      "strokeWidth": 1,
-                      "layout": "vertical",
+                      "id": "GXkzZ",
+                      "name": "state",
                       "gap": 6,
-                      "padding": [
-                        12,
-                        14
-                      ],
+                      "alignItems": "center",
                       "children": [
                         {
-                          "type": "frame",
-                          "id": "vnXVO",
-                          "name": "diff",
-                          "width": "fill_container",
-                          "gap": 10,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "x0ocL",
-                              "fill": "$status-running",
-                              "textGrowth": "fixed-width",
-                              "width": 12,
-                              "content": "+",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "kiULP",
-                              "fill": "$status-running",
-                              "content": "pi · *",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 11.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
+                          "type": "rectangle",
+                          "id": "u2DQU",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
                         },
                         {
-                          "type": "frame",
-                          "id": "NTM2y",
-                          "name": "diff",
-                          "width": "fill_container",
-                          "gap": 10,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "Mvtoh",
-                              "fill": "$status-running",
-                              "textGrowth": "fixed-width",
-                              "width": 12,
-                              "content": "+",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "HIsDv",
-                              "fill": "$status-running",
-                              "content": "opencode · kimi-*   Kimi only",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 11.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "Jubbw",
-                          "name": "diff",
-                          "width": "fill_container",
-                          "gap": 10,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "P5kycV",
-                              "fill": "$text-muted",
-                              "textGrowth": "fixed-width",
-                              "width": 12,
-                              "content": "=",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "Onn0z",
-                              "fill": "$text-secondary",
-                              "content": "codex · *   already on your list",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 11.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
+                          "type": "text",
+                          "id": "yxzlN",
+                          "fill": "$status-running",
+                          "content": "2 pairs added from pairs.json. Nothing was removed.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
                     {
-                      "type": "text",
-                      "id": "zvYOh",
-                      "fill": "$text-secondary",
-                      "textGrowth": "fixed-width",
-                      "width": 580,
-                      "content": "Nothing is removed. Agents start their next session under the new list.",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 11,
-                      "fontWeight": "normal"
-                    },
-                    {
                       "type": "frame",
-                      "id": "rkTPp",
-                      "name": "answers",
-                      "width": "fill_container",
+                      "id": "UViq1",
+                      "name": "g",
                       "gap": 8,
-                      "justifyContent": "end",
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "frame",
-                          "id": "qnfUZ",
-                          "name": "b Cancel",
-                          "height": 32,
-                          "fill": "$surface",
+                          "id": "K6gD72",
+                          "name": "b close",
+                          "height": 26,
                           "stroke": "$border",
-                          "strokeWidth": 1,
                           "padding": [
                             0,
-                            14
+                            11
                           ],
                           "justifyContent": "center",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "AU3E3",
-                              "fill": "$text-primary",
-                              "content": "Cancel",
+                              "id": "TNwCF",
+                              "fill": "$text-muted",
+                              "content": "close",
                               "lineHeight": 1.4,
-                              "fontFamily": "$font-ui",
-                              "fontSize": 12.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "H5pKY",
-                          "name": "b Import 2 pairs",
-                          "height": 32,
-                          "fill": "$accent",
-                          "stroke": "$accent",
-                          "strokeWidth": 1,
-                          "padding": [
-                            0,
-                            14
-                          ],
-                          "justifyContent": "center",
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "MySQ4",
-                              "fill": "$on-accent",
-                              "content": "Import 2 pairs",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-ui",
-                              "fontSize": 12.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
                               "fontWeight": "normal"
                             }
                           ]
@@ -883514,7 +883362,51 @@
                 },
                 {
                   "type": "frame",
-                  "id": "hBJF3",
+                  "id": "A8CpxY",
+                  "name": "same",
+                  "width": 620,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "F2AzlR",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "v2hZV",
+                          "name": "d",
+                          "fill": "$text-muted",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "nu9Rg",
+                          "fill": "$text-muted",
+                          "content": "Every pair of pairs.json was already on your list.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "S92yDk",
                   "name": "dialog pairs.json was not imported",
                   "width": 620,
                   "fill": "$surface-elevated",
@@ -883529,7 +883421,7 @@
                   "children": [
                     {
                       "type": "text",
-                      "id": "i0JekN",
+                      "id": "PDpoA",
                       "fill": "$text-primary",
                       "content": "pairs.json was not imported",
                       "lineHeight": 1.4,
@@ -883539,11 +883431,11 @@
                     },
                     {
                       "type": "text",
-                      "id": "rrxAu",
+                      "id": "frIAN",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 580,
-                      "content": "Line 3 has no harness. Nothing was imported; your list is unchanged.",
+                      "content": "Item 3 has no harness. Nothing was imported; your list is unchanged.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -883551,7 +883443,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "pKqkA",
+                      "id": "P2hFyp",
                       "name": "answers",
                       "width": "fill_container",
                       "gap": 8,
@@ -883560,7 +883452,7 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Z9IkGb",
+                          "id": "fnNYU",
                           "name": "b Close",
                           "height": 32,
                           "fill": "$surface",
@@ -883575,7 +883467,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "wT2iU",
+                              "id": "N10qbC",
                               "fill": "$text-primary",
                               "content": "Close",
                               "lineHeight": 1.4,
@@ -883615,7 +883507,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "Import reads a file you choose and shows what it adds. It never removes a pair, and never reads a list from the network.",
+                  "content": "Import reads a JSON list of { harness, models, note } from a file you choose, through the system's file dialog, adds what is new and says how many. It never removes a pair, and never reads a list from the network.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -885135,8 +885027,8 @@
                         {
                           "type": "text",
                           "id": "WRQhr",
-                          "fill": "$status-waiting",
-                          "content": "gpt-* names GPT, and closed models are not recorded (Settings): this pair would record nothing.",
+                          "fill": "$status-error",
+                          "content": "a glob holds no space: qwen3 * matches no model id. Main's words, as addPair gives them.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -885216,7 +885108,7 @@
                               "type": "text",
                               "id": "RvfPI",
                               "fill": "$text-primary",
-                              "content": "gpt-*",
+                              "content": "qwen3 *",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -886015,7 +885907,7 @@
           "children": [
             {
               "type": "frame",
-              "id": "gi0wn",
+              "id": "AIKQ4",
               "name": "dialogs",
               "width": 760,
               "layout": "vertical",
@@ -886023,9 +885915,9 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "VFgHU",
+                  "id": "ZUOJp",
                   "fill": "$text-muted",
-                  "content": "import from a file: what it adds, before it does",
+                  "content": "import from a file: a JSON file you pick, then how many pairs it added",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -886033,225 +885925,73 @@
                 },
                 {
                   "type": "frame",
-                  "id": "PKvL4",
-                  "name": "dialog Import pairs from pairs.json?",
+                  "id": "O8cBcq",
+                  "name": "imported",
                   "width": 620,
-                  "fill": "$surface-elevated",
-                  "stroke": "$border-strong",
+                  "fill": "$surface",
+                  "stroke": "$border",
                   "strokeWidth": 1,
                   "layout": "vertical",
-                  "gap": 12,
+                  "gap": 10,
                   "padding": [
-                    16,
-                    18
+                    12,
+                    14
                   ],
                   "children": [
                     {
-                      "type": "text",
-                      "id": "L2wjc",
-                      "fill": "$text-primary",
-                      "content": "Import pairs from pairs.json?",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 15,
-                      "fontWeight": "normal"
-                    },
-                    {
-                      "type": "text",
-                      "id": "B97KE",
-                      "fill": "$text-secondary",
-                      "textGrowth": "fixed-width",
-                      "width": 580,
-                      "content": "A JSON list of { harness, models, note }, or one pair a line: harness, models, note. What it adds to your list:",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 12,
-                      "fontWeight": "normal"
-                    },
-                    {
                       "type": "frame",
-                      "id": "vw3Um",
-                      "name": "diff",
-                      "width": "fill_container",
-                      "fill": "$bg",
-                      "stroke": "$border",
-                      "strokeWidth": 1,
-                      "layout": "vertical",
+                      "id": "y47Z5k",
+                      "name": "state",
                       "gap": 6,
-                      "padding": [
-                        12,
-                        14
-                      ],
+                      "alignItems": "center",
                       "children": [
                         {
-                          "type": "frame",
-                          "id": "rw6ea",
-                          "name": "diff",
-                          "width": "fill_container",
-                          "gap": 10,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "nPkBg",
-                              "fill": "$status-running",
-                              "textGrowth": "fixed-width",
-                              "width": 12,
-                              "content": "+",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "eZfvb",
-                              "fill": "$status-running",
-                              "content": "pi · *",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 11.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
+                          "type": "rectangle",
+                          "id": "MIADr",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
                         },
                         {
-                          "type": "frame",
-                          "id": "kaXRG",
-                          "name": "diff",
-                          "width": "fill_container",
-                          "gap": 10,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "mHifU",
-                              "fill": "$status-running",
-                              "textGrowth": "fixed-width",
-                              "width": 12,
-                              "content": "+",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "ihpte",
-                              "fill": "$status-running",
-                              "content": "opencode · kimi-*   Kimi only",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 11.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "LqqxY",
-                          "name": "diff",
-                          "width": "fill_container",
-                          "gap": 10,
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "a6B2p",
-                              "fill": "$text-muted",
-                              "textGrowth": "fixed-width",
-                              "width": 12,
-                              "content": "=",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 12,
-                              "fontWeight": "normal"
-                            },
-                            {
-                              "type": "text",
-                              "id": "JZKDW",
-                              "fill": "$text-secondary",
-                              "content": "codex · *   already on your list",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-mono",
-                              "fontSize": 11.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
+                          "type": "text",
+                          "id": "BJRqY",
+                          "fill": "$status-running",
+                          "content": "2 pairs added from pairs.json. Nothing was removed.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
                     {
-                      "type": "text",
-                      "id": "OBPzp",
-                      "fill": "$text-secondary",
-                      "textGrowth": "fixed-width",
-                      "width": 580,
-                      "content": "Nothing is removed. Agents start their next session under the new list.",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-ui",
-                      "fontSize": 11,
-                      "fontWeight": "normal"
-                    },
-                    {
                       "type": "frame",
-                      "id": "OuGWv",
-                      "name": "answers",
-                      "width": "fill_container",
+                      "id": "RgKWF",
+                      "name": "g",
                       "gap": 8,
-                      "justifyContent": "end",
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "frame",
-                          "id": "SE7Zr",
-                          "name": "b Cancel",
-                          "height": 32,
-                          "fill": "$surface",
+                          "id": "T58J6p",
+                          "name": "b close",
+                          "height": 26,
                           "stroke": "$border",
-                          "strokeWidth": 1,
                           "padding": [
                             0,
-                            14
+                            11
                           ],
                           "justifyContent": "center",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "kZA0V",
-                              "fill": "$text-primary",
-                              "content": "Cancel",
+                              "id": "U9jTC",
+                              "fill": "$text-muted",
+                              "content": "close",
                               "lineHeight": 1.4,
-                              "fontFamily": "$font-ui",
-                              "fontSize": 12.5,
-                              "fontWeight": "normal"
-                            }
-                          ]
-                        },
-                        {
-                          "type": "frame",
-                          "id": "q1WIC5",
-                          "name": "b Import 2 pairs",
-                          "height": 32,
-                          "fill": "$accent",
-                          "stroke": "$accent",
-                          "strokeWidth": 1,
-                          "padding": [
-                            0,
-                            14
-                          ],
-                          "justifyContent": "center",
-                          "alignItems": "center",
-                          "children": [
-                            {
-                              "type": "text",
-                              "id": "S0xQD",
-                              "fill": "$on-accent",
-                              "content": "Import 2 pairs",
-                              "lineHeight": 1.4,
-                              "fontFamily": "$font-ui",
-                              "fontSize": 12.5,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
                               "fontWeight": "normal"
                             }
                           ]
@@ -886262,7 +886002,51 @@
                 },
                 {
                   "type": "frame",
-                  "id": "r0xp0c",
+                  "id": "z2I48",
+                  "name": "same",
+                  "width": 620,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ZlfB8",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "RzNPS",
+                          "name": "d",
+                          "fill": "$text-muted",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "V6FgOO",
+                          "fill": "$text-muted",
+                          "content": "Every pair of pairs.json was already on your list.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QGzE5",
                   "name": "dialog pairs.json was not imported",
                   "width": 620,
                   "fill": "$surface-elevated",
@@ -886277,7 +886061,7 @@
                   "children": [
                     {
                       "type": "text",
-                      "id": "RjGge",
+                      "id": "TQ8UE",
                       "fill": "$text-primary",
                       "content": "pairs.json was not imported",
                       "lineHeight": 1.4,
@@ -886287,11 +886071,11 @@
                     },
                     {
                       "type": "text",
-                      "id": "FOYfv",
+                      "id": "FmJcS",
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 580,
-                      "content": "Line 3 has no harness. Nothing was imported; your list is unchanged.",
+                      "content": "Item 3 has no harness. Nothing was imported; your list is unchanged.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -886299,7 +886083,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "Y95MXN",
+                      "id": "KmUQF",
                       "name": "answers",
                       "width": "fill_container",
                       "gap": 8,
@@ -886308,7 +886092,7 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "axGzw",
+                          "id": "oyA7A",
                           "name": "b Close",
                           "height": 32,
                           "fill": "$surface",
@@ -886323,7 +886107,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "Hwau3",
+                              "id": "d6wFD",
                               "fill": "$text-primary",
                               "content": "Close",
                               "lineHeight": 1.4,
@@ -886363,7 +886147,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "Import reads a file you choose and shows what it adds. It never removes a pair, and never reads a list from the network.",
+                  "content": "Import reads a JSON list of { harness, models, note } from a file you choose, through the system's file dialog, adds what is new and says how many. It never removes a pair, and never reads a list from the network.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
