@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  parseRemoteHost, sshArgv, remoteCommand, remoteEnvFile, remotePort, REMOTE_ENV_KEYS,
+  parseRemoteHost, parseAgentRemote, sshArgv, remoteCommand, remoteEnvFile, remotePort, REMOTE_ENV_KEYS,
 } from '../../../electron/core/remote-launch';
 
 /**
@@ -23,6 +23,9 @@ import {
  *    mod's local folder, an account folder, the ssh agent's socket), names the Mac's API address instead of the
  *    tunnel's, or loses the agent's token, its identity or a provider's key; or a value breaks out of its quotes when
  *    sourced; or a key that is not a variable name is written.
+ * 6. An agent is placed on a host the owner never added, or in a folder outside that host's work root ("..", another
+ *    path, a quote, a relative path); or with no folder said, it gets none instead of its project's name under the
+ *    work root; or null does not take it back to this computer.
  */
 
 const host = { id: 'build-1', name: 'Build host', sshTarget: 'buildbox', workRoot: '/home/agent/work' };
@@ -104,5 +107,21 @@ describe('remoteEnvFile', () => {
     }
     expect(text).toContain(`export ANTHROPIC_AUTH_TOKEN='k'\\''ey$(id)'`);
     expect(REMOTE_ENV_KEYS).not.toContain('PATH');
+  });
+});
+
+describe('parseAgentRemote', () => {
+  const hosts = [host];
+  const project = '/Users/me/projects/project-a';
+
+  it("6. a host the owner added, a folder under its work root, the project's name by default, null to come back", () => {
+    expect(parseAgentRemote({ hostId: 'build-1' }, hosts, project)).toEqual({ ok: true, remote: { hostId: 'build-1', folder: '/home/agent/work/project-a' } });
+    expect(parseAgentRemote({ hostId: 'build-1', folder: '/home/agent/work/a/b' }, hosts, project)).toEqual({ ok: true, remote: { hostId: 'build-1', folder: '/home/agent/work/a/b' } });
+    expect(parseAgentRemote(null, hosts, project)).toEqual({ ok: true, remote: null });
+    expect(parseAgentRemote({ hostId: 'nowhere' }, hosts, project)).toMatchObject({ ok: false, code: 'unknown_host' });
+    for (const folder of ['/etc', '/home/agent/work/../x', '/home/agent/workshop', 'project-a', "/home/agent/work/a'b", '/home/agent/work']) {
+      expect(parseAgentRemote({ hostId: 'build-1', folder }, hosts, project), folder).toMatchObject({ ok: false, code: 'invalid_folder' });
+    }
+    expect(parseAgentRemote('build-1', hosts, project)).toMatchObject({ ok: false, code: 'invalid_remote' });
   });
 });
