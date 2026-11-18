@@ -29,6 +29,9 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 10. A session that grew is not sent again; one that did not change is.
  * 11. Deleting everything does not call the server's delete, keeps the token, or keeps the progress.
  * 12. The install file is readable by others, or the token is in the state the window gets.
+ * 13. A 507 disk_full (the server under its free-disk floor) is not waited out as Retry-After says.
+ * 14. A back-office closed to new installs (403 registration_closed), or one that blocked this install
+ *     (403 install_blocked), reads as an error retried soon, instead of a state the window says plainly.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -42,7 +45,7 @@ class FakeBackOffice {
   batches = new Map<string, string>();
   sessions = new Map<string, Record<string, unknown>>();
   rows: Array<Record<string, unknown>> = [];
-  failNext: Array<{ status: number; retryAfter?: string }> = [];
+  failNext: Array<{ status: number; retryAfter?: string; code?: string }> = [];
   down = false;
   async start() {
     this.server = http.createServer((req, res) => {
@@ -69,7 +72,7 @@ class FakeBackOffice {
     const url = req.url ?? '';
     this.seen.push({ method: req.method ?? '', url, headers: req.headers, body: raw });
     const fail = this.failNext.shift();
-    if (fail) { this.send(res, fail.status, { error: 'rate_limited' }, fail.retryAfter ? { 'Retry-After': fail.retryAfter } : {}); return; }
+    if (fail) { this.send(res, fail.status, { error: fail.code ?? 'rate_limited' }, fail.retryAfter ? { 'Retry-After': fail.retryAfter } : {}); return; }
     if (req.method === 'POST' && url === '/v1/installs') {
       const token = `tbi_${this.installs.size + 1}`;
       this.installs.set(token, `inst-${this.installs.size + 1}`);
@@ -246,6 +249,33 @@ describe('the trace uploader', () => {
     const r = await u.runOnce();
     expect(r.sent).toBe(0);
     expect(u.state().nextTryAt).toBe(clock + 42_000);
+  });
+
+  it('13: a 507 waits as Retry-After says', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    seed('t2', 'second', 2000);
+    bo.failNext.push({ status: 507, retryAfter: '120' });
+    expect((await u.runOnce()).sent).toBe(0);
+    expect(u.state().nextTryAt).toBe(clock + 120_000);
+    expect(u.state().notice).toBeUndefined();
+  });
+
+  it('14: a back-office closed to new installs, or one that blocked this one, is a state, not an error retried soon', async () => {
+    seed('t1', 'first');
+    bo.failNext.push({ status: 403, code: 'registration_closed' });
+    const u = uploader();
+    expect((await u.runOnce()).sent).toBe(0);
+    expect(u.state().notice).toBe('registration_closed');
+    expect(u.state().nextTryAt).toBeGreaterThanOrEqual(clock + 6 * 3600_000);
+    clock = u.state().nextTryAt! + 1;
+    expect((await u.runOnce()).sent).toBe(1);
+    expect(u.state().notice).toBeUndefined();
+    seed('t2', 'second', 2000);
+    bo.failNext.push({ status: 403, code: 'install_blocked' });
+    await u.runOnce();
+    expect(u.state().notice).toBe('install_blocked');
   });
 
   it('8: a 401 registers the install again, once, and sends everything again under it', async () => {
