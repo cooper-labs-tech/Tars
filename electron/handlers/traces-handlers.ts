@@ -189,8 +189,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('traces:requestMessages', (_e, requestId: unknown) => {
     const r = traceStore().requestMessages(String(requestId));
     if (!r) return null;
-    const { raw: _raw, ...shown } = r;
-    return shown;
+    return { system: r.system, tools: r.tools, input: r.input, output: r.output };
   });
 
   ipcMain.handle('traces:exportTo', async (_e, filter: unknown) => {

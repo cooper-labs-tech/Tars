@@ -79,9 +79,9 @@ afterEach(() => {
 describe('the trace store', () => {
   it('1: the history resent on every request is stored once', () => {
     store.openTrace(meta('t1'));
-    let state = turn('t1', [], 'list the files', clock);
+    const state = turn('t1', [], 'list the files', clock);
     const after1 = store.stats().blobs;
-    state = turn('t1', state.history, 'now count them', state.at + 1000);
+    turn('t1', state.history, 'now count them', state.at + 1000);
     const after2 = store.stats().blobs;
     // The second turn adds its new messages (instruction, call, result, answer: the call and result are equal to the
     // first turn's, so already stored) and nothing of the history before it.
