@@ -93,6 +93,8 @@ interface Launch {
   resume?: { sessionId: string; size: number };
   /** How long each session of its folder was at the launch: one bound later is read from there, as a resume. */
   sizes: Map<string, number>;
+  /** What Tars typed into the agent's terminal since the launch, whitespace folded, for a session's first prompt. */
+  typed: string[];
   bound?: Bound;
 }
 
@@ -117,6 +119,11 @@ function readFrom(file: string, offset: number, max = Infinity): Buffer {
     fs.closeSync(fd);
   }
 }
+/** Whitespace folded to single spaces: kimi keeps a paste whole, and Tars's line breaks are not part of the evidence. */
+const fold = (text: string): string => text.replace(/\s+/g, ' ').trim();
+/** How much of a typed text is looked for, and the least that tells one message from another. */
+const TYPED_HEAD = 200;
+const TYPED_MIN = 16;
 const wireOf = (sessionDir: string): string => path.join(sessionDir, 'agents', 'main', 'wire.jsonl');
 
 export class KimiSessionWatch {
@@ -133,12 +140,25 @@ export class KimiSessionWatch {
     const sizes = new Map<string, number>();
     const entries = this.index();
     for (const e of entries) if (sameDir(e.workDir, cwd)) sizes.set(e.sessionId, sizeOf(wireOf(e.sessionDir)));
-    const launch: Launch = { cwd, at: this.deps.now(), sizes };
+    const launch: Launch = { cwd, at: this.deps.now(), sizes, typed: [] };
     if (resumeSessionId) {
       const entry = entries.find((e) => e.sessionId === resumeSessionId);
       launch.resume = { sessionId: resumeSessionId, size: entry ? sizeOf(wireOf(entry.sessionDir)) : 0 };
     }
     this.launches.set(agentId, launch);
+  }
+
+  /**
+   * Tars typed `text` into the agent's terminal (core/pty-manager.ts, writeProgrammaticInput). A session whose first
+   * prompt holds it is the agent's: kimi keeps its lock only while a turn writes (measured on 2.6.3), and a turn on a
+   * fast endpoint can end between two reads. A text too short to tell one message from another is not kept.
+   */
+  noteTyped(agentId: string, text: string): void {
+    const launch = this.launches.get(agentId);
+    const folded = fold(text).slice(0, TYPED_HEAD);
+    if (!launch || launch.bound || folded.length < TYPED_MIN) return;
+    launch.typed.push(folded);
+    if (launch.typed.length > 20) launch.typed.shift();
   }
 
   forget(agentId: string): void {
@@ -179,15 +199,24 @@ export class KimiSessionWatch {
     }
   }
 
-  /** The id the first prompt of a session names, read from its head; null when it names nobody (yet). */
-  private namedIn(file: string): string | null {
+  /** The first prompt of a session, read from its head; null while it has none. */
+  private firstPrompt(file: string): string | null {
     let head = '';
     try { head = readFrom(file, 0, 1024 * 1024).toString('utf8'); } catch { return null; }
     for (const line of head.split('\n')) {
       const event = kimiEventOf(line);
-      if (event?.kind === 'prompt') return IDENTITY.exec(event.text)?.[1] ?? '';
+      if (event?.kind === 'prompt') return event.text;
     }
     return null;
+  }
+
+  /** Whether a session's first prompt says it is this launch's: the agent's identity line, or a text Tars typed in. */
+  private promptIsOurs(agentId: string, launch: Launch, file: string): boolean {
+    const first = this.firstPrompt(file);
+    if (first === null) return false;
+    if (IDENTITY.exec(first)?.[1] === agentId) return true;
+    const folded = fold(first);
+    return launch.typed.some((t) => folded.includes(t));
   }
 
   async tick(): Promise<void> {
@@ -218,7 +247,7 @@ export class KimiSessionWatch {
       const bound = { sessionId: entry.sessionId, file, offset: before ?? 0, partial: '', resumed: before !== undefined, registered: false };
       if (held && pids!.includes(holder!)) return bound;
       if (held) continue;
-      if (this.namedIn(file) === agentId) return bound;
+      if (this.promptIsOurs(agentId, launch, file)) return bound;
     }
     return undefined;
   }
