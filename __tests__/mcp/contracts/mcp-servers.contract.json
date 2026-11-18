@@ -871,6 +871,12 @@
                   "minimum": 0,
                   "maximum": 600,
                   "description": "How long to wait for the grant in this call (default 60)."
+                },
+                "remote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."
                 }
               },
               "additionalProperties": false,
@@ -6386,6 +6392,12 @@
                   "minimum": 0,
                   "maximum": 600,
                   "description": "How long to wait for the grant in this call (default 60)."
+                },
+                "remote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."
                 }
               },
               "additionalProperties": false,
@@ -7539,6 +7551,12 @@
                   "minimum": 0,
                   "maximum": 600,
                   "description": "How long to wait for the grant in this call (default 60)."
+                },
+                "remote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."
                 }
               },
               "additionalProperties": false,
@@ -8620,6 +8638,12 @@
                   "minimum": 0,
                   "maximum": 600,
                   "description": "How long to wait for the grant in this call (default 60)."
+                },
+                "remote": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "description": "The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."
                 }
               },
               "additionalProperties": false,

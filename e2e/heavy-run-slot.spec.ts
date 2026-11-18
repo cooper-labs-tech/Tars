@@ -232,6 +232,58 @@ for (const newInterface of [false, true]) {
     }
   });
 
+  // 2.0.7, the orchestrator's item 15: a run that executes on another machine (`tars-slot run --remote <host>`) takes
+  // none of this machine's slots and is held by none of its floors, but shows in the status; and each waiter says why
+  // it waits, the second one whom it waits behind. Red on origin/train/2.0.7: --remote is not read, and the remote
+  // run waits under the floor with the others.
+  test(`a remote run takes no slot of this machine, shows apart, and each waiter says why it waits${newInterface ? ' (new interface)' : ''}`, async () => {
+    test.setTimeout(180_000);
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-remote-${newInterface ? 'ni' : 'classic'}-`));
+    const harbor = path.join(home, 'projects', 'harbor');
+    const meridian = path.join(home, 'projects', 'meridian');
+    seed(home, newInterface, [
+      { id: 'a', name: 'Harbor Worker', role: 'worker', project: harbor, cli: standIn(home, 'a', ['--label', 'harbor e2e suite']) },
+      { id: 'r', name: 'Remote Worker', role: 'worker', project: harbor, cli: standIn(home, 'r', ['--remote', 'build-host', '--label', 'remote build']) },
+      { id: 'b', name: 'Meridian Worker', role: 'worker', project: meridian, cli: standIn(home, 'b', ['--label', 'meridian build']) },
+    // A floor above any disk: no run of this machine can start, and a remote run must not care.
+    ], { heavySlotMinDiskGb: 1_000_000, heavySlots: 1 });
+    const values: Record<string, unknown> = { newInterface };
+    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+    const { app, page } = await launch(home, apiPort(newInterface ? 31354 : 31353), newInterface);
+    const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status()) as Promise<SlotStatus & { remote: Array<SlotTicket & { remote?: string }> }>;
+    const start = (id: string) => page.evaluate(i => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
+    try {
+      await start('a');
+      await expect.poll(async () => (await status()).waiting[0]?.why ?? '', { timeout: 30_000 }).toMatch(/^waiting for free disk: [\d.]+ GB free, the floor is 1000000 GB$/);
+      // The remote run: granted at once under the same floor, listed apart, never a holder.
+      await start('r');
+      await expect.poll(() => fs.existsSync(path.join(home, 'started-r')), { timeout: 30_000 }).toBe(true);
+      const withRemote = await status();
+      keep({ withRemote });
+      expect.soft(withRemote.remote.map(t => [t.agentId, t.remote, t.label, t.state])).toEqual([['r', 'build-host', 'remote build', 'granted']]);
+      expect.soft(withRemote.holders).toEqual([]);
+      expect.soft(withRemote.waiting.map(t => t.agentId)).toEqual(['a']);
+      expect.soft(fs.readFileSync(path.join(home, 'slot-r.log'), 'utf8')).toMatch(/granted \(remote, on build-host: none of this machine's slots\)/);
+      // A second local waiter: whom it waits behind, and why that one waits.
+      await start('b');
+      await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['a', 'b']);
+      await expect.poll(async () => (await status()).waiting[1]?.why ?? '', { timeout: 15_000 })
+        .toMatch(/^behind 1 run in the queue: Harbor Worker \(harbor e2e suite\) is first, and waits: waiting for free disk: [\d.]+ GB free, the floor is 1000000 GB$/);
+      const queued = await status();
+      keep({ queued });
+      expect.soft(queued.waiting.every(t => !!t.why)).toBe(true);
+      expect.soft(fs.existsSync(path.join(home, 'started-a')) || fs.existsSync(path.join(home, 'started-b')), 'a local run started under the floor').toBe(false);
+    } finally {
+      for (const name of ['a', 'r', 'b']) {
+        for (const file of [`started-${name}`, `slot-${name}.pid`]) {
+          try { const pid = Number(fs.readFileSync(path.join(home, file), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
+        }
+      }
+      await app.close().catch(() => undefined);
+      await removeHome(home);
+    }
+  });
+
   test(`a lease taken for the turn goes back when the turn ends, the window gives one back, and the label is masked${newInterface ? ' (new interface)' : ''}`, async () => {
     test.setTimeout(180_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-turn-${newInterface ? 'ni' : 'classic'}-`));

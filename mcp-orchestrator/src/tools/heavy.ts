@@ -15,9 +15,9 @@ import { apiRequest } from "../utils/api.js";
 
 type Ticket = {
   id: string; state: "granted" | "waiting"; position?: number; why?: string; priority: string; clamped?: boolean;
-  label: string; agentName: string; project: string; grantedAt?: string; nestedIn?: string; alerts: string[];
+  label: string; agentName: string; project: string; grantedAt?: string; nestedIn?: string; remote?: string; alerts: string[];
 };
-type Status = { slots: number; holders: Ticket[]; waiting: Ticket[] };
+type Status = { slots: number; holders: Ticket[]; waiting: Ticket[]; remote?: Ticket[] };
 
 const WAIT_DEFAULT_S = 60;
 const WAIT_MAX_S = 600;
@@ -25,7 +25,7 @@ const WAIT_MAX_S = 600;
 function said(t: Ticket): string {
   if (t.state === "granted") {
     return [
-      `Granted: ticket ${t.id}${t.nestedIn ? " (inside the run that holds the slot)" : ""}. Run your heavy command now, then give the slot back with heavy_slot_give_back; Tars gives it back at your turn's end.`,
+      `Granted: ticket ${t.id}${t.nestedIn ? " (inside the run that holds the slot)" : t.remote ? ` (remote, on ${t.remote}: none of this machine's slots)` : ""}. Run your heavy command now, then give the slot back with heavy_slot_give_back; Tars gives it back at your turn's end.`,
       ...(t.clamped ? ["gate is an orchestrator's, or a task's its orchestrator handed as a gate: asked as normal."] : []),
       ...t.alerts.map(a => `Alert: ${a}`),
     ].join("\n");
@@ -43,16 +43,17 @@ export function registerHeavySlotTools(server: McpServer): void {
         priority: z.enum(["gate", "normal", "background"]).optional().describe("gate: a release gate (an orchestrator, or the agent its orchestrator handed a task as a gate, delegate_task's gate; others get normal). normal by default; background for what can wait."),
         ticket: z.string().optional().describe("A ticket a previous call returned waiting: wait on it again instead of asking anew."),
         wait_seconds: z.number().int().min(0).max(WAIT_MAX_S).optional().describe(`How long to wait for the grant in this call (default ${WAIT_DEFAULT_S}).`),
+        remote: z.string().trim().min(1).max(200).optional().describe("The host the run executes on, when this machine only starts it (an ssh to a build host): granted at once, it takes none of this machine's slots and is held by none of its floors, and the status lists it apart. Your word: a run said remote that works here takes this machine's room unseen."),
       },
       failure: "taking the heavy-run slot",
-      async run({ label, priority, ticket, wait_seconds }) {
+      async run({ label, priority, ticket, wait_seconds, remote }) {
         let t: Ticket;
         if (ticket) {
           t = ((await apiRequest(`/api/heavy-slot/tickets/${encodeURIComponent(ticket)}`, "GET")) as { ticket: Ticket }).ticket;
         } else {
           // Held by the asking agent's terminal, which Tars resolves from its token (this server may be shared, its
           // parent Tars): given back when the agent's turn ends.
-          t = ((await apiRequest("/api/heavy-slot/ask", "POST", { untilTurnEnds: true, label: label ?? "a heavy run", ...(priority ? { priority } : {}) })) as { ticket: Ticket }).ticket;
+          t = ((await apiRequest("/api/heavy-slot/ask", "POST", { untilTurnEnds: true, label: label ?? "a heavy run", ...(priority ? { priority } : {}), ...(remote !== undefined ? { remote } : {}) })) as { ticket: Ticket }).ticket;
         }
         const deadline = Date.now() + (wait_seconds ?? WAIT_DEFAULT_S) * 1000;
         while (t.state !== "granted" && Date.now() < deadline) {
@@ -87,6 +88,7 @@ export function registerHeavySlotTools(server: McpServer): void {
           `At most ${s.slots} runs at once, each started when the machine has room.`,
           ...(s.holders.length ? s.holders.map(t => `Holds: ${line(t)} since ${t.grantedAt}.`) : ["Nobody holds it."]),
           ...s.waiting.map(t => `Waits ${t.position}: ${line(t)}${t.why ? `: ${t.why}` : ""}.`),
+          ...(s.remote ?? []).map(t => `Remote: ${line(t)} on ${t.remote} since ${t.grantedAt}, none of this machine's slots.`),
         ].join("\n"));
       },
     }),

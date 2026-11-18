@@ -48,6 +48,9 @@ starts is inside that run.
   command, gives the slot back when it ends and exits with its code. Use it in git hooks and
   scripts too, as `"$TARS_SLOT" run ...`, which needs no PATH. `tars-slot status` shows who
   holds it and who waits.
+- A run whose work happens on another machine (an ssh to a build host): `tars-slot run --remote
+  <host> --label "<what>" -- <command>`. It takes none of this machine's slots and shows in the
+  status as remote. Say remote only when the work really runs elsewhere.
 - From a tool: `heavy_slot_take`, then `heavy_slot_give_back` when the run is over. Tars gives it
   back when your turn ends.
 - Tars tells you when the disk fills or the swap grows fast during your run, and never stops it:
