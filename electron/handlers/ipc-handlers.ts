@@ -9,7 +9,7 @@ import { removeAgent } from '../core/agent-remove';
 import { gitRefusal } from '../core/chat-slots';
 import { restartRunnersOf } from '../services/chat-runners';
 import { diskSpace, listOrphanFolders, removeOrphanFolders } from '../services/orphan-folders';
-import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '../services/disk-janitor';
+import { janitorApprove, janitorApproveRequest, janitorScan, janitorState, setJanitorProjects } from '../services/disk-janitor';
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
 import { decidePermission, permissionQuestionOf, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
@@ -1193,6 +1193,16 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     if (!Array.isArray(ids) || !ids.every(i => typeof i === 'string')) return { success: false, error: 'the items to delete must be the ids the window showed' };
     if (janitorState().deleting) return { success: false, error: 'an approval is already under way' };
     void janitorApprove(ids).catch(err => console.warn('[janitor] the approval failed:', err));
+    return { success: true };
+  });
+  // The owner's one click on an agent's cleanup request (2.0.7): its items approved, each checked again as it goes.
+  ipcMain.handle('diskJanitor:approveRequest', (_event, id: unknown) => {
+    if (typeof id !== 'string') return { success: false, error: 'the request is named by its id' };
+    const request = janitorState().cleanupRequests.find(r => r.id === id);
+    if (!request) return { success: false, error: 'no such request' };
+    if (request.state !== 'waiting') return { success: false, error: 'this request was approved already' };
+    if (janitorState().deleting) return { success: false, error: 'an approval is already under way' };
+    void janitorApproveRequest(id).catch(err => console.warn('[janitor] the request\'s approval failed:', err));
     return { success: true };
   });
 

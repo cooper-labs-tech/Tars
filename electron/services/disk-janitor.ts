@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { agents } from '../core/agent-manager';
-import { DATA_DIR, PRIVATE_DIR } from '../constants';
+import { DATA_DIR, PRIVATE_DIR, dataPath } from '../constants';
 import { diskUsage } from '../platform/disk-usage';
 import { safeGit } from '../utils/safe-git';
 import { retentionLog } from './agent-tmp';
@@ -11,6 +11,9 @@ import { type JanitorItem, type JanitorOps, type JanitorReport, type JanitorWorl
 import { createJanitor, type JanitorState } from './janitor-state';
 import { processesNow } from './janitor-processes';
 import { broadcastToAllWindows } from '../utils/broadcast';
+import { buildDiskReport, registryOf, type DiskReport, type DiskReportMachine } from './disk-report';
+import { diskSpace } from './orphan-folders';
+import { readSamples } from './health/samples';
 
 /**
  * The disk janitor in the app (the rules: janitor-rules.ts). The window asks for a scan and shows it; the owner ticks
@@ -120,7 +123,11 @@ export function setJanitorProjects(projects: () => string[]): void {
 const IN_PROGRESS: Record<string, string> = { 'rebase-merge': 'a rebase', 'rebase-apply': 'a rebase', MERGE_HEAD: 'a merge', CHERRY_PICK_HEAD: 'a cherry-pick', REVERT_HEAD: 'a revert', BISECT_LOG: 'a bisect' };
 
 async function worldNow(measure = true): Promise<JanitorWorld> {
-  const fleet = [...agents.values()].map(a => ({ id: a.id, projectPath: a.projectPath, ...(a.worktreePath ? { worktreePath: a.worktreePath } : {}) }));
+  const fleet = [...agents.values()].map(a => ({
+    id: a.id, projectPath: a.projectPath, ...(a.worktreePath ? { worktreePath: a.worktreePath } : {}), name: a.name || a.id, status: a.status,
+    // The sessions it holds: its temporary folders keep these sessions' scratchpads (janitor-rules.ts).
+    sessions: [a.currentSessionId, a.resumableSessionId].filter((s): s is string => typeof s === 'string' && s.length > 0),
+  }));
   const projects = [...new Set(projectsOf().filter(p => p && fs.existsSync(p)))];
   const reports = reportsText();
   const home = os.homedir();
@@ -169,8 +176,20 @@ const OPS: JanitorOps = {
   log: (line) => retentionLog(`[janitor] ${line}`, JANITOR_LOG),
 };
 
+/** The machine's free disk, and its swap and swap growth as the last health sample measured them (null when none did). */
+function machineNow(): DiskReportMachine {
+  const last = readSamples(dataPath('health-samples.jsonl')).at(-1)?.machine;
+  return {
+    diskFreeBytes: diskSpace()?.freeBytes ?? null,
+    swapUsedMb: typeof last?.swapUsedMb === 'number' ? last.swapUsedMb : null,
+    swapGrowthMbPerMin: typeof last?.swapGrowthMbPerMin === 'number' ? last.swapGrowthMbPerMin : null,
+  };
+}
+
 /** The janitor of this Tars: its state sent to the window on each change (diskJanitor:changed). */
 const janitor = createJanitor({
+  // What agents leave behind, made after each scan from its world (services/disk-report.ts).
+  report: (world, items) => buildDiskReport(world, items, { machine: machineNow(), registryOf }),
   world: () => worldNow(true),
   // The re-check before a deletion does not measure again: the scan's size is what the owner approved.
   worldForCheck: () => worldNow(false),
@@ -192,4 +211,45 @@ export function janitorScan(asker: { id: string; name: string; project: string }
 /** The owner's approval, told to the window as it goes; a second one while one runs is refused. */
 export function janitorApprove(ids: string[]): Promise<JanitorReport> {
   return janitor.approve(ids);
+}
+
+/** An agent's scan, waited for `waitMs` at most (GET /api/janitor/scan?wait=, disk_scan). */
+export function janitorScanFor(asker: { id: string; name: string; project: string }, waitMs: number) {
+  return janitor.scanFor(asker, waitMs);
+}
+
+/** An agent's cleanup request, recorded for the owner (POST /api/janitor/request, disk_cleanup_request). */
+export function janitorRequest(asker: { id: string; name: string; project: string }, ids: unknown, why: unknown) {
+  return janitor.request(asker, ids, why);
+}
+
+/** The owner's one click on a request (diskJanitor:approveRequest). */
+export function janitorApproveRequest(id: string): Promise<JanitorReport> {
+  return janitor.approveRequest(id);
+}
+
+/** The last report, as an agent of that project reads it (GET /api/disk/report, disk_report). */
+export function janitorReportFor(project: string): DiskReport | null {
+  return janitor.reportFor(project);
+}
+
+/**
+ * The periodic scan, which makes the report of what agents leave behind with nobody asking: every 6 hours, or a
+ * test's own period (DOROTHY_DISK_REPORT_EVERY_MS, under DOROTHY_E2E only, 2 s at least). It proposes and deletes
+ * nothing by itself: what it finds waits for the owner. Never two at once (a scan under way is joined).
+ */
+let reportTimer: ReturnType<typeof setInterval> | undefined;
+export function startDiskReports(): void {
+  if (reportTimer) return;
+  const asked = Number(process.env.DOROTHY_DISK_REPORT_EVERY_MS);
+  const every = process.env.DOROTHY_E2E === '1' && Number.isFinite(asked) && asked >= 2_000 ? asked : 6 * 3_600_000;
+  reportTimer = setInterval(() => {
+    void janitor.scan(null, { by: 'Tars, the periodic report' }).catch(err => console.warn('[janitor] the periodic scan failed:', err));
+  }, every);
+  reportTimer.unref?.();
+}
+
+export function stopDiskReports(): void {
+  if (reportTimer) clearInterval(reportTimer);
+  reportTimer = undefined;
 }

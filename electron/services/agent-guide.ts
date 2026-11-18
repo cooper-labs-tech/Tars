@@ -162,7 +162,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       'You act in your own project. Tools that act on another project refuse unless they take allowCrossProject.',
       'An agent sleeps after 30 minutes without a turn; a message or a task wakes it.',
       'What you start carries your agent id in its environment (CLAUDE_AGENT_ID), detached or not. When you are stopped, Tars ends all of it by its PID, an ansible run and a `fly ssh` session excepted; a sleep waits while any of it runs outside your terminal. Label each Docker container you start, `docker run --label tars.agent=$CLAUDE_AGENT_ID` (`labels: [tars.agent=...]` in a compose file), so that it is stopped with you. What runs on with no session of yours is reported to your orchestrator after an hour, never ended.',
-      'A disk short of space: `disk_scan` lists what Tars\'s disk janitor would propose to delete, by rule. Only the user approves a deletion, in Tars\'s window: never delete those yourself.',
+      'A disk short of space: `disk_scan` lists what Tars\'s disk janitor would propose to delete in your project, by rule, and `disk_report` what agents leave behind there, per worktree and per agent, with the machine\'s free disk and swap. `disk_cleanup_request` asks the user to approve items, by their ids, saying why: the user approves in Tars\'s window, in one click. Never delete those yourself.',
       '`tars_guide` with no topic lists the topics; with one, returns it. The guide is the one of the Tars that runs you.',
     ].join('\n'),
   },
@@ -184,6 +184,8 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
 export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   // mcp-orchestrator
   disk_scan: 'limits',
+  disk_report: 'limits',
+  disk_cleanup_request: 'limits',
   whoami: 'limits',
   list_agents: 'delegation',
   get_agent: 'delegation',

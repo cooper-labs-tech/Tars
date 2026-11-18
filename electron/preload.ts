@@ -991,6 +991,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     state: () => ipcRenderer.invoke('diskJanitor:state'),
     scan: () => ipcRenderer.invoke('diskJanitor:scan'),
     approve: (ids: string[]) => ipcRenderer.invoke('diskJanitor:approve', ids),
+    // An agent's cleanup request, approved in one click (2.0.7).
+    approveRequest: (id: string) => ipcRenderer.invoke('diskJanitor:approveRequest', id),
     onChanged: (callback: (state: unknown) => void) => {
       const listener = (_: unknown, state: unknown) => callback(state);
       ipcRenderer.on('diskJanitor:changed', listener);
