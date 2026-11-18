@@ -372,7 +372,14 @@ for (const newInterface of [false, true]) {
       const readyPush = git(readyWt, ['push', 'origin', `HEAD:refs/heads/${readyBranch}`]);
       expect(readyPush.code).not.toBe(0);
       expect(readyPush.err).toContain('push-turned-off-by-tars');
-      // On a branch another worktree holds: refused, and nothing is left made.
+      // On a branch another worktree holds, with a gate checkout of it already there and work in it (the Audit's M3 on
+      // #595): refused, naming its holder, nothing made, and that checkout and its work left alone.
+      const gate = await named('worktree_new', { project: B, branch: readyBranch, existing: true });
+      const gatePath = /Worktree (.+?): /.exec(gate.text)?.[1];
+      keep({ gate });
+      expect(gate.isError).toBe(false);
+      expect(gatePath).toBeTruthy();
+      fs.writeFileSync(path.join(gatePath!, 'qa-notes.txt'), 'mid-gate\n');
       const agentsBefore = records().length;
       const worktreesBefore = git(B, ['worktree', 'list', '--porcelain']).out;
       const halfMade = await named('create_agent', { name: 'B-Twice', projectPath: B, provider: 'codex', worktree: { branch: readyBranch, noPush: true } });
@@ -380,6 +387,8 @@ for (const newInterface of [false, true]) {
       expect(halfMade.isError).toBe(true);
       expect(records().length).toBe(agentsBefore);
       expect(git(B, ['worktree', 'list', '--porcelain']).out).toBe(worktreesBefore);
+      expect(halfMade.text).toContain('branch_held');
+      expect(fs.readFileSync(path.join(gatePath!, 'qa-notes.txt'), 'utf8')).toBe('mid-gate\n');
       expect(mainState()).toEqual(mainBefore);
       // A setting beyond the inference ones, across projects: the named worker yes, the other no.
       const modeByNamed = await named('update_agent', { id: readyId, permissionMode: 'normal' });

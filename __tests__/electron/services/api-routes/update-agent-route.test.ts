@@ -101,6 +101,21 @@ import { EventEmitter } from 'events';
  *     change moved since: it must set back only what is still at its value,
  *     and name the rest; a revert by a caller who may not make that change is
  *     taken.
+ * 22. (the Audit's M1 on #595) The queue is walked on a copy: a change
+ *     cancelled by its revert while another is applied is applied anyway, and
+ *     one asked while another is applied is dropped until Tars's next start, or
+ *     applied beside it. Each must be kept in its order, and a cancelled one
+ *     never applied.
+ * 23. (M2) A revert is judged by the settings the log holds, which for a
+ *     provider change include the model and CLI path it cleared: the worker
+ *     that changed a provider is refused its revert, and so is everyone on an
+ *     orchestrator. A revert must be judged by what the change's caller named.
+ * 24. (L3) The change log hands any agent another project's whole history,
+ *     CLI paths, skills, names and folders: another project's changes must
+ *     show their inference settings only, unless a grant opens that project.
+ * 25. (L5) A value the log refuses (a name of 400 characters) is written to
+ *     the agent, then the log throws: it must be refused before anything is
+ *     written.
  * 21. The window's undo (agent.revertChange, 2.0.7) goes another way than
  *     revert_agent_change, or is filed under an agent or Tars: it must take
  *     the same engine, filed under the window; of a queued change it applies
@@ -819,5 +834,95 @@ describe("the window's undo (agent.revertChange)", () => {
     const answer = await revertAsWindow(sel as never);
     expect(answer.ok).toBe(false);
     expect((answer as { error: string }).error.length).toBeGreaterThan(0);
+  });
+});
+
+describe('the Audit of #595: the queue, the revert, the log', () => {
+  async function call(method: 'GET' | 'POST', pathname: string, body: Record<string, unknown> = {}, caller: Caller = { callerAgentId: 'lead' }) {
+    const app = makeRouteApp();
+    registerAgentRoutes(app, ctx);
+    const url = new URL(`http://localhost${pathname}`);
+    const route = app.routes.find(r => r.method === method && (r.pattern === url.pathname || (r.pattern instanceof RegExp && r.pattern.test(url.pathname))));
+    const sendJson = vi.fn();
+    const req = { method, pathname: url.pathname, url, body, raw: {} as never, res: {} as never, params: {}, ...caller } as RouteRequest;
+    await route!.handler(req, sendJson, ctx);
+    const [answer, status] = sendJson.mock.calls[0] as [Record<string, unknown>, number | undefined];
+    return { answer, status: status ?? 200 };
+  }
+
+  function queueTwo() {
+    liveCli('pty-w2', 'claude');
+    Object.assign(agents.get('w2')!, { ptyId: 'pty-w2', status: 'running' });
+  }
+
+  it('22. never applies a change its revert cancelled while an earlier one was being applied', async () => {
+    queueTwo();
+    const c1 = await update('w2', { model: 'opus' }, { callerAgentId: 'w1' });
+    const c2 = await update('w2', { effort: 'max' }, { callerAgentId: 'w1' });
+    expect([c1.answer.state, c2.answer.state]).toEqual(['queued', 'queued']);
+    Object.assign(agents.get('w2')!, { status: 'waiting', waitingReason: 'idle' });
+    // The revert of c2 lands while c1 is applied (its restart is asked for inside the apply).
+    vi.mocked(restartForSettings).mockImplementationOnce(() => {
+      void revertAsWindow({ changeId: String(c2.answer.changeId) });
+      return { action: 'restarted' };
+    });
+    await checkQueued();
+    await checkQueued();
+    expect(agents.get('w2')!.model).toBe('opus');
+    expect(agents.get('w2')!.effort).toBeUndefined();
+    expect(changeById(String(c2.answer.changeId))!.state).toBe('cancelled');
+  });
+
+  it('22. keeps a change asked while another is applied, and applies it after, in order', async () => {
+    queueTwo();
+    const c1 = await update('w2', { model: 'opus' }, { callerAgentId: 'w1' });
+    Object.assign(agents.get('w2')!, { status: 'waiting', waitingReason: 'idle' });
+    let c2: { answer: Record<string, unknown> } | undefined;
+    vi.mocked(restartForSettings).mockImplementationOnce(() => {
+      void update('w2', { effort: 'max' }, { callerAgentId: 'w1' }).then((a) => { c2 = a; });
+      return { action: 'restarted' };
+    });
+    await checkQueued();
+    await vi.waitFor(() => expect(c2).toBeDefined());
+    expect(c2!.answer.state).toBe('queued');
+    await checkQueued();
+    expect(agents.get('w2')).toMatchObject({ model: 'opus', effort: 'max' });
+    expect(changeById(String(c1.answer.changeId))!.state).toBe('applied');
+    expect(changeById(String(c2!.answer.changeId))!.state).toBe('applied');
+  });
+
+  it('23. lets the worker that changed a provider revert it, on a worker and on an orchestrator, and Tars\'s pass too', async () => {
+    const onWorker = await update('w2', { provider: 'codex' }, { callerAgentId: 'w1' });
+    expect(onWorker.status, String(onWorker.answer.error)).toBe(200);
+    const back = await call('POST', '/api/agent-changes/revert', { changeId: onWorker.answer.changeId }, { callerAgentId: 'w1' });
+    expect((back.answer.results as Array<{ state: string }>)[0].state).toBe('applied');
+    expect(agents.get('w2')).toMatchObject({ provider: 'claude', model: 'sonnet' });
+    const onLead = await update('lead', { provider: 'codex' }, { callerAgentId: 'far' });
+    expect(onLead.status, String(onLead.answer.error)).toBe(200);
+    const byTars = await call('POST', '/api/agent-changes/revert', { changeId: onLead.answer.changeId }, { internal: true });
+    expect((byTars.answer.results as Array<{ state: string }>)[0].state).toBe('applied');
+    expect(agents.get('lead')!.provider ?? 'claude').toBe('claude');
+  });
+
+  it("24. shows another project's changes by their inference settings only, its own whole", async () => {
+    await update('far', { model: 'opus' });
+    await update('far', { name: 'Far renamed' }, { callerAgentId: 'far-lead' });
+    await update('w2', { name: 'Tester renamed' });
+    const fromFar = await call('GET', '/api/agent-changes', {}, { callerAgentId: 'far' });
+    const changes = fromFar.answer.changes as AgentChange[];
+    const mine = changes.filter((c) => c.projectPath === '/other/project');
+    expect(mine.map((c) => c.fields).sort()).toEqual([['model'], ['name']]);
+    const theirs = changes.filter((c) => c.projectPath === PROJECT);
+    expect(theirs).toEqual([]);
+    const fromHere = await call('GET', '/api/agent-changes', {}, { callerAgentId: 'w1' });
+    const farSeen = (fromHere.answer.changes as AgentChange[]).filter((c) => c.projectPath === '/other/project');
+    expect(farSeen.map((c) => c.fields)).toEqual([['model']]);
+  });
+
+  it('25. refuses a value the log does not keep before writing anything', async () => {
+    const before = recordOf('w2');
+    const { status } = await update('w2', { name: 'n'.repeat(400) });
+    expect(status).toBe(400);
+    expect(recordOf('w2')).toEqual(before);
   });
 });
