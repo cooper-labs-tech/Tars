@@ -53,9 +53,11 @@ test('4. lengths and sizes', () => {
 });
 
 test('5. required fields', () => {
-  const { model: _m, ...noModel } = session;
+  const noModel: Record<string, unknown> = { ...session };
+  delete noModel.model;
   assert.ok(errs({ ...ok, sessions: [noModel] }).length);
-  const { messages: _x, ...noMessages } = request;
+  const noMessages: Record<string, unknown> = { ...request };
+  delete noMessages.messages;
   assert.ok(errs({ ...ok, requests: [noMessages] }).length);
 });
 

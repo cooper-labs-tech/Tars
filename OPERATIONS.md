@@ -2791,3 +2791,128 @@ and it may hold the only copy of a version never published (see *Which builds ar
 `CLAUDE.md` at the repo root carries a block re-written by `next dev`
 (`node_modules/next/dist/server/lib/generate-agent-files.js`). Removing it from a diff only
 re-creates the uncommitted change; commit it with your work to keep the tree clean.
+
+## Trace back-office
+
+`backoffice/` (API in `backoffice/API.md`, boundaries in `SECURITY.md` § 9) runs on one Linux
+server behind Cloudflare. This is the generic runbook. `traces.example.com` stands for the
+instance's host name, and `192.0.2.10` for the server's address.
+
+### Size
+
+One small VPS is enough to start: 2 vCPU, 4 GB of memory, 80 GB of disk. A session is about
+100 KB once compressed and deduplicated, so 80 GB holds several hundred thousand. Watch the free
+disk on the overview page, and grow the disk before it falls under 20 %.
+
+### 1. Server
+
+- Debian 12 or Ubuntu 24.04, with automatic security updates (`unattended-upgrades`).
+- SSH by key only (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`).
+- A user for the service: `useradd --system --home /var/lib/tars-backoffice --shell /usr/sbin/nologin tbo`.
+
+### 2. Software
+
+- Node.js 22 LTS (22.18 or later), from NodeSource or the distribution.
+- PostgreSQL 16 or 17 and nginx, from the distribution. restic for the backups.
+
+### 3. Database
+
+```bash
+sudo -u postgres createuser tbo
+sudo -u postgres createdb --owner tbo tars_backoffice
+```
+
+The service connects over the local unix socket with peer authentication, so the database has no
+password and no TCP listener (`listen_addresses = ''` in `postgresql.conf`).
+
+### 4. Code and configuration
+
+```bash
+sudo git clone --depth 1 https://github.com/cooper-labs-tech/Tars /opt/tars-src
+sudo ln -s /opt/tars-src/backoffice /opt/tars-backoffice
+cd /opt/tars-backoffice && sudo npm ci --omit=dev
+sudo install -d -o tbo -g tbo -m 700 /var/lib/tars-backoffice /var/lib/tars-backoffice/blobs
+sudo install -d -m 700 /etc/tars-backoffice
+```
+
+`/etc/tars-backoffice/env`, mode 0600, owned by root (systemd reads it before dropping to `tbo`):
+
+```
+PGHOST=/var/run/postgresql
+PGDATABASE=tars_backoffice
+BACKOFFICE_DATA_DIR=/var/lib/tars-backoffice/blobs
+BACKOFFICE_LISTEN=127.0.0.1:8787
+BACKOFFICE_PUBLIC_ORIGIN=https://traces.example.com
+BACKOFFICE_TRUST_PROXY=1
+BACKOFFICE_OWNER_PASSWORD_HASH=<from: node src/cli.ts hash-password>
+BACKOFFICE_ACCESS_ISSUER=https://<team>.cloudflareaccess.com
+BACKOFFICE_ACCESS_AUDIENCE=<the Access application's AUD tag>
+```
+
+Then install `deploy/tars-backoffice.service` into `/etc/systemd/system/` and
+`systemctl enable --now tars-backoffice`. The unit applies pending migrations before each start
+(`ExecStartPre`). The owner's password hash comes from
+`printf '%s' '<password>' | node /opt/tars-backoffice/src/cli.ts hash-password`, run anywhere.
+Commands that need the database (`reader create`, `retention run`) run as the service would:
+`sudo systemd-run --uid=tbo --pipe --wait -p EnvironmentFile=/etc/tars-backoffice/env -p WorkingDirectory=/opt/tars-backoffice /usr/bin/node src/cli.ts <command>`.
+
+### 5. Cloudflare
+
+1. **DNS:** an `A` record `traces` to `192.0.2.10`, proxied (orange cloud).
+2. **SSL/TLS:** mode "Full (strict)". "Always Use HTTPS" on. Minimum TLS 1.2.
+3. **Origin certificate:** SSL/TLS, Origin Server, Create certificate for `traces.example.com`.
+   The certificate goes to `/etc/ssl/tars-backoffice/origin.pem`, the key to `origin.key`
+   (0600, root).
+4. **Authenticated Origin Pulls:** turned on for the zone. Cloudflare's origin-pull CA goes to
+   `/etc/ssl/tars-backoffice/cloudflare-origin-pull-ca.pem`.
+5. **Access:** Zero Trust, Access, Applications, a self-hosted application for
+   `traces.example.com/admin`, with a policy allowing only the operator's email and requiring
+   MFA. Its "Application Audience (AUD) tag" is `BACKOFFICE_ACCESS_AUDIENCE`, and the team domain
+   is `BACKOFFICE_ACCESS_ISSUER`. `/v1/*` stays outside Access: installs and readers use their
+   tokens.
+6. **Rate limiting rule** (WAF): `/v1/installs` POST, 20 per 10 minutes per IP, block. This is
+   the durable limit in front of the in-process one.
+
+### 6. nginx and firewall
+
+- `deploy/nginx.conf` goes to `/etc/nginx/sites-available/tars-backoffice`, linked into
+  `sites-enabled`. `/etc/nginx/cloudflare-ips.conf` lists one `set_real_ip_from` per range of
+  https://www.cloudflare.com/ips-v4 and `ips-v6`.
+- Firewall (ufw or nftables): SSH from the operator's own address, and 443 from Cloudflare's
+  ranges only. Nothing else in.
+- Refresh the ranges monthly (a timer that rewrites both the nginx include and the firewall
+  set from the two lists, then reloads).
+
+### 7. Backups
+
+`deploy/backup.sh` from a nightly systemd timer: `pg_dump --format=custom`, then the dump and the
+blob folder into a restic repository off the server (another provider's object store, or a
+storage box). `/etc/tars-backoffice/backup.env` (0600) holds `RESTIC_REPOSITORY` and
+`RESTIC_PASSWORD_FILE`. Keep a copy of the restic password outside the server too. Snapshots age
+out in 35 days, so a deletion reaches the backups within 35 days.
+
+**Restore drill, once after setup and then quarterly:** `restic restore latest --target /tmp/r`,
+`pg_restore --clean --dbname tars_backoffice /tmp/r/var/lib/tars-backoffice/backup/db.dump`, copy
+the blobs back, start the service, read one session through the read API.
+
+### 8. Updates
+
+```bash
+cd /opt/tars-src && sudo git pull --ff-only
+cd /opt/tars-backoffice && sudo npm ci --omit=dev
+sudo systemctl restart tars-backoffice      # applies pending migrations first
+```
+
+The server refuses to start while a migration is pending. Every migration has its reverse
+(`migrate down`, run by hand with `systemd-run` as above). A `down` that drops data says so in
+its first line. Take a backup before an update that carries a migration.
+
+### 9. Day to day
+
+- **Overview page:** installs, sessions, disk, the last 14 days.
+- **Readers:** create a token (shown once), revoke one. `node src/cli.ts reader create <name>`
+  does the same from the shell.
+- **Retention:** Settings, in days. It runs hourly, and on demand from the same page.
+- **Deletions:** every deletion with its receipt and counts. An install's own deletion is
+  immediate, and readers learn of it from `/v1/read/deletions`.
+- **Logs:** `journalctl -u tars-backoffice`. Request bodies are never logged.

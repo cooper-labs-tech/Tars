@@ -117,7 +117,7 @@ const eslintConfig = defineConfig([
     // members. Typing every stub in full makes the test longer and more
     // brittle without making the product any safer, so `any` is allowed here
     // and nowhere else. Production code has none.
-    files: ["__tests__/**/*.ts", "e2e/**/*.ts", "e2e/**/*.mjs"],
+    files: ["__tests__/**/*.ts", "e2e/**/*.ts", "e2e/**/*.mjs", "backoffice/test/**/*.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
     },

@@ -104,7 +104,7 @@ const csrfOf = (html: string) => /name="csrf" value="([^"]+)"/.exec(html)?.[1] ?
 describe('trace back-office, end to end', () => {
   let installA = { id: '', token: '' };
   let installB = { id: '', token: '' };
-  let reader = { id: '', token: '' };
+  const reader = { id: '', token: '' };
   let cursor = '';
 
   before(async () => {

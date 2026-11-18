@@ -1040,3 +1040,72 @@ says around them, in a message of its own, is the owner's; anything the owner
 typed by hand into a terminal, or said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
+
+## 9. The trace back-office
+
+`backoffice/` is a separate server, self-hosted by whoever runs it: Tars installs whose user
+opted in send it their agent traces, and readers its operator trusts read them. Its API is
+`backoffice/API.md`. What holds, and what does not:
+
+**Boundaries.**
+
+| Who | Holds | Opens |
+|---|---|---|
+| An install | `tbi_` token, returned once at registration, kept by Tars in `~/.tars-private` | Its own uploads, its own usage, the deletion of all its data. Never another install's data, never a read route |
+| A reader | `tbr_` token, issued by the operator in the pages, shown once | `/v1/read/*`, read only. No write |
+| The operator | Cloudflare Access identity, then the app's own password | `/admin/*` |
+
+- **Tokens at rest:** only SHA-256 hashes. They are 32 random bytes, so a hash cannot be reversed
+  by guessing, and the lookup is by hash, so nothing compares a secret byte by byte. The E2E dumps
+  the `installs` table and checks no token is in it.
+- **A token opens only its prefix:** an install token on a read route, a reader token on a write,
+  is `401`. A revoked reader token is refused at its next request (no cache).
+- **Every write is authenticated, but one:** registration. An install cannot hold a token
+  before it has one. It is limited per source address and in all, and the operator can close
+  it. An install that uploads nothing within 7 days is removed. Registration gets an install
+  nothing but its own empty space.
+- **Content is checked against its name:** a blob whose decoded bytes do not hash to the name it
+  was sent under is refused (`422`). So no install can plant other content under a hash another
+  install will later send, even though identical content is stored once.
+- **No oracle across installs:** "which of these blobs are missing" answers about the asking
+  install's own blobs only. Whether another install sent a given text is never revealed.
+- **Bodies:** limited on the wire and after decompression. zlib stops a decompression bomb at the
+  limit instead of expanding it in full (unit-tested).
+- **Unknown fields are refused,** not dropped: a client that starts sending a path or an
+  environment by mistake is told at once.
+
+**The operator's pages, two locks.**
+
+1. **Cloudflare Access** in front of `/admin`: the operator's identity provider, with MFA. The
+   server also checks Access's signed assertion (`Cf-Access-Jwt-Assertion`, RS256, audience,
+   issuer, expiry) when configured. So reaching the origin around Cloudflare does not get past
+   this lock.
+2. **The app's own login:** the operator's password as an scrypt hash, in the server's
+   environment file, never in the repository. The session cookie is random and stored hashed.
+   It is `HttpOnly`, `SameSite=Strict`, `Secure` and `__Host-` over https, and lasts 12 hours.
+   Every form carries a CSRF token, and every POST must come from the configured origin. Logins
+   are limited to 5 tries, then one every 3 minutes per address. The pages send a strict CSP and
+   load no script.
+
+Either lock holds if the other fails: a leaked password is useless without the Access identity,
+and an Access misconfiguration still meets the password.
+
+**Transport.** TLS ends at Cloudflare, which reaches the origin over TLS again with a Cloudflare
+Origin CA certificate. The origin's firewall accepts port 443 from Cloudflare's published ranges
+only, and nginx requires Cloudflare's client certificate (Authenticated Origin Pulls). So an
+attacker who learns the origin's address gets no answer. The Node process listens on loopback
+only.
+
+**What it does not protect.**
+
+- **Content is stored as sent.** Scrubbing secrets is the client's job, before upload. The server
+  stores what it is given, and the operator and every reader with a token can read it all. An
+  install's user must know who reads before opting in: that is the privacy notice's job, not this
+  code's.
+- **Readers' copies:** once read, content is in the reader's hands. The deletion feed tells a
+  reader what to delete. The server cannot make it.
+- **The operator's own server:** root on the server reads everything. The blobs are not encrypted
+  at rest beyond the disk's own encryption. The backups are, by restic, with a key kept off the
+  server.
+- **Rate limits are per process, in memory:** a restart refills them. Cloudflare's own rate rules
+  in front are the durable limit.

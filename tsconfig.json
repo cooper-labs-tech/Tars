@@ -28,5 +28,5 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "mcp-*", "vitest.config.mts", "landing", "__tests__", "e2e"]
+  "exclude": ["node_modules", "mcp-*", "vitest.config.mts", "landing", "__tests__", "e2e", "backoffice"]
 }

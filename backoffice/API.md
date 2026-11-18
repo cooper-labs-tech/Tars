@@ -52,7 +52,7 @@ Default limits, each set by the operator (`GET /v1/installs/me` returns the ones
 | Requests per install | 120 per minute, bursts of 60 |
 | Batch body | 8 MiB on the wire, 64 MiB decompressed |
 | Blob | 16 MiB on the wire, 64 MiB decompressed |
-| Stored bytes per install | 2 GiB (blobs, as stored) |
+| Stored bytes per install | 2 GiB (its blobs as stored, plus the batch bodies kept 30 days for replays) |
 | Registrations | 10 per hour per source address, 500 per hour in all |
 
 A client retries `429` and `503` after `Retry-After`, and retries network errors and other `5xx`
