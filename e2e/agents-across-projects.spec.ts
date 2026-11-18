@@ -39,7 +39,13 @@ import { writeFakeClis } from './fake-clis.mjs';
  * 9. a worktree for B's agent: the granted worker makes one in B under .worktrees/<branch> with push off (the worker the grant
  *    does not name is refused), moves an agent onto it and back, and removes it; B's main checkout keeps its HEAD,
  *    its branch and its working tree through all of it; `git push` from the worktree fails loudly naming why, and a
- *    push from the main checkout still works.
+ *    push from the main checkout still works;
+ * 10. through the grant, the named worker creates a ready agent in B in one call (codex, its model and effort, a
+ *    worktree on the branch it names with push off): on the record and on disk, its push refused; a second creation
+ *    on a branch another worktree holds is refused and leaves nothing made (no agent, no worktree); the worker the
+ *    grant does not name is refused; the named worker changes a setting beyond the inference ones of a B agent;
+ *    removing the agent while its worktree holds uncommitted work is refused, saying why, and leaves both; once the
+ *    work is committed it is removed with its worktree. B's main checkout is untouched throughout.
  * Run in the classic shell and in the new interface's. The artefact: values.json (every tool answer, the records,
  * the change log, the git states).
  */
@@ -333,6 +339,55 @@ for (const newInterface of [false, true]) {
       expect(movedBack.isError).toBe(false);
       expect(recordOf('b-c').worktreePath).toBeUndefined();
       expect(fs.existsSync(wt)).toBe(false);
+      expect(mainState()).toEqual(mainBefore);
+
+      // ── 10. A ready agent created in B in one call; a half-made one never; removed only without uncommitted work ──
+      const readyBranch = 'work/b-ready';
+      const createdByOther = await other('create_agent', { name: 'B-Ready', projectPath: B, provider: 'codex', model: 'gpt-5.5', effort: 'high', worktree: { branch: 'work/b-never' } });
+      const created = await named('create_agent', { name: 'B-Ready', projectPath: B, provider: 'codex', model: 'gpt-5.5', effort: 'high', worktree: { branch: readyBranch, noPush: true } });
+      keep({ createdByOther, created });
+      expect(createdByOther.isError).toBe(true);
+      expect(createdByOther.text).toContain('cross_project_not_granted');
+      expect(created.isError).toBe(false);
+      const readyId = /ID: ([0-9a-f-]{36})/.exec(created.text)?.[1];
+      expect(readyId).toBeTruthy();
+      const readyWt = path.join(B, '.worktrees', ...readyBranch.split('/'));
+      expect(recordOf(readyId!)).toMatchObject({ projectPath: B, provider: 'codex', model: 'gpt-5.5', effort: 'high', worktreePath: readyWt, branchName: readyBranch, role: 'worker' });
+      expect(fs.existsSync(path.join(readyWt, 'README.md'))).toBe(true);
+      const readyPush = git(readyWt, ['push', 'origin', `HEAD:refs/heads/${readyBranch}`]);
+      expect(readyPush.code).not.toBe(0);
+      expect(readyPush.err).toContain('push-turned-off-by-tars');
+      // On a branch another worktree holds: refused, and nothing is left made.
+      const agentsBefore = records().length;
+      const worktreesBefore = git(B, ['worktree', 'list', '--porcelain']).out;
+      const halfMade = await named('create_agent', { name: 'B-Twice', projectPath: B, provider: 'codex', worktree: { branch: readyBranch, noPush: true } });
+      keep({ halfMade, worktreesAfterHalfMade: git(B, ['worktree', 'list', '--porcelain']).out });
+      expect(halfMade.isError).toBe(true);
+      expect(records().length).toBe(agentsBefore);
+      expect(git(B, ['worktree', 'list', '--porcelain']).out).toBe(worktreesBefore);
+      expect(mainState()).toEqual(mainBefore);
+      // A setting beyond the inference ones, across projects: the named worker yes, the other no.
+      const modeByNamed = await named('update_agent', { id: readyId, permissionMode: 'normal' });
+      const modeByOther = await other('update_agent', { id: readyId, permissionMode: 'auto' });
+      keep({ modeByNamed, modeByOther });
+      expect(modeByNamed.isError).toBe(false);
+      expect(recordOf(readyId!).permissionMode).toBe('normal');
+      expect(modeByOther.isError).toBe(true);
+      // Removal refused while its worktree holds uncommitted work, then done once it is committed.
+      fs.writeFileSync(path.join(readyWt, 'draft.txt'), 'not committed\n');
+      const refusedRemoval = await named('remove_agent', { id: readyId });
+      keep({ refusedRemoval });
+      expect(refusedRemoval.isError).toBe(true);
+      expect(refusedRemoval.text).toContain('draft.txt');
+      expect(recordOf(readyId!).id).toBe(readyId);
+      expect(fs.existsSync(path.join(readyWt, 'draft.txt'))).toBe(true);
+      expect(git(readyWt, ['add', 'draft.txt']).code).toBe(0);
+      expect(git(readyWt, ['-c', 'user.email=e2e@tars.test', '-c', 'user.name=e2e', 'commit', '-q', '-m', 'the draft']).code).toBe(0);
+      const removedAgent = await named('remove_agent', { id: readyId });
+      keep({ removedAgent, mainAtEnd: mainState() });
+      expect(removedAgent.isError).toBe(false);
+      expect(records().some((a) => a.id === readyId)).toBe(false);
+      expect(fs.existsSync(readyWt)).toBe(false);
       expect(mainState()).toEqual(mainBefore);
     } finally {
       for (const server of servers) server.kill();
