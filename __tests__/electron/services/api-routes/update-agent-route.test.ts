@@ -116,6 +116,9 @@ import { EventEmitter } from 'events';
  * 25. (L5) A value the log refuses (a name of 400 characters) is written to
  *     the agent, then the log throws: it must be refused before anything is
  *     written.
+ * 26. (the re-audit's I1 on #595) Two changes asked of a free agent at the
+ *     same moment are both applied, the second over the first's apply: the
+ *     second must wait for it, queued, then apply.
  * 21. The window's undo (agent.revertChange, 2.0.7) goes another way than
  *     revert_agent_change, or is filed under an agent or Tars: it must take
  *     the same engine, filed under the window; of a queued change it applies
@@ -917,6 +920,18 @@ describe('the Audit of #595: the queue, the revert, the log', () => {
     const fromHere = await call('GET', '/api/agent-changes', {}, { callerAgentId: 'w1' });
     const farSeen = (fromHere.answer.changes as AgentChange[]).filter((c) => c.projectPath === '/other/project');
     expect(farSeen.map((c) => c.fields)).toEqual([['model']]);
+  });
+
+  it('26. makes the second of two changes asked at once wait for the first, then applies it', async () => {
+    const [a, b] = await Promise.all([
+      update('w2', { model: 'opus' }, { callerAgentId: 'w1' }),
+      update('w2', { effort: 'max' }, { callerAgentId: 'far' }),
+    ]);
+    expect(a.answer.state).toBe('applied');
+    expect(b.answer).toMatchObject({ state: 'queued', waitingFor: 'earlier change' });
+    await checkQueued();
+    expect(agents.get('w2')).toMatchObject({ model: 'opus', effort: 'max' });
+    expect(changeById(String(b.answer.changeId))!.state).toBe('applied');
   });
 
   it('25. refuses a value the log does not keep before writing anything', async () => {

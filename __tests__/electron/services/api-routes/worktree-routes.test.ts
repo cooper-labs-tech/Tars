@@ -16,11 +16,26 @@ import { execFileSync } from 'node:child_process';
  * WR4. A refusal of the service reaches the caller as a success, or without its code.
  * WR5. (The Audit's L2 on #585) a worktree an agent's terminal was started in (its ptyCwd), a task worktree no
  *      agent's worktreePath names, is removed from under it.
+ * WR7. (The re-audit of #595, L1) With noPush, a worktree whose push could not be turned off is kept and answered as
+ *      made (pushOff: false), while a push from it reaches a remote: it must be refused, saying why, the worktree
+ *      this call made taken back with the branch it made, and a gate checkout that was already there left alone.
  */
 
 vi.setConfig({ testTimeout: 60_000 });
 const { fleet } = vi.hoisted(() => ({ fleet: new Map<string, Record<string, unknown>>() }));
 vi.mock('../../../../electron/core/agent-manager', () => ({ agents: fleet }));
+// Turning push off fails on demand, as a push list git would not reduce to the marker would make it fail.
+const { pushOff } = vi.hoisted(() => ({ pushOff: { fail: false } }));
+vi.mock('../../../../electron/services/project-worktrees', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../../../electron/services/project-worktrees')>();
+  return {
+    ...real,
+    turnPushOff: async (at: string) => {
+      if (pushOff.fail) throw new Error('the push of remote origin still reaches /elsewhere.git');
+      return real.turnPushOff(at);
+    },
+  };
+});
 
 import { registerWorktreeRoutes } from '../../../../electron/services/api-routes/worktree-routes';
 
@@ -105,5 +120,28 @@ describe('the worktree routes', () => {
     expect(bad).toMatchObject({ status: 400, body: { code: 'invalid_branch' } });
     const none = await call('POST', '/api/worktrees/remove', { branch: 'feat/none' }, 'w');
     expect(none).toMatchObject({ status: 404, body: { code: 'not_found' } });
+  });
+
+  it('WR7. refuse a worktree whose push could not be turned off, taking back only what the call made', async () => {
+    pushOff.fail = true;
+    try {
+      const a = await call('POST', '/api/worktrees', { branch: 'feat/np', noPush: true }, 'w');
+      expect(a.status, JSON.stringify(a.body)).toBe(409);
+      expect(a.body.code).toBe('push_not_off');
+      expect(String(a.body.error)).toContain('still reaches');
+      expect(fs.existsSync(path.join(mine, '.worktrees', 'feat', 'np'))).toBe(false);
+      expect(() => git(mine, 'rev-parse', '--verify', '-q', 'refs/heads/feat/np')).toThrow();
+      // A gate checkout already there is never taken back.
+      pushOff.fail = false;
+      expect((await call('POST', '/api/worktrees', { branch: 'feat/held' }, 'w')).status).toBe(200);
+      const gate = await call('POST', '/api/worktrees', { branch: 'feat/held', existing: true }, 'w');
+      expect(gate.body.kind).toBe('detached');
+      pushOff.fail = true;
+      const again = await call('POST', '/api/worktrees', { branch: 'feat/held', existing: true, noPush: true }, 'w');
+      expect(again.status).toBe(409);
+      expect(fs.existsSync(String(gate.body.path))).toBe(true);
+    } finally {
+      pushOff.fail = false;
+    }
   });
 });
