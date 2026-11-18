@@ -165,7 +165,7 @@ describe('trace back-office, end to end', () => {
     installA = { id: a.json.installId, token: a.json.token };
     const b = await call('POST', '/v1/installs', { body: { client: { name: 'tars', version: '2.0.7', platform: 'linux' } } });
     installB = { id: b.json.installId, token: b.json.token };
-    const client = new pg.Client(db.env);
+    const client = new pg.Client({ host: db.env.PGHOST, port: Number(db.env.PGPORT), user: db.env.PGUSER, database: db.env.PGDATABASE });
     await client.connect();
     const dump = JSON.stringify((await client.query('SELECT * FROM installs')).rows);
     await client.end();
