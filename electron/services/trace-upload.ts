@@ -50,6 +50,8 @@ export interface UploadStateView {
   lastUploadAt?: number;
   lastError?: string;
   nextTryAt?: number;
+  /** The back-office does not take new installs, or blocked this one: a state to say, tried again in 6 hours. */
+  notice?: 'registration_closed' | 'install_blocked';
 }
 
 class HttpError extends Error {
@@ -73,6 +75,7 @@ export class TraceUploader {
   private nextTryAt?: number;
   private failures = 0;
   private lastError?: string;
+  private notice?: UploadStateView['notice'];
   private running = false;
 
   constructor(private readonly deps: UploaderDeps) {
@@ -96,7 +99,7 @@ export class TraceUploader {
     return {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
       pendingSessions: counts.pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
-      lastError: this.lastError, nextTryAt: this.nextTryAt,
+      lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
     };
   }
 
@@ -171,12 +174,22 @@ export class TraceUploader {
       this.failures = 0;
       this.nextTryAt = undefined;
       this.lastError = undefined;
+      this.notice = undefined;
       return { sent, failed: 0 };
     } catch (err) {
       this.failures++;
       const e = err as HttpError;
       const backoff = Math.min(30 * 60_000, 30_000 * 2 ** (this.failures - 1));
+      // A back-office closed to new installs, or one that blocked this install, is the operator's decision: a state the
+      // window says plainly, looked at again in 6 hours, not an error retried on the backoff.
+      if (e instanceof HttpError && e.status === 403 && (e.code === 'registration_closed' || e.code === 'install_blocked')) {
+        this.notice = e.code;
+        this.nextTryAt = this.now() + 6 * 3600_000;
+        this.lastError = e.code === 'registration_closed' ? 'This back-office does not take new installs.' : 'This back-office blocked this install.';
+        return { sent, failed: 1 };
+      }
       const blocked = e instanceof HttpError && e.status === 403;
+      // Retry-After when the server gives one (429 rate_limited, 503 unavailable, 507 disk_full), else the backoff.
       this.nextTryAt = this.now() + (e instanceof HttpError && e.retryAfterMs !== undefined ? e.retryAfterMs : blocked ? 3600_000 : backoff);
       this.lastError = e instanceof HttpError ? `${e.status} ${e.code}` : (err as Error).message;
       return { sent, failed: 1 };

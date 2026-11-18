@@ -3029,8 +3029,11 @@ export interface UploadState {
   sentSessions: number;
   lastUploadAt?: number;
   lastError?: string;
-  /** Waiting before the next try (offline, the server busy). */
+  /** Waiting before the next try (offline, the server busy or full). */
   nextTryAt?: number;
+  /** The back-office does not take new installs ('registration_closed'), or blocked this install ('install_blocked'):
+   *  say it plainly ("this back-office does not take new installs"), not as an error. Looked at again in 6 hours. */
+  notice?: 'registration_closed' | 'install_blocked';
 }
 
 export interface TraceStats {
