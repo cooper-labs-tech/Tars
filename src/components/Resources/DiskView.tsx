@@ -2,13 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Lock, RefreshCw, Search, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui';
+import { Button, SegmentedControl } from '@/components/ui';
+import type { SegmentedOption } from '@/components/ui';
 import type { JanitorItem } from '@/types/electron';
 import { Box, Empty, Figure, Figures, Notice, Unread } from './bits';
 import { bytes, diskGb, gb, stamp, sum } from './format';
 import { useDiskJanitor, useDiskSpace } from './hooks';
+import { AskedByAgents, WhatAgentsLeave } from './DiskReport';
 
 /** Each kind of item, one group, under the window's own title; the items' line is the rule they matched. */
+const VIEWS: readonly SegmentedOption<'cleanup' | 'leave'>[] = [{ value: 'cleanup', label: 'The cleanup' }, { value: 'leave', label: 'What agents leave' }];
+
 const KINDS: Record<JanitorItem['kind'], string> = {
   'closed-worktree': 'Worktrees of merged branches',
   'next-cache': 'Build caches of idle worktrees',
@@ -54,7 +58,9 @@ function detailsOf(d: NonNullable<JanitorItem['details']>): string {
  * diskJanitor (PR 542).
  */
 export function DiskView() {
-  const { state, missing, error, reload, actionError, scan, approve } = useDiskJanitor();
+  const { state, missing, error, reload, actionError, scan, approve, approveRequest } = useDiskJanitor();
+  /** 2.0.7: the cleanup the janitor proposes, or what agents leave behind, per project and per agent. */
+  const [view, setView] = useState<'cleanup' | 'leave'>('cleanup');
   const disk = useDiskSpace();
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
@@ -102,6 +108,17 @@ export function DiskView() {
 
   return (
     <section role="region" aria-label="Disk" className="flex flex-col gap-3 min-h-0 flex-1">
+      {view === 'leave' ? (
+      <Figures>
+        <Figure volatile caption="FREE DISK" value={gb(diskFree)} sub={disk ? `of ${gb(diskGb(disk.totalBytes))} · floor ${Math.round(diskGb(disk.floorBytes))} GB` : 'cannot be read'} />
+        <Figure volatile caption="SWAP USED" value={state?.report?.machine.swapUsedMb != null ? bytes(state.report.machine.swapUsedMb * 1024 ** 2) : 'not read'}
+          tone={(state?.report?.machine.swapGrowthMbPerMin ?? 0) > 0 ? 'waiting' : undefined}
+          sub={state?.report?.machine.swapGrowthMbPerMin != null && state.report.machine.swapGrowthMbPerMin > 0 ? `growing ${Math.round(state.report.machine.swapGrowthMbPerMin)} MB a minute` : state?.report ? 'not growing' : 'no report yet'} />
+        <Figure caption="LEFT BEHIND" value={state?.report ? bytes(sum(state.report.projects.map((p) => p.bytes)) ?? 0) : 'not read'}
+          sub={state?.report ? `in ${state.report.projects.length} ${state.report.projects.length === 1 ? 'project' : 'projects'}, ${sum(state.report.projects.map((p) => p.worktrees.length)) ?? 0} worktrees and ${state.report.agents.length} agents` : 'no report yet'} />
+        <Figure caption="PROPOSED" value={state?.scan ? bytes(proposedBytes) : '0 B'} sub={state?.scan ? `${count(open.length)} in ${groups.length} ${groups.length === 1 ? 'group' : 'groups'}` : 'no scan yet'} />
+      </Figures>
+      ) : (
       <Figures>
         <Figure volatile caption="FREE DISK" value={gb(diskFree)} tone={diskFree == null ? undefined : diskFree < 6 ? 'error' : diskFree < 10 ? 'waiting' : undefined}
           sub={disk ? `of ${gb(diskGb(disk.totalBytes))} · floor ${Math.round(diskGb(disk.floorBytes))} GB` : 'cannot be read'} />
@@ -109,6 +126,12 @@ export function DiskView() {
         <Figure caption="TICKED" value={bytes(tickedBytes)} sub={count(tickedItems.length)} />
         <Figure caption="FREED THIS WEEK" value={bytes(freedBytes)} sub={`${count(freedWeek.length)}, each in the log`} />
       </Figures>
+      )}
+      <div className="flex items-center gap-2 shrink-0">
+        <SegmentedControl ariaLabel="Disk view" options={VIEWS} value={view} onChange={setView} />
+        <span className="flex-1" />
+        {state?.report && <span className="font-mono text-[10.5px] text-muted-foreground">{`report made ${stamp(state.report.at)} after the last scan · every 6 hours at least`}</span>}
+      </div>
       {!missing && diskFree != null && diskFree < 10 && (
         <Notice tone={diskFree < 6 ? 'error' : 'waiting'} actions={scanButton('scan')}>
           {`${gb(diskFree)} free on this computer. A scan finds what the list allows; you choose what goes.`}
@@ -121,6 +144,9 @@ export function DiskView() {
         <Notice tone="idle">{`${lastRequest.by} asked for a scan of ${lastRequest.project} at ${stamp(lastRequest.at)}: ${count(lastRequest.items)}. Only you approve; an agent cannot.`}</Notice>
       )}
       {(actionError || state?.error) && <Unread text="The disk janitor could not finish:" detail={actionError ?? state?.error} onRetry={actionError ? undefined : reload} />}
+      {view === 'leave' ? (
+        <WhatAgentsLeave report={state?.report ?? null} items={items} busy={busy} onApprove={(ids) => void approve(ids)} />
+      ) : (
       <div className="flex gap-3 items-stretch min-h-0 flex-1 min-w-0">
         <Box name="Proposed" fill className="flex-1"
           caption={deleting ? `DELETING · ${deleting.done} OF ${deleting.total} · ${bytes(deleting.freedBytes)} FREED` : scanning ? 'SCANNING' : state?.scan ? (open.length ? `PROPOSED · ${count(open.length).toUpperCase()} IN ${groups.length} ${groups.length === 1 ? 'GROUP' : 'GROUPS'}` : 'PROPOSED · NOTHING') : 'PROPOSED'}
@@ -208,6 +234,7 @@ export function DiskView() {
           )}
         </Box>
         <div className="w-[380px] max-xl:w-[292px] shrink-0 flex flex-col gap-3 min-h-0">
+          {state && <AskedByAgents requests={state.cleanupRequests ?? []} items={items} busy={busy} onApprove={(id) => void approveRequest(id)} />}
           <Box name="Never proposed" caption="NEVER PROPOSED, NEVER DELETED">
             {state?.never.length ? (
               <ul className="pb-2.5">
@@ -232,6 +259,7 @@ export function DiskView() {
           </Box>
         </div>
       </div>
+      )}
     </section>
   );
 }
