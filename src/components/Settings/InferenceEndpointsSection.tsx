@@ -311,6 +311,9 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
         {replacingKey ? (
           <div className="relative">
             <PasswordInput aria-label="Key" value={key} onChange={e => setKey(e.target.value)} placeholder={endpoint ? 'a new key' : 'kept in ~/.tars-private, never shown again'} autoComplete="off" />
+            {endpoint && !endpoint.keySet && endpoint.changedBy && !endpoint.approved && (
+              <p className="mt-1 font-mono text-[10.5px] text-status-waiting">key to set again: it went with the old address when an agent changed it</p>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-2">
