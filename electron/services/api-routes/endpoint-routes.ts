@@ -79,7 +79,7 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
     send({ endpoint: viewOf(ctx, r.endpoint.id), needsApproval: !r.endpoint.approved, ...(keyNote ? { keyNotTaken: keyNote } : {}) }, 201);
   });
 
-  app.put(ENDPOINT, async (req, send) => {
+  app.post(ENDPOINT, async (req, send) => {
     const who = caller(req, send);
     if (!who) return;
     const b = req.body;
