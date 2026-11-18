@@ -35,6 +35,8 @@ const GIB = 1024 ** 3;
 
 export interface TracesDeps {
   getSettings(): AppSettings;
+  /** Holds and writes the settings, as the window's saves do: the API's endpoint routes change them. */
+  saveSettings(settings: AppSettings): void;
   getAgent(id: string): AgentStatus | undefined;
   /** Tells the window: 'traces:changed', 'endpoints:waiting', 'endpoints:changed'. */
   emit(channel: string, payload?: unknown): void;
@@ -313,4 +315,15 @@ export function isReaderToken(presented: string): boolean {
   const same = a.length === b.length && timingSafeEqual(a, b);
   if (same) readerLastUsedAt = new Date().toISOString();
   return same;
+}
+
+/** The settings changed by an API route (an agent's endpoint tools), held and saved as the window's saves are. */
+export function saveSettingsFromApi(settings: AppSettings): void {
+  if (!deps) throw new Error('Tars is not ready.');
+  deps.saveSettings(settings);
+}
+
+/** Tells the window an endpoint changed, and whether it now waits for the owner's approval. */
+export function tellEndpointChanged(e: { id: string; by?: { agentId: string; agentName?: string }; needsApproval: boolean }): void {
+  deps?.emit('endpoints:changed', e);
 }
