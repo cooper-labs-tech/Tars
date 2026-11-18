@@ -1005,7 +1005,7 @@
           },
           {
             "name": "project_schedule",
-            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each agent at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -1044,7 +1044,7 @@
                     "resume-queues",
                     "start-agents"
                   ],
-                  "description": "With 'set': 'resume-queues' (default: the agents start as their work comes) or 'start-agents' (each agent at rest is started too)"
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
                 }
               },
               "additionalProperties": false,
@@ -6605,7 +6605,7 @@
           },
           {
             "name": "project_schedule",
-            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each agent at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -6644,7 +6644,7 @@
                     "resume-queues",
                     "start-agents"
                   ],
-                  "description": "With 'set': 'resume-queues' (default: the agents start as their work comes) or 'start-agents' (each agent at rest is started too)"
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
                 }
               },
               "additionalProperties": false,
@@ -7843,7 +7843,7 @@
           },
           {
             "name": "project_schedule",
-            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each agent at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -7882,7 +7882,7 @@
                     "resume-queues",
                     "start-agents"
                   ],
-                  "description": "With 'set': 'resume-queues' (default: the agents start as their work comes) or 'start-agents' (each agent at rest is started too)"
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
                 }
               },
               "additionalProperties": false,
@@ -9009,7 +9009,7 @@
           },
           {
             "name": "project_schedule",
-            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each agent at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -9048,7 +9048,7 @@
                     "resume-queues",
                     "start-agents"
                   ],
-                  "description": "With 'set': 'resume-queues' (default: the agents start as their work comes) or 'start-agents' (each agent at rest is started too)"
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
                 }
               },
               "additionalProperties": false,
