@@ -97,13 +97,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('endpoints:refreshModels', async (_e, id: unknown) => {
     const r = await readModels(deps.getAppSettings(), String(id));
     // Only what the probe owns, onto the settings as they are now (the Audit's M1 on #596).
-    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch));
+    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch, r.probed));
     return r.ok ? { ok: true, models: r.models } : { ok: false, error: r.error };
   });
 
   ipcMain.handle('endpoints:check', async (_e, id: unknown) => {
     const r = await checkHealth(deps.getAppSettings(), String(id));
-    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch));
+    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch, r.probed));
     return r.health;
   });
 

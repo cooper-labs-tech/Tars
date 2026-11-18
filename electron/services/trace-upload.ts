@@ -113,8 +113,10 @@ export class TraceUploader {
       headers['Content-Encoding'] = c.encoding;
       headers['Content-Type'] = json ? 'application/json' : 'application/octet-stream';
     }
-    const res = await this.http(`${base.replace(/\/+$/, '')}${route}`, { method, headers, body: payload ? new Uint8Array(payload) : undefined, signal: AbortSignal.timeout(60_000) });
+    // No redirect is followed: the install token, and the session, go to the address the user set and no other.
+    const res = await this.http(`${base.replace(/\/+$/, '')}${route}`, { method, headers, body: payload ? new Uint8Array(payload) : undefined, redirect: 'manual', signal: AbortSignal.timeout(60_000) });
     const text = await res.text();
+    if (res.status >= 300 && res.status < 400) throw new HttpError(res.status, 'redirect_refused');
     let parsed: unknown = {};
     try { parsed = text ? JSON.parse(text) : {}; } catch { parsed = {}; }
     if (!res.ok) {

@@ -110,14 +110,14 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
     if (!caller(req, send)) return;
     const r = await readModels(ctx.getAppSettings(), req.params.id);
     // Only what the probe owns, onto the settings as they are now (the Audit's M1 on #596).
-    saveSettingsFromApi(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch));
+    saveSettingsFromApi(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch, r.probed));
     send(r.ok ? { models: r.models } : { error: r.error }, r.ok ? 200 : 502);
   });
 
   app.post(ENDPOINT_CHECK, async (req, send) => {
     if (!caller(req, send)) return;
     const r = await checkHealth(ctx.getAppSettings(), req.params.id);
-    saveSettingsFromApi(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch));
+    saveSettingsFromApi(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch, r.probed));
     send({ health: r.health });
   });
 

@@ -177,8 +177,13 @@ export function sweepTraces(): void {
 }
 
 /** The proxy on its port, and the hourly sweep. Called once at startup. */
-export function startTracesRuntime(d: TracesDeps): void {
+/** What the runtime reads and writes through (the settings, the fleet, the window), without starting anything. */
+export function configureTraces(d: TracesDeps): void {
   deps = d;
+}
+
+export function startTracesRuntime(d: TracesDeps): void {
+  configureTraces(d);
   sweepTimer = setInterval(sweepTraces, 3600_000);
   sweepTimer.unref?.();
   sweepTraces();

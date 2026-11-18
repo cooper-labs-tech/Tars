@@ -292,7 +292,13 @@ export function ensureDropFolder(dir: string = ENDPOINT_KEYS_DIR): void {
 /** What a probe changes on an endpoint, applied to the settings as they are when it is written (the Audit's M1). */
 export type EndpointPatch = Partial<Pick<InferenceEndpoint, 'models' | 'modelsReadAt' | 'modelsError' | 'health'>>;
 
-export function applyEndpointPatch(settings: AppSettings, id: string, patch: EndpointPatch): AppSettings {
+/**
+ * A probe's patch onto the settings as they are now. With `probed`, the address the probe went to: when the endpoint
+ * has moved since, the patch describes another address and is dropped (the re-audit's I1 on #596).
+ */
+export function applyEndpointPatch(settings: AppSettings, id: string, patch: EndpointPatch, probed?: string): AppSettings {
+  const now = endpointsOf(settings).find(e => e.id === id);
+  if (!now || (probed !== undefined && now.baseUrl !== probed)) return settings;
   return { ...settings, inferenceEndpoints: endpointsOf(settings).map(e => (e.id === id ? { ...e, ...patch } : e)) };
 }
 
@@ -317,9 +323,10 @@ const REDIRECT_REFUSED = 'The endpoint answered with a redirect, which Tars does
  * patch, never the settings: they are read again when it is written.
  */
 export async function readModels(settings: AppSettings, id: string, fetchImpl: typeof fetch = fetch, now: string = new Date().toISOString()):
-  Promise<{ ok: true; models: string[]; patch: EndpointPatch } | { ok: false; error: string; patch: EndpointPatch }> {
+  Promise<{ ok: true; models: string[]; patch: EndpointPatch; probed: string } | { ok: false; error: string; patch: EndpointPatch; probed?: string }> {
   const e = endpointsOf(settings).find(x => x.id === id);
   if (!e) return { ok: false, error: 'There is no such endpoint.', patch: {} };
+  const probed = e.baseUrl;
   const { url, key } = probeOf(settings, e);
   let error: string;
   try {
@@ -332,21 +339,22 @@ export async function readModels(settings: AppSettings, id: string, fetchImpl: t
       try { parsed = JSON.parse(text); } catch { parsed = undefined; }
       const data = (parsed as { data?: unknown })?.data;
       const models = Array.isArray(data) ? data.map(m => (m as { id?: unknown })?.id).filter((m): m is string => typeof m === 'string' && m.length > 0) : null;
-      if (models && models.length) return { ok: true, models, patch: { models, modelsReadAt: now, modelsError: undefined } };
+      if (models && models.length) return { ok: true, models, patch: { models, modelsReadAt: now, modelsError: undefined }, probed };
       error = 'The endpoint answered, but not with a list of models (/v1/models).';
     }
   } catch (err) {
     error = (err as Error).message;
   }
   const said = withoutKey(error, key).slice(0, 300);
-  return { ok: false, error: said, patch: { modelsError: said } };
+  return { ok: false, error: said, patch: { modelsError: said }, probed };
 }
 
 /** A /v1/models probe: its status, latency and time. Never the key, and the key only to the approved address. */
 export async function checkHealth(settings: AppSettings, id: string, fetchImpl: typeof fetch = fetch, now: string = new Date().toISOString(), clock: () => number = Date.now):
-  Promise<{ health: NonNullable<InferenceEndpoint['health']>; patch: EndpointPatch }> {
+  Promise<{ health: NonNullable<InferenceEndpoint['health']>; patch: EndpointPatch; probed?: string }> {
   const e = endpointsOf(settings).find(x => x.id === id);
   if (!e) return { health: { ok: false, at: now, error: 'There is no such endpoint.' }, patch: {} };
+  const probed = e.baseUrl;
   const { url, key } = probeOf(settings, e);
   const started = clock();
   let health: NonNullable<InferenceEndpoint['health']>;
@@ -359,5 +367,5 @@ export async function checkHealth(settings: AppSettings, id: string, fetchImpl: 
   } catch (err) {
     health = { ok: false, latencyMs: clock() - started, at: now, error: withoutKey((err as Error).message, key).slice(0, 200) };
   }
-  return { health, patch: { health } };
+  return { health, patch: { health }, probed };
 }

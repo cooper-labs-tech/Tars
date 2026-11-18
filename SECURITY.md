@@ -1074,7 +1074,10 @@ other address.
 - The proxy, and the models and health probes too, send the key only to `approvedBaseUrl`, and only while the
   endpoint is approved at that address. An endpoint whose address an agent changed is probed at the new address with
   no key.
-- No fetch follows a redirect: a redirect answer is an error, never a hop for the key.
+- No fetch follows a redirect, the uploader's included (its install token does not hop either): a redirect answer
+  is an error, never a hop for a credential.
+- A probe that was in flight while the endpoint's address changed is dropped: its models or health describe the old
+  address.
 - An agent changing an endpoint's address also takes its key away. The key was given for the old address, and the
   owner approving the new one must not hand it over unawares: it is set again, from the window or a drop file. The
   owner's own change of address keeps it, since that act is the approval.
