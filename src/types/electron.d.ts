@@ -2908,9 +2908,9 @@ export interface ElectronAPI {
     preview: (traceId: string) => Promise<{ document: unknown; counts: Record<string, number>; scrubVersion: string } | null>;
     /** The user has read the notice: uploads may start (refused while no address is set). */
     giveUploadConsent: () => Promise<{ ok: true; at: string } | { ok: false; error: string }>;
-    /** The uploader's state. Lands with the uploader. */
+    /** The uploader's state. */
     uploadState: () => Promise<UploadState>;
-    /** Asks the back-office to delete everything this install sent, then forgets the install. Lands with the uploader. */
+    /** Asks the back-office to delete everything this install sent, then forgets the install and what was sent. */
     deleteEverywhere: () => Promise<{ ok: true; deleted?: number } | { ok: false; error: string }>;
     /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
      *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it

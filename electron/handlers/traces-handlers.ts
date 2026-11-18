@@ -12,7 +12,7 @@ import {
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
 import { CLOSED_MODELS_WARNING, traceDecision } from '../services/trace-gate';
-import { previewUpload } from '../services/traces-runtime';
+import { previewUpload, traceUploader } from '../services/traces-runtime';
 import { cleanBaseUrl } from '../services/inference-endpoints';
 import { SCRUB_VERSION } from '../services/trace-scrub';
 
@@ -215,6 +215,12 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     },
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));
+  ipcMain.handle('traces:uploadState', () => traceUploader().state());
+  ipcMain.handle('traces:deleteEverywhere', async () => {
+    const r = await traceUploader().deleteEverywhere();
+    tell('traces:changed');
+    return r;
+  });
   ipcMain.handle('traces:giveUploadConsent', () => {
     const t = traceSettingsOf(deps.getAppSettings());
     if (!t.uploadUrl) return { ok: false, error: 'Set the back-office address first.' };

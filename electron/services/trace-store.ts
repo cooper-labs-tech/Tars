@@ -134,6 +134,7 @@ export interface TraceMessageView { hash: string; role: string; parts: TracePart
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+CREATE TABLE IF NOT EXISTS uploads (trace_id TEXT PRIMARY KEY, uploaded_seq INTEGER NOT NULL, uploaded_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS traces (
   trace_id TEXT PRIMARY KEY, project_path TEXT NOT NULL, agent_id TEXT NOT NULL, agent_name TEXT,
   harness TEXT NOT NULL, harness_version TEXT, native_session_id TEXT,
@@ -325,6 +326,31 @@ export class TraceStore {
     const status = last?.final_status === 'done' ? 'done' : last?.final_status === 'failed' ? 'failed' : last ? 'abandoned' : 'abandoned';
     this.db.prepare(`UPDATE traces SET ended_at = ?, final_status = ?, outcome_json = COALESCE(?, outcome_json), updated_seq = ? WHERE trace_id = ?`)
       .run(endedAt, status, outcome === undefined ? null : JSON.stringify(outcome), this.nextSeq(), traceId);
+  }
+
+  /** The sessions with something not yet uploaded (new, or grown since), oldest change first. */
+  uploadQueue(limit: number): Array<{ traceId: string; seq: number; projectPath: string; agentId: string }> {
+    return (this.db.prepare(`SELECT t.trace_id, t.updated_seq, t.project_path, t.agent_id FROM traces t
+      LEFT JOIN uploads u ON u.trace_id = t.trace_id
+      WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0) ORDER BY t.updated_seq ASC LIMIT ?`).all(limit) as Row[])
+      .map(r => ({ traceId: String(r.trace_id), seq: num(r.updated_seq), projectPath: String(r.project_path), agentId: String(r.agent_id) }));
+  }
+
+  /** A session uploaded as it was at `seq`. */
+  markUploaded(traceId: string, seq: number, at: number): void {
+    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) VALUES (?, ?, ?)
+      ON CONFLICT(trace_id) DO UPDATE SET uploaded_seq = MAX(uploaded_seq, excluded.uploaded_seq), uploaded_at = excluded.uploaded_at`).run(traceId, seq, at);
+  }
+
+  /** Forget every upload (the back-office deleted them, or the address changed). */
+  resetUploads(): void {
+    this.db.prepare('DELETE FROM uploads').run();
+  }
+
+  uploadCounts(): { sent: number; pending: number; lastAt?: number } {
+    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id').get() as { n: number; at: number | null };
+    const pending = this.db.prepare('SELECT COUNT(*) AS n FROM traces t LEFT JOIN uploads u ON u.trace_id = t.trace_id WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0)').get() as { n: number };
+    return { sent: sent.n, pending: pending.n, lastAt: sent.at ?? undefined };
   }
 
   /** How many of a session's requests were held while the endpoint paused, and how many ended in an error. */
@@ -591,6 +617,7 @@ export class TraceStore {
       this.db.prepare('DELETE FROM requests WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM typed_inputs WHERE used_by IN (SELECT turn_id FROM turns WHERE trace_id = ?)').run(traceId);
       this.db.prepare('DELETE FROM turns WHERE trace_id = ?').run(traceId);
+      this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
       deleted += this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
     }
     return deleted;

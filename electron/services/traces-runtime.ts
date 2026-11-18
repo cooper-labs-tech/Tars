@@ -14,6 +14,7 @@ import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 import { sessionDocument } from './trace-export';
+import { TraceUploader } from './trace-upload';
 import { SECRET_FIELDS } from './settings-secrets';
 
 /**
@@ -43,6 +44,8 @@ export interface TracesDeps {
   getAgent(id: string): AgentStatus | undefined;
   /** Tells the window: 'traces:changed', 'endpoints:waiting', 'endpoints:changed'. */
   emit(channel: string, payload?: unknown): void;
+  /** Tars's version, sent when the install registers with a back-office. */
+  clientVersion?: string;
 }
 
 let deps: TracesDeps | null = null;
@@ -50,6 +53,10 @@ let store: TraceStore | null = null;
 let sweepTimer: NodeJS.Timeout | null = null;
 let changedTimer: NodeJS.Timeout | null = null;
 let readerLastUsedAt: string | undefined;
+let uploader: TraceUploader | null = null;
+let uploadTimer: NodeJS.Timeout | null = null;
+let uploadSoon: NodeJS.Timeout | null = null;
+export const TRACES_INSTALL_FILE = privatePath('traces-install.json');
 
 /** An agent being created, whose terminal is spawned before its record is in the fleet (agent:create). */
 const preRegistered = new Map<string, AgentStatus>();
@@ -119,7 +126,31 @@ export function traceStore(): TraceStore {
   return store;
 }
 
+/** The uploader to the user's back-office (trace-upload.ts): idle while no address or no consent. */
+export function traceUploader(): TraceUploader {
+  if (!uploader) {
+    uploader = new TraceUploader({
+      store: traceStore(),
+      installFile: TRACES_INSTALL_FILE,
+      settings: () => { const t = traceSettingsOf(deps?.getSettings()); return { url: t.uploadUrl, consentAt: t.uploadConsentAt }; },
+      // Opted in now, not only when the session was recorded: a project or an agent switched off since is not sent.
+      eligible: (q) => traceSettingsOf(deps?.getSettings()).projects.includes(q.projectPath) && agentOf(q.agentId)?.traces === true,
+      scrubContext: (projectPath) => scrubContextFor(projectPath),
+      client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
+    });
+  }
+  return uploader;
+}
+
+function uploadPass(): void {
+  void traceUploader().runOnce().then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); });
+}
+
 function changed(): void {
+  // A pass 30 s after the last change, besides the one every 5 minutes.
+  if (uploadSoon) clearTimeout(uploadSoon);
+  uploadSoon = setTimeout(() => { uploadSoon = null; uploadPass(); }, 30_000);
+  uploadSoon.unref?.();
   if (changedTimer) return;
   changedTimer = setTimeout(() => { changedTimer = null; deps?.emit('traces:changed'); }, 1000);
   changedTimer.unref?.();
@@ -158,12 +189,20 @@ export function startTracesRuntime(d: TracesDeps): void {
   sweepTimer = setInterval(sweepTraces, 3600_000);
   sweepTimer.unref?.();
   sweepTraces();
+  uploadTimer = setInterval(uploadPass, 5 * 60_000);
+  uploadTimer.unref?.();
+  uploadPass();
 }
 
 export function stopTracesRuntime(): void {
   stopEndpointProxy();
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
+  if (uploadTimer) clearInterval(uploadTimer);
+  if (uploadSoon) clearTimeout(uploadSoon);
+  uploadTimer = null;
+  uploadSoon = null;
+  uploader = null;
   store?.close();
   store = null;
 }

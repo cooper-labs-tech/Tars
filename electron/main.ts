@@ -443,6 +443,7 @@ function initApiServer() {
     getSettings: () => appSettings,
     saveSettings: (settings) => { appSettings = settings; saveAppSettingsToFile(settings); },
     getAgent: (id) => agents.get(id),
+    clientVersion: app.getVersion(),
     emit: (channel, payload) => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(channel, payload); },
   });
   moveLocalKanbanToHermes();
