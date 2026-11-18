@@ -74,6 +74,8 @@ export interface TypedInput {
 }
 
 export interface TraceFilter {
+  /** One session exactly. */
+  traceId?: string;
   project?: string;
   agentId?: string;
   harness?: string;
@@ -479,6 +481,7 @@ export class TraceStore {
   private where(f: TraceFilter): { sql: string; args: unknown[] } {
     const clauses: string[] = [];
     const args: unknown[] = [];
+    if (f.traceId) { clauses.push('trace_id = ?'); args.push(f.traceId); }
     if (f.project) { clauses.push('project_path = ?'); args.push(f.project); }
     if (f.agentId) { clauses.push('agent_id = ?'); args.push(f.agentId); }
     if (f.harness) { clauses.push('harness = ?'); args.push(f.harness); }

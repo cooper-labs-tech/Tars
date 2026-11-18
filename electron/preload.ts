@@ -1102,6 +1102,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     addPair: (pair: { harness: string; models: string; note?: string }) => ipcRenderer.invoke('traces:addPair', pair),
     removePair: (pair: { harness: string; models: string }) => ipcRenderer.invoke('traces:removePair', pair),
     reseedPairs: () => ipcRenderer.invoke('traces:reseedPairs'),
+    offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => ipcRenderer.invoke('traces:offer', q),
     stats: () => ipcRenderer.invoke('traces:stats'),
     list: (filter: Record<string, unknown>) => ipcRenderer.invoke('traces:list', filter),
     session: (traceId: string) => ipcRenderer.invoke('traces:session', traceId),

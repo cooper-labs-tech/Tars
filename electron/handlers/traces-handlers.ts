@@ -11,7 +11,7 @@ import {
 } from '../services/traces-runtime';
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
-import { defaultTracePairs } from '../services/trace-gate';
+import { defaultTracePairs, traceDecision } from '../services/trace-gate';
 
 /** Said with the list, so the window can show it: the rule no pair can open. */
 export const HARD_RULE = 'A Claude, GPT, o-series or Gemini model is never traced, whatever the list says.';
@@ -43,7 +43,7 @@ function cleanFilter(raw: unknown): TraceFilter {
   const f = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   const str = (k: string) => (typeof f[k] === 'string' && f[k] ? String(f[k]) : undefined);
   const num = (k: string) => (typeof f[k] === 'number' && Number.isFinite(f[k]) ? Number(f[k]) : undefined);
-  return { project: str('project'), agentId: str('agentId'), harness: str('harness'), model: str('model'), endpointId: str('endpointId'), from: num('from'), to: num('to'), cursor: str('cursor'), limit: num('limit') };
+  return { traceId: str('traceId'), project: str('project'), agentId: str('agentId'), harness: str('harness'), model: str('model'), endpointId: str('endpointId'), from: num('from'), to: num('to'), cursor: str('cursor'), limit: num('limit') };
 }
 
 export function registerTracesHandlers(deps: TracesHandlerDeps): void {
@@ -160,6 +160,23 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   });
   // A vetted list from outside Tars is not there yet: the seed is the four open harnesses until it is.
   ipcMain.handle('traces:reseedPairs', () => setPairs(defaultTracePairs()));
+
+  // Whether "Record traces" can be offered for this harness, model, endpoint and project, and why not: the window
+  // asks rather than copy the rule (trace-gate.ts). The agent's own switch is what is offered, so it counts as on;
+  // the project's is said apart.
+  ipcMain.handle('traces:offer', (_e, raw: unknown) => {
+    const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+    const settings = deps.getAppSettings();
+    const t = traceSettingsOf(settings);
+    const endpoint = (settings.inferenceEndpoints ?? []).find(e => e.id === o.endpointId);
+    const projectOptedIn = typeof o.projectPath === 'string' && t.projects.includes(o.projectPath);
+    const d = traceDecision({
+      provider: typeof o.provider === 'string' ? o.provider : undefined, model: typeof o.model === 'string' ? o.model : undefined,
+      endpoint: endpoint ? { allowTraces: endpoint.allowTraces === true, approved: endpoint.approved === true && endpoint.approvedBaseUrl === endpoint.baseUrl } : undefined,
+      projectOptedIn: true, agentOptedIn: true, pairs: t.pairs,
+    });
+    return { offered: d.traced, reason: d.traced ? (projectOptedIn ? 'traced' : 'the project is not opted in') : d.reason, projectOptedIn };
+  });
 
   ipcMain.handle('traces:stats', () => {
     const s = traceStore().stats();

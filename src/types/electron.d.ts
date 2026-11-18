@@ -2899,6 +2899,10 @@ export interface ElectronAPI {
     removePair: (pair: { harness: string; models: string }) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
     /** Back to the seed: the four open harnesses on any model (a vetted list will replace the seed). */
     reseedPairs: () => Promise<{ ok: true } & TracePairsView>;
+    /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
+     *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
+     *  when it is the one missing. */
+    offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => Promise<{ offered: boolean; reason: string; projectOptedIn: boolean }>;
     stats: () => Promise<TraceStats>;
     list: (f: TraceFilter) => Promise<TraceList>;
     session: (traceId: string) => Promise<{ session: TraceSessionSummary; outcome?: TraceOutcome; turns: TraceTurnView[] } | null>;
@@ -2983,6 +2987,8 @@ export interface TraceStats {
 }
 
 export interface TraceFilter {
+  /** One session exactly (an export of a single session). */
+  traceId?: string;
   project?: string;
   agentId?: string;
   harness?: string;
