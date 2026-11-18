@@ -21,6 +21,7 @@ export const WINDOW_SECRETS = [
   'openRouterApiKey', 'deepSeekApiKey', 'mimoApiKey', 'moonshotApiKey', 'qwenApiKey', 'zhipuApiKey',
   'minimaxApiKey', 'nvidiaApiKey', 'nousPortalApiKey', 'veniceApiKey', 'ollamaCloudApiKey', 'customOpenAIApiKey',
   'hermesGatewayToken', 'memoryGbrainAuthToken', 'memoryHonchoApiKey',
+  'endpointKeys',
   'sentryAuthToken',
 ] as const;
 

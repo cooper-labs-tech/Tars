@@ -354,6 +354,11 @@ export interface AgentStatus {
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
+  /** The inference endpoint this agent's harness runs on (with `model`, one of the endpoint's): Tars points the
+   *  harness at its endpoint proxy. Only codex, pi, qwen-code and opencode. services/inference-endpoints.ts. */
+  endpointId?: string;
+  /** The agent's own trace switch (off by default); a session is traced only with its project's on too. */
+  traces?: boolean;
 }
 
 /**
@@ -598,6 +603,16 @@ export interface AppSettings {
   customOpenAIBaseUrl?: string;
   customOpenAIApiKey?: string;
   customOpenAIModel?: string;
+  /** OpenAI-compatible inference endpoints an open harness (codex, pi, qwen-code, opencode) runs on, per agent,
+   *  through Tars's endpoint proxy (services/endpoint-proxy.ts). Their keys are in the settings' secrets
+   *  (`endpointKeys`), never here. services/inference-endpoints.ts. */
+  inferenceEndpoints?: InferenceEndpoint[];
+  /** Each endpoint's key by endpoint id: a secret (settings-secrets.ts), set through endpoints:setKey or an agent's
+   *  key drop file, never handed to an agent or a CLI. */
+  endpointKeys?: Record<string, string>;
+  /** Native traces (services/trace-store.ts): the projects opted in, the store's cap and retention, and the
+   *  harness and model pairs that may be traced (trace-gate.ts). Off for every project until the user opts one in. */
+  traces?: TraceSettings;
   /** Remote Hermes instance (external scheduler) */
   hermesGatewayUrl?: string;
   hermesGatewayToken?: string;
@@ -980,4 +995,34 @@ export interface ClaudeAccountAgentChange {
   claudeAccountId: ClaudeAccountId | null;
   /** The account it is held to; null is automatic. */
   claudeAccountPin: ClaudeAccountId | null;
+}
+
+export interface InferenceEndpoint {
+  /** `ep-` and 6 hex. */
+  id: string;
+  name: string;
+  /** http(s), up to the routes (`.../v1`), no trailing slash. */
+  baseUrl: string;
+  /** The user marked it as one whose sessions may be traced. Only the window turns it on. */
+  allowTraces: boolean;
+  /** The endpoint's own /v1/models, last read. */
+  models: string[];
+  modelsReadAt?: string;
+  modelsError?: string;
+  /** False while an agent added it or changed its base URL and the owner has not approved it in the window. */
+  approved: boolean;
+  /** The base URL the owner approved. */
+  approvedBaseUrl?: string;
+  /** The agent that last added it or changed its base URL. */
+  changedBy?: { agentId: string; agentName?: string; at: string };
+  /** How long the proxy holds a request while the endpoint pauses (503, 429, 502): 0 to 3600 s, 600 by default. */
+  holdMaxSeconds: number;
+  health?: { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string };
+}
+
+export interface TraceSettings {
+  projects: string[];
+  capBytes: number;
+  retentionDays: number;
+  pairs: Array<{ harness: string; models: string; note?: string }>;
 }
