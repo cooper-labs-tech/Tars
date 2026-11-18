@@ -664,13 +664,16 @@ identity, no build: electron-builder fails instead of signing ad hoc), `notarize
 
 ```xml
 com.apple.security.cs.allow-jit                        true
-com.apple.security.cs.allow-unsigned-executable-memory true
-com.apple.security.cs.disable-library-validation       true
 ```
 
-V8 needs JIT. `allow-unsigned-executable-memory` and `disable-library-validation` stay until the
-first signed build has measured them (below). `allow-dyld-environment-variables` was removed on
-purpose (the plist says why).
+That one key and no other, measured on the first signed build (18/11, below): without it V8 cannot
+reserve its code range and the binary aborts before any JavaScript runs; with it alone, the signed
+app starts, node-pty and better-sqlite3 load in the main process and in the binary run as Node (the
+shared MCP servers, tars-slot), and the window renders. `allow-unsigned-executable-memory` and
+`disable-library-validation` were removed then: every native module is signed with the same
+Developer ID, so library validation lets them load, and refuses one re-signed ad hoc ("different
+Team IDs"). `allow-dyld-environment-variables` was removed earlier (the plist says why). A native
+module that fails to load is fixed in its signature, never by restoring a key.
 
 How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`):
 
@@ -711,12 +714,16 @@ and nothing published on the way (no `npm run release`, no `gh release`):
 1. `npm run electron:build` with the variables `check` names (`CSC_NAME`, `APPLE_KEYCHAIN_PROFILE`);
    then sign, notarize and staple the dmg as step 2b does, and `node scripts/mac-signing.mjs
    verify release/Tars-<version>-arm64.dmg`: ALL PASS, or the release is not cut;
-2. **the entitlements, measured.** Rebuild once with `com.apple.security.cs.disable-library-validation`
-   removed from `build/entitlements.mac.plist`, open the quarantined copy, start an agent (node-pty)
-   and open the Vault (better-sqlite3): if both load, the key goes for good. Then the same with
-   `com.apple.security.cs.allow-unsigned-executable-memory` removed (with `allow-jit` kept): the app
-   must start and render. A key that is still needed stays, with what failed written next to it in
-   the plist; a nested binary that fails is fixed in its signature, not by restoring a key;
+2. **the entitlements, measured** (done on 18/11: `allow-jit` alone, the plist says what each
+   variant did). To measure again after an Electron or native-module upgrade: build signed with
+   `--dir` and `-c.mac.notarize=false`, with a variant passed as `-c.mac.entitlements` and
+   `-c.mac.entitlementsInherit`, start it on a throwaway HOME (the e2e fixture's `launchSandboxed`
+   with `executablePath`), and in the main process spawn a shell through node-pty and open a
+   better-sqlite3 database; then run the binary with `ELECTRON_RUN_AS_NODE=1`, as the MCP servers
+   run, and load both modules there too. Witness that the check bites: the same app with
+   `pty.node` re-signed ad hoc must fail. A key that is still needed stays, with what failed written
+   next to it in the plist; a nested binary that fails is fixed in its signature, not by restoring a
+   key;
 3. **the update path, measured**, below: install the previous version, update it in the app from the
    signed build served locally (a generic feed with `latest-mac.yml` and the zip), and write what it
    shows.
