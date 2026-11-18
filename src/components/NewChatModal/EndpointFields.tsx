@@ -94,7 +94,13 @@ export function EndpointFields({ provider, model, onModelChange, projectPath, ch
     const api = window.electronAPI?.traces;
     if (!api || !projectPath) { setOffer(null); return; }
     void api.offer({ provider, model, endpointId: runsOn === 'endpoint' && choice.endpointId ? choice.endpointId : undefined, projectPath })
-      .then(r => { if (!cancelled) setOffer({ offered: r.offered, reason: GATE_REASONS[r.reason] ?? 'other', said: r.reason }); })
+      .then(r => {
+        if (cancelled) return;
+        // offered counts only the agent's own switch: a project not opted in is still a reason, as the frame draws it
+        // (not offered: <project> does not record traces, open Projects), since nothing would be recorded.
+        if (r.offered && !r.projectOptedIn) setOffer({ offered: false, reason: 'project-off', said: r.reason });
+        else setOffer({ offered: r.offered, reason: GATE_REASONS[r.reason] ?? 'other', said: r.reason });
+      })
       .catch(() => { if (!cancelled) setOffer(null); });
     return () => { cancelled = true; };
   }, [provider, model, runsOn, choice.endpointId, projectPath]);
