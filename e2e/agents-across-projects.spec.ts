@@ -46,7 +46,8 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    on a branch another worktree holds is refused and leaves nothing made (no agent, no worktree); the worker the
  *    grant does not name is refused; the named worker changes a setting beyond the inference ones of a B agent;
  *    removing the agent while its worktree holds uncommitted work is refused, saying why, and leaves both; once the
- *    work is committed it is removed with its worktree. B's main checkout is untouched throughout.
+ *    work is committed it is removed with its worktree. B's main checkout is untouched throughout;
+ * 11. the window undoes an agent's last retune (agent.revertChange): its earlier value back, filed under the window.
  * Run in the classic shell and in the new interface's. The artefact: values.json (every tool answer, the records,
  * the change log, the git states).
  */
@@ -403,6 +404,17 @@ for (const newInterface of [false, true]) {
       expect(records().some((a) => a.id === readyId)).toBe(false);
       expect(fs.existsSync(readyWt)).toBe(false);
       expect(mainState()).toEqual(mainBefore);
+
+      // ── 11. The window undoes an agent's last retune ──
+      const piModelBefore = recordOf('b-pi').model ?? null;
+      const piRetuned = await other('update_agent', { id: 'b-pi', model: 'pi-model-x' });
+      await expect.poll(() => recordOf('b-pi').model, { timeout: 60_000 }).toBe('pi-model-x');
+      const undone = await page.evaluate(() => (window as unknown as { electronAPI: { agent: { revertChange: (s: unknown) => Promise<Record<string, unknown>> } } }).electronAPI.agent.revertChange({ agentId: 'b-pi' }));
+      keep({ piRetuned, undone });
+      expect(undone).toMatchObject({ ok: true });
+      await expect.poll(() => recordOf('b-pi').model ?? null, { timeout: 60_000 }).toBe(piModelBefore);
+      const undoLog = await lead('agent_changes', { agentId: 'b-pi', limit: 1 });
+      expect(JSON.parse(undoLog.text.slice(undoLog.text.indexOf('[')))[0]).toMatchObject({ by: { kind: 'window' }, after: { model: piModelBefore } });
     } finally {
       for (const server of servers) server.kill();
       await app.close().catch(() => {});

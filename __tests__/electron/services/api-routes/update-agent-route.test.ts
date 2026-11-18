@@ -101,6 +101,13 @@ import { EventEmitter } from 'events';
  *     change moved since: it must set back only what is still at its value,
  *     and name the rest; a revert by a caller who may not make that change is
  *     taken.
+ * 21. The window's undo (agent.revertChange, 2.0.7) goes another way than
+ *     revert_agent_change, or is filed under an agent or Tars: it must take
+ *     the same engine, filed under the window; of a queued change it applies
+ *     it instead of cancelling it; of an applied one it clobbers what another
+ *     change moved since, or moves the agent back onto a worktree that is
+ *     gone; asked of a change nobody knows, or of both a change and an agent,
+ *     it answers ok. Each must be said, nothing written.
  */
 
 const mockPtyProcess = { onData: vi.fn(), onExit: vi.fn(), kill: vi.fn(), write: vi.fn() };
@@ -157,7 +164,7 @@ import { ptyProcesses } from '../../../../electron/core/pty-manager';
 import { spawnAgentPty } from '../../../../electron/core/agent-pty';
 import { restartForSettings } from '../../../../electron/core/agent-restart';
 import { updateAgent } from '../../../../electron/core/agent-update';
-import { checkQueued, resetRetune } from '../../../../electron/core/agent-retune';
+import { checkQueued, resetRetune, revertAsWindow } from '../../../../electron/core/agent-retune';
 import { changeById, resetChanges, type AgentChange } from '../../../../electron/services/agent-changes';
 import { setGrant, resetGrants } from '../../../../electron/services/cross-project-grants';
 import { consumeResumeSessionId, resetResumeTracking, transcriptPath } from '../../../../electron/utils/resume-session';
@@ -769,5 +776,48 @@ describe('several agents, the log and a revert', () => {
     const refused = await call('POST', '/api/agent-changes/revert', { changeId: renamed.answer.changeId }, { callerAgentId: 'w1' });
     expect((refused.answer.results as Array<{ state: string; code?: string }>)[0]).toMatchObject({ state: 'refused', code: 'worker_may_not_update' });
     expect(agents.get('w2')!.name).toBe('Tester two');
+  });
+});
+
+describe("the window's undo (agent.revertChange)", () => {
+  it('21. sets an applied change back through the engine, filed under the window, and names what moved since', async () => {
+    const first = await update('w2', { model: 'opus', effort: 'high' }, { callerAgentId: 'far' });
+    await update('w2', { effort: 'max' }, { callerAgentId: 'w1' });
+    const undone = await revertAsWindow({ changeId: String(first.answer.changeId) });
+    expect(undone).toMatchObject({ ok: true, state: 'applied', leftAlone: ['effort'] });
+    expect(agents.get('w2')).toMatchObject({ model: 'sonnet', effort: 'max' });
+    const logged = changeById((undone as { revertChangeId: string }).revertChangeId)!;
+    expect(logged).toMatchObject({ by: { kind: 'window' }, revertOf: first.answer.changeId, before: { model: 'opus' }, after: { model: 'sonnet' } });
+  });
+
+  it("21. undoes an agent's last change by its id, and cancels a queued one, writing nothing", async () => {
+    liveCli('pty-w2', 'claude');
+    Object.assign(agents.get('w2')!, { ptyId: 'pty-w2', status: 'running' });
+    await update('w2', { effort: 'low' }, { callerAgentId: 'w1' });
+    expect(await revertAsWindow({ agentId: 'w2' })).toEqual({ ok: true, state: 'cancelled' });
+    Object.assign(agents.get('w2')!, { status: 'waiting', waitingReason: 'idle' });
+    await checkQueued();
+    expect(agents.get('w2')!.effort).toBeUndefined();
+  });
+
+  it('21. leaves a worktree that is gone alone, and says so', async () => {
+    Object.assign(agents.get('w2')!, { worktreePath: `${PROJECT}/.worktrees/gone`, branchName: 'gone' });
+    const moved = await update('w2', { worktree: null });
+    expect(moved.status, String(moved.answer.error)).toBe(200);
+    const undone = await revertAsWindow({ changeId: String(moved.answer.changeId) });
+    expect(undone).toMatchObject({ ok: false });
+    expect(String((undone as { error: string }).error)).toMatch(/worktree/);
+    expect(agents.get('w2')!.worktreePath).toBeUndefined();
+  });
+
+  it.each([
+    ['a change nobody knows', { changeId: 'chg-00000000' }],
+    ['an agent with no change', { agentId: 'w1' }],
+    ['both a change and an agent', { changeId: 'chg-00000000', agentId: 'w1' }],
+    ['neither', {}],
+  ])('21. refuses %s, saying why', async (_what, sel) => {
+    const answer = await revertAsWindow(sel as never);
+    expect(answer.ok).toBe(false);
+    expect((answer as { error: string }).error.length).toBeGreaterThan(0);
   });
 });
