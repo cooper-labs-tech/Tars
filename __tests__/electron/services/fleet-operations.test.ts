@@ -37,6 +37,10 @@ import type { PowerReading } from '../../../electron/services/power-state';
  * 13. Clearing a schedule while its window is open stops agents, or leaves the window open.
  * 14. A worker, a chat's runner, another project's orchestrator, or a caller with no identity sets a project's hours
  *     or cap; the project's orchestrator, or Tars, is refused.
+ * From the Audit's gate of #593 (M1), written before the fix:
+ * 15. The stop stops the project's orchestrator or one of its chats' runners, or pauses their queues: an orchestrator
+ *     never sleeps, and what the owner or another project sends it would wait for the next window. The start
+ *     resumes or starts them either: they are left out of the hours, as the cap leaves them out.
  */
 
 const P = '/projects/project-a';
@@ -351,6 +355,33 @@ describe('a window', () => {
     world.now = at('2026-11-19T18:00:00Z');
     await ops.tick();
     expect(ops.openWindows()).toEqual([{ projectPath: P, until: '2026-11-20T04:00:00.000Z' }]);
+  });
+});
+
+describe("the project's leads (the Audit's M1 on #593)", () => {
+  it('15. the orchestrator and its chats\' runners are neither stopped nor paused, started nor resumed', async () => {
+    world.agents = [
+      agent('lead', { leads: true, cliUp: true }),
+      agent('runner', { leads: true, cliUp: false, status: 'asleep' }),
+      agent('w', { cliUp: false }),
+    ];
+    const ops = createFleetOperations(deps());
+    ops.setSchedule(P, { ...NIGHT, onStart: 'start-agents' }, 'you');
+    world.now = at('2026-11-19T18:00:00Z');
+    await ops.tick();
+    expect(world.started).toEqual(['w']);
+    world.now = at('2026-11-20T04:00:00Z');
+    await ops.tick();
+    expect(world.stops.map((s) => s.id)).toEqual(['w']);
+    expect(world.pauses.has('lead')).toBe(false);
+    expect(world.pauses.has('runner')).toBe(false);
+    expect(find('lead').status).toBe('idle');
+    // A restart's pause of a lead's queue is not the hours' to lift either.
+    world.pauses.set('lead', { why: RESTART_PAUSE });
+    world.now = at('2026-11-20T18:00:00Z');
+    await ops.tick();
+    expect(world.pauses.get('lead')?.why).toBe(RESTART_PAUSE);
+    expect(world.started.filter((id) => id !== 'w')).toEqual([]);
   });
 });
 

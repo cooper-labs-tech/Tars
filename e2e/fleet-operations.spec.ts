@@ -28,7 +28,8 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    blocker), keepAwake.state() names the window; on battery (powerMonitor made to say so, macOS and Windows) the
  *    window carries the battery warning, once.
  * 6. Worker One works (`HOLD three`). At 04:00 every queue is paused with the hours' reason, the agents at rest are
- *    stopped, Worker One is not: it waits, at work, until its turn ends, then is stopped (afterTurn).
+ *    stopped, Worker One is not: it waits, at work, until its turn ends, then is stopped (afterTurn). Lead A, the
+ *    project's orchestrator, is neither stopped nor paused (the Audit's M1 on #593).
  * 7. During the day, Lead B hands Worker Two `ECHO morning` (allowCrossProject): it waits in its queue,
  *    paused, never refused.
  * 8. Tars restarts: the hours, the cap, the last window and Worker Two's waiting task are all there.
@@ -272,6 +273,9 @@ for (const newInterface of [false, true]) {
       at('2026-11-20T04:00:05.000Z');
       await expect.poll(async () => (await w.fleet(projectA))?.window?.closedAt, { timeout: 15_000 }).toBe('2026-11-20T04:00:05.000Z');
       await expect.poll(() => w.status(A_W2), { timeout: 10_000 }).toBe('stopped');
+      // The project's orchestrator is left out of the hours (the Audit's M1 on #593): never stopped, its queue never paused.
+      expect(await w.status(A_LEAD)).not.toBe('stopped');
+      expect((await w.queue(A_LEAD)).paused).toBeUndefined();
       const closing = await w.fleet(projectA);
       keep({ closing });
       expect(closing?.window?.stopping).toEqual([{ id: A_W1, agent: 'Worker One' }]);
