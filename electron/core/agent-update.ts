@@ -45,6 +45,12 @@ export interface AgentUpdate {
   savedPrompt?: string | null;
   obsidianVaultPaths?: string[];
   worktree?: WorktreeConfig;
+  /**
+   * An existing worktree of the agent's own project to work in, as update_agent names it (2.0.7: a fleet worktree
+   * made with worktree_new, under the project's .worktrees/), or null for the project's own folder. The route checks
+   * it is one of the project's worktrees; nothing here makes one.
+   */
+  worktreeAt?: { worktreePath: string; branchName: string } | null;
   /** The Orchestrator toggle. See core/agent-role.ts. */
   role?: AgentRole;
   /** The toggle's old name, read when `role` is absent. */
@@ -132,13 +138,16 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
     return { success: false, error: 'Secondary project path does not exist' };
   }
   const makesWorktree = !!(params.worktree?.enabled && params.worktree.branchName && (moving || !agent.worktreePath));
+  // Onto an existing worktree, or back to the project's folder: a new working folder, which a new terminal takes.
+  const movesFolder = params.worktreeAt !== undefined && !moving
+    && (params.worktreeAt?.worktreePath ?? undefined) !== agent.worktreePath;
   // Last of the checks, before the one that writes: what would end the terminal, while a CLI is at work in it.
   if (opts.endsNoCli) {
     const ending = [
       ...(params.provider !== undefined && params.provider !== agent.provider ? ['provider'] : []),
       ...(params.cliPath !== undefined && (params.cliPath ?? undefined) !== agent.cliPath ? ['CLI path'] : []),
       ...(moving ? ['project'] : []),
-      ...(makesWorktree ? ['worktree'] : []),
+      ...(makesWorktree || movesFolder ? ['worktree'] : []),
     ];
     if (ending.length > 0 && cliAtWork(agent)) {
       return {
@@ -242,6 +251,14 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
       agent.currentTask = undefined;
     }
     agent.cliPath = newCliPath;
+  }
+  if (movesFolder) {
+    agent.worktreePath = params.worktreeAt?.worktreePath;
+    agent.branchName = params.worktreeAt?.branchName;
+    // The running PTY, if any, was spawned in the old folder: ended, so the next start opens in the new one.
+    killStalePty(agent);
+    agent.status = 'idle';
+    agent.currentTask = undefined;
   }
   if (worktree) {
     agent.worktreePath = worktree.worktreePath;

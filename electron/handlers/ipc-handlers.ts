@@ -91,6 +91,8 @@ import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
 import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
 import { registerChromeSwitchHandlers } from '../services/chrome-without-asking';
+import { registerCrossProjectHandlers } from '../services/cross-project-grants';
+import { recordChange } from '../services/agent-changes';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -228,6 +230,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerMcpConfigHandlers();
   // The owner's switch, Claude in Chrome acts without asking (2.0.7): the window's own channel, kept in ~/.tars-private.
   registerChromeSwitchHandlers(ipcMain);
+  registerCrossProjectHandlers(ipcMain);
   registerTrayHandlers(deps);
 }
 
@@ -1081,8 +1084,27 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   // shares. The window ends the terminal a new provider, CLI path, project or worktree needs, whatever runs in
   // it: the user who saves sees what that cuts.
   ipcMain.handle('agent:update', async (_event, params: AgentUpdate) => {
+    const before = agents.get(params?.id) ? { ...agents.get(params.id)! } : undefined;
     const result = await updateAgent(params, { makeWorktree: makeAgentWorktree });
     if (!result.success) return { success: false, error: result.error };
+    // The change log keeps the window's changes too (2.0.7, services/agent-changes.ts): who, before, after, when.
+    if (before && result.changed.length) {
+      const value = (a: AgentStatus, f: string) => ((a as unknown as Record<string, unknown>)[f] ?? null);
+      const loggable = (v: unknown) => v === null || ['string', 'number', 'boolean'].includes(typeof v);
+      const fields = result.changed.filter((f) => loggable(value(before, f)) && loggable(value(result.agent, f)));
+      try {
+        if (fields.length) {
+          const at = new Date().toISOString();
+          recordChange({
+            agentId: result.agent.id, agentName: result.agent.name || result.agent.id, projectPath: result.agent.projectPath, by: { kind: 'window' },
+            fields, before: Object.fromEntries(fields.map((f) => [f, value(before, f)])), after: Object.fromEntries(fields.map((f) => [f, value(result.agent, f)])),
+            askedAt: at, state: 'applied', effectiveAt: at,
+          });
+        }
+      } catch (err) {
+        console.warn('[agent-changes] the window\'s change was not logged:', err);
+      }
+    }
     // An orchestrator's chats run on its configuration: each runner takes it,
     // and a live one restarts on what changed (services/chat-runners.ts).
     restartRunnersOf(result.agent.id, result.changedAtLaunch);

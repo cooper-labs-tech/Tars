@@ -354,6 +354,17 @@ export interface AgentStatus {
   /** The line the agent last wrote about itself with the MCP tool `checkpoint` (core/agent-checkpoint.ts): one
    *  line, 120 characters at most, with when. Saved. */
   checkpoint?: { line: string; at: string };
+  /** The last change of its settings asked over the API (2.0.7, core/agent-retune.ts): who asked (an agent, with its
+   *  project, or Tars), which settings, applied or queued, when asked and when it took effect. The whole change, with
+   *  its values before and after, is in the change log (GET /api/agent-changes). Saved. */
+  lastRetune?: {
+    changeId: string;
+    by: { kind: 'agent'; id: string; name: string; projectPath: string } | { kind: 'tars' } | { kind: 'window' };
+    fields: string[];
+    state: 'applied' | 'queued' | 'cancelled' | 'failed';
+    askedAt: string;
+    effectiveAt?: string;
+  };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line
   lastCleanOutput?: string;  // Clean text output captured from transcript by hooks

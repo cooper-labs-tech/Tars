@@ -544,12 +544,17 @@ const AGENT_TOOLS: Tool[] = [
   // Scoped to the caller's project by default
   tool({
     name: "list_agents",
-    description: "List the agents of YOUR project and their current status (idle/running/waiting/completed/error). Only these agents can receive your tasks: delegating to another project's agents is rejected. `all: true` adds other projects' agents for visibility ONLY; they remain undelegatable, and you must not present them as agents you have access to.",
+    description: "List the agents of YOUR project with their status (idle/running/waiting/completed/error) and inference settings (provider, model, effort). Only these agents receive your tasks, unless the owner's grant across projects opens another project to you (Settings). `project` lists one project's agents: another project's show who they are, their status and their inference settings, which any agent may change with update_agent, and nothing of their tasks; through the owner's grant, all of it. `all: true` adds every project's agents in the same way, for visibility: do not present another project's agents as ones you can hand work to unless a grant opens them to you.",
     schema: {
       all: z.boolean().optional().describe("If true, list agents of ALL projects instead of only your own"),
+      project: z.string().optional().describe("An absolute project path: that project's agents"),
     },
     failure: "listing agents",
-    async run({ all }) {
+    async run({ all, project }) {
+      if (project) {
+        const data = (await apiRequest(`/api/agents?project=${encodeURIComponent(project)}`)) as { agents: unknown[] };
+        return text(`Agents of project ${project}:\n${JSON.stringify(data.agents, null, 2)}`);
+      }
       const data = (await apiRequest(all ? "/api/agents?all=true" : "/api/agents")) as {
         agents: unknown[];
         scopedToProject?: string;
@@ -566,12 +571,13 @@ const AGENT_TOOLS: Tool[] = [
         const reachable = mine ? rows.filter(a => a.projectPath === mine) : rows;
         const others = mine ? rows.filter(a => a.projectPath !== mine) : [];
         const header = mine
-          ? `You can delegate to these ${reachable.length} agent(s) - they are in your project (${mine}):`
+          ? `You can delegate to these ${reachable.length} agent(s): they are in your project (${mine}):`
           : `No caller identity, so nothing here is scoped:`;
         const tail = others.length
           ? `\n\nThe following ${others.length} agent(s) belong to OTHER projects. They are listed ` +
-            `because all:true was requested. You CANNOT delegate to them - delegate_task will ` +
-            `reject it. Do not describe them as available to you:\n` +
+            `because all:true was requested. You cannot hand them work unless the owner's grant across projects ` +
+            `opens their project to you (delegate_task says so when it refuses); any agent may change their ` +
+            `inference settings with update_agent. Do not describe them as available to you:\n` +
             JSON.stringify(others, null, 2)
           : "";
         return text(`${header}\n${JSON.stringify(reachable, null, 2)}${tail}`);
@@ -713,9 +719,18 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "update_agent",
-    description: "Change an agent of your project after creating it: its name, provider (any CLI or API-key provider), model, effort, permission mode, CLI path, skills, character or secondary project path. Only your project's orchestrator does this, on its project's other agents: a worker is refused (worker_may_not_update), and so is an agent of another project (other_project). The role stays the user's: an agent is made the orchestrator, or stops being it, in the Agents page of Tars, where the orchestrator's own settings are changed too (orchestrator_settings), and so is a move to another project. A running turn is never cut. A change of model, effort or permission mode on the same CLI restarts a claude agent's CLI once its turn ends, on the same conversation; another CLI takes it at its next start. A change of provider or CLI path is refused while a CLI runs in the agent's terminal (cli_running): stop it with stop_agent once its work is done, then change it; its next start runs the new CLI on a new conversation, and the old CLI's model and CLI path are cleared unless you give new ones. The answer says when the change applies and whether the conversation is kept.",
+    description: "Change an agent's settings, or several agents' at once. "
+      + "Its inference settings (provider, the harness: any CLI or API-key provider; model; effort) any agent changes on any agent, of any project, orchestrators included: a worker too, and with no grant. "
+      + "Everything else (name, permission mode, CLI path, skills, character, secondary project path) only the agent's project's orchestrator changes, on its project's other agents: a worker is refused (worker_may_not_update), another project too (other_project), and an orchestrator's own (orchestrator_settings). "
+      + "worktree moves the agent onto one of its project's worktrees (made first with worktree_new, under the project's .worktrees/), or back to its project's folder with null: its project's orchestrator, or an agent the owner's grant across projects opens it to. "
+      + "A chat's runner runs on its orchestrator's settings, taken at each of its launches: change the orchestrator (runs_on_orchestrator). The role and the project stay the user's, in the Agents page of Tars. "
+      + "A running turn is never cut: an agent that is free takes the change now (applied: a claude agent restarts on it, on the same conversation; codex and pi start on it at their next task; a new provider or worktree starts at its next task, on a new conversation), and one mid-turn, asking a permission or holding a delegated task gets it queued, nothing written until its turn ends; opencode, amp and grok take a new model or effort at their next start, and a new provider once their CLI has ended. "
+      + "The answer says applied or queued, the change's id (chg-...) and when it applies; agent_changes reads when a queued one took effect, and revert_agent_change takes a change, a batch or an agent's last change back. "
+      + "ids (a list) or project (a path) change several agents in one call, each applied, queued or refused on its own, under one batch id. Every change is logged, and an agent of another project's change is noted to that project's orchestrator.",
     schema: {
-      id: z.string().describe("The agent ID"),
+      id: z.string().optional().describe("The agent ID (or give ids, or project)"),
+      ids: z.array(z.string()).optional().describe("Several agents' IDs, changed in one call (1 to 100)"),
+      project: z.string().optional().describe("An absolute project path: every agent of that project, changed in one call"),
       name: z.string().min(1).optional().describe("Its new name"),
       provider: z.string().optional().describe(PROVIDERS),
       model: z.string().nullable().optional().describe("The model, as the provider's CLI names it (e.g. 'opus' or 'sonnet' for claude); null for the provider's default."),
@@ -728,21 +743,73 @@ const AGENT_TOOLS: Tool[] = [
       skills: z.array(z.string()).optional().describe("Its skills: the whole list, which replaces the one it has"),
       character: z.enum(CHARACTERS).optional().describe("Visual character for the agent"),
       secondaryProjectPath: z.string().nullable().optional().describe("Secondary project path added as context (--add-dir); null to take it away"),
+      worktree: z.string().max(200).nullable().optional().describe("The branch of one of the agent's project's worktrees to work in (worktree_list names them), or null for the project's own folder"),
     },
     failure: "updating agent",
-    async run({ id, ...fields }) {
+    async run({ id, ids, project, ...fields }) {
       // Only what was named: null clears a setting, so a field nobody named must not reach Tars as one.
       const body = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+      const targets = [id, ids, project].filter((v) => v !== undefined).length;
+      if (targets !== 1) return problem("Error updating agent: name the agent with id, or several with ids or project (one of the three).");
       try {
+        if (id === undefined) {
+          const data = (await apiRequest("/api/agents/update", "POST", { ...body, ...(ids ? { ids } : { project }) })) as { batchId: string; results: unknown[] };
+          return text(`Batch ${data.batchId}: each agent applied, queued or refused on its own.\n${JSON.stringify(data, null, 2)}`);
+        }
         const data = (await apiRequest(`/api/agents/${encodeURIComponent(id)}/update`, "POST", body)) as {
-          agent: { id: string; name?: string }; changed?: string[]; text?: string;
+          agent: { id: string; name?: string }; changed?: string[]; text?: string; state?: string; changeId?: string;
         };
-        const changed = data.changed?.length ? data.changed.join(", ") : "nothing";
-        return text(`Updated "${data.agent.name || data.agent.id}" (${changed}). ${data.text ?? ""}`.trim());
+        const changed = data.changed?.length ? data.changed.join(", ") : "nothing yet";
+        return text(`Updated "${data.agent.name || data.agent.id}" (${changed}): ${data.state ?? "applied"}. ${data.text ?? ""}`.trim());
       } catch (err) {
         // The refusal's code, which the description names, with its reason.
         const code = (err as { body?: { code?: unknown } }).body?.code;
         if (typeof code === "string") return problem(`Error updating agent (${code}): ${(err as Error).message}`);
+        throw err;
+      }
+    },
+  }),
+
+  tool({
+    name: "agent_changes",
+    description: "The log of agents' settings changes, newest first: who asked (an agent, with its project, or Tars), which agent, its values before and after, when it was asked, whether it was applied or queued (or cancelled, or failed), and when it took effect. Any agent reads it. Filter by agent, project or batch.",
+    schema: {
+      agentId: z.string().optional().describe("One agent's changes"),
+      project: z.string().optional().describe("The changes of one project's agents (an absolute path)"),
+      batchId: z.string().optional().describe("The changes of one batch (b-...)"),
+      limit: z.number().int().min(1).max(500).optional().describe("At most this many, 100 when not given"),
+    },
+    failure: "reading the change log",
+    readOnly: true,
+    async run({ agentId, project, batchId, limit }) {
+      const q = new URLSearchParams();
+      if (agentId) q.set("agentId", agentId);
+      if (project) q.set("project", project);
+      if (batchId) q.set("batchId", batchId);
+      if (limit) q.set("limit", String(limit));
+      const data = (await apiRequest(`/api/agent-changes${q.toString() ? `?${q}` : ""}`)) as { changes: unknown[] };
+      return text(`${data.changes.length} change(s), newest first:\n${JSON.stringify(data.changes, null, 2)}`);
+    },
+  }),
+
+  tool({
+    name: "revert_agent_change",
+    description: "Take a change of agents' settings back, from the change log: one change (changeId), every change of a batch (batchId), or an agent's last change (agentId). A change still queued is cancelled, nothing written; an applied one sets its values before back, applied or queued as any change is, for the settings still at the values it set (one another change moved since is left alone, and named). You may revert what you may change.",
+    schema: {
+      changeId: z.string().optional().describe("The change (chg-...)"),
+      batchId: z.string().optional().describe("Every change of a batch (b-...)"),
+      agentId: z.string().optional().describe("The agent's last change"),
+    },
+    failure: "reverting the change",
+    async run({ changeId, batchId, agentId }) {
+      const named = [changeId, batchId, agentId].filter((v) => v !== undefined).length;
+      if (named !== 1) return problem("Error reverting: name one of changeId, batchId or agentId.");
+      try {
+        const data = await apiRequest("/api/agent-changes/revert", "POST", changeId ? { changeId } : batchId ? { batchId } : { agentId });
+        return text(JSON.stringify(data, null, 2));
+      } catch (err) {
+        const code = (err as { body?: { code?: unknown } }).body?.code;
+        if (typeof code === "string") return problem(`Error reverting (${code}): ${(err as Error).message}`);
         throw err;
       }
     },
