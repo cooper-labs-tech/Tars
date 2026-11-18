@@ -301,6 +301,11 @@ describe('what a quarantined copy is judged', () => {
     expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 0, stdout: '' } }).run })).ok).toBe(false);
     expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 0, stdout: 'tars-start-check sqlite=42 pty= exit=0\n' } }).run })).ok).toBe(false);
     expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 1, stdout: `${line}\n` } }).run })).ok).toBe(false);
+    // Killed by the system (measured: SIGKILL, 137, for the signed app with its pty.node re-signed ad hoc), which run()
+    // reports as -1 with nothing printed: said so, not as "exit -1".
+    const killed = await startCheck({ app: APP, run: machine({ 'env -i': { code: -1 } }).run });
+    expect(killed.ok).toBe(false);
+    expect(killed.why).toMatch(/killed|signal/);
   });
 
   it('20. a binary that could not be run fails', async () => {

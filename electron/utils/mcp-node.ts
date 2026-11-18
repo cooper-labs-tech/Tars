@@ -47,25 +47,61 @@ export function mcpNodeCommand(
   platform: NodeJS.Platform = process.platform,
   mayWrite: boolean = isPackaged() && !isTransientAppPath(appBinary),
 ): string {
+  return launcherCommand('tars-mcp-node', app => [
+    '# Written by a packaged Tars: its MCP servers run on the Node inside the app,',
+    '# or on the node on the PATH once that app is gone.',
+    `APP=${app}`,
+    '[ -x "$APP" ] && ELECTRON_RUN_AS_NODE=1 exec "$APP" "$@"',
+    'exec node "$@"',
+  ], appBinary, platform, mayWrite);
+}
+
+/**
+ * The program a server the user names runs on (Settings, Tasmania: a path anywhere, with its own node_modules):
+ * ~/.tars/bin/tars-user-mcp-node, the node on the PATH first, the Node inside the app when there is none.
+ *
+ * Signed with the hardened runtime (#591), the app's binary loads no native module but the app's own: library
+ * validation. Measured on the first signed build (18/11): an N-API module of a server's own node_modules, which the ad
+ * hoc 2.0.6 loaded run as Node, was refused ("different Team IDs"), and the system's node loads it. A module built
+ * against Node's own ABI (NAN, better-sqlite3 installed with npm) never loaded in the app's binary anyway. Tars's own
+ * bundles stay on mcpNodeCommand: they carry no native code of their own, and must not depend on the machine's Node.
+ * The same rules of writing as that launcher; on Windows, `node`.
+ */
+export function userMcpNodeCommand(
+  appBinary: string = lastingAppBinary(),
+  platform: NodeJS.Platform = process.platform,
+  mayWrite: boolean = isPackaged() && !isTransientAppPath(appBinary),
+): string {
+  return launcherCommand('tars-user-mcp-node', app => [
+    '# Written by a packaged Tars: a server the user named runs on the node on the PATH,',
+    '# which loads the native modules of its own node_modules, or on the Node inside the app',
+    '# when there is none (signed, the app loads no native module but its own).',
+    'command -v node >/dev/null 2>&1 && exec node "$@"',
+    `APP=${app}`,
+    '[ -x "$APP" ] && ELECTRON_RUN_AS_NODE=1 exec "$APP" "$@"',
+    'exec node "$@"',
+  ], appBinary, platform, mayWrite);
+}
+
+/** ~/.tars/bin/<name>, a sh script of `lines` (given the app binary, quoted), written as mcpNodeCommand says. */
+function launcherCommand(
+  name: string,
+  lines: (quotedApp: string) => string[],
+  appBinary: string,
+  platform: NodeJS.Platform,
+  mayWrite: boolean,
+): string {
   if (platform === 'win32') return 'node';
   const bin = path.join(DATA_DIR, 'bin');
-  const launcher = path.join(bin, 'tars-mcp-node');
+  const launcher = path.join(bin, name);
   const isLink = (p: string) => { try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; } };
   if (!mayWrite) return fs.existsSync(launcher) && !isLink(bin) && !isLink(launcher) ? launcher : 'node';
   if (isLink(bin) || isLink(launcher)) {
-    console.warn('[mcp] ~/.tars/bin/tars-mcp-node is a link: not written through, the MCP servers run on `node`');
+    console.warn(`[mcp] ~/.tars/bin/${name} is a link: not written through, the MCP servers run on \`node\``);
     return 'node';
   }
   const quoted = `'${appBinary.replace(/'/g, `'\\''`)}'`;
-  const script = [
-    '#!/bin/sh',
-    '# Written by a packaged Tars: its MCP servers run on the Node inside the app,',
-    '# or on the node on the PATH once that app is gone.',
-    `APP=${quoted}`,
-    '[ -x "$APP" ] && ELECTRON_RUN_AS_NODE=1 exec "$APP" "$@"',
-    'exec node "$@"',
-    '',
-  ].join('\n');
+  const script = ['#!/bin/sh', ...lines(quoted), ''].join('\n');
   try {
     let current: string | undefined;
     try { current = fs.readFileSync(launcher, 'utf-8'); } catch { /* not written yet */ }

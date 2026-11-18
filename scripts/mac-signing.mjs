@@ -189,6 +189,38 @@ export function machOFiles(root) {
   return found;
 }
 
+/**
+ * What the start check runs inside the app's binary as Node: better-sqlite3 and node-pty from its own app.asar, as the
+ * app requires them (node-pty finds spawn-helper in app.asar.unpacked), a shell spawned through the pty, one line out.
+ */
+const START_SCRIPT = [
+  "const m = process.argv[1] + '/app.asar/node_modules/';",
+  "const Database = require(m + 'better-sqlite3'); const db = new Database(':memory:');",
+  "const x = db.prepare('select 42 as x').get().x; db.close();",
+  "const t = require(m + 'node-pty').spawn('/bin/sh', ['-c', 'echo pty-ok'], { env: { PATH: '/usr/bin:/bin' } });",
+  "let o = ''; t.onData(c => { o += c; });",
+  "const timer = setTimeout(() => { console.log('tars-start-check timeout'); process.exit(3); }, 20000);",
+  "t.onExit(e => { clearTimeout(timer); console.log('tars-start-check sqlite=' + x + ' pty=' + o.trim() + ' exit=' + e.exitCode); });",
+].join('\n');
+const START_LINE = 'tars-start-check sqlite=42 pty=pty-ok exit=0';
+
+/**
+ * The app started once, as nothing else in the checks does: its binary run as Node (ELECTRON_RUN_AS_NODE=1, how its MCP
+ * servers and tars-slot run it), in a clean environment, under the signature and entitlements it ships with. A plist
+ * without allow-jit signs, notarizes and staples, and V8 aborts here (exit 133); a native module library validation
+ * refuses fails its require.
+ */
+export async function startCheck({ app, run = defaultRun }) {
+  const bin = join(app, 'Contents', 'MacOS', basename(app, '.app'));
+  const r = await run('env', ['-i', 'PATH=/usr/bin:/bin', 'ELECTRON_RUN_AS_NODE=1', bin, '-e', START_SCRIPT, join(app, 'Contents', 'Resources')]);
+  if (r.missing) return { ok: false, why: `could not run ${bin}` };
+  if (r.code === 0 && String(r.stdout).split('\n').some(l => l.trim() === START_LINE)) return { ok: true };
+  const said = `${r.stderr ?? ''}\n${r.stdout ?? ''}`.split('\n').map(l => l.replace(/^#\s*/, '').trim()).find(Boolean);
+  // run() gives -1 when no exit code came back: the system killed it (as macOS does a process whose code it refuses).
+  const ended = r.code === -1 ? 'killed by a signal' : `exit ${r.code}`;
+  return { ok: false, why: `${ended}${said ? `: ${said.slice(0, 200)}` : ', no result line'}` };
+}
+
 /** The quarantine Safari puts on a download. */
 const quarantine = () => `0083;${Math.floor(Date.now() / 1000).toString(16)};Safari;`;
 
@@ -250,6 +282,8 @@ export async function verifyQuarantined({ dmg, team, run = defaultRun, platform 
     }
     const appStaple = await step('stapler on the app', 'xcrun', ['stapler', 'validate', app]);
     if (!appStaple.missing) (staplerValid(appStaple.code, `${appStaple.stdout}${appStaple.stderr}`) ? passed : failures).push(`stapler validate on the app: exit ${appStaple.code}`);
+    const started = await startCheck({ app, run });
+    (started.ok ? passed : failures).push(`the app started as Node (better-sqlite3, a shell through node-pty): ${started.ok ? 'ok' : started.why}`);
 
     const binaries = machOFiles(app);
     let nestedBad = 0;

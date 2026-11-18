@@ -683,8 +683,8 @@ How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`)
   `APPLE_ID` or password, no `APPLE_API_KEY` (it would win over the profile), no `CSC_LINK` or
   `CSC_KEY_PASSWORD` (a certificate file instead of the identity chosen);
 - **the build**: electron-builder signs every Mach-O of the app (Electron's frameworks and
-  helpers, node-pty's `pty.node` and `spawn-helper`, better-sqlite3's and sharp's `.node` files,
-  in `app.asar.unpacked`) with the hardened runtime and a secure timestamp, then notarizes and
+  helpers, node-pty's `pty.node` and `spawn-helper`, better-sqlite3's `.node` files, in
+  `app.asar.unpacked`; 26 Mach-O files on the first signed build) with the hardened runtime and a secure timestamp, then notarizes and
   staples the app before it makes the dmg and the zip;
 - **after the build**, the dmg: signed with a secure timestamp (electron-builder's own `dmg.sign`
   gives none, so it is off), notarized and stapled, then its `.blockmap` and its entry in
@@ -694,7 +694,11 @@ How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`)
   accepted as `source=Notarized Developer ID`, `spctl -t open --context
   context:primary-signature` on the dmg likewise, `xcrun stapler validate` on both, and every
   Mach-O signed with a Developer ID Application identity, a secure timestamp and the hardened
-  runtime. Every signature is pinned to the Team ID of the identity that signed, read at run time
+  runtime. Then the app is started once: its binary run as Node (`ELECTRON_RUN_AS_NODE=1`, in a
+  clean environment) loads better-sqlite3 and spawns a shell through node-pty from its own
+  `app.asar`, the one check that starts it (a plist without `allow-jit` passes all the others and
+  aborts at launch, exit 133; `__tests__/scripts/entitlements.test.ts` also pins the plist to
+  `allow-jit` alone). Every signature is pinned to the Team ID of the identity that signed, read at run time
   from it (never written in the repository): another team's Developer ID fails. One failure stops
   the release before `gh release create`. The same checks run on any dmg with `node
   scripts/mac-signing.mjs verify <dmg> [--team <Team ID>]`, the team defaulting to the keychain's
@@ -1609,7 +1613,11 @@ Six servers ship inside the app, built from `mcp-*/` into `dist/bundle.js` and c
 | `mcp-x` | `dorothy-x` | `getMcpXPath()` |
 
 Plus `tasmania` when `appSettings.tasmaniaEnabled` and the configured
-`tasmaniaServerPath` exists on disk. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
+`tasmaniaServerPath` exists on disk. The six run on `~/.tars/bin/tars-mcp-node`, the app's own binary
+as Node; `tasmania`, a server outside the app with its own `node_modules`, runs on
+`~/.tars/bin/tars-user-mcp-node`, the machine's `node` first and the app's binary when there is none
+(`electron/utils/mcp-node.ts`): signed (#591), the app's binary refuses any native module but its own, and
+on the first signed build an N-API module of such a server failed there and loaded on `node`. `mcp-telegram` (`claude-mgr-telegram`) is no longer built or shipped since
 2.0.5: it sent with Tars's own bot's token, and every start takes it out of each CLI a 2.0.4 registered it in
 (`retireTelegramMcp`, `electron/services/hermes-relay-switch.ts`), relay on or off.
 
