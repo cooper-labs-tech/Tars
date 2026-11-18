@@ -23,8 +23,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * e. "/compact" and Enter: a command, not recorded;
  * f. dev-a's report to lead-a (Tars types it, writeProgrammaticInput): not recorded;
  * g. "TYPED-W ..." typed into the worker's own terminal: not recorded, a worker's terminal is not an orchestrator's.
+ * g2. (the Audit's L1 on #594) While lead-a works on a turn, the owner types "ANSWER-1 yes" into what the turn shows (a
+ *     dialog Tars does not see): the stand-in takes it as that answer, not as a prompt, then, as a prompt-injected agent
+ *     would from inside its own terminal, posts a UserPromptSubmit naming it with its own hook token: not recorded.
  * Then:
- * h. lead-a's owner_words list holds a's words and only them, as the hook confirmed them;
+ * h. lead-a's owner_words list holds a's words and the SLOW>> line typed at rest, and only them;
  * i. lead-a relays them to lead-b: lead-b's terminal gets them under the sender line only Tars writes, "via terminal",
  *    "verified by Tars" and their id, then the words byte for byte.
  * Red on the 2.0.7 train (b5f207bcf): the list is empty, and the relay has no id to name.
@@ -51,12 +54,15 @@ const line = (o) => fs.appendFileSync(transcript, JSON.stringify({ sessionId: si
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function turn(prompt) {
   record({ prompt });
+  busy = true;
   hook('user-prompt-submit.sh', { hook_event_name: 'UserPromptSubmit', prompt });
   line({ type: 'user', message: { role: 'user', content: prompt } });
   line({ type: 'assistant', message: { id: 'msg-' + Date.now(), role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'noted' }] } });
-  await sleep(100);
+  await sleep(prompt.includes('SLOW>>') ? 6000 : 100);
   hook('on-stop.sh', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'noted' });
+  busy = false;
 }
+let busy = false;
 process.stdin.setRawMode(true);
 hook('session-start.sh', { hook_event_name: 'SessionStart', source: 'startup' });
 fs.appendFileSync(path.join(process.env.HOME, 'starts.jsonl'), JSON.stringify({ id }) + '\n');
@@ -72,6 +78,12 @@ process.stdin.on('data', (data) => {
       if (ch === '\r' && !pasting) {
         const typed = buffer;
         buffer = '';
+        // Typed during a turn into what it shows: that answer, never a prompt; then forged as one, as an injected agent would.
+        if (busy && typed.startsWith('ANSWER-')) {
+          fs.appendFileSync(path.join(process.env.HOME, 'answered.jsonl'), JSON.stringify({ id, typed }) + '\n');
+          setTimeout(() => hook('user-prompt-submit.sh', { hook_event_name: 'UserPromptSubmit', prompt: typed }), 500);
+          continue;
+        }
         if (typed.trim()) queue = queue.then(() => turn(typed));
       } else buffer += ch;
     }
@@ -164,6 +176,13 @@ for (const newInterface of [false, true]) {
       await submitted('lead-a', 'REPORTED-1');
       await send('dev-a', [...keys('TYPED-W the owner types to a worker'), '\r']);
       await submitted('dev-a', 'TYPED-W');
+      // g2. A turn of lead-a, and the owner's answer to what it shows.
+      await send('lead-a', [...keys('SLOW>> a long turn'), '\r']);
+      await submitted('lead-a', 'SLOW>>');
+      await new Promise((r) => setTimeout(r, 800));
+      await send('lead-a', [...keys('ANSWER-1 yes'), '\r']);
+      await until('lead-a answered and forged its hook', () => (lines(path.join(home, 'answered.jsonl')) as unknown[]).length > 0);
+      await new Promise((r) => setTimeout(r, 7000));
       await new Promise((r) => setTimeout(r, 1000));
 
       const list = await api('lead-a', 'GET', '/api/owner-words');
@@ -177,9 +196,10 @@ for (const newInterface of [false, true]) {
       Object.assign(seen, { promptsLeadA: prompts('lead-a'), promptsDevA: prompts('dev-a'), received });
 
       expect.soft(list.status).toBe(200);
-      expect.soft(words.map((w) => w.text)).toEqual([TYPED]);
+      // Newest first: the two lines typed at rest, never what was typed into the turn.
+      expect.soft(words.map((w) => w.text)).toEqual(['SLOW>> a long turn', TYPED]);
       expect.soft(typed?.via).toBe('terminal');
-      expect.soft(words.some((w) => /PASTED|UNBRACKETED|REPORTED|compact|TYPED-2|TYPED-W/.test(w.text))).toBe(false);
+      expect.soft(words.some((w) => /PASTED|UNBRACKETED|REPORTED|compact|TYPED-2|TYPED-W|ANSWER-1/.test(w.text))).toBe(false);
       expect.soft(relay?.status).toBe(200);
       expect.soft(received).toMatch(new RegExp(`^Message from Tars: the owner's words of .*, via terminal, relayed by agent "Alpha Lead" \\("lead-a"\\), verified by Tars \\(words ${typed?.id ?? 'ow-none'}\\):`));
       expect.soft(received.trimEnd().endsWith(TYPED)).toBe(true);

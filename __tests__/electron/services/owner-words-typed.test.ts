@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX } from '../../../electron/services/owner-words';
+import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX, typedAtRest } from '../../../electron/services/owner-words';
 
 /**
  * The owner's words typed by hand into an orchestrator's terminal (2.0.7; SECURITY.md §8, "Typed in a terminal",
@@ -21,6 +21,12 @@ import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX } fro
  * W10. The record lacks `via: 'terminal'`, the agent's project, or the chat of a chat's runner; or a line typed into
  *      a chat's runner can be listed by another chat's runner (the window chat's rules do not hold).
  * W11. Line breaks typed as CR, or spaces at the ends, keep a line from matching the prompt the CLI reports.
+ * And from the Audit's L1 on #594 (written before its code): the hook carries the agent's own token, so a prompt-injected
+ * orchestrator can confirm a line its owner typed that its CLI never took as a prompt.
+ * W12. A line typed while a turn runs (queued by the CLI, or the answer to what the turn shows: an AskUserQuestion's
+ *      free text Tars did not see), with a dialog or a question open, or a permission question held by Tars, waits for
+ *      a confirmation.
+ * W13. A line waits longer than the hook needs at rest: 10 minutes gave a forged hook all that time.
  */
 
 const A = '/projects/alpha';
@@ -106,5 +112,24 @@ describe('a line typed into an orchestrator\'s terminal', () => {
   it('W11: CR line breaks and spaces at the ends do not keep a line from matching', () => {
     words.typed('lead-a', 'first\nsecond ', { projectPath: A });
     expect(words.confirmTyped('lead-a', ' first\r\nsecond')?.text).toBe('first\nsecond');
+  });
+});
+
+describe('a line counts only when typed at rest (the Audit\'s L1 on #594)', () => {
+  it('W12: at the CLI\'s prompt only: never in a turn, a dialog, a question or a permission question', () => {
+    for (const status of ['idle', 'completed', 'error']) expect(typedAtRest({ status }, false), status).toBe(true);
+    expect(typedAtRest({ status: 'waiting', waitingReason: 'idle' }, false)).toBe(true);
+    expect(typedAtRest({ status: 'running' }, false)).toBe(false);
+    expect(typedAtRest({ status: 'waiting', waitingReason: 'permission' }, false)).toBe(false);
+    expect(typedAtRest({ status: 'waiting', waitingReason: 'question' }, false)).toBe(false);
+    expect(typedAtRest({ status: 'idle' }, true)).toBe(false);
+    expect(typedAtRest({ status: 'idle', permissionAsk: { tool: 'Bash' } }, false)).toBe(false);
+    for (const status of ['asleep', 'stopped', undefined]) expect(typedAtRest({ status }, false), String(status)).toBe(false);
+  });
+
+  it('W13: a line waits a minute at most for its confirmation', () => {
+    words.typed('lead-a', 'merge it', { projectPath: A });
+    t += 61_000;
+    expect(words.confirmTyped('lead-a', 'merge it')).toBeUndefined();
   });
 });
