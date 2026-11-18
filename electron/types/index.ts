@@ -1015,8 +1015,10 @@ export interface InferenceEndpoint {
   approvedBaseUrl?: string;
   /** The agent that last added it or changed its base URL. */
   changedBy?: { agentId: string; agentName?: string; at: string };
-  /** How long the proxy holds a request while the endpoint pauses (503, 429, 502): 0 to 3600 s, 600 by default. */
+  /** How long the proxy holds a request while the endpoint pauses (503, 429, 502): 0 to 3600 s, 120 by default. */
   holdMaxSeconds: number;
+  /** Add X-Session-Id and X-Agent-Id to every request (off by default: they name the agent and its session). */
+  sendSessionHeaders?: boolean;
   health?: { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string };
 }
 
@@ -1024,5 +1026,12 @@ export interface TraceSettings {
   projects: string[];
   capBytes: number;
   retentionDays: number;
+  /** The harness and model pairs that may be traced: empty as it ships. */
   pairs: Array<{ harness: string; models: string; note?: string }>;
+  /** Leave Claude, GPT, o-series and Gemini models out (on by default; their terms may forbid training on them). */
+  excludeClosedModels: boolean;
+  /** Where opted-in sessions are uploaded (a back-office the user points at), empty until set. */
+  uploadUrl: string;
+  /** The user has seen what leaves the machine, and when. */
+  uploadConsentAt?: string;
 }

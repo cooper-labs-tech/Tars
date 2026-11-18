@@ -26,7 +26,13 @@ import type { ProxyTarget } from './endpoint-proxy';
  */
 
 export const ENDPOINT_KEYS_DIR = path.join(DATA_DIR, 'endpoint-keys');
-export const DEFAULT_HOLD_SECONDS = 600;
+/**
+ * The hold ceiling for a general endpoint: two minutes. A standard 503 or 429 says in Retry-After how long to wait,
+ * usually seconds to a minute; two minutes rides out several such answers, and stays under the request timeouts the
+ * harnesses keep by default, so a held request does not turn into a harness's own failure. An endpoint that pauses
+ * for longer (a maintenance window) takes a longer ceiling in its settings, up to an hour.
+ */
+export const DEFAULT_HOLD_SECONDS = 120;
 export const MAX_HOLD_SECONDS = 3600;
 const MAX_NAME = 60;
 const MAX_KEY_BYTES = 8 * 1024;
@@ -46,7 +52,7 @@ export interface EndpointView {
   models: string[]; modelsReadAt?: string; modelsError?: string;
   agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }>;
   approved: boolean; approvedBaseUrl?: string; changedBy?: InferenceEndpoint['changedBy'];
-  holdMaxSeconds: number; health?: InferenceEndpoint['health'];
+  holdMaxSeconds: number; sendSessionHeaders: boolean; health?: InferenceEndpoint['health'];
 }
 
 type Result = { ok: true; settings: AppSettings; endpoint: InferenceEndpoint } | { ok: false; error: string };
@@ -70,7 +76,7 @@ export function cleanBaseUrl(raw: unknown): string | null {
 /** Adds an endpoint, or changes one (`id`), as the owner or an agent may. */
 export function saveEndpoint(
   settings: AppSettings,
-  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number },
+  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean },
   actor: EndpointActor,
   now: string = new Date().toISOString(),
 ): Result {
@@ -100,6 +106,7 @@ export function saveEndpoint(
   const next: InferenceEndpoint = {
     ...(current ?? { id: newId(list), models: [], approved: false }),
     name, baseUrl: baseUrl!, allowTraces, holdMaxSeconds: hold,
+    sendSessionHeaders: input.sendSessionHeaders ?? current?.sendSessionHeaders ?? false,
   } as InferenceEndpoint;
   if (owner) {
     next.approved = true;
@@ -160,7 +167,8 @@ export function endpointViews(settings: AppSettings, agents: AgentStatus[]): End
     models: Array.isArray(e.models) ? e.models : [], modelsReadAt: e.modelsReadAt, modelsError: e.modelsError,
     agents: agents.filter(a => a.endpointId === e.id).map(a => ({ id: a.id, name: a.name ?? a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), model: a.model })),
     approved: e.approved === true, approvedBaseUrl: e.approvedBaseUrl, changedBy: e.changedBy,
-    holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS, health: e.health,
+    holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS,
+    sendSessionHeaders: e.sendSessionHeaders === true, health: e.health,
   }));
 }
 
@@ -171,7 +179,10 @@ export function endpointTarget(settings: AppSettings, id: string): ProxyTarget |
   if (!e.approved || !e.approvedBaseUrl || e.approvedBaseUrl !== e.baseUrl) {
     return { refused: { status: 403, type: 'endpoint_not_approved', message: `The owner has not approved the endpoint "${e.name}" at this address yet: Settings, Inference endpoints.` } };
   }
-  return { baseUrl: e.approvedBaseUrl, key: settings.endpointKeys?.[id] || null, holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS };
+  return {
+    baseUrl: e.approvedBaseUrl, key: settings.endpointKeys?.[id] || null,
+    holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS, sendSessionHeaders: e.sendSessionHeaders === true,
+  };
 }
 
 /** Why an agent may not run on this endpoint and model with this harness, or null when it may (or has none). */

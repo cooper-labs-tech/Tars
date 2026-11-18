@@ -3,7 +3,7 @@ import { execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import { randomBytes, timingSafeEqual } from 'crypto';
-import { DATA_DIR, ENDPOINT_PROXY_PORT, privatePath } from '../constants';
+import { API_TOKEN_FILE, BRIDGE_TOKEN_FILE, DATA_DIR, ENDPOINT_PROXY_PORT, privatePath } from '../constants';
 import type { AgentStatus, AppSettings, TraceSettings } from '../types';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { updateSharedJsonSync } from '../utils/shared-file';
@@ -12,6 +12,9 @@ import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder } from './inference-endpoints';
 import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
+import { projectEnvValues, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
+import { sessionDocument } from './trace-export';
+import { SECRET_FIELDS } from './settings-secrets';
 
 /**
  * The running side of inference endpoints and native traces: wires the proxy, the per-terminal
@@ -62,7 +65,10 @@ interface LiveSession extends ProxySession { harness: string; model: string; sta
 const sessions = new Map<string, LiveSession>();
 const waits = new Map<string, Extract<HoldEvent, { since: number }>>();
 
-/** The trace settings with their defaults: no project opted in, 5 GiB, 30 days, the four open harnesses. */
+/**
+ * The trace settings with their defaults: no project opted in, 5 GiB, 30 days, no pair (the owner names them), closed
+ * models left out, no upload address.
+ */
 export function traceSettingsOf(settings: Partial<AppSettings> | undefined): TraceSettings {
   const t = settings?.traces;
   return {
@@ -70,7 +76,42 @@ export function traceSettingsOf(settings: Partial<AppSettings> | undefined): Tra
     capBytes: typeof t?.capBytes === 'number' && t.capBytes > 0 ? t.capBytes : 5 * GIB,
     retentionDays: typeof t?.retentionDays === 'number' && t.retentionDays > 0 ? t.retentionDays : 30,
     pairs: Array.isArray(t?.pairs) ? t!.pairs : defaultTracePairs(),
+    excludeClosedModels: t?.excludeClosedModels !== false,
+    uploadUrl: typeof t?.uploadUrl === 'string' ? t.uploadUrl : '',
+    ...(typeof t?.uploadConsentAt === 'string' ? { uploadConsentAt: t.uploadConsentAt } : {}),
   };
+}
+
+/**
+ * What the scrubber masks for a project's sessions (trace-scrub.ts): every secret Tars holds (the settings' keys,
+ * the endpoints' keys, its API and reader tokens), the project's .env values, and the home folder in each spelling.
+ */
+export function scrubContextFor(projectPath: string | undefined): ScrubContext {
+  const settings = deps?.getSettings() ?? ({} as AppSettings);
+  const known: string[] = [];
+  const collect = (v: unknown) => {
+    if (typeof v === 'string') known.push(v);
+    else if (v && typeof v === 'object') for (const x of Object.values(v as Record<string, unknown>)) collect(x);
+  };
+  for (const f of SECRET_FIELDS) collect((settings as unknown as Record<string, unknown>)[f]);
+  for (const file of [API_TOKEN_FILE, BRIDGE_TOKEN_FILE, TRACES_READER_TOKEN_FILE]) {
+    try { known.push(fs.readFileSync(file, 'utf8').trim()); } catch { /* none */ }
+  }
+  const home = os.homedir();
+  return {
+    homeDirs: [...new Set([home, home.replace(/\\/g, '/')])],
+    knownSecrets: [...new Set(known.filter(k => k.length >= 8))],
+    envValues: projectPath ? projectEnvValues(projectPath) : [],
+  };
+}
+
+/** One session as it would be uploaded: its document, scrubbed, and what was masked, by kind. */
+export function previewUpload(traceId: string): { document: unknown; counts: Record<string, number>; scrubVersion: string } | null {
+  const doc = sessionDocument(traceStore(), traceId);
+  if (!doc) return null;
+  const counts: Record<string, number> = {};
+  const document = scrubValue(doc, scrubContextFor(String(doc.trace.project_path ?? '')), counts);
+  return { document, counts, scrubVersion: SCRUB_VERSION };
 }
 
 export function traceStore(): TraceStore {
@@ -180,6 +221,7 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
     provider: harness, model: agent.model,
     endpoint: endpoint ? { allowTraces: endpoint.allowTraces === true, approved: endpoint.approved === true && endpoint.approvedBaseUrl === endpoint.baseUrl } : undefined,
     projectOptedIn: t.projects.includes(agent.projectPath), agentOptedIn: agent.traces === true, pairs: t.pairs,
+    excludeClosedModels: t.excludeClosedModels,
   });
   const token = `tep_${randomBytes(24).toString('hex')}`;
   const traceId = `tr_${Date.now().toString(36)}${randomBytes(8).toString('hex')}`;

@@ -11,10 +11,10 @@ import {
 } from '../services/traces-runtime';
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
-import { defaultTracePairs, traceDecision } from '../services/trace-gate';
-
-/** Said with the list, so the window can show it: the rule no pair can open. */
-export const HARD_RULE = 'A Claude, GPT, o-series or Gemini model is never traced, whatever the list says.';
+import { CLOSED_MODELS_WARNING, traceDecision } from '../services/trace-gate';
+import { previewUpload } from '../services/traces-runtime';
+import { cleanBaseUrl } from '../services/inference-endpoints';
+import { SCRUB_VERSION } from '../services/trace-scrub';
 
 /**
  * The window's side of inference endpoints and native traces: the IPC contract the back-office page
@@ -62,6 +62,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       id: typeof i.id === 'string' ? i.id : undefined, name: typeof i.name === 'string' ? i.name : undefined,
       baseUrl: typeof i.baseUrl === 'string' ? i.baseUrl : undefined, allowTraces: typeof i.allowTraces === 'boolean' ? i.allowTraces : undefined,
       holdMaxSeconds: typeof i.holdMaxSeconds === 'number' ? i.holdMaxSeconds : undefined,
+      sendSessionHeaders: typeof i.sendSessionHeaders === 'boolean' ? i.sendSessionHeaders : undefined,
     }, { window: true });
     if (!r.ok) return r;
     apply(r.settings);
@@ -129,13 +130,28 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       if (!Array.isArray(p.pairs) || !p.pairs.every(x => x && typeof x.harness === 'string' && typeof x.models === 'string')) return { ok: false, error: 'A pair is a harness and a model glob.' };
       next.pairs = p.pairs.map(x => ({ harness: x.harness, models: x.models, ...(typeof x.note === 'string' ? { note: x.note } : {}) }));
     }
+    if (p.excludeClosedModels !== undefined) {
+      if (typeof p.excludeClosedModels !== 'boolean') return { ok: false, error: 'Leaving closed models out is on or off.' };
+      next.excludeClosedModels = p.excludeClosedModels;
+    }
+    if (p.uploadUrl !== undefined) {
+      if (typeof p.uploadUrl !== 'string') return { ok: false, error: 'The back-office address is a URL, or empty.' };
+      const url = p.uploadUrl.trim() === '' ? '' : cleanBaseUrl(p.uploadUrl);
+      if (url === null) return { ok: false, error: 'The back-office address must be http(s), with no credentials, query or fragment.' };
+      if (url !== next.uploadUrl) delete next.uploadConsentAt;
+      next.uploadUrl = url;
+    }
     apply({ ...deps.getAppSettings(), traces: next });
     sweepTraces();
     return { ok: true, settings: next };
   });
 
-  // The harness and model pairs that may be traced: the owner's list, behind the hard rule in code (trace-gate.ts).
-  const pairsView = () => ({ pairs: traceSettingsOf(deps.getAppSettings()).pairs, hardRule: HARD_RULE });
+  // The harness and model pairs that may be traced: the owner's list, empty as Tars ships, and the closed-model
+  // default beside it (trace-gate.ts).
+  const pairsView = () => {
+    const t = traceSettingsOf(deps.getAppSettings());
+    return { pairs: t.pairs, excludeClosedModels: t.excludeClosedModels, closedModelsWarning: CLOSED_MODELS_WARNING };
+  };
   const setPairs = (pairs: TraceSettings['pairs']) => {
     apply({ ...deps.getAppSettings(), traces: { ...traceSettingsOf(deps.getAppSettings()), pairs } });
     return { ok: true as const, ...pairsView() };
@@ -143,23 +159,69 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   const pairOf = (raw: unknown): TraceSettings['pairs'][number] | null => {
     const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
     if (typeof o.harness !== 'string' || !o.harness.trim() || typeof o.models !== 'string' || !o.models.trim()) return null;
-    return { harness: o.harness.trim(), models: o.models.trim(), ...(typeof o.note === 'string' && o.note ? { note: o.note } : {}) };
+    return { harness: o.harness.trim().slice(0, 80), models: o.models.trim().slice(0, 200), ...(typeof o.note === 'string' && o.note ? { note: o.note.slice(0, 200) } : {}) };
   };
+  const same = (a: { harness: string; models: string }, b: { harness: string; models: string }) => a.harness === b.harness && a.models === b.models;
   ipcMain.handle('traces:pairs', () => pairsView());
   ipcMain.handle('traces:addPair', (_e, raw: unknown) => {
     const pair = pairOf(raw);
     if (!pair) return { ok: false, error: 'A pair is a harness (or *) and a model glob (or *).' };
     const pairs = traceSettingsOf(deps.getAppSettings()).pairs;
-    if (pairs.some(p => p.harness === pair.harness && p.models === pair.models)) return { ok: true, ...pairsView() };
+    if (pairs.some(p => same(p, pair))) return { ok: true, ...pairsView() };
     return setPairs([...pairs, pair]);
   });
   ipcMain.handle('traces:removePair', (_e, raw: unknown) => {
     const pair = pairOf(raw);
     if (!pair) return { ok: false, error: 'A pair is a harness and a model glob.' };
-    return setPairs(traceSettingsOf(deps.getAppSettings()).pairs.filter(p => !(p.harness === pair.harness && p.models === pair.models)));
+    return setPairs(traceSettingsOf(deps.getAppSettings()).pairs.filter(p => !same(p, pair)));
   });
-  // A vetted list from outside Tars is not there yet: the seed is the four open harnesses until it is.
-  ipcMain.handle('traces:reseedPairs', () => setPairs(defaultTracePairs()));
+  // A list of pairs from a JSON file the owner picks (an array of { harness, models, note? }), added to the list.
+  ipcMain.handle('traces:importPairs', async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const options = { properties: ['openFile' as const], filters: [{ name: 'JSON', extensions: ['json'] }] };
+    const chosen = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
+    if (chosen.canceled || !chosen.filePaths[0]) return { ok: false, error: 'Cancelled.', cancelled: true };
+    let raw: unknown;
+    try {
+      if (fs.statSync(chosen.filePaths[0]).size > 1024 * 1024) return { ok: false, error: 'The file is over 1 MiB.' };
+      raw = JSON.parse(fs.readFileSync(chosen.filePaths[0], 'utf8'));
+    } catch (err) {
+      return { ok: false, error: `Not a JSON file: ${(err as Error).message}` };
+    }
+    const list = Array.isArray(raw) ? raw : Array.isArray((raw as { pairs?: unknown })?.pairs) ? (raw as { pairs: unknown[] }).pairs : null;
+    if (!list || list.length > 500) return { ok: false, error: 'The file holds a list of up to 500 { harness, models } pairs.' };
+    const incoming = list.map(pairOf);
+    if (incoming.some(p => p === null)) return { ok: false, error: 'Every entry is { harness, models, note? }.' };
+    const pairs = [...traceSettingsOf(deps.getAppSettings()).pairs];
+    let added = 0;
+    for (const p of incoming as TraceSettings['pairs']) if (!pairs.some(x => same(x, p))) { pairs.push(p); added++; }
+    return { ...setPairs(pairs), added };
+  });
+
+  // The upload to a back-office (its address a setting, empty until the user sets one): what leaves the machine,
+  // shown before the first upload, and a session as it would be sent.
+  ipcMain.handle('traces:uploadNotice', () => ({
+    leaves: [
+      'the sessions of the projects and agents you opted in, in full: system prompts, tool definitions, your messages and the agents\', tool calls and their results, thinking the model returned',
+      'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
+      'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
+      'an install id, to delete everything this install sent',
+    ],
+    stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
+    scrubbing: {
+      version: SCRUB_VERSION,
+      catches: ['every secret Tars holds (settings keys, endpoint keys, its own tokens)', 'the values of the project\'s .env files', 'keys by shape (OpenAI, Anthropic, GitHub, Slack, AWS, Google, Stripe, npm, Hugging Face, JWT, private keys)', 'secrets after a telling name (password=, api_key:, "token":)', 'passwords in URLs, Bearer and Basic credentials', 'your home folder, as ~'],
+      cannot: ['a secret with no known shape and no telling name that Tars does not hold', 'a secret split in two, encoded, or in an image', 'personal data: names, e-mail addresses, IP addresses', 'what the endpoint itself already received'],
+    },
+  }));
+  ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));
+  ipcMain.handle('traces:giveUploadConsent', () => {
+    const t = traceSettingsOf(deps.getAppSettings());
+    if (!t.uploadUrl) return { ok: false, error: 'Set the back-office address first.' };
+    const at = new Date().toISOString();
+    apply({ ...deps.getAppSettings(), traces: { ...t, uploadConsentAt: at } });
+    return { ok: true, at };
+  });
 
   // Whether "Record traces" can be offered for this harness, model, endpoint and project, and why not: the window
   // asks rather than copy the rule (trace-gate.ts). The agent's own switch is what is offered, so it counts as on;
@@ -173,7 +235,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     const d = traceDecision({
       provider: typeof o.provider === 'string' ? o.provider : undefined, model: typeof o.model === 'string' ? o.model : undefined,
       endpoint: endpoint ? { allowTraces: endpoint.allowTraces === true, approved: endpoint.approved === true && endpoint.approvedBaseUrl === endpoint.baseUrl } : undefined,
-      projectOptedIn: true, agentOptedIn: true, pairs: t.pairs,
+      projectOptedIn: true, agentOptedIn: true, pairs: t.pairs, excludeClosedModels: t.excludeClosedModels,
     });
     return { offered: d.traced, reason: d.traced ? (projectOptedIn ? 'traced' : 'the project is not opted in') : d.reason, projectOptedIn };
   });

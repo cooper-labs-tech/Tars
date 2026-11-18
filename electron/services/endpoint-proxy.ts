@@ -11,8 +11,9 @@ import type { WireRecord } from './trace-store';
  *   the terminal is spawned and dead when it exits (core/agent-pty.ts). The proxy takes it as a Bearer or as
  *   `x-api-key`, and swaps it for the endpoint's real key in the same form. The key is read from the private folder
  *   per request: it never reaches a harness, an environment, a config file, a log or a record.
- * - It adds `X-Session-Id` (the trace id) and `X-Agent-Id`, which a relay in front of the endpoint may key its own records on, and
- *   overwrites any a harness sent. Nothing else changes: unknown params and response fields go through as they are,
+ * - When the endpoint asks for them (its "send session headers" option, off by default, since they name the agent and
+ *   its session to the endpoint), it adds `X-Session-Id` (the trace id) and `X-Agent-Id`, overwriting any a harness
+ *   sent; off, a harness's own go through as they are. Nothing else changes: unknown params and response fields go through as they are,
  *   and a stream is relayed chunk by chunk as it comes (a relay in front of the endpoint may measure TTFT too). The one header it
  *   sets besides is `Accept-Encoding: identity`, so the copy it records is readable.
  * - **Pause, not fail**: before any byte of a response has reached the harness, a 503 (endpoint_busy),
@@ -40,6 +41,8 @@ export interface ProxyTarget {
   baseUrl: string;
   key: string | null;
   holdMaxSeconds: number;
+  /** Add X-Session-Id and X-Agent-Id (the endpoint's option, off by default). */
+  sendSessionHeaders?: boolean;
 }
 
 export type HoldEvent =
@@ -74,7 +77,9 @@ export const DEFAULT_MAX_BODY = 16 * 1024 * 1024;
 
 /** Request headers never forwarded as the harness sent them: the hop's own, and its credential. */
 const DROP_REQUEST = new Set(['host', 'connection', 'keep-alive', 'proxy-authorization', 'proxy-connection', 'te', 'trailer',
-  'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding', 'x-session-id', 'x-agent-id']);
+  'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding']);
+/** Set by Tars when the endpoint asks for them, never a harness's then. */
+const SESSION_HEADERS = new Set(['x-session-id', 'x-agent-id']);
 const DROP_RESPONSE = new Set(['connection', 'keep-alive', 'transfer-encoding', 'proxy-connection', 'upgrade']);
 
 /** How long to wait before the next try: Retry-After in seconds or as a date, else a backoff with jitter. */
@@ -182,14 +187,17 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
     const upstreamUrl = new URL(`${target.baseUrl.replace(/\/+$/, '')}${pathname.slice('/v1'.length)}${url.search}`);
     const headers: http.OutgoingHttpHeaders = {};
     for (const [name, value] of Object.entries(req.headers)) {
-      if (value !== undefined && !DROP_REQUEST.has(name.toLowerCase())) headers[name] = value;
+      const lower = name.toLowerCase();
+      if (value !== undefined && !DROP_REQUEST.has(lower) && !(target.sendSessionHeaders && SESSION_HEADERS.has(lower))) headers[name] = value;
     }
     if (target.key) {
       if (presented.form === 'x-api-key') headers['x-api-key'] = target.key;
       else headers.authorization = `Bearer ${target.key}`;
     }
-    headers['x-session-id'] = session.traceId;
-    headers['x-agent-id'] = session.agentId;
+    if (target.sendSessionHeaders) {
+      headers['x-session-id'] = session.traceId;
+      headers['x-agent-id'] = session.agentId;
+    }
     headers['accept-encoding'] = 'identity';
     if (req.method !== 'GET') headers['content-length'] = String(body.length);
 

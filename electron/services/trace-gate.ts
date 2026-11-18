@@ -4,13 +4,10 @@
  * A session of an agent is kept as a trace only when all of these hold:
  * - the agent runs on an inference endpoint, which is approved, and which the user marked as allowing traces;
  * - the project and the agent are both opted in (both off by default);
- * - the harness and model pair is on the owner's list (`AppSettings.traces.pairs`, editable data, seeded with the
- *   four open harnesses and reseeded from a vetted list);
- * - the model is not a closed one.
- *
- * The last rule is hard, above the list: a Claude, GPT, o-series or Gemini model is never traced, whatever the list
- * says, since a closed model's outputs are its vendor's. The claude binary is not on the seeded list: a harness
- * whose terms forbid training stays usable on an endpoint, with traces off.
+ * - the harness and model pair is on the owner's list (`AppSettings.traces.pairs`). The list ships empty: what is
+ *   traced is the owner's data, never a default of Tars's (Tars is a general app, the owner's decision of 19/11);
+ * - with `excludeClosedModels` on, its default, the model is not a closed one (Claude, GPT, o-series, Gemini). The
+ *   owner can turn it off in Settings, warned that the providers' terms may forbid training on their outputs.
  */
 
 export interface TracePair {
@@ -29,14 +26,19 @@ export interface TraceGateInput {
   projectOptedIn: boolean;
   agentOptedIn: boolean;
   pairs: TracePair[];
+  /** Leave closed models out (the default). */
+  excludeClosedModels: boolean;
 }
 
 export type TraceDecision = { traced: boolean; reason: string };
 
-/** The four open harnesses Tars runs on an endpoint today, on any model: the seed of the owner's list. */
+/** The owner's list as it ships: empty. Nothing is traced until the owner names a pair. */
 export function defaultTracePairs(): TracePair[] {
-  return ['codex', 'pi', 'qwen-code', 'opencode'].map(harness => ({ harness, models: '*', note: 'seeded' }));
+  return [];
 }
+
+/** Said beside the closed-model setting in the window. */
+export const CLOSED_MODELS_WARNING = 'Claude, GPT, o-series and Gemini models are left out of traces by default: their providers\' terms may forbid training on their outputs. Turn this off only if the terms of the models you trace allow it.';
 
 /**
  * A closed model, read from each segment of its id (`openai/gpt-5` is two): a segment that starts with claude, gpt,
@@ -66,7 +68,7 @@ export function traceDecision(input: TraceGateInput): TraceDecision {
   if (!input.projectOptedIn) return { traced: false, reason: 'the project is not opted in' };
   if (!input.agentOptedIn) return { traced: false, reason: 'the agent is not opted in' };
   const model = input.model ?? '';
-  if (closedModel(model)) return { traced: false, reason: 'a closed model is never traced' };
+  if (input.excludeClosedModels !== false && closedModel(model)) return { traced: false, reason: 'closed models are left out of traces (Settings)' };
   const harness = input.provider ?? '';
   if (!(input.pairs ?? []).some(p => pairAllows(p, harness, model))) {
     return { traced: false, reason: 'this harness and model pair is not on the list' };

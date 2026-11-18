@@ -2872,7 +2872,7 @@ export interface ElectronAPI {
   endpoints?: {
     list: () => Promise<EndpointView[]>;
     /** From the window: approved by the act. */
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     approve: (id: string) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     /** Write-only: no channel returns a key. null clears it. */
     setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -2892,13 +2892,26 @@ export interface ElectronAPI {
   /** Native traces (services/trace-store.ts), the back-office page. */
   traces?: {
     settings: () => Promise<TraceSettingsView>;
-    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number }) => Promise<{ ok: true; settings: TraceSettingsView } | { ok: false; error: string }>;
-    /** The harness and model pairs that may be traced, and the rule no pair can open. */
+    /** `uploadUrl`: the back-office address any user may point at their own server, '' for none. A new address
+     *  clears the consent: the notice is shown again. */
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string }) => Promise<{ ok: true; settings: TraceSettingsView } | { ok: false; error: string }>;
+    /** The harness and model pairs that may be traced (empty as Tars ships), and the closed-model default with the
+     *  warning to show beside its switch. */
     pairs: () => Promise<TracePairsView>;
     addPair: (pair: TracePair) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
     removePair: (pair: { harness: string; models: string }) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
-    /** Back to the seed: the four open harnesses on any model (a vetted list will replace the seed). */
-    reseedPairs: () => Promise<{ ok: true } & TracePairsView>;
+    /** Adds the pairs of a JSON file the owner picks (an array of { harness, models, note? }); `added` new ones. */
+    importPairs: () => Promise<({ ok: true; added: number } & TracePairsView) | { ok: false; error: string; cancelled?: true }>;
+    /** What leaves the machine on upload, what stays, and what the scrubbing catches and cannot: the first-time notice. */
+    uploadNotice: () => Promise<UploadNotice>;
+    /** One session as it would be uploaded: scrubbed, with what was masked by kind. */
+    preview: (traceId: string) => Promise<{ document: unknown; counts: Record<string, number>; scrubVersion: string } | null>;
+    /** The user has read the notice: uploads may start (refused while no address is set). */
+    giveUploadConsent: () => Promise<{ ok: true; at: string } | { ok: false; error: string }>;
+    /** The uploader's state. Lands with the uploader. */
+    uploadState: () => Promise<UploadState>;
+    /** Asks the back-office to delete everything this install sent, then forgets the install. Lands with the uploader. */
+    deleteEverywhere: () => Promise<{ ok: true; deleted?: number } | { ok: false; error: string }>;
     /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
      *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
      *  when it is the one missing. */
@@ -2944,8 +2957,10 @@ export interface EndpointView {
   approvedBaseUrl?: string;
   /** The change notice: which agent, when. */
   changedBy?: { agentId: string; agentName?: string; at: string };
-  /** How long a request is held while the endpoint pauses (503, 429, 502): 0 to 3600, default 600. */
+  /** How long a request is held while the endpoint pauses (503, 429, 502): 0 to 3600, default 120. */
   holdMaxSeconds: number;
+  /** Adds X-Session-Id and X-Agent-Id to every request: off by default (they name the agent and its session). */
+  sendSessionHeaders: boolean;
   health?: EndpointHealth;
 }
 
@@ -2971,8 +2986,40 @@ export interface EndpointWait {
 }
 
 export interface TracePair { harness: string; models: string; note?: string }
-export interface TracePairsView { pairs: TracePair[]; hardRule: string }
-export interface TraceSettingsView { projects: string[]; capBytes: number; retentionDays: number; pairs: TracePair[] }
+export interface TracePairsView { pairs: TracePair[]; excludeClosedModels: boolean; closedModelsWarning: string }
+export interface TraceSettingsView {
+  projects: string[];
+  capBytes: number;
+  retentionDays: number;
+  pairs: TracePair[];
+  /** On by default: Claude, GPT, o-series and Gemini models are left out. */
+  excludeClosedModels: boolean;
+  /** The back-office address, '' for none (no upload). */
+  uploadUrl: string;
+  /** When the user read the upload notice for this address. */
+  uploadConsentAt?: string;
+}
+
+export interface UploadNotice {
+  leaves: string[];
+  stays: string[];
+  scrubbing: { version: string; catches: string[]; cannot: string[] };
+}
+
+export interface UploadState {
+  /** An address is set. */
+  configured: boolean;
+  consentAt?: string;
+  /** The install is registered with the back-office (its token is in the private folder). */
+  registered: boolean;
+  /** Opted-in sessions with something not yet sent. */
+  pendingSessions: number;
+  sentSessions: number;
+  lastUploadAt?: number;
+  lastError?: string;
+  /** Waiting before the next try (offline, the server busy). */
+  nextTryAt?: number;
+}
 
 export interface TraceStats {
   bytes: number;
