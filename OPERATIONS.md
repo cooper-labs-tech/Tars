@@ -592,13 +592,14 @@ restore that fails is reported and fails the build.
 
 It clears the last export (`out`) and `next dev`'s own folder (`.next/dev`, whose types
 `tsconfig.json` includes and whose validators name the routes moved aside), and leaves the rest of
-`.next` to `next build`, which cleans it and keeps `.next/cache`. Until 2.0.7 it wiped all of
-`.next`, cache included: since Next 16.4, a build run by an agent stops once on a known security
-advisory (`SecurityFatalError`, `experimental.agentUpgrade`, `'security'` by default) and goes
-through when the same command runs again within 5 minutes, on a receipt kept in
+`.next` to `next build`, which cleans it and keeps `.next/cache`. It used to wipe all of `.next`,
+cache included: since Next 16.4, a `next build` or `next dev` run by a coding agent stops once on a
+known security advisory (`SecurityFatalError`, `experimental.agentUpgrade`, `'security'` by
+default) and goes through when the same command runs again within 5 minutes, on a receipt kept in
 `.next/cache/next-agentic-upgrade-retries`; the wipe threw the receipt away, and every retry
-stopped again. The fix for such a stop is to upgrade Next to the version the advisory names, as
-2.0.7 did for GHSA-mfr8-8qww-v76h and GHSA-vc7v-qv4w-wrv8 (16.4.2 to 16.4.6).
+stopped again. The fix for such a stop is to upgrade Next to the stable version the advisory
+names, as was done for GHSA-mfr8-8qww-v76h and GHSA-vc7v-qv4w-wrv8 (16.4.2 to 16.4.6), not to turn
+the check off.
 
 **If a build is killed with `SIGKILL` nothing can put them back.** Symptom: `src/app/api` is
 gone and the dev server 404s every renderer API route. The next `build:renderer` refuses to
