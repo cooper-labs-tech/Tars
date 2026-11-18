@@ -1028,6 +1028,9 @@ function busyText(agent: AgentStatus, ref?: string): string {
   const line = oneTaskQueue.queued(agent.id);
   const at = ref ? line.findIndex((t) => t.ref === ref) : -1;
   const before = at >= 0 ? at : line.length;
+  // Paused, nothing goes in until it is resumed: that is what it waits for (a stop, a restart, a project's hours).
+  const paused = oneTaskQueue.pausedOf(agent.id);
+  if (paused) return `its queue, paused: ${paused.why}`;
   const cap = !busy && !before ? capHold(agent, ref) : undefined;
   if (cap) return cap;
   const head = busy ? behindText(busy, nameOf) : 'the tasks queued before it';

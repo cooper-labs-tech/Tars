@@ -86,7 +86,7 @@ export function registerFleetTools(server: McpServer): void {
       failure: "setting the project's cap",
       async run({ cap, project }) {
         const { project: p } = (await apiRequest("/api/fleet/cap", "POST", { ...(project ? { project } : {}), cap })) as { project: Project };
-        return text(p.cap ? `${p.projectPath}: at most ${p.cap.cap} workers at work at once from now; work beyond it waits in their queues.` : `${p.projectPath}: no cap on its workers at work any more.`);
+        return text(p.cap ? `${p.projectPath}: at most ${p.cap.cap} worker${p.cap.cap === 1 ? "" : "s"} at work at once from now; work beyond it waits in their queues.` : `${p.projectPath}: no cap on its workers at work any more.`);
       },
     }),
   ]);

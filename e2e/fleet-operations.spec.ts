@@ -286,6 +286,7 @@ for (const newInterface of [false, true]) {
       const morning = await leadB('start_agent', { id: A_W2, prompt: 'ECHO morning', allowCrossProject: true });
       keep({ morning });
       expect(morning.isError).toBe(false);
+      expect(morning.text).toMatch(/its queue, paused: outside its project's hours \(every day from 18:00 to 04:00 UTC\)/);
       await expect.poll(async () => (await w.queue(A_W2)).items.map((i) => i.title), { timeout: 10_000 }).toEqual(['ECHO morning']);
 
       // Worker One's turn ends: it is stopped, after it.

@@ -173,10 +173,14 @@ function queuedText(task: TaskView): string {
   }
   // A project's cap (2.0.7): the agent is free, and a place among the project's workers at work is what it waits for.
   const cap = task.queuedBehind?.startsWith("its project's cap");
+  // A paused queue (a stop, a restart of Tars, a project's hours): it goes in once the queue is resumed.
+  const paused = task.queuedBehind?.startsWith("its queue, paused: ");
   return `Task ${task.id} is queued on agent ${task.agentId}${task.queuedAt ? ` since ${task.queuedAt}` : ""}`
     + (cap
       ? `, waiting for ${task.queuedBehind}: it starts once a place frees, the oldest of the project first. `
-      : `${task.queuedBehind ? `, behind ${task.queuedBehind}` : ""}: an agent runs one task at a time, and this one starts once it is free. `)
+      : paused
+        ? `: ${task.queuedBehind}. It goes in once the queue is resumed, never refused and never lost. `
+        : `${task.queuedBehind ? `, behind ${task.queuedBehind}` : ""}: an agent runs one task at a time, and this one starts once it is free. `)
     + `Follow it with task_status({ taskId: "${task.id}" }), or take it back with task_cancel({ taskId: "${task.id}" }).`;
 }
 
