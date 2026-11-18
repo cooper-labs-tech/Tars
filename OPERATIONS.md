@@ -577,7 +577,7 @@ npm run build:renderer
 This is the tricky one. It runs `scripts/build-renderer.mjs`, which does, in this order:
 
 ```bash
-rm -rf .next out
+rm -rf out .next/dev
 mv src/app/api src/app/_api_backup
 mv src/app/icon.tsx src/app/_icon_backup.tsx      # when there is one
 ELECTRON_BUILD=1 next build
@@ -589,6 +589,16 @@ mv src/app/_icon_backup.tsx src/app/icon.tsx
 cannot contain route handlers or a dynamic `icon.tsx`: hence the move-and-restore dance. The
 script puts them back even on failure or on Ctrl+C, and exits with next build's code. A
 restore that fails is reported and fails the build.
+
+It clears the last export (`out`) and `next dev`'s own folder (`.next/dev`, whose types
+`tsconfig.json` includes and whose validators name the routes moved aside), and leaves the rest of
+`.next` to `next build`, which cleans it and keeps `.next/cache`. Until 2.0.7 it wiped all of
+`.next`, cache included: since Next 16.4, a build run by an agent stops once on a known security
+advisory (`SecurityFatalError`, `experimental.agentUpgrade`, `'security'` by default) and goes
+through when the same command runs again within 5 minutes, on a receipt kept in
+`.next/cache/next-agentic-upgrade-retries`; the wipe threw the receipt away, and every retry
+stopped again. The fix for such a stop is to upgrade Next to the version the advisory names, as
+2.0.7 did for GHSA-mfr8-8qww-v76h and GHSA-vc7v-qv4w-wrv8 (16.4.2 to 16.4.6).
 
 **If a build is killed with `SIGKILL` nothing can put them back.** Symptom: `src/app/api` is
 gone and the dev server 404s every renderer API route. The next `build:renderer` refuses to

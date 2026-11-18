@@ -28,6 +28,8 @@
  *     src/app/api inside it;
  *   - a restore that fails is reported and fails the build. The shell's mv
  *     nested the folder or failed silently, and exited 0.
+ * And where it does less: it clears out and .next/dev, not all of .next,
+ * whose cache next build keeps (STALE, below).
  *
  * Tested in __tests__/scripts/build-renderer.test.ts.
  */
@@ -44,6 +46,15 @@ const ASIDE = [
   { from: 'src/app/api', to: 'src/app/_api_backup', required: true },
   { from: 'src/app/icon.tsx', to: 'src/app/_icon_backup.tsx', required: false },
 ];
+
+/**
+ * What an earlier run leaves that next build would mix in: the last export, and next dev's own folder, whose types
+ * tsconfig includes and whose validators name the routes moved aside ("Failed to type check", bbfff6e70). The rest of
+ * .next is next build's to clean (cleanDistDir), and it keeps .next/cache: its build cache, and the receipt that lets
+ * an agent's build through on its retry after Next 16.4 stopped it on a security advisory (SecurityFatalError,
+ * lib/upgrade/nudge.js). Wiping all of .next took that receipt, so the retry stopped again, every time.
+ */
+const STALE = ['out', '.next/dev'];
 
 const RECOVER = 'OPERATIONS.md, "Build the renderer for packaging", says how to put things back by hand';
 
@@ -106,7 +117,7 @@ export async function buildRenderer({ root = process.cwd(), build = nextBuild(),
   let result;
   try {
     result = await (async () => {
-      for (const dir of ['.next', 'out']) fs.rmSync(at(dir), { recursive: true, force: true });
+      for (const dir of STALE) fs.rmSync(at(dir), { recursive: true, force: true });
       for (const { to } of ASIDE) {
         if (fs.existsSync(at(to))) {
           log(`${to} already exists: a build was stopped before it could put it back. Nothing was moved. ${RECOVER}.`);
