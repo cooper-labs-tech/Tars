@@ -235,7 +235,9 @@ Stand-ins a spec may point the app at, read only under `DOROTHY_E2E=1`: `TARS_CH
 chats' limit is computed from), `DOROTHY_HEALTH_EVERY_MS` (how often the health samples are taken,
 200 ms at least; `e2e/health-reports.spec.ts` takes one a second), `DOROTHY_STATUS_EVERY_MS` (how often a status is
 set against its CLI's record, 200 ms at least) and `DOROTHY_SLEEP_AFTER_MS` (the sleep's delay, 2 s at least;
-both in `e2e/status-from-events.spec.ts`). `DOROTHY_TELEGRAM_API_URL`, a stand-in of Telegram's Bot API that 2.0.4's
+both in `e2e/status-from-events.spec.ts`), `DOROTHY_SCHEDULE_EVERY_MS` (how often the projects' hours are looked at,
+200 ms at least) and `DOROTHY_E2E_CLOCK_FILE` (a file holding an ISO instant the hours read as now, so a spec moves a
+night along in a second; both in `e2e/fleet-operations.spec.ts`, never read by a packaged build). `DOROTHY_TELEGRAM_API_URL`, a stand-in of Telegram's Bot API that 2.0.4's
 bot read, is read by nothing since the bot went in 2.0.5: `e2e/telegram-through-hermes.spec.ts` still sets it, to show
 that nothing asks the stand-in anything. And one read by any development run,
 never by a packaged Tars (`app.isPackaged`): `DOROTHY_ERROR_REPORTS_DSN`, where error reports go, a
@@ -1164,6 +1166,8 @@ curl -s -H "Authorization: Bearer $TOKEN" $API/api/memory/status | jq
 | DELETE | `/api/agents/:id` |
 | POST | `/api/heavy-slot/ask` (`{ pid, priority?, label?, untilTurnEnds? }`: the heavy-run slot, `electron/services/heavy-slot.ts`; an agent's own token; `pid` under the agent's terminal) · `/api/heavy-slot/tickets/:id/give-back` |
 | GET | `/api/heavy-slot` (who holds the slot, who waits and why) · `/api/heavy-slot/tickets/:id` (the asking agent's own ticket) |
+| GET | `/api/fleet/projects` · `/api/fleet/project?project=<path>` (each project's hours, cap and last window, `electron/services/fleet-operations.ts`; any authenticated caller) |
+| POST | `/api/fleet/schedule` (`{ project?, start, stop, timeZone, onStart? }`) · `/api/fleet/schedule/clear` (`{ project? }`) · `/api/fleet/cap` (`{ project?, cap }`, 1 to 64 or null): the project's own orchestrator or Tars's pass, `403 not_your_project` otherwise |
 | POST | `/api/hooks/{output,status,task-completed,agent-stopped,notification}` |
 | GET | `/api/memory/{context,search,status}` · POST `/api/memory/{write,remember}` |
 | GET/POST/PUT/DELETE | `/api/vault/documents[/:id]` · `/api/vault/folders[/:id]` · `/api/vault/search` · `/:id/attach` |
@@ -1429,6 +1433,27 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker is answered `worker_may_not_stop` | a worker does not stop, restart or remove another agent: it asks its orchestrator, saying why |
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
+
+## Orchestration: a project's hours and its cap
+
+Since 2.0.7 (`electron/services/fleet-operations.ts`, SPECS.md §4): a project may work only during its hours, every
+day, and with at most so many workers at work at once. Set by its own orchestrator (`project_schedule`,
+`project_cap`) or from the window; kept in `~/.tars-private/fleet-operations.json`; the log says `[fleet]`.
+
+```
+project_schedule({ action: "set", start: "22:00", stop: "06:00", timeZone: "UTC" })   # the orchestrator's own project
+project_cap({ cap: 3 })
+project_schedule({})                                                                    # every project: hours, cap, last window
+```
+
+| Symptom | Cause and fix |
+|---|---|
+| A task handed during the day does not start | the project's hours are over: its agent's queue is paused `outside its project's hours (...)`, and it goes in at the next start. To run it now, resume that queue (`agent_queue({ id, action: 'resume' })` or the window), or clear the hours |
+| A task waits with `its project's cap: 3 of 3 agents at work` | the cap is full: it goes in when one of the project's workers ends its turn, the oldest waiting first. `project_cap` with a higher number, or `null`, lets more in |
+| An agent still runs after the stop time | it was at work: it is stopped once its turn ends (`project_schedule({})` lists it under "to stop once its turn ends"). A CLI that never says its turn ended (amp, grok, opencode, pi) is left running, its queue paused, and the record says why: stop it yourself if it must |
+| The window opened late, or closed late | Tars was not running, or the computer slept, at the time: the record says so. A sleep during the window is listed with its wake |
+| A warning says the computer runs on battery, or its lid is closed | plug it in, open the lid or connect a display: the system sleeps whatever Tars asks, and the turns die with it. "Cannot tell on this system" means Tars has no way to read it there (Windows has no lid state for a program) |
+| Another project's orchestrator is refused `not_your_project` | only the project's own orchestrator and the window set its hours and cap, until the owner's allowlist of caller projects exists |
 
 ## Orchestration: the gate loop and a worktree per task
 
