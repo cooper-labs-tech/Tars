@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button, Dropdown, Input, PanelCaption } from '@/components/ui';
+import { Button, DialogShell, Dropdown, Input, PanelCaption } from '@/components/ui';
 import type { TracePair } from '@/types/electron';
 import { Notice, Unread } from '@/components/Resources/bits';
 import { StateLine } from './bits';
@@ -25,6 +25,7 @@ export function PairsView() {
   const [exclude, setExclude] = useState(true);
   const [warning, setWarning] = useState('');
   const [imported, setImported] = useState<string | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [harness, setHarness] = useState('');
   const [models, setModels] = useState('');
@@ -79,7 +80,7 @@ export function PairsView() {
     const api = tracesApi();
     if (!api) return;
     const r = await api.importPairs();
-    if (!r.ok) { if (!r.cancelled) setRefusal(`Nothing was imported: ${r.error}. Your list is unchanged.`); return; }
+    if (!r.ok) { if (!r.cancelled) setImportError(r.error); return; }
     setPairs(r.pairs);
     setRefusal(null);
     setImported(r.added === 0 ? 'Every pair of the file was already on your list.' : `${r.added} pair${r.added === 1 ? '' : 's'} added from the file. Nothing was removed.`);
@@ -158,6 +159,11 @@ export function PairsView() {
         </div>
       </section>
 
+      {importError && (
+        <DialogShell onClose={() => setImportError(null)} width={620} title="The file was not imported"
+          subtitle={`${importError}. Nothing was imported; your list is unchanged.`}
+          footerRight={<Button onClick={() => setImportError(null)}>Close</Button>} />
+      )}
     </div>
   );
 }
