@@ -365,7 +365,10 @@ channels (`crossProject:set`, `crossProject:remove`), held at once, and read fro
 agent writes while Tars runs changes nothing until Tars is restarted, as with the owner's Chrome switch. A grant from
 project A to project B gives A's orchestrator, A's chats' runners and the workers of A it names by id the powers of B's
 orchestrator over B's agents: list them whole, hand them work, start, stop, steer and message them, read their answers
-and their tasks, wait on them, make, list and remove worktrees in B, and move a B agent onto one. One way: nothing of A
+and their tasks, wait on them, create agents in B (never an orchestrator), change their settings beyond the inference
+ones (never an orchestrator's), remove them, make, list and remove worktrees in B, and move a B agent onto one. A
+removal over the API never deletes a worktree holding uncommitted work: it is refused, naming the files, and nothing
+is removed. One way: nothing of A
 opens to B. Without a grant, across projects, an agent lists another project's agents with their status and inference
 settings (never their tasks), retunes them as above, and leaves a note (mode note, `allowCrossProject: true`): it hands
 no work, starts and stops nothing, and reads no answer. Before 2.0.7 `allowCrossProject: true` opened every drive route
