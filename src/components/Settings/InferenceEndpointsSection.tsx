@@ -64,7 +64,7 @@ export const InferenceEndpointsSection = () => {
 
   const setAllowTraces = async (e: EndpointView) => {
     if (!api) return;
-    const r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders });
+    const r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
     void reload();
   };
@@ -90,7 +90,7 @@ export const InferenceEndpointsSection = () => {
 
   const putBack = async (e: EndpointView) => {
     if (!api || !e.approvedBaseUrl) return;
-    const r = await api.save({ id: e.id, name: e.name, baseUrl: e.approvedBaseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders });
+    const r = await api.save({ id: e.id, name: e.name, baseUrl: e.approvedBaseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
     void reload();
   };
@@ -138,8 +138,8 @@ export const InferenceEndpointsSection = () => {
                   {e.name}
                 </button>
                 <State word={state.word} tone={state.tone} />
-                <p className="font-mono text-[10.5px] text-muted-foreground truncate">{e.baseUrl}</p>
-                <p className="font-mono text-[10.5px] text-muted-foreground">{`${e.keySet ? 'a key is set · never shown' : 'no key'}${e.sendSessionHeaders ? ' · session headers sent' : ''}`}</p>
+                <p className="font-mono text-[10.5px] text-muted-foreground truncate">{e.plainHttp ? `${e.baseUrl} · unencrypted` : e.baseUrl}</p>
+                <p className="font-mono text-[10.5px] text-muted-foreground">{`${e.keySet ? 'a key is set · never shown' : e.changedBy && !e.approved ? 'key to set again: it went with the old address' : 'no key'}${e.sendSessionHeaders ? ' · session headers sent' : ''}`}</p>
                 <p className="font-mono text-[10.5px] text-muted-foreground truncate">{usedByOf(e.agents)}</p>
               </div>
               <div className="w-[250px] shrink-0 min-w-0 space-y-0.5">
@@ -183,10 +183,11 @@ export const InferenceEndpointsSection = () => {
 
             {baseUrlWaits && (
               <Notice answers={<>
+                {!e.keySet && <Button size="sm" className="font-mono lowercase" onClick={() => setForm({ id: e.id })}>set the key</Button>}
                 <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve the new URL</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => { void putBack(e); }}>put back the approved one</Button>
               </>}>
-                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its base URL${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}. Requests still go to the approved one until you approve the new one.`}</p>
+                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its base URL${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}.${e.keySet ? ' Requests still go to the approved one until you approve the new one.' : ' Its key went with the old address: set it again, then approve the new one.'}`}</p>
                 <p className="font-mono text-[11px] text-text-secondary">{`approved   ${e.approvedBaseUrl}`}</p>
                 <p className="font-mono text-[11px] text-status-waiting">{`new        ${e.baseUrl}`}</p>
               </Notice>
@@ -233,10 +234,12 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
   const [name, setName] = useState(endpoint?.name ?? '');
   const [baseUrl, setBaseUrl] = useState(endpoint?.baseUrl ?? '');
   const [key, setKey] = useState('');
-  const [replacingKey, setReplacingKey] = useState(!endpoint);
+  const [replacingKey, setReplacingKey] = useState(!endpoint || !endpoint.keySet);
   const [hold, setHold] = useState(String(endpoint?.holdMaxSeconds ?? DEFAULT_HOLD));
   const [allowTraces, setAllowTraces] = useState(endpoint?.allowTraces ?? false);
   const [sessionHeaders, setSessionHeaders] = useState(endpoint?.sendSessionHeaders ?? false);
+  const [plainHttp, setPlainHttp] = useState(endpoint?.allowPlainHttp ?? false);
+  const isHttp = /^http:\/\//i.test(baseUrl.trim());
   const [urlError, setUrlError] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; tone: StatusTone } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -252,7 +255,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
     setUrlError(null);
     setNote(null);
     try {
-      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders });
+      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, allowPlainHttp: isHttp && plainHttp });
       if (!saved.ok) { setUrlError(saved.error); return; }
       const id = saved.endpoint.id;
       if (replacingKey && key !== '') {
@@ -334,6 +337,21 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
         <div className="flex items-center gap-2.5">
           <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">Models</span>
           <span className="font-mono text-[10.5px] text-muted-foreground">read from /v1/models with this key as soon as it is added</span>
+        </div>
+      )}
+
+      {isHttp && (
+        <div data-plain-http className="px-3.5 py-3 bg-secondary border border-border-accent space-y-1.5">
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] text-foreground">Allow plain http to this address</p>
+              <p className="mt-0.5 max-w-[620px] text-[11px] leading-tight text-muted-foreground">
+                Requests, the endpoint&apos;s key and your agents&apos; context cross the network unencrypted: anyone on the way can read them. Only for a network you trust. A private address needs no leave; a public one needs yours.
+              </p>
+            </div>
+            <Toggle label="Allow plain http to this address" enabled={plainHttp} onChange={() => setPlainHttp(v => !v)} />
+          </div>
+          {plainHttp && <State word="allowed by you: unencrypted" tone="waiting" />}
         </div>
       )}
 

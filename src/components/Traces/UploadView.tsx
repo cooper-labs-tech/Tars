@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, DialogShell, Input, PanelCaption } from '@/components/ui';
 import type { TraceSettingsView, UploadNotice, UploadState } from '@/types/electron';
 import { Box, Row, Unread } from '@/components/Resources/bits';
+import { Toggle } from '@/components/Settings/Toggle';
 import { clockOf, dayClockOf, dayOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
 import { tracesApi } from './hooks';
@@ -27,6 +28,9 @@ function Bullets({ caption, items, tone }: { caption: string; items: string[]; t
 /** The upload's state in words: queued, sent, failed with the back-office's reason, offline. */
 function stateWord(s: UploadState): { word: string; tone: 'running' | 'waiting' | 'error' | 'idle' } {
   const next = s.nextTryAt ? ` · next try ${clockOf(s.nextTryAt)}` : '';
+  // Said plainly, not as an error: the back-office's own choice. Main looks again in 6 hours.
+  if (s.notice === 'registration_closed') return { word: 'this back-office does not take new installs · looked at again in 6 hours', tone: 'idle' };
+  if (s.notice === 'install_blocked') return { word: 'this back-office blocked this install · looked at again in 6 hours', tone: 'waiting' };
   if (s.lastError && /^\d{3} /.test(s.lastError)) return { word: `failed: ${s.lastError}${next}`, tone: 'error' };
   if (s.lastError) return { word: `offline: the back-office was not reached (${s.lastError})${next}`, tone: 'waiting' };
   if (s.pendingSessions > 0) return { word: `sending · ${s.pendingSessions} session${s.pendingSessions === 1 ? '' : 's'} queued`, tone: 'waiting' };
@@ -45,6 +49,8 @@ export function UploadView() {
   const [state, setState] = useState<UploadState | null>(null);
   const [notice, setNotice] = useState<UploadNotice | null>(null);
   const [url, setUrl] = useState('');
+  const [plainHttp, setPlainHttp] = useState(false);
+  const isHttp = /^http:\/\//i.test(url.trim());
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showNotice, setShowNotice] = useState(false);
@@ -59,6 +65,7 @@ export function UploadView() {
       const s = await api.settings();
       setSettings(s);
       setUrl(s.uploadUrl);
+      setPlainHttp(s.uploadAllowPlainHttp === true);
       setState(await api.uploadState());
       setError(null);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -75,13 +82,15 @@ export function UploadView() {
 
   const saveUrl = async () => {
     const api = tracesApi();
-    if (!api || !settings || url.trim() === settings.uploadUrl) return;
-    const r = await api.setSettings({ uploadUrl: url.trim() });
+    if (!api || !settings) return;
+    const leave = isHttp && plainHttp;
+    if (url.trim() === settings.uploadUrl && leave === (settings.uploadAllowPlainHttp === true)) return;
+    const r = await api.setSettings({ uploadUrl: url.trim(), uploadAllowPlainHttp: leave });
     if (!r.ok) { setSaveError(r.error); return; }
     setSaveError(null);
     setSettings(r.settings);
     // A new address clears the consent: the notice comes before anything is sent.
-    if (r.settings.uploadUrl) setShowNotice(true);
+    if (r.settings.uploadUrl && r.settings.uploadUrl !== settings.uploadUrl) setShowNotice(true);
     void read();
   };
 
@@ -153,6 +162,18 @@ export function UploadView() {
                 onBlur={() => { void saveUrl(); }}
                 onKeyDown={e => { if (e.key === 'Enter') void saveUrl(); }} />
             </Row>
+            {isHttp && (
+              <Row className="space-y-1.5 py-2.5" data-plain-http>
+                <div className="flex items-center gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] text-foreground">Allow plain http to the back-office</p>
+                    <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">The sessions you opt in cross the network unencrypted: anyone on the way can read them. Only for a network you trust. A private address needs no leave; a public one needs yours.</p>
+                  </div>
+                  <Toggle label="Allow plain http to the back-office" enabled={plainHttp} onChange={() => setPlainHttp(v => !v)} />
+                </div>
+                {plainHttp && <StateLine word="allowed by you: unencrypted" tone="waiting" />}
+              </Row>
+            )}
             {saveError && <Row><StateLine word={saveError} tone="error" /></Row>}
             <Row className="space-y-2 py-2.5">
               <StateLine word={consentWord.word} tone={consentWord.tone} />
