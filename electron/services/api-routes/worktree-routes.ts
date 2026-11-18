@@ -10,7 +10,7 @@ import type { RouteApp, RouteRequest, SendJson } from './types';
  * worktree_new, worktree_list, worktree_remove and worktree_prune (services/project-worktrees.ts).
  *
  * The project is the calling agent's own, from its token, or (2.0.7) another project the owner's allowlist opens to
- * it (`project`, services/cross-project-grants.ts): a fleet worktree, made under that project's .worktrees/ for one
+ * it (`project`, services/cross-project-grants.ts): a worktree made under that project's .worktrees/ for one
  * of its agents to be moved onto (update_agent with worktree), its push turned off on request (`noPush`). Never a
  * folder a body names: the worktree's path is the project's .worktrees/<branch> (utils/worktree-path.ts). Nothing here
  * checks out, moves or resets the project's main checkout. An agent that runs in a worktree (its worktreePath) keeps

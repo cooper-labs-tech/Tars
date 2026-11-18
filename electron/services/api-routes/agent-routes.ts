@@ -1924,17 +1924,21 @@ function updateRefusal(driver: Driver, agent: AgentStatus, fields: readonly stri
     };
   }
   const rule = ruleOf(fields);
+  // Whether the agent changed has the orchestrator's powers: then its settings beyond the inference ones are the window's.
+  const targetHasPowers = hasOrchestratorPowers(agent);
   if (rule === 'retune' || driver.kind === 'tars') {
-    if (driver.kind === 'tars' && rule !== 'retune' && hasOrchestratorPowers(agent)) {
+    if (driver.kind === 'tars' && rule !== 'retune' && targetHasPowers) {
       return { status: 403, code: 'orchestrator_settings', error: `${envelopeValue(agent.name || agent.id)} is its project's orchestrator, and its chats run on its settings: those other than its inference ones are changed in the Agents page of Tars.` };
     }
     return null;
   }
   const caller = driver.agent;
   const sameProject = caller.projectPath === agent.projectPath;
-  const leads = hasOrchestratorPowers(caller) && sameProject;
+  // Whether the caller has the orchestrator's powers (its project's orchestrator, or a chat's runner).
+  const callerHasPowers = hasOrchestratorPowers(caller);
+  const leads = callerHasPowers && sameProject;
   if (rule === 'worktree') {
-    if (hasOrchestratorPowers(agent)) {
+    if (targetHasPowers) {
       return { status: 403, code: 'orchestrator_settings', error: `${envelopeValue(agent.name || agent.id)} is its project's orchestrator: it is not moved onto a worktree over the API.` };
     }
     if (leads || grantFor(caller, agent.projectPath)) return null;
@@ -1946,7 +1950,7 @@ function updateRefusal(driver: Driver, agent: AgentStatus, fields: readonly stri
     };
   }
   const other = fields.filter((f) => f !== 'worktree' && !(RETUNE_FIELDS as readonly string[]).includes(f));
-  if (!hasOrchestratorPowers(caller)) {
+  if (!callerHasPowers) {
     return {
       status: 403, code: 'worker_may_not_update',
       error: `A worker changes another agent's inference settings only (${RETUNE_FIELDS.join(', ')}); ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} its orchestrator's and the user's to change. `
@@ -1960,7 +1964,7 @@ function updateRefusal(driver: Driver, agent: AgentStatus, fields: readonly stri
         + `across projects only the inference settings (${RETUNE_FIELDS.join(', ')}) change, and ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} not among them.`,
     };
   }
-  if (hasOrchestratorPowers(agent)) {
+  if (targetHasPowers) {
     return {
       status: 403, code: 'orchestrator_settings',
       error: `${envelopeValue(agent.name || agent.id)} ${agent.kind === 'chat' ? 'runs a chat, on its orchestrator\'s settings' : 'is its project\'s orchestrator, and its chats run on its settings'}: `
@@ -2990,9 +2994,11 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
-    // Across projects without the owner's grant, a note only (mayActIn).
-    const noteAsked = ['note', 'note-now'].includes(String((req.body as { mode?: unknown } | undefined)?.mode))
-      && (req.body as { intent?: unknown } | undefined)?.intent !== 'task';
+    // Across projects without the owner's grant, a note only (mayActIn): one asked for, or a worker's message that
+    // goes in as a note (noteSender), never a task, a steer or a restart.
+    const body = (req.body ?? {}) as { mode?: unknown; intent?: unknown };
+    const noteAsked = body.intent !== 'task' && (['note', 'note-now'].includes(String(body.mode))
+      || (!!noteSender(req, agent) && !['steer', 'restart'].includes(String(body.mode))));
     if (!assertMayDriveAgent(req, agent, sendJson, { noteOnly: noteAsked })) return;
 
     const { message: asSent, model, permissionMode, mode: asked, reason, intent } = req.body as {

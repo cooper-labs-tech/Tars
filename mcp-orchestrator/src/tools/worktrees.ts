@@ -2,7 +2,7 @@
  * A worktree per task, for any project (2.0.7, W6 of the fresh-install report; electron/services/project-worktrees.ts,
  * the local API's /api/worktrees): a branch of its own for each piece of work, from the fresh default branch, in the
  * project's .worktrees, and removed once its PR is merged. In the calling agent's own project, or (2.0.7) in another
- * project the owner's grant across projects opens to it (`project`): a fleet worktree for one of that project's agents
+ * project the owner's grant across projects opens to it (`project`): a worktree for one of that project's agents
  * to be moved onto (update_agent with worktree), its push turned off on request (`noPush`).
  */
 

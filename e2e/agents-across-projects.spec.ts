@@ -36,7 +36,7 @@ import { writeFakeClis } from './fake-clis.mjs';
  * 7. a batch over all of B, applied or queued agent by agent under one batch id, then reverted in one call: every
  *    agent back to its earlier effort;
  * 8. the change log, through agent_changes: who, which agent, before, after, applied or queued, when;
- * 9. a fleet worktree: the granted worker makes one in B under .worktrees/<branch> with push off (the worker the grant
+ * 9. a worktree for B's agent: the granted worker makes one in B under .worktrees/<branch> with push off (the worker the grant
  *    does not name is refused), moves an agent onto it and back, and removes it; B's main checkout keeps its HEAD,
  *    its branch and its working tree through all of it; `git push` from the worktree fails loudly naming why, and a
  *    push from the main checkout still works.
@@ -294,9 +294,9 @@ for (const newInterface of [false, true]) {
       keep({ notices: notices3 });
       expect(notices3.some((n) => n.agentId === 'b-qwen' && (n.by as Record<string, unknown>)?.id === 'a-x')).toBe(true);
 
-      // ── 9. A fleet worktree in B: made, used, left; B's main checkout untouched; its push refused loudly ──
-      const branch = 'fleet/2026-11-19/b-c/t1';
-      const notGranted = await other('worktree_new', { project: B, branch: 'fleet/2026-11-19/b-c/t0' });
+      // ── 9. A worktree in B for one of its agents: made, used, left; B's main checkout untouched; its push refused loudly ──
+      const branch = 'work/b-c-first';
+      const notGranted = await other('worktree_new', { project: B, branch: 'work/b-c-refused' });
       const made = await named('worktree_new', { project: B, branch, noPush: true });
       keep({ notGranted, made, mainAfterNew: mainState() });
       expect(notGranted.isError).toBe(true);
@@ -311,9 +311,9 @@ for (const newInterface of [false, true]) {
       expect(recordOf('b-c')).toMatchObject({ worktreePath: wt, branchName: branch });
       expect(mainState()).toEqual(mainBefore);
       // The push from the worktree fails, naming why; from the main checkout it still works.
-      fs.writeFileSync(path.join(wt, 'work.txt'), 'fleet work\n');
+      fs.writeFileSync(path.join(wt, 'work.txt'), 'the work\n');
       expect(git(wt, ['add', 'work.txt']).code).toBe(0);
-      expect(git(wt, ['-c', 'user.email=e2e@tars.test', '-c', 'user.name=e2e', 'commit', '-q', '-m', 'fleet work']).code).toBe(0);
+      expect(git(wt, ['-c', 'user.email=e2e@tars.test', '-c', 'user.name=e2e', 'commit', '-q', '-m', 'the work']).code).toBe(0);
       const wtPush = git(wt, ['push', 'origin', `HEAD:refs/heads/${branch}`]);
       const wtPushUrl = git(wt, ['push', remote, `HEAD:refs/heads/${branch}`]);
       const mainPush = git(B, ['push', 'origin', 'main:refs/heads/from-main']);

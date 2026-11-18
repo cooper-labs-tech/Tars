@@ -46,7 +46,7 @@ export interface AgentUpdate {
   obsidianVaultPaths?: string[];
   worktree?: WorktreeConfig;
   /**
-   * An existing worktree of the agent's own project to work in, as update_agent names it (2.0.7: a fleet worktree
+   * An existing worktree of the agent's own project to work in, as update_agent names it (2.0.7: a worktree
    * made with worktree_new, under the project's .worktrees/), or null for the project's own folder. The route checks
    * it is one of the project's worktrees; nothing here makes one.
    */

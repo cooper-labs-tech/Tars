@@ -64,14 +64,14 @@ export interface NewWorktree {
 }
 
 /**
- * What git is handed instead of every remote's address in a worktree whose push Tars turned off (2.0.7, a fleet
+ * What git is handed instead of every remote's address in a worktree whose push Tars turned off (2.0.7, a
  * worktree, `noPush`): a path that is no repository, so `git push` from that worktree fails at once, exit 128, and its
  * error names this, whatever remote or address it was given. Fetching is untouched, and so is every other checkout of
  * the repository: the settings are the worktree's own (extensions.worktreeConfig, then `git config --worktree`).
  * Measured with git 2.5x on 19/11 (reports/agents-reconfigure-runs/push-probe.sh): a push by remote name, by an
  * absolute path, a file:// and an https:// address all fail naming it; the main checkout still pushes.
  */
-export const NO_PUSH_URL = 'push-turned-off-by-tars-for-this-fleet-worktree';
+export const NO_PUSH_URL = 'push-turned-off-by-tars-for-this-worktree';
 /** The addresses rewritten for a push: every scheme git takes, scp-like git@, an absolute path and a relative one. */
 const PUSH_PREFIXES = ['https://', 'http://', 'ssh://', 'git://', 'git@', 'file://', '/', '.'];
 
