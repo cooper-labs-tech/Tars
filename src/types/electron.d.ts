@@ -2872,7 +2872,9 @@ export interface ElectronAPI {
   endpoints?: {
     list: () => Promise<EndpointView[]>;
     /** From the window: approved by the act. */
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    /** `allowPlainHttp`: the owner allows plain http to a public address (refused without it; private addresses
+     *  need none). An agent's change of address takes the endpoint's key away (set it again). */
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     approve: (id: string) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     /** Write-only: no channel returns a key. null clears it. */
     setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -2894,7 +2896,7 @@ export interface ElectronAPI {
     settings: () => Promise<TraceSettingsView>;
     /** `uploadUrl`: the back-office address any user may point at their own server, '' for none. A new address
      *  clears the consent: the notice is shown again. */
-    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string }) => Promise<{ ok: true; settings: TraceSettingsView } | { ok: false; error: string }>;
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => Promise<{ ok: true; settings: TraceSettingsView } | { ok: false; error: string }>;
     /** The harness and model pairs that may be traced (empty as Tars ships), and the closed-model default with the
      *  warning to show beside its switch. */
     pairs: () => Promise<TracePairsView>;
@@ -2961,6 +2963,10 @@ export interface EndpointView {
   holdMaxSeconds: number;
   /** Adds X-Session-Id and X-Agent-Id to every request: off by default (they name the agent and its session). */
   sendSessionHeaders: boolean;
+  /** The traffic is plain http, not encrypted at the HTTP level: show it. */
+  plainHttp: boolean;
+  /** The owner allowed plain http to this public address. */
+  allowPlainHttp: boolean;
   health?: EndpointHealth;
 }
 
@@ -3002,6 +3008,8 @@ export interface TraceSettingsView {
   uploadUrl: string;
   /** When the user read the upload notice for this address. */
   uploadConsentAt?: string;
+  /** The owner allowed plain http to a public back-office address. */
+  uploadAllowPlainHttp?: boolean;
 }
 
 export interface UploadNotice {

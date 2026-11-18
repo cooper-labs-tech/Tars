@@ -3,7 +3,7 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import type { AppSettings, TraceSettings } from '../types';
 import { agents } from '../core/agent-manager';
 import {
-  approveEndpoint, checkHealth, endpointViews, readModels, removeEndpoint, saveEndpoint, setEndpointKey,
+  applyEndpointPatch, approveEndpoint, checkHealth, endpointViews, readModels, removeEndpoint, saveEndpoint, setEndpointKey, transportOf,
   type EndpointView, type ToolCallSupport,
 } from '../services/inference-endpoints';
 import {
@@ -63,6 +63,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       baseUrl: typeof i.baseUrl === 'string' ? i.baseUrl : undefined, allowTraces: typeof i.allowTraces === 'boolean' ? i.allowTraces : undefined,
       holdMaxSeconds: typeof i.holdMaxSeconds === 'number' ? i.holdMaxSeconds : undefined,
       sendSessionHeaders: typeof i.sendSessionHeaders === 'boolean' ? i.sendSessionHeaders : undefined,
+      allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
     }, { window: true });
     if (!r.ok) return r;
     apply(r.settings);
@@ -95,13 +96,14 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
 
   ipcMain.handle('endpoints:refreshModels', async (_e, id: unknown) => {
     const r = await readModels(deps.getAppSettings(), String(id));
-    if (r.settings) apply(r.settings);
+    // Only what the probe owns, onto the settings as they are now (the Audit's M1 on #596).
+    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch));
     return r.ok ? { ok: true, models: r.models } : { ok: false, error: r.error };
   });
 
   ipcMain.handle('endpoints:check', async (_e, id: unknown) => {
     const r = await checkHealth(deps.getAppSettings(), String(id));
-    apply(r.settings);
+    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch));
     return r.health;
   });
 
@@ -134,12 +136,24 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       if (typeof p.excludeClosedModels !== 'boolean') return { ok: false, error: 'Leaving closed models out is on or off.' };
       next.excludeClosedModels = p.excludeClosedModels;
     }
+    if (p.uploadAllowPlainHttp !== undefined) {
+      if (typeof p.uploadAllowPlainHttp !== 'boolean') return { ok: false, error: 'Allowing plain http is on or off.' };
+      next.uploadAllowPlainHttp = p.uploadAllowPlainHttp;
+    }
     if (p.uploadUrl !== undefined) {
       if (typeof p.uploadUrl !== 'string') return { ok: false, error: 'The back-office address is a URL, or empty.' };
       const url = p.uploadUrl.trim() === '' ? '' : cleanBaseUrl(p.uploadUrl);
       if (url === null) return { ok: false, error: 'The back-office address must be http(s), with no credentials, query or fragment.' };
-      if (url !== next.uploadUrl) delete next.uploadConsentAt;
+      if (url !== next.uploadUrl) {
+        delete next.uploadConsentAt;
+        if (p.uploadAllowPlainHttp === undefined) next.uploadAllowPlainHttp = false;
+      }
       next.uploadUrl = url;
+    }
+    // The endpoints' rule (the Audit's L2 on #596): https for a public address, plain http to loopback and private
+    // networks, and elsewhere only with the owner's allowance, given here, in the window.
+    if (next.uploadUrl && transportOf(next.uploadUrl) === 'http-public' && !next.uploadAllowPlainHttp) {
+      return { ok: false, error: 'A public back-office address takes https. Plain http goes to loopback and private networks only, unless you allow it.' };
     }
     apply({ ...deps.getAppSettings(), traces: next });
     sweepTraces();

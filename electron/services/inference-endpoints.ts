@@ -53,6 +53,9 @@ export interface EndpointView {
   agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }>;
   approved: boolean; approvedBaseUrl?: string; changedBy?: InferenceEndpoint['changedBy'];
   holdMaxSeconds: number; sendSessionHeaders: boolean; health?: InferenceEndpoint['health'];
+  /** The traffic is plain http, not encrypted at the HTTP level (a private network, or the owner's allowance). */
+  plainHttp: boolean;
+  allowPlainHttp: boolean;
 }
 
 type Result = { ok: true; settings: AppSettings; endpoint: InferenceEndpoint } | { ok: false; error: string };
@@ -61,6 +64,34 @@ const fromWindow = (actor: EndpointActor): actor is { window: true } => 'window'
 
 function endpointsOf(settings: Partial<AppSettings>): InferenceEndpoint[] {
   return Array.isArray(settings.inferenceEndpoints) ? settings.inferenceEndpoints.filter(e => e && ENDPOINT_ID.test(e.id)) : [];
+}
+
+/**
+ * How a base URL's traffic travels (the Audit's L2 on #596, the orchestrator's rule):
+ * - `https`: encrypted, anywhere;
+ * - `http-private`: plain http to loopback, a private range (RFC 1918, 100.64.0.0/10 where encrypted overlays such
+ *   as WireGuard live, fc00::/7) or IPv6 link-local: taken, and the window says the traffic is not encrypted at the
+ *   HTTP level;
+ * - `http-public`: plain http to anything else, a host name included (no name is resolved to decide): taken only
+ *   when the owner allows plain http for that endpoint, in the window.
+ * The cloud metadata range 169.254/16 stays refused whatever the scheme (isValidOpenAIBaseUrl).
+ */
+export function transportOf(url: string): 'https' | 'http-private' | 'http-public' {
+  let u: URL;
+  try { u = new URL(url); } catch { return 'http-public'; }
+  if (u.protocol === 'https:') return 'https';
+  const host = u.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') return 'http-private';
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(host);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    if (a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127)) return 'http-private';
+    return 'http-public';
+  }
+  if (host.includes(':')) {
+    if (/^f[cd][0-9a-f]{2}:/.test(host) || /^fe[89ab][0-9a-f]:/.test(host)) return 'http-private';
+  }
+  return 'http-public';
 }
 
 /** A base URL as stored: valid http(s), no credentials, query or fragment, trailing slashes trimmed. */
@@ -76,7 +107,7 @@ export function cleanBaseUrl(raw: unknown): string | null {
 /** Adds an endpoint, or changes one (`id`), as the owner or an agent may. */
 export function saveEndpoint(
   settings: AppSettings,
-  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean },
+  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean },
   actor: EndpointActor,
   now: string = new Date().toISOString(),
 ): Result {
@@ -103,10 +134,17 @@ export function saveEndpoint(
   if (!current && !owner) allowTraces = false;
 
   const movedTo = baseUrl !== current?.baseUrl;
+  // Plain http to a public address: only by the owner's explicit allowance, given in the window, for this address.
+  if (input.allowPlainHttp !== undefined && !owner) return { ok: false, error: 'Only the owner allows plain http for an endpoint, in the window.' };
+  const allowPlainHttp = input.allowPlainHttp ?? (movedTo ? false : current?.allowPlainHttp === true);
+  if (transportOf(baseUrl!) === 'http-public' && !allowPlainHttp) {
+    return { ok: false, error: 'A public address takes https. Plain http goes to loopback and private networks only, unless the owner allows it for this endpoint in the window.' };
+  }
   const next: InferenceEndpoint = {
     ...(current ?? { id: newId(list), models: [], approved: false }),
     name, baseUrl: baseUrl!, allowTraces, holdMaxSeconds: hold,
     sendSessionHeaders: input.sendSessionHeaders ?? current?.sendSessionHeaders ?? false,
+    allowPlainHttp,
   } as InferenceEndpoint;
   if (owner) {
     next.approved = true;
@@ -117,7 +155,14 @@ export function saveEndpoint(
   }
   if (movedTo && current) { next.models = []; delete next.modelsReadAt; delete next.health; }
   const endpoints = current ? list.map(e => (e.id === next.id ? next : e)) : [...list, next];
-  return { ok: true, settings: { ...settings, inferenceEndpoints: endpoints }, endpoint: next };
+  // An agent moving an endpoint's address takes its key away (the Audit's H1 on #596): the key was given for the old
+  // address, and the owner approving the new one must not hand it over unawares. The owner's own move keeps it.
+  let keys = settings.endpointKeys;
+  if (current && movedTo && !owner && keys && next.id in keys) {
+    keys = { ...keys };
+    delete keys[next.id];
+  }
+  return { ok: true, settings: { ...settings, inferenceEndpoints: endpoints, ...(keys !== settings.endpointKeys ? { endpointKeys: keys } : {}) }, endpoint: next };
 }
 
 function newId(list: InferenceEndpoint[]): string {
@@ -169,6 +214,7 @@ export function endpointViews(settings: AppSettings, agents: AgentStatus[]): End
     approved: e.approved === true, approvedBaseUrl: e.approvedBaseUrl, changedBy: e.changedBy,
     holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS,
     sendSessionHeaders: e.sendSessionHeaders === true, health: e.health,
+    plainHttp: transportOf(e.baseUrl) !== 'https', allowPlainHttp: e.allowPlainHttp === true,
   }));
 }
 
@@ -243,7 +289,10 @@ export function ensureDropFolder(dir: string = ENDPOINT_KEYS_DIR): void {
   try { fs.chmodSync(dir, 0o700); } catch { /* Windows: no modes */ }
 }
 
-function patchEndpoint(settings: AppSettings, id: string, patch: Partial<InferenceEndpoint>): AppSettings {
+/** What a probe changes on an endpoint, applied to the settings as they are when it is written (the Audit's M1). */
+export type EndpointPatch = Partial<Pick<InferenceEndpoint, 'models' | 'modelsReadAt' | 'modelsError' | 'health'>>;
+
+export function applyEndpointPatch(settings: AppSettings, id: string, patch: EndpointPatch): AppSettings {
   return { ...settings, inferenceEndpoints: endpointsOf(settings).map(e => (e.id === id ? { ...e, ...patch } : e)) };
 }
 
@@ -251,49 +300,64 @@ function withoutKey(text: string, key: string | null): string {
   return key ? text.split(key).join('<key>') : text;
 }
 
-/** The endpoint's own /v1/models, with its key. A bad answer keeps the last list and says why, never the key. */
+/**
+ * Where a probe goes, and with which key: the key only to the address the owner approved, as the proxy sends it
+ * (the Audit's H1 on #596). An endpoint whose address an agent changed is probed at its new address with no key.
+ */
+function probeOf(settings: AppSettings, e: InferenceEndpoint): { url: string; key: string | null } {
+  const approvedNow = e.approved === true && !!e.approvedBaseUrl && e.approvedBaseUrl === e.baseUrl;
+  return { url: `${e.baseUrl}/models`, key: approvedNow ? settings.endpointKeys?.[e.id] || null : null };
+}
+
+/** A redirect is never followed: the key, or the probe, would go to an address nobody approved. */
+const REDIRECT_REFUSED = 'The endpoint answered with a redirect, which Tars does not follow.';
+
+/**
+ * The endpoint's own /v1/models. A bad answer says why, never the key, and leaves the last list. It hands back a
+ * patch, never the settings: they are read again when it is written.
+ */
 export async function readModels(settings: AppSettings, id: string, fetchImpl: typeof fetch = fetch, now: string = new Date().toISOString()):
-  Promise<{ ok: true; settings: AppSettings; models: string[] } | { ok: false; error: string; settings?: AppSettings }> {
+  Promise<{ ok: true; models: string[]; patch: EndpointPatch } | { ok: false; error: string; patch: EndpointPatch }> {
   const e = endpointsOf(settings).find(x => x.id === id);
-  if (!e) return { ok: false, error: 'There is no such endpoint.' };
-  const key = settings.endpointKeys?.[id] || null;
+  if (!e) return { ok: false, error: 'There is no such endpoint.', patch: {} };
+  const { url, key } = probeOf(settings, e);
   let error: string;
   try {
-    const res = await fetchImpl(`${e.baseUrl}/models`, { headers: { Accept: 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, signal: AbortSignal.timeout(15_000) });
+    const res = await fetchImpl(url, { headers: { Accept: 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
     const text = await res.text();
-    if (!res.ok) error = `HTTP ${res.status}: ${text.slice(0, 200)}`;
+    if (res.status >= 300 && res.status < 400) error = REDIRECT_REFUSED;
+    else if (!res.ok) error = `HTTP ${res.status}: ${text.slice(0, 200)}`;
     else {
       let parsed: unknown;
       try { parsed = JSON.parse(text); } catch { parsed = undefined; }
       const data = (parsed as { data?: unknown })?.data;
       const models = Array.isArray(data) ? data.map(m => (m as { id?: unknown })?.id).filter((m): m is string => typeof m === 'string' && m.length > 0) : null;
-      if (models && models.length) {
-        return { ok: true, models, settings: patchEndpoint(settings, id, { models, modelsReadAt: now, modelsError: undefined }) };
-      }
+      if (models && models.length) return { ok: true, models, patch: { models, modelsReadAt: now, modelsError: undefined } };
       error = 'The endpoint answered, but not with a list of models (/v1/models).';
     }
   } catch (err) {
     error = (err as Error).message;
   }
   const said = withoutKey(error, key).slice(0, 300);
-  return { ok: false, error: said, settings: patchEndpoint(settings, id, { modelsError: said }) };
+  return { ok: false, error: said, patch: { modelsError: said } };
 }
 
-/** A /v1/models probe: its status, latency and time. Never the key. */
+/** A /v1/models probe: its status, latency and time. Never the key, and the key only to the approved address. */
 export async function checkHealth(settings: AppSettings, id: string, fetchImpl: typeof fetch = fetch, now: string = new Date().toISOString(), clock: () => number = Date.now):
-  Promise<{ settings: AppSettings; health: NonNullable<InferenceEndpoint['health']> }> {
+  Promise<{ health: NonNullable<InferenceEndpoint['health']>; patch: EndpointPatch }> {
   const e = endpointsOf(settings).find(x => x.id === id);
-  if (!e) return { settings, health: { ok: false, at: now, error: 'There is no such endpoint.' } };
-  const key = settings.endpointKeys?.[id] || null;
+  if (!e) return { health: { ok: false, at: now, error: 'There is no such endpoint.' }, patch: {} };
+  const { url, key } = probeOf(settings, e);
   const started = clock();
   let health: NonNullable<InferenceEndpoint['health']>;
   try {
-    const res = await fetchImpl(`${e.baseUrl}/models`, { headers: key ? { Authorization: `Bearer ${key}` } : {}, signal: AbortSignal.timeout(15_000) });
+    const res = await fetchImpl(url, { headers: key ? { Authorization: `Bearer ${key}` } : {}, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
     const latencyMs = clock() - started;
     const text = await res.text().catch(() => '');
-    health = { ok: res.ok, status: res.status, latencyMs, at: now, ...(res.ok ? {} : { error: withoutKey(text.slice(0, 200), key) }) };
+    const redirect = res.status >= 300 && res.status < 400;
+    health = { ok: res.ok && !redirect, status: res.status, latencyMs, at: now, ...(res.ok && !redirect ? {} : { error: redirect ? REDIRECT_REFUSED : withoutKey(text.slice(0, 200), key) }) };
   } catch (err) {
     health = { ok: false, latencyMs: clock() - started, at: now, error: withoutKey((err as Error).message, key).slice(0, 200) };
   }
-  return { settings: patchEndpoint(settings, id, { health }), health };
+  return { health, patch: { health } };
 }

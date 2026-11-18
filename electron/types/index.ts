@@ -1019,6 +1019,8 @@ export interface InferenceEndpoint {
   holdMaxSeconds: number;
   /** Add X-Session-Id and X-Agent-Id to every request (off by default: they name the agent and its session). */
   sendSessionHeaders?: boolean;
+  /** The owner allowed plain http to this public address (window only); private addresses need no allowance. */
+  allowPlainHttp?: boolean;
   health?: { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string };
 }
 
@@ -1034,4 +1036,6 @@ export interface TraceSettings {
   uploadUrl: string;
   /** The user has seen what leaves the machine, and when. */
   uploadConsentAt?: string;
+  /** The owner allowed plain http to a public back-office address (private ones need no allowance). */
+  uploadAllowPlainHttp?: boolean;
 }

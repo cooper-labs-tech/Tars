@@ -1070,6 +1070,29 @@ other address.
 - Like the agent's API token (§ 3), it is not secret from the other agents of the same user. Another agent that read
   it could make model calls on that endpoint, recorded under that agent's session, but it would never learn the key.
 
+**The key goes only to the approved address** (the Audit's H1 on #596).
+- The proxy, and the models and health probes too, send the key only to `approvedBaseUrl`, and only while the
+  endpoint is approved at that address. An endpoint whose address an agent changed is probed at the new address with
+  no key.
+- No fetch follows a redirect: a redirect answer is an error, never a hop for the key.
+- An agent changing an endpoint's address also takes its key away. The key was given for the old address, and the
+  owner approving the new one must not hand it over unawares: it is set again, from the window or a drop file. The
+  owner's own change of address keeps it, since that act is the approval.
+- A probe writes back only what it owns (models, health), onto the settings as they are when it ends, so a change
+  made meanwhile (a project's trace opt-out) is never undone (the Audit's M1).
+
+**Plain http** (L2). https is required for a public address.
+- Plain http is taken for loopback, private ranges (RFC 1918, 100.64.0.0/10 where encrypted overlays such as
+  WireGuard live, fc00::/7) and IPv6 link-local, and the window says the traffic is not encrypted at the HTTP level.
+- Anything else on http needs the owner's "allow plain http" for that endpoint, given in the window only.
+- The back-office address follows the same rule.
+- A host name counts as public: no name is resolved to decide.
+- The cloud metadata range, 169.254/16, is refused whatever the scheme.
+
+**A request is sent twice only when it cannot have run** (L4). A connection refused or unreachable is held and tried
+again. A reset after the request was written is tried again for a GET only: a POST may already be generating, and
+sending it again would run and bill it twice.
+
 **The approval guard.** Any agent may list the endpoints, add one, change one, rotate a key, read the models and check
 the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchestrator. That is the owner's decision of
 19/11, so agents can tune other projects' agents.
@@ -1130,6 +1153,7 @@ default. Nothing goes before the user has read, in the window, what leaves the m
 would be sent.
 - Every string is scrubbed first (`services/trace-scrub.ts`, whose header says what it catches and what it cannot).
 - Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
+- Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
 - The install's token and that secret are in `~/.tars-private/traces-install.json` (0600).
 - Only sessions whose project and agent are opted in at the moment of sending go.

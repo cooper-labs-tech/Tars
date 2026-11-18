@@ -9,7 +9,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
-import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder } from './inference-endpoints';
+import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
 import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
@@ -86,6 +86,7 @@ export function traceSettingsOf(settings: Partial<AppSettings> | undefined): Tra
     excludeClosedModels: t?.excludeClosedModels !== false,
     uploadUrl: typeof t?.uploadUrl === 'string' ? t.uploadUrl : '',
     ...(typeof t?.uploadConsentAt === 'string' ? { uploadConsentAt: t.uploadConsentAt } : {}),
+    ...(t?.uploadAllowPlainHttp === true ? { uploadAllowPlainHttp: true } : {}),
   };
 }
 
@@ -132,7 +133,12 @@ export function traceUploader(): TraceUploader {
     uploader = new TraceUploader({
       store: traceStore(),
       installFile: TRACES_INSTALL_FILE,
-      settings: () => { const t = traceSettingsOf(deps?.getSettings()); return { url: t.uploadUrl, consentAt: t.uploadConsentAt }; },
+      // An address that breaks the plain-http rule (a file edited by hand) is no address: nothing goes.
+      settings: () => {
+        const t = traceSettingsOf(deps?.getSettings());
+        const allowed = !t.uploadUrl || transportOf(t.uploadUrl) !== 'http-public' || t.uploadAllowPlainHttp === true;
+        return { url: allowed ? t.uploadUrl : '', consentAt: t.uploadConsentAt };
+      },
       // Opted in now, not only when the session was recorded: a project or an agent switched off since is not sent.
       eligible: (q) => traceSettingsOf(deps?.getSettings()).projects.includes(q.projectPath) && agentOf(q.agentId)?.traces === true,
       scrubContext: (projectPath) => scrubContextFor(projectPath),
@@ -143,6 +149,8 @@ export function traceUploader(): TraceUploader {
 }
 
 function uploadPass(): void {
+  const t = traceSettingsOf(deps?.getSettings());
+  if (!t.uploadUrl || !t.uploadConsentAt) return;
   void traceUploader().runOnce().then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); });
 }
 
@@ -157,7 +165,8 @@ function changed(): void {
 }
 
 export function sweepTraces(): void {
-  if (!deps) return;
+  // Nothing to sweep for a user who has never traced a session: the store is not created for that (the Audit's I2).
+  if (!deps || (!store && !fs.existsSync(TRACES_DB_FILE))) return;
   const t = traceSettingsOf(deps.getSettings());
   try {
     const r = traceStore().sweep({ capBytes: t.capBytes, retentionDays: t.retentionDays, now: Date.now() });
@@ -170,6 +179,23 @@ export function sweepTraces(): void {
 /** The proxy on its port, and the hourly sweep. Called once at startup. */
 export function startTracesRuntime(d: TracesDeps): void {
   deps = d;
+  sweepTimer = setInterval(sweepTraces, 3600_000);
+  sweepTimer.unref?.();
+  sweepTraces();
+  uploadTimer = setInterval(uploadPass, 5 * 60_000);
+  uploadTimer.unref?.();
+  uploadPass();
+}
+
+/**
+ * The proxy on its port, started with the first terminal of an agent on an endpoint, not at boot: an install with no
+ * endpoint binds no port of it (the Audit's I2 on #596).
+ */
+let proxyStarted = false;
+function ensureProxy(): void {
+  const d = deps;
+  if (proxyStarted || !d) return;
+  proxyStarted = true;
   try { ensureDropFolder(); } catch { /* made again when an agent drops a key */ }
   startEndpointProxy(ENDPOINT_PROXY_PORT, {
     sessionOf: (token) => sessions.get(token),
@@ -186,15 +212,10 @@ export function startTracesRuntime(d: TracesDeps): void {
       d.emit('endpoints:waiting', endpointWaits());
     },
   });
-  sweepTimer = setInterval(sweepTraces, 3600_000);
-  sweepTimer.unref?.();
-  sweepTraces();
-  uploadTimer = setInterval(uploadPass, 5 * 60_000);
-  uploadTimer.unref?.();
-  uploadPass();
 }
 
 export function stopTracesRuntime(): void {
+  proxyStarted = false;
   stopEndpointProxy();
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
@@ -253,6 +274,7 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
   const harness = String(agent.provider);
   const launch = endpointLaunchFor(harness, { proxyBase: PROXY_BASE, model: agent.model });
   if (!launch) return { env: {} };
+  ensureProxy();
   const settings = deps.getSettings();
   const endpoint = (settings.inferenceEndpoints ?? []).find(e => e.id === agent.endpointId);
   const t = traceSettingsOf(settings);

@@ -17,7 +17,8 @@ import type { WireRecord } from './trace-store';
  *   and a stream is relayed chunk by chunk as it comes (a relay in front of the endpoint may measure TTFT too). The one header it
  *   sets besides is `Accept-Encoding: identity`, so the copy it records is readable.
  * - **Pause, not fail**: before any byte of a response has reached the harness, a 503 (endpoint_busy),
- *   a 429 (rate_limited), a 502 or a refused connection is held and tried again, as `Retry-After` says (at most
+ *   a 429 (rate_limited), a 502 or a connection that never reached the endpoint (refused, unreachable, a name not yet resolved; a reset too,
+ *   for a GET only) is held and tried again, as `Retry-After` says (at most
  *   60 s a wait), up to the endpoint's `holdMaxSeconds`. Past it, the last error passes as it came. The window is
  *   told while a request is held (onHold). Once a response has started, everything passes through unchanged.
  * - Once a traced response has ended, a copy of both bodies goes to the recorder, off the response's path; a
@@ -70,7 +71,13 @@ const ROUTES: Record<string, string> = {
 
 /** Statuses that mean "not now" rather than "no". */
 const PAUSE_STATUSES = new Set([429, 502, 503]);
-const PAUSE_ERRORS = new Set(['ECONNREFUSED', 'ECONNRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'EPIPE', 'EAI_AGAIN']);
+/** Failures where the request never reached the endpoint: held and tried again, whatever the method. */
+const NOT_SENT_ERRORS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN']);
+/**
+ * Failures once the request may have reached it: tried again for a GET only. A POST could already be running, and
+ * sending it again would run and bill a generation twice (the Audit's L4 on #596).
+ */
+const MAYBE_SENT_ERRORS = new Set(['ECONNRESET', 'EPIPE', 'ETIMEDOUT']);
 const MAX_WAIT_MS = 60_000;
 const BACKOFF_S = [2, 4, 8, 30];
 export const DEFAULT_MAX_BODY = 16 * 1024 * 1024;
@@ -224,7 +231,10 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       }
       if (controller.signal.aborted) { reply?.res.destroy(); clearHold(); return; }
 
-      const pausing = reply ? PAUSE_STATUSES.has(reply.res.statusCode ?? 0) : PAUSE_ERRORS.has(failure?.code ?? '');
+      const code = failure?.code ?? '';
+      const pausing = reply
+        ? PAUSE_STATUSES.has(reply.res.statusCode ?? 0)
+        : NOT_SENT_ERRORS.has(code) || (req.method === 'GET' && MAYBE_SENT_ERRORS.has(code));
       if (pausing) {
         const retryAfter = reply?.res.headers['retry-after'];
         const delay = retryDelayMs(Array.isArray(retryAfter) ? retryAfter[0] : retryAfter, attempts, now());
@@ -257,12 +267,15 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
         if (value !== undefined && !DROP_RESPONSE.has(name.toLowerCase())) outHeaders[name] = value;
       }
       res.writeHead(upstream.statusCode ?? 502, outHeaders);
+      // A copy of the response only for a session that is recorded: an untraced stream is relayed and not held
+      // (the Audit's L3 on #596).
+      const keepCopy = session.traced && !!surface && !!deps.record;
       const copy: Buffer[] = [];
       let firstByteAt: number | undefined;
       let broken: string | undefined;
       upstream.on('data', (chunk: Buffer) => {
         if (firstByteAt === undefined) firstByteAt = now();
-        copy.push(chunk);
+        if (keepCopy) copy.push(chunk);
         if (!res.write(chunk)) {
           upstream.pause();
           res.once('drain', () => upstream.resume());

@@ -48,7 +48,7 @@ export function registerEndpointTools(server: McpServer): void {
       schema: {
         name: z.string().min(1).max(60).describe("A name people will recognise."),
         base_url: z.string().describe("http(s), up to the routes, for example https://host.example.com/v1."),
-        hold_max_seconds: z.number().int().min(0).max(3600).optional().describe("How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 600)."),
+        hold_max_seconds: z.number().int().min(0).max(3600).optional().describe("How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 120)."),
         key_file: KEY_FILE.optional(),
       },
       failure: "adding the endpoint",

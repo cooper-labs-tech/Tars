@@ -1073,7 +1073,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Tars's endpoint proxy. A key goes in and never comes back (keySet only). Approval is here and nowhere else.
   endpoints: {
     list: () => ipcRenderer.invoke('endpoints:list'),
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean }) => ipcRenderer.invoke('endpoints:save', e),
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean }) => ipcRenderer.invoke('endpoints:save', e),
     approve: (id: string) => ipcRenderer.invoke('endpoints:approve', id),
     setKey: (id: string, key: string | null) => ipcRenderer.invoke('endpoints:setKey', id, key),
     remove: (id: string) => ipcRenderer.invoke('endpoints:remove', id),
@@ -1097,7 +1097,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // pairs that may be traced, and the external reader's token (shown once when rotated).
   traces: {
     settings: () => ipcRenderer.invoke('traces:settings'),
-    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string }) => ipcRenderer.invoke('traces:setSettings', s),
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => ipcRenderer.invoke('traces:setSettings', s),
     pairs: () => ipcRenderer.invoke('traces:pairs'),
     addPair: (pair: { harness: string; models: string; note?: string }) => ipcRenderer.invoke('traces:addPair', pair),
     removePair: (pair: { harness: string; models: string }) => ipcRenderer.invoke('traces:removePair', pair),

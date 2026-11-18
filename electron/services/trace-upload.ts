@@ -212,9 +212,9 @@ export class TraceUploader {
     const opt = <T>(v: T | null | undefined): T | undefined => (v === null ? undefined : v);
 
     const session = {
-      sessionId: traceId, agentId: opt(t.agent_id as string), agentName: opt(t.agent_name as string), projectKey: key(projectPath),
+      sessionId: traceId, agentId: opt(t.agent_id as string), projectKey: key(projectPath),
       harness: String(t.client), harnessVersion: opt(t.client_version as string), endpointKey: key(String(t.endpoint_id)),
-      endpointName: opt(t.endpoint_name as string), model: String(t.model), startedAt: Number(t.started_at), endedAt: opt(t.ended_at as number),
+      model: String(t.model), startedAt: Number(t.started_at), endedAt: opt(t.ended_at as number),
       finalStatus: String(t.final_status), turnCount: Number(t.turn_count), requestCount: Number(t.request_count),
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
