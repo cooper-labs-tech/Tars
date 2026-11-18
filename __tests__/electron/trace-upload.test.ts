@@ -31,6 +31,10 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 12. The install file is readable by others, or the token is in the state the window gets.
  * 13. A 507 disk_full (the server under its free-disk floor) is not waited out as Retry-After says.
  * 15. (The re-audit's I2 on #596.) A redirect is followed, and the install token hops to another address.
+ * 16. After the user deleted everything sent, the next pass registers again and sends it all back, undoing the
+ *     deletion: the consent must be withdrawn with it.
+ * 17. A long session goes as one batch over the size limit (the request metadata grows with the square of the
+ *     requests), or is split into parts that lose a request, share a batch id, or name a turn not yet sent.
  * 14. A back-office closed to new installs (403 registration_closed), or one that blocked this install
  *     (403 install_blocked), reads as an error retried soon, instead of a state the window says plainly.
  */
@@ -121,6 +125,7 @@ let store: TraceStore;
 let bo: FakeBackOffice;
 let clock: number;
 let settings: { url: string; consentAt?: string; projects: string[]; agentsTraced: Set<string> };
+let withdrawn = 0;
 
 function seed(traceId: string, text: string, startedAt = 1000) {
   store.openTrace({ traceId, projectPath: PROJECT, agentId: 'agent-1', agentName: 'Q', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'Remote host', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'open-coder-1', startedAt });
@@ -138,6 +143,7 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     eligible: (s) => settings.projects.includes(s.projectPath) && settings.agentsTraced.has(s.agentId),
     scrubContext: () => ({ homeDirs: [HOME], knownSecrets: [SECRET], envValues: [] }),
     client: { name: 'tars', version: '0.0.0-test', platform: process.platform },
+    withdrawConsent: () => { withdrawn++; settings.consentAt = undefined; },
     now: () => clock,
     ...over,
   });
@@ -149,6 +155,7 @@ beforeEach(async () => {
   bo = new FakeBackOffice();
   await bo.start();
   clock = 1_000_000;
+  withdrawn = 0;
   settings = { url: bo.base, consentAt: '2026-11-19T00:00:00Z', projects: [PROJECT], agentsTraced: new Set(['agent-1']) };
 });
 afterEach(async () => {
@@ -290,6 +297,46 @@ describe('the trace uploader', () => {
     fs.rmSync(path.join(dir, 'private', 'traces-install.json'), { force: true });
     const r = await uploader({ fetch: moved }).runOnce();
     expect(r).toMatchObject({ sent: 0, failed: 1 });
+  });
+
+  it('16: deleting everything withdraws the consent, so nothing is registered or sent again', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    expect(withdrawn).toBe(1);
+    const installsBefore = bo.seen.filter(x => x.url === '/v1/installs').length;
+    expect((await u.runOnce()).skipped).toBe('off');
+    expect(bo.seen.filter(x => x.url === '/v1/installs').length).toBe(installsBefore);
+  });
+
+  it('17: a session over the batch limit goes in parts, each under it, with every request, its turns and distinct ids', async () => {
+    store.openTrace({ traceId: 'long', projectPath: PROJECT, agentId: 'agent-1', harness: 'qwen-code', endpointId: 'ep-000001', model: 'open-coder-1', startedAt: 1000 });
+    const history: unknown[] = [{ role: 'user', content: 'start the long task' }];
+    for (let i = 0; i < 40; i++) {
+      const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'system', content: 'S' }, ...history], tools: [{ type: 'function', function: { name: 'bash' } }] }));
+      const call = { role: 'assistant', content: null, tool_calls: [{ id: `c${i}`, type: 'function', function: { name: 'bash', arguments: `{"n":${i}}` } }] };
+      const resp = Buffer.from(JSON.stringify({ choices: [{ message: call, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+      store.ingest({ traceId: 'long', agentId: 'agent-1', surface: 'openai_chat', startedAt: 1000 + i * 10, endedAt: 1005 + i * 10, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0 });
+      history.push(call, { role: 'tool', tool_call_id: `c${i}`, content: `out ${i}` });
+    }
+    const r = await uploader({ maxBatchBytes: 3000 }).runOnce();
+    expect(r.sent).toBe(1);
+    const puts = bo.seen.filter(x => x.method === 'PUT' && x.url.startsWith('/v1/batches/'));
+    expect(puts.length).toBeGreaterThan(1);
+    // Every part is under the limit, but a part of one request: a request cannot be cut, and the back-office's own
+    // ceiling (10,000 refs, about 0.9 MB) is far under its 8 MiB.
+    puts.forEach((p, i) => {
+      const n = (bo.rows[i] as { requests: unknown[] }).requests.length;
+      if (n > 1) expect(p.body.length, `${p.url}, ${n} requests`).toBeLessThanOrEqual(3000);
+    });
+    expect(new Set(puts.map(p => p.url)).size).toBe(puts.length);
+    const requests = bo.rows.flatMap(b => (b as { requests?: Array<{ requestId: string; turnId: string }> }).requests ?? []);
+    expect(new Set(requests.map(q => q.requestId)).size).toBe(40);
+    for (const b of bo.rows as Array<{ sessions: unknown[]; turns: Array<{ turnId: string }>; requests: Array<{ turnId: string }> }>) {
+      expect(b.sessions).toHaveLength(1);
+      for (const q of b.requests ?? []) expect(b.turns.map(t => t.turnId)).toContain(q.turnId);
+    }
   });
 
   it('8: a 401 registers the install again, once, and sends everything again under it', async () => {
