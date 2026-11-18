@@ -339,8 +339,10 @@ whatever its project; and one project may drive another's agents, but only where
 
 **What a prompt-injected agent can now do, with no grant.** Through `update_agent` (`POST /api/agents/:id/update`,
 `POST /api/agents/update` for several), on any agent of any project, an orchestrator included:
-- move it to another provider: another CLI, or an API-key provider whose key is set, so that its next session's
-  conversation goes to that vendor;
+- move it to another provider: another CLI, or an API-key provider whose key is set. A move between providers that
+  run the claude binary (claude and the API-key providers) keeps the binary, so the agent restarts on its same
+  conversation: its whole history so far (the code it read, its outputs, anything pasted to it) goes to the new vendor
+  with its next turn, not only what follows. A move to another binary starts a new conversation;
 - give it another model or effort: a weaker model, or `max` effort on every agent of a project, which costs;
 - once the endpoint and traces fields land (feat/traces-native), point it at an endpoint the owner configured and turn
   its traces on, for an endpoint the owner marked as one that may be traced.
@@ -357,7 +359,10 @@ whatever its project; and one project may drive another's agents, but only where
 - Everything is on the record, where the agents are not handed it: `~/.tars-private/agent-changes.jsonl` (0600) keeps
   who asked, which agent, before, after, when, applied or queued; the window is told of each (`agent:retuned`) and the
   agent keeps its last (`lastRetune`); an agent of another project's change is noted to the target project's
-  orchestrator; one call takes a change or a whole batch back (`revert_agent_change`).
+  orchestrator; one call takes a change or a whole batch back (`revert_agent_change`), allowed to whoever could make
+  that change (judged by the settings its caller named, a provider change's cleared model and CLI path aside) and to
+  the window. Any agent reads the log of its own project whole, and another project's by its inference settings only,
+  unless a grant opens that project.
 - A chat's runner is never changed directly: it runs on its orchestrator's settings.
 
 **The allowlist across projects.** `~/.tars-private/cross-project-grants.json` (0600), set only through the window's
@@ -381,7 +386,11 @@ is the owner's choice, and Tars notes each outside delegation, start, stop and r
 **A worktree's push turned off.** `worktree_new` with `noPush` turns push off for that worktree only (`extensions.worktreeConfig`,
 then `git config --worktree`: every remote's pushurl, and every address a push may name, rewritten to a path that is no
 repository), so a push from it fails at once, naming why, and B's other checkouts push as before. It is a guard against
-a mistake, not a boundary: an agent working in that worktree can unset its own setting.
+a mistake, not a boundary: an agent working in that worktree can unset its own setting. A remote's pushurl of its own
+in the shared settings is reset for that worktree (an empty value first, then the marker), and the push addresses are
+read back after (`git remote get-url --push --all`): a worktree whose push still reaches anything is refused, its
+creation taken back. Not rewritten: an explicit scp-like address with a user other than `git` (`me@host:repo`), for
+which git offers no prefix to match.
 
 ## 3. An agent's token is not secret from the other agents
 
