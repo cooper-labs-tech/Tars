@@ -1,9 +1,10 @@
 import { agents } from '../core/agent-manager';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { chatNameOf } from '../core/chat-inbox';
-import { onOwnerLine } from '../core/pty-manager';
+import { onOwnerLine, ptyProcesses } from '../core/pty-manager';
+import { dialogShown } from '../core/agent-launch';
 import type { AgentStatus } from '../types';
-import { ownerWords } from './owner-words';
+import { ownerWords, typedAtRest } from './owner-words';
 
 /**
  * The owner's words typed by hand into an orchestrator's terminal (2.0.7; SECURITY.md §8, "Typed in a terminal").
@@ -12,11 +13,14 @@ import { ownerWords } from './owner-words';
  * until the agent's CLI says it took that line as a prompt (hooks-routes.ts, UserPromptSubmit); then it is the
  * owner's words, via the terminal, for the agent's project and, for a chat's runner, its chat. Only an agent with an
  * orchestrator's powers: the project's orchestrator or a chat's runner, those who could relay them. A worker's
- * terminal is the worker's work, and no worker relays.
+ * terminal is the worker's work, and no worker relays. And only a line submitted with the CLI at rest at its prompt
+ * (typedAtRest), confirmed within a minute.
  */
 function noteTyped(agentId: string, line: string): void {
   const agent = agents.get(agentId);
   if (!agent || !agent.projectPath || !hasOrchestratorPowers(agent)) return;
+  // Typed at rest only: the hook that confirms it carries the agent's own token (the Audit's L1 on #594).
+  if (!typedAtRest(agent, dialogShown(agent, agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined))) return;
   const chatId = chatNameOf(agent)?.id;
   ownerWords.typed(agent.id, line, { projectPath: agent.projectPath, ...(chatId ? { chatId } : {}) });
 }

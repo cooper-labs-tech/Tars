@@ -20,9 +20,23 @@ export const OWNER_WORDS_TTL_MS = 24 * 3_600_000;
 export const OWNER_WORDS_MAX = 200;
 /**
  * How long a line typed into an orchestrator's terminal waits for its CLI to say it took it as a prompt (2.0.7): the
- * hook comes some 40 ms after the Enter (input-draft.ts), later for a line typed while a turn runs.
+ * hook comes some 40 ms after an Enter at rest (input-draft.ts), and only a line typed at rest waits (typedAtRest).
+ * It was 10 minutes, all the time a forged hook needed (the Audit's L1 on #594).
  */
-export const OWNER_TYPED_PENDING_MS = 10 * 60_000;
+export const OWNER_TYPED_PENDING_MS = 60_000;
+
+/**
+ * Whether a line the owner just submitted into that agent's terminal may wait for its confirmation (the Audit's L1 on
+ * #594): only with the CLI at rest at its prompt (idle, completed, failed, or waiting at its idle prompt), never in a
+ * turn (the line is queued, or answers what the turn shows), with a dialog or a question open, or a permission
+ * question held by Tars. The hook that confirms it carries the agent's own token: a prompt-injected agent could
+ * otherwise confirm a "yes" its owner typed to a dialog Tars did not see.
+ */
+export function typedAtRest(agent: { status?: string; waitingReason?: string; permissionAsk?: unknown }, dialogShown: boolean): boolean {
+  if (dialogShown || agent.permissionAsk) return false;
+  if (agent.status === 'waiting') return agent.waitingReason === 'idle';
+  return agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error';
+}
 /** The most lines that wait, per agent; the oldest go first. */
 export const OWNER_TYPED_PENDING_MAX = 20;
 /**
