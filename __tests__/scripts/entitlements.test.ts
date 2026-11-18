@@ -15,6 +15,12 @@ import { join, resolve } from 'node:path';
  *    while every build was ad hoc, since nothing signed with the file.
  * 2. Anything else codesign cannot parse (macOS only: the parser is codesign's own): the same stop, found only after
  *    the renderer, the main process and the MCP bundles are built.
+ * Written before the fix of the Audit's L5 on #591 (18/11):
+ * 3. The keys drift and nothing says so. A plist that lost allow-jit signs, notarizes, staples and passes every check
+ *    of a quarantined copy, and the app it ships aborts at launch for every user (V8 cannot reserve its code range,
+ *    exit 133, measured on the first signed build). One that gains a key back (disable-library-validation,
+ *    allow-unsigned-executable-memory, allow-dyld-environment-variables) undoes a protection measured unneeded. The
+ *    set is exactly what was measured; a change comes with its measurement (OPERATIONS.md, "The first signed build").
  */
 
 const PLIST = resolve(__dirname, '../../build/entitlements.mac.plist');
@@ -26,6 +32,15 @@ describe('build/entitlements.mac.plist', () => {
     expect(comments.length).toBeGreaterThan(0);
     const bad = comments.filter(c => c.includes('--') || c.endsWith('-'));
     expect(bad.map(c => c.trim().slice(0, 60))).toEqual([]);
+  });
+
+  it('grants allow-jit and nothing else, the set measured on the first signed build (3)', () => {
+    const text = readFileSync(PLIST, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
+    const body = text.match(/<dict>([\s\S]*)<\/dict>/)?.[1] ?? '';
+    const entries = [...body.matchAll(/<key>([^<]*)<\/key>\s*<([a-z]+)\s*\/>/g)].map(m => [m[1], m[2]]);
+    // Every key is followed by a boolean: a key with any other value would not be counted above.
+    expect((body.match(/<key>/g) ?? []).length).toBe(entries.length);
+    expect(Object.fromEntries(entries)).toEqual({ 'com.apple.security.cs.allow-jit': 'true' });
   });
 
   it.runIf(process.platform === 'darwin')('is accepted by codesign, signing a copy of /usr/bin/true ad hoc with it (2)', () => {

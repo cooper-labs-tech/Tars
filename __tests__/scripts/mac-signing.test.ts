@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   chooseIdentity, NOTARY_PROFILE, notaryCredentials, parseIdentities, preflight, Refusal, rewriteDmgEntry,
-  signatureProblems, signingEnv, spctlVerdict, staplerValid, verifyQuarantined,
+  signatureProblems, signingEnv, spctlVerdict, staplerValid, startCheck, verifyQuarantined,
 } from '../../scripts/mac-signing.mjs';
 
 /**
@@ -47,6 +47,15 @@ import {
  *     signing identity's, read at run time from it (the parenthesis of its name), never written in the repository.
  * 16. A CSC_LINK or CSC_KEY_PASSWORD left in the shell reaches the build, which would sign with that p12 instead.
  * 17. The checks run with no Team ID to pin, and pass any team.
+ * Written before the code of the third round (the Audit's L5 on #591, 18/11):
+ * 18. Nothing starts the quarantined app: one that aborts at launch passes every check (a plist without allow-jit
+ *     signs, notarizes and staples, and V8 aborts, exit 133, measured). Its binary is run once as Node, as the MCP
+ *     servers run it, loading better-sqlite3 and spawning a shell through node-pty from its own app.asar: any exit
+ *     but 0 fails, with the exit and stderr's first line.
+ * 19. An exit 0 whose output lacks the exact result line (a module that did not load, a shell that printed nothing)
+ *     passes.
+ * 20. A binary that could not be run passes, or the check runs in the release's own environment (a stray
+ *     ELECTRON_ or NODE_ variable of the shell changing what it proves).
  */
 
 type Answer = { code: number; stdout?: string; stderr?: string; missing?: boolean };
@@ -270,6 +279,34 @@ describe('what a quarantined copy is judged', () => {
     const result = await verifyQuarantined({ dmg: '/nowhere/x.dmg', team: 'TEAMONE111', run: m.run, platform: 'linux' });
     expect(result.ok).toBe(false);
     expect(m.asked).toEqual([]);
+  });
+
+  const APP = '/work/Tars.app';
+  const START = 'env -i PATH=/usr/bin:/bin ELECTRON_RUN_AS_NODE=1 /work/Tars.app/Contents/MacOS/Tars -e ';
+
+  it('18. the app is started once as Node, in a clean environment, and an abort fails it', async () => {
+    const m = machine({ 'env -i': { code: 133, stderr: '#\n# Fatal process out of memory: Failed to reserve virtual memory for CodeRange\n' } });
+    const result = await startCheck({ app: APP, run: m.run });
+    expect(result.ok).toBe(false);
+    expect(result.why).toMatch(/exit 133/);
+    expect(result.why).toMatch(/CodeRange/);
+    expect(m.asked).toHaveLength(1);
+    expect(m.asked[0].startsWith(START)).toBe(true);
+    expect(m.asked[0].endsWith(' /work/Tars.app/Contents/Resources')).toBe(true);
+  });
+
+  it('19. passes only on exit 0 with the exact result line', async () => {
+    const line = 'tars-start-check sqlite=42 pty=pty-ok exit=0';
+    expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 0, stdout: `${line}\n` } }).run })).ok).toBe(true);
+    expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 0, stdout: '' } }).run })).ok).toBe(false);
+    expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 0, stdout: 'tars-start-check sqlite=42 pty= exit=0\n' } }).run })).ok).toBe(false);
+    expect((await startCheck({ app: APP, run: machine({ 'env -i': { code: 1, stdout: `${line}\n` } }).run })).ok).toBe(false);
+  });
+
+  it('20. a binary that could not be run fails', async () => {
+    const result = await startCheck({ app: APP, run: machine({}).run });
+    expect(result.ok).toBe(false);
+    expect(result.why).toMatch(/could not run/);
   });
 
   it('17. no Team ID to pin: refused before anything runs', async () => {

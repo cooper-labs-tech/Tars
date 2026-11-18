@@ -93,6 +93,18 @@ import { Leftovers, RECORDS_ITS_PID, endLeftUnder, processesUnder, takePidsRecor
  *     ~/.claude/mcp.json, the guard refused it, and `npm test` exited 1 with
  *     every test passed. A server that does not end on its own outlives the
  *     file as well.
+ * The Audit's I8 on #591, the signed release (2026-11-18), written before the fix:
+ * 23. A server the user names (Settings, Tasmania: any path, outside the app)
+ *     runs on the launcher, the app's binary as Node. Signed with the hardened
+ *     runtime, that binary refuses a native module that is not the app's own
+ *     (library validation): measured on the first signed build, an N-API module
+ *     of the server's own node_modules failed ("different Team IDs") where the
+ *     ad hoc 2.0.6 loaded it, and where the system's node loads it.
+ * 24. Over-correction: Tars's own bundles leave the app's binary; or a user's
+ *     server on a machine with no node runs nothing (it ran on the app's binary).
+ * 25. A user's server registered on the launcher by an earlier start stays on
+ *     it, since the registration check compares the server's path only.
+ * 26. On Windows, which runs no sh script: `node`, as Tars's own servers.
  */
 
 const home = () => os.homedir();
@@ -520,6 +532,68 @@ function handle(msg) {
     const servers = JSON.parse(fs.readFileSync(report, 'utf-8')) as { name: string; command: string }[];
     expect(servers.length).toBeGreaterThan(0);
     for (const server of servers) expect(server.command, server.name).toBe(program());
+  });
+});
+
+describe('a server the user names (Settings, Tasmania)', { timeout: 30_000 }, () => {
+  const resources = path.join(scratch, 'resources');
+  const runtimeFile = () => path.join(home(), '.tars', 'mcp-servers-runtime.json');
+  const userLauncher = () => path.join(home(), '.tars', 'bin', 'tars-user-mcp-node');
+  /** What a user's server is registered on from this host: its own launcher, or `node` on Windows (26). */
+  const userProgram = () => (process.platform === 'win32' ? 'node' : userLauncher());
+  const userServer = path.join(scratch, 'user-server', 'index.js');
+  const tasmania = { tasmaniaEnabled: true, tasmaniaServerPath: userServer } as never;
+
+  beforeEach(() => {
+    (process as unknown as { resourcesPath: string }).resourcesPath = resources;
+    for (const dir of ['mcp-orchestrator', 'mcp-memory', 'mcp-kanban']) {
+      fs.mkdirSync(path.join(resources, dir, 'dist'), { recursive: true });
+      fs.writeFileSync(path.join(resources, dir, 'dist', 'bundle.js'), '');
+    }
+    fs.mkdirSync(path.dirname(userServer), { recursive: true });
+    fs.writeFileSync(userServer, '');
+    registry.clear(); calls.length = 0; providerList.value = 'one'; appState.isPackaged = true;
+    fs.rmSync(runtimeFile(), { force: true });
+  });
+
+  it.skipIf(skipOnWindows(LAUNCHER_NOT_RUNNABLE))('23. runs on the node on the PATH, which loads the native modules of its own node_modules', () => {
+    const app = fakeApp(path.join(scratch, 'user-one'));
+    const systemNode = path.join(scratch, 'system-node');
+    fs.mkdirSync(systemNode, { recursive: true });
+    fs.writeFileSync(path.join(systemNode, 'node'), `#!${process.execPath}\nconsole.log(JSON.stringify({ systemNode: true, args: process.argv.slice(2) }));\n`, { mode: 0o755 });
+
+    const command = mcpNode.userMcpNodeCommand(app, 'darwin', true);
+
+    expect(command).toBe(userLauncher());
+    expect(JSON.parse(execFileSync(command, ['/user/server.js', '--flag'], { env: { PATH: systemNode } }).toString()))
+      .toEqual({ systemNode: true, args: ['/user/server.js', '--flag'] });
+  });
+
+  it.skipIf(skipOnWindows(LAUNCHER_NOT_RUNNABLE))('24. runs on the app binary as Node when the PATH has no node, as before', () => {
+    const app = fakeApp(path.join(scratch, 'user-two'));
+    expect(run(mcpNode.userMcpNodeCommand(app, 'darwin', true), ['/user/server.js'])).toEqual({ runAsNode: '1', args: ['/user/server.js'] });
+  });
+
+  it('23, 24, 26. is registered on its own launcher, and Tars\'s own bundles stay on theirs', async () => {
+    await setupMcpOrchestrator(tasmania);
+
+    expect(registry.get('tasmania')?.command).toBe(userProgram());
+    for (const name of ['claude-mgr-orchestrator', 'tars-memory', 'claude-mgr-kanban']) {
+      expect(registry.get(name)?.command, name).toBe(program());
+    }
+  });
+
+  it('25. one an earlier start registered on the app\'s launcher is moved over, once', async () => {
+    registry.set('tasmania', { command: program(), args: [userServer] });
+    fs.mkdirSync(path.dirname(runtimeFile()), { recursive: true });
+    fs.writeFileSync(runtimeFile(), JSON.stringify({ command: program(), providers: ['fake'] }));
+
+    await setupMcpOrchestrator(tasmania);
+    expect(registry.get('tasmania')?.command).toBe(userProgram());
+
+    calls.length = 0;
+    await setupMcpOrchestrator(tasmania);
+    expect(calls).toEqual([]);
   });
 });
 
