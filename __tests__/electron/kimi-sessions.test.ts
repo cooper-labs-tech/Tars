@@ -176,6 +176,25 @@ describe('KimiSessionWatch', () => {
     expect(of('a1-0000-1111').map((p) => p[1])).toEqual(['running', 'running', 'Stop', 'idle', 'Stop']);
   });
 
+  it('6: a turn too short for its lock to be seen: the first prompt holding what Tars typed into the agent\'s terminal binds it', async () => {
+    // Measured on 2.6.3: kimi holds the lock only while a turn writes, and a turn on a fast endpoint ends in 0.4 s.
+    watch.noteLaunch('a1', work);
+    watch.noteLaunch('a2', work);
+    pids.a1 = [10];
+    pids.a2 = [20];
+    const typed = 'Message from agent "Lead" ("lead-id"), task t-1a2b3c4d:\n\nRun the tests\nand say what failed.';
+    watch.noteTyped('a2', 'Message from agent "Lead" ("lead-id"), task t-99999999:\n\nsomething else entirely');
+    watch.noteTyped('a1', typed);
+    watch.noteTyped('a1', 'ok');
+    const wire = session('session_1');
+    write(wire, prompt(0, typed), said(0, 1, 'none failed'), ended(0, 'completed'));
+    const short = session('session_2');
+    write(short, prompt(0, 'ok'), ended(0, 'completed'));
+    await watch.tick();
+    expect(of('a1').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['none failed', 'session_1']);
+    expect(of('a2')).toEqual([]);
+  });
+
   it('7: two agents in one folder each get the session their own kimi holds', async () => {
     watch.noteLaunch('a1', work);
     watch.noteLaunch('a2', work);
