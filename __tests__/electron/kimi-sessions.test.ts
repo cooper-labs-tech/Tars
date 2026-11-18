@@ -211,6 +211,19 @@ describe('KimiSessionWatch', () => {
     ]);
   });
 
+  it('8: a session already there at the launch, bound by its lock, is read from where it stood, as a resume', async () => {
+    const wire = session('session_1');
+    write(wire, prompt(0, 'old task'), said(0, 1, 'old answer'), ended(0, 'completed'));
+    watch.noteLaunch('a1', work);
+    pids.a1 = [7];
+    lock('session_1', 7);
+    write(wire, prompt(1, 'new task'), said(1, 1, 'new answer'), ended(1, 'completed'));
+    await watch.tick();
+    expect(of('a1').map((p) => p.slice(1, 3))).toEqual([
+      ['running', 'resume'], ['running', 'new task'], ['Stop', 'new answer'], ['idle', ''], ['Stop', ''],
+    ]);
+  });
+
   it('9: a line still being written waits for its end', async () => {
     watch.noteLaunch('a1', work);
     pids.a1 = [7];
