@@ -143,6 +143,14 @@ export function traceUploader(): TraceUploader {
       eligible: (q) => traceSettingsOf(deps?.getSettings()).projects.includes(q.projectPath) && agentOf(q.agentId)?.traces === true,
       scrubContext: (projectPath) => scrubContextFor(projectPath),
       client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
+      // After "delete everything sent": no upload again until the user consents again.
+      withdrawConsent: () => {
+        if (!deps) return;
+        const t = traceSettingsOf(deps.getSettings());
+        const { uploadConsentAt: _gone, ...rest } = t;
+        deps.saveSettings({ ...deps.getSettings(), traces: rest });
+        deps.emit('traces:changed');
+      },
     });
   }
   return uploader;

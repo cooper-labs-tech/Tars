@@ -35,6 +35,13 @@ export interface UploaderDeps {
   eligible(session: { projectPath: string; agentId: string }): boolean;
   scrubContext(projectPath: string): ScrubContext;
   client: { name: string; version: string; platform: string };
+  /**
+   * Takes the user's consent back. Called once everything sent was deleted: without it, the next pass would register
+   * again and send it all back, undoing the deletion. Sharing starts again only when the user consents again.
+   */
+  withdrawConsent(): void;
+  /** A batch's body, compressed, at most (4 MiB: half the back-office's 8 MiB, the margin it advises). */
+  maxBatchBytes?: number;
   fetch?: typeof fetch;
   now?: () => number;
 }
@@ -276,17 +283,45 @@ export class TraceUploader {
       for (const h of r.missing ?? []) missing.add(h);
     }
     for (const h of missing) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
-    const body = Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns, requests, messages }));
-    let answer: { missingBlobs?: string[] };
-    try {
-      answer = await this.call(install, install.url, 'PUT', `/v1/batches/${traceId}.${seq}`, body) as { missingBlobs?: string[] };
-    } catch (err) {
-      // The same state sent before with other bytes (a .env value changed the scrubbing in between): a batch id of its own.
-      if (!(err instanceof HttpError && err.status === 409)) throw err;
-      answer = await this.call(install, install.url, 'PUT', `/v1/batches/${traceId}.${seq}.${this.now()}`, body) as { missingBlobs?: string[] };
+    // One batch per session state, or several when it is over the limit: each request names its whole history, so
+    // a long session's metadata grows with the square of its requests. Each part carries the session row (an
+    // upsert), the requests of that part, the turns they name and the metadata of the messages they name.
+    const bodyOf = (part: typeof requests, withAllTurns: boolean) => {
+      const turnIds = new Set(part.map(q => q.turnId));
+      const hashes = new Set(part.flatMap(q => [...q.messages.map(m => m.hash), ...(q.toolsHash ? [q.toolsHash] : [])]));
+      return Buffer.from(JSON.stringify({
+        schema: 1, sessions: [session],
+        turns: withAllTurns ? turns : turns.filter(x => turnIds.has(x.turnId)),
+        requests: part, messages: messages.filter(m => hashes.has(m.hash)),
+      }));
+    };
+    const limit = this.deps.maxBatchBytes ?? 4 * 1024 * 1024;
+    const split = (part: typeof requests): Array<typeof requests> => {
+      if (part.length <= 1 || compress(bodyOf(part, false)).body.length <= limit) return [part];
+      const half = Math.ceil(part.length / 2);
+      return [...split(part.slice(0, half)), ...split(part.slice(half))];
+    };
+    const parts = compress(bodyOf(requests, true)).body.length <= limit ? [requests] : split(requests);
+    for (let k = 0; k < parts.length; k++) {
+      const body = bodyOf(parts[k], parts.length === 1 || k === 0 && parts[k].length === requests.length);
+      const id = parts.length === 1 ? `${traceId}.${seq}` : `${traceId}.${seq}.${k}`;
+      let answer: { missingBlobs?: string[] };
+      try {
+        answer = await this.call(install, install.url, 'PUT', `/v1/batches/${id}`, body) as { missingBlobs?: string[] };
+      } catch (err) {
+        // The same state sent before with other bytes (a .env value changed the scrubbing in between): an id of its own.
+        if (!(err instanceof HttpError && err.status === 409)) throw err;
+        answer = await this.call(install, install.url, 'PUT', `/v1/batches/${id}.${this.now()}`, body) as { missingBlobs?: string[] };
+      }
+      for (const h of answer.missingBlobs ?? []) {
+        if (blobs.has(h) && !missing.has(h)) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
+      }
     }
-    for (const h of answer.missingBlobs ?? []) {
-      if (blobs.has(h) && !missing.has(h)) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
+    // A turn no request names (none today) still goes, with the last part.
+    const named = new Set(requests.map(q => q.turnId));
+    const alone = turns.filter(x => !named.has(x.turnId));
+    if (parts.length > 1 && alone.length) {
+      await this.call(install, install.url, 'PUT', `/v1/batches/${traceId}.${seq}.turns`, Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns: alone, requests: [], messages: [] })));
     }
   }
 
@@ -297,10 +332,11 @@ export class TraceUploader {
     try {
       const r = await this.call(install, install.url, 'DELETE', '/v1/installs/me') as { deleted?: { sessions?: number } };
       this.forget();
+      this.deps.withdrawConsent();
       return { ok: true, deleted: r.deleted?.sessions };
     } catch (err) {
       // The token already gone (a deletion that went through before its answer was lost): nothing is left there.
-      if (err instanceof HttpError && err.status === 401) { this.forget(); return { ok: true }; }
+      if (err instanceof HttpError && err.status === 401) { this.forget(); this.deps.withdrawConsent(); return { ok: true }; }
       return { ok: false, error: err instanceof HttpError ? `The back-office answered ${err.status} ${err.code}.` : (err as Error).message };
     }
   }

@@ -1160,7 +1160,9 @@ would be sent.
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
 - The install's token and that secret are in `~/.tars-private/traces-install.json` (0600).
 - Only sessions whose project and agent are opted in at the moment of sending go.
-- One action in the window asks the back-office to delete everything the install sent, then forgets the install.
+- One action in the window asks the back-office to delete everything the install sent, then forgets the install and
+  takes the consent back. Without that, the next pass would register again and send everything back, undoing the
+  deletion. Sharing starts again only when the user consents again.
 - The scrubbing applies to what is uploaded only: the endpoint the agent talked to, and the local store, saw the
   session as it was.
 
