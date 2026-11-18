@@ -1496,6 +1496,16 @@ export interface AgentQueueItem {
 }
 
 /** agentQueue: an agent's queue, and whether nothing goes in (paused, since when, why). */
+/** A remote Linux host of the owner's (2.0.7): an alias of their ssh config (or user@host) and a work root on it. */
+export interface RemoteHost {
+  /** 1 to 40 lowercase letters, digits or dashes. */
+  id: string;
+  name: string;
+  sshTarget: string;
+  /** An absolute path on the host, where the agents' folders are made. */
+  workRoot: string;
+}
+
 export interface AgentQueue {
   agentId: string;
   paused?: { since: string; why: string };
@@ -2985,6 +2995,18 @@ export interface ElectronAPI {
   diagnostic: {
     /** Sends the last 24 hours of health samples (numbers, with the names of Tars's own calls and pages) once; refused with the reason, a sentence shown as is. */
     send: () => Promise<DiagnosticAnswer>;
+  };
+
+  /**
+   * The owner's remote hosts (2.0.7, main's services/remote-hosts.ts): where agents may run their CLI over ssh. Set by
+   * the window only; kept in ~/.tars-private. A host holds no credential: ssh finds the keys in the owner's own config.
+   */
+  remoteHosts: {
+    list: () => Promise<RemoteHost[]>;
+    /** Added, or replaced by its id. Refused with `code`: invalid_host, invalid_id, invalid_name, invalid_target, invalid_work_root, no_credentials_here. */
+    set: (host: RemoteHost) => Promise<{ success: true; host: RemoteHost } | { success: false; error: string; code: string }>;
+    remove: (id: string) => Promise<{ success: boolean }>;
+    onChanged: (callback: (hosts: RemoteHost[]) => void) => () => void;
   };
 
   keepAwake: {

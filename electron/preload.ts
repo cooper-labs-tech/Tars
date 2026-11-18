@@ -1089,6 +1089,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     last: () => ipcRenderer.invoke('errorReports:last'),
   },
 
+  // The owner's remote hosts, where agents may run their CLI over ssh (2.0.7, services/remote-hosts.ts).
+  remoteHosts: {
+    list: () => ipcRenderer.invoke('remoteHosts:list'),
+    set: (host: unknown) => ipcRenderer.invoke('remoteHosts:set', host),
+    remove: (id: string) => ipcRenderer.invoke('remoteHosts:remove', id),
+    onChanged: (callback: (hosts: unknown) => void) => {
+      const listener = (_: unknown, hosts: unknown) => callback(hosts);
+      ipcRenderer.on('remoteHosts:changed', listener);
+      return () => ipcRenderer.removeListener('remoteHosts:changed', listener);
+    },
+  },
+
   // Whether Tars keeps the computer awake now, and per which setting (2.0.5, services/keep-awake.ts).
   keepAwake: {
     state: () => ipcRenderer.invoke('keepAwake:state'),
