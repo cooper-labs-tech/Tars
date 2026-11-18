@@ -21,8 +21,9 @@ import { writeFakeClis } from './fake-clis.mjs';
  * Asserted, in order:
  * 1. read-back: a worker of A lists B's agents with their harness, model, effort and status, and nothing of their
  *    tasks' content;
- * 2. no grant yet: A's workers and A's orchestrator hand B no work (delegate_task refused, naming the allowlist),
- *    allowCrossProject or not;
+ * 2. no grant yet: A's workers and A's orchestrator hand B's workers no work and stop none (refused, naming the
+ *    allowlist), allowCrossProject or not; but A's orchestrator, with allowCrossProject, hands B's orchestrator a
+ *    task and reads its answer (task_status, get_agent_output), as projects' orchestrators talk to each other;
  * 3. a worker of A changes the harness, model and effort of a B agent and of B's orchestrator through update_agent:
  *    applied at once (no CLI runs there), on the record, on the agent's card in the window, and in the window's
  *    notice event with who did it; a field outside the list (permission mode), alone or with a model, is refused and
@@ -191,6 +192,20 @@ for (const newInterface of [false, true]) {
         expect(said.isError).toBe(true);
         expect(said.text).toContain('cross_project_not_granted');
       }
+      // Orchestrator to orchestrator, with no grant: a task and its answer, as projects' leads talk to each other.
+      const o2o = await lead('delegate_task', { id: 'b-o', prompt: 'ECHO oo1', timeoutSeconds: 120, allowCrossProject: true });
+      const o2oTask = taskIdOf(o2o);
+      const o2oStatus = o2oTask ? await lead('task_status', { taskId: o2oTask }) : undefined;
+      const o2oOutput = o2oTask ? await lead('get_agent_output', { id: 'b-o', taskId: o2oTask }) : undefined;
+      const o2oWorker = await lead('delegate_task', { id: 'b-codex', prompt: 'ECHO never4', timeoutSeconds: 5, allowCrossProject: true });
+      keep({ o2o, o2oStatus, o2oOutput, o2oWorker });
+      expect(o2o.isError).toBe(false);
+      expect(o2o.text).toContain('echo oo1');
+      expect(o2oStatus?.text).toContain('echo oo1');
+      expect(o2oOutput?.text).toContain('echo oo1');
+      expect(o2oWorker.isError).toBe(true);
+      expect(o2oWorker.text).toContain('cross_project_not_granted');
+      expect(o2oWorker.text).toMatch(/owner/);
 
       // ── 3. A worker of A retunes a B worker and B's orchestrator; a field outside the list is refused ──
       const retuned = await other('update_agent', { id: 'b-c', provider: 'codex', model: 'gpt-5.5', effort: 'high' });
@@ -225,10 +240,9 @@ for (const newInterface of [false, true]) {
       keep({ granted });
       expect(granted).toMatchObject({ ok: true });
 
-      // B's orchestrator in a session, to receive Tars's notes.
-      await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start: (p: unknown) => Promise<unknown> } } }).electronAPI.agent.start({ id: 'b-o', prompt: 'ECHO ready' }));
+      // B's orchestrator is in a session since the task A's orchestrator handed it: Tars's notes go there.
       const fakeLog = () => (fs.existsSync(path.join(home, 'fake-cli.jsonl')) ? fs.readFileSync(path.join(home, 'fake-cli.jsonl'), 'utf8') : '');
-      await expect.poll(() => /echo ready/.test(fakeLog()), { timeout: 60_000 }).toBe(true);
+      await expect.poll(() => /echo oo1/.test(fakeLog()), { timeout: 60_000 }).toBe(true);
 
       // ── 5. The named worker delegates to B's codex, pi and qwen-code agents and reads each answer ──
       const answers: Record<string, unknown> = {};
