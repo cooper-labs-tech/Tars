@@ -37,6 +37,8 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  *     approved address carries it elsewhere. And an approval of a new address hands it the old address's key.
  * 14. (M1.) A probe hands back the whole settings as they were before its fetch, so saving them undoes what changed
  *     meanwhile (a project's trace opt-out).
+ * 16. (The re-audit's I1 on #596.) A probe in flight while the address changes lands the old address's models or
+ *     health on the new one.
  * 15. (L2, the orchestrator's rule.) Plain http to a public address is taken; or refused on loopback, a private range
  *     (RFC 1918, 100.64.0.0/10, fc00::/7) or IPv6 link-local; or an agent, rather than the owner in the window, allows
  *     plain http to a public address.
@@ -198,6 +200,21 @@ describe('the key goes only where the owner approved (H1, M1)', () => {
     const after = applyEndpointPatch(applyEndpointPatch(fresh, r.endpoint.id, m.patch), r.endpoint.id, h.patch);
     expect(after.traces?.projects).toEqual([]);
     expect(after.inferenceEndpoints![0]).toMatchObject({ models: ['open-coder-1'], health: { ok: true } });
+  });
+});
+
+describe('a probe across a change of address (re-audit I1)', () => {
+  it('16: the patch of a probe of the old address does not land on the new one', async () => {
+    const r = added(base(), OWNER, { baseUrl: 'https://old.example.com/v1' });
+    const m = await readModels(r.settings, r.endpoint.id, (async () => new Response(JSON.stringify({ data: [{ id: 'old-model' }] }), { status: 200 })) as unknown as typeof fetch, NOW);
+    const h = await checkHealth(r.settings, r.endpoint.id, (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch, NOW);
+    const moved = saveEndpoint(r.settings, { id: r.endpoint.id, baseUrl: 'https://new.example.com/v1' }, OWNER, NOW);
+    if (!moved.ok) throw new Error(moved.error);
+    const after = applyEndpointPatch(applyEndpointPatch(moved.settings, r.endpoint.id, m.patch, m.probed), r.endpoint.id, h.patch, h.probed);
+    expect(after.inferenceEndpoints![0].models).toEqual([]);
+    expect(after.inferenceEndpoints![0].health).toBeUndefined();
+    const same = applyEndpointPatch(r.settings, r.endpoint.id, m.patch, m.probed);
+    expect(same.inferenceEndpoints![0].models).toEqual(['old-model']);
   });
 });
 

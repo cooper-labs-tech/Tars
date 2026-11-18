@@ -30,6 +30,7 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 11. Deleting everything does not call the server's delete, keeps the token, or keeps the progress.
  * 12. The install file is readable by others, or the token is in the state the window gets.
  * 13. A 507 disk_full (the server under its free-disk floor) is not waited out as Retry-After says.
+ * 15. (The re-audit's I2 on #596.) A redirect is followed, and the install token hops to another address.
  * 14. A back-office closed to new installs (403 registration_closed), or one that blocked this install
  *     (403 install_blocked), reads as an error retried soon, instead of a state the window says plainly.
  */
@@ -276,6 +277,19 @@ describe('the trace uploader', () => {
     bo.failNext.push({ status: 403, code: 'install_blocked' });
     await u.runOnce();
     expect(u.state().notice).toBe('install_blocked');
+  });
+
+  it('15: no call follows a redirect, and a redirect answer is a failure', async () => {
+    seed('t1', 'first');
+    const inits: Array<RequestInit | undefined> = [];
+    const spy = ((u: string, init?: RequestInit) => { inits.push(init); return fetch(u, init); }) as typeof fetch;
+    expect((await uploader({ fetch: spy }).runOnce()).sent).toBe(1);
+    expect(inits.length).toBeGreaterThan(0);
+    for (const init of inits) expect(init?.redirect).toBe('manual');
+    const moved = (async () => new Response('', { status: 302, headers: { Location: 'https://elsewhere.example/v1/installs' } })) as unknown as typeof fetch;
+    fs.rmSync(path.join(dir, 'private', 'traces-install.json'), { force: true });
+    const r = await uploader({ fetch: moved }).runOnce();
+    expect(r).toMatchObject({ sent: 0, failed: 1 });
   });
 
   it('8: a 401 registers the install again, once, and sends everything again under it', async () => {
