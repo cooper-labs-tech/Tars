@@ -64,7 +64,8 @@ describe('the relay turned on', () => {
 
     const servers = JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers;
     expect(Object.keys(servers)).toEqual(['claude-mgr-orchestrator']);
-  });
+    // The first test imports the providers and mcp-orchestrator cold: past 5 s on a loaded machine (load 170, 19/11).
+  }, 30_000);
 
   it('3. the start does not register mcp-telegram again', () => {
     expect(sw.bundledMcpServers()).not.toContain('claude-mgr-telegram');

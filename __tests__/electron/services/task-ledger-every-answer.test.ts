@@ -23,6 +23,9 @@ import { createOneTaskQueue } from '../../../electron/core/one-task';
  * E5. A queued message delivered into the agent's terminal can never be followed to the turn it opened: its id reads
  *     `delivered` for ever (one-task.ts `named`); or `named` moves a task that started already, one that failed, one
  *     never taken, or names it twice.
+ * E6. (found by the E2E, the new interface's run) Between its delivery and the UserPromptSubmit of the turn it opens,
+ *     300 ms there, its id reads `delivered`, ended, and a caller that reads it then stops following it though its turn
+ *     is coming; or, once that turn is given up on, it still reads as going in.
  */
 
 const T0 = Date.UTC(2026, 10, 19, 9, 0, 0);
@@ -137,5 +140,25 @@ describe('a queued message delivered into the terminal', () => {
     const waiting = q.enqueue('arch', { title: 'still queued' }, T0, 't-0000cccc');
     q.named(waiting.ref, 'ledger-task-4');
     expect(q.lookup(waiting.ref)?.state).toBe('queued');
+  });
+
+  it('E6: delivered, its turn awaited, it reads as going in until that turn is named or given up on', () => {
+    const q = createOneTaskQueue(T0);
+    const item = q.enqueue('arch', { requesterId: 'lead', title: 'QUEUED>>', how: 'message' }, T0, 't-0000dddd');
+    q.takeTurn('arch', item.ref, undefined, T0);
+    q.delivered(item.ref, 'typed', undefined, T0 + 10);
+    q.turnAwaited(item.ref, true);
+    q.runEnded('arch');
+    expect(q.lookup(item.ref)?.state).toBe('starting');
+    q.named(item.ref, 'ledger-task-5');
+    expect(q.lookup(item.ref)).toMatchObject({ state: 'started', taskId: 'ledger-task-5' });
+
+    const other = q.enqueue('arch', { title: 'its turn never seen' }, T0, 't-0000eeee');
+    q.takeTurn('arch', other.ref, undefined, T0);
+    q.delivered(other.ref, 'typed', undefined, T0 + 10);
+    q.turnAwaited(other.ref, true);
+    expect(q.lookup(other.ref)?.state).toBe('starting');
+    q.turnAwaited(other.ref, false);
+    expect(q.lookup(other.ref)?.state).toBe('delivered');
   });
 });

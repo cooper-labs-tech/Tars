@@ -1756,21 +1756,32 @@ export function replayQueuedItem(item: QueuedTask): void {
  * The turn a queued message opens once it went in (2.0.7): its id is followed to that turn's task, to its end and its
  * answer, as a delegation's is, instead of reading `delivered` for ever (an orchestrator's report of 19/11: a message
  * sent with mode 'queue' was "that agent's work now", its answer never kept). The turn whose prompt carries the id
- * its line named, or, for a line that named none, the first turn that carries no other. Watched until then, or for
- * TURN_START_MAX_MS; the returned function stops it.
+ * its line named, or, for a line that named none and for a session started on it (a launch's prompt names none), the
+ * first turn that carries no other. Watched from before it is typed, since the turn's UserPromptSubmit comes some
+ * 40 ms after its Enter; once it went into a terminal whose turns Tars sees, it reads `starting` until that turn
+ * begins (the E2E's new interface read `delivered` 300 ms before it), and `delivered` again if none begins within
+ * TURN_START_MAX_MS.
  */
-function followDeliveredTurn(agentId: string, ref: string, lineRef: string | undefined): () => void {
-  let unwatch: () => void = () => undefined;
-  const timer = setTimeout(() => unwatch(), TURN_START_MAX_MS);
+function followDeliveredTurn(agent: AgentStatus, ref: string, lineRef: string | undefined): { delivered(how: 'typed' | 'started'): void; stop(): void } {
+  let line = lineRef;
+  let stop: () => void = () => undefined;
+  const timer = setTimeout(() => { oneTaskQueue.turnAwaited(ref, false); stop(); }, TURN_START_MAX_MS);
   const stopWatching = watchTurns((turnAgentId, taskId, prompt) => {
-    if (turnAgentId !== agentId) return;
+    if (turnAgentId !== agent.id) return;
     const tagged = taskOfPrompt(prompt);
-    if (lineRef ? tagged?.ref !== lineRef : !!tagged) return;
+    if (line ? tagged?.ref !== line : !!tagged) return;
     oneTaskQueue.named(ref, taskId);
-    unwatch();
+    stop();
   });
-  unwatch = () => { clearTimeout(timer); stopWatching(); };
-  return unwatch;
+  stop = () => { clearTimeout(timer); stopWatching(); };
+  return {
+    delivered(how) {
+      if (how === 'started') line = undefined;
+      if (turnsHeard(agent)) oneTaskQueue.turnAwaited(ref, true);
+      else stop();
+    },
+    stop: () => stop(),
+  };
 }
 
 function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: RouteContext, ref: string, taskRef: string | undefined): void {
@@ -1779,7 +1790,7 @@ function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: Route
     announceTask(agent.id);
     if (!taken) { dropped(agent, taskRef); return; }
     // Watched before it is typed: the turn's UserPromptSubmit comes some 40 ms after its Enter.
-    const stopFollowing = followDeliveredTurn(agent.id, queued.ref, taskRef ?? opts.taskId);
+    const follow = followDeliveredTurn(agent, queued.ref, taskRef ?? opts.taskId);
     // At the agent's rest, as a delegation (runInTerminal): a task its background work keeps open ends now, and this
     // message's turn opens its own.
     liveTaskLedger()?.endedForDelegation(agent.id);
@@ -1793,9 +1804,11 @@ function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: Route
       if (settled) return;
       settled = true;
       oneTaskQueue.runEnded(agent.id);
-      if (how) oneTaskQueue.delivered(queued.ref, how);
-      else {
-        stopFollowing();
+      if (how) {
+        oneTaskQueue.delivered(queued.ref, how);
+        follow.delivered(how);
+      } else {
+        follow.stop();
         oneTaskQueue.notStarted(queued.ref, why ?? 'it could not be handed over');
       }
     };

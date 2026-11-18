@@ -81,7 +81,7 @@ export interface QueueSnapshot {
  */
 type Delivered = { how: 'typed' | 'started'; at: number; note?: string };
 
-type Taken = { task: QueuedTask; taskId?: string; error?: string; delivered?: Delivered };
+type Taken = { task: QueuedTask; taskId?: string; error?: string; delivered?: Delivered; awaitsTurn?: boolean };
 
 export interface OneTaskQueue {
   /** When this queue began, with this run of Tars: a task queued before it is gone. */
@@ -137,10 +137,16 @@ export interface OneTaskQueue {
    */
   delivered(ref: string, how: Delivered['how'], note?: string, now?: number): void;
   /**
-   * A task delivered into the agent's terminal opened this turn, the ledger's task `taskId` (2.0.7): followed by its
-   * id from now, to its end and its answer, as a delegation's is. Once; never for one that failed or never left the line.
+   * A task taken from the line into the agent's terminal opened this turn, the ledger's task `taskId` (2.0.7): followed
+   * by its id from now, to its end and its answer, as a delegation's is. Once; never for one that failed or never left
+   * the line.
    */
   named(ref: string, taskId: string): void;
+  /**
+   * A task delivered into a terminal whose turns Tars sees: its turn is awaited (true), and it reads `starting`, going
+   * in, until that turn is named, or until it is given up on (false), when it reads `delivered` again (2.0.7).
+   */
+  turnAwaited(ref: string, awaited: boolean): void;
   queued(agentId: string): QueuedTask[];
   /** Out of the line, never to start: still known by its ref, as failed with `why`, to whoever follows it. */
   cancel(ref: string, why?: string): QueuedTask | undefined;
@@ -270,6 +276,7 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
       const was = taken.get(ref);
       if (!was) return undefined;
       if (was.taskId) return { state: 'started', task: was.task, taskId: was.taskId };
+      if (was.delivered && was.awaitsTurn) return { state: 'starting', task: was.task };
       if (was.delivered) return { state: 'delivered', task: was.task, how: was.delivered.how, at: was.delivered.at, ...(was.delivered.note ? { note: was.delivered.note } : {}) };
       if (was.error !== undefined) return { state: 'failed', task: was.task, error: was.error };
       return { state: 'starting', task: was.task };
@@ -284,7 +291,12 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
     },
     named(ref, taskId) {
       const was = taken.get(ref);
-      if (was && was.delivered && !was.taskId && was.error === undefined) was.taskId = taskId;
+      // Taken and not failed: its turn may begin before its delivery is recorded (a session started on it).
+      if (was && !was.taskId && was.error === undefined) was.taskId = taskId;
+    },
+    turnAwaited(ref, awaited) {
+      const was = taken.get(ref);
+      if (was && was.delivered && !was.taskId) was.awaitsTurn = awaited;
     },
     queued(agentId) {
       return [...lineOf(agentId)];

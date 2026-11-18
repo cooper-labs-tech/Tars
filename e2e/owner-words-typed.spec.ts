@@ -116,10 +116,13 @@ for (const newInterface of [false, true]) {
       const page = await app.firstWindow();
       await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI);
-      const tokens = await app.evaluate((_e, { dist }) => {
-        const mint = process.mainModule!.require(`${dist}/core/agent-tokens.js`).mintAgentToken as (id: string) => string;
-        return { 'lead-a': mint('lead-a'), 'dev-a': mint('dev-a'), 'lead-b': mint('lead-b') };
-      }, { dist });
+      // Each agent's own token, as its terminal's CLI holds it: read once the sessions are up, since a terminal's start
+      // mints its agent's token anew, and a token minted before it no longer opens anything.
+      const tokens: Record<'lead-a' | 'dev-a' | 'lead-b', string> = { 'lead-a': '', 'dev-a': '', 'lead-b': '' };
+      const readTokens = async () => Object.assign(tokens, await app.evaluate((_e, { dist }) => {
+        const own = process.mainModule!.require(`${dist}/core/agent-tokens.js`).terminalTokenOf as (id: string) => string | undefined;
+        return { 'lead-a': own('lead-a') ?? '', 'dev-a': own('dev-a') ?? '', 'lead-b': own('lead-b') ?? '' };
+      }, { dist }));
       const api = async (as: keyof typeof tokens, method: string, route: string, body?: unknown) => {
         const res = await fetch(`http://127.0.0.1:${port}${route}`, {
           method, headers: { 'content-type': 'application/json', authorization: `Bearer ${tokens[as]}` }, ...(body ? { body: JSON.stringify(body) } : {}),
@@ -143,6 +146,8 @@ for (const newInterface of [false, true]) {
       const started = () => new Set((lines(path.join(home, 'starts.jsonl')) as Array<{ id: string }>).map((s) => s.id));
       await until('three sessions up', () => ['lead-a', 'dev-a', 'lead-b'].every((id) => started().has(id)), 60_000);
       await new Promise((r) => setTimeout(r, 1500));
+      await readTokens();
+      seen.tokensRead = Object.fromEntries(Object.entries(tokens).map(([id, t]) => [id, t.length > 0]));
 
       await send('lead-a', [...keys(TYPED), '\r']);
       await submitted('lead-a', 'TYPED-1');
@@ -177,7 +182,7 @@ for (const newInterface of [false, true]) {
       expect.soft(words.some((w) => /PASTED|UNBRACKETED|REPORTED|compact|TYPED-2|TYPED-W/.test(w.text))).toBe(false);
       expect.soft(relay?.status).toBe(200);
       expect.soft(received).toMatch(new RegExp(`^Message from Tars: the owner's words of .*, via terminal, relayed by agent "Alpha Lead" \\("lead-a"\\), verified by Tars \\(words ${typed?.id ?? 'ow-none'}\\):`));
-      expect.soft(received.endsWith(TYPED)).toBe(true);
+      expect.soft(received.trimEnd().endsWith(TYPED)).toBe(true);
     } finally {
       recordValues(seen);
       await app.close().catch(() => { /* gone */ });
