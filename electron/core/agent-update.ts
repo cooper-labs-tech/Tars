@@ -63,6 +63,8 @@ export interface AgentUpdateOptions {
   makeWorktree?: (projectPath: string, branchName: string) => Promise<{ worktreePath: string; branchName: string } | { error: string }>;
   /** Refuse a change that needs a new terminal while a CLI runs or starts in the agent's, rather than end it. */
   endsNoCli?: boolean;
+  /** The settings an endpoint is checked against: the app's own, as the caller holds them (else read from disk). */
+  settings?: AppSettings;
 }
 
 export type AgentUpdateResult =
@@ -132,7 +134,7 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   // (services/inference-endpoints.ts): approved, one of the four harnesses, a model it lists.
   const endpointAfter = params.endpointId === undefined ? agent.endpointId : params.endpointId ?? undefined;
   if (params.endpointId !== undefined || (endpointAfter && (params.provider !== undefined || params.model !== undefined))) {
-    const wrong = validateEndpointChoice(readAppSettingsFromDisk() as AppSettings, {
+    const wrong = validateEndpointChoice(opts.settings ?? (readAppSettingsFromDisk() as AppSettings), {
       endpointId: endpointAfter, provider: params.provider ?? agent.provider, model: params.model === undefined ? agent.model : params.model,
     });
     if (wrong) return { success: false, error: `Not saved: ${wrong}` };

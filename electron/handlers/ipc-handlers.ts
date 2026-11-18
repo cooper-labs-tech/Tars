@@ -1069,7 +1069,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   // shares. The window ends the terminal a new provider, CLI path, project or worktree needs, whatever runs in
   // it: the user who saves sees what that cuts.
   ipcMain.handle('agent:update', async (_event, params: AgentUpdate) => {
-    const result = await updateAgent(params, { makeWorktree: makeAgentWorktree });
+    const result = await updateAgent(params, { makeWorktree: makeAgentWorktree, settings: deps.getAppSettings() });
     if (!result.success) return { success: false, error: result.error };
     // An orchestrator's chats run on its configuration: each runner takes it,
     // and a live one restarts on what changed (services/chat-runners.ts).
