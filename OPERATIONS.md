@@ -389,6 +389,25 @@ not be re-baselining thirty.
 The HTML report is written to `e2e/report/` (gitignored); open `e2e/report/index.html`.
 Traces are `retain-on-failure`.
 
+### Harness conformance: `e2e/harness-conformance.spec.ts`
+
+One run per harness, the same steps for each, so a harness ships only once delegate_task, task_status and
+get_agent_output behave on it as on the others. A real binary of the harness runs its TUI in an agent's terminal, on
+the stand-in endpoint of `e2e/stand-in-openai-endpoint.mjs` through Tars's endpoint proxy: loopback, a dummy key, a
+scripted tool call, no network and no token spent. The steps: it starts; `delegate_task` returns its own final answer
+after a real tool round on the wire; `task_status` and `get_agent_output` give the same answer; Tars quits and starts
+again and the agent's first start continues its session, then answers a second task.
+
+```bash
+npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
+TARS_HARNESS_KIMI_CODE=/path/to/kimi npx playwright test e2e/harness-conformance.spec.ts -g kimi-code
+TARS_HARNESS_CODEX=/path/to/codex TARS_HARNESS_PI=/path/to/pi npx playwright test e2e/harness-conformance.spec.ts
+```
+
+Opt-in: a harness whose `TARS_HARNESS_<ID>` names no binary is skipped and says so. Install each binary pinned, from
+its own registry or release, into a folder of its own, never over the user's own CLI. Each run leaves `values.json`,
+`endpoint-requests.jsonl`, the app's logs and `reproduce.txt` in its output folder.
+
 ### The CLI matrix: `npm run e2e:matrix`
 
 ```bash

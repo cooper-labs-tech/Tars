@@ -62,7 +62,7 @@ orchestrator agent's CLI
 - **The server decides message-vs-spawn.** `POST /api/agents/:id/dispatch` makes that call under the main process's single-threaded event loop. The earlier GET-status-then-POST pattern raced and could type into a dead PTY.
 - **Session ownership is explicit.** A dispatch tombstones the old session id; only the session registered by `SessionStart` may drive status. Hooks of a killed PTY survive the kill by seconds and would otherwise flip the new task's status.
 - **Providers are a strategy interface, not conditionals.** 19 methods on `CLIProvider`; 21 implementations. Adding a vendor is a file in `electron/providers/` plus one line in the registry.
-- **Thirteen of the twenty-one providers are the `claude` binary re-pointed.** `ANTHROPIC_BASE_URL` + the key as `ANTHROPIC_AUTH_TOKEN` in the PTY environment, with `ANTHROPIC_API_KEY` blank (`keyProviderEnv`), either at the vendor's Anthropic-compatible endpoint or through OpenRouter. Never as `ANTHROPIC_API_KEY`: an interactive Claude Code asks before it uses an API key it finds in its environment, and nothing answers that in an agent's terminal (measured on 2.1.302; SECURITY.md, §5). They inherit Claude Code's hooks, skills and MCP config for free.
+- **Thirteen of the twenty-two providers are the `claude` binary re-pointed.** `ANTHROPIC_BASE_URL` + the key as `ANTHROPIC_AUTH_TOKEN` in the PTY environment, with `ANTHROPIC_API_KEY` blank (`keyProviderEnv`), either at the vendor's Anthropic-compatible endpoint or through OpenRouter. Never as `ANTHROPIC_API_KEY`: an interactive Claude Code asks before it uses an API key it finds in its environment, and nothing answers that in an agent's terminal (measured on 2.1.302; SECURITY.md, §5). They inherit Claude Code's hooks, skills and MCP config for free.
 - **Model list and prices come from models.dev, not from the source.** A model released today is selectable after the next 6-hour refresh, with no release.
 - **Memory is federated and provider-agnostic.** Six sources behind one hub, delivered two ways: a bundled MCP server every provider registers, and prompt injection for the CLIs with no session hook.
 - **Tars has no scheduler.** Cron jobs, the task board and long-running automation live in the user's Hermes gateway; Tars is a client and exposes an inbound webhook.
@@ -144,7 +144,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 
 `safeEffort()` is exported from the same module and validates reasoning effort against `{low, medium, high, xhigh, max}` before it lands unquoted in a shell string. The value arrives over IPC, so it is validated at the point of use, not trusted from the caller. `effortFlag()` turns it into ` --effort <level>` for the fourteen providers on the claude binary, medium included: without the flag Claude Code starts at the effort it last saved for that model from any terminal (`/effort` writes `modelSettings.<model>.effortLevel` into `~/.claude/settings.json`), not at medium. An agent with no effort gets no flag, which is the one case that means the CLI's own.
 
-### The registry (21 providers)
+### The registry (22 providers)
 
 | id | Display name | Binary | Config dir | Reaches the model via |
 |---|---|---|---|---|
@@ -156,6 +156,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `pi` | Pi Terminal | `pi` | `~/.pi` | native |
 | `amp` | Amp | `amp` | `~/.config/amp` | native |
 | `qwen-code` | Qwen Code | `qwen` | `~/.qwen` | native, on the models of the user's own `~/.qwen/settings.json` (2.0.4, below) |
+| `kimi-code` | Kimi Code | `kimi` | `$KIMI_CODE_HOME`, else `~/.kimi-code` | native, on the model of the user's own `config.toml`, or an inference endpoint (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
@@ -176,8 +177,8 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 
 | Capability | Value per provider |
 |---|---|
-| Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini` and `qwen-code`; `false` for `codex`, `grok`, `opencode`, `pi` and `amp`. codex's and pi's turns are read from their own session log instead (`turnsReported`, below) |
-| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi` |
+| Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini` and `qwen-code`; `false` for `codex`, `grok`, `opencode`, `pi`, `kimi-code` and `amp`. codex's, pi's and Kimi Code's turns are read from their own session log instead (`turnsReported`, below) |
+| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi`, `kimi-code` (`mcp.json` of its home) |
 | Skills | `true` everywhere except `pi`, which has packages rather than skills |
 | Skill directories | claude family: `~/.claude/skills` + `~/.agents/skills`; `gemini`: `~/.gemini/skills`; `grok`: `~/.grok/skills` + `~/.agents/skills`; `codex`, `opencode`: `~/.agents/skills`; `pi`: `~/.pi/packages` |
 | Memory base path | `<configDir>/projects` for the claude-binary family; `codex`, `gemini`, `grok`, `opencode` and `pi` return `configDir` itself, a placeholder; they have no Claude-like memory tree |
@@ -213,11 +214,22 @@ Measured on codex-cli 0.163.0 (standalone install, ChatGPT account), the version
 - **The agent's folder is trusted before codex starts** (`ensureCodexProjectTrusted`): in a folder its config does not trust, codex asks "Trust this folder?" and waits for good. `[projects."<real path>"] trust_level = "trusted"` is written once; a choice already there is left, and the home folder or `/` is refused, as for Claude Code, on Windows in any spelling of them (a letter's case, `/`, `\\?\`). config.toml is read before it is written, and only its absence reads as none; it is parsed as TOML (smol-toml), so a table under any writing of the folder's key (codex writes a key holding a backslash or a double quote as a literal string, every path on Windows) or a dotted key under `[projects]` is the folder's, and nothing is added to a file that is not TOML, or would not be after (a `projects` written inline): a second table for one key makes codex refuse its whole config. It is replaced whole, never written in place (`updateSharedTextSync`).
 - **Its turns** (`services/codex-sessions.ts`). codex writes each session to `$CODEX_HOME/sessions/<y>/<m>/<d>/rollout-*.jsonl`. A codex terminal's launch is noted (spawnAgentPty); a session begun after it in that folder is the agent's only on evidence that it is: its first message carries the agent's identity line (`[Tars: you are agent "<name>" (id <id>)`, which every session Tars begins carries, spawnAgentSession's header or, for a CLI with no bootstrap, the first prompt or the first message typed in, `identityLine`), the agent's own codex holds its rollout open (codex holds it from its first line to its end, measured on 0.163; lsof on macOS, `/proc/<pid>/fd` on Linux, `platform/open-files.ts`, asked once per session, and again when ps or lsof failed or timed out, six times at most, 1 to 16 s apart, a failure never binding it), or it is a fork of the agent's own session that its launch began (`forked_from_id`). A first message naming another agent is nobody's, and so are, on Windows, where no tool lists a process's files, a session that names nobody, and the guardian of the automatic review, a subagent. A new rollout is read from its head on, each byte once, up to its first message (1 MiB at most), never whole at each tick, and its lines are cut from its bytes, so a character codex wrote in two pieces is read whole. Its lines are posted, as the agent's terminal with its own token, as Claude Code's hooks post: SessionStart, UserPromptSubmit with the task's text, the answer and Stop at `task_complete`, StopFailure with codex's error. So `wait_for_agent`, the one-task queue and the room see codex end its turns (`hasEndOfTurn`), and `delegate_task` follows a codex agent's task to its turn's end and answers with codex's final message, in full, without tokens or cost (`turnsHeard`, `agent-routes.ts`). A turn interrupted with Esc (`turn_aborted`, reason `interrupted`, and no task_complete after it) stops the agent's task as interrupted before its rest is posted (`turnInterrupted`, `task-watch.ts`): a delegated task says so, and the agent's next task is not held behind a turn that is over.
 - **Its own session after a restart, or a wake** (a codex agent is permanent too). The session Tars registered from its rollout is kept as `resumableSessionId`, and the first start of a run, or a wake, is `codex resume <id>` (`resolveResumeSessionId` finds the rollout by its id, under the day it began). Measured on 0.163: `codex resume` continues the session in its own rollout, with its conversation, and writes a line to it at once; `codex fork <id>`, for a restart that applies new settings, begins a new session that names the one it forks (`forked_from_id`); a codex started with no prompt writes no rollout before its first turn. The session watch binds a resumed session once its rollout grows past where it was at the launch, and registers it as a `resume`; a launch is waited on for as long as its codex runs, so a first task typed hours after Start is followed too. A codex agent at rest is put to sleep like the others.
+### Kimi Code (19/11): `providers/kimi-code-provider.ts`, `providers/kimi-cli.ts`, `services/kimi-sessions.ts`
+
+The binary `kimi` (MoonshotAI/kimi-code, MIT), measured on 2.6.3 in a terminal against a loopback endpoint.
+
+- **Launch**: its TUI takes no task on its command line, so the task is typed in once it runs (`taskTypedAfterLaunch`), as amp's. `--auto` (its Never Ask mode) in auto and bypass, `--plan` in plan, nothing in normal. `-m <alias>` for a model of the user's own config. `--add-dir` for the secondary folder and the template's folders, through the same guard as every CLI (`handedSecondaryFolder`).
+- **Folder trust**: kimi asks "Trust this folder?" at its first start in a folder. `KIMI_CODE_TRUST_WORKSPACE=1` in the terminal's environment trusts it for that process, and nothing is written.
+- **MCP**: Tars's servers join the user's own in `mcp.json` of its home; kimi starts each with its whole environment, the agent's token in it (measured).
+- **Turns and answers**: read from its session log, `sessions/<workspace>/<session>/agents/main/wire.jsonl`, and posted as the hooks would (`services/kimi-sessions.ts`): `turn.prompt` is the prompt, the `content.part` text parts are the answer (its report, `reportOf`), `turn.ended` with `completed` ends the turn, `cancelled` (an Esc) interrupts it, any other reason is a failure that says it. The user's own home is the one kimi runs on (its login, its providers), so a session is the agent's on evidence only: its lock (`locks/sessions/<id>.lock`) names a process of the agent's terminal (`ps` on macOS and Linux; on Windows the terminal's own process, which is the CLI there), or its first prompt carries the agent's identity line. A session there before the launch is read from where it stood.
+- **Resume**: `--session <id>` when kimi still lists the session in `session_index.jsonl` with its log on disk (`utils/resume-session.ts`); an id not of kimi's form (`session_<uuid>`) never reaches the command line.
+- **Models**: only the user's own default is offered; no model of any family is assumed.
+
 - **An approval codex waits on** is read from the screen, by its dialog's title and answers (`codexDialogOnScreen`): in normal mode codex asks before a command it runs outside its sandbox, and before each call of an MCP server's tool, in a form of its own (measured: `Allow the probe MCP server to run tool "ping"?`, then Allow, Allow for this session, Always allow, Cancel). `waiting` on a permission while it is shown, with that title, `running` once it is gone, and no writer types into it: Enter would allow the call. In auto, codex's automatic review answered the same call by itself (measured with Tars's send_message).
 
 ### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
 
-An agent running codex, pi, qwen-code or opencode can run on an OpenAI-compatible inference endpoint, chosen per
+An agent running codex, pi, qwen-code, opencode or kimi-code can run on an OpenAI-compatible inference endpoint, chosen per
 agent (`endpointId`, with `model` one of the endpoint's own `/v1/models`).
 
 **The proxy.** Tars writes everything the harness needs, through one adapter per harness (`endpoint-harness.ts`).
@@ -229,6 +241,8 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   `OPENAI_API_KEY`.
 - **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
+- **kimi-code 2.6.3:** the whole model from its environment, `KIMI_MODEL_NAME`, `KIMI_MODEL_PROVIDER_TYPE=openai`,
+  `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written.
 
 The proxy:
 - swaps the token for the endpoint's key;
