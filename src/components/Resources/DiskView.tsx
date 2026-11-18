@@ -17,6 +17,11 @@ const KINDS: Record<JanitorItem['kind'], string> = {
   'docker-image': 'Docker images',
   'docker-vm-trim': 'The Docker VM',
   'agent-tmp': 'Temporary folders of removed agents',
+  // 2.0.7, what agents leave behind (services/disk-report.ts).
+  'session-scratchpad': 'Folders of ended agent sessions',
+  'agent-tmp-entry': "Old files in agents' temporary folders",
+  'release-folder': 'Release builds',
+  'worktree-node-modules': 'node_modules of idle worktrees',
 };
 const ORDER = Object.keys(KINDS) as JanitorItem['kind'][];
 const INK = { deleted: 'text-status-running', kept: 'text-status-waiting', failed: 'text-status-error' } as const;
