@@ -50,10 +50,12 @@
       hardening win.
 
       The notarize step is wired into the release build (scripts/mac-signing.mjs,
-      package.json build.mac.notarize). TODO, on the first Mac that has the
-      Developer ID identity: do a signed `--dir` build with this key removed and
-      confirm better-sqlite3 and node-pty still load. If a nested binary fails,
-      fix that binary's signature rather than restoring this entitlement.
+      package.json build.mac.notarize). Whether this key, and
+      allow-unsigned-executable-memory above, are still needed is measured as
+      step 2 of the first signed build (OPERATIONS.md, "The first signed
+      build"): a signed build without each, node-pty and better-sqlite3 loaded.
+      The result is written here. If a nested binary fails, fix that binary's
+      signature rather than restoring this entitlement.
     -->
     <key>com.apple.security.cs.disable-library-validation</key>
     <true/>

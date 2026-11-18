@@ -642,15 +642,18 @@ repository creates or changes a credential or a keychain item):
 1. a **Developer ID Application** certificate of the team's Apple Developer account, with its
    private key, in the login keychain: `security find-identity -v -p codesigning` lists it.
    With several, `CSC_NAME` names the one that signs (its hash, or a part of its name);
-2. notary credentials: the notarytool keychain profile named `Tars`, stored once with
+2. the notarytool keychain profile named `Tars`, stored once, which asks for the app-specific
+   password at a prompt (never `--password`: it would stay in the shell's history and show in `ps`
+   while it runs):
 
    ```bash
-   xcrun notarytool store-credentials Tars \
-     --apple-id <apple-id> --team-id <team-id> --password <app-specific-password>
+   xcrun notarytool store-credentials Tars --apple-id <apple-id> --team-id <team-id>
    ```
 
-   or, instead, `APPLE_ID`, `APPLE_APP_PASSWORD` and `APPLE_TEAM_ID`, all three, in the shell
-   that runs the release.
+   The profile is the only way. `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` and
+   `APPLE_APP_SPECIFIC_PASSWORD` are refused by the preflight: `@electron/notarize` 3.1.1 would put
+   the password on `notarytool`'s command line (`--password`), readable through `ps` by every
+   process of the user, every agent included, for the minutes of each notarization.
 
 `node scripts/mac-signing.mjs check` says whether both are there, without building anything.
 
@@ -665,17 +668,17 @@ com.apple.security.cs.allow-unsigned-executable-memory true
 com.apple.security.cs.disable-library-validation       true
 ```
 
-V8 needs JIT and unsigned executable memory. Library validation stays disabled until a signed
-build has shown `better-sqlite3` and `node-pty` load without it (the comment in the plist says how
-to try). `allow-dyld-environment-variables` was removed on purpose (the plist says why).
+V8 needs JIT. `allow-unsigned-executable-memory` and `disable-library-validation` stay until the
+first signed build has measured them (below). `allow-dyld-environment-variables` was removed on
+purpose (the plist says why).
 
 How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`):
 
 - **before anything is built**, the preflight: an identity and notary credentials that answer
   (`notarytool history --keychain-profile Tars`), or the release stops there. It hands the build
-  `CSC_NAME` and the variables electron-builder's notarization reads (`APPLE_KEYCHAIN_PROFILE`, or
-  `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` from `APPLE_APP_PASSWORD`, and `APPLE_TEAM_ID`), and
-  no `APPLE_API_KEY` that would win over them;
+  `CSC_NAME` and `APPLE_KEYCHAIN_PROFILE`, and none of what would sign or notarize otherwise: no
+  `APPLE_ID` or password, no `APPLE_API_KEY` (it would win over the profile), no `CSC_LINK` or
+  `CSC_KEY_PASSWORD` (a certificate file instead of the identity chosen);
 - **the build**: electron-builder signs every Mach-O of the app (Electron's frameworks and
   helpers, node-pty's `pty.node` and `spawn-helper`, better-sqlite3's and sharp's `.node` files,
   in `app.asar.unpacked`) with the hardened runtime and a secure timestamp, then notarizes and
@@ -688,14 +691,61 @@ How a release is signed (`scripts/mac-signing.mjs`, called by `npm run release`)
   accepted as `source=Notarized Developer ID`, `spctl -t open --context
   context:primary-signature` on the dmg likewise, `xcrun stapler validate` on both, and every
   Mach-O signed with a Developer ID Application identity, a secure timestamp and the hardened
-  runtime. One failure stops the release before `gh release create`. The same checks run on any
-  dmg with `node scripts/mac-signing.mjs verify <dmg>` (2.0.6's: 31 failures; a dmg holding a
-  notarized Electron app: the app passes, the unsigned dmg does not).
+  runtime. Every signature is pinned to the Team ID of the identity that signed, read at run time
+  from it (never written in the repository): another team's Developer ID fails. One failure stops
+  the release before `gh release create`. The same checks run on any dmg with `node
+  scripts/mac-signing.mjs verify <dmg> [--team <Team ID>]`, the team defaulting to the keychain's
+  identity's (2.0.6's: 31 failures; a dmg holding a notarized Electron app: the app passes, the
+  unsigned dmg does not).
 
 `npm run electron:build` alone (outside `npm run release`) also fails without an identity; with
 one and no notary variables, electron-builder signs and skips notarization with a warning, and
 leaves the dmg unsigned: only `npm run release` makes a distributable build. `npm run
 electron:pack` (the sandbox) stays unsigned on purpose (`-c.mac.identity=null`).
+
+#### The first signed build
+
+Once `node scripts/mac-signing.mjs check` passes, before the first signed version is published,
+and nothing published on the way (no `npm run release`, no `gh release`):
+
+1. `npm run electron:build` with the variables `check` names (`CSC_NAME`, `APPLE_KEYCHAIN_PROFILE`);
+   then sign, notarize and staple the dmg as step 2b does, and `node scripts/mac-signing.mjs
+   verify release/Tars-<version>-arm64.dmg`: ALL PASS, or the release is not cut;
+2. **the entitlements, measured.** Rebuild once with `com.apple.security.cs.disable-library-validation`
+   removed from `build/entitlements.mac.plist`, open the quarantined copy, start an agent (node-pty)
+   and open the Vault (better-sqlite3): if both load, the key goes for good. Then the same with
+   `com.apple.security.cs.allow-unsigned-executable-memory` removed (with `allow-jit` kept): the app
+   must start and render. A key that is still needed stays, with what failed written next to it in
+   the plist; a nested binary that fails is fixed in its signature, not by restoring a key;
+3. **the update path, measured**, below: install the previous version, update it in the app from the
+   signed build served locally (a generic feed with `latest-mac.yml` and the zip), and write what it
+   shows.
+
+#### Updating a 2.0.x Mac to the first signed version
+
+`electron-updater` hands the downloaded zip to Squirrel.Mac, which swaps it in only if it satisfies
+the running app's designated requirement (`SecStaticCodeCheckValidityWithErrors`, nested code and
+strict). An ad hoc build's requirement is its own cdhash, `cdhash H"..."`, which no other build can
+satisfy. Measured on 18/11 with those same calls (`apple-signing-runs/squirrel-check.swift` in the
+reports, on 2.0.5 from GitHub, the installed 2.0.6 and a notarized app):
+
+| running app | update | Squirrel's check |
+|---|---|---|
+| 2.0.5 (ad hoc) | 2.0.6 (ad hoc) | refused, -67050 (requirement not satisfied) |
+| 2.0.6 (ad hoc) | the same 2.0.6 | refused, -67056 (no sealed resources) |
+| 2.0.6 (ad hoc) | a notarized Developer ID app | refused, -67050 |
+| a notarized app | the same app | accepted (its requirement is its identifier and team) |
+
+So no in-app update has ever installed on macOS for an ad hoc build, and 2.0.6 or older will not
+install the first signed version either. What the window of 2.0.6 does: the download finishes,
+`update-downloaded` is sent before Squirrel has checked anything, the panel says "Restart to Apply";
+Squirrel's refusal (`Code signature at URL ... did not pass validation`) only reaches the main
+process's log; on Restart, nothing happens, and after 8 s the panel says the update could not be
+installed and offers **Download it instead**, which opens the release (since 1.6.10). That sequence
+is read in the code (`update-checker.ts`, `electron-updater`'s `MacUpdater`, `ClientLayout.tsx`),
+not run live: step 3 above runs it. No loop, no silent failure: one wasted click, then the dmg. The release notes say it (`NOTES_FOOTER`: download
+the `.dmg` once and replace Tars in Applications). From the first signed version on, an update is
+checked against the team's requirement, which the next signed build satisfies (the last row).
 
 ### The two update paths
 

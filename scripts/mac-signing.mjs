@@ -4,24 +4,27 @@
  * that a copy downloaded through Safari (quarantined) opens without Gatekeeper's "damaged" or "could not verify".
  * `npm run release` (scripts/release.mjs) calls it in three places:
  *
- *   preflight  before anything is built: a valid Developer ID Application identity in the keychain, and notary
- *              credentials that answer (the keychain profile "Tars", or APPLE_ID, APPLE_APP_PASSWORD and
- *              APPLE_TEAM_ID). Either missing stops the release there: a mac release is never signed ad hoc.
- *              It hands the build the variables electron-builder reads: CSC_NAME, and APPLE_KEYCHAIN_PROFILE or
- *              APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and APPLE_TEAM_ID. electron-builder then signs every Mach-O
- *              of the app with the hardened runtime and a secure timestamp (@electron/osx-sign), and notarizes and
- *              staples the app (mac.notarize) before it makes the dmg and the zip.
+ *   preflight  before anything is built: a valid Developer ID Application identity in the keychain, and the
+ *              notarytool keychain profile "Tars", answering. Either missing stops the release there: a mac
+ *              release is never signed ad hoc. The Apple ID variables are refused: @electron/notarize would put
+ *              the app-specific password on notarytool's command line, which every process of the user reads.
+ *              It hands the build the variables electron-builder reads: CSC_NAME and APPLE_KEYCHAIN_PROFILE.
+ *              electron-builder then signs every Mach-O of the app with the hardened runtime and a secure
+ *              timestamp (@electron/osx-sign), and notarizes and staples the app (mac.notarize) before it makes
+ *              the dmg and the zip.
  *   finishDmg  after the build: the dmg signed (with a secure timestamp, which electron-builder's own dmg signing
  *              does not give), notarized and stapled, then its block map and its entry in latest-mac.yml
  *              recomputed, since the staple changes its bytes.
  *   verifyQuarantined  before anything is published: the dmg and the app it holds, copied and quarantined as Safari
  *              does, judged as Gatekeeper judges a download (codesign --verify --deep --strict, spctl as
- *              "Notarized Developer ID", stapler validate), and every Mach-O inside signed with a Developer ID
- *              Application identity, a secure timestamp and the hardened runtime.
+ *              "Notarized Developer ID" of the signing identity's team, stapler validate), and every Mach-O
+ *              inside signed with a Developer ID Application identity of that team, a secure timestamp and the
+ *              hardened runtime. The Team ID is read at run time from the identity, never written here.
  *
- * The credentials are the owner's alone: nothing here creates or changes a keychain item, and no Apple ID,
- * password or team ID is printed. `node scripts/mac-signing.mjs check` runs the preflight on its own;
- * `node scripts/mac-signing.mjs verify <dmg>` runs the checks on a dmg.
+ * The credentials are the owner's alone: nothing here creates or changes a keychain item, and no Apple ID or
+ * password is printed. `node scripts/mac-signing.mjs check` runs the preflight on its own;
+ * `node scripts/mac-signing.mjs verify <dmg> [--team <Team ID>]` runs the checks on a dmg (the team defaults to the
+ * keychain's Developer ID Application identity's).
  */
 import { closeSync, existsSync, mkdtempSync, openSync, readdirSync, readFileSync, readSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -36,10 +39,11 @@ export class Refusal extends Error {}
 /** The notarytool keychain profile the owner stores once (`xcrun notarytool store-credentials Tars`). */
 export const NOTARY_PROFILE = 'Tars';
 
-const ID_TRIO = ['APPLE_ID', 'APPLE_APP_PASSWORD', 'APPLE_TEAM_ID'];
+/** The variables that would hand notarytool a password on its command line (the Audit's M1 on #591). */
+const PASSWORD_VARIABLES = ['APPLE_ID', 'APPLE_APP_PASSWORD', 'APPLE_TEAM_ID', 'APPLE_APP_SPECIFIC_PASSWORD'];
 
 const OWNER_IDENTITY = 'the owner creates a "Developer ID Application" certificate in the team\'s Apple Developer account and installs it, with its private key, in the login keychain of this Mac';
-const OWNER_PROFILE = `the owner stores it once with \`xcrun notarytool store-credentials ${NOTARY_PROFILE}\`, or sets APPLE_ID, APPLE_APP_PASSWORD and APPLE_TEAM_ID`;
+const OWNER_PROFILE = `the owner stores it once with \`xcrun notarytool store-credentials ${NOTARY_PROFILE} --apple-id <apple-id> --team-id <team-id>\`, which asks for the app-specific password at a prompt`;
 
 /**
  * The valid "Developer ID Application" identities in `security find-identity -v -p codesigning`'s output. A line
@@ -48,8 +52,8 @@ const OWNER_PROFILE = `the owner stores it once with \`xcrun notarytool store-cr
 export function parseIdentities(text) {
   const found = [];
   for (const line of String(text).split('\n')) {
-    const m = /^\s*\d+\)\s+([0-9A-F]{40})\s+"(Developer ID Application: [^"]+)"\s*$/.exec(line);
-    if (m) found.push({ hash: m[1], name: m[2] });
+    const m = /^\s*\d+\)\s+([0-9A-F]{40})\s+"(Developer ID Application: [^"]+ \(([0-9A-Z]{10})\))"\s*$/.exec(line);
+    if (m) found.push({ hash: m[1], name: m[2], team: m[3] });
   }
   return found;
 }
@@ -70,37 +74,38 @@ export function chooseIdentity(identities, cscName) {
   return identities[0];
 }
 
-/** The keychain profile, or the three variables together. Never a value in a refusal. */
+/**
+ * The keychain profile, and nothing else. With an Apple ID and its app-specific password, @electron/notarize 3.1.1
+ * (lib/notarytool.js authorizationArgs) runs `notarytool submit ... --password <password> --wait`: readable through
+ * ps by every process of the user, every agent included, for the minutes of each notarization. Never a value in the
+ * refusal.
+ */
 export function notaryCredentials(env) {
-  const present = ID_TRIO.filter(name => env[name]);
-  if (present.length === 0) return { kind: 'profile', profile: NOTARY_PROFILE };
-  if (present.length === ID_TRIO.length) return { kind: 'apple-id' };
-  const missing = ID_TRIO.filter(name => !env[name]);
-  throw new Refusal(`${ID_TRIO.join(', ')} go together, and ${missing.join(' and ')} ${missing.length === 1 ? 'is' : 'are'} not set: set ${missing.length === 1 ? 'it' : 'them'}, or unset all three to use the keychain profile "${NOTARY_PROFILE}"`);
+  const set = PASSWORD_VARIABLES.filter(name => env[name]);
+  if (set.length) {
+    throw new Refusal(`${set.join(', ')} ${set.length === 1 ? 'is' : 'are'} set: a mac release does not notarize with an Apple ID and its password, which notarytool would carry on its command line, readable by every process of this user. Unset ${set.length === 1 ? 'it' : 'them'}; ${OWNER_PROFILE}`);
+  }
+  return { kind: 'profile', profile: NOTARY_PROFILE };
 }
 
 /**
- * The environment of the build: CSC_NAME, and the variables electron-builder's mac.notarize reads (app-builder-lib
- * 26 MacTargetHelper.getNotarizeOptions: APPLE_ID with APPLE_APP_SPECIFIC_PASSWORD first, then an API key, then a
- * keychain profile). An API key left in the shell would win over the profile, so it is not passed on.
+ * The environment of the build: CSC_NAME and the keychain profile, the variables electron-builder reads
+ * (app-builder-lib 26 MacTargetHelper.getNotarizeOptions takes an Apple ID first, then an API key, then a profile,
+ * so neither of the first two is passed on), and no CSC_LINK or CSC_KEY_PASSWORD, with which it would sign with a
+ * certificate file instead of the identity chosen.
  */
 export function signingEnv(baseEnv, identity, credentials) {
   const env = { ...baseEnv };
-  for (const key of ['APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_KEYCHAIN_PROFILE', 'APPLE_KEYCHAIN']) delete env[key];
+  for (const key of [...PASSWORD_VARIABLES, 'APPLE_API_KEY', 'APPLE_API_KEY_ID', 'APPLE_API_ISSUER', 'APPLE_KEYCHAIN_PROFILE', 'APPLE_KEYCHAIN', 'CSC_LINK', 'CSC_KEY_PASSWORD']) delete env[key];
   env.CSC_NAME = identity.hash;
   env.CSC_IDENTITY_AUTO_DISCOVERY = 'true';
-  if (credentials.kind === 'profile') {
-    for (const key of ID_TRIO) delete env[key];
-    env.APPLE_KEYCHAIN_PROFILE = credentials.profile;
-  } else {
-    env.APPLE_APP_SPECIFIC_PASSWORD = baseEnv.APPLE_APP_PASSWORD;
-  }
+  env.APPLE_KEYCHAIN_PROFILE = credentials.profile;
   return env;
 }
 
 /**
  * Before anything is built. The keychain profile is asked with `notarytool history`, which needs only the profile
- * and the network. The three variables are not tried: notarytool would take the password on its command line.
+ * and the network.
  */
 export async function preflight({ run = defaultRun, env = process.env, platform = process.platform } = {}) {
   if (platform !== 'darwin') throw new Refusal(`a mac release is signed and notarized on macOS only, and this is ${platform}`);
@@ -108,11 +113,9 @@ export async function preflight({ run = defaultRun, env = process.env, platform 
   if (found.missing || found.code !== 0) throw new Refusal(`security find-identity could not list the codesigning identities (exit ${found.code})`);
   const identity = chooseIdentity(parseIdentities(found.stdout), env.CSC_NAME);
   const credentials = notaryCredentials(env);
-  if (credentials.kind === 'profile') {
-    const asked = await run('xcrun', ['notarytool', 'history', '--keychain-profile', NOTARY_PROFILE]);
-    if (asked.missing || asked.code !== 0) {
-      throw new Refusal(`notarytool does not answer with the keychain profile "${NOTARY_PROFILE}" (exit ${asked.code}): ${OWNER_PROFILE}`);
-    }
+  const asked = await run('xcrun', ['notarytool', 'history', '--keychain-profile', NOTARY_PROFILE]);
+  if (asked.missing || asked.code !== 0) {
+    throw new Refusal(`notarytool does not answer with the keychain profile "${NOTARY_PROFILE}" (exit ${asked.code}): ${OWNER_PROFILE}`);
   }
   return { identity, credentials, env: signingEnv(env, identity, credentials) };
 }
@@ -134,16 +137,18 @@ export function rewriteDmgEntry(yml, dmgName, { sha512, size }) {
   return lines.join('\n');
 }
 
-/** spctl's verdict: accepted, as a notarized Developer ID, and exit 0. */
-export function spctlVerdict(code, output) {
+/** spctl's verdict: accepted, as a notarized Developer ID of `team` (the origin's parenthesis), and exit 0. */
+export function spctlVerdict(code, output, team) {
   const text = String(output);
-  if (code === 0 && /: accepted\b/.test(text) && /^source=Notarized Developer ID$/m.test(text)) return { ok: true };
+  const origin = /^origin=Developer ID Application: .* \(([0-9A-Z]{10})\)$/m.exec(text)?.[1];
+  if (code === 0 && /: accepted\b/.test(text) && /^source=Notarized Developer ID$/m.test(text) && origin === team) return { ok: true };
   const source = /^source=(.*)$/m.exec(text)?.[1];
-  return { ok: false, why: `exit ${code}, ${/: rejected\b/.test(text) ? 'rejected' : /: accepted\b/.test(text) ? 'accepted' : 'no verdict'}${source ? `, source=${source}` : ''}` };
+  const verdict = /: rejected\b/.test(text) ? 'rejected' : /: accepted\b/.test(text) ? 'accepted' : 'no verdict';
+  return { ok: false, why: `exit ${code}, ${verdict}${source ? `, source=${source}` : ''}${origin === team ? '' : `, signed by team ${origin ?? 'none'}, not ${team}`}` };
 }
 
-/** What is wrong with one binary's signature, from `codesign -dvv --verbose=4`. */
-export function signatureProblems(output) {
+/** What is wrong with one binary's signature, from `codesign -dvv --verbose=4`, against the signing team. */
+export function signatureProblems(output, team) {
   const text = String(output);
   if (/code object is not signed at all|not signed/.test(text) && !/^Authority=/m.test(text) && !/^Signature=/m.test(text)) return ['not signed'];
   const problems = [];
@@ -151,6 +156,10 @@ export function signatureProblems(output) {
   if (!/^Timestamp=/m.test(text)) problems.push('no secure timestamp');
   const flags = /^CodeDirectory .*flags=0x[0-9a-f]+\(([^)]*)\)/m.exec(text)?.[1] ?? '';
   if (!flags.split(',').includes('runtime')) problems.push('no hardened runtime');
+  if (!problems.includes('not signed with a Developer ID Application identity')) {
+    const signedBy = /^TeamIdentifier=([0-9A-Z]{10})$/m.exec(text)?.[1];
+    if (signedBy !== team) problems.push(`signed by team ${signedBy ?? 'none'}, not ${team}`);
+  }
   return problems;
 }
 
@@ -184,13 +193,15 @@ export function machOFiles(root) {
 const quarantine = () => `0083;${Math.floor(Date.now() / 1000).toString(16)};Safari;`;
 
 /**
- * The dmg and its app, as a download through Safari is: copied, quarantined, then judged. Every check runs; the
- * result lists what passed and what failed, and a step that could not run is a failure.
+ * The dmg and its app, as a download through Safari is: copied, quarantined, then judged against `team`, the Team
+ * ID of the identity that signed them. Every check runs; the result lists what passed and what failed, and a step
+ * that could not run is a failure.
  */
-export async function verifyQuarantined({ dmg, run = defaultRun, platform = process.platform, log = () => {} }) {
+export async function verifyQuarantined({ dmg, team, run = defaultRun, platform = process.platform, log = () => {} }) {
   const failures = [];
   const passed = [];
   if (platform !== 'darwin') return { ok: false, failures: [`the checks run on macOS only, and this is ${platform}`], passed };
+  if (!/^[0-9A-Z]{10}$/.test(String(team ?? ''))) return { ok: false, failures: ['no Team ID to pin the signatures to (the signing identity\'s, or --team)'], passed };
   const step = async (what, cmd, args) => {
     const r = await run(cmd, args);
     if (r.missing) failures.push(`${what}: could not run ${cmd}`);
@@ -211,8 +222,8 @@ export async function verifyQuarantined({ dmg, run = defaultRun, platform = proc
 
     const dmgSpctl = await step('spctl on the dmg', 'spctl', ['-a', '-vv', '-t', 'open', '--context', 'context:primary-signature', copy]);
     if (!dmgSpctl.missing) {
-      const v = spctlVerdict(dmgSpctl.code, `${dmgSpctl.stdout}${dmgSpctl.stderr}`);
-      (v.ok ? passed : failures).push(`spctl -t open on the dmg: ${v.ok ? 'accepted, Notarized Developer ID' : v.why}`);
+      const v = spctlVerdict(dmgSpctl.code, `${dmgSpctl.stdout}${dmgSpctl.stderr}`, team);
+      (v.ok ? passed : failures).push(`spctl -t open on the dmg: ${v.ok ? `accepted, Notarized Developer ID of team ${team}` : v.why}`);
     }
     const dmgStaple = await step('stapler on the dmg', 'xcrun', ['stapler', 'validate', copy]);
     if (!dmgStaple.missing) (staplerValid(dmgStaple.code, `${dmgStaple.stdout}${dmgStaple.stderr}`) ? passed : failures).push(`stapler validate on the dmg: exit ${dmgStaple.code}`);
@@ -234,8 +245,8 @@ export async function verifyQuarantined({ dmg, run = defaultRun, platform = proc
     if (!verify.missing) (verify.code === 0 ? passed : failures).push(`codesign --verify --deep --strict on the app: exit ${verify.code}${verify.code === 0 ? '' : `, ${String(verify.stderr).trim().split('\n').pop()}`}`);
     const appSpctl = await step('spctl on the app', 'spctl', ['--assess', '--type', 'exec', '-vv', app]);
     if (!appSpctl.missing) {
-      const v = spctlVerdict(appSpctl.code, `${appSpctl.stdout}${appSpctl.stderr}`);
-      (v.ok ? passed : failures).push(`spctl --assess --type exec on the app: ${v.ok ? 'accepted, Notarized Developer ID' : v.why}`);
+      const v = spctlVerdict(appSpctl.code, `${appSpctl.stdout}${appSpctl.stderr}`, team);
+      (v.ok ? passed : failures).push(`spctl --assess --type exec on the app: ${v.ok ? `accepted, Notarized Developer ID of team ${team}` : v.why}`);
     }
     const appStaple = await step('stapler on the app', 'xcrun', ['stapler', 'validate', app]);
     if (!appStaple.missing) (staplerValid(appStaple.code, `${appStaple.stdout}${appStaple.stderr}`) ? passed : failures).push(`stapler validate on the app: exit ${appStaple.code}`);
@@ -245,10 +256,10 @@ export async function verifyQuarantined({ dmg, run = defaultRun, platform = proc
     for (const file of binaries) {
       const shown = await step(`codesign on ${file.slice(app.length + 1)}`, 'codesign', ['-dvv', '--verbose=4', file]);
       if (shown.missing) break;
-      const problems = signatureProblems(`${shown.stdout}${shown.stderr}`);
+      const problems = signatureProblems(`${shown.stdout}${shown.stderr}`, team);
       if (problems.length) { nestedBad++; failures.push(`${file.slice(app.length + 1)}: ${problems.join(', ')}`); }
     }
-    if (binaries.length && nestedBad === 0) passed.push(`${binaries.length} Mach-O files, each signed with a Developer ID Application identity, a secure timestamp and the hardened runtime`);
+    if (binaries.length && nestedBad === 0) passed.push(`${binaries.length} Mach-O files, each signed with a Developer ID Application identity of team ${team}, a secure timestamp and the hardened runtime`);
     log(`checked a quarantined copy of ${basename(dmg)} and of ${appName}`);
   } finally {
     if (mounted) await run('hdiutil', ['detach', mount]);
@@ -262,7 +273,7 @@ export async function verifyQuarantined({ dmg, run = defaultRun, platform = proc
  * a .dmg as it is and staples it), then its block map and its entry in latest-mac.yml recomputed by
  * electron-builder's own blockmap, which reproduces the manifest byte for byte (measured on 2.0.6's dmg, 18/11).
  */
-export async function finishDmg({ releaseDir, version, identity, credentials, env = process.env, run = defaultRun, log = () => {}, notarize, buildBlockMap }) {
+export async function finishDmg({ releaseDir, version, identity, credentials, run = defaultRun, log = () => {}, notarize, buildBlockMap }) {
   const ymlPath = join(releaseDir, 'latest-mac.yml');
   const dmgName = `Tars-${version}-arm64.dmg`;
   const dmg = join(releaseDir, dmgName);
@@ -275,11 +286,9 @@ export async function finishDmg({ releaseDir, version, identity, credentials, en
   if (signed.missing || signed.code !== 0) throw new Refusal(`codesign could not sign ${dmgName} (exit ${signed.code})`);
   log(`${dmgName} signed with a secure timestamp`);
 
-  const options = credentials.kind === 'profile'
-    ? { appPath: dmg, keychainProfile: credentials.profile }
-    : { appPath: dmg, appleId: env.APPLE_ID, appleIdPassword: env.APPLE_APP_PASSWORD, teamId: env.APPLE_TEAM_ID };
+  if (credentials.kind !== 'profile') throw new Refusal('the dmg is notarized with the keychain profile only');
   try {
-    await notarize(options);
+    await notarize({ appPath: dmg, keychainProfile: credentials.profile });
   } catch (err) {
     // Its message is notarytool's, which names the submission, never a credential.
     throw new Refusal(`notarization of ${dmgName} failed: ${String(err?.message ?? err).split('\n')[0]}`);
@@ -292,20 +301,26 @@ export async function finishDmg({ releaseDir, version, identity, credentials, en
 }
 
 async function cli(argv) {
-  const [command, target] = argv;
+  const [command, target, flag, value] = argv;
   if (command === 'check') {
     const got = await preflight();
-    console.log(`ready: a valid Developer ID Application identity (${got.identity.hash.slice(0, 8)}...), notary credentials: ${got.credentials.kind === 'profile' ? `keychain profile "${got.credentials.profile}"` : 'APPLE_ID, APPLE_APP_PASSWORD and APPLE_TEAM_ID'}`);
+    console.log(`ready: a valid Developer ID Application identity (${got.identity.hash.slice(0, 8)}..., team ${got.identity.team}), notary credentials: the keychain profile "${got.credentials.profile}"`);
     return 0;
   }
   if (command === 'verify' && target) {
-    const result = await verifyQuarantined({ dmg: realpathSync(target), log: line => console.log(line) });
+    // The team the signatures must carry: --team, else the keychain's Developer ID Application identity's.
+    let team = flag === '--team' ? value : undefined;
+    if (!team) {
+      const found = await defaultRun('security', ['find-identity', '-v', '-p', 'codesigning']);
+      team = chooseIdentity(parseIdentities(found.stdout), process.env.CSC_NAME).team;
+    }
+    const result = await verifyQuarantined({ dmg: realpathSync(target), team, log: line => console.log(line) });
     for (const line of result.passed) console.log(`PASS ${line}`);
     for (const line of result.failures) console.log(`FAIL ${line}`);
     console.log(result.ok ? 'ALL PASS' : `${result.failures.length} FAIL`);
     return result.ok ? 0 : 1;
   }
-  console.error('usage: node scripts/mac-signing.mjs check | verify <dmg>');
+  console.error('usage: node scripts/mac-signing.mjs check | verify <dmg> [--team <Team ID>]');
   return 2;
 }
 

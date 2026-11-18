@@ -61,8 +61,12 @@ import { finishDmg, preflight as macPreflight, Refusal, verifyQuarantined } from
 export { Refusal };
 
 /** The line every set of notes ends on. */
+// The second sentence: Squirrel.Mac refuses every update of an ad hoc build, the app's requirement being its own
+// cdhash (measured 18/11: 2.0.5 to 2.0.6, and 2.0.6 to a notarized app, both refused), so a Mac on 2.0.6 or older
+// reaches a signed version only through the dmg, once. Its window then offers "Download it instead".
 export const NOTES_FOOTER = 'Le `.dmg` et le `.zip` sont signes avec une identite Developer ID et notarises par Apple: '
-  + 'macOS les ouvre sans avertissement Gatekeeper.';
+  + 'macOS les ouvre sans avertissement Gatekeeper. Sur un Mac en 2.0.6 ou plus ancienne (non signee), la mise a jour '
+  + 'dans l\'app ne peut pas s\'installer: telecharge le `.dmg` une fois et remplace Tars dans Applications.';
 
 /**
  * The mac signing steps (scripts/mac-signing.mjs). A test hands its own: no test signs, notarizes or asks the
@@ -71,7 +75,7 @@ export const NOTES_FOOTER = 'Le `.dmg` et le `.zip` sont signes avec une identit
 const MAC_SIGNING = {
   preflight: env => macPreflight({ env }),
   finish: finishDmg,
-  verify: ({ dmg, log }) => verifyQuarantined({ dmg, log }),
+  verify: ({ dmg, team, log }) => verifyQuarantined({ dmg, team, log }),
 };
 
 const firstLine = text => text.trim().split('\n')[0] ?? '';
@@ -453,7 +457,7 @@ export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), 
     for (const key of ['CI', 'GH_TOKEN', 'GITHUB_TOKEN']) delete env[key];
     const signed = await signing.preflight(env);
     for (const key of ['CI', 'GH_TOKEN', 'GITHUB_TOKEN']) delete signed.env[key];
-    log(`1b. signing: a valid Developer ID Application identity (${signed.identity.hash.slice(0, 8)}...), notary credentials: ${signed.credentials.kind === 'profile' ? `the keychain profile "${signed.credentials.profile}"` : 'APPLE_ID, APPLE_APP_PASSWORD and APPLE_TEAM_ID'}`);
+    log(`1b. signing: a valid Developer ID Application identity (${signed.identity.hash.slice(0, 8)}...), notary credentials: the keychain profile "${signed.credentials.profile}"`);
 
     // Before anything is built, and in a dry run too, so that it says what the
     // real run would refuse. The build writes over the build release/ holds.
@@ -492,7 +496,8 @@ export async function main(argv = process.argv.slice(2), { cwd = process.cwd(), 
     } else {
       artifacts = await verifyArtifacts(releaseDir, version);
       log(`3. artifacts checked: ${basename(artifacts.dmg)}, ${basename(artifacts.zip)} and latest-mac.yml agree, and the app says ${version}`);
-      const judged = await signing.verify({ dmg: artifacts.dmg, log: line => log(`3b. ${line}`) });
+      // Pinned to the team of the identity that signed, read from it at run time.
+      const judged = await signing.verify({ dmg: artifacts.dmg, team: signed.identity.team, log: line => log(`3b. ${line}`) });
       for (const line of judged.passed) log(`3b. ${line}`);
       if (!judged.ok) throw new Refusal(`a quarantined copy would not pass Gatekeeper:\n${judged.failures.map(f => `  - ${f}`).join('\n')}`);
       log('3b. a quarantined copy of the dmg and of its app passes Gatekeeper as a notarized Developer ID');
