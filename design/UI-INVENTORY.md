@@ -57,7 +57,7 @@ it off (JeanBrasse, 12/10). Off, the app draws exactly as before. On:
 | Surface | Frames |
 |---|---|
 | The new shell: main menu (Chat, Projects, then Dashboard, Kanban and Schedules), New chat, the fixed first entry Tars, all projects (today's room, /chat), the chat list, More at the foot | `tars-redesign.pen`: Shell · chats · empty, Shell · chats · list, a chat open |
-| More open: Agents, Review, Logs, Vault, Extensions, Usage, Resources, Brain, Settings, What's New | `tars-redesign.pen`: Shell · chats · More open |
+| More open: Agents, Review, Logs, Vault, Extensions, Usage, Traces, Resources, Brain, Settings, What's New | `tars-redesign.pen`: Shell · chats · More open |
 | A page of More, opened as a card above the app, over a scrim, the page under it not moving | `tars-redesign.pen`: Shell · chats · Settings card |
 | Tars, all projects: the current Chat page, unchanged, in the new shell | `chat-redesign-a.pen`: Chat · chats · Tars, all projects |
 | The chat list, read from the chats' records (#361): Pinned, Active, Working, Snoozed and Settled, the last two folded; each row with its title, project and number, and its runner's state; the project filter; "No chats yet" before a project has an orchestrator | `tars-redesign.pen`: Shell · chats · list, a chat open, Shell · chats · empty |
@@ -87,7 +87,7 @@ shows: Chats · shell · notes, Chats · the list from the records · notes, Cha
 page from the transcripts · notes, and Chats · chat page · notes, which also says how
 the room relates to the chats and what follows the Backend's v2.2.
 
-## Pages (18)
+## Pages (19)
 
 | Route | Name | Frame |
 |---|---|---|
@@ -104,6 +104,7 @@ the room relates to the chats and what follows the Backend's v2.2.
 | `/projects` | Projects | Projects · dark, Agent stopped · who and why (a stopped agent's row), Agent asleep · and how it wakes (an asleep agent's row) |
 | `/skills` | Extensions (Skills + Plugins) | Extensions · Skills, Extensions · Plugins |
 | `/usage` | Usage | Usage · dark, Usage · light, Usage · daily messages, Usage · last 24 hours, Usage · limits per account, Usage · cost per task, Usage · cost per agent, Usage · pages (five rows a card, states, narrowest window; notes), Usage · cards while they read (each with its light copy; the agent table's headers, figures highest first, words A to Z, and focused, are its col header states) |
+| `/traces` | Traces (the sessions recorded for agents on an inference endpoint that allows it, a session's turns and requests, storage and the reader token, who may be traced; ?view= names the view, ?session= a session) | Traces · sessions, · a session's turns, · storage and reader access, · who may be traced (each with its light copy), · states, · who may be traced · states (each with its light copy) |
 | `/resources` | Resources (this computer: the heavy-run slot and its queue, what each agent and project holds, the disk janitor; ?view= names the view) | Resources (2.0.5) · heavy runs, · agents and projects, · disk (each with its light copy and at the narrowest window), · heavy runs · states, · agents and projects · states, · disk · states (each with its light copy), · notes; since 2.0.6, the machine's terminals as a fifth figure of Heavy runs, in main's words: Resources (2.0.6) · heavy runs, terminals left (its light copy, the narrowest window), · terminals left · states (and its light copy) |
 | `/memory` | Brain (Projects / Agents / Backends) | Brain · Projects, Brain · Agents, Brain · Backends; a project's row naming the older copy of its memory: Brain · Projects · a row with an older copy · states (and its light copy); fifty agents and a thousand memory files fitted to the canvas, a project's memory one box, with the zoom controls: Brain · Agents · fifty agents, fitted; a project opened, the list of its memory files and one of them open: Brain · Agents · a project's memory files, Brain · Agents · a project's memory file, open (panel); since 2.0.6, a project's MEMORY.md close to or past what Claude Code reads, in guard.notice's words on its row and above the file: Brain · Projects · MEMORY.md past what Claude Code reads (2.0.6) · states (and its light copy) |
 | `/whats-new` | What's new | What's new · dark |
@@ -124,16 +125,26 @@ does not read this table.
 Each frame has its `· light` copy below it. Usage · activity · notes says what each
 part shows and what the Backend would provide.
 
-## Settings (6 groups, 20 sections)
+## Settings (6 groups, 21 sections)
 
 | Group | Sections |
 |---|---|
 | General | Preferences (with the New interface switch last, off by default: Settings · Preferences, and with the row on Settings · Preferences · new interface on, each with its light copy; the last error report beside the Send error reports switch: Settings · Preferences · error reports, the last report, and its light copy), Terminal, Notifications, System (with the disk and the folders no agent owns: Settings · System · folders no agent owns, and its states, each with its light copy); Preferences' Keep this computer awake row since 2.0.5: Keep awake (2.0.5) · Settings, General, Preferences (its light copy, the narrowest window), · states (and its light copy) |
-| AI & Providers | Providers (an API key set, replaced or cleared, never shown: Secrets · Settings, Providers, an API key, and its light copy), Claude accounts, CLI Paths (what Tars found as it opens, the detection Providers reads too: Secrets · CLIs, one detection, and its light copy), Permissions |
+| AI & Providers | Inference endpoints (OpenAI-compatible servers an open harness runs on: a key never shown back, an endpoint an agent added or changed waiting for approval, the hold while one is busy, session headers off by default, Never record closed models on by default: Settings · Inference endpoints and · states, each with its light copy), Providers (an API key set, replaced or cleared, never shown: Secrets · Settings, Providers, an API key, and its light copy), Claude accounts, CLI Paths (what Tars found as it opens, the detection Providers reads too: Secrets · CLIs, one detection, and its light copy), Permissions |
 | Hermes | Connection (+ link out to Schedules): Settings · Connection, its Incoming webhooks row pointing to Gateways; its token set and replaced, never shown: Secrets · Settings, Hermes connection (and its light copy). Its Telegram through Hermes switch moves to Relay, drawn for 2.0.4 (listed at the end). Gateways, every Hermes that hands Tars work, its two addresses, its secret shown and copied by Tars only, added, replaced and removed asking once, and the projects it may reach: Gateways · Settings, Hermes (its light copy, the narrowest window), · states (and its light copy), · notes for the Backend |
 | Integrations | Telegram, Slack, Discord, X (Twitter), Google Workspace; Telegram since 2.0.5, Tars's own bot gone: Telegram goes through Hermes, its one action leading to Settings, Hermes, nothing to type, test or switch, and, when Tars found the old bot's token, the line saying to revoke it with BotFather: Settings · Telegram · Telegram through Hermes (and its light copy); every key and token of the other sections set, replaced or cleared, never shown: Secrets · states (Slack's bot token for the pattern, and its light copy), Secrets · notes for the Backend. The frames that drew the bot itself, Settings · Telegram and Secrets · Settings, Telegram (its light copy, the narrowest window), left the document with it in 2.0.5 |
 | Extensions | Skills & Plugins, Custom MCP, Tasmania |
 | Workspace | Git, Memory Backends |
+
+Inference endpoints lists the OpenAI-compatible servers an open harness (Codex,
+Pi, Qwen Code, opencode) can run on, through Tars, which keeps the key. New agent
+and Edit agent then offer RUNS ON its own account or an endpoint, the endpoint's
+model, and Record traces, offered only when the endpoint allows traces, the
+project records traces (its Projects panel) and the harness and model are among
+the owner's pairs; otherwise the line says why. Frames: Overlay · New agent · on
+an endpoint, Overlay · Edit agent · on an endpoint, Overlay · New agent · on an
+endpoint · states, Projects · a project · Record traces for this project (and
+their light copies).
 
 Claude accounts is off until turned on. On, it lists up to five Claude
 subscriptions, each with its 5 h and weekly use, and the two thresholds that

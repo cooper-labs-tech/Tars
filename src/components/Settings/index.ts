@@ -28,6 +28,7 @@ export { TasmaniaIcon } from './TasmaniaIcon';
 export { GoogleWorkspaceSection } from './GoogleWorkspaceSection';
 export { AIProvidersSection } from './AIProvidersSection';
 export { ClaudeAccountsSection } from './ClaudeAccountsSection';
+export { InferenceEndpointsSection } from './InferenceEndpointsSection';
 export { PermissionsSection } from './PermissionsSection';
 export { SkillsSection } from './SkillsSection';
 export { McpSection } from './McpSection';

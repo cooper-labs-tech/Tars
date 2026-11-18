@@ -20,6 +20,7 @@ import {
   MessageSquare,
   ArrowDownToLine,
   Gauge,
+  Waypoints,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
@@ -47,6 +48,7 @@ const navItems = [
   { href: '/projects', icon: FolderKanban, label: 'Projects', shortcut: '8' },
   { href: '/skills', icon: Puzzle, label: 'Extensions', shortcut: '9' },
   { href: '/usage', icon: BarChart2, label: 'Usage', shortcut: '0' },
+  { href: '/traces', icon: Waypoints, label: 'Traces' },
   { href: '/resources', icon: Gauge, label: 'Resources' },
   { href: '/memory', icon: Brain, label: 'Brain' },
 ];
