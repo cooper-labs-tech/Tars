@@ -43,6 +43,8 @@ export interface SlotView {
   nestedIn?: string;
   /** Held by the agent's CLI (heavy_slot_take): given back when its turn ends. */
   untilTurnEnds?: true;
+  /** The host a remote run executes on (2.0.7, `tars-slot run --remote <host>`): it takes none of this machine's room. */
+  remote?: string;
   alerts: string[];
 }
 
@@ -71,6 +73,8 @@ export interface SlotStatus {
   }) | null;
   holders: Array<SlotView & { tree?: SlotTree }>;
   waiting: SlotView[];
+  /** Runs said to execute on another machine (2.0.7): granted at once, out of this machine's queue and room. */
+  remote: SlotView[];
   /** Since midnight, oldest first. */
   alerts: SlotAlert[];
 }
@@ -162,7 +166,7 @@ function view(t: SlotTicket, snap: SlotSnapshot): SlotView {
     ...(t.why ? { why: t.why } : {}), priority: t.priority, ...(t.clamped ? { clamped: true as const } : {}),
     label: t.label, agentId: t.agentId, agentName: t.agentName, project: t.project, pid: t.pid,
     askedAt: new Date(t.askedAt).toISOString(), ...(t.grantedAt !== undefined ? { grantedAt: new Date(t.grantedAt).toISOString() } : {}),
-    ...(t.nestedIn ? { nestedIn: t.nestedIn } : {}), ...(t.untilTurnEnds ? { untilTurnEnds: true as const } : {}), alerts: [...t.alerts],
+    ...(t.nestedIn ? { nestedIn: t.nestedIn } : {}), ...(t.untilTurnEnds ? { untilTurnEnds: true as const } : {}), ...(t.remote !== undefined ? { remote: t.remote } : {}), alerts: [...t.alerts],
   };
 }
 
@@ -176,7 +180,7 @@ function todaysAlerts(): SlotAlert[] {
 
 export async function slotStatus(): Promise<SlotStatus> {
   if (!lastMachine) await machineNow().catch(() => undefined);
-  if (!slot) return { slots: SLOTS_DEFAULT, floors: floors(), machine: lastMachine, holders: [], waiting: [], alerts: todaysAlerts() };
+  if (!slot) return { slots: SLOTS_DEFAULT, floors: floors(), machine: lastMachine, holders: [], waiting: [], remote: [], alerts: todaysAlerts() };
   const snap = slot.snapshot();
   const holders = await Promise.all(snap.holders.map(async t => {
     const tree = await treeOf(t.pid).catch(() => undefined);
@@ -184,7 +188,7 @@ export async function slotStatus(): Promise<SlotStatus> {
   }));
   return {
     slots: snap.slots, floors: floors(), machine: lastMachine, holders,
-    waiting: snap.waiting.map(t => view(t, snap)), alerts: todaysAlerts(),
+    waiting: snap.waiting.map(t => view(t, snap)), remote: snap.remote.map(t => view(t, snap)), alerts: todaysAlerts(),
   };
 }
 

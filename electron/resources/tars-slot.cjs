@@ -5,9 +5,12 @@
  * which cannot call an MCP tool. Run from an agent's terminal started by Tars: it presents the agent's own token
  * (CLAUDE_MGR_API_TOKEN) to the Tars at CLAUDE_MGR_API_URL, both in that terminal's environment.
  *
- *   tars-slot run [--priority gate|normal|background] [--label <text>] [--wait-seconds <n>] -- <command> [args...]
+ *   tars-slot run [--priority gate|normal|background] [--label <text>] [--wait-seconds <n>] [--remote <host>] -- <command> [args...]
  *       Waits for the slot, runs the command as its child, gives the slot back when the command ends, and exits
- *       with its code. The lease is this process's: killed, it goes back by itself.
+ *       with its code. The lease is this process's: killed, it goes back by itself. With --remote, the command runs
+ *       its work on another machine, named <host> (an ssh to it, say): granted at once, it takes none of this
+ *       machine's slots and is held by none of its floors, and the status lists it apart. It is your word: a run said
+ *       remote that works here takes this machine's room unseen.
  *   tars-slot take [--priority ...] [--label <text>] [--wait-seconds <n>]
  *       From a script that runs the steps itself, to hold the slot across them: the lease is the calling process's
  *       (this one's parent), and ends with it. From an agent's own Bash tool, that parent is the shell of one command,
@@ -61,12 +64,13 @@ function call(method, path, body) {
 }
 
 function parse(argv) {
-  const opts = { priority: undefined, label: undefined, waitSeconds: undefined, rest: [] };
+  const opts = { priority: undefined, label: undefined, waitSeconds: undefined, remote: undefined, rest: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--') { opts.rest = argv.slice(i + 1); break; }
     if (a === '--priority') opts.priority = argv[++i];
     else if (a === '--label') opts.label = argv[++i];
+    else if (a === '--remote') opts.remote = argv[i + 1] !== undefined && argv[i + 1] !== '--' ? argv[++i] : '';
     else if (a === '--wait-seconds') opts.waitSeconds = Number(argv[++i]);
     else opts.rest.push(a);
   }
@@ -76,6 +80,7 @@ function parse(argv) {
 async function ask(pid, opts, label) {
   const { status, json } = await call('POST', '/api/heavy-slot/ask', {
     pid, ...(opts.priority ? { priority: opts.priority } : {}), label: opts.label || label,
+    ...(opts.remote !== undefined ? { remote: opts.remote } : {}),
   });
   if (status !== 200 || !json.ticket) fail(3, `the slot was not asked: ${json.error || `HTTP ${status}`}`);
   if (json.ticket.clamped) out('gate is an orchestrator\'s: asked as normal');
@@ -99,14 +104,14 @@ async function waitGranted(ticket, opts) {
 }
 
 async function run(opts) {
-  if (opts.rest.length === 0) fail(2, 'usage: tars-slot run [--priority p] [--label text] -- <command> [args...]');
+  if (opts.rest.length === 0) fail(2, 'usage: tars-slot run [--priority p] [--label text] [--remote host] -- <command> [args...]');
   const ticket = await ask(process.pid, opts, opts.rest.join(' ').slice(0, 120));
   const granted = await waitGranted(ticket, opts);
   if (!granted) {
     await call('POST', `/api/heavy-slot/tickets/${ticket.id}/give-back`).catch(() => {});
     fail(75, `not granted within ${opts.waitSeconds} s`);
   }
-  out(`granted${granted.nestedIn ? ' (inside the run that holds it)' : ''}: ${opts.rest.join(' ')}`);
+  out(`granted${granted.nestedIn ? ' (inside the run that holds it)' : granted.remote ? ` (remote, on ${granted.remote}: none of this machine's slots)` : ''}: ${opts.rest.join(' ')}`);
   const env = { ...process.env };
   // Set by the shim to run this script on Electron's Node; never handed to the command (an Electron app it starts).
   if (env.TARS_SLOT_UNSET_RUN_AS_NODE) { delete env.ELECTRON_RUN_AS_NODE; delete env.TARS_SLOT_UNSET_RUN_AS_NODE; }
@@ -156,6 +161,8 @@ async function status() {
   process.stdout.write(`slots: at most ${json.slots} at once, each started when the machine has room\n`);
   for (const t of json.holders) process.stdout.write(`holds  ${line(t)} since ${t.grantedAt}\n`);
   for (const t of json.waiting) process.stdout.write(`waits  ${t.position}. ${line(t)}${t.why ? `: ${t.why}` : ''}\n`);
+  // Runs on other machines (2.0.7): none of this machine's slots.
+  for (const t of json.remote || []) process.stdout.write(`remote ${line(t)} on ${t.remote} since ${t.grantedAt}\n`);
 }
 
 async function main() {
@@ -166,7 +173,7 @@ async function main() {
   if (command === 'take') return take(opts);
   if (command === 'give-back') return giveBack(opts);
   if (command === 'status') return status();
-  fail(2, 'usage: tars-slot run [--label text] -- <command> | take (from a script that runs the steps itself) | give-back <ticket> | status');
+  fail(2, 'usage: tars-slot run [--label text] [--remote host] -- <command> | take (from a script that runs the steps itself) | give-back <ticket> | status');
 }
 
 main().catch((err) => fail(3, `Tars could not be reached: ${err.message}`));

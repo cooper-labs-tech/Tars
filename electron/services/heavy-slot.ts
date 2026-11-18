@@ -8,7 +8,7 @@ import { redactSecrets } from '../utils/redact-secrets';
  * each further run is admitted by the machine's room, up to a ceiling (below).
  *
  * Measured before: a `next dev` takes 6 to 7 GB of swap, the load reached 300, and each project's orchestrator built
- * its own lock (kotsna's mkdir, parallel's heavy-run.lock, 1212's rule 198), which coordinated nothing between
+ * its own lock (kotsna's mkdir, another project's lock file, 1212's rule 198), which coordinated nothing between
  * projects and stayed taken when its agent died. 1212 read the free space at the start only, while the swap grew
  * during the run.
  *
@@ -27,7 +27,7 @@ import { redactSecrets } from '../utils/redact-secrets';
  * - The machine is read before a grant: under the disk or the memory floor, the grant waits and the waiter is told
  *   the floor and the figure. A figure the system cannot give does not block. During a run, the disk is read again:
  *   alerts at 10, 6 and 3 GB, and on fast swap growth, to the holder, its orchestrator and the window.
- * - Tars never ends a run by itself (an ansible run, a `fly ssh` or a build talking to the Sparks must never be
+ * - Tars never ends a run by itself (an ansible run, a `fly ssh` or a build talking to a remote inference host must never be
  *   ended by anything automatic): this slot is given no way to end a process.
  *
  * The world it lives in is passed in (heavy-slot-runtime.ts in the app, a stand-in in its tests).
@@ -99,6 +99,11 @@ export interface SlotAsk {
   terminalPid?: number;
   /** Held by the agent's CLI (the MCP tool): given back when the agent's turn ends. */
   untilTurnEnds?: boolean;
+  /**
+   * The run executes on another machine, named so (2.0.7, `tars-slot run --remote <host>`): this machine only starts
+   * it. Granted at once, it takes none of this machine's room, and is listed apart.
+   */
+  remote?: string;
 }
 
 export interface SlotTicket {
@@ -118,6 +123,8 @@ export interface SlotTicket {
   grantedAt?: number;
   /** Granted inside this holder's lease (an ask from under its process). */
   nestedIn?: string;
+  /** The host a remote run executes on (2.0.7): never one of this machine's holders. */
+  remote?: string;
   /** Why it waits: who holds the slot, or the floor and the figure. */
   why?: string;
   /** What was said during its run, oldest first. */
@@ -127,7 +134,19 @@ export interface SlotTicket {
   swapSaidAt?: number;
 }
 
-export interface SlotSnapshot { slots: number; holders: SlotTicket[]; waiting: SlotTicket[] }
+export interface SlotSnapshot { slots: number; holders: SlotTicket[]; waiting: SlotTicket[]; remote: SlotTicket[] }
+
+/** The longest host name a remote run shows. */
+const REMOTE_HOST_MAX = 60;
+
+/** A remote run's host as every agent and the window read it: masked, on one line, at most 60 characters. */
+function remoteHost(raw: string): string {
+  const host = redactSecrets(raw).replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, REMOTE_HOST_MAX).trim();
+  return host || 'a remote host';
+}
+
+/** What a waiter is told before the queue has been read for it, and when nothing holds it back but its turn. */
+const NEXT_LOOK = 'in the queue: it is read for at the next look, within seconds';
 
 function under(pid: number, ancestor: number, parentOf: Map<number, number>): boolean {
   const seen = new Set<number>();
@@ -195,13 +214,19 @@ export class HeavySlot {
     return undefined;
   }
 
+  /** This machine's holders: a remote run is none of them, and takes none of its room. */
   private holders(): SlotTicket[] {
-    return [...this.tickets.values()].filter(t => t.grantedAt !== undefined && !t.nestedIn).sort((a, b) => a.grantedAt! - b.grantedAt!);
+    return [...this.tickets.values()].filter(t => t.grantedAt !== undefined && !t.nestedIn && t.remote === undefined).sort((a, b) => a.grantedAt! - b.grantedAt!);
   }
 
   private waiting(): SlotTicket[] {
     return [...this.tickets.values()].filter(t => t.grantedAt === undefined)
       .sort((a, b) => RANK[a.priority] - RANK[b.priority] || a.askedAt - b.askedAt);
+  }
+
+  /** The runs said to execute on another machine, oldest first. */
+  private remoteRuns(): SlotTicket[] {
+    return [...this.tickets.values()].filter(t => t.remote !== undefined).sort((a, b) => a.grantedAt! - b.grantedAt!);
   }
 
   /**
@@ -231,10 +256,18 @@ export class HeavySlot {
       // Every agent and the window read it: a token or a URL's password in a command line is masked first.
       label: redactSecrets(a.label), ...(a.untilTurnEnds ? { untilTurnEnds: true as const } : {}), askedAt: this.world.now(), alerts: [],
     };
-    const host = this.holders().find(h => h.agentId === a.agentId && (h.pid === a.pid || (parentOf && under(a.pid, h.pid, parentOf))));
-    if (host) {
+    const host = a.remote === undefined
+      ? this.holders().find(h => h.agentId === a.agentId && (h.pid === a.pid || (parentOf && under(a.pid, h.pid, parentOf))))
+      : undefined;
+    if (a.remote !== undefined) {
+      // It runs elsewhere: granted at once, out of this machine's queue and room, listed apart (remoteRuns).
+      ticket.remote = remoteHost(a.remote);
+      ticket.grantedAt = this.world.now();
+    } else if (host) {
       ticket.grantedAt = this.world.now();
       ticket.nestedIn = host.id;
+    } else {
+      ticket.why = NEXT_LOOK;
     }
     this.tickets.set(ticket.id, ticket);
     this.world.changed();
@@ -333,8 +366,14 @@ export class HeavySlot {
         delete head.why;
         changed = true;
       }
-      const why = refused ?? (waiting.length ? await this.refusal(this.holders()) : undefined);
-      if (why) for (const t of waiting) say(t, why);
+      // Each waiter its own reason (2.0.7): the head, why it may not start now; each one behind it, whom it waits
+      // behind and why that one waits. Nothing holding the head back but its turn: the next look.
+      if (waiting.length) {
+        const why = refused ?? (await this.refusal(this.holders())) ?? NEXT_LOOK;
+        const head = waiting[0];
+        waiting.forEach((t, i) => say(t, i === 0 ? why
+          : `behind ${i} run${i === 1 ? '' : 's'} in the queue: ${head.agentName} (${head.label}) is first, and waits: ${why}`));
+      }
     }
     if (changed) this.world.changed();
   }
@@ -364,7 +403,7 @@ export class HeavySlot {
   }
 
   snapshot(): SlotSnapshot {
-    return { slots: this.slots(), holders: this.holders(), waiting: this.waiting() };
+    return { slots: this.slots(), holders: this.holders(), waiting: this.waiting(), remote: this.remoteRuns() };
   }
 
   /** Whether anything is held or waited for: the runtime's timers run only then. */

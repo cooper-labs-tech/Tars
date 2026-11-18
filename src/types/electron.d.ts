@@ -282,6 +282,8 @@ interface HeavySlotTicket {
   nestedIn?: string;
   /** Taken with heavy_slot_take, held by the agent's CLI: given back when its turn ends. */
   untilTurnEnds?: true;
+  /** 2.0.7: the host a remote run executes on (`tars-slot run --remote <host>`): granted at once, out of this machine's room. */
+  remote?: string;
   alerts: string[];
 }
 interface HeavySlotStatus {
@@ -303,6 +305,8 @@ interface HeavySlotStatus {
   holders: Array<HeavySlotTicket & { tree?: { processes: number; memoryMb: number; cpuPct: number } }>;
   /** In the order they will be granted. */
   waiting: HeavySlotTicket[];
+  /** 2.0.7: runs said to execute on another machine, oldest first: granted at once, none of this machine's slots. */
+  remote: HeavySlotTicket[];
   /** Since midnight, oldest first, each with whom it was sent to. */
   alerts: Array<{ at: string; ticket: string; agentName: string; project: string; label: string; text: string; sentTo: string[] }>;
 }

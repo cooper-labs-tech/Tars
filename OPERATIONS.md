@@ -1258,6 +1258,12 @@ agent died.
     the same command without the PATH, which a login shell may set anew (Debian's and Ubuntu's `/etc/profile`).
   - `tars-slot take`, from a script that runs the steps itself, holds it for that script (its parent process) and
     prints the ticket; `tars-slot give-back <ticket>`; `tars-slot status`.
+  - `tars-slot run --remote <host> -- <command>` (2.0.7): the command does its work on another machine (an ssh to a
+    build host). It is granted at once, takes none of this machine's slots, counts in no ceiling, settle time or disk
+    reserve, is held by none of its floors and alerted on none of its readings, and is listed apart: `remote` in
+    `tars-slot status`, `heavy_slot_status` and the window's `heavySlot.status().remote`. Its lease is still its local
+    process's. The host name is masked, on one line, 60 characters at most. It is the agent's word: a run said remote
+    that works here takes this machine's room unseen. `heavy_slot_take` takes `remote` too.
   - The MCP tools `heavy_slot_take`, `heavy_slot_give_back`, `heavy_slot_status`: the lease is then the agent's CLI's,
     for the turn. Tars gives it back when the agent's turn ends (its Stop, or `idle` on record), granted or still
     waiting, and tells the holder and its orchestrator. A `tars-slot run` lease is its own process's and stays.
@@ -1286,7 +1292,9 @@ agent died.
   `getconf PAGESIZE`; unknown on Windows, where it does not block). A reading that throws or does not come in 15 s
   holds a further run back. Passes run one at a time: one asked for while another runs joins the next, which reads
   the queue as it is then. Each waiter reads why: the holders and the ceiling, the settle
-  time, the disk with its reserve, the memory, the swapping, or no reading. During a run, every 30 s: alerts at 10, 6 and 3 GB of
+  time, the disk with its reserve, the memory, the swapping, or no reading; since 2.0.7, the first one that reason,
+  each one behind it whom it waits behind and why that one waits (`behind 1 run in the queue: <name> (<label>) is
+  first, and waits: ...`), and an ask not read for yet `in the queue: it is read for at the next look`. During a run, every 30 s: alerts at 10, 6 and 3 GB of
   free disk and when the swap grows by 1,000 MB a minute or more, to the holder (`tars-slot run` prints them), its
   project's orchestrator (typed as Tars) and the window (`heavySlot:alert`). **Tars never stops a run itself.**
 - **Settings.** `heavySlots`, the ceiling (1 to 8; default 3 since 2.0.6, 1 before), `heavySlotMinDiskGb`, `heavySlotMinFreeMemPct`, in

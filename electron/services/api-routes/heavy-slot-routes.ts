@@ -11,7 +11,8 @@ import type { RouteApp, RouteRequest, SendJson } from './types';
  * tools and the `tars-slot` command line call. Authenticated like every route under /api/ (api-server.ts): an ask, a
  * ticket and a give-back take an agent's own token, which names the agent; the status any authenticated caller.
  *
- * POST /api/heavy-slot/ask { pid, priority?, label?, untilTurnEnds? }: a `tars-slot run` lease is held by `pid`, its
+ * POST /api/heavy-slot/ask { pid, priority?, label?, untilTurnEnds?, remote? } (remote, 2.0.7: the host a run executes on,
+ * granted at once and out of this machine's room): a `tars-slot run` lease is held by `pid`, its
  * run's own process, which must be under the asking agent's terminal where the process table can be read; `gate` is
  * an orchestrator's only. The MCP tool's lease (`untilTurnEnds`) is held by the asking agent's terminal, resolved from
  * its token, whatever pid comes with it: the orchestrator server is shared (services/mcp-shared.ts), so its parent is
@@ -50,7 +51,12 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
   app.post('/api/heavy-slot/ask', async (req, sendJson) => {
     const agent = callerAgent(req, sendJson);
     if (!agent) return;
-    const { priority, label, untilTurnEnds } = req.body as { pid?: unknown; priority?: unknown; label?: unknown; untilTurnEnds?: unknown };
+    const { priority, label, untilTurnEnds, remote } = req.body as { pid?: unknown; priority?: unknown; label?: unknown; untilTurnEnds?: unknown; remote?: unknown };
+    // A run that executes on another machine (2.0.7): the host it names, taken at the asker's word (heavy-slot.ts).
+    if (remote !== undefined && (typeof remote !== 'string' || remote.length > 500)) {
+      sendJson({ error: 'remote is the name of the host the run executes on, as text.' }, 400);
+      return;
+    }
     const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
     // The tool's lease: the agent's terminal, from its token, never a pid the (shared) server sends.
     const forTheTurn = untilTurnEnds === true;
@@ -75,6 +81,7 @@ export function registerHeavySlotRoutes(app: RouteApp): void {
         mayGate: mayGate(agent), terminalPid: terminal?.pid,
         // The terminal lives as long as the agent's session: a lease on it is held for the turn, as the tool's is.
         untilTurnEnds: forTheTurn || (terminal !== undefined && pid === terminal.pid),
+        ...(typeof remote === 'string' ? { remote } : {}),
       });
       sendJson({ success: true, ticket });
     } catch (err) {
