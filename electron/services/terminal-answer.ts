@@ -121,11 +121,72 @@ export function finalAnswerOf(lines: Iterable<string>, window: Window): string |
 
 type TurnRead = { answer: string | null; last: string | null; end: 'ended' | 'open' | 'unknown' };
 
-/** One transcript, streamed: only the answer is kept, never a line of it. */
+/** How far back from a transcript's end the search for a task's first record starts, doubled at each step. */
+const TAIL_FIRST_BYTES = 256 * 1024;
+const PROBE_BYTES = 64 * 1024;
+
+/**
+ * The first whole line after `from` that carries a timestamp (Claude Code stamps its records; a request's blob it
+ * does not), its time and where it starts; undefined when none does before the end.
+ */
+async function firstStamp(fh: fs.promises.FileHandle, from: number, size: number): Promise<{ at: number; start: number } | undefined> {
+  let pos = from;
+  let pending = Buffer.alloc(0);
+  let lineStart = from;
+  // Mid-line unless at the file's start: what comes before the first line break is the end of a line.
+  let skipping = from > 0;
+  while (pos < size) {
+    const chunk = Buffer.alloc(Math.min(PROBE_BYTES, size - pos));
+    const { bytesRead } = await fh.read(chunk, 0, chunk.length, pos);
+    if (!bytesRead) break;
+    pending = Buffer.concat([pending, chunk.subarray(0, bytesRead)]);
+    pos += bytesRead;
+    for (let nl = pending.indexOf(0x0a); nl >= 0; nl = pending.indexOf(0x0a)) {
+      const line = pending.subarray(0, nl);
+      pending = pending.subarray(nl + 1);
+      const start = lineStart;
+      lineStart += nl + 1;
+      if (skipping) { skipping = false; continue; }
+      try {
+        const at = Date.parse(String((JSON.parse(line.toString('utf8')) as { timestamp?: unknown }).timestamp ?? ''));
+        if (Number.isFinite(at)) return { at, start };
+      } catch { /* not a record */ }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Where to start reading a transcript for a window that begins at `since`: a line start no later than its first
+ * record in the window, found from the file's end, or 0. A session's file holds its whole history (36 MB, 3 s a read
+ * at a load of 114), and a task is its last turns: read whole at every turn's end, and again while the end settles,
+ * that cost the main process seconds per turn (2.0.7). Records are appended in time order; one copied by a resume
+ * with its old dates is at the file's start.
+ */
+export async function windowStart(file: string, since: number): Promise<number> {
+  let fh: fs.promises.FileHandle;
+  try {
+    fh = await fs.promises.open(file, 'r');
+  } catch {
+    return 0;
+  }
+  try {
+    const { size } = await fh.stat();
+    for (let back = TAIL_FIRST_BYTES; back < size; back *= 2) {
+      const stamp = await firstStamp(fh, size - back, size);
+      if (stamp && stamp.at < since) return stamp.start;
+    }
+    return 0;
+  } finally {
+    await fh.close();
+  }
+}
+
+/** One transcript, streamed from its window's start: only the answer is kept, never a line of it. */
 async function readInFile(file: string, window: Window): Promise<TurnRead | null> {
   if (!fs.existsSync(file)) return null;
   const reader = answerReader(window);
-  const input = fs.createReadStream(file, { encoding: 'utf-8' });
+  const input = fs.createReadStream(file, { encoding: 'utf-8', start: await windowStart(file, window.since) });
   const lines = readline.createInterface({ input, crlfDelay: Infinity });
   try {
     for await (const line of lines) reader.line(line);

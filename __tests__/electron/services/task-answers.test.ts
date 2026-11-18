@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { readTurnAnswer } from '../../../electron/services/terminal-answer';
+import { readTurnAnswer, windowStart } from '../../../electron/services/terminal-answer';
 import { answerOfTask, answerPending, noteOutputPosted, postedOutputSince, forgetAnswers } from '../../../electron/services/task-answers';
 import { transcriptPath } from '../../../electron/utils/resume-session';
 import { qwenTranscriptPath } from '../../../electron/services/qwen-code';
@@ -33,6 +33,11 @@ import { qwenTranscriptPath } from '../../../electron/services/qwen-code';
  *     the transcript, megabytes, is read again.
  * A9. Qwen Code's transcript (Gemini's `parts`, no stop reason) waits for a stop reason it never writes.
  * A10. A read in flight is not said: a caller that asks for the task meanwhile reads it ended with no answer.
+ * A11. (measured once the reads ran at every turn's end) A turn's read streams the session's whole history: the reported
+ *      session's 36 MB transcript took 3 s per read at a load of 114, once per turn of every agent now, and again at
+ *      each re-read while the end settles. The read starts at a line no later than the task's first record, found from
+ *      the file's end (`windowStart`); and still finds that record when the lines near the end carry no timestamp,
+ *      when the window begins at the file's first line, or when a line is longer than a probe.
  */
 
 const T0 = Date.parse('2026-11-18T19:37:10.000Z');
@@ -166,5 +171,27 @@ describe('each ended task\'s answer, whatever its CLI', () => {
     // Read once: what the transcript says later is not read again for it.
     write([assistant(234_600, 'm4', `${REPORT} and a later word`, 'end_turn')]);
     expect(await answerOfTask(t, { transcript: true, homeDir: home })).toBe(REPORT);
+  });
+});
+
+describe('a long session\'s transcript', () => {
+  it('A11: the read starts near the task\'s first record, found from the end, and the answer is whole', async () => {
+    // An old history of 4 MB (an hour before the task), then the task's turn.
+    const old = Array.from({ length: 2_000 }, (_, i) => assistant(-3_600_000 + i, `old-${i}`, `old message ${i} ${'x'.repeat(2_000)}`, 'end_turn'));
+    write(old);
+    const before = fs.statSync(file).size;
+    narrationOnly();
+    report();
+    const start = await windowStart(file, T0);
+    expect(start).toBeGreaterThan(before * 0.9);
+    expect(start).toBeLessThanOrEqual(before);
+    expect(await readTurnAnswer(task(), { settleMs: 0, homeDir: home })).toBe(REPORT);
+  });
+
+  it('A11: lines with no timestamp near the end, a window from the first line, a line longer than a probe', async () => {
+    write([assistant(1_000, 'first', `the first ${'y'.repeat(300_000)}`, 'end_turn')]);
+    for (let i = 0; i < 50; i++) write([JSON.stringify({ type: 'api-request-blob', hash: `h${i}`, message: 'z'.repeat(10_000) })]);
+    expect(await windowStart(file, T0)).toBe(0);
+    expect(await readTurnAnswer(task(), { settleMs: 0, homeDir: home })).toBe(`the first ${'y'.repeat(300_000)}`);
   });
 });
