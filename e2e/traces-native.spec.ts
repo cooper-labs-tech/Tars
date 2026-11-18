@@ -24,6 +24,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    the held attempts and the endpoint's request ids, the tool call; nothing for Off.
  * 6. The read API: the reader token reads the session; the shared token gets 401.
  * 7. An endpoint Lead adds waits for the owner's approval, and an agent cannot be set on it until then.
+ * 8. (The Audit's H1 on #596.) Lead moves the endpoint's base URL to an address of its own, then asks for its models
+ *    and its health, by its tools and by the window's buttons: that address never receives the key, and the move
+ *    took the key away.
  * The artefact: values.json, the stand-in's request log (headers included), the trace export, the app's log.
  */
 
@@ -203,7 +206,7 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(refused.status, 'the shared token on the traces').toBe(401);
 
     // 7. An endpoint an agent adds waits for the owner.
-    const added = await lead('endpoint_add', { name: 'Another host', base_url: 'http://192.0.2.10:9000/v1' });
+    const added = await lead('endpoint_add', { name: 'Another host', base_url: 'https://192.0.2.10:9000/v1' });
     const after = await api<Array<Record<string, unknown>>>('endpoints', 'list');
     const another = after.find(v => v.name === 'Another host');
     const moved = await page.evaluate(({ id, ep }) => ((window as unknown as Api).electronAPI.agent.update as (p: unknown) => Promise<unknown>)({ id, endpointId: ep, model: 'any' }), { id: OFF, ep: String(another?.id) }) as { success: boolean; error?: string };
@@ -212,6 +215,25 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(another, 'the added endpoint').toMatchObject({ approved: false, changedBy: { agentId: LEAD } });
     expect.soft(moved.success, 'an agent set on an endpoint not approved').toBe(false);
     expect.soft(moved.error, 'why').toMatch(/approve/);
+
+    // 8. The key never goes to an address nobody approved.
+    const attackerLog = test.info().outputPath('attacker-requests.jsonl');
+    const attacker = await startStandIn({ log: attackerLog });
+    try {
+      const repointed = await lead('endpoint_update', { id: EP, base_url: attacker.baseUrl });
+      const viaTools = [await lead('endpoint_refresh_models', { id: EP }), await lead('endpoint_check', { id: EP })];
+      await api('endpoints', 'refreshModels', EP);
+      await api('endpoints', 'check', EP);
+      const reachedAttacker = fs.existsSync(attackerLog) ? fs.readFileSync(attackerLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : [];
+      const afterMove = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP);
+      keep({ repointed, viaTools, attackerSaw: reachedAttacker.map(r => ({ url: r.url, auth: r.headers?.authorization ? 'present' : 'none' })), afterMove });
+      expect.soft(reachedAttacker.length, 'the probes went to the new address').toBeGreaterThan(0);
+      expect.soft(reachedAttacker.every(r => !r.headers?.authorization && !r.headers?.['x-api-key']), 'a credential reached the unapproved address').toBe(true);
+      expect.soft(JSON.stringify(reachedAttacker), 'the key reached the unapproved address').not.toContain(key);
+      expect.soft(afterMove, 'the moved endpoint').toMatchObject({ approved: false, keySet: false });
+    } finally {
+      await attacker.close();
+    }
   } finally {
     for (const s of servers) s.kill();
     await app?.close().catch(() => {});

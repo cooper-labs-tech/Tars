@@ -18,7 +18,7 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 1. Something is sent without an address, or before the user read the notice (consent).
  * 2. A session not opted in now (its project or its agent switched off since) is sent.
  * 3. A secret, the home path, a project path or an endpoint address reaches the server, in a blob or a row; a
- *    person's name goes as authorDetail.
+ *    person's name goes as authorDetail; the agent's or the endpoint's name goes as typed (the Audit's L1 on #596).
  * 4. A blob's hash is not the SHA-256 of the bytes sent (the local hash of the unscrubbed content), so the server
  *    refuses it; or a blob the server has is sent again.
  * 5. A field the API does not know is sent (the server refuses the batch), or a required one is missing.
@@ -183,6 +183,10 @@ describe('the trace uploader', () => {
     expect(everything).not.toContain(HOME);
     expect(everything).not.toContain('192.0.2.10');
     expect(everything).not.toContain('Lead');
+    // Names are free labels that often say a host or a person (the Audit's L1 on #596): never sent.
+    expect(everything).not.toContain('Remote host');
+    expect(bo.sessions.get('t1')!.agentName).toBeUndefined();
+    expect(bo.sessions.get('t1')!.endpointName).toBeUndefined();
     expect(everything).toContain('<REDACTED:known_secret>');
     const session = bo.sessions.get('t1')!;
     expect(session.projectKey).toMatch(/^[0-9a-f]{64}$/);

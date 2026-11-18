@@ -33,6 +33,8 @@ import type { WireRecord } from '../../electron/services/trace-store';
  * 17. A refused connection is not held, or after the ceiling becomes a hang instead of a 502.
  * 18. An endpoint that is not approved is reached.
  * 19. Retry-After as an HTTP date, or absent, gives no sensible wait; a huge one is not capped.
+ * 20. (The Audit's L4 on #596.) A POST the endpoint may already have taken (the connection reset after it was sent)
+ *     is sent again, and a generation runs and is billed twice; a GET is not retried after a reset.
  */
 
 type Upstream = { server: http.Server; base: string; seen: Array<{ method?: string; url?: string; headers: http.IncomingHttpHeaders; body: Buffer }>; handler: (req: http.IncomingMessage, res: http.ServerResponse, body: Buffer, n: number) => void };
@@ -296,6 +298,20 @@ describe('the endpoint proxy', () => {
     expect(r.status).toBe(403);
     expect(JSON.parse(r.text).error.type).toBe('endpoint_not_approved');
     expect(up.seen).toHaveLength(0);
+  });
+
+  it('20: a reset after the request went is never retried for a POST, and is for a GET', async () => {
+    up.handler = (req) => { req.socket.destroy(); };
+    let t = 0;
+    await startProxy({ now: () => t, sleep: async (ms) => { sleeps.push(ms); t += ms; } });
+    const post = await call('/v1/chat/completions', { body: '{"model":"m"}' });
+    expect(post.status).toBe(502);
+    expect(up.seen.filter(s => s.method === 'POST')).toHaveLength(1);
+    expect(sleeps).toEqual([]);
+    const get = await call('/v1/models', { method: 'GET' });
+    expect(get.status).toBe(502);
+    expect(up.seen.filter(s => s.method === 'GET').length).toBeGreaterThan(1);
+    expect(sleeps.length).toBeGreaterThan(0);
   });
 
   it('19: the wait read from Retry-After, an HTTP date, or nothing, capped at 60 s', () => {
