@@ -6,7 +6,7 @@ import type { BornProcess } from '../../../electron/core/born-processes';
 /**
  * What an agent started that outlives its session, reported and never ended (2.0.5, the owner's lot 2 of 28/10):
  * kotsna's dev servers ran 10 days with no session, and nobody knew. The owner's limits: never end such a process
- * automatically (an ansible run, a `fly ssh`, a build talking to the Sparks may be among them); say it.
+ * automatically (an ansible run, a `fly ssh`, a build talking to a remote inference host may be among them); say it.
  *
  * How it fails, written before the code:
  * 1. An agent with no live session whose tagged processes or labelled containers run is not recorded on its

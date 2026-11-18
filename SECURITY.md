@@ -327,7 +327,7 @@ Without the setting, Claude in Chrome no longer waits on Tars either (2.0.7): th
 would show its dialog, and the classifier, which allowed every Chrome call measured, decides first. From 27 September
 to 10 November not one Chrome dialog opened in an agent's terminal (`~/.tars/logs/hooks.log`), while 22 Chrome calls
 of five agents in four projects were held for the window from 2 November: 10 refused at the delay, 12 handed back by
-hand, which the classifier then let run within seconds, with no dialog (the four checked in the Parallel
+hand, which the classifier then let run within seconds, with no dialog (the four checked in another project's
 orchestrator's transcript).
 
 ---

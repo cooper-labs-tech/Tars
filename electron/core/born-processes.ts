@@ -92,7 +92,7 @@ export function tarsAndItsParents(table: Array<{ pid: number; ppid: number }>, s
 
 /**
  * Programs that serve every project, whoever started them, kept by a stop (the owner, 28/10): colima, the Docker VM
- * kotsna's Supabase and parallel's tests run in, its limactl and the Virtualization process; docker; VS Code
+ * kotsna's Supabase and another project's tests run in, its limactl and the Virtualization process; docker; VS Code
  * opened with `code .`. Named by their exact executable paths, resolved where they are links (Homebrew's bin/
  * into its Cellar): never by a name or a word of the command, which any script can take. This list only keeps:
  * what a stop ends is decided by the birth tag alone.

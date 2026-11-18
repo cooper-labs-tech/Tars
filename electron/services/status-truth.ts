@@ -24,7 +24,7 @@ import { tellNotTaken } from './agent-watch';
  *   took it: no UserPromptSubmit, nothing in its transcript. Tars showed it
  *   working at its prompt for 42 minutes, and the six tasks queued behind it
  *   waited for an end of turn that had already come;
- * - Parallel-Frontend's claude exited mid-turn (no Stop, and SessionEnd's post
+ * - another project's Frontend agent's claude exited mid-turn (no Stop, and SessionEnd's post
  *   never landed) and left the shell it was typed into: `running` with no CLI,
  *   for two days.
  * So, every STATUS_EVERY_MS, each agent's status is set against two things Tars

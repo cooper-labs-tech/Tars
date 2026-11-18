@@ -7,7 +7,7 @@ import type { AgentStatus } from '../../../electron/types';
  * An agent's status reconciled with its CLI's own record when an event never reached Tars (the DB brief of 28/10,
  * item B of the resources plan). Measured on 28/10 (reports/db-status-and-sleep-2810.md): a message Tars typed at
  * a Stop that the CLI never took left Kotsna-QA `running` at its prompt for 42 minutes; a claude that died mid-turn
- * left Parallel-Frontend `running` with no CLI for two days. Hooks keep the status; this only puts it right when
+ * left another project's Frontend agent `running` with no CLI for two days. Hooks keep the status; this only puts it right when
  * the record and the process say otherwise, and never on silence alone: a quiet transcript says nothing.
  *
  * How it fails, written before the code.
@@ -29,7 +29,7 @@ import type { AgentStatus } from '../../../electron/types';
  *    a turn, or do not date it.
  *
  * The rule (statusFix), every time measured from the pass's period E (30 s; four passes is the grace):
- * S1 `running` or a dialog's `waiting` with no CLI in the terminal is kept (Parallel-Frontend): it is `completed`,
+ * S1 `running` or a dialog's `waiting` with no CLI in the terminal is kept (that Frontend agent): it is `completed`,
  *    as SessionEnd would have posted;
  * S2 ... but a launch on its way, or a turn handed or started within the grace, is not touched;
  * S3 `running` whose record says the turn ended, with a message handed after the last turn began and not taken
