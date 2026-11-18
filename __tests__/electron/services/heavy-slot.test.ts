@@ -667,8 +667,17 @@ describe('remote runs (2.0.7): a command this machine only starts', () => {
     const host = slot.get(odd.id)!.remote!;
     expect(host).not.toMatch(/hunter2|\n/);
     expect(host.length).toBeLessThanOrEqual(60);
-    const blank = await slot.ask(remote(104, 'a', '   '));
-    expect(slot.get(blank.id)!.remote).toBe('a remote host');
+  });
+
+  it("H37. (the Audit's L1 on #598) a remote run that names no host is refused, never granted as one", async () => {
+    const w = world({ slots: 1 });
+    const slot = new HeavySlot(w);
+    for (const host of ['', '   ', '\n\t']) {
+      await expect(slot.ask(remote(104, 'a', host)), JSON.stringify(host)).rejects.toThrow(/names no host/);
+    }
+    expect(slot.snapshot().remote).toEqual([]);
+    // A host name that is nothing but a masked secret names no host either.
+    await expect(slot.ask(remote(104, 'a', '\u0001'))).rejects.toThrow(/names no host/);
   });
 });
 

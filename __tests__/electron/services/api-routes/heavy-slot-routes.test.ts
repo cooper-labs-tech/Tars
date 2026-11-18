@@ -20,6 +20,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * S5. A worker whose work came from another worker, or from another project's orchestrator, may take it.
  * S6. A link left from another terminal (a past session's) still counts.
  * S7. The orchestrator itself, or a chat's runner, loses it.
+ * S9. (The Audit's L1 on #598.) A remote run that names no host (`remote: ""`, blank) is let through, and takes no slot
+ *     unseen; or one that is not text is.
  */
 
 const { fleet, terminals, asked } = vi.hoisted(() => ({
@@ -71,6 +73,17 @@ describe('the ask route and the shared servers', () => {
   it('S3. a tars-slot run keeps its own pid', async () => {
     expect((await ask({ pid: 4123, label: 'npm test' })).status).toBe(200);
     expect(asked[0]).toMatchObject({ pid: 4123, untilTurnEnds: false });
+  });
+
+  it('S9. a remote run that names no host is refused, and says why', async () => {
+    for (const remote of ['', '   ', 42, null]) {
+      const r = await ask({ pid: 4123, label: 'build', remote });
+      expect(r.status, JSON.stringify(remote)).toBe(400);
+      expect(JSON.stringify(r.body), JSON.stringify(remote)).toMatch(/names the host/);
+    }
+    expect(asked).toEqual([]);
+    expect((await ask({ pid: 4123, label: 'build', remote: 'build-host' })).status).toBe(200);
+    expect(asked[0]).toMatchObject({ remote: 'build-host' });
   });
 });
 
