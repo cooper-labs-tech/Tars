@@ -81,6 +81,7 @@ vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.
 
 import * as pty from 'node-pty';
 import type { AgentStatus } from '../../../electron/types';
+import { setGrant, resetGrants } from '../../../electron/services/cross-project-grants';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -832,13 +833,21 @@ describe('an agent keeps exactly the rights it had', () => {
     expect(agents.size, 'the agent was enrolled anyway').toBe(before);
   });
 
-  it('still creates one there when it says so', async () => {
-    const { status, body } = await call('POST', '/api/agents', bearer(alphaToken), {
+  it('creates one there only through the owner\'s grant from its project, allowCrossProject alone no longer (2.0.7)', async () => {
+    const refused = await call('POST', '/api/agents', bearer(alphaToken), {
       projectPath: BETA.projectPath, name: 'deliberate', allowCrossProject: true,
     });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+    expect(refused.body.code).toBe('cross_project_not_granted');
 
-    expect(status, JSON.stringify(body)).toBe(200);
-    expect(agents.get((body.agent as { id: string }).id)?.projectPath).toBe(BETA.projectPath);
+    setGrant({ from: ALPHA.projectPath, to: BETA.projectPath, workers: [ALPHA.id] });
+    try {
+      const { status, body } = await call('POST', '/api/agents', bearer(alphaToken), { projectPath: BETA.projectPath, name: 'deliberate' });
+      expect(status, JSON.stringify(body)).toBe(200);
+      expect(agents.get((body.agent as { id: string }).id)?.projectPath).toBe(BETA.projectPath);
+    } finally {
+      resetGrants();
+    }
   });
 });
 

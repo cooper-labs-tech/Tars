@@ -510,11 +510,17 @@ describe('a task delegated to a codex agent, its turn interrupted', () => {
 });
 
 describe('a task from another project', () => {
-  it('(D13) allowed with allowCrossProject: true, goes into the target\'s terminal', async () => {
+  it('(D13) refused on allowCrossProject alone; through the owner\'s grant, goes into the target\'s terminal (2.0.7)', async () => {
     const lead = orchestrator();
     lead.projectPath = path.join(tmp, 'another-project');
-    liveAgent('dev');
-    const { data, status } = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'cross', answer: 'started', allowCrossProject: true }).answer;
+    const dev = liveAgent('dev');
+    const refused = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'cross', answer: 'started', allowCrossProject: true }).answer;
+    expect(refused.status).toBe(403);
+    expect(refused.data).toMatchObject({ code: 'cross_project_not_granted' });
+    // Imported here: its constants are this file's mocked ones, set once tmp is.
+    const { setGrant, resetGrants } = await import('../../../../electron/services/cross-project-grants');
+    setGrant({ from: lead.projectPath, to: dev.projectPath, workers: [] });
+    const { data, status } = await call('POST', '/api/agents/dev/run-task', 'lead', { task: 'cross', answer: 'started' }).answer.finally(() => resetGrants());
     expect(status).toBe(200);
     expect(data).toMatchObject({ ok: true, queued: false });
     await until(() => typed.length === 1);

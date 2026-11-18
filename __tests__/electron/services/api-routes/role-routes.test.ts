@@ -64,6 +64,7 @@ import { restartForSettings } from '../../../../electron/core/agent-restart';
 import { getSuperAgentInstructionsPath } from '../../../../electron/utils';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../../electron/types';
+import { setGrant, resetGrants } from '../../../../electron/services/cross-project-grants';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -305,11 +306,13 @@ describe('POST /api/agents', () => {
     const elsewhere = path.join(path.dirname(project), 'other-project');
     fs.mkdirSync(elsewhere, { recursive: true });
     const theirs = agent('theirs', { projectPath: elsewhere, role: 'orchestrator', orchestratorMode: true });
+    // Crossing takes the owner's grant since 2.0.7: given here, so that the role's own refusal is what answers.
+    setGrant({ from: project, to: elsewhere, workers: ['caller'] });
 
     const answer = await createAgent(
       { name: 'Rogue3', role: 'orchestrator', projectPath: elsewhere, allowCrossProject: true, permissionMode: 'bypass' },
       'caller',
-    );
+    ).finally(() => resetGrants());
 
     expect(answer!.status).toBe(403);
     expect(String(answer!.body.error)).toContain('Agents page');
