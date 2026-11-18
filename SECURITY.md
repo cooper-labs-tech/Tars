@@ -1040,3 +1040,90 @@ says around them, in a message of its own, is the owner's; anything the owner
 typed by hand into a terminal, or said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
+
+## 9. Inference endpoints and traces
+
+Written with the code (19/11/2026). An agent running codex, pi, qwen-code or opencode can run on an
+OpenAI-compatible inference endpoint the user adds in Settings, a remote inference host. Its sessions can be kept as
+traces, opt-in, for an external trace reader. This adds one outbound flow, two credentials and one store.
+
+**The outbound flow.** Every model call such an agent makes goes to the endpoint, with the agent's whole context:
+- its system prompt;
+- the files it read;
+- every tool result.
+
+The harness never talks to the endpoint directly. It talks to Tars's endpoint proxy on loopback
+(`services/endpoint-proxy.ts`, `API_PORT + 2`), which sends the request to the endpoint's approved base URL and to no
+other address.
+
+**The endpoint's key** is in the settings' secrets (`endpointKeys`, `~/.tars-private/settings-secrets.json`).
+- The proxy reads it per request and puts it on the outbound call, in the header form the harness used (a Bearer, or
+  `x-api-key`).
+- It is never in an agent's environment, a command line, a CLI's config file, a log, a trace, or anything the window
+  is sent (the window gets `keySet`).
+- Pi's `models.json` gets one provider of Tars's whose `apiKey` is the name of a variable (`$TARS_ENDPOINT_TOKEN`),
+  not a key.
+
+**The terminal's token** (`tep_` and 48 hex characters) is what the harness presents to the proxy.
+- It is minted with the agent's terminal (`core/agent-pty.ts`), in memory only, and dies with that terminal.
+- It sits in the variables the harness reads it from: `TARS_ENDPOINT_TOKEN`, and `OPENAI_API_KEY` for qwen-code.
+- Like the agent's API token (§ 3), it is not secret from the other agents of the same user. Another agent that read
+  it could make model calls on that endpoint, recorded under that agent's session, but it would never learn the key.
+
+**The approval guard.** Any agent may list the endpoints, add one, change one, rotate a key, read the models and check
+the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchestrator. That is the owner's decision of
+19/11, so agents can tune other projects' agents.
+- An endpoint an agent adds, or whose base URL an agent changes, is unusable until the owner approves it once in the
+  window. The proxy answers `403 endpoint_not_approved`, and an agent cannot be set on it.
+  - The reason: it is where an agent's whole context would go, and an injected agent could otherwise point any agent
+    at its own server in two calls.
+  - No API route approves: `endpoints:approve` is the window's alone.
+- A key, the models, the name or the hold ceiling keep the approval.
+- An agent may turn traces off for an endpoint, never on.
+
+**The key drop folder.** An agent hands a key to Tars through a file, never through a prompt or a tool argument.
+- It writes the key, one line, into `~/.tars/endpoint-keys/<name>.key`, and names the file in `endpoint_set_key`.
+- The name must be `[A-Za-z0-9._-]{1,64}.key`, with no separator.
+- The folder must be a plain folder, not a link (lstat).
+- The file is opened with `O_NOFOLLOW` and checked by fstat against its lstat: a plain file with one link, 8 KiB at
+  most, one printable line.
+- Then Tars takes the key into the private folder and deletes the file.
+- A file that fails a check is left as it is, and only its name is reported.
+- Tars reads a key from no other path, so no argument can make it read `~/.tars-private`, `~/.ssh` or anything else
+  and send it out as a Bearer.
+- The macOS keychain is not read either: the key path is the same on every system.
+
+**The trace reader's token**, `~/.tars-private/traces-reader-token` (0600), opens `GET /api/traces/*` and nothing
+else.
+- `resolveCaller` reads it only on those paths, as it reads a Hermes gateway's secret only on its webhook.
+- No other credential opens those paths: not an agent's token (one agent would read every other's sessions), not the
+  shared token, not a gateway's secret.
+- It is rotated or revoked in the window, and shown once when made.
+- The API listens on loopback. Offering the routes to a host on a tailnet is not built; it is the owner's call. It
+  would take a second listener bound to the tailnet address alone, serving these routes and nothing else, behind a
+  switch that is off by default. A port forward would carry every route of the API, leaving the token as the only
+  guard.
+
+**The stored traces**, `~/.tars/traces/traces.db` (0600, in a 0700 folder).
+- They hold sessions in full: prompts, files read, tool results.
+- `~/.tars` is in every agent's `--add-dir`, so any agent can read every traced session, as it can already read every
+  transcript under `~/.claude` and `~/.codex`.
+- Nothing is masked on this machine. Masking secrets and pseudonymising is the reader's job, on its side.
+- The endpoint's key never enters a trace: the proxy records the request body, never its headers.
+- What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
+  Settings, and a delete in the back-office.
+
+**Who is traced** (`services/trace-gate.ts`). A session is traced only when all of these hold:
+- an approved endpoint that allows traces;
+- the project's switch and the agent's both on;
+- the harness and model pair on the owner's list.
+
+One rule is above the list, in code: a Claude, GPT, o-series or Gemini model is never traced. The claude binary is not
+on the seeded list.
+
+Measured by:
+- `__tests__/electron/endpoint-proxy.test.ts` (the token swap, both ids, no buffering, the holds);
+- `inference-endpoints.test.ts` (the approval guard, the drop file);
+- `services/trace-reader-token.test.ts` (the door);
+- `trace-gate.test.ts`;
+- `e2e/traces-native.spec.ts` (the whole chain against a stand-in endpoint on loopback).
