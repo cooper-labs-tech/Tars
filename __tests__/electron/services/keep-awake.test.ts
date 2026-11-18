@@ -20,6 +20,14 @@ import type { AgentStatus, AppSettings } from '../../../electron/types';
  * 10. (same) The system refuses the blocker (start throws, or the blocker is not started right after start) and the
  *    state says the Mac is kept awake, or says nothing; or a refused blocker's id is kept as if held; or it is never
  *    asked again; or "refused" stays once it is granted or no longer wanted.
+ *
+ * 2.0.7, a project's hours (services/fleet-operations.ts), written before the code:
+ * 11. While a project's window is open and no agent works yet, the computer is let sleep (while-working), and the
+ *     night's work never starts.
+ * 12. A window keeps the computer awake under 'never' (the owner's word outranks a schedule an orchestrator set).
+ * 13. The blocker is not given back when the last window closes with no agent at work.
+ * 14. The state does not say which windows keep the computer awake and until when, or says it with none open (the
+ *     window's line and the e2e read the state as it was: no new key when no window is open).
  */
 
 function blocker() {
@@ -49,8 +57,13 @@ function setup(mode?: unknown, statuses: AgentStatus['status'][] = []) {
   const b = blocker();
   const s = { keepAwake: mode } as unknown as AppSettings;
   let fleet = statuses.map(agent);
-  const k = createKeepAwake({ blocker: b, settings: () => s, agents: () => fleet });
-  return { b, k, s, setFleet: (st: AgentStatus['status'][]) => { fleet = st.map(agent); } };
+  let windows: Array<{ projectPath: string; until: string }> = [];
+  const k = createKeepAwake({ blocker: b, settings: () => s, agents: () => fleet, windows: () => windows });
+  return {
+    b, k, s,
+    setFleet: (st: AgentStatus['status'][]) => { fleet = st.map(agent); },
+    setWindows: (w: typeof windows) => { windows = w; },
+  };
 }
 
 describe('keepAwake', () => {
@@ -148,4 +161,41 @@ describe('keepAwake', () => {
       expect(k.sync().refused).toBeUndefined();
     });
   }
+
+  const night = { projectPath: '/p/project-a', until: '2026-11-20T04:00:00.000Z' };
+
+  it("11. a project's open window keeps the computer awake with no agent at work yet", () => {
+    const { b, k, setWindows } = setup(undefined, ['idle']);
+    expect(k.sync().active).toBe(false);
+    setWindows([night]);
+    expect(k.sync()).toMatchObject({ mode: 'while-working', active: true, working: 0, scheduled: [night] });
+    expect(b.calls).toEqual(['start:prevent-app-suspension']);
+  });
+
+  it("12. 'never' outranks a project's window", () => {
+    const { b, k, setWindows } = setup('never', []);
+    setWindows([night]);
+    expect(k.sync()).toMatchObject({ mode: 'never', active: false, scheduled: [night] });
+    expect(b.calls).toEqual([]);
+  });
+
+  it('13. the blocker goes back when the last window closes with no agent at work', () => {
+    const { b, k, setWindows } = setup(undefined, []);
+    setWindows([night, { projectPath: '/p/other', until: '2026-11-20T06:00:00.000Z' }]);
+    expect(k.sync().active).toBe(true);
+    setWindows([night]);
+    expect(k.sync().active).toBe(true);
+    setWindows([]);
+    expect(k.sync().active).toBe(false);
+    expect(b.calls).toEqual(['start:prevent-app-suspension', 'stop:1']);
+  });
+
+  it('14. the state names the open windows, and has no such key with none open', () => {
+    const { k, setWindows } = setup('always', []);
+    expect(k.sync()).not.toHaveProperty('scheduled');
+    setWindows([night]);
+    expect(k.sync().scheduled).toEqual([night]);
+    setWindows([]);
+    expect(k.sync()).not.toHaveProperty('scheduled');
+  });
 });

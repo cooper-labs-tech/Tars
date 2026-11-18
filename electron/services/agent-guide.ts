@@ -178,6 +178,19 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
       'During a run Tars tells you, your orchestrator and the window when the disk fills or the swap grows fast. Tars never stops a run itself: you decide.',
     ].join('\n'),
   },
+  {
+    id: 'project-hours',
+    title: 'A project\'s hours and its cap on workers at work',
+    roles: ['orchestrator', 'worker'],
+    text: [
+      'A project may have hours: a window every day, from a start to a stop in HH:MM, in UTC or in the computer\'s local time, always said (22:00 to 06:00 UTC runs eight hours, ending the next morning). `project_schedule` reads them with what the last window did; its `set` and `clear` are the project\'s own orchestrator\'s, and the owner\'s, in the window. Kept across a restart of Tars.',
+      'At the start, the queues the last stop paused go again, and the workers start as their work comes (onStart \'start-agents\' starts each worker at rest as well; never one somebody else stopped). A restart of Tars inside the window does not hold the queues: they go again.',
+      'At the stop, every worker\'s queue is paused: work handed outside the hours waits there for the next window, never refused and never lost (agent_queue shows it). Every worker is stopped once its current turn has ended (a task, a dialog, background work it left), never in the middle of one. A CLI that never tells Tars its turn ended (amp, grok, opencode, pi) is left running, its queue paused, and the window says why.',
+      'While a window is open the computer is kept awake, even before any agent works (unless the owner set keep awake to never), and the owner is warned once a window when it runs on battery, or with its lid closed and no external display, where Tars can tell; where it cannot, it says so. A sleep of the computer during the window is recorded with its wake.',
+      'A project may have a cap: `project_cap` sets the most of its workers at work at once (its orchestrator is neither counted nor held). A task handed beyond it (delegate_task, start_agent, a message that would start a session) waits in that agent\'s queue, read as waiting for its project\'s cap, and goes in when a place frees, the oldest of the project first. It counts tasks and session starts, never a message typed into a session already up, which goes in as before (an answer must never wait behind the tasks waiting on it): work handed by `send_message` to a worker whose session is up passes the cap, so hand work that must wait for a place with `delegate_task`.',
+      'The hours leave the project\'s orchestrator and its chats\' runners alone: never paused, stopped, resumed or started by them, so what the owner or another project sends them never waits for a window. Another project\'s orchestrator does not set a project\'s hours or cap.',
+    ].join('\n'),
+  },
 ];
 
 /** The topic that explains each tool an agent can see. */
@@ -218,6 +231,8 @@ export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   worktree_prune: 'workflow',
   heavy_slot_give_back: 'heavy-runs',
   heavy_slot_status: 'heavy-runs',
+  project_schedule: 'project-hours',
+  project_cap: 'project-hours',
   // mcp-kanban
   list_tasks: 'kanban',
   get_task: 'kanban',

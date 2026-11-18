@@ -377,7 +377,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends. A project's cap on workers at work (project_cap) counts tasks and session starts, never a message typed into a session already up: hand work that must wait for a place with delegate_task.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -996,6 +996,91 @@
                   "description": "Say what would be removed, and remove nothing."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_schedule",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "get",
+                    "set",
+                    "clear"
+                  ],
+                  "description": "'get' (default), 'set' or 'clear'"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project (for 'get' with no project and no own project: every project)."
+                },
+                "start": {
+                  "type": "string",
+                  "description": "With 'set': the start of the window, HH:MM on 24 hours, e.g. '22:00'"
+                },
+                "stop": {
+                  "type": "string",
+                  "description": "With 'set': its stop, HH:MM; before the start, it ends the next day, e.g. '06:00'"
+                },
+                "timeZone": {
+                  "type": "string",
+                  "enum": [
+                    "UTC",
+                    "local"
+                  ],
+                  "description": "With 'set', required: 'UTC', or 'local' for the computer's own time. Tars never guesses it."
+                },
+                "onStart": {
+                  "type": "string",
+                  "enum": [
+                    "resume-queues",
+                    "start-agents"
+                  ],
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_cap",
+            "description": "A project's cap: the most of its workers at work at once (its orchestrator is neither counted nor held). Work handed to a worker beyond it (delegate_task, start_agent, a message that would start a session) is never refused and never lost: it waits in that agent's queue, read as waiting for its project's cap, and goes in when a place frees, the oldest of the project first. It counts tasks and session starts, never a message typed into a session already up: work handed by send_message to a worker whose session is up passes the cap, so hand work that must wait for a place with delegate_task. Set by the project's own orchestrator (and the owner, in the window); project_schedule 'get' reads it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "cap": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "1 to 64, or null to remove the cap"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project."
+                }
+              },
+              "required": [
+                "cap"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -5892,7 +5977,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends. A project's cap on workers at work (project_cap) counts tasks and session starts, never a message typed into a session already up: hand work that must wait for a place with delegate_task.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -6511,6 +6596,91 @@
                   "description": "Say what would be removed, and remove nothing."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_schedule",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "get",
+                    "set",
+                    "clear"
+                  ],
+                  "description": "'get' (default), 'set' or 'clear'"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project (for 'get' with no project and no own project: every project)."
+                },
+                "start": {
+                  "type": "string",
+                  "description": "With 'set': the start of the window, HH:MM on 24 hours, e.g. '22:00'"
+                },
+                "stop": {
+                  "type": "string",
+                  "description": "With 'set': its stop, HH:MM; before the start, it ends the next day, e.g. '06:00'"
+                },
+                "timeZone": {
+                  "type": "string",
+                  "enum": [
+                    "UTC",
+                    "local"
+                  ],
+                  "description": "With 'set', required: 'UTC', or 'local' for the computer's own time. Tars never guesses it."
+                },
+                "onStart": {
+                  "type": "string",
+                  "enum": [
+                    "resume-queues",
+                    "start-agents"
+                  ],
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_cap",
+            "description": "A project's cap: the most of its workers at work at once (its orchestrator is neither counted nor held). Work handed to a worker beyond it (delegate_task, start_agent, a message that would start a session) is never refused and never lost: it waits in that agent's queue, read as waiting for its project's cap, and goes in when a place frees, the oldest of the project first. It counts tasks and session starts, never a message typed into a session already up: work handed by send_message to a worker whose session is up passes the cap, so hand work that must wait for a place with delegate_task. Set by the project's own orchestrator (and the owner, in the window); project_schedule 'get' reads it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "cap": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "1 to 64, or null to remove the cap"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project."
+                }
+              },
+              "required": [
+                "cap"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -7045,7 +7215,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends. A project's cap on workers at work (project_cap) counts tasks and session starts, never a message typed into a session already up: hand work that must wait for a place with delegate_task.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -7664,6 +7834,91 @@
                   "description": "Say what would be removed, and remove nothing."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_schedule",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "get",
+                    "set",
+                    "clear"
+                  ],
+                  "description": "'get' (default), 'set' or 'clear'"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project (for 'get' with no project and no own project: every project)."
+                },
+                "start": {
+                  "type": "string",
+                  "description": "With 'set': the start of the window, HH:MM on 24 hours, e.g. '22:00'"
+                },
+                "stop": {
+                  "type": "string",
+                  "description": "With 'set': its stop, HH:MM; before the start, it ends the next day, e.g. '06:00'"
+                },
+                "timeZone": {
+                  "type": "string",
+                  "enum": [
+                    "UTC",
+                    "local"
+                  ],
+                  "description": "With 'set', required: 'UTC', or 'local' for the computer's own time. Tars never guesses it."
+                },
+                "onStart": {
+                  "type": "string",
+                  "enum": [
+                    "resume-queues",
+                    "start-agents"
+                  ],
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_cap",
+            "description": "A project's cap: the most of its workers at work at once (its orchestrator is neither counted nor held). Work handed to a worker beyond it (delegate_task, start_agent, a message that would start a session) is never refused and never lost: it waits in that agent's queue, read as waiting for its project's cap, and goes in when a place frees, the oldest of the project first. It counts tasks and session starts, never a message typed into a session already up: work handed by send_message to a worker whose session is up passes the cap, so hand work that must wait for a place with delegate_task. Set by the project's own orchestrator (and the owner, in the window); project_schedule 'get' reads it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "cap": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "1 to 64, or null to remove the cap"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project."
+                }
+              },
+              "required": [
+                "cap"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },
@@ -8126,7 +8381,7 @@
           },
           {
             "name": "send_message",
-            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends.",
+            "description": "Send input/message to an agent. If the agent is idle/completed/error, this will START the agent with the message as the prompt. If the agent is 'waiting', this sends the message as input. WARNING: Sending to a 'running' agent may interfere with its current work. Prefer waiting until it reaches 'waiting' or 'completed' status. To answer whoever asked you for your current task, use the id \"requester\" (a chat's orchestrator, or the project's orchestrator); \"orchestrator\" or the orchestrator's name reach it too. An agent's id always reaches that agent. A worker never orders work from another agent: what a worker sends another worker arrives as a note for information, labelled so, typed in once that agent's turn has ended, never as a task, and never starting an agent that has no session open; steer and restart are refused to it, as a stop is. To get work done by another agent, or to have it stopped, a worker asks its orchestrator. Use mode 'note' (or 'note-now') for information the agent needs no answer to, such as a release cut, a branch moved or a gate passed: it is labelled a note, it is no task, and you are not told when the agent's turn ends. A project's cap on workers at work (project_cap) counts tasks and session starts, never a message typed into a session already up: hand work that must wait for a place with delegate_task.",
             "inputSchema": {
               "type": "object",
               "properties": {
@@ -8745,6 +9000,91 @@
                   "description": "Say what would be removed, and remove nothing."
                 }
               },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_schedule",
+            "description": "A project's hours: a window every day when its agents work, from a start to a stop in HH:MM, in UTC or in the computer's local time (always say which). At the start, the queues the last stop paused go again (and, with onStart 'start-agents', each worker at rest is started); at the stop, every worker's queue is paused, so work handed outside the hours waits for the next window, never refused and never lost, and every worker is stopped once its current turn has ended, never in the middle of one. The project's orchestrator and its chats' runners are left out of the hours. Kept across a restart of Tars. While a window is open the computer is kept awake, and the owner is warned once a window when it runs on battery or with its lid closed. action 'get' (the default) reads every project's hours, cap and what its last window did, or one project's; 'set' and 'clear' are for the project's own orchestrator (and the owner, in the window).",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "action": {
+                  "type": "string",
+                  "enum": [
+                    "get",
+                    "set",
+                    "clear"
+                  ],
+                  "description": "'get' (default), 'set' or 'clear'"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project (for 'get' with no project and no own project: every project)."
+                },
+                "start": {
+                  "type": "string",
+                  "description": "With 'set': the start of the window, HH:MM on 24 hours, e.g. '22:00'"
+                },
+                "stop": {
+                  "type": "string",
+                  "description": "With 'set': its stop, HH:MM; before the start, it ends the next day, e.g. '06:00'"
+                },
+                "timeZone": {
+                  "type": "string",
+                  "enum": [
+                    "UTC",
+                    "local"
+                  ],
+                  "description": "With 'set', required: 'UTC', or 'local' for the computer's own time. Tars never guesses it."
+                },
+                "onStart": {
+                  "type": "string",
+                  "enum": [
+                    "resume-queues",
+                    "start-agents"
+                  ],
+                  "description": "With 'set': 'resume-queues' (default: the workers start as their work comes) or 'start-agents' (each worker at rest is started too)"
+                }
+              },
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "project_cap",
+            "description": "A project's cap: the most of its workers at work at once (its orchestrator is neither counted nor held). Work handed to a worker beyond it (delegate_task, start_agent, a message that would start a session) is never refused and never lost: it waits in that agent's queue, read as waiting for its project's cap, and goes in when a place frees, the oldest of the project first. It counts tasks and session starts, never a message typed into a session already up: work handed by send_message to a worker whose session is up passes the cap, so hand work that must wait for a place with delegate_task. Set by the project's own orchestrator (and the owner, in the window); project_schedule 'get' reads it.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "cap": {
+                  "anyOf": [
+                    {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 64
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "1 to 64, or null to remove the cap"
+                },
+                "project": {
+                  "type": "string",
+                  "description": "The project's folder, as list_agents gives it. Omitted: your own project."
+                }
+              },
+              "required": [
+                "cap"
+              ],
               "additionalProperties": false,
               "$schema": "http://json-schema.org/draft-07/schema#"
             },

@@ -25,7 +25,10 @@
 //   DELEGATE <agent id> <prompt>   calls Tars's delegate_task, through Tars's MCP server as this CLI starts it;
 //   SEND <agent id> <message>      calls send_message the same way;
 //   ECHO <word>                    answers "echo <word>";
-//   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers.
+//   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers;
+//   HOLD <tag>                     a turn that lasts until the file release-<tag> exists beside FAKE_CLI_LOG, then
+//                                  answers "held <tag>" (a spec ends the turn when it wants to);
+//   TOOL <name> <json>             calls that tool of Tars's MCP server with the JSON as its arguments.
 // Every launch, typed line, turn, hook, tool call and answer is one JSON line in FAKE_CLI_LOG, with whether Tars's
 // agent token reached it or the MCP server, never a token or a key.
 import fs from 'node:fs';
@@ -460,9 +463,20 @@ export async function run() {
       hook('StopFailure', { error: 'authentication_failed', error_details: answer });
       return;
     }
-    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
+    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE|HOLD|TOOL) (\S+)(?: (.+))?$/ms.exec(text);
     if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
+    else if (directive[1] === 'HOLD') {
+      const release = path.join(path.dirname(LOG), `release-${directive[2]}`);
+      log({ holding: directive[2] });
+      while (!fs.existsSync(release)) await sleep(200);
+      answer = `held ${directive[2]}`;
+    } else if (directive[1] === 'TOOL') {
+      let args = {};
+      try { args = JSON.parse((directive[3] ?? '{}').trim()); } catch { /* none */ }
+      const r = await callTars(directive[2], args);
+      answer = `${directive[2]} ${r.isError ? 'refused' : 'answered'}: ${r.text}`;
+    }
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
     else if (directive[1] === 'SEND') {
       const r = await callTars('send_message', { id: directive[2], message: (directive[3] ?? '').trim() });
