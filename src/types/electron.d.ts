@@ -741,6 +741,8 @@ export interface AgentStatus {
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
+  /** 2.0.7: its CLI runs on a remote host of the owner's, over ssh (core/remote-launch.ts): the host's id and the folder there. */
+  remote?: { hostId: string; folder: string };
 }
 
 export interface AgentTemplate {
@@ -1665,6 +1667,8 @@ export interface ElectronAPI {
       /** @deprecated Send `role`. Read only when `role` is absent. */
       orchestratorMode?: boolean;
       cliPath?: string | null;
+      /** 2.0.7: a remote host of the owner's and a folder under its work root, or null to run on this computer. */
+      remote?: { hostId: string; folder?: string } | null;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     /** `{ success: false, cliRunning: true }` when a CLI still runs in the agent's terminal: nothing was typed. */
     /** `code: 'no_terminal'` when the machine had no terminal left: `error` says how many of how many and what frees one, and the agent reads 'error' with it (asleep, it stays asleep with it). */

@@ -369,6 +369,8 @@ export interface AgentStatus {
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
+  /** 2.0.7: its CLI runs on a remote host of the owner's, over ssh (core/remote-launch.ts): the host's id and the folder there. */
+  remote?: { hostId: string; folder: string };
 }
 
 /**

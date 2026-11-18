@@ -1849,6 +1849,8 @@ const MODEL_NAME = /^[a-zA-Z0-9._:\/\[\]-]+$/;
 /** What update_agent changes, as POST /api/agents/:id/update takes it. */
 const UPDATE_FIELDS = [
   'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills', 'secondaryProjectPath',
+  // 2.0.7: a remote host of the owner's and a folder on it, or null (core/remote-launch.ts; checked in core/agent-update.ts).
+  'remote',
 ] as const;
 const CHARACTERS: readonly AgentCharacter[] = ['robot', 'ninja', 'wizard', 'astronaut', 'knight', 'pirate', 'alien', 'viking'];
 const EFFORTS: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -1917,8 +1919,9 @@ function updateFrom(body: unknown, agent: AgentStatus, ctx: RouteContext): { upd
   }
   if (!UPDATE_FIELDS.some(field => asked[field] !== undefined)) return { status: 400, error: `Nothing to change: name a setting. ${takes}` };
 
-  const { name, character, provider, model, localModel, effort, permissionMode, cliPath, skills, secondaryProjectPath } = asked;
+  const { name, character, provider, model, localModel, effort, permissionMode, cliPath, skills, secondaryProjectPath, remote } = asked;
   const update: Omit<AgentUpdate, 'id'> = {};
+  if (remote !== undefined) update.remote = remote as AgentUpdate['remote'];
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) return { status: 400, error: 'An agent\'s name is a string with at least one character in it.' };
     // As POST /api/agents refuses it (the Audit's gate of #351).

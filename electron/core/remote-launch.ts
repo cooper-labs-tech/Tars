@@ -53,6 +53,35 @@ export function parseRemoteHost(raw: unknown): RemoteHostParse {
   return { ok: true, host: { id: r.id, name: r.name.trim(), sshTarget: r.sshTarget, workRoot: root.replace(/\/+$/, '') || '/' } };
 }
 
+/** Where an agent runs when it runs on a host: the host's id and the folder on it, under its work root. */
+export interface AgentRemote { hostId: string; folder: string }
+
+export type AgentRemoteParse =
+  | { ok: true; remote: AgentRemote | null }
+  | { ok: false; error: string; code: 'invalid_remote' | 'unknown_host' | 'invalid_folder' };
+
+const BAD_PATH = /[\u0000-\u001f\u007f'"`$\\]/;
+
+/**
+ * An agent's placement as asked (the window, or its project's orchestrator): a host the owner added, and a folder
+ * strictly under that host's work root (its project's folder name there when none is said); null brings it back to
+ * this computer.
+ */
+export function parseAgentRemote(raw: unknown, hosts: RemoteHost[], projectPath: string): AgentRemoteParse {
+  if (raw === null) return { ok: true, remote: null };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, code: 'invalid_remote', error: 'remote is { hostId, folder? }, or null to run on this computer.' };
+  const { hostId, folder } = raw as { hostId?: unknown; folder?: unknown };
+  const host = typeof hostId === 'string' ? hosts.find((h) => h.id === hostId) : undefined;
+  if (!host) return { ok: false, code: 'unknown_host', error: 'hostId names none of the owner\'s remote hosts: only the owner adds one, in the window.' };
+  const name = projectPath.split(/[\\/]/).filter(Boolean).pop() ?? 'project';
+  const asked = folder === undefined ? `${host.workRoot}/${BAD_PATH.test(name) ? 'project' : name}` : folder;
+  if (typeof asked !== 'string' || !asked.startsWith(`${host.workRoot}/`) || BAD_PATH.test(asked) || asked.length > 400
+    || asked.split('/').some((seg) => seg === '..' || seg === '.')) {
+    return { ok: false, code: 'invalid_folder', error: `folder is an absolute path under the host's work root (${host.workRoot}/...), with no "..", quote, backslash or $.` };
+  }
+  return { ok: true, remote: { hostId: host.id, folder: asked.replace(/\/+$/, '') } };
+}
+
 /** Where the tunnel's ports are taken on the host. */
 const PORT_BASE = 41000;
 const PORT_SPAN = 2000;
