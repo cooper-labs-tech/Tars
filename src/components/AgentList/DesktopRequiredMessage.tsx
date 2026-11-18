@@ -21,7 +21,9 @@ export function DesktopRequiredMessage() {
             </code>
           </div>
           <p className="text-xs text-text-muted">
-            Or build the Mac app with: <code className="text-text-muted">npm run electron:build</code>
+            {/* Not electron:build: since signed releases it needs the maintainer's Developer ID (OPERATIONS.md,
+                "Package unsigned"). The unsigned copy is Tars Sandbox, started beside your own Tars. */}
+            Or package an unsigned copy, Tars Sandbox: <code className="text-text-muted">npm run electron:pack</code>, then <code className="text-text-muted">npm run sandbox</code>
           </p>
         </div>
       </div>
