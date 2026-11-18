@@ -22,15 +22,17 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. create_agent makes a codex agent (model-a, effort low), and start_agent starts codex on model-a;
  * 2. update_agent sets model-b and effort high while codex works: taken, said to apply at its next start on a new
  *    conversation, and codex is not touched (same process, no second launch);
- * 3. a move to claude while codex runs is refused (cli_running), naming stop_agent, and nothing is written;
+ * 3. a move to claude while codex works is queued (2.0.7: never refused, never cutting the turn), and nothing is
+ *    written; reverted while still queued, it is dropped, and codex is left alone;
  * 4. stopped and started again, codex runs on model-b;
  * 5. stopped, the agent moves to claude (model opus, effort max, the stand-in as its CLI path): taken, said to apply
  *    at its next start on a new conversation; agents.json has it;
  * 6. started, claude runs with --model opus and --effort max, on a new session (no --resume);
  * 7. its effort changed to low once its turn has ended: taken, its conversation kept, and claude is restarted with
  *    --effort low, --resume <its session> and --fork-session;
- * 8. refused, and nothing written: the worker changing it (worker_may_not_update), the orchestrator changing an agent
- *    of another project (other_project), and the orchestrator changing itself (orchestrator_settings).
+ * 8. refused, and nothing written, for a setting outside the inference ones (2.0.7: those any agent changes): the
+ *    worker changing it (worker_may_not_update), the orchestrator changing an agent of another project
+ *    (other_project), and the orchestrator changing itself (orchestrator_settings).
  * Run in the classic shell and in the new interface's. The artefact: values.json (every tool answer, the records,
  * every launch), launches.jsonl.
  */
@@ -226,12 +228,19 @@ setInterval(() => {}, 1 << 30);
       expect(alive(first.pid)).toBe(true);
       expect(launchesOf(id, 'codex')).toHaveLength(1);
 
-      // ── 3. A move to claude while codex runs: refused, nothing written ──
+      // ── 3. A move to claude while codex works: queued, nothing written; reverted while queued, dropped ──
       const tooSoon = await lead('update_agent', { id, provider: 'claude' });
       keep({ tooSoon, afterTooSoon: recordOf(id) });
-      expect(tooSoon.isError).toBe(true);
-      expect(tooSoon.text).toContain('cli_running');
-      expect(tooSoon.text).toContain('stop_agent');
+      expect(tooSoon.isError).toBe(false);
+      expect(tooSoon.text).toMatch(/\bqueued\b/);
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
+      expect(alive(first.pid)).toBe(true);
+      const queuedChange = /\bchg-[0-9a-f]{8}\b/.exec(tooSoon.text)?.[0];
+      expect(queuedChange).toBeTruthy();
+      const dropped = await lead('revert_agent_change', { changeId: queuedChange });
+      keep({ dropped });
+      expect(dropped.isError).toBe(false);
+      expect(dropped.text).toContain('cancelled');
       expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
       expect(alive(first.pid)).toBe(true);
 
@@ -274,9 +283,9 @@ setInterval(() => {}, 1 << 30);
 
       // ── 8. Refused, and nothing written ──
       const before = { o1: recordOf('o1'), far: recordOf('far'), mover: recordOf(id) };
-      const byWorker = await worker('update_agent', { id, model: 'haiku' });
-      const otherProject = await lead('update_agent', { id: 'far', model: 'haiku' });
-      const itself = await lead('update_agent', { id: 'o1', model: 'haiku' });
+      const byWorker = await worker('update_agent', { id, permissionMode: 'plan' });
+      const otherProject = await lead('update_agent', { id: 'far', permissionMode: 'plan' });
+      const itself = await lead('update_agent', { id: 'o1', permissionMode: 'plan' });
       keep({ byWorker, otherProject, itself });
       expect(byWorker.isError).toBe(true);
       expect(byWorker.text).toContain('worker_may_not_update');

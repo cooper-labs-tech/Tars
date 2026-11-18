@@ -26,6 +26,8 @@
 //   SEND <agent id> <message>      calls send_message the same way;
 //   ECHO <word>                    answers "echo <word>";
 //   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers.
+//   HOLD <tag>                     keeps its turn going until the file $HOME/release-<tag> exists, then answers
+//                                  "released <tag>": a turn that lasts as long as a spec needs it to.
 // Every launch, typed line, turn, hook, tool call and answer is one JSON line in FAKE_CLI_LOG, with whether Tars's
 // agent token reached it or the MCP server, never a token or a key.
 import fs from 'node:fs';
@@ -460,9 +462,14 @@ export async function run() {
       hook('StopFailure', { error: 'authentication_failed', error_details: answer });
       return;
     }
-    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
+    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE|HOLD) (\S+)(?: (.+))?$/ms.exec(text);
     if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
+    else if (directive[1] === 'HOLD') {
+      const release = path.join(process.env.HOME || '', `release-${directive[2]}`);
+      while (!fs.existsSync(release)) await sleep(200);
+      answer = `released ${directive[2]}`;
+    }
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
     else if (directive[1] === 'SEND') {
       const r = await callTars('send_message', { id: directive[2], message: (directive[3] ?? '').trim() });
