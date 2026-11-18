@@ -30,7 +30,9 @@ export interface TraceGateInput {
   excludeClosedModels: boolean;
 }
 
-export type TraceDecision = { traced: boolean; reason: string };
+/** Why, as a stable code the window reads (its own words for each), beside the reason in English. */
+export type TraceCode = 'traced' | 'no-endpoint' | 'endpoint-not-approved' | 'endpoint-disallows' | 'project-off' | 'agent-off' | 'closed-model' | 'not-on-list';
+export type TraceDecision = { traced: boolean; code: TraceCode; reason: string };
 
 /** The owner's list as it ships: empty. Nothing is traced until the owner names a pair. */
 export function defaultTracePairs(): TracePair[] {
@@ -62,16 +64,16 @@ export function pairAllows(pair: TracePair, harness: string, model: string): boo
 
 /** Whether this session is traced, and the condition that decided it. */
 export function traceDecision(input: TraceGateInput): TraceDecision {
-  if (!input.endpoint) return { traced: false, reason: 'not on an inference endpoint' };
-  if (!input.endpoint.approved) return { traced: false, reason: 'the endpoint is not approved' };
-  if (!input.endpoint.allowTraces) return { traced: false, reason: 'the endpoint does not allow traces' };
-  if (!input.projectOptedIn) return { traced: false, reason: 'the project is not opted in' };
-  if (!input.agentOptedIn) return { traced: false, reason: 'the agent is not opted in' };
+  if (!input.endpoint) return { traced: false, code: 'no-endpoint', reason: 'not on an inference endpoint' };
+  if (!input.endpoint.approved) return { traced: false, code: 'endpoint-not-approved', reason: 'the endpoint is not approved' };
+  if (!input.endpoint.allowTraces) return { traced: false, code: 'endpoint-disallows', reason: 'the endpoint does not allow traces' };
+  if (!input.projectOptedIn) return { traced: false, code: 'project-off', reason: 'the project is not opted in' };
+  if (!input.agentOptedIn) return { traced: false, code: 'agent-off', reason: 'the agent is not opted in' };
   const model = input.model ?? '';
-  if (input.excludeClosedModels !== false && closedModel(model)) return { traced: false, reason: 'closed models are left out of traces (Settings)' };
+  if (input.excludeClosedModels !== false && closedModel(model)) return { traced: false, code: 'closed-model', reason: 'closed models are left out of traces (Settings)' };
   const harness = input.provider ?? '';
   if (!(input.pairs ?? []).some(p => pairAllows(p, harness, model))) {
-    return { traced: false, reason: 'this harness and model pair is not on the list' };
+    return { traced: false, code: 'not-on-list', reason: 'this harness and model pair is not on the list' };
   }
-  return { traced: true, reason: 'traced' };
+  return { traced: true, code: 'traced', reason: 'traced' };
 }

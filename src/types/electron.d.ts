@@ -2915,7 +2915,7 @@ export interface ElectronAPI {
     /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
      *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
      *  when it is the one missing. */
-    offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => Promise<{ offered: boolean; reason: string; projectOptedIn: boolean }>;
+    offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => Promise<{ offered: boolean; code: TraceOfferCode; reason: string; projectOptedIn: boolean }>;
     stats: () => Promise<TraceStats>;
     list: (f: TraceFilter) => Promise<TraceList>;
     session: (traceId: string) => Promise<{ session: TraceSessionSummary; outcome?: TraceOutcome; turns: TraceTurnView[] } | null>;
@@ -2984,6 +2984,10 @@ export interface EndpointWait {
   nextTryAt: number;
   giveUpAt: number;
 }
+
+/** Why "Record traces" is or is not offered: stable codes the window words itself. `no-endpoint`: the agent runs on
+ *  its CLI's own account. `agent-off` never comes from offer (it counts the agent's switch as on). */
+export type TraceOfferCode = 'traced' | 'no-endpoint' | 'endpoint-not-approved' | 'endpoint-disallows' | 'project-off' | 'agent-off' | 'closed-model' | 'not-on-list';
 
 export interface TracePair { harness: string; models: string; note?: string }
 export interface TracePairsView { pairs: TracePair[]; excludeClosedModels: boolean; closedModelsWarning: string }

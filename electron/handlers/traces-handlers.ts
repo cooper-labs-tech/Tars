@@ -243,7 +243,11 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       endpoint: endpoint ? { allowTraces: endpoint.allowTraces === true, approved: endpoint.approved === true && endpoint.approvedBaseUrl === endpoint.baseUrl } : undefined,
       projectOptedIn: true, agentOptedIn: true, pairs: t.pairs, excludeClosedModels: t.excludeClosedModels,
     });
-    return { offered: d.traced, reason: d.traced ? (projectOptedIn ? 'traced' : 'the project is not opted in') : d.reason, projectOptedIn };
+    const projectMissing = d.traced && !projectOptedIn;
+    return {
+      offered: d.traced, code: projectMissing ? 'project-off' as const : d.code,
+      reason: projectMissing ? 'the project is not opted in' : d.reason, projectOptedIn,
+    };
   });
 
   ipcMain.handle('traces:stats', () => {

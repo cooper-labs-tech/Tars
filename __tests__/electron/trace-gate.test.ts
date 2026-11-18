@@ -30,7 +30,7 @@ const base: TraceGateInput = {
 
 describe('trace gate', () => {
   it('traces an open harness on an open model of an approved endpoint that allows traces, both switches on', () => {
-    expect(traceDecision(base)).toEqual({ traced: true, reason: 'traced' });
+    expect(traceDecision(base)).toEqual({ traced: true, code: 'traced', reason: 'traced' });
   });
 
   it('1: no endpoint, no trace', () => {
@@ -96,6 +96,17 @@ describe('trace gate', () => {
       traceDecision({ ...base, agentOptedIn: false }).reason,
     ];
     expect(new Set(reasons).size).toBe(reasons.length);
+    // And a stable code for each, which the window reads instead of the text.
+    expect([
+      traceDecision({ ...base, endpoint: undefined }).code,
+      traceDecision({ ...base, endpoint: { allowTraces: true, approved: false } }).code,
+      traceDecision({ ...base, endpoint: { allowTraces: false, approved: true } }).code,
+      traceDecision({ ...base, projectOptedIn: false }).code,
+      traceDecision({ ...base, agentOptedIn: false }).code,
+      traceDecision({ ...base, model: 'gpt-5' }).code,
+      traceDecision({ ...base, pairs: [] }).code,
+      traceDecision(base).code,
+    ]).toEqual(['no-endpoint', 'endpoint-not-approved', 'endpoint-disallows', 'project-off', 'agent-off', 'closed-model', 'not-on-list', 'traced']);
     for (const r of reasons) expect(r).not.toBe('traced');
   });
 });
