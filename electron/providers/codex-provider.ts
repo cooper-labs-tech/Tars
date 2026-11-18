@@ -1,3 +1,4 @@
+import { endpointLaunchForAgent } from '../services/traces-runtime';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -94,7 +95,10 @@ export class CodexProvider implements CLIProvider {
     // A key from Settings: its interactive session reads none from its
     // environment (0.163), so a model provider of Tars's names CODEX_API_KEY,
     // by name only. None: Codex keeps its own login (services/cli-keys.ts).
-    for (const arg of codexKeyConfig(params.appSettings ?? (readAppSettingsFromDisk() as AppSettings))) {
+    // On an inference endpoint, a model provider of Tars's on the endpoint proxy instead
+    // (services/endpoint-harness.ts): the terminal's proxy token by variable name only, never a key.
+    const endpoint = endpointLaunchForAgent(params.agentId, 'codex');
+    for (const arg of endpoint ? endpoint.args : codexKeyConfig(params.appSettings ?? (readAppSettingsFromDisk() as AppSettings))) {
       command += ` ${shellQuote(arg)}`;
     }
 

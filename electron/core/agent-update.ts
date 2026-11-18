@@ -1,3 +1,5 @@
+import { validateEndpointChoice } from '../services/inference-endpoints';
+import { readAppSettingsFromDisk } from '../providers/cli-provider';
 import * as fs from 'fs';
 import { agents, saveAgents, killStalePty } from './agent-manager';
 import { ptyProcesses } from './pty-manager';
@@ -10,7 +12,7 @@ import { assignRole, requestedRole } from './agent-role';
 import { planModeRefusal } from '../providers/plan-mode';
 import { skillsProblem } from '../utils/skill-name';
 import { handedFolderProblem } from '../utils/handed-folder';
-import type { AgentStatus, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
+import type { AgentStatus, AppSettings, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
 
 /**
  * An agent's settings changed: the one way in, for the window (agent:update)
@@ -50,6 +52,10 @@ export interface AgentUpdate {
   /** The toggle's old name, read when `role` is absent. */
   orchestratorMode?: boolean;
   cliPath?: string | null;
+  /** The inference endpoint its harness runs on, or null for none (services/inference-endpoints.ts). */
+  endpointId?: string | null;
+  /** Its own trace switch (services/trace-gate.ts). */
+  traces?: boolean;
 }
 
 export interface AgentUpdateOptions {
@@ -88,6 +94,7 @@ export function cliAtWork(agent: AgentStatus): boolean {
 const FIELDS = [
   'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills',
   'projectPath', 'secondaryProjectPath', 'obsidianVaultPaths', 'savedPrompt', 'worktreePath', 'branchName', 'role',
+  'endpointId', 'traces',
 ] as const;
 
 export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions = {}): Promise<AgentUpdateResult> {
@@ -121,6 +128,16 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
     const skillsWrong = skillsProblem(params.skills);
     if (skillsWrong) return { success: false, error: `Not saved: ${skillsWrong}.` };
   }
+  // An endpoint, its harness and its model, checked together whenever one of them moves for an agent on one
+  // (services/inference-endpoints.ts): approved, one of the four harnesses, a model it lists.
+  const endpointAfter = params.endpointId === undefined ? agent.endpointId : params.endpointId ?? undefined;
+  if (params.endpointId !== undefined || (endpointAfter && (params.provider !== undefined || params.model !== undefined))) {
+    const wrong = validateEndpointChoice(readAppSettingsFromDisk() as AppSettings, {
+      endpointId: endpointAfter, provider: params.provider ?? agent.provider, model: params.model === undefined ? agent.model : params.model,
+    });
+    if (wrong) return { success: false, error: `Not saved: ${wrong}` };
+  }
+  if (params.traces !== undefined && typeof params.traces !== 'boolean') return { success: false, error: 'Not saved: traces is on or off.' };
   const moving = params.projectPath !== undefined && params.projectPath !== agent.projectPath;
   if (moving && !fs.existsSync(params.projectPath!)) {
     return { success: false, error: 'Project path does not exist' };
@@ -137,6 +154,7 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
     const ending = [
       ...(params.provider !== undefined && params.provider !== agent.provider ? ['provider'] : []),
       ...(params.cliPath !== undefined && (params.cliPath ?? undefined) !== agent.cliPath ? ['CLI path'] : []),
+      ...(endpointTerminalChanges(agent, params) ? ['endpoint'] : []),
       ...(moving ? ['project'] : []),
       ...(makesWorktree ? ['worktree'] : []),
     ];
@@ -197,6 +215,21 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   if (params.character !== undefined) {
     agent.character = params.character;
   }
+  // The endpoint session (its token, its model, whether it is traced) is minted with the terminal
+  // (core/agent-pty.ts): a new endpoint, model or trace switch needs a new terminal, as a new provider does.
+  if (endpointTerminalChanges(agent, params) && agent.ptyId) {
+    const stale = ptyProcesses.get(agent.ptyId);
+    if (stale) {
+      killPty(stale);
+      ptyProcesses.delete(agent.ptyId);
+    }
+    agent.ptyId = undefined;
+    agent.ptyCwd = undefined;
+    agent.status = 'idle';
+    agent.currentTask = undefined;
+  }
+  if (params.endpointId !== undefined) agent.endpointId = params.endpointId ?? undefined;
+  if (params.traces !== undefined) agent.traces = params.traces;
   if (params.model !== undefined) {
     agent.model = params.model === null ? undefined : params.model;
   }
@@ -274,4 +307,13 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
 
   const changed = FIELDS.filter((field, i) => JSON.stringify(agent[field]) !== before[i]);
   return { success: true, agent, changed, changedAtLaunch, ...(restart ? { restart } : {}) };
+}
+
+/** Whether this update changes what an endpoint session was minted with: the endpoint, or its model or traces while on one. */
+function endpointTerminalChanges(agent: AgentStatus, params: AgentUpdate): boolean {
+  const after = params.endpointId === undefined ? agent.endpointId : params.endpointId ?? undefined;
+  if (after !== agent.endpointId) return true;
+  if (!after) return false;
+  return (params.model !== undefined && (params.model ?? undefined) !== agent.model)
+    || (params.traces !== undefined && params.traces !== (agent.traces === true));
 }

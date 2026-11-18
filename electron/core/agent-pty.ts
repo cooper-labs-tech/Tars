@@ -1,3 +1,4 @@
+import { closeEndpointSession, openEndpointSession } from '../services/traces-runtime';
 import * as path from 'path';
 import * as pty from 'node-pty';
 import { spawnPty } from './pty-spawn';
@@ -143,6 +144,9 @@ export function spawnAgentPty(opts: {
   // rememberPanelSize.
   const size = panelSizeOf(agentId) ?? { cols: opts.cols, rows: opts.rows };
   const token = agentId ? mintAgentToken(agentId) : undefined;
+  // Its inference endpoint's session, when it runs on one (services/traces-runtime.ts): a token of this terminal's
+  // for the endpoint proxy, in the variables its harness reads it from. Never the endpoint's key.
+  const endpointSession = agentId ? openEndpointSession(agentId) : { env: {} as Record<string, string> };
   // The Claude account this agent starts on, when the option is on (see
   // core/account-env.ts): here for the reason this module exists, since an
   // account a caller forgot would be a CLI billed to the wrong subscription.
@@ -202,6 +206,9 @@ export function spawnAgentPty(opts: {
       // The state mod (services/state-mod.ts), for a claude new enough to load
       // it: its hooks report this terminal's state from inside the CLI.
       ...stateModLaunchEnv(opts.binaryName, env),
+      // Last, so a key the user set for the harness's own provider (OPENAI_API_KEY for qwen-code) is replaced by the
+      // proxy token on an endpoint: the harness talks to Tars's proxy, which holds the real key.
+      ...endpointSession.env,
     }) as { [key: string]: string },
   });
   spawnedAs.set(spawned, { shell: opts.shell, runsCommand: opts.runsCommand, env: opts.env });
@@ -224,6 +231,8 @@ export function spawnAgentPty(opts: {
     spawnedAs.delete(spawned);
     // And its token: a stopped CLI's stayed valid until the agent's next launch.
     if (agentId && token) revokeTerminalToken(agentId, token);
+    // And its endpoint token, with the trace it recorded.
+    closeEndpointSession(endpointSession.token);
     // An agent's CLI that failed to start, where the terminal is the CLI (the API's sessions everywhere, every
     // terminal on Windows): it exited on its own with a failure code at its launch (2.0.4, F1). A CLI typed into
     // a shell leaves the shell behind, and its code with it.

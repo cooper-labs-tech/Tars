@@ -1,3 +1,4 @@
+import { noteTypedForTraces } from '../services/traces-runtime';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
@@ -1333,6 +1334,8 @@ export function writeProgrammaticInput(
   // Sanitised once, for both shapes below: the short path has no paste to
   // break out of, and is exactly the one where a lone carriage return works.
   data = asTypedText(data);
+  // Who this is from, for a traced agent's session (services/traces-runtime.ts): the turn it opens is theirs.
+  noteTypedForTraces(origin, data);
   if (!bracketPaste) {
     // Plain shell command for a raw bash/zsh prompt: send directly, or through
     // a file when it holds a tab or a newline (shellLine). Nothing

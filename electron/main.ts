@@ -79,6 +79,7 @@ import { readFleetResources } from './services/fleet-resources-runtime';
 // Services
 import { startApiServer } from './services/api-server';
 import { startOpenAIBridgeServer, stopOpenAIBridgeServer } from './services/openai-bridge';
+import { startTracesRuntime, stopTracesRuntime } from './services/traces-runtime';
 import {
   initSlackBot,
   getSlackApp,
@@ -436,6 +437,13 @@ function initApiServer() {
   // See services/openai-bridge.ts for why this cannot just be another /api/*
   // route, and for the addressing scheme that lets one server serve both.
   startOpenAIBridgeServer();
+  // The endpoint proxy and the trace store (services/traces-runtime.ts): loopback, a no-op until an agent runs on
+  // an inference endpoint. Traces are written only for the projects and agents the user opted in.
+  startTracesRuntime({
+    getSettings: () => appSettings,
+    getAgent: (id) => agents.get(id),
+    emit: (channel, payload) => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(channel, payload); },
+  });
   moveLocalKanbanToHermes();
   // Sentry's new errors, as parked tasks on the board of the project named in
   // Settings, told to its orchestrator. Does nothing until the token, the
@@ -1112,6 +1120,7 @@ app.on('before-quit', (event) => {
   runShutdownSteps([
     ['closeVaultDb', closeVaultDb],
     ['stopOpenAIBridgeServer', stopOpenAIBridgeServer],
+    ['stopTracesRuntime', stopTracesRuntime],
   ]);
 });
 
