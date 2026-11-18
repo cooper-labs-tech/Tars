@@ -20,7 +20,7 @@
 import * as http from 'node:http';
 import * as fs from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { pathToFileURL } from 'node:url';
+import * as path from 'node:path';
 
 export const MODEL_ID = 'stand-in-coder';
 const SHELL_NAMES = /^(shell|bash|exec_command|run_shell_command|exec|local_shell|shell_command)$/i;
@@ -226,11 +226,13 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
   });
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+// Run as a command (`node e2e/stand-in-openai-endpoint.mjs ...`). Read by its file name, not import.meta: Playwright
+// loads the specs' imports through its CommonJS transform, where import.meta does not exist (as fake-clis.mjs says).
+if (path.basename(process.argv[1] || '') === 'stand-in-openai-endpoint.mjs') {
   const arg = (name, fallback) => {
     const i = process.argv.indexOf(`--${name}`);
     return i > 0 ? process.argv[i + 1] : fallback;
   };
-  const s = await startStandIn({ port: Number(arg('port', '0')), key: arg('key', process.env.STAND_IN_KEY || ''), log: arg('log', process.env.STAND_IN_LOG || '') });
-  console.log(`stand-in listening on ${s.baseUrl}`);
+  void startStandIn({ port: Number(arg('port', '0')), key: arg('key', process.env.STAND_IN_KEY || ''), log: arg('log', process.env.STAND_IN_LOG || '') })
+    .then((s) => console.log(`stand-in listening on ${s.baseUrl}`));
 }

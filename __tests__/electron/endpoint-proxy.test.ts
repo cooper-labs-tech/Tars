@@ -18,7 +18,8 @@ import type { WireRecord } from '../../electron/services/trace-store';
  * 3. The real key ends up in a record.
  * 4. A path other than the model routes is forwarded; a GET reaches a POST route.
  * 5. A body over the cap is accepted.
- * 6. X-Session-Id or X-Agent-Id is missing upstream, or a harness can set them itself.
+ * 6. With the endpoint's "send session headers" on, X-Session-Id or X-Agent-Id is missing upstream, or a harness can
+ *    set them itself; with it off (the default), Tars adds them, or takes the harness's own away.
  * 7. A stream is buffered: the harness gets nothing until the endpoint has sent everything (TTFT skewed).
  * 8. The request or response bytes are changed (an unknown param stripped, a vendor field dropped).
  * 9. An error status the endpoint gave is changed, or held when it is not a pause (400, 401, 404).
@@ -67,7 +68,7 @@ let deps: ProxyDeps;
 async function startProxy(over: Partial<ProxyDeps> = {}) {
   deps = {
     sessionOf: (t) => (t === SESSION.token ? SESSION : undefined),
-    targetOf: () => ({ baseUrl: up.base, key: KEY, holdMaxSeconds: 600 }),
+    targetOf: () => ({ baseUrl: up.base, key: KEY, holdMaxSeconds: 600, sendSessionHeaders: true }),
     record: (r) => { records.push(r); },
     onHold: (e) => { holds.push(e); },
     sleep: async (ms) => { sleeps.push(ms); },
@@ -119,6 +120,15 @@ describe('the endpoint proxy', () => {
       expect(s.headers['x-agent-id']).toBe('agent-1');
       expect(JSON.stringify(s.headers)).not.toContain(SESSION.token);
     }
+  });
+
+  it('6: with the endpoint\'s session headers off (the default), Tars adds none and leaves the harness\'s own', async () => {
+    await startProxy({ targetOf: () => ({ baseUrl: up.base, key: KEY, holdMaxSeconds: 600, sendSessionHeaders: false }) });
+    await call('/v1/chat/completions', { body: '{}' });
+    await call('/v1/chat/completions', { body: '{}', headers: { 'X-Session-Id': 'harness-own' } });
+    expect(up.seen[0].headers['x-session-id']).toBeUndefined();
+    expect(up.seen[0].headers['x-agent-id']).toBeUndefined();
+    expect(up.seen[1].headers['x-session-id']).toBe('harness-own');
   });
 
   it('2: an endpoint with no key gets no Authorization at all', async () => {

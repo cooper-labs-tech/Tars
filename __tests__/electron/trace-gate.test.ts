@@ -4,15 +4,17 @@ import { traceDecision, closedModel, defaultTracePairs, pairAllows, type TraceGa
 /**
  * Who is traced (native traces). Traces are off by default and kept only for an
  * allowed pair: a harness on the owner's editable list, on a model of an approved endpoint the user marked as
- * allowing traces, with the project and the agent both opted in. One rule is hard, above the list: a Claude, GPT,
- * o-series or Gemini model is never traced, and the claude binary is never on the seeded list.
+ * allowing traces, with the project and the agent both opted in. The list ships empty: what is traced is the owner's
+ * data, never a default of Tars's. A closed model (Claude, GPT, o-series, Gemini) is left out by default, a setting
+ * the owner can change, warned that the providers' terms may forbid training on their outputs.
  *
  * How it fails, written before the code (19/11):
  * 1. An agent with no endpoint (its CLI's own provider, say Claude Code on Anthropic) is traced.
- * 2. A closed model is traced because the owner's list allows its harness with `*`: claude-*, gpt-*, o3, gemini-*,
- *    behind a vendor prefix (`openai/gpt-5`, `anthropic/claude-x`) too.
+ * 2. With the default on, a closed model is traced because the list allows its harness with `*`: claude-*, gpt-*,
+ *    o3, gemini-*, behind a vendor prefix (`openai/gpt-5`, `anthropic/claude-x`) too; with the owner's default
+ *    turned off, a closed model on the list is still refused.
  * 3. An open model whose name only looks alike is refused: gemma, glm, qwen, mimo, "o" inside a word.
- * 4. The claude binary (provider claude, or any provider it runs, such as custom-openai) is on the seeded list.
+ * 4. The list does not ship empty: something is traced before the owner names it.
  * 5. An endpoint whose allowTraces is false, or which is not approved, is traced.
  * 6. Only one of the two switches (project, agent) is enough.
  * 7. A harness not on the list is traced; a list entry whose glob does not match the model still allows it.
@@ -23,7 +25,7 @@ import { traceDecision, closedModel, defaultTracePairs, pairAllows, type TraceGa
 const base: TraceGateInput = {
   provider: 'qwen-code', model: 'open-coder-1-q8',
   endpoint: { allowTraces: true, approved: true },
-  projectOptedIn: true, agentOptedIn: true, pairs: defaultTracePairs(),
+  projectOptedIn: true, agentOptedIn: true, pairs: [{ harness: 'qwen-code', models: '*' }, { harness: 'codex', models: '*' }], excludeClosedModels: true,
 };
 
 describe('trace gate', () => {
@@ -35,11 +37,13 @@ describe('trace gate', () => {
     expect(traceDecision({ ...base, endpoint: undefined }).traced).toBe(false);
   });
 
-  it('2: a closed model is never traced, whatever the list says', () => {
+  it('2: a closed model is left out by default, whatever the list says, and only the owner\'s setting lets it in', () => {
     const everything = [{ harness: '*', models: '*' }];
     for (const model of ['claude-sonnet-5', 'anthropic/claude-x', 'gpt-5.1', 'openai/gpt-oss-120b', 'o3', 'o4-mini', 'gemini-3-pro', 'google/gemini-2.5-flash']) {
       expect(closedModel(model), model).toBe(true);
       expect(traceDecision({ ...base, model, pairs: everything }).traced, model).toBe(false);
+      expect(traceDecision({ ...base, model, pairs: everything, excludeClosedModels: false }).traced, model).toBe(true);
+      expect(traceDecision({ ...base, model, pairs: [], excludeClosedModels: false }).traced, model).toBe(false);
     }
   });
 
@@ -49,9 +53,9 @@ describe('trace gate', () => {
     }
   });
 
-  it('4: the seeded list holds the four open harnesses and never the claude binary', () => {
-    const harnesses = defaultTracePairs().map(p => p.harness).sort();
-    expect(harnesses).toEqual(['codex', 'opencode', 'pi', 'qwen-code']);
+  it('4: the list ships empty, and nothing is traced until the owner names a pair', () => {
+    expect(defaultTracePairs()).toEqual([]);
+    expect(traceDecision({ ...base, pairs: defaultTracePairs() }).traced).toBe(false);
     for (const provider of ['claude', 'custom-openai', 'venice', 'gemini']) {
       expect(traceDecision({ ...base, provider }).traced, provider).toBe(false);
     }
@@ -85,11 +89,11 @@ describe('trace gate', () => {
     const reasons = [
       traceDecision({ ...base, endpoint: undefined }).reason,
       traceDecision({ ...base, model: 'gpt-5' }).reason,
+      traceDecision({ ...base, pairs: [] }).reason,
       traceDecision({ ...base, endpoint: { allowTraces: false, approved: true } }).reason,
       traceDecision({ ...base, endpoint: { allowTraces: true, approved: false } }).reason,
       traceDecision({ ...base, projectOptedIn: false }).reason,
       traceDecision({ ...base, agentOptedIn: false }).reason,
-      traceDecision({ ...base, provider: 'claude' }).reason,
     ];
     expect(new Set(reasons).size).toBe(reasons.length);
     for (const r of reasons) expect(r).not.toBe('traced');

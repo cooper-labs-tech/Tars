@@ -16,7 +16,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * the real mcp-orchestrator with its own identity. Asserted:
  * 1. Lead sets the endpoint's key from a drop file (endpoint_set_key): the file is gone, the key is in no view.
  * 2. Lead's task to Q reaches the endpoint through the proxy: the endpoint sees the real key, X-Session-Id and
- *    X-Agent-Id, never the terminal's token; Q's harness sees the token (`tep_`), never the key.
+ *    X-Agent-Id (the endpoint's "send session headers" is on), never the terminal's token; Q's harness sees the token (`tep_`), never the key.
  * 3. Pause, not fail: the endpoint answers 503, then 429, then 200; Q's harness sees only 200s, and the window is
  *    told of the wait while it lasts.
  * 4. The stream is not buffered: Q's first chunk comes before the endpoint sends its last.
@@ -63,7 +63,7 @@ test('an open harness runs on an inference endpoint through Tars, held while the
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { qwencode: fakes['qwen-code'] },
-    inferenceEndpoints: [{ id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: true, models: [MODEL_ID], approved: true, approvedBaseUrl: standin.baseUrl, holdMaxSeconds: 30 }],
+    inferenceEndpoints: [{ id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: true, models: [MODEL_ID], approved: true, approvedBaseUrl: standin.baseUrl, holdMaxSeconds: 30, sendSessionHeaders: true }],
     traces: { projects: [project], capBytes: 1024 ** 3, retentionDays: 30, pairs: [{ harness: 'qwen-code', models: '*' }] },
   }, null, 2));
 

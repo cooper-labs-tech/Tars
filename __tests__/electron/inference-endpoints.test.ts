@@ -30,7 +30,8 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  *    taken; a refused file is deleted; its content appears in an error.
  * 9. /v1/models answering HTML, an error or a non-list wipes the models; the key appears in modelsError.
  * 10. The health probe does not say its status, latency and time, or says the key.
- * 11. holdMaxSeconds outside 0..3600 is saved.
+ * 11. holdMaxSeconds outside 0..3600 is saved; its default is not the general one (120 s).
+ * 12. Session headers are sent by default: they name the agent and its session to a third party.
  */
 
 const NOW = '2026-11-19T12:00:00.000Z';
@@ -86,7 +87,11 @@ describe('saving endpoints', () => {
     const r = added(base(), OWNER, { allowTraces: true });
     expect(r.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'http://192.0.2.10:9000/v1', allowTraces: true });
     const target = endpointTarget(r.settings, r.endpoint.id);
-    expect(target).toMatchObject({ baseUrl: 'http://192.0.2.10:9000/v1', holdMaxSeconds: 600 });
+    expect(target).toMatchObject({ baseUrl: 'http://192.0.2.10:9000/v1', holdMaxSeconds: 120, sendSessionHeaders: false });
+    const withHeaders = saveEndpoint(r.settings, { id: r.endpoint.id, sendSessionHeaders: true }, OWNER, NOW);
+    if (!withHeaders.ok) throw new Error(withHeaders.error);
+    expect(endpointTarget(withHeaders.settings, r.endpoint.id)).toMatchObject({ sendSessionHeaders: true });
+    expect(endpointViews(withHeaders.settings, [])[0]).toMatchObject({ sendSessionHeaders: true, holdMaxSeconds: 120 });
   });
 
   it('4: the key is never in a view nor in the endpoint record', () => {
