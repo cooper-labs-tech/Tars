@@ -544,7 +544,7 @@ const AGENT_TOOLS: Tool[] = [
   // Scoped to the caller's project by default
   tool({
     name: "list_agents",
-    description: "List the agents of YOUR project with their status (idle/running/waiting/completed/error) and inference settings (provider, model, effort). Only these agents receive your tasks, unless the owner's grant across projects opens another project to you (Settings). `project` lists one project's agents: another project's show who they are, their status and their inference settings, which any agent may change with update_agent, and nothing of their tasks; through the owner's grant, all of it. `all: true` adds every project's agents in the same way, for visibility: do not present another project's agents as ones you can hand work to unless a grant opens them to you.",
+    description: "List the agents of YOUR project with their status (idle/running/waiting/completed/error) and inference settings (provider, model, effort). Only these agents receive your tasks, besides another project's orchestrator (with allowCrossProject) and the projects the owner's grant across projects opens to you (Settings). `project` lists one project's agents: another project's show who they are, their status and their inference settings, which any agent may change with update_agent, and nothing of their tasks; through the owner's grant, all of it. `all: true` adds every project's agents in the same way, for visibility: do not present another project's agents as ones you can hand work to unless a grant opens them to you.",
     schema: {
       all: z.boolean().optional().describe("If true, list agents of ALL projects instead of only your own"),
       project: z.string().optional().describe("An absolute project path: that project's agents"),
@@ -827,7 +827,7 @@ const AGENT_TOOLS: Tool[] = [
       id: z.string().describe("The agent ID"),
       prompt: z.string().describe("The task or instruction for the agent to work on"),
       model: z.string().optional().describe("Optional model for this task only, taken only when Tars starts the agent's session for it; an open session keeps its own, and the answer says so."),
-      allowCrossProject: z.boolean().optional().describe("Acting on an agent of ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects); without one, this flag lets a note through (send_message with mode note) and nothing more"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this request. Calling again with the same id is answered with the first call's task, and nothing is handed over twice. Omitted: one is made for this call."),
     },
     failure: "starting agent",
@@ -843,7 +843,7 @@ const AGENT_TOOLS: Tool[] = [
       id: z.string().describe("The agent ID"),
       reason: z.string().min(1).describe("Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"),
       dropQueue: z.boolean().optional().describe("Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."),
-      allowCrossProject: z.boolean().optional().describe("Acting on an agent of ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects); without one, this flag lets a note through (send_message with mode note) and nothing more"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
     },
     failure: "stopping agent",
     async run({ id, reason, dropQueue, allowCrossProject }) {
@@ -867,7 +867,7 @@ const AGENT_TOOLS: Tool[] = [
       id: z.string().describe("The agent ID, or \"requester\" for whoever asked you for your current task"),
       message: z.string().optional().describe("The message to send to the agent"),
       prompt: z.string().optional().describe("Alias for 'message', use either one"),
-      allowCrossProject: z.boolean().optional().describe("Acting on an agent of ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects); without one, this flag lets a note through (send_message with mode note) and nothing more"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
       mode: z.enum(SEND_MODES).optional().describe("How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."),
       reason: z.string().optional().describe("With mode 'restart': why, in one line, kept with the stop"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this request. Calling again with the same id is answered with the first call's outcome, and nothing is sent twice. Omitted: one is made for this call."),
@@ -980,7 +980,7 @@ const AGENT_TOOLS: Tool[] = [
     description: "Permanently remove an agent. This will stop the agent if running and delete it from the system, with its own worktree. Refused, and nothing removed, while that worktree holds uncommitted work (worktree_has_work, naming the files): commit it or move it out first. Only Tars, the user and the project's orchestrator remove an agent, or an agent the owner's grant across projects opens that project to, and an agent may remove itself: a worker calling this on another agent is refused, and asks its orchestrator instead.",
     schema: {
       id: z.string().describe("The agent ID"),
-      allowCrossProject: z.boolean().optional().describe("Acting on an agent of ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects); without one, this flag lets a note through (send_message with mode note) and nothing more"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
     },
     failure: "removing agent",
     async run({ id, allowCrossProject }) {
@@ -1061,7 +1061,7 @@ const AGENT_TOOLS: Tool[] = [
       prompt: z.string().describe("The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."),
       model: z.string().optional().describe("Optional model for this task only; the agent's saved model is not changed. Taken only when Tars starts the agent's session for the task: an open session keeps its own model, and the answer says so. Aliases: 'sonnet', 'opus', 'haiku', 'opusplan', 'sonnet[1m]' (1M context). Omit to use the agent's configured default."),
       timeoutSeconds: z.number().optional().describe("How long this call waits for the answer, in seconds: 3600 (an hour) when omitted. The task itself is not stopped there: it goes on in the agent's terminal, and task_status reads its end."),
-      allowCrossProject: z.boolean().optional().describe("Delegating to an agent of ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects); this flag adds nothing to it"),
+      allowCrossProject: z.boolean().optional().describe("Delegating to ANOTHER project: to its orchestrator, this flag is enough, as projects' orchestrators talk to each other; to its workers it takes the owner's grant from your project to that one (Settings, the allowlist across projects)"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."),
       gate: z.boolean().optional().describe("The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."),
     },

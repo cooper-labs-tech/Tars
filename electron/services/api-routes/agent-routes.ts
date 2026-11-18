@@ -656,8 +656,13 @@ function withoutCommandLines<T extends Pick<AgentStatus, 'leftRunning' | 'stopPr
 function visibleAgent(req: RouteRequest): AgentStatus | undefined {
   const agent = agents.get(req.params.id);
   const caller = callerProject(req);
-  // Or through the owner's grant from the caller's project to the agent's (2.0.7): as that project's orchestrator.
-  return agent && (!caller || agent.projectPath === caller || !!grantedLead(req, agent)) ? agent : undefined;
+  // Or through the owner's grant from the caller's project to the agent's (2.0.7): as that project's orchestrator. Or
+  // another project's orchestrator working on what the caller asked it, which the caller follows (wait_for_agent,
+  // get_agent_output) as the projects' orchestrators do with each other.
+  if (!agent) return undefined;
+  if (!caller || agent.projectPath === caller || grantedLead(req, agent)) return agent;
+  const callerId = resolveCallerId(req);
+  return isProjectLead(agent) && !!callerId && agent.requestedBy?.agentId === callerId ? agent : undefined;
 }
 
 // callerId and callerProject live in ./utils: the bus routes ask the same two
@@ -890,15 +895,23 @@ function resolveDriver(req: RouteRequest, sendJson: SendJson): Driver | undefine
  * (or it has its project's orchestrator's powers), opens that project's agents to it as to that project's
  * orchestrator. The project is the one of the agent whose token the call presents, never a header.
  *
- * Without a grant, across projects, only a note goes through (`noteOnly`, mode note or note-now, with
- * allowCrossProject: true): information that hands no work and starts nothing. Before 2.0.7 any agent could pass
- * allowCrossProject: true and drive another project's agents; it no longer opens more than a note. Retuning an
- * agent's inference settings needs no grant (mayUpdate).
+ * Without a grant, across projects, with allowCrossProject: true, two things go through, as before 2.0.7: a note
+ * (`noteOnly`, mode note or note-now: information that hands no work and starts nothing), to any agent; and, to that
+ * project's orchestrator (`toLead`), a message in any mode but a restart, and a task (delegate_task), as the projects'
+ * orchestrators talk to each other (Tars-Orchestrator's decision of 19/11), whose answers the asker reads. Everything
+ * else across projects, a worker's work, a start, a stop, a creation, a removal, takes the grant. Retuning an agent's
+ * inference settings needs none (mayUpdate).
  */
-function assertMayDriveAgent(req: RouteRequest, agent: AgentStatus, sendJson: SendJson, opts: { noteOnly?: boolean } = {}): boolean {
+function assertMayDriveAgent(req: RouteRequest, agent: AgentStatus, sendJson: SendJson, opts: { noteOnly?: boolean; toLead?: boolean } = {}): boolean {
   const driver = resolveDriver(req, sendJson);
   if (!driver) return false;
-  return mayActIn(req, driver, agent.projectPath, `agent "${agent.name || agent.id}" belongs to project ${agent.projectPath}`, sendJson, opts);
+  return mayActIn(req, driver, agent.projectPath, `agent "${agent.name || agent.id}" belongs to project ${agent.projectPath}`, sendJson,
+    { ...opts, toLead: !!opts.toLead && isProjectLead(agent) });
+}
+
+/** Its project's orchestrator: the agent other projects' orchestrators talk to without a grant. */
+function isProjectLead(agent: AgentStatus): boolean {
+  return agent.role === 'orchestrator' && agent.kind !== 'chat';
 }
 
 /**
@@ -906,7 +919,7 @@ function assertMayDriveAgent(req: RouteRequest, agent: AgentStatus, sendJson: Se
  * the drive routes ask it about the agent they act on, and creation about the
  * project the new agent would join. `what` says which, in the refusal.
  */
-function mayActIn(req: RouteRequest, driver: Driver, projectPath: string, what: string, sendJson: SendJson, opts: { noteOnly?: boolean } = {}): boolean {
+function mayActIn(req: RouteRequest, driver: Driver, projectPath: string, what: string, sendJson: SendJson, opts: { noteOnly?: boolean; toLead?: boolean } = {}): boolean {
   if (driver.kind === 'tars') return true;
 
   const caller = driver.agent;
@@ -915,12 +928,13 @@ function mayActIn(req: RouteRequest, driver: Driver, projectPath: string, what: 
   const flagged = (req.body as { allowCrossProject?: boolean } | undefined)?.allowCrossProject === true
     // DELETE requests have no parsed body. Accept the override as a query param.
     || req.url.searchParams.get('allowCrossProject') === 'true';
-  if (opts.noteOnly && flagged) return true;
+  if (flagged && (opts.noteOnly || opts.toLead)) return true;
   sendJson({
-    error: `Cross-project access denied: ${what}, and you are of ${caller.projectPath}. Handing work to, starting, stopping or `
-      + 'messaging another project\'s agents takes the owner\'s grant from your project to that one (Settings, the allowlist across '
-      + 'projects), naming you unless you are your project\'s orchestrator; without it only a note goes through (mode note, with '
-      + 'allowCrossProject: true), and any agent may retune another\'s inference settings with update_agent. list_agents shows yours.',
+    error: `Cross-project access denied: ${what}, and you are of ${caller.projectPath}. Handing work to another project\'s workers, `
+      + 'starting, stopping, creating or removing its agents takes a grant from your project to that one, which only the owner gives, '
+      + 'in Tars\'s window (Settings, the allowlist across projects); none is set for you. Without it, with allowCrossProject: true, '
+      + 'a note reaches any of its agents, and a message or a task reaches its orchestrator; any agent may retune another\'s '
+      + 'inference settings with update_agent. list_agents shows yours.',
     code: 'cross_project_not_granted',
   }, 403);
   return false;
@@ -3092,12 +3106,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
-    // Across projects without the owner's grant, a note only (mayActIn): one asked for, or a worker's message that
-    // goes in as a note (noteSender), never a task, a steer or a restart.
+    // Across projects without the owner's grant (mayActIn): a note, one asked for or a worker's message that goes in as
+    // one (noteSender), to any agent; and to that project's orchestrator anything but a restart, which is a stop.
     const body = (req.body ?? {}) as { mode?: unknown; intent?: unknown };
     const noteAsked = body.intent !== 'task' && (['note', 'note-now'].includes(String(body.mode))
       || (!!noteSender(req, agent) && !['steer', 'restart'].includes(String(body.mode))));
-    if (!assertMayDriveAgent(req, agent, sendJson, { noteOnly: noteAsked })) return;
+    if (!assertMayDriveAgent(req, agent, sendJson, { noteOnly: noteAsked, toLead: String(body.mode) !== 'restart' })) return;
 
     const { message: asSent, model, permissionMode, mode: asked, reason, intent } = req.body as {
       message: string; model?: string; permissionMode?: PermissionLevel; mode?: unknown; reason?: unknown; intent?: unknown;
@@ -3211,7 +3225,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
-    if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    if (!assertMayDriveAgent(req, agent, sendJson, { toLead: true })) return;
     if (!mayHandWork(req, agent, sendJson)) return;
     tellOutside(agent, req, 'delegated a task to', ctx, (req.body as { task?: string } | undefined)?.task);
 
@@ -3432,7 +3446,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
-    if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    if (!assertMayDriveAgent(req, agent, sendJson, { toLead: true })) return;
     tellOutside(agent, req, 'sent a message to', ctx, (req.body as { message?: string } | undefined)?.message);
 
     const { message: asSent, mode } = req.body as { message: string; mode?: unknown };

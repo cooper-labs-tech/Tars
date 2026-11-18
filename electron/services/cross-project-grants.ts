@@ -13,8 +13,9 @@ import type { AgentStatus } from '../types';
  * them. One way: a grant from A to B opens nothing of A to B.
  *
  * Without an entry, an agent reaches another project's agents only as any agent does: it reads their settings and
- * status (never their tasks' content), retunes their inference (agent-retune.ts), and leaves a note; it never hands
- * work, starts or stops one. `allowCrossProject: true` no longer opens more than that.
+ * status (never their tasks' content), retunes their inference (agent-retune.ts), leaves a note, and messages or hands
+ * a task to that project's orchestrator, as projects' orchestrators talk to each other; it never hands its workers
+ * work, starts, stops, creates or removes one. `allowCrossProject: true` no longer opens more than that.
  *
  * Kept as the owner's Chrome switch is (services/chrome-without-asking.ts, the Audit's M1 and L3 on #582):
  * ~/.tars-private/cross-project-grants.json, 0600, which no agent is handed (~/.tars, where app-settings.json is, is
