@@ -210,13 +210,19 @@ export class KimiSessionWatch {
     return null;
   }
 
-  /** Whether a session's first prompt says it is this launch's: the agent's identity line, or a text Tars typed in. */
+  /**
+   * Whether a session's first prompt says it is this launch's. The agent's identity line decides when there is one:
+   * this agent, or nobody else's. Otherwise a text Tars typed into this agent's terminal and into no other launch's
+   * (the Audit's L1 on #601: the same note typed into two kimi agents of one folder would bind either session).
+   */
   private promptIsOurs(agentId: string, launch: Launch, file: string): boolean {
     const first = this.firstPrompt(file);
     if (first === null) return false;
-    if (IDENTITY.exec(first)?.[1] === agentId) return true;
+    const named = IDENTITY.exec(first)?.[1];
+    if (named) return named === agentId;
     const folded = fold(first);
-    return launch.typed.some((t) => folded.includes(t));
+    const others = [...this.launches].filter(([id, l]) => id !== agentId && !l.bound).flatMap(([, l]) => l.typed);
+    return launch.typed.some((t) => folded.includes(t) && !others.some((o) => folded.includes(o)));
   }
 
   async tick(): Promise<void> {

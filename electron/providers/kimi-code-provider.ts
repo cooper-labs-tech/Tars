@@ -12,6 +12,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { shellQuote } from './cli-provider';
+import { endpointLaunchForAgent } from '../services/traces-runtime';
 
 /**
  * Kimi Code CLI, the binary `kimi` (MoonshotAI/kimi-code, MIT), measured on 2.6.3 (19/11/2026) in a PTY against a
@@ -97,6 +98,9 @@ export class KimiCodeProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       // The folder trusted for this process, nothing written (measured on 2.6.3).
       KIMI_CODE_TRUST_WORKSPACE: '1',
+      // On an inference endpoint, its model from the launch (services/endpoint-harness.ts); the proxy token's
+      // variable is filled at the spawn (core/agent-pty.ts), never here.
+      ...(endpointLaunchForAgent(agentId, 'kimi-code')?.env ?? {}),
     };
   }
 
