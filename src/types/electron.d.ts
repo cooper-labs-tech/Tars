@@ -480,6 +480,8 @@ export type AgentProvider =
   | 'qwen'
   /** Qwen Code, the CLI `qwen` (2.0.4); `qwen` is the Qwen API through the claude binary. */
   | 'qwen-code'
+  /** Kimi Code CLI, the binary `kimi`; `moonshot` is Moonshot's API through the claude binary. */
+  | 'kimi-code'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -2099,6 +2101,7 @@ export interface ElectronAPI {
         grok: string;
         opencode: string;
         pi: string;
+        kimi: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -2182,6 +2185,8 @@ export interface ElectronAPI {
         grok: string;
         opencode: string;
         pi: string;
+        /** Optional on the way in: settings written before Kimi Code; main reads a missing key as none. */
+        kimi?: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -2363,6 +2368,7 @@ export interface ElectronAPI {
       qwencode: string;
       opencode: string;
       pi: string;
+      kimi: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2378,6 +2384,7 @@ export interface ElectronAPI {
       qwencode: string;
       opencode: string;
       pi: string;
+      kimi: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2394,6 +2401,8 @@ export interface ElectronAPI {
       qwencode: string;
       opencode: string;
       pi: string;
+      /** Optional on the way in: paths saved before Kimi Code; main reads a missing key as none. */
+      kimi?: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2946,7 +2955,7 @@ export interface ElectronAPI {
   platform: string;
 }
 
-export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode';
+export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode' | 'kimi-code';
 
 export interface EndpointHealth { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string }
 
