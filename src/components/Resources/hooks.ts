@@ -103,7 +103,9 @@ export function useDiskJanitor() {
   }, []);
   const scan = useCallback(() => (api ? act(() => api.scan(), 'The scan could not start.') : Promise.resolve()), [api, act]);
   const approve = useCallback((ids: string[]) => (api ? act(() => api.approve(ids), 'Nothing was deleted.') : Promise.resolve()), [api, act]);
-  return { ...reading, actionError, scan, approve };
+  /** 2.0.7: the owner's one click on an agent's cleanup request, its items approved as approve does. */
+  const approveRequest = useCallback((id: string) => (api ? act(() => api.approveRequest(id), 'Nothing was deleted.') : Promise.resolve()), [api, act]);
+  return { ...reading, actionError, scan, approve, approveRequest };
 }
 
 /** The free space of the disk Tars runs on, which main already reads (Settings · System): the one machine figure the
