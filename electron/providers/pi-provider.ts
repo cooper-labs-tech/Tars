@@ -14,6 +14,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
+import { trustsTooMuch } from '../utils/trust-too-much';
 
 /**
  * Where pi reads its MCP servers (`@earendil-works/pi-coding-agent` 1.3.0,
@@ -24,7 +25,57 @@ import { updateSharedJsonSync } from '../utils/shared-file';
  * has no MCP at all.
  */
 function mcpConfigFile(): string {
-  return path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent'), 'mcp.json');
+  return path.join(piAgentDir(), 'mcp.json');
+}
+
+/** pi's agent folder, `$PI_CODING_AGENT_DIR` or `~/.pi/agent`: where it keeps its MCP servers and its trust answers. */
+function piAgentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
+}
+
+/**
+ * The agent's folder trusted in pi's `trust.json` before pi starts, as ensureCodexProjectTrusted does for codex.
+ * Measured on pi 1.5.2 (20/11): in a folder with pi resources of its own (`.pi/settings.json`, `mcp.json`,
+ * `extensions`, `skills`, `prompts`, `themes`) or under a folder holding `.agents/skills` other than the user's, pi
+ * first asks "Trust project folder?" and waits for good, which nobody answers in an agent's terminal. pi keeps the
+ * folder's real path to true or false, and the entry nearest up the tree decides (its core/trust-manager.js): any
+ * entry there already, for the folder or one above it, is the user's and is left as it is. A folder that would trust
+ * every folder below it is refused (utils/trust-too-much.ts), and pi asks. The file is written whole (utils/shared-file.ts)
+ * and left alone when it is not a JSON object.
+ */
+export function ensurePiProjectTrusted(projectPath: string, agentDir: string = piAgentDir()): 'written' | 'already' | 'refused' | 'failed' {
+  if (!projectPath || trustsTooMuch(projectPath)) return 'refused';
+  let real: string;
+  try { real = fs.realpathSync(projectPath); } catch { return 'failed'; }
+  const file = path.join(agentDir, 'trust.json');
+  const same = (a: string, b: string) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+  let found: 'already' | 'unreadable' | undefined;
+  try {
+    const outcome = updateSharedJsonSync<Record<string, unknown>>(file, current => {
+      if (current !== undefined && (typeof current !== 'object' || current === null || Array.isArray(current))) {
+        found = 'unreadable';
+        return undefined;
+      }
+      const entries = current ?? {};
+      for (let dir = real; ; dir = path.dirname(dir)) {
+        if (Object.entries(entries).some(([key, value]) => typeof value === 'boolean' && same(key, dir))) {
+          found = 'already';
+          return undefined;
+        }
+        if (path.dirname(dir) === dir) break;
+      }
+      return { ...entries, [real]: true };
+    });
+    if (found === 'already') return 'already';
+    if (outcome === 'written') return 'written';
+    console.warn(found === 'unreadable' || outcome === 'unreadable'
+      ? `[pi] ${file} is not a JSON object pi can read: ${real} is not trusted there, and pi will ask`
+      : `[pi] ${real} not trusted in ${file}: the file kept changing while Tars wrote it`);
+    return 'failed';
+  } catch (err) {
+    console.warn(`[pi] ${real} not trusted in ${file}: it could not be read`, err instanceof Error ? err.message : err);
+    return 'failed';
+  }
 }
 
 /** Where Tars wrote them until 2.0.4, which pi never reads. */
