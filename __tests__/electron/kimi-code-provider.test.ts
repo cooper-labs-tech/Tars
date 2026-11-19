@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { KimiCodeProvider } from '../../electron/providers/kimi-code-provider';
+import { KimiCodeProvider, kimiSessionOfCommand } from '../../electron/providers/kimi-code-provider';
 import { getProvider, isValidProvider } from '../../electron/providers';
 import { hasEndOfTurn } from '../../electron/core/end-of-turn';
 import { endpointLaunchFor } from '../../electron/services/endpoint-harness';
@@ -120,6 +120,15 @@ describe('KimiCodeProvider', () => {
 
   it('7: no model of any family by default', () => {
     expect(p.getModels().map((m) => m.id)).toEqual(['default']);
+  });
+
+  it('12: the session a launch line resumes is read back from it, and nothing else', () => {
+    const uuid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
+    const line = p.buildInteractiveCommand({ binaryPath: '/opt/kimi', prompt: '', resumeSessionId: uuid, permissionMode: 'bypass' });
+    expect(kimiSessionOfCommand(`cd '/p' && ${line}`)).toBe(`session_${uuid}`);
+    expect(kimiSessionOfCommand(`C:\\kimi.exe --auto --session "session_${uuid}"`)).toBe(`session_${uuid}`);
+    expect(kimiSessionOfCommand(p.buildInteractiveCommand({ binaryPath: '/opt/kimi', prompt: '', permissionMode: 'bypass' }))).toBeUndefined();
+    expect(kimiSessionOfCommand("'kimi' --session 'session_x; rm -rf /'")).toBeUndefined();
   });
 
   it('11: an agent on an endpoint is started without -m; another agent keeps its alias', () => {

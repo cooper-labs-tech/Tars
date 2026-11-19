@@ -28,6 +28,11 @@ import { kimiEventOf, KimiSessionWatch, type HookPost } from '../../electron/ser
  * 9. A line still being written is parsed before its end.
  * 10. The posts are out of the order the hook routes expect: the session's registration, then the prompt, then the
  *     answer, the rest and the stop.
+ * 12. A kimi relaunched on a new session in the same run (a restart, a stop then a start, a forked start) binds its
+ *     previous session, whose first prompt names the agent too: that session is the stop's tombstone, so the new
+ *     session's turns never reach Tars and a delegated task never ends (the Audit's M1 on #601). A session there
+ *     before the launch counts only when its lock names a process of the agent's terminal, or as the session the
+ *     launch resumes; a held lock is looked for before any prompt.
  * 11. A post names the session in kimi's own form, `session_<uuid>`: the hook routes take the UUID a CLI gave its
  *     session and nothing else, and answer 400, so every post was dropped (the conformance run, 19/11). Posted as the
  *     UUID alone.
@@ -266,6 +271,40 @@ describe('KimiSessionWatch', () => {
     expect(of('a1').map((p) => p.slice(1, 3))).toEqual([
       ['running', 'resume'], ['running', 'new task'], ['Stop', 'new answer'], ['idle', ''], ['Stop', ''],
     ]);
+  });
+
+  it('12: a relaunch on a new session binds the new one, never the previous one that names the agent too', async () => {
+    const id = 'a1-0000-1111';
+    write(session(K(1)), prompt(0, `${IDENTITY(id)} first task`), said(0, 1, 'first answer'), ended(0, 'completed'));
+    watch.noteLaunch(id, work);
+    pids[id] = [30];
+    write(session(K(2)), prompt(0, `${IDENTITY(id)} after the restart`), said(0, 1, 'second answer'), ended(0, 'completed'));
+    await watch.tick();
+    expect(of(id).map((p) => p[3])).toEqual([T(2), T(2), T(2), T(2), T(2)]);
+    expect(of(id).find((p) => p[0] === '/api/hooks/output')?.[2]).toBe('second answer');
+  });
+
+  it('12: the same where no process can be read (Windows): the previous session stays out', async () => {
+    const id = 'a1-0000-2222';
+    write(session(K(1)), prompt(0, `${IDENTITY(id)} first task`), ended(0, 'completed'));
+    watch.noteLaunch(id, work);
+    pids[id] = undefined;
+    await watch.tick();
+    expect(posts).toEqual([]);
+    write(session(K(2)), prompt(0, `${IDENTITY(id)} after the restart`), said(0, 1, 'second'), ended(0, 'completed'));
+    await watch.tick();
+    expect(of(id).find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['second', T(2)]);
+  });
+
+  it('12: a held lock is looked for before any prompt: the session the agent\'s kimi holds wins over one that names it', async () => {
+    const id = 'a1-0000-3333';
+    watch.noteLaunch(id, work);
+    pids[id] = [40];
+    write(session(K(1)), prompt(0, `${IDENTITY(id)} a session it does not hold`), ended(0, 'completed'));
+    write(session(K(2)), prompt(0, 'the session its kimi holds'), said(0, 1, 'held'), ended(0, 'completed'));
+    lock(K(2), 40);
+    await watch.tick();
+    expect(of(id).find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['held', T(2)]);
   });
 
   it('9: a line still being written waits for its end', async () => {
