@@ -1,3 +1,4 @@
+import { endpointLaunchForAgent } from '../services/traces-runtime';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -63,6 +64,9 @@ export class PiProvider implements CLIProvider {
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+
+    // On an inference endpoint: Tars's provider in pi's models.json, on the endpoint proxy (services/endpoint-harness.ts).
+    for (const arg of endpointLaunchForAgent(params.agentId, 'pi')?.args ?? []) command += ` '${arg.replace(/'/g, "'\\''")}'`;
 
     // For interactive PTY sessions, launch the TUI (no subcommand).
     if (params.model && params.model !== 'default') {

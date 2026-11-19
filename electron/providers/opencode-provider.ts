@@ -1,3 +1,4 @@
+import { endpointLaunchForAgent } from '../services/traces-runtime';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -73,12 +74,14 @@ export class OpenCodeProvider implements CLIProvider {
     // Always the TUI: the agent's permanent session (2.0.4). `run` did the
     // task and exited, and the agent was gone with it.
 
-    // Model (format: provider/model)
-    if (params.model && params.model !== 'default') {
-      if (!/^[a-zA-Z0-9._:\/\-]+$/.test(params.model)) {
+    // Model (format: provider/model). On an inference endpoint, Tars's provider on the endpoint proxy, whose
+    // definition comes in the terminal's environment (services/endpoint-harness.ts).
+    const model = endpointLaunchForAgent(params.agentId, 'opencode')?.modelArg ?? params.model;
+    if (model && model !== 'default') {
+      if (!/^[a-zA-Z0-9._:\/\-]+$/.test(model)) {
         throw new Error('Invalid model name');
       }
-      command += ` --model '${params.model}'`;
+      command += ` --model '${model}'`;
     }
 
     // Reasoning effort is --variant on opencode (provider-specific values
@@ -130,6 +133,8 @@ export class OpenCodeProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor('opencode', appSettings),
+      // On an inference endpoint: the provider of Tars's, inline; the token is set at spawn (core/agent-pty.ts).
+      ...(endpointLaunchForAgent(agentId, 'opencode')?.env ?? {}),
     };
   }
 

@@ -1,3 +1,4 @@
+import { validateEndpointChoice } from '../inference-endpoints';
 import { apiListening, NOT_LISTENING } from '../../core/api-listening';
 import { agentResources } from '../fleet-resources-runtime';
 import type { AgentProcess } from '../fleet-resources';
@@ -1834,6 +1835,7 @@ const MODEL_NAME = /^[a-zA-Z0-9._:\/\[\]-]+$/;
 /** What update_agent changes, as POST /api/agents/:id/update takes it. */
 const UPDATE_FIELDS = [
   'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills', 'secondaryProjectPath',
+  'endpointId', 'traces',
 ] as const;
 const CHARACTERS: readonly AgentCharacter[] = ['robot', 'ninja', 'wizard', 'astronaut', 'knight', 'pirate', 'alien', 'viking'];
 const EFFORTS: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -1902,7 +1904,7 @@ function updateFrom(body: unknown, agent: AgentStatus, ctx: RouteContext): { upd
   }
   if (!UPDATE_FIELDS.some(field => asked[field] !== undefined)) return { status: 400, error: `Nothing to change: name a setting. ${takes}` };
 
-  const { name, character, provider, model, localModel, effort, permissionMode, cliPath, skills, secondaryProjectPath } = asked;
+  const { name, character, provider, model, localModel, effort, permissionMode, cliPath, skills, secondaryProjectPath, endpointId, traces } = asked;
   const update: Omit<AgentUpdate, 'id'> = {};
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) return { status: 400, error: 'An agent\'s name is a string with at least one character in it.' };
@@ -1960,9 +1962,27 @@ function updateFrom(body: unknown, agent: AgentStatus, ctx: RouteContext): { upd
     if (handed) return { status: 400, error: `Not changed: ${handed}` };
     update.secondaryProjectPath = secondaryProjectPath;
   }
+  if (endpointId !== undefined) {
+    if (endpointId !== null && (typeof endpointId !== 'string' || !/^ep-[0-9a-f]{6}$/.test(endpointId))) {
+      return { status: 400, error: 'endpointId is an inference endpoint\'s id (ep- and 6 hex), or null for the CLI\'s own account.' };
+    }
+    update.endpointId = endpointId;
+  }
+  if (traces !== undefined) {
+    if (typeof traces !== 'boolean') return { status: 400, error: 'traces is true or false.' };
+    update.traces = traces;
+  }
   if (update.provider !== undefined && update.provider !== agent.provider) {
     if (!('model' in update)) update.model = null;
     if (!('cliPath' in update)) update.cliPath = null;
+  }
+  // An endpoint, its harness and its model together (services/inference-endpoints.ts), against the settings the app holds.
+  const endpointAfter = update.endpointId === undefined ? agent.endpointId : update.endpointId ?? undefined;
+  if (update.endpointId !== undefined || (endpointAfter && (update.provider !== undefined || update.model !== undefined))) {
+    const wrong = validateEndpointChoice(ctx.getAppSettings(), {
+      endpointId: endpointAfter, provider: update.provider ?? agent.provider, model: update.model === undefined ? agent.model : update.model,
+    });
+    if (wrong) return { status: 400, error: `Not changed: ${wrong}` };
   }
   // Plan on a provider that has none would run as normal (the Audit's Low 2 on #407).
   if (update.provider !== undefined || update.permissionMode !== undefined) {
@@ -2547,7 +2567,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       }
       const cliWasUp = cliAtWork(agent);
       const binaryBefore = getProvider(agent.provider).binaryName;
-      const result = await updateAgent({ id: agent.id, ...asked.update }, { endsNoCli: true });
+      const result = await updateAgent({ id: agent.id, ...asked.update }, { endsNoCli: true, settings: ctx.getAppSettings() });
       if (!result.success) {
         sendJson({ error: result.error, ...(result.code ? { code: result.code } : {}) }, result.code === 'cli_running' ? 409 : 400);
         return;

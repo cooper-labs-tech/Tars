@@ -109,6 +109,7 @@ CLAUDE_CODE_PLUGIN_DIRS            # a claude agent at 2.1.289 or newer: a read-
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS  # set to 1 with it: the mod is a hooks module of Claude Code's early-access function hooks
 TMPDIR                # ~/.tars/tmp/<short id>/t, the agent's own temporary folder, which a boot does not empty (services/agent-tmp.ts)
 CLAUDE_CODE_TMPDIR    # ~/.tars/tmp/<short id>/c, where Claude Code keeps the agent's scratchpad and background task output
+TARS_ENDPOINT_TOKEN   # an agent on an inference endpoint: its terminal's token for the endpoint proxy (API_PORT + 2), minted with the terminal, never the endpoint's key (qwen-code gets it as OPENAI_API_KEY, with OPENAI_BASE_URL and OPENAI_MODEL; opencode its provider in OPENCODE_CONFIG_CONTENT). SECURITY.md § 9
 TARS_CHATS_READ       # '1' for an agent that runs a chat, started while chatsReadEachOther is on: mcp-orchestrator then registers chat_list
 ```
 

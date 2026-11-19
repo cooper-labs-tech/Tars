@@ -79,6 +79,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       /** The toggle's old name, read only when `role` is absent. */
       orchestratorMode?: boolean;
       cliPath?: string;
+      /** The inference endpoint its harness runs on, with `model` one of its models. */
+      endpointId?: string;
+      /** Its own trace switch, off by default. */
+      traces?: boolean;
     }) => ipcRenderer.invoke('agent:create', config),
     update: (params: {
       id: string;
@@ -101,6 +105,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       /** The toggle's old name, read only when `role` is absent. */
       orchestratorMode?: boolean;
       cliPath?: string | null;
+      /** The inference endpoint its harness runs on, or null for none. */
+      endpointId?: string | null;
+      traces?: boolean;
     }) => ipcRenderer.invoke('agent:update', params),
     start: (params: { id: string; prompt: string; options?: { model?: string; resume?: boolean; provider?: string; localModel?: string } }) =>
       ipcRenderer.invoke('agent:start', params),
@@ -1059,6 +1066,64 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Whether Tars keeps the computer awake now, and per which setting (2.0.5, services/keep-awake.ts).
   keepAwake: {
     state: () => ipcRenderer.invoke('keepAwake:state'),
+  },
+
+
+  // Inference endpoints (services/inference-endpoints.ts): OpenAI-compatible endpoints an open harness runs on through
+  // Tars's endpoint proxy. A key goes in and never comes back (keySet only). Approval is here and nowhere else.
+  endpoints: {
+    list: () => ipcRenderer.invoke('endpoints:list'),
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean }) => ipcRenderer.invoke('endpoints:save', e),
+    approve: (id: string) => ipcRenderer.invoke('endpoints:approve', id),
+    setKey: (id: string, key: string | null) => ipcRenderer.invoke('endpoints:setKey', id, key),
+    remove: (id: string) => ipcRenderer.invoke('endpoints:remove', id),
+    refreshModels: (id: string) => ipcRenderer.invoke('endpoints:refreshModels', id),
+    check: (id: string) => ipcRenderer.invoke('endpoints:check', id),
+    harnesses: () => ipcRenderer.invoke('endpoints:harnesses'),
+    waits: () => ipcRenderer.invoke('endpoints:waits'),
+    onChanged: (callback: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+      ipcRenderer.on('endpoints:changed', listener);
+      return () => ipcRenderer.removeListener('endpoints:changed', listener);
+    },
+    onWaiting: (callback: (payload: unknown) => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: unknown) => callback(payload);
+      ipcRenderer.on('endpoints:waiting', listener);
+      return () => ipcRenderer.removeListener('endpoints:waiting', listener);
+    },
+  },
+
+  // Native traces (services/trace-store.ts): the back-office page's reads, its export and delete, the opt-ins, the
+  // pairs that may be traced, and the external reader's token (shown once when rotated).
+  traces: {
+    settings: () => ipcRenderer.invoke('traces:settings'),
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => ipcRenderer.invoke('traces:setSettings', s),
+    pairs: () => ipcRenderer.invoke('traces:pairs'),
+    addPair: (pair: { harness: string; models: string; note?: string }) => ipcRenderer.invoke('traces:addPair', pair),
+    removePair: (pair: { harness: string; models: string }) => ipcRenderer.invoke('traces:removePair', pair),
+    importPairs: () => ipcRenderer.invoke('traces:importPairs'),
+    uploadNotice: () => ipcRenderer.invoke('traces:uploadNotice'),
+    preview: (traceId: string) => ipcRenderer.invoke('traces:preview', traceId),
+    giveUploadConsent: () => ipcRenderer.invoke('traces:giveUploadConsent'),
+    uploadState: () => ipcRenderer.invoke('traces:uploadState'),
+    deleteEverywhere: () => ipcRenderer.invoke('traces:deleteEverywhere'),
+    abandonDeletion: () => ipcRenderer.invoke('traces:abandonDeletion'),
+    ackDeletionCleared: () => ipcRenderer.invoke('traces:ackDeletionCleared'),
+    offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => ipcRenderer.invoke('traces:offer', q),
+    stats: () => ipcRenderer.invoke('traces:stats'),
+    list: (filter: Record<string, unknown>) => ipcRenderer.invoke('traces:list', filter),
+    session: (traceId: string) => ipcRenderer.invoke('traces:session', traceId),
+    requestMessages: (requestId: string) => ipcRenderer.invoke('traces:requestMessages', requestId),
+    exportTo: (filter: Record<string, unknown>) => ipcRenderer.invoke('traces:exportTo', filter),
+    remove: (sel: { traceIds: string[] } | { filter: Record<string, unknown> }) => ipcRenderer.invoke('traces:remove', sel),
+    readerToken: () => ipcRenderer.invoke('traces:readerToken'),
+    rotateReaderToken: () => ipcRenderer.invoke('traces:rotateReaderToken'),
+    revokeReaderToken: () => ipcRenderer.invoke('traces:revokeReaderToken'),
+    onChanged: (callback: () => void) => {
+      const listener = () => callback();
+      ipcRenderer.on('traces:changed', listener);
+      return () => ipcRenderer.removeListener('traces:changed', listener);
+    },
   },
 
   // Platform info

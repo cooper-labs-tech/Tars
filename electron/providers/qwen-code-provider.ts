@@ -1,3 +1,4 @@
+import { endpointLaunchForAgent } from '../services/traces-runtime';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
@@ -54,6 +55,8 @@ export class QwenCodeProvider implements CLIProvider {
       if (!QWEN_MODEL_ID.test(params.model)) throw new Error('Invalid model name');
       command += ` -m ${shellQuote(params.model)}`;
     }
+    // On an inference endpoint: OpenAI auth against Tars's endpoint proxy (services/endpoint-harness.ts).
+    for (const arg of endpointLaunchForAgent(params.agentId, 'qwen-code')?.args ?? []) command += ` ${shellQuote(arg)}`;
     command += ` --approval-mode ${qwenApprovalMode(params.permissionMode)}`;
     // An orchestrator delegates: its tools that write and its sub-agents are not there.
     if (params.orchestratorMode) command += ` --exclude-tools ${QWEN_ORCHESTRATOR_EXCLUDED.join(' ')}`;
@@ -107,6 +110,8 @@ export class QwenCodeProvider implements CLIProvider {
       ...keyEnvFor('qwen-code', appSettings, { model: launch.model }),
       // Its settings file of Tars's: hooks, MCP servers, effort, no updater.
       QWEN_CODE_SYSTEM_SETTINGS_PATH: writeQwenAgentSettings(agentId, { effort: launch.effort }),
+      // On an inference endpoint: the proxy's address and the model; the token is set at spawn (core/agent-pty.ts).
+      ...(endpointLaunchForAgent(agentId, 'qwen-code')?.env ?? {}),
     };
   }
 

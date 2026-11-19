@@ -215,6 +215,64 @@ Measured on codex-cli 0.163.0 (standalone install, ChatGPT account), the version
 - **Its own session after a restart, or a wake** (a codex agent is permanent too). The session Tars registered from its rollout is kept as `resumableSessionId`, and the first start of a run, or a wake, is `codex resume <id>` (`resolveResumeSessionId` finds the rollout by its id, under the day it began). Measured on 0.163: `codex resume` continues the session in its own rollout, with its conversation, and writes a line to it at once; `codex fork <id>`, for a restart that applies new settings, begins a new session that names the one it forks (`forked_from_id`); a codex started with no prompt writes no rollout before its first turn. The session watch binds a resumed session once its rollout grows past where it was at the launch, and registers it as a `resume`; a launch is waited on for as long as its codex runs, so a first task typed hours after Start is followed too. A codex agent at rest is put to sleep like the others.
 - **An approval codex waits on** is read from the screen, by its dialog's title and answers (`codexDialogOnScreen`): in normal mode codex asks before a command it runs outside its sandbox, and before each call of an MCP server's tool, in a form of its own (measured: `Allow the probe MCP server to run tool "ping"?`, then Allow, Allow for this session, Always allow, Cancel). `waiting` on a permission while it is shown, with that title, `running` once it is gone, and no writer types into it: Enter would allow the call. In auto, codex's automatic review answered the same call by itself (measured with Tars's send_message).
 
+### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
+
+An agent running codex, pi, qwen-code or opencode can run on an OpenAI-compatible inference endpoint, chosen per
+agent (`endpointId`, with `model` one of the endpoint's own `/v1/models`).
+
+**The proxy.** Tars writes everything the harness needs, through one adapter per harness (`endpoint-harness.ts`).
+Each adapter points its harness at the endpoint proxy (`http://127.0.0.1:<API_PORT + 2>/v1`), with the terminal's
+token as its key. Measured on 19/11 against a stand-in endpoint, a tool call each:
+- **codex 0.163:** a model provider of Tars's on the command line, Responses only, since it refuses `wire_api = "chat"`
+  at load. The user's `config.toml` is not touched.
+- **qwen-code 0.25.2:** `--auth-type openai` with `OPENAI_BASE_URL`, `OPENAI_MODEL`, and the token in
+  `OPENAI_API_KEY`.
+- **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
+- **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
+
+The proxy:
+- swaps the token for the endpoint's key;
+- adds `X-Session-Id` (the trace id) and `X-Agent-Id` when the endpoint's "send session headers" is on (off by
+  default);
+- passes chat completions, Responses, Anthropic Messages and `/v1/models` unchanged, streams included, chunk by chunk.
+
+**Pause, not fail.** Before any byte has reached the harness, a 503, 429, 502 or refused connection is held. It is
+tried again as `Retry-After` says, up to the endpoint's `holdMaxSeconds` (120 by default: several standard 503 or 429
+answers, under the harnesses' own request timeouts), and the window shows the wait.
+
+**Endpoints and approval.** The user adds endpoints in Settings, and agents add them through `endpoint_*`. A new or
+re-pointed base URL from an agent waits for the owner's approval in the window. Keys come from the window, or from an
+agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
+
+**Traces.** A session is traced only when all of these hold (`trace-gate.ts`):
+- the project's switch and the agent's are both on (both off by default);
+- the endpoint is approved and allows traces;
+- the harness and model pair is on the owner's list (empty as Tars ships, or imported from a file);
+- with the default on, the model is not a closed one (Claude, GPT, o-series, Gemini). The owner can turn it off,
+  warned that the providers' terms may forbid training on their outputs.
+
+`~/.tars/traces/traces.db` holds one row per terminal session:
+- turns open on a user instruction, never on a tool result or a harness's reminder, and side calls (a title, a memory
+  summary) open none;
+- requests carry their timing, usage, attempts and the endpoint's `X-Request-Id`;
+- messages, system prompts and tool sets are stored once by content hash, compressed;
+- authorship comes from what Tars typed into the terminal. A closed model's words set `mixed`, and an instruction
+  Tars did not type counts in `unknown_turns`;
+- the outcome holds the branch, the head, held requests and errors.
+
+Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
+reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
+
+**Upload** (`trace-upload.ts`, `trace-scrub.ts`). With a back-office address set (empty by default) and the user's
+consent, opted-in sessions are uploaded:
+- each string scrubbed;
+- projects and endpoints as HMAC keys;
+- blobs by the hash of their scrubbed content, sent once;
+- one idempotent batch per session state;
+- resumed after a restart, with backoff.
+
+`deleteEverywhere` asks the back-office to delete all of it.
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:

@@ -16,6 +16,12 @@ export const API_PORT = Number(process.env.DOROTHY_API_PORT) || 31415;
  */
 export const OPENAI_BRIDGE_PORT = API_PORT + 1;
 
+/**
+ * The endpoint proxy's loopback port (services/endpoint-proxy.ts): every harness on an inference endpoint talks to
+ * it, with its terminal's token. Derived from API_PORT for the same reason as the bridge's.
+ */
+export const ENDPOINT_PROXY_PORT = API_PORT + 2;
+
 export const OLD_DATA_DIR = path.join(os.homedir(), '.claude-manager');
 
 /**

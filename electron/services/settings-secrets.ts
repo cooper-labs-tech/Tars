@@ -30,6 +30,7 @@ export const SECRET_FIELDS = [
   'openRouterApiKey', 'deepSeekApiKey', 'mimoApiKey', 'moonshotApiKey', 'qwenApiKey', 'zhipuApiKey',
   'minimaxApiKey', 'nvidiaApiKey', 'nousPortalApiKey', 'veniceApiKey', 'ollamaCloudApiKey', 'customOpenAIApiKey',
   'hermesGatewayToken', 'memoryGbrainAuthToken', 'memoryHonchoApiKey',
+  'endpointKeys',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type SecretField = typeof SECRET_FIELDS[number];
@@ -51,7 +52,7 @@ const MOVED_FIELDS: readonly string[] = [...SECRET_FIELDS, ...LEGACY_SECRET_FIEL
  * mask: the CLIs' keys go through cliKeys:set instead. The Sentry token keeps
  * its own private file (sentry-token.ts) and is one of them.
  */
-export const WINDOW_SET_FIELDS = [...SECRET_FIELDS.filter((f) => f !== 'cliApiKeys' && f !== 'ampApiKey'), 'sentryAuthToken'] as const;
+export const WINDOW_SET_FIELDS = [...SECRET_FIELDS.filter((f) => f !== 'cliApiKeys' && f !== 'ampApiKey' && f !== 'endpointKeys'), 'sentryAuthToken'] as const;
 type WindowField = typeof WINDOW_SET_FIELDS[number];
 
 /** A field the move takes out of app-settings.json: a secret, or a legacy one. */

@@ -1,0 +1,348 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import {
+  saveEndpoint, approveEndpoint, removeEndpoint, setEndpointKey, endpointViews, endpointTarget, validateEndpointChoice,
+  takeKeyFromDropFile, readModels, checkHealth, applyEndpointPatch, transportOf, type EndpointActor,
+} from '../../electron/services/inference-endpoints';
+import type { AppSettings, AgentStatus } from '../../electron/types';
+import { cannotSymlink } from '../setup/symlink-privilege';
+
+/**
+ * Inference endpoints (native traces): what the user, or an agent, adds in Tars; the key
+ * kept in the private folder; the approval the owner gives once in the window for any base URL an agent set; the
+ * choice of an endpoint and model for an agent; the key drop file; the models and health probes.
+ *
+ * How it fails, written before the code (19/11):
+ * 1. A base URL that is not http(s), holds credentials, a query or a fragment, or points at the link-local range,
+ *    is saved.
+ * 2. An endpoint an agent adds, or whose base URL an agent changes, is usable before the owner approves it; or a
+ *    change of key, models, name or ceiling by an agent takes an approval away; or an agent turns traces on.
+ * 3. The window's save is not an approval; an approval from the window does not approve the URL now in the record.
+ * 4. The key ends up in an endpoint's view, or in what is saved to app-settings.json (it is a secret field).
+ * 5. An endpoint is removed while agents use it.
+ * 6. An agent is set on an endpoint that does not exist, is not approved, with a harness other than the four, a
+ *    harness measured failed, or a model the endpoint does not list.
+ * 7. The proxy's target is the unapproved base URL, or a request reaches an unapproved endpoint.
+ * 8. The drop file: a name with a separator or `..`, not ending in .key, a symlink, a hard link, a file over 8 KiB,
+ *    or more than one line is read; a drop folder that is a symlink is followed; the file stays after the key is
+ *    taken; a refused file is deleted; its content appears in an error.
+ * 9. /v1/models answering HTML, an error or a non-list wipes the models; the key appears in modelsError.
+ * 10. The health probe does not say its status, latency and time, or says the key.
+ * 11. holdMaxSeconds outside 0..3600 is saved; its default is not the general one (120 s).
+ * 12. Session headers are sent by default: they name the agent and its session to a third party.
+ * 13. (The Audit's H1 on #596.) The key goes to an address the owner did not approve: an agent moves an endpoint's
+ *     base URL, then asks for its models or its health, and the probe sends the key there; or a redirect from the
+ *     approved address carries it elsewhere. And an approval of a new address hands it the old address's key.
+ * 14. (M1.) A probe hands back the whole settings as they were before its fetch, so saving them undoes what changed
+ *     meanwhile (a project's trace opt-out).
+ * 16. (The re-audit's I1 on #596.) A probe in flight while the address changes lands the old address's models or
+ *     health on the new one.
+ * 15. (L2, the orchestrator's rule.) Plain http to a public address is taken; or refused on loopback, a private range
+ *     (RFC 1918, 100.64.0.0/10, fc00::/7) or IPv6 link-local; or an agent, rather than the owner in the window, allows
+ *     plain http to a public address.
+ */
+
+const NOW = '2026-11-19T12:00:00.000Z';
+const OWNER: EndpointActor = { window: true };
+const AGENT: EndpointActor = { agentId: 'agent-remote', agentName: 'Remote-Tuner' };
+const base = (): AppSettings => ({ inferenceEndpoints: [] } as unknown as AppSettings);
+const agent = (over: Partial<AgentStatus>): AgentStatus => ({ id: 'a1', name: 'Q', projectPath: '/p', provider: 'qwen-code', model: 'GLM', status: 'idle', skills: [], ...over } as unknown as AgentStatus);
+
+function added(settings: AppSettings, actor: EndpointActor, over: Record<string, unknown> = {}) {
+  const r = saveEndpoint(settings, { name: 'Remote host', baseUrl: 'http://192.168.50.10:9000/v1', allowTraces: false, ...over }, actor, NOW);
+  if (!r.ok) throw new Error(r.error);
+  return r;
+}
+
+describe('saving endpoints', () => {
+  it('1: only a plain http(s) base URL is saved', () => {
+    for (const baseUrl of ['ftp://h/v1', 'http://user:pw@h/v1', 'http://h/v1?x=1', 'http://h/v1#f', 'http://169.254.169.254/v1', 'not a url', '']) {
+      expect(saveEndpoint(base(), { name: 'x', baseUrl, allowTraces: false }, OWNER, NOW).ok, baseUrl).toBe(false);
+    }
+    const r = added(base(), OWNER, { baseUrl: 'https://h.example/v1/' });
+    expect(r.endpoint.baseUrl).toBe('https://h.example/v1');
+    expect(r.endpoint.id).toMatch(/^ep-[0-9a-f]{6}$/);
+  });
+
+  it('2: what an agent adds or re-points waits for the owner; what else it changes keeps the approval', () => {
+    // An agent cannot add one with traces on: that is the owner's.
+    expect(saveEndpoint(base(), { name: 'x', baseUrl: 'https://h.example/v1', allowTraces: true }, AGENT, NOW).ok).toBe(false);
+    const byAgent = added(base(), AGENT);
+    expect(byAgent.endpoint).toMatchObject({ approved: false, allowTraces: false, changedBy: { agentId: 'agent-remote' } });
+    expect('refused' in endpointTarget(byAgent.settings, byAgent.endpoint.id)).toBe(true);
+
+    const approved = approveEndpoint(byAgent.settings, byAgent.endpoint.id);
+    if (!approved.ok) throw new Error(approved.error);
+    expect(approved.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'http://192.168.50.10:9000/v1' });
+
+    const renamed = saveEndpoint(approved.settings, { id: byAgent.endpoint.id, name: 'Remote host 2', holdMaxSeconds: 120 }, AGENT, NOW);
+    if (!renamed.ok) throw new Error(renamed.error);
+    expect(renamed.endpoint.approved).toBe(true);
+    const keyed = setEndpointKey(renamed.settings, byAgent.endpoint.id, 'k-rotated');
+    if (!keyed.ok) throw new Error(keyed.error);
+    expect(endpointViews(keyed.settings, [])[0].approved).toBe(true);
+    // An agent cannot turn traces on, and may turn them off.
+    const tracesOn = saveEndpoint(keyed.settings, { id: byAgent.endpoint.id, allowTraces: true }, AGENT, NOW);
+    expect(tracesOn.ok).toBe(false);
+
+    const moved = saveEndpoint(keyed.settings, { id: byAgent.endpoint.id, baseUrl: 'https://evil.example/v1' }, AGENT, NOW);
+    if (!moved.ok) throw new Error(moved.error);
+    expect(moved.endpoint).toMatchObject({ approved: false, approvedBaseUrl: 'http://192.168.50.10:9000/v1', baseUrl: 'https://evil.example/v1' });
+    expect('refused' in endpointTarget(moved.settings, byAgent.endpoint.id)).toBe(true);
+  });
+
+  it('3: what the owner saves in the window is approved by that act', () => {
+    const r = added(base(), OWNER, { allowTraces: true });
+    expect(r.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'http://192.168.50.10:9000/v1', allowTraces: true });
+    const target = endpointTarget(r.settings, r.endpoint.id);
+    expect(target).toMatchObject({ baseUrl: 'http://192.168.50.10:9000/v1', holdMaxSeconds: 120, sendSessionHeaders: false });
+    const withHeaders = saveEndpoint(r.settings, { id: r.endpoint.id, sendSessionHeaders: true }, OWNER, NOW);
+    if (!withHeaders.ok) throw new Error(withHeaders.error);
+    expect(endpointTarget(withHeaders.settings, r.endpoint.id)).toMatchObject({ sendSessionHeaders: true });
+    expect(endpointViews(withHeaders.settings, [])[0]).toMatchObject({ sendSessionHeaders: true, holdMaxSeconds: 120 });
+  });
+
+  it('4: the key is never in a view nor in the endpoint record', () => {
+    const r = added(base(), OWNER);
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'sk-secret-value');
+    if (!keyed.ok) throw new Error(keyed.error);
+    const views = endpointViews(keyed.settings, []);
+    expect(JSON.stringify(views)).not.toContain('sk-secret-value');
+    expect(views[0].keySet).toBe(true);
+    expect(JSON.stringify(keyed.settings.inferenceEndpoints)).not.toContain('sk-secret-value');
+    expect(keyed.settings.endpointKeys).toEqual({ [r.endpoint.id]: 'sk-secret-value' });
+    expect(endpointTarget(keyed.settings, r.endpoint.id)).toMatchObject({ key: 'sk-secret-value' });
+    const cleared = setEndpointKey(keyed.settings, r.endpoint.id, null);
+    if (!cleared.ok) throw new Error(cleared.error);
+    expect(endpointViews(cleared.settings, [])[0].keySet).toBe(false);
+  });
+
+  it('5: an endpoint in use is not removed, and the views say who uses it', () => {
+    const r = added(base(), OWNER);
+    const users = [agent({ id: 'a1', name: 'Q', endpointId: r.endpoint.id })];
+    expect(endpointViews(r.settings, users)[0].agents).toEqual([{ id: 'a1', name: 'Q', projectPath: '/p', provider: 'qwen-code', model: 'GLM' }]);
+    const refused = removeEndpoint(r.settings, r.endpoint.id, users);
+    expect(refused.ok).toBe(false);
+    expect(removeEndpoint(r.settings, r.endpoint.id, []).ok).toBe(true);
+  });
+
+  it('11: the hold ceiling stays within 0 and 3600 seconds', () => {
+    expect(saveEndpoint(base(), { name: 'x', baseUrl: 'https://h.example/v1', allowTraces: false, holdMaxSeconds: 4000 }, OWNER, NOW).ok).toBe(false);
+    expect(saveEndpoint(base(), { name: 'x', baseUrl: 'https://h.example/v1', allowTraces: false, holdMaxSeconds: -1 }, OWNER, NOW).ok).toBe(false);
+    expect(added(base(), OWNER, { holdMaxSeconds: 0 }).endpoint.holdMaxSeconds).toBe(0);
+  });
+});
+
+describe('the key goes only where the owner approved (H1, M1)', () => {
+  type Seen = { url: string; auth?: string; redirect?: string };
+  const recorder = (status = 200, body = JSON.stringify({ data: [{ id: 'open-coder-1' }] })) => {
+    const seen: Seen[] = [];
+    const f = (async (u: string, init?: RequestInit) => {
+      seen.push({ url: String(u), auth: (init?.headers as Record<string, string> | undefined)?.Authorization, redirect: init?.redirect });
+      return new Response(body, { status });
+    }) as unknown as typeof fetch;
+    return { seen, f };
+  };
+
+  it('13: after an agent moves the base URL, models and health send no key, and nothing follows a redirect', async () => {
+    const r = added(base(), OWNER, { baseUrl: 'https://approved.example.com/v1' });
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'sk-the-owners-key');
+    if (!keyed.ok) throw new Error(keyed.error);
+    const moved = saveEndpoint(keyed.settings, { id: r.endpoint.id, baseUrl: 'https://attacker.example.com/v1' }, AGENT, NOW);
+    if (!moved.ok) throw new Error(moved.error);
+    const a = recorder();
+    await readModels(moved.settings, r.endpoint.id, a.f, NOW);
+    await checkHealth(moved.settings, r.endpoint.id, a.f, NOW);
+    expect(a.seen.length).toBe(2);
+    for (const call of a.seen) {
+      expect(call.auth, call.url).toBeUndefined();
+      expect(call.redirect).toBe('manual');
+    }
+    // And the move took the key away: the owner's approval of the new address never hands it the old one's.
+    expect(moved.settings.endpointKeys?.[r.endpoint.id]).toBeUndefined();
+    // The owner setting a key again, before approving the new address, still sends it nowhere unapproved.
+    const rekeyed = setEndpointKey(moved.settings, r.endpoint.id, 'sk-set-again');
+    if (!rekeyed.ok) throw new Error(rekeyed.error);
+    const b = recorder();
+    await readModels(rekeyed.settings, r.endpoint.id, b.f, NOW);
+    await checkHealth(rekeyed.settings, r.endpoint.id, b.f, NOW);
+    expect(b.seen.map(c => c.auth)).toEqual([undefined, undefined]);
+    const approved = approveEndpoint(moved.settings, r.endpoint.id);
+    if (!approved.ok) throw new Error(approved.error);
+    expect(endpointTarget(approved.settings, r.endpoint.id)).toMatchObject({ key: null });
+  });
+
+  it('13: on the approved address the key goes, with redirects not followed, and a redirect answer is no success', async () => {
+    const r = added(base(), OWNER, { baseUrl: 'https://approved.example.com/v1' });
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'sk-the-owners-key');
+    if (!keyed.ok) throw new Error(keyed.error);
+    const a = recorder();
+    await readModels(keyed.settings, r.endpoint.id, a.f, NOW);
+    expect(a.seen[0]).toMatchObject({ url: 'https://approved.example.com/v1/models', auth: 'Bearer sk-the-owners-key', redirect: 'manual' });
+    const moved = await readModels(keyed.settings, r.endpoint.id, recorder(302, '').f, NOW);
+    expect(moved.ok).toBe(false);
+    // The owner moving the address keeps the key: the owner's own act, approved by it.
+    const ownerMoved = saveEndpoint(keyed.settings, { id: r.endpoint.id, baseUrl: 'https://new.example.com/v1' }, OWNER, NOW);
+    if (!ownerMoved.ok) throw new Error(ownerMoved.error);
+    expect(ownerMoved.settings.endpointKeys?.[r.endpoint.id]).toBe('sk-the-owners-key');
+  });
+
+  it('14: a probe hands back a patch, which lands on the settings as they are when it is written', async () => {
+    const r = added(base(), OWNER);
+    const m = await readModels(r.settings, r.endpoint.id, recorder().f, NOW);
+    const h = await checkHealth(r.settings, r.endpoint.id, recorder().f, NOW);
+    expect('settings' in m).toBe(false);
+    expect('settings' in h).toBe(false);
+    // Meanwhile, the owner took a project out of traces.
+    const fresh = { ...r.settings, traces: { projects: [], capBytes: 1, retentionDays: 1, pairs: [], excludeClosedModels: true, uploadUrl: '' } } as AppSettings;
+    const after = applyEndpointPatch(applyEndpointPatch(fresh, r.endpoint.id, m.patch), r.endpoint.id, h.patch);
+    expect(after.traces?.projects).toEqual([]);
+    expect(after.inferenceEndpoints![0]).toMatchObject({ models: ['open-coder-1'], health: { ok: true } });
+  });
+});
+
+describe('a probe across a change of address (re-audit I1)', () => {
+  it('16: the patch of a probe of the old address does not land on the new one', async () => {
+    const r = added(base(), OWNER, { baseUrl: 'https://old.example.com/v1' });
+    const m = await readModels(r.settings, r.endpoint.id, (async () => new Response(JSON.stringify({ data: [{ id: 'old-model' }] }), { status: 200 })) as unknown as typeof fetch, NOW);
+    const h = await checkHealth(r.settings, r.endpoint.id, (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch, NOW);
+    const moved = saveEndpoint(r.settings, { id: r.endpoint.id, baseUrl: 'https://new.example.com/v1' }, OWNER, NOW);
+    if (!moved.ok) throw new Error(moved.error);
+    const after = applyEndpointPatch(applyEndpointPatch(moved.settings, r.endpoint.id, m.patch, m.probed), r.endpoint.id, h.patch, h.probed);
+    expect(after.inferenceEndpoints![0].models).toEqual([]);
+    expect(after.inferenceEndpoints![0].health).toBeUndefined();
+    const same = applyEndpointPatch(r.settings, r.endpoint.id, m.patch, m.probed);
+    expect(same.inferenceEndpoints![0].models).toEqual(['old-model']);
+  });
+});
+
+describe('plain http (L2)', () => {
+  it('15: https anywhere; plain http on loopback, private ranges and IPv6 link-local; elsewhere only by the owner', () => {
+    expect(transportOf('https://api.example.com/v1')).toBe('https');
+    for (const u of ['http://127.0.0.1:8000/v1', 'http://localhost:11434/v1', 'http://10.1.2.3/v1', 'http://172.16.0.9/v1', 'http://192.168.1.20/v1', 'http://100.64.0.1/v1', 'http://100.127.255.254/v1', 'http://[fd12::1]/v1', 'http://[fe80::1]/v1', 'http://[::1]/v1']) {
+      expect(transportOf(u), u).toBe('http-private');
+    }
+    for (const u of ['http://203.0.113.5/v1', 'http://api.example.com/v1', 'http://100.128.0.1/v1', 'http://172.32.0.1/v1']) {
+      expect(transportOf(u), u).toBe('http-public');
+    }
+    expect(saveEndpoint(base(), { name: 'x', baseUrl: 'http://203.0.113.5/v1', allowTraces: false }, OWNER, NOW).ok).toBe(false);
+    expect(saveEndpoint(base(), { name: 'x', baseUrl: 'http://203.0.113.5/v1', allowTraces: false, allowPlainHttp: true }, AGENT, NOW).ok).toBe(false);
+    const allowed = saveEndpoint(base(), { name: 'x', baseUrl: 'http://203.0.113.5/v1', allowTraces: false, allowPlainHttp: true }, OWNER, NOW);
+    expect(allowed.ok).toBe(true);
+    const lan = saveEndpoint(base(), { name: 'x', baseUrl: 'http://192.168.1.20/v1', allowTraces: false }, AGENT, NOW);
+    if (!lan.ok) throw new Error(lan.error);
+    expect(endpointViews(lan.settings, [])[0]).toMatchObject({ plainHttp: true });
+    const tls = added(base(), OWNER, { baseUrl: 'https://api.example.com/v1' });
+    expect(endpointViews(tls.settings, [])[0]).toMatchObject({ plainHttp: false });
+  });
+});
+
+describe('choosing an endpoint for an agent', () => {
+  it('6: an approved endpoint, one of the four harnesses not measured failed, one of its models', () => {
+    const r = added(base(), OWNER);
+    const s = { ...r.settings, inferenceEndpoints: r.settings.inferenceEndpoints!.map(e => ({ ...e, models: ['GLM', 'Qwen'] })) };
+    expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'qwen-code', model: 'GLM' })).toBeNull();
+    expect(validateEndpointChoice(s, { endpointId: 'ep-ffffff', provider: 'qwen-code', model: 'GLM' })).toMatch(/no such endpoint/i);
+    expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'claude', model: 'GLM' })).toMatch(/codex, pi, qwen-code or opencode/);
+    expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'qwen-code', model: 'Mistral' })).toMatch(/does not list/);
+    expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'codex', model: 'GLM' }, { codex: 'failed' })).toMatch(/tool calls/);
+    const unapproved = { ...s, inferenceEndpoints: s.inferenceEndpoints!.map(e => ({ ...e, approved: false })) };
+    expect(validateEndpointChoice(unapproved, { endpointId: r.endpoint.id, provider: 'qwen-code', model: 'GLM' })).toMatch(/approve/);
+    expect(validateEndpointChoice(s, { endpointId: null, provider: 'claude', model: 'x' })).toBeNull();
+  });
+
+  it('7: no target for an unknown endpoint', () => {
+    expect(endpointTarget(base(), 'ep-000000')).toMatchObject({ refused: { status: 404 } });
+  });
+});
+
+describe('the key drop file', () => {
+  let dir: string;
+  beforeEach(() => { dir = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'drop-')), 'endpoint-keys'); });
+  afterEach(() => { fs.rmSync(path.dirname(dir), { recursive: true, force: true }); });
+  const drop = (name: string, content: string) => { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(path.join(dir, name), content); };
+
+  it('8: a good drop file gives its key and is deleted', () => {
+    drop('remote.key', 'sk-abc123XYZ\n');
+    expect(takeKeyFromDropFile('remote.key', dir)).toEqual({ ok: true, key: 'sk-abc123XYZ' });
+    expect(fs.existsSync(path.join(dir, 'remote.key'))).toBe(false);
+  });
+
+  it('8: bad names are refused before anything is read', () => {
+    for (const name of ['../x.key', 'a/b.key', 'a\\b.key', 'remote.txt', '.key', '', 'x'.repeat(70) + '.key', '/etc/passwd']) {
+      const r = takeKeyFromDropFile(name, dir);
+      expect(r.ok, name).toBe(false);
+    }
+  });
+
+  it.skipIf(cannotSymlink())('8: a symlink, a hard link or a linked drop folder is refused, and left where it is', () => {
+    const outside = path.join(path.dirname(dir), 'outside-secret');
+    fs.writeFileSync(outside, 'PRIVATE-VALUE');
+    fs.mkdirSync(dir, { recursive: true });
+    fs.symlinkSync(outside, path.join(dir, 'sym.key'));
+    fs.linkSync(outside, path.join(dir, 'hard.key'));
+    for (const name of ['sym.key', 'hard.key']) {
+      const r = takeKeyFromDropFile(name, dir);
+      expect(r.ok, name).toBe(false);
+      expect(JSON.stringify(r)).not.toContain('PRIVATE-VALUE');
+    }
+    expect(fs.existsSync(path.join(dir, 'sym.key'))).toBe(true);
+    const linkedDir = path.join(path.dirname(dir), 'linked');
+    fs.mkdirSync(path.join(path.dirname(dir), 'real'));
+    fs.writeFileSync(path.join(path.dirname(dir), 'real', 'k.key'), 'sk-1');
+    fs.symlinkSync(path.join(path.dirname(dir), 'real'), linkedDir);
+    expect(takeKeyFromDropFile('k.key', linkedDir).ok).toBe(false);
+  });
+
+  it('8: content that is not one printable line, or too big, is refused without being shown', () => {
+    drop('two.key', 'line-one\nline-two\n');
+    drop('big.key', 'k'.repeat(9000));
+    drop('space.key', 'has space');
+    drop('empty.key', '\n');
+    for (const name of ['two.key', 'big.key', 'space.key', 'empty.key']) {
+      const r = takeKeyFromDropFile(name, dir);
+      expect(r.ok, name).toBe(false);
+      expect(JSON.stringify(r)).not.toMatch(/line-one|kkkk|has space/);
+      expect(fs.existsSync(path.join(dir, name))).toBe(true);
+    }
+    expect(takeKeyFromDropFile('missing.key', dir).ok).toBe(false);
+  });
+});
+
+describe('models and health', () => {
+  const answer = (status: number, body: string, type = 'application/json') =>
+    (async () => new Response(body, { status, headers: { 'Content-Type': type } })) as unknown as typeof fetch;
+
+  it('9: a good list is read; a bad answer keeps the last list and says why without the key', async () => {
+    const r = added(base(), OWNER);
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'sk-zzz');
+    if (!keyed.ok) throw new Error(keyed.error);
+    let seenAuth = '';
+    const good = (async (_u: string, init?: RequestInit) => { seenAuth = String((init?.headers as Record<string, string>).Authorization); return new Response(JSON.stringify({ object: 'list', data: [{ id: 'GLM' }, { id: 'Qwen' }] }), { status: 200 }); }) as unknown as typeof fetch;
+    const one = await readModels(keyed.settings, r.endpoint.id, good, NOW);
+    if (!one.ok) throw new Error(one.error);
+    expect(one.models).toEqual(['GLM', 'Qwen']);
+    expect(seenAuth).toBe('Bearer sk-zzz');
+    const withList = applyEndpointPatch(keyed.settings, r.endpoint.id, one.patch);
+    for (const bad of [answer(200, '<html>login</html>', 'text/html'), answer(401, '{"error":"bad key sk-zzz"}'), answer(200, '{"data":"nope"}')]) {
+      const two = await readModels(withList, r.endpoint.id, bad, NOW);
+      expect(two.ok).toBe(false);
+      const after = applyEndpointPatch(withList, r.endpoint.id, two.patch);
+      expect(after.inferenceEndpoints![0].models).toEqual(['GLM', 'Qwen']);
+      expect(JSON.stringify(after.inferenceEndpoints)).not.toContain('sk-zzz');
+    }
+  });
+
+  it('10: the health probe says its status, latency and time, never the key', async () => {
+    const r = added(base(), OWNER);
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'sk-zzz');
+    if (!keyed.ok) throw new Error(keyed.error);
+    let t = 1000;
+    const h = await checkHealth(keyed.settings, r.endpoint.id, answer(503, '{"error":{"type":"endpoint_busy","message":"sk-zzz"}}'), NOW, () => (t += 42));
+    expect(h.health).toMatchObject({ ok: false, status: 503, latencyMs: 42, at: NOW });
+    expect(JSON.stringify(h.health)).not.toContain('sk-zzz');
+    expect(JSON.stringify(applyEndpointPatch(keyed.settings, r.endpoint.id, h.patch).inferenceEndpoints)).not.toContain('sk-zzz');
+  });
+});

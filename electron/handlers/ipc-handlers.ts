@@ -1,3 +1,6 @@
+import { validateEndpointChoice } from '../services/inference-endpoints';
+import { clearPreRegistered, preRegisterAgent } from '../services/traces-runtime';
+import { registerTracesHandlers } from './traces-handlers';
 import { apiListening, NOT_LISTENING } from '../core/api-listening';
 import { measureFleetDisk, readFleetResources } from '../services/fleet-resources-runtime';
 import { safeGit, safeGitSync } from '../utils/safe-git';
@@ -224,6 +227,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerGwsHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerMcpConfigHandlers();
   registerTrayHandlers(deps);
+  registerTracesHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
 }
 
 // ============== Tray Panel IPC Handlers ==============
@@ -345,8 +349,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     /** The toggle's old name, read when `role` is absent. */
     orchestratorMode?: boolean;
     cliPath?: string;
+    /** The inference endpoint its harness runs on (services/inference-endpoints.ts), with `model` one of its models. */
+    endpointId?: string;
+    /** Its own trace switch, off by default (services/trace-gate.ts). */
+    traces?: boolean;
   }) => {
     const id = uuidv4();
+    // An endpoint, its harness and its model, before anything is created.
+    const endpointWrong = validateEndpointChoice(getAppSettings(), { endpointId: config.endpointId, provider: config.provider, model: config.model });
+    if (endpointWrong) throw new Error(`Not created: ${endpointWrong}`);
     const { shell, args: shellArgv } = agentShell({ setting: getAppSettings().terminalShell });
 
     // Validate effort against allowed values to prevent shell injection
@@ -411,6 +422,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Get provider-specific env vars
     const agentProvider = getProvider(config.provider);
+    // Its endpoint, known to the launch before the record is: the terminal spawned below is the one its harness
+    // reads the endpoint session's token from (services/traces-runtime.ts).
+    if (config.endpointId) preRegisterAgent({ id, name: config.name, projectPath: config.projectPath, provider: config.provider, model: config.model, endpointId: config.endpointId, traces: config.traces === true });
     const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings, { model: config.model, effort: config.effort });
 
     // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
@@ -481,10 +495,13 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       localModel: config.localModel,
       obsidianVaultPaths: config.obsidianVaultPaths || [],
       cliPath: config.cliPath,
+      ...(config.endpointId ? { endpointId: config.endpointId } : {}),
+      ...(config.traces === true ? { traces: true } : {}),
     };
     // A new orchestrator takes the role from its project's current one.
     const demoted = assignRole(status, role, agents.values());
     agents.set(id, status);
+    clearPreRegistered(id);
 
     // Save agents to disk
     saveAgents();
@@ -1052,7 +1069,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   // shares. The window ends the terminal a new provider, CLI path, project or worktree needs, whatever runs in
   // it: the user who saves sees what that cuts.
   ipcMain.handle('agent:update', async (_event, params: AgentUpdate) => {
-    const result = await updateAgent(params, { makeWorktree: makeAgentWorktree });
+    const result = await updateAgent(params, { makeWorktree: makeAgentWorktree, settings: deps.getAppSettings() });
     if (!result.success) return { success: false, error: result.error };
     // An orchestrator's chats run on its configuration: each runner takes it,
     // and a live one restarts on what changed (services/chat-runners.ts).
