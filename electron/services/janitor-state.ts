@@ -63,6 +63,8 @@ export type CleanupRequest = {
   byId: string;
   project: string;
   ids: string[];
+  /** Each item as the window shows it, what it is and the rule it matched (the Audit's L1 on #606). */
+  items: Array<Pick<JanitorStateItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule'>>;
   bytes: number;
   why: string;
   state: 'waiting' | 'approved';
@@ -140,7 +142,7 @@ export function createJanitor(deps: {
   const state = (): JanitorState => ({
     scan: scan ? { ...scan, items: scan.items.map(i => ({ ...i })) } : null,
     deleting: deleting ? { ...deleting } : null, never: [...NEVER_WORDS], log: readLog(deps.logFile), requests: [...requests],
-    cleanupRequests: cleanupRequests.map(r => ({ ...r, ids: [...r.ids] })), report, error,
+    cleanupRequests: cleanupRequests.map(r => ({ ...r, ids: [...r.ids], items: r.items.map(i => ({ ...i })) })), report, error,
   });
   const tell = () => { try { deps.broadcast(state()); } catch { /* no window */ } };
 
@@ -233,6 +235,7 @@ export function createJanitor(deps: {
       const request: CleanupRequest = {
         id: `jr-${randomBytes(4).toString('hex')}`, at: Date.now(), by: asker.name, byId: asker.id, project: asker.project,
         ids: unique, bytes: unique.reduce((sum, id) => sum + (known.get(id)?.sizeBytes ?? 0), 0), why: why.trim(), state: 'waiting',
+        items: unique.map(id => { const v = view(known.get(id)!); return { id: v.id, kind: v.kind, label: v.label, path: v.path, bytes: v.bytes, rule: v.rule }; }),
       };
       cleanupRequests.push(request);
       if (cleanupRequests.length > REQUESTS_KEPT) cleanupRequests.shift();

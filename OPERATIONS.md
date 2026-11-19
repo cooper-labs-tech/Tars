@@ -1524,8 +1524,11 @@ window; agents may only ask for a scan.
     `session-scratchpad`, an ended session's folder in a live agent's Claude Code temporary folder
     (`~/.tars/tmp/<id>/c/<user>/<project>/<session>`, neither its current nor its resumable session; with none known,
     its newest is held), untouched for 3 days; `agent-tmp-entry`, an entry of a live agent's TMPDIR (`t/`) or of its
-    current session's scratchpad, untouched for 7 days; `release-folder`, the `release/` of a project or a worktree,
-    untouched for 3 days; `worktree-node-modules`, the `node_modules` of a worktree nothing changed in for 7 days
+    current session's scratchpad, untouched for 7 days; `release-folder`, the `release/` of a project or a worktree
+    that is electron-builder's output by its own evidence (its `builder-debug.yml` or
+    `builder-effective-config.yaml`, no file git tracks in it, ignored by git, or untracked in a worktree: at a
+    project's root an untracked one is uncommitted work), untouched for 3 days, the re-check applying the same (the
+    Audit's M1 on #605: any folder named `release/` was proposed); `worktree-node-modules`, the `node_modules` of a worktree nothing changed in for 7 days
     (caches aside). A temporary item carries its agent's project, so that project's orchestrator is shown it. A
     `node_modules` cloned by `scripts/worktree.mjs` shares most of its blocks with the others: it frees less than the
     size `du` gives, and `janitor.log` records the size the scan measured.
@@ -1558,7 +1561,8 @@ window; agents may only ask for a scan.
   re-check ran the whole scan for each item. No route takes an approval.
 - **Cleanup requests** (2.0.7). `POST /api/janitor/request { ids, why }` (`disk_cleanup_request`): an agent asks the
   owner for a cleanup of items of the last scan, every one in its own project (403 otherwise; 400 without ids, past
-  200, or without a short why). It records, deletes nothing; the window shows it in `state().cleanupRequests` and the
+  200, or without a short why). It records, deletes nothing; the window shows it in `state().cleanupRequests`, each item with its kind, label,
+  path, size and rule, and the
   owner approves it in one click, `diskJanitor.approveRequest(id)`, each item then checked again as for any approval.
 - **The report** (2.0.7, `services/disk-report.ts`): after each scan, and a scan every 6 hours with nobody asking
   (`startDiskReports`, deleting nothing), what agents leave behind: each project's worktrees with their agent (the

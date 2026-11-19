@@ -157,6 +157,20 @@ async function worldNow(measure = true): Promise<JanitorWorld> {
     docker: { images: dockerImages, vm: colima.ok },
     // The re-check before a deletion does not measure again: the scan's size is what the owner approved.
     sizeOf: (p) => (measure ? diskUsage(p) : Promise.resolve(0)),
+    // A file git tracks inside, else whether git ignores the folder (git, never a shell; null when git cannot say).
+    tracking: async (dir) => {
+      try {
+        if ((await safeGit(dir, ['ls-files', '--', '.'])).stdout.trim()) return 'tracked';
+      } catch {
+        return null;
+      }
+      try {
+        await safeGit(path.dirname(dir), ['check-ignore', '-q', '--', path.basename(dir)]);
+        return 'ignored';
+      } catch (err) {
+        return (err as { code?: unknown }).code === 1 ? 'untracked' : null;
+      }
+    },
   };
 }
 

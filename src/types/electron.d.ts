@@ -1337,6 +1337,8 @@ export interface JanitorCleanupRequest {
   project: string;
   /** The janitor items it names (JanitorItem.id), all in its project. */
   ids: string[];
+  /** Each of those items as the window shows it: what it is, its size, the rule it matched. */
+  items: Array<Pick<JanitorItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule'>>;
   bytes: number;
   why: string;
   state: 'waiting' | 'approved';

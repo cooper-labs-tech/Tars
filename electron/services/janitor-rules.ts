@@ -24,7 +24,9 @@ import { shortIdOf } from './agent-tmp';
  * - session-scratchpad: an ended session's folder in a live agent's Claude Code temporary folder
  *   (~/.tars/tmp/<id>/c/<user>/<project>/<session>, neither its current nor its resumable session), untouched 3 days;
  * - agent-tmp-entry: an entry of a live agent's TMPDIR (t/) or of its current session's scratchpad, untouched 7 days;
- * - release-folder: the release/ of a project or a worktree (electron-builder's output), untouched 3 days;
+ * - release-folder: the release/ of a project or a worktree (electron-builder's output), untouched 3 days, holding
+ *   its marker (builder-debug.yml, builder-effective-config.yaml), no file git tracks in it, and ignored by git (at a
+ *   project's root) or ignored or untracked (in a worktree): a user's own release/ is never proposed;
  * - worktree-node-modules: the node_modules of a worktree nothing changed in for 7 days (caches aside).
  * None of these when a report names it or a process works in it. A temporary item carries its agent's project.
  * Never, whatever matches: ~/.tars-private, ~/Documents, the uv cache, the Trash, ~/Library/Developer (Xcode, the iOS
@@ -85,6 +87,11 @@ export interface JanitorWorld {
   named(folder: string): boolean;
   docker: { images(): Promise<Array<{ id: string; repo: string; sizeBytes: number; used: boolean }> | null>; vm: boolean };
   sizeOf(p: string): Promise<number>;
+  /**
+   * What git says of a folder (2.0.7, the Audit's M1 on #605): `tracked` when it holds a file git tracks, else
+   * `ignored` or `untracked`; null when git cannot say. Absent: nothing that needs it is proposed.
+   */
+  tracking?(dir: string): Promise<'tracked' | 'ignored' | 'untracked' | null>;
 }
 
 export interface JanitorOps {
@@ -201,15 +208,28 @@ export type ScanScope = { kinds: JanitorKind[]; project?: string; agentTmp?: str
 const WORKTREE_KINDS: readonly JanitorKind[] = ['next-cache', 'test-artefacts', 'closed-worktree', 'release-folder', 'worktree-node-modules'];
 const looksAt = (scope: ScanScope | undefined, kinds: readonly JanitorKind[]) => !scope || kinds.some(k => scope.kinds.includes(k));
 
-/** The release/ of a folder (a project or a worktree), when it is old and nothing works in it. */
-async function releaseItem(world: JanitorWorld, folder: string, label: string, project: string): Promise<JanitorItem | undefined> {
+/**
+ * What electron-builder writes into its output folder, measured in the Tars checkout's release/ (builder-debug.yml),
+ * and the Audit's other marker: a release/ holding neither is a user's own folder (the Audit's M1 on #605).
+ */
+const BUILDER_MARKERS = ['builder-debug.yml', 'builder-effective-config.yaml'];
+const isFile = (p: string) => { try { return fs.lstatSync(p).isFile(); } catch { return false; } };
+
+/**
+ * The release/ of a folder (a project or a worktree), when it is electron-builder's output by its own evidence (its
+ * marker, no file git tracks, ignored by git, or untracked in a worktree: at a project's root that is uncommitted
+ * work), old, and nothing works in it.
+ */
+async function releaseItem(world: JanitorWorld, folder: string, label: string, project: string, atRoot: boolean): Promise<JanitorItem | undefined> {
   const p = path.join(folder, 'release');
-  if (!isDir(p) || kept(world, p) || world.named(p)) return undefined;
+  if (!isDir(p) || !BUILDER_MARKERS.some(m => isFile(path.join(p, m))) || kept(world, p) || world.named(p)) return undefined;
+  const git = world.tracking ? await world.tracking(p) : null;
+  if (git !== 'ignored' && !(git === 'untracked' && !atRoot)) return undefined;
   const changed = await newestChange(p, world.now);
   if (changed > world.now - RELEASE_IDLE_DAYS * DAY) return undefined;
   return {
     id: idOf('release-folder', p), kind: 'release-folder', path: p, project, label: `${label}/release`, sizeBytes: await world.sizeOf(p),
-    rule: `the release/ of a project or a worktree (electron-builder's output), untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
+    rule: `electron-builder's output (its builder-debug.yml), git tracking nothing in it, untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
     why: `last changed ${day(changed)}`,
   };
 }
@@ -222,7 +242,7 @@ async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (wha
     if (onNeverList(world, project)) continue;
     // The project's own release/: a build output, not its source.
     if (wants('release-folder')) {
-      const own = await releaseItem(world, project, path.basename(project), project);
+      const own = await releaseItem(world, project, path.basename(project), project, true);
       if (own) out.push(own);
     }
     const list = await world.worktrees(project);
@@ -253,7 +273,7 @@ async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (wha
         });
       }
       if (wants('release-folder')) {
-        const release = await releaseItem(world, wt, name, wt);
+        const release = await releaseItem(world, wt, name, wt, false);
         if (release) out.push(release);
       }
       // Its node_modules, by the worktree's idleness: one of more than 20,000 entries reads as just touched when walked.
