@@ -197,6 +197,7 @@ export const DEFAULT_APP_SETTINGS = {
     gemini: '',
     grok: '',
     qwencode: '',
+    kimi: '',
     opencode: '',
     amp: '',
     pi: '',
