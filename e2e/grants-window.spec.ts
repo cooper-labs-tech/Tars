@@ -18,13 +18,16 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    to, the worker and that the owner gave it.
  * 3. Removing it is not asked once, or it is not removed at once, row and record.
  * 4. Worker One retunes project-b's worker (its effort, through update_agent): no notice across the top of the page,
- *    or it does not say who, which agent, of which project, what and its state (the agent's card on the page as it
- *    is: recorded, not asserted).
- * 5. Undo, from the notice: the earlier effort is not back on the record, or the notice does not say it is undone.
- * 6. The agent's card, after a reload, shows no last retune.
+ *    or it does not say who, which agent, of which project, what and its state; or the agent's card does not show it
+ *    at once, with no reload: by whom and when, what (low to high), applied, and an undo (F3, reports/qa-windows-specs.md).
+ * 5. Undo, from the notice: the earlier effort is not back on the record, or the notice does not say it is undone; or
+ *    the card does not then read "undone by you at", as data-retune="undone", with no undo on it (F4).
+ * 6. The agent's card, after a reload, does not read the same: undone by you, no undo, the record naming the change it
+ *    takes back (revertOf, 691123c2e and 95dd847b0).
  * 7. An uncaught error in the page.
  * In the classic shell and in the new interface's.
- * Red on #595's head (65ed59bff), which has no window: 1 finds no Across projects in Settings.
+ * Red on #595's head (65ed59bff), which has no window: 1 finds no Across projects in Settings. Red on #604's code
+ * before bc5b406a2 and 95dd847b0 (its head b1e4c5a61 of 19/11): 4 finds no card without a reload, 5 and 6 no undone.
  * The artefact: values.json (the grants and the agents' records at each step, the tool's answer), step screenshots.
  */
 
@@ -37,7 +40,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 type Reply = { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 type Grant = { from: string; to: string; workers: string[]; grantedAt: string };
-type Listed = { id: string; name: string; effort?: string | null; lastRetune?: { state: string; by?: unknown } };
+type Listed = { id: string; name: string; effort?: string | null; lastRetune?: { state: string; by?: unknown; revertOf?: string } };
 
 for (const newInterface of [false, true]) {
   test(`grants across projects given and removed in the window, and an agent retuned by another told and undone${newInterface ? ' (new interface)' : ''}`, async () => {
@@ -156,34 +159,55 @@ for (const newInterface of [false, true]) {
       await expect(notices).toContainText('retuned B Coder', { timeout: 30_000 });
       const noticeText = await notices.innerText();
       const afterRetune = await coder();
-      // The card, live: its last retune, as the page has it without a reload (soft: 6 checks it after one).
+      // The card, live: its last retune as the page heard it, with no reload (F3).
       const card = page.locator('[data-retune]').first();
       const liveCard = await card.waitFor({ state: 'visible', timeout: 15_000 }).then(() => true, () => false);
+      const liveCardText = liveCard ? await card.innerText() : null;
+      const liveCardState = liveCard ? await card.getAttribute('data-retune') : null;
+      const liveCardUndo = liveCard ? await card.getByRole('button', { name: 'undo', exact: true }).count() : 0;
       await stepShot(page, `${tag}4-retuned-notice`);
-      keep({ retuned, noticeText, afterRetune, liveCard, liveCardText: liveCard ? await card.innerText() : null });
+      keep({ retuned, noticeText, afterRetune, liveCard, liveCardText, liveCardState, liveCardUndo });
       expect.soft(retuned.isError, `update_agent: ${retuned.text}`).toBe(false);
       expect.soft(afterRetune?.effort, 'the effort Worker One asked for').toBe('high');
       expect.soft(afterRetune?.lastRetune, "the record's last retune").toMatchObject({ state: 'applied' });
       expect.soft(noticeText, 'the notice: who, which agent, of which project').toMatch(/Worker One[\s\S]*retuned B Coder \(project-b\)/);
       expect.soft(noticeText, 'the notice: what').toMatch(/low[\s\S]*high/);
       expect.soft(noticeText, 'the notice: its state').toMatch(/applied/);
-      // Recorded, not asserted: at #604's head (cbc9e9149) the card shows the retune only after a reload (QA's Low in
-      // reports/qa-windows-specs.md); the notice, above, is what tells the owner at once.
+      expect.soft(liveCard, 'the card shows the retune with no reload').toBe(true);
+      expect.soft(liveCardState, "the card's state").toBe('applied');
+      expect.soft(liveCardText, 'the card: by whom and when').toMatch(/retuned by Worker One \(project-a\) at \d\d:\d\d/);
+      expect.soft(liveCardText, 'the card: what, as the retune changed it').toMatch(/effort low to high/);
+      expect.soft(liveCardText, 'the card: applied').toMatch(/applied \d\d:\d\d/);
+      expect.soft(liveCardUndo, 'the card offers its undo').toBe(1);
 
       // 5. Undo, from the notice.
       await notices.getByRole('button', { name: 'undo', exact: true }).first().click();
       await expect(notices).toContainText(/undone by you at /, { timeout: 15_000 });
       await expect.poll(async () => (await coder())?.effort, { timeout: 15_000 }).toBe('low');
       const afterUndo = await coder();
+      // The card, live again: the undo is no retune to undo (F4).
+      const undoneCard = await expect(card).toHaveAttribute('data-retune', 'undone', { timeout: 15_000 }).then(() => true, () => false);
+      const undoneCardText = await card.innerText().catch(() => null);
+      const undoneCardUndo = await card.getByRole('button', { name: 'undo', exact: true }).count();
       await stepShot(page, `${tag}5-undone`);
-      keep({ afterUndo, noticeAfterUndo: await notices.innerText() });
+      keep({ afterUndo, noticeAfterUndo: await notices.innerText(), undoneCard, undoneCardText, undoneCardUndo });
+      expect.soft(undoneCard, 'the card reads undone, live').toBe(true);
+      expect.soft(undoneCardText, 'the card: undone by you, and when').toMatch(/undone by you at \d\d:\d\d/);
+      expect.soft(undoneCardUndo, 'no undo on an undo').toBe(0);
+      expect.soft(afterUndo?.lastRetune?.revertOf, 'the record names the change the undo takes back').toBeTruthy();
 
-      // 6. The card, after a reload: B Coder's last retune, as its record says.
+      // 6. The card, after a reload: B Coder's last retune, as its record says (revertOf).
       await page.reload({ waitUntil: 'domcontentloaded' });
       const cardAfterReload = page.locator('[data-retune]').first();
       const reloadedCard = await cardAfterReload.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true, () => false);
-      keep({ reloadedCard, reloadedCardText: reloadedCard ? await cardAfterReload.innerText() : null, recordAfterUndo: (await coder())?.lastRetune ?? null });
+      const reloadedCardText = reloadedCard ? await cardAfterReload.innerText() : null;
+      const reloadedCardState = reloadedCard ? await cardAfterReload.getAttribute('data-retune') : null;
+      const reloadedCardUndo = reloadedCard ? await cardAfterReload.getByRole('button', { name: 'undo', exact: true }).count() : -1;
+      keep({ reloadedCard, reloadedCardText, reloadedCardState, reloadedCardUndo, recordAfterUndo: (await coder())?.lastRetune ?? null });
       expect.soft(reloadedCard, "the card's last retune after a reload").toBe(true);
+      expect.soft(reloadedCardState, "the card's state after a reload").toBe('undone');
+      expect.soft(reloadedCardText, 'the card after a reload: undone by you, and when').toMatch(/undone by you at \d\d:\d\d/);
+      expect.soft(reloadedCardUndo, 'no undo on an undo, after a reload').toBe(0);
       await stepShot(page, `${tag}6-card-after-reload`);
 
       // 7.
