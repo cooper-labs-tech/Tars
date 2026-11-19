@@ -39,7 +39,8 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 24. (L2.) A clock moved backward between the sessions and the deletion lets them through on re-consent.
  * 25. (L at e50e78564.) Giving up a deletion when none is owed forgets a live install: the next pass registers anew,
  *     sends everything again, and leaves the old copy out of reach of "delete everything sent".
- * 26. An owed deletion that clears itself (its install file gone) says nothing, or says it at every read.
+ * 26. An owed deletion that clears itself (its install file gone) says nothing; or its word is consumed by a read the
+ *     window did not make (the consent check), or masked by another notice.
  * 18. A deletion that lands while a pass runs: the pass goes on with the consent it read at its start, and sends
  *     after the deletion (the re-audit's M1 at ec6951aa5).
  * 9. A restart sends every session again, or forgets the install and registers anew.
@@ -474,11 +475,15 @@ describe('the trace uploader', () => {
     expect(bo.seen.filter(x => x.url === '/v1/installs')).toHaveLength(1);
   });
 
-  it('26: an owed deletion that clears itself is said once', () => {
+  it('26: an owed deletion that clears itself is said until the window acknowledges it, whatever else is read', () => {
     deletion = { owed: true, since: 5000 };
     const u = uploader();
-    expect(u.state().notice).toBe('deletion_cleared');
-    expect(u.state().notice).toBeUndefined();
+    // The consent check reads the owed state, not the window's state: nothing is consumed.
+    expect(u.isDeletionOwed()).toBe(false);
+    expect(u.state().deletionCleared).toBe(true);
+    expect(u.state().deletionCleared).toBe(true);
+    u.ackDeletionCleared();
+    expect(u.state().deletionCleared).toBe(false);
   });
 
   it('24: a clock moved backward does not let sessions present at the deletion through', async () => {
