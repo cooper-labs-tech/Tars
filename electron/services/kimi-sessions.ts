@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
-import { kimiHome } from '../providers/kimi-cli';
+import { kimiHome, kimiIdOf, kimiUuidOf } from '../providers/kimi-cli';
 
 export type { HookPost };
 
@@ -141,9 +141,10 @@ export class KimiSessionWatch {
     const entries = this.index();
     for (const e of entries) if (sameDir(e.workDir, cwd)) sizes.set(e.sessionId, sizeOf(wireOf(e.sessionDir)));
     const launch: Launch = { cwd, at: this.deps.now(), sizes, typed: [] };
-    if (resumeSessionId) {
-      const entry = entries.find((e) => e.sessionId === resumeSessionId);
-      launch.resume = { sessionId: resumeSessionId, size: entry ? sizeOf(wireOf(entry.sessionDir)) : 0 };
+    const resumed = kimiIdOf(resumeSessionId);
+    if (resumed) {
+      const entry = entries.find((e) => e.sessionId === resumed);
+      launch.resume = { sessionId: resumed, size: entry ? sizeOf(wireOf(entry.sessionDir)) : 0 };
     }
     this.launches.set(agentId, launch);
   }
@@ -258,8 +259,9 @@ export class KimiSessionWatch {
     return undefined;
   }
 
+  /** Posted under the UUID the hook routes take (kimi-cli.ts, kimiUuidOf): kimi's own `session_<uuid>` is refused there. */
   private post(agentId: string, b: Bound, route: HookPost['path'], body: Record<string, unknown>): Promise<void> {
-    return this.deps.post(agentId, { path: route, body: { agent_id: agentId, session_id: b.sessionId, ...body } });
+    return this.deps.post(agentId, { path: route, body: { agent_id: agentId, session_id: kimiUuidOf(b.sessionId) ?? b.sessionId, ...body } });
   }
 
   private async follow(agentId: string, b: Bound): Promise<void> {

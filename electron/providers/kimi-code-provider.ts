@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { AppSettings } from '../types';
-import { kimiHome, KIMI_SESSION_ID } from './kimi-cli';
+import { kimiHome, kimiIdOf } from './kimi-cli';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import type {
@@ -65,7 +65,9 @@ export class KimiCodeProvider implements CLIProvider {
     // A resume continues the session under its own id. A restart that forks would resume the session it just stopped,
     // whose id is the stop's tombstone (hooks-routes.ts refuses its posts): it starts a new session instead, until
     // `kimi fork` is measured.
-    if (params.resumeSessionId && !params.forkSession && KIMI_SESSION_ID.test(params.resumeSessionId)) command += ` --session ${shellQuote(params.resumeSessionId)}`;
+    // Tars knows the session by its UUID (kimi-cli.ts): kimi takes its own name for it.
+    const session = params.forkSession ? null : kimiIdOf(params.resumeSessionId);
+    if (session) command += ` --session ${shellQuote(session)}`;
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
     if (secondary) command += ` --add-dir ${shellQuote(secondary)}`;
     for (const vp of params.obsidianVaultPaths ?? []) {

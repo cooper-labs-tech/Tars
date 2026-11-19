@@ -87,9 +87,10 @@ export function resolveResumeSessionId(
   for (const candidate of [agent.resumableSessionId, agent.forkedFromSessionId]) {
     const sessionId = candidate?.trim();
     if (!sessionId) continue;
-    // Kimi Code's ids are its own (`session_<uuid>`), listed in its index (providers/kimi-cli.ts).
+    // Kimi Code: Tars keeps the UUID the hook routes took, and kimi lists it as `session_<uuid>` (providers/kimi-cli.ts).
     if (agent.provider === 'kimi-code') {
-      if (kimiSessionDir(sessionId, kimiHome(process.env, homeDir))) return sessionId;
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(sessionId)
+        && kimiSessionDir(`session_${sessionId}`, kimiHome(process.env, homeDir))) return sessionId;
       continue;
     }
     // A UUID and nothing else. This value reaches a command line, and the

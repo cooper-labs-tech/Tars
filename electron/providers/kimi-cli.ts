@@ -12,6 +12,23 @@ import * as path from 'path';
 /** A session id as kimi writes it, the only form that reaches a command line. */
 export const KIMI_SESSION_ID = /^session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/**
+ * The UUID Tars knows a kimi session by: the hook routes take the UUID a CLI gave its session and nothing else
+ * (hooks-routes.ts, SESSION_ID_SHAPE), and kimi names its sessions `session_<uuid>`. Null for anything else.
+ */
+export function kimiUuidOf(kimiId: string): string | null {
+  return KIMI_SESSION_ID.test(kimiId) ? kimiId.slice('session_'.length) : null;
+}
+
+/** Kimi's own name for a session Tars knows by its UUID (or already names so); null for anything else. */
+export function kimiIdOf(id: string | undefined): string | null {
+  if (!id) return null;
+  if (KIMI_SESSION_ID.test(id)) return id;
+  return UUID.test(id) ? `session_${id}` : null;
+}
+
 export function kimiHome(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir()): string {
   return env.KIMI_CODE_HOME || path.join(homeDir, '.kimi-code');
 }
