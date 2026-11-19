@@ -887958,7 +887958,7 @@
                                   "fill": "$text-secondary",
                                   "textGrowth": "fixed-width",
                                   "width": 540,
-                                  "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.",
+                                  "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -889485,7 +889485,7 @@
                                   "fill": "$text-secondary",
                                   "textGrowth": "fixed-width",
                                   "width": 540,
-                                  "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.",
+                                  "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -892273,7 +892273,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.",
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -892374,7 +892374,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.",
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -895612,7 +895612,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.",
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -895713,7 +895713,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.",
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -900983,6 +900983,1548 @@
                   "textGrowth": "fixed-width",
                   "width": 400,
                   "content": "Recording goes on here. Tars asks the back-office again in 6 hours.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "y1yQt",
+      "x": 0,
+      "y": 163000,
+      "name": "Traces · upload · forgotten, and a deletion in progress",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 22,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "gp5pW",
+          "fill": "$text-primary",
+          "content": "Traces · upload · states: a back-office that no longer knows this Tars, and a deletion in progress",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "FjhMg",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "When the back-office forgets this install, by your deletion or by its operator, uploading stops and the traces on this computer stay. Sharing again is your own act, which registers a new install.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "GaBBn",
+          "name": "forgotten",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "ZoYr8",
+              "name": "cards",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bv1to",
+                  "fill": "$text-muted",
+                  "content": "the back-office no longer knows this Tars: said plainly, not as an error",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Ys0H4",
+                  "name": "back-office",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "T8NVNI",
+                      "fill": "$text-muted",
+                      "content": "BACK-OFFICE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "iyuaZ",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Tars can upload the sessions of the projects you opt in to a back-office: a server of your own, or a hosted one. Nothing is uploaded until you set its address and read what leaves this computer.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KBuwL",
+                      "name": "row Address",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 16,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Hmyib",
+                          "name": "l",
+                          "width": 230,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "njPXV",
+                              "fill": "$text-primary",
+                              "content": "Address",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "E1MYfC",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 230,
+                              "content": "The back-office's API, yours or a hosted one. Empty: nothing leaves this computer. A new address asks for your consent again.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "b3f8m",
+                          "name": "input",
+                          "width": 270,
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OayKD",
+                              "fill": "$text-primary",
+                              "content": "https://traces.example.com",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RR04S",
+                      "name": "consent",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "mjPwv",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "s270ZT",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "XhVDV",
+                              "fill": "$status-waiting",
+                              "content": "consent withdrawn: nothing is sent until you read what leaves this computer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xZ2YV",
+                          "name": "g",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "FKF62",
+                              "name": "b What leaves this computer",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "xNtOu",
+                                  "fill": "$text-primary",
+                                  "content": "What leaves this computer",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Y3swI",
+                              "name": "b Preview a session",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "sqLYP",
+                                  "fill": "$text-primary",
+                                  "content": "Preview a session",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "lQw7j",
+                  "name": "upload",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qkusk",
+                      "fill": "$text-muted",
+                      "content": "UPLOAD",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gZtqR",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "s6MxJ",
+                          "name": "d",
+                          "fill": "$text-muted",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Mcuqb",
+                          "fill": "$text-muted",
+                          "content": "this back-office no longer knows this Tars · uploading stopped, the traces on this computer stay",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GUAr5",
+                      "name": "figs",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "rsItl",
+                          "name": "fig QUEUED",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "H3mOe",
+                              "fill": "$text-muted",
+                              "content": "QUEUED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "oUlSJ",
+                              "fill": "$text-primary",
+                              "content": "3",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "ILqDs",
+                              "fill": "$text-muted",
+                              "content": "sessions to send",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "F5LcS",
+                          "name": "fig SENT",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "p2GHs",
+                              "fill": "$text-muted",
+                              "content": "SENT",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "JR6N2",
+                              "fill": "$text-primary",
+                              "content": "41",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "A2qZv",
+                              "fill": "$text-muted",
+                              "content": "sessions",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "w9SQAG",
+                          "name": "fig LAST UPLOAD",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "NFrC5",
+                              "fill": "$text-muted",
+                              "content": "LAST UPLOAD",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "pBsxH",
+                              "fill": "$text-primary",
+                              "content": "15:02",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "gXBOQ",
+                              "fill": "$text-muted",
+                              "content": "19/11",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "cUIri",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "OnAd7",
+                  "fill": "$text-muted",
+                  "content": "yours to start again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "RuBjs",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "Main stopped uploading and withdrew the consent. Read what leaves this computer, then upload what you opt in: that registers a new install.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "SdC9S",
+          "name": "deleting",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "w5WIF",
+              "name": "cards",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bmB2X",
+                  "fill": "$text-muted",
+                  "content": "a deletion in progress: the running upload is stopped first, then the back-office deletes",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "C5T3p",
+                  "name": "delete everywhere",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xXOky",
+                      "fill": "$text-muted",
+                      "content": "DELETE EVERYTHING THIS TARS SENT",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "mmo4d",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DW4fV",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iqZZK",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "R7yWI",
+                          "fill": "$status-waiting",
+                          "content": "stopping the upload under way, then asking the back-office to delete",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RZxC4",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "hiJYr",
+                          "name": "b deleting",
+                          "opacity": 0.45,
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$status-error-40",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "tO1zv",
+                              "fill": "$status-error",
+                              "content": "deleting",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Zwm62",
+                  "name": "delete everywhere",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "dBIMC",
+                      "fill": "$text-muted",
+                      "content": "DELETE EVERYTHING THIS TARS SENT",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OPkrJ",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KWumC",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "m78ZzX",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "syhIr",
+                          "fill": "$status-running",
+                          "content": "the back-office deleted 41 sessions · this install is forgotten, your consent withdrawn",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DDkoi",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "zMIH9",
+                          "name": "b Delete everything this Tars sent",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$status-error-40",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "r53wzo",
+                              "fill": "$status-error",
+                              "content": "Delete everything this Tars sent",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "m8zra",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "uTBP4",
+                  "fill": "$text-muted",
+                  "content": "no pass outlives it",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "tt32x",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A pass already sending is stopped before the deletion, so nothing it sends lands after it. The button stays off until the back-office answers.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "aciw5",
+      "x": 1540,
+      "y": 163000,
+      "name": "Traces · upload · forgotten, and a deletion in progress · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 22,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "PcCUE",
+          "fill": "$text-primary",
+          "content": "Traces · upload · states: a back-office that no longer knows this Tars, and a deletion in progress",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "H9JXJm",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "When the back-office forgets this install, by your deletion or by its operator, uploading stops and the traces on this computer stay. Sharing again is your own act, which registers a new install.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "u71Ara",
+          "name": "forgotten",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "MhiH9",
+              "name": "cards",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "VaywC",
+                  "fill": "$text-muted",
+                  "content": "the back-office no longer knows this Tars: said plainly, not as an error",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ax2of",
+                  "name": "back-office",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "f7SFI",
+                      "fill": "$text-muted",
+                      "content": "BACK-OFFICE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "xZ91q",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Tars can upload the sessions of the projects you opt in to a back-office: a server of your own, or a hosted one. Nothing is uploaded until you set its address and read what leaves this computer.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "s5nfqo",
+                      "name": "row Address",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 16,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "wwDQg",
+                          "name": "l",
+                          "width": 230,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "IcsVX",
+                              "fill": "$text-primary",
+                              "content": "Address",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "QfGK2",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 230,
+                              "content": "The back-office's API, yours or a hosted one. Empty: nothing leaves this computer. A new address asks for your consent again.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "TMfIs",
+                          "name": "input",
+                          "width": 270,
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "AY1ww",
+                              "fill": "$text-primary",
+                              "content": "https://traces.example.com",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nbv6g",
+                      "name": "consent",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "mm37w",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "ytDSY",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "yIWAu",
+                              "fill": "$status-waiting",
+                              "content": "consent withdrawn: nothing is sent until you read what leaves this computer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "o8rdJQ",
+                          "name": "g",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "LvY6H",
+                              "name": "b What leaves this computer",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "sVm53",
+                                  "fill": "$text-primary",
+                                  "content": "What leaves this computer",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "hbKTK",
+                              "name": "b Preview a session",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Gkp2R",
+                                  "fill": "$text-primary",
+                                  "content": "Preview a session",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "p0SPFK",
+                  "name": "upload",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "wY5UO",
+                      "fill": "$text-muted",
+                      "content": "UPLOAD",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Px8Cl",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ZedqD",
+                          "name": "d",
+                          "fill": "$text-muted",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "x6A2u",
+                          "fill": "$text-muted",
+                          "content": "this back-office no longer knows this Tars · uploading stopped, the traces on this computer stay",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Eus6A",
+                      "name": "figs",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Hvhgq",
+                          "name": "fig QUEUED",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "QfrMR",
+                              "fill": "$text-muted",
+                              "content": "QUEUED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "tQi5A",
+                              "fill": "$text-primary",
+                              "content": "3",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "V6y8Bv",
+                              "fill": "$text-muted",
+                              "content": "sessions to send",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ssSrK",
+                          "name": "fig SENT",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "gDHK3",
+                              "fill": "$text-muted",
+                              "content": "SENT",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "dE9tg",
+                              "fill": "$text-primary",
+                              "content": "41",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "MwPBp",
+                              "fill": "$text-muted",
+                              "content": "sessions",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "W1w0d",
+                          "name": "fig LAST UPLOAD",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "XLZih",
+                              "fill": "$text-muted",
+                              "content": "LAST UPLOAD",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "SQzaq",
+                              "fill": "$text-primary",
+                              "content": "15:02",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "UBH3L",
+                              "fill": "$text-muted",
+                              "content": "19/11",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "DhIW5",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "r8Ez5R",
+                  "fill": "$text-muted",
+                  "content": "yours to start again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "MlaLS",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "Main stopped uploading and withdrew the consent. Read what leaves this computer, then upload what you opt in: that registers a new install.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "oNbFO",
+          "name": "deleting",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "dvIDZ",
+              "name": "cards",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "f016Mm",
+                  "fill": "$text-muted",
+                  "content": "a deletion in progress: the running upload is stopped first, then the back-office deletes",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "xQMrZ",
+                  "name": "delete everywhere",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "rYZFW",
+                      "fill": "$text-muted",
+                      "content": "DELETE EVERYTHING THIS TARS SENT",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "J1qgZ",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XcOSk",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "YXOWc",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "mqHHx",
+                          "fill": "$status-waiting",
+                          "content": "stopping the upload under way, then asking the back-office to delete",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "orkAY",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "cVAtd",
+                          "name": "b deleting",
+                          "opacity": 0.45,
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$status-error-40",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "AveEZ",
+                              "fill": "$status-error",
+                              "content": "deleting",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bphP5",
+                  "name": "delete everywhere",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "p711I",
+                      "fill": "$text-muted",
+                      "content": "DELETE EVERYTHING THIS TARS SENT",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "N96u7V",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YhoCe",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "GGLRq",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "zEFu1",
+                          "fill": "$status-running",
+                          "content": "the back-office deleted 41 sessions · this install is forgotten, your consent withdrawn",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vi3dF",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "A5YRT",
+                          "name": "b Delete everything this Tars sent",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$status-error-40",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ntGlk",
+                              "fill": "$status-error",
+                              "content": "Delete everything this Tars sent",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YhWpK",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "A9Mu6",
+                  "fill": "$text-muted",
+                  "content": "no pass outlives it",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "I0jxiz",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A pass already sending is stopped before the deletion, so nothing it sends lands after it. The button stays off until the back-office answers.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
