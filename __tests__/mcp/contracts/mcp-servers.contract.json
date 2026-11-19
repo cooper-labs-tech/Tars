@@ -290,6 +290,29 @@
                     "null"
                   ],
                   "description": "Secondary project path added as context (--add-dir); null to take it away"
+                },
+                "remote": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "hostId": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "hostId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Run its CLI on one of the owner's remote Linux hosts, over ssh: the host's id (only the owner adds hosts, in Tars's window) and a folder under that host's work root (its project's folder name there when omitted); null to run it on this computer again. Refused while a CLI runs in its terminal (cli_running)."
                 }
               },
               "required": [
@@ -5805,6 +5828,29 @@
                     "null"
                   ],
                   "description": "Secondary project path added as context (--add-dir); null to take it away"
+                },
+                "remote": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "hostId": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "hostId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Run its CLI on one of the owner's remote Linux hosts, over ssh: the host's id (only the owner adds hosts, in Tars's window) and a folder under that host's work root (its project's folder name there when omitted); null to run it on this computer again. Refused while a CLI runs in its terminal (cli_running)."
                 }
               },
               "required": [
@@ -6958,6 +7004,29 @@
                     "null"
                   ],
                   "description": "Secondary project path added as context (--add-dir); null to take it away"
+                },
+                "remote": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "hostId": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "hostId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Run its CLI on one of the owner's remote Linux hosts, over ssh: the host's id (only the owner adds hosts, in Tars's window) and a folder under that host's work root (its project's folder name there when omitted); null to run it on this computer again. Refused while a CLI runs in its terminal (cli_running)."
                 }
               },
               "required": [
@@ -8039,6 +8108,29 @@
                     "null"
                   ],
                   "description": "Secondary project path added as context (--add-dir); null to take it away"
+                },
+                "remote": {
+                  "anyOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "hostId": {
+                          "type": "string"
+                        },
+                        "folder": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "hostId"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "description": "Run its CLI on one of the owner's remote Linux hosts, over ssh: the host's id (only the owner adds hosts, in Tars's window) and a folder under that host's work root (its project's folder name there when omitted); null to run it on this computer again. Refused while a CLI runs in its terminal (cli_running)."
                 }
               },
               "required": [
