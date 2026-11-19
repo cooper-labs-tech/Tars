@@ -236,9 +236,10 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   // The user gives up a deletion an old back-office never confirmed: its install is forgotten, and what was recorded
   // before the deletion is still never sent.
   ipcMain.handle('traces:abandonDeletion', () => {
-    traceUploader().abandonDeletion();
+    const r = traceUploader().abandonDeletion();
+    if (!r.ok) return r;
     tell('traces:changed');
-    return traceUploader().state();
+    return { ok: true, state: traceUploader().state() };
   });
   ipcMain.handle('traces:deleteEverywhere', async () => {
     const r = await traceUploader().deleteEverywhere();

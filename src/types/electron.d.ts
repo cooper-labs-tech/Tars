@@ -2916,8 +2916,9 @@ export interface ElectronAPI {
     deleteEverywhere: () => Promise<{ ok: true; deleted?: number } | { ok: false; error: string }>;
     /** Gives up a deletion the old back-office never confirmed (gone, or not answering). Say plainly what it means:
      *  "what you shared there may still be there; Tars stops trying to delete it, and still never sends what was
-     *  recorded before the deletion". Sharing may then start again, to this or another back-office. */
-    abandonDeletion: () => Promise<UploadState>;
+     *  recorded before the deletion". Sharing may then start again, to this or another back-office. Refused, with a
+     *  reason, when no deletion is waiting for confirmation. */
+    abandonDeletion: () => Promise<{ ok: true; state: UploadState } | { ok: false; error: string }>;
     /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
      *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
      *  when it is the one missing. */
@@ -3046,8 +3047,10 @@ export interface UploadState {
    *  - 'install_blocked': "this back-office blocked this install" (looked at again in 6 hours);
    *  - 'forgotten': "this back-office no longer knows this Tars" (the user's deletion, or its operator's). Uploads
    *    stop, the local traces stay, and the consent is withdrawn: sharing again is the user's own act (the upload
-   *    notice, then giveUploadConsent), which registers a new install. */
-  notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
+   *    notice, then giveUploadConsent), which registers a new install.
+   *  - 'deletion_cleared': a deletion that waited for confirmation was cleared because this install's record is gone
+   *    (said once): sharing may start again, and what was recorded before the deletion is still never sent. */
+  notice?: 'registration_closed' | 'install_blocked' | 'forgotten' | 'deletion_cleared';
   /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
   deletionOwed: boolean;
 }
