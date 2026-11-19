@@ -24,7 +24,13 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 5. A field the API does not know is sent (the server refuses the batch), or a required one is missing.
  * 6. The server down: the session is lost, or retried at once in a loop; back up, it is sent once.
  * 7. A 429 or 503: Retry-After is not honoured.
- * 8. A 401 (the install forgotten by the server): the uploader stops for good instead of registering again.
+ * 8. A 401 (the back-office no longer knows this install: the user deleted it, or its operator did) registers again
+ *    on its own and sends everything back, undoing a deletion. It must stop, keep the local data, say "this
+ *    back-office no longer knows this Tars", and leave registering again to the user's own consent (the
+ *    orchestrator's decision on #596).
+ * 19. A consent withdrawn (sharing turned off, no deletion) while a pass runs: the pass sends the next sessions.
+ * 18. A deletion that lands while a pass runs: the pass goes on with the consent it read at its start, and sends
+ *     after the deletion (the re-audit's M1 at ec6951aa5).
  * 9. A restart sends every session again, or forgets the install and registers anew.
  * 10. A session that grew is not sent again; one that did not change is.
  * 11. Deleting everything does not call the server's delete, keeps the token, or keeps the progress.
@@ -339,15 +345,53 @@ describe('the trace uploader', () => {
     }
   });
 
-  it('8: a 401 registers the install again, once, and sends everything again under it', async () => {
+  it('8: a 401 stops the uploads, keeps the local data, says so, and registers nothing until the user consents again', async () => {
     seed('t1', 'first');
-    await uploader().runOnce();
+    const u = uploader();
+    await u.runOnce();
     bo.installs.clear();
     seed('t2', 'second', 2000);
-    const r = await uploader().runOnce();
-    expect(r.sent).toBe(2);
-    expect(bo.sessions.has('t2')).toBe(true);
-    expect(bo.seen.filter(s => s.url === '/v1/installs').length).toBe(2);
+    const r = await u.runOnce();
+    expect(r.sent).toBe(0);
+    expect(bo.seen.filter(x => x.url === '/v1/installs').length).toBe(1);
+    expect(u.state()).toMatchObject({ notice: 'forgotten', registered: false });
+    expect(withdrawn).toBe(1);
+    expect(store.list({}).sessions.map(x => x.traceId).sort()).toEqual(['t1', 't2']);
+    expect((await u.runOnce()).skipped).toBe('off');
+    // The user consents again: a new install, and everything goes under it.
+    settings.consentAt = '2026-11-19T06:00:00Z';
+    clock += 7 * 3600_000;
+    expect((await u.runOnce()).sent).toBe(2);
+    expect(bo.seen.filter(x => x.url === '/v1/installs').length).toBe(2);
+  });
+
+  it('19: a consent withdrawn while a pass runs stops it before the next session', async () => {
+    for (const id of ['a', 'b', 'c']) seed(id, `task ${id}`, id.charCodeAt(0) * 1000);
+    const spy = (async (url: string, init?: RequestInit) => {
+      if (String(url).includes('/v1/batches/')) settings.consentAt = undefined;
+      return fetch(url, init);
+    }) as typeof fetch;
+    await uploader({ fetch: spy }).runOnce();
+    expect(bo.seen.filter(x => x.method === 'PUT' && x.url.startsWith('/v1/batches/'))).toHaveLength(1);
+  });
+
+  it('18: a deletion landing while a pass runs stops it, and nothing is sent after the deletion', async () => {
+    for (const id of ['a', 'b', 'c', 'd']) seed(id, `task ${id}`, id.charCodeAt(0) * 1000);
+    let u!: TraceUploader;
+    let deletion: Promise<unknown> | undefined;
+    const spy = (async (url: string, init?: RequestInit) => {
+      // The user presses "delete everything sent" while the pass is at its first batch.
+      if (!deletion && String(url).includes('/v1/batches/')) deletion = u.deleteEverywhere();
+      return fetch(url, init);
+    }) as typeof fetch;
+    u = uploader({ fetch: spy });
+    await u.runOnce();
+    await deletion;
+    const at = bo.seen.findIndex(x => x.method === 'DELETE');
+    expect(at).toBeGreaterThan(-1);
+    expect(bo.seen.slice(at + 1), JSON.stringify(bo.seen.slice(at + 1).map(x => `${x.method} ${x.url}`))).toEqual([]);
+    expect(withdrawn).toBe(1);
+    expect((await u.runOnce()).skipped).toBe('off');
   });
 
   it('11 and 12: delete everywhere calls the server, forgets the token and the progress; the file is private, the state token-free', async () => {
