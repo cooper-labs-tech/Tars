@@ -1571,6 +1571,9 @@ window; agents may only ask for a scan.
   200, or without a short why). It records, deletes nothing; the window shows it in `state().cleanupRequests`, each item with its kind, label,
   path, size and rule, and the
   owner approves it in one click, `diskJanitor.approveRequest(id)`, each item then checked again as for any approval.
+  The request then keeps what became of each of its items (`items[].outcome`: deleted and its bytes, kept or failed
+  and why) and what it freed (`freedBytes`, 0 until approved), past later scans; the window's approval of the same
+  ids from the scan's list writes nothing into it.
 - **The report** (2.0.7, `services/disk-report.ts`): after each scan, and a scan every 6 hours with nobody asking
   (`startDiskReports`, deleting nothing), what agents leave behind: each project's worktrees with their agent (the
   fleet agent in it, else the worktree tool's registry), idle days, what `.next`, `release/`, test artefacts and,

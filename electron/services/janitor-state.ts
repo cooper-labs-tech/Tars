@@ -63,9 +63,14 @@ export type CleanupRequest = {
   byId: string;
   project: string;
   ids: string[];
-  /** Each item as the window shows it, what it is and the rule it matched (the Audit's L1 on #606). */
-  items: Array<Pick<JanitorStateItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule'>>;
+  /**
+   * Each item as the window shows it, what it is and the rule it matched (the Audit's L1 on #606), and, once this
+   * request's approval has processed it, what became of it: kept on the request past later scans (QA's F2 on #606).
+   */
+  items: Array<Pick<JanitorStateItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule' | 'outcome'>>;
   bytes: number;
+  /** What this request's approval freed, the bytes of its items deleted; 0 until the owner approves it. */
+  freedBytes: number;
   why: string;
   state: 'waiting' | 'approved';
   approvedAt?: number;
@@ -142,7 +147,9 @@ export function createJanitor(deps: {
   const state = (): JanitorState => ({
     scan: scan ? { ...scan, items: scan.items.map(i => ({ ...i })) } : null,
     deleting: deleting ? { ...deleting } : null, never: [...NEVER_WORDS], log: readLog(deps.logFile), requests: [...requests],
-    cleanupRequests: cleanupRequests.map(r => ({ ...r, ids: [...r.ids], items: r.items.map(i => ({ ...i })) })), report, error,
+    cleanupRequests: cleanupRequests.map(r => ({
+      ...r, ids: [...r.ids], items: r.items.map(i => ({ ...i, ...(i.outcome ? { outcome: { ...i.outcome } } : {}) })),
+    })), report, error,
   });
   const tell = () => { try { deps.broadcast(state()); } catch { /* no window */ } };
 
@@ -234,7 +241,7 @@ export function createJanitor(deps: {
       }
       const request: CleanupRequest = {
         id: `jr-${randomBytes(4).toString('hex')}`, at: Date.now(), by: asker.name, byId: asker.id, project: asker.project,
-        ids: unique, bytes: unique.reduce((sum, id) => sum + (known.get(id)?.sizeBytes ?? 0), 0), why: why.trim(), state: 'waiting',
+        ids: unique, bytes: unique.reduce((sum, id) => sum + (known.get(id)?.sizeBytes ?? 0), 0), freedBytes: 0, why: why.trim(), state: 'waiting',
         items: unique.map(id => { const v = view(known.get(id)!); return { id: v.id, kind: v.kind, label: v.label, path: v.path, bytes: v.bytes, rule: v.rule }; }),
       };
       cleanupRequests.push(request);
@@ -251,7 +258,7 @@ export function createJanitor(deps: {
       request.state = 'approved';
       request.approvedAt = Date.now();
       tell();
-      return janitor.approve(request.ids);
+      return approveIds(request.ids, request);
     },
     /** The last report as an agent of `project` reads it, or null before the first scan. */
     reportFor(project: string): DiskReport | null {
@@ -262,32 +269,46 @@ export function createJanitor(deps: {
       return started;
     },
     /** The owner's approval, told as it goes. */
-    async approve(ids: string[]): Promise<JanitorReport> {
-      if (deleting) throw new Error('an approval is already under way');
-      const n = new Set(ids).size;
-      deleting = { done: 0, total: n, freedBytes: 0 };
-      tell();
-      const pathOf = (id: string) => scan?.items.find(i => i.id === id)?.path ?? id;
-      try {
-        return await approveJanitor(ids, deps.worldForCheck ?? deps.world, {
-          ...deps.ops,
-          checking: (id) => { if (deleting) { deleting.current = { path: pathOf(id), phase: 'checking' }; tell(); } },
-          done: (id, outcome) => {
-            const item = scan?.items.find(i => i.id === id);
-            if (item) item.outcome = outcome;
-            if (deleting) {
-              deleting.done++;
-              if (outcome.kind === 'deleted') deleting.freedBytes += outcome.bytes ?? 0;
-              deleting.current = { path: pathOf(id), phase: outcome.kind };
-            }
-            tell();
-          },
-        });
-      } finally {
-        deleting = null;
-        tell();
-      }
+    approve(ids: string[]): Promise<JanitorReport> {
+      return approveIds(ids);
     },
   };
+
+  /**
+   * An approval of these ids, told as it goes; for a request's approval, each outcome is also kept on that request's
+   * item, and what was deleted added to its freedBytes. The window's approval of the same ids from the scan's list
+   * writes nothing into a request: only that request's own approval does.
+   */
+  async function approveIds(ids: string[], request?: CleanupRequest): Promise<JanitorReport> {
+    if (deleting) throw new Error('an approval is already under way');
+    const n = new Set(ids).size;
+    deleting = { done: 0, total: n, freedBytes: 0 };
+    tell();
+    const pathOf = (id: string) => scan?.items.find(i => i.id === id)?.path ?? id;
+    try {
+      return await approveJanitor(ids, deps.worldForCheck ?? deps.world, {
+        ...deps.ops,
+        checking: (id) => { if (deleting) { deleting.current = { path: pathOf(id), phase: 'checking' }; tell(); } },
+        done: (id, outcome) => {
+          const item = scan?.items.find(i => i.id === id);
+          if (item) item.outcome = outcome;
+          const asked = request?.items.find(i => i.id === id);
+          if (request && asked) {
+            asked.outcome = { ...outcome };
+            if (outcome.kind === 'deleted') request.freedBytes += outcome.bytes ?? 0;
+          }
+          if (deleting) {
+            deleting.done++;
+            if (outcome.kind === 'deleted') deleting.freedBytes += outcome.bytes ?? 0;
+            deleting.current = { path: pathOf(id), phase: outcome.kind };
+          }
+          tell();
+        },
+      });
+    } finally {
+      deleting = null;
+      tell();
+    }
+  }
   return janitor;
 }

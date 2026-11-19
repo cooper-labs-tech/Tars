@@ -1337,9 +1337,15 @@ export interface JanitorCleanupRequest {
   project: string;
   /** The janitor items it names (JanitorItem.id), all in its project. */
   ids: string[];
-  /** Each of those items as the window shows it: what it is, its size, the rule it matched. */
-  items: Array<Pick<JanitorItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule'>>;
+  /**
+   * Each of those items as the window shows it: what it is, its size, the rule it matched, and, once this request's
+   * approval has processed it, its outcome (deleted and its bytes, kept or failed and why), kept past later scans.
+   * Absent while the request waits, and when the owner approved the same item from the scan's list instead.
+   */
+  items: Array<Pick<JanitorItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule' | 'outcome'>>;
   bytes: number;
+  /** What this request's approval freed, the bytes of its items deleted; 0 until the owner approves it. */
+  freedBytes: number;
   why: string;
   state: 'waiting' | 'approved';
   approvedAt?: number;

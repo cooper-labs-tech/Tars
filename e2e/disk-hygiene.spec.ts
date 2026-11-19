@@ -49,7 +49,10 @@ type Report = {
 type State = {
   scan: null | { running: boolean; askedBy: string | null; items: Item[] };
   deleting: unknown;
-  cleanupRequests?: Array<{ id: string; by: string; project: string; ids: string[]; bytes: number; why: string; state: string }>;
+  cleanupRequests?: Array<{
+    id: string; by: string; project: string; ids: string[]; bytes: number; why: string; state: string; freedBytes?: number;
+    items?: Array<{ id: string; outcome?: { kind: string; bytes?: number | null; why?: string | null } | null }>;
+  }>;
   report?: Report | null;
 };
 type Api = { electronAPI: { diskJanitor: {
@@ -240,6 +243,12 @@ for (const newInterface of [false, true]) {
       for (const stays of [newOut, newTmp, path.join(ownRelease, 'NOTES.md'), path.join(wt(harbor, 'idle'), 'node_modules'), path.join(wt(harbor, 'active'), 'release'), path.join(wt(quay, 'old'), 'release')]) {
         expect.soft(fs.existsSync(stays), `not requested, stays: ${path.relative(home, stays)}`).toBe(true);
       }
+      // The request keeps what became of each of its items and what it freed (QA's F2 on #606).
+      const approved = after.cleanupRequests?.find(q => q.id === asked.body.requested);
+      expect.soft(approved?.state).toBe('approved');
+      expect.soft(approved?.items?.map(i => i.outcome?.kind)).toEqual(wanted.map(() => 'deleted'));
+      expect.soft(approved?.freedBytes ?? 0).toBe((approved?.items ?? []).reduce((sum, i) => sum + (i.outcome?.bytes ?? 0), 0));
+      expect.soft(approved?.freedBytes ?? 0).toBeGreaterThan(200 * 1024);
       // 6 (second half). The periodic report deleted nothing on its own, and the window holds a report.
       expect.soft((await state()).report?.at ?? 0).toBeGreaterThan(0);
     } finally {
