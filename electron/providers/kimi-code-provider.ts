@@ -19,7 +19,9 @@ import { endpointLaunchForAgent } from '../services/traces-runtime';
  * loopback endpoint:
  * - its TUI takes no task on its command line (`kimi [options]`; `-p` is one-shot), so a launch types the task in
  *   once it runs (taskTypedAfterLaunch, core/typed-task.ts), with a bracketed paste and Enter like every CLI;
- * - `--auto` is its Never Ask mode, `--plan` its plan mode; without either it asks (manual);
+ * - `--auto` is its Never Ask mode; without it, it asks (manual). Its `--plan` still runs commands, each after an
+ *   approval dialog nobody answers in an agent's terminal (measured), so Tars offers no plan mode for it
+ *   (plan-mode.ts refuses plan, and the window agrees once kimi-code is in its registry);
  * - its first start in a folder asks "Trust this folder?": KIMI_CODE_TRUST_WORKSPACE=1 trusts it for that process
  *   only, writing nothing;
  * - its MCP servers are read from `$KIMI_CODE_HOME/mcp.json` (`mcpServers`), each started with kimi's whole
