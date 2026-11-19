@@ -31,6 +31,8 @@ function stateWord(s: UploadState): { word: string; tone: 'running' | 'waiting' 
   // Said plainly, not as an error: the back-office's own choice. Main looks again in 6 hours.
   if (s.notice === 'registration_closed') return { word: 'this back-office does not take new installs · looked at again in 6 hours', tone: 'idle' };
   if (s.notice === 'install_blocked') return { word: 'this back-office blocked this install · looked at again in 6 hours', tone: 'waiting' };
+  // Forgotten by your deletion or by its operator: uploads stopped and the consent withdrawn; sharing again is your act.
+  if (s.notice === 'forgotten') return { word: 'this back-office no longer knows this Tars · uploading stopped, the traces on this computer stay', tone: 'idle' };
   if (s.lastError && /^\d{3} /.test(s.lastError)) return { word: `failed: ${s.lastError}${next}`, tone: 'error' };
   if (s.lastError) return { word: `offline: the back-office was not reached (${s.lastError})${next}`, tone: 'waiting' };
   if (s.pendingSessions > 0) return { word: `sending · ${s.pendingSessions} session${s.pendingSessions === 1 ? '' : 's'} queued`, tone: 'waiting' };
@@ -56,6 +58,8 @@ export function UploadView() {
   const [showNotice, setShowNotice] = useState(false);
   const [preview, setPreview] = useState<{ title: string; document: unknown; counts: Record<string, number>; scrubVersion: string } | 'none' | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /** The deletion under way: main stops the running upload pass first, then asks the back-office to delete. */
+  const [inProgress, setInProgress] = useState(false);
   const [deleted, setDeleted] = useState<{ word: string; tone: 'running' | 'error' } | null>(null);
 
   const read = useCallback(async () => {
@@ -122,9 +126,11 @@ export function UploadView() {
     const api = tracesApi();
     if (!api) return;
     setDeleting(false);
-    const r = await api.deleteEverywhere();
+    setDeleted(null);
+    setInProgress(true);
+    const r = await api.deleteEverywhere().finally(() => setInProgress(false));
     setDeleted(r.ok
-      ? { word: `the back-office deleted ${r.deleted ?? 'every'} session${r.deleted === 1 ? '' : 's'} · this install is forgotten`, tone: 'running' }
+      ? { word: `the back-office deleted ${r.deleted ?? 'every'} session${r.deleted === 1 ? '' : 's'} · this install is forgotten, your consent withdrawn`, tone: 'running' }
       : { word: `not deleted: ${r.error}. Nothing was forgotten; try again.`, tone: 'error' });
     void read();
   };
@@ -136,7 +142,9 @@ export function UploadView() {
     ? { word: 'no address: nothing leaves this computer', tone: 'idle' as const }
     : settings?.uploadConsentAt
       ? { word: `consent given ${dayClockOf(Date.parse(settings.uploadConsentAt))}${state?.registered ? ' · this install is registered' : ''}`, tone: 'running' as const }
-      : { word: 'nothing is sent until you read what leaves this computer', tone: 'waiting' as const };
+      : state?.notice === 'forgotten'
+        ? { word: 'consent withdrawn: nothing is sent until you read what leaves this computer', tone: 'waiting' as const }
+        : { word: 'nothing is sent until you read what leaves this computer', tone: 'waiting' as const };
   const status = state && address ? stateWord(state) : null;
   const masked = preview && preview !== 'none'
     ? Object.entries(preview.counts).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(' · ')
@@ -221,10 +229,11 @@ export function UploadView() {
           <Box name="Delete everything this Tars sent" caption="DELETE EVERYTHING THIS TARS SENT">
             <div className="px-4 pb-3 space-y-2.5">
               <p className="text-[11.5px] leading-relaxed text-text-secondary">
-                Asks the back-office to delete every session this install sent, then forgets the install and what was sent. Recording on this computer goes on, and so does uploading, as a new install, while the address and your consent stay.
+                Asks the back-office to delete every session this install sent, then forgets the install and what was sent, and withdraws your consent. Recording on this computer goes on; uploading starts again only when you consent again, as a new install.
               </p>
-              {deleted && <StateLine word={deleted.word} tone={deleted.tone} />}
-              <Button size="sm" variant="danger" disabled={!address} onClick={() => setDeleting(true)}>Delete everything this Tars sent</Button>
+              {inProgress && <StateLine word="stopping the upload under way, then asking the back-office to delete" tone="waiting" />}
+              {deleted && !inProgress && <StateLine word={deleted.word} tone={deleted.tone} />}
+              <Button size="sm" variant="danger" disabled={!address || inProgress} onClick={() => setDeleting(true)}>{inProgress ? 'deleting' : 'Delete everything this Tars sent'}</Button>
             </div>
           </Box>
         </div>
