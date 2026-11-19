@@ -37,6 +37,9 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 23. (L1 at ee4d55975.) A deletion owed for ever locks sharing out: the install file lost, or an old back-office gone
  *     for good, and consent is refused even to a new back-office.
  * 24. (L2.) A clock moved backward between the sessions and the deletion lets them through on re-consent.
+ * 25. (L at e50e78564.) Giving up a deletion when none is owed forgets a live install: the next pass registers anew,
+ *     sends everything again, and leaves the old copy out of reach of "delete everything sent".
+ * 26. An owed deletion that clears itself (its install file gone) says nothing, or says it at every read.
  * 18. A deletion that lands while a pass runs: the pass goes on with the consent it read at its start, and sends
  *     after the deletion (the re-audit's M1 at ec6951aa5).
  * 9. A restart sends every session again, or forgets the install and registers anew.
@@ -452,10 +455,30 @@ describe('the trace uploader', () => {
     await u.runOnce();
     deletion = { owed: true, since: 5000 };
     expect(u.state().deletionOwed).toBe(true);
-    u.abandonDeletion();
+    expect(u.abandonDeletion()).toEqual({ ok: true });
     expect(deletion).toEqual({ owed: false, since: 5000 });
     expect(fs.existsSync(path.join(dir, 'private', 'traces-install.json'))).toBe(false);
     expect(u.state()).toMatchObject({ deletionOwed: false, registered: false });
+  });
+
+  it('25: giving up a deletion when none is owed is refused, and the install and its marks stay', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    const r = u.abandonDeletion();
+    expect(r.ok).toBe(false);
+    expect(fs.existsSync(path.join(dir, 'private', 'traces-install.json'))).toBe(true);
+    expect(u.state()).toMatchObject({ registered: true, sentSessions: 1 });
+    clock += 1;
+    expect((await u.runOnce()).sent).toBe(0);
+    expect(bo.seen.filter(x => x.url === '/v1/installs')).toHaveLength(1);
+  });
+
+  it('26: an owed deletion that clears itself is said once', () => {
+    deletion = { owed: true, since: 5000 };
+    const u = uploader();
+    expect(u.state().notice).toBe('deletion_cleared');
+    expect(u.state().notice).toBeUndefined();
   });
 
   it('24: a clock moved backward does not let sessions present at the deletion through', async () => {
