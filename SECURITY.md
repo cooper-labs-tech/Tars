@@ -1128,7 +1128,13 @@ Origin CA certificate. The Node process listens on loopback only, behind nginx.
   in order to present it. Whoever controls this zone's Cloudflare account (or an API token with
   SSL and certificate rights on it) can tie that certificate to another hostname of the same
   zone. The CA's private key never leaves the operator: losing the server does not let anyone
-  mint a new client certificate.
+  mint a new client certificate. A leaked client key is revoked by replacing the CA, not by
+  deleting the certificate at Cloudflare: nginx trusts whatever the CA signed until its CA file
+  changes (`OPERATIONS.md`, "Trace back-office", Cloudflare § 4).
+- **The only TLS site:** the back-office's server block is nginx's `default_server` on 443, and
+  the only one. A handshake without SNI, or naming another host, lands on it and meets the same
+  client-certificate check. A second TLS site on that nginx would become where such a handshake
+  lands, with no check at all.
 
 **What it does not protect.**
 

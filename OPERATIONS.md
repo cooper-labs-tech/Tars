@@ -2884,9 +2884,10 @@ Commands that need the database (`reader create`, `retention run`) run as the se
    an API token with "Zone, SSL and Certificates, Edit" on the zone:
 
    ```bash
-   curl -sX POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames/certificates" \
-     -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
-     --data "$(jq -n --rawfile c aop-client.pem --rawfile k aop-client.key '{certificate: $c, private_key: $k}')"
+   # The key reaches curl on its standard input, never in its arguments, which any local process can read.
+   jq -n --rawfile c aop-client.pem --rawfile k aop-client.key '{certificate: $c, private_key: $k}' |
+     curl -sX POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames/certificates" \
+       -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" --data @-
    # note the "id" it returns, then:
    curl -sX PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames" \
      -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
@@ -2897,6 +2898,26 @@ Commands that need the database (`reader create`, `retention run`) run as the se
    `aop-client.key` from the machine once uploaded: Cloudflare holds it now. Renew the client
    certificate before its 825 days run out: sign a new one with the same CA, upload it, tie it
    to the hostname, then delete the old one. The server changes nothing.
+
+   **If the client key or the CA key leaks: a new CA, not just a new certificate.** nginx
+   trusts every certificate the CA signed, so deleting the leaked certificate at Cloudflare
+   leaves the stolen copy valid at the origin for the rest of its 825 days. Replace the CA, in
+   this order, so the origin never refuses Cloudflare:
+   1. On the operator's machine, make a new CA and a new client certificate, as above.
+   2. On the server, trust both CAs for a moment: `cat aop-ca-new.pem aop-ca-old.pem >
+      /etc/ssl/tars-backoffice/aop-ca.pem`, then `nginx -t && systemctl reload nginx`.
+   3. Upload the new client certificate and tie it to the hostname (the two calls above).
+   4. On the server, trust only the new CA: copy `aop-ca-new.pem` to
+      `/etc/ssl/tars-backoffice/aop-ca.pem` and reload nginx. From here the stolen certificate
+      opens nothing.
+   5. Before deleting it, save the old certificate (public, `GET
+      .../origin_tls_client_auth/hostnames/certificates/<old id>` returns it as `certificate`)
+      into `old-client.pem`. Then delete it at Cloudflare (`DELETE` on the same URL), and
+      destroy the old CA key.
+
+   Check, on the server: `openssl verify -CAfile /etc/ssl/tars-backoffice/aop-ca.pem
+   old-client.pem` must fail, and `curl -s https://traces.example.com/healthz` through
+   Cloudflare must still answer `{"ok":true}`.
 5. **Access on `/admin`: required.** Zero Trust, Access, Applications, a self-hosted application
    for `traces.example.com/admin`, with a policy allowing only the operator's email and requiring
    MFA. Its "Application Audience (AUD) tag" is `BACKOFFICE_ACCESS_AUDIENCE`, and the team domain
@@ -2910,7 +2931,11 @@ Commands that need the database (`reader create`, `retention run`) run as the se
 ### 6. nginx and firewall
 
 - `deploy/nginx.conf` goes to `/etc/nginx/sites-available/tars-backoffice`, linked into
-  `sites-enabled`. `/etc/nginx/cloudflare-ips.conf` lists one `set_real_ip_from` per range of
+  `sites-enabled`. **It must be the only TLS site of this nginx:** remove
+  `sites-enabled/default` and add no other `listen 443`. Its server block is the
+  `default_server`, so a handshake without SNI, or naming another host, still meets the client
+  certificate check. A second TLS site would become where such a handshake lands, with no check
+  at all. `grep -rn 'listen.*443' /etc/nginx/` must show only this file. `/etc/nginx/cloudflare-ips.conf` lists one `set_real_ip_from` per range of
   https://www.cloudflare.com/ips-v4 and `ips-v6`.
 - Firewall (ufw or nftables): SSH from the operator's own address, and 443 from Cloudflare's
   ranges only. Nothing else in.
