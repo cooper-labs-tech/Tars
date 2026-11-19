@@ -59,6 +59,7 @@
 | `scripts/sandbox.sh` | A second Tars beside your real one: `HOME=~/Tars-sandbox`, API port 31499 |
 | `mods/tars-state/` | The state mod: a Claude Code hooks module that reports an agent's sessions, turns, failures and a heartbeat to Tars from inside the CLI (`electron/services/state-mod.ts`), and asks Tars instead of showing a permission dialog, the window deciding it (`electron/services/permission-asks.ts`); a session without it keeps the shell hooks and the dialog |
 | `hooks/` | Shell hooks installed into the CLIs. `session-start.sh` registers the session and injects `/bootstrap` + memory context; `user-prompt-submit.sh`, `on-stop.sh` and `stop-failure.sh` own the status lifecycle |
+| `backoffice/` | The self-hostable trace back-office: a separate Node server (Postgres for metadata, blobs on disk) that opted-in installs upload traces to and trusted readers read from. Its API is `backoffice/API.md`, its runbook `OPERATIONS.md` "Trace back-office", its boundaries `SECURITY.md` § 9. Its own `package.json`, tests (`npm test` there, a throwaway Postgres) and tsconfig; the root tsc excludes it |
 
 ## Environment Variables
 
@@ -128,7 +129,7 @@ Four roles work this tree. They map to the long-lived branches `feat/frontend`, 
 - Adding an IPC-backed feature: you may *consume* `window.electronAPI`, but the channel and its type in `src/types/electron.d.ts` come from the Backend Agent
 
 ### Backend Agent
-- **Owns**: `electron/`, `mcp-*/`, `hooks/`, `scripts/`
+- **Owns**: `electron/`, `mcp-*/`, `hooks/`, `scripts/`, `backoffice/` (the self-hostable trace back-office: its server, schema, tests and deploy files)
 - **Never touches**: `src/components/`, `src/app/`, `design/`
 - **Owns the contract**: `electron/preload.ts` and `src/types/electron.d.ts` change together, in one commit, or the renderer breaks silently
 - **Spawn rule**: `spawnAgentSession()` in `electron/services/api-routes/agent-routes.ts` is the only place an API-driven session is started: the skills prefix, MCP config, model flag, `--disallowed-tools`, workspace trust, identity header and `--add-dir ~/.tars` all live there. Underneath it, `initAgentPty()` in `electron/core/agent-manager.ts` is the one function that spawns a PTY; `main.ts`, `ipc-handlers.ts`, the Slack and Discord bots and the Hermes relay's routing already call it directly. Route new work through one of those two. Do not add a third way in

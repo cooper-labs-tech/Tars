@@ -1,0 +1,27 @@
+{
+  "name": "tars-trace-backoffice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A self-hostable back-office that receives Tars agent traces from opted-in installs and serves them to trusted readers",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "start": "node src/server.ts",
+    "migrate": "node src/cli.ts migrate up",
+    "test": "node --test --test-concurrency=1 test/unit/*.test.ts test/e2e.test.ts",
+    "test:unit": "node --test test/unit/*.test.ts",
+    "test:e2e": "node --test test/e2e.test.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.1",
+    "@types/pg": "8.15.6",
+    "typescript": "5.9.3"
+  }
+}

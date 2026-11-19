@@ -1040,3 +1040,112 @@ says around them, in a message of its own, is the owner's; anything the owner
 typed by hand into a terminal, or said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
+
+## 9. The trace back-office
+
+`backoffice/` is a separate server, self-hosted by whoever runs it: Tars installs whose user
+opted in send it their agent traces, and readers its operator trusts read them. Its API is
+`backoffice/API.md`. What holds, and what does not:
+
+**Boundaries.**
+
+| Who | Holds | Opens |
+|---|---|---|
+| An install | `tbi_` token, returned once at registration, kept by Tars in `~/.tars-private` | Its own uploads, its own usage, the deletion of all its data. Never another install's data, never a read route |
+| A reader | `tbr_` token, issued by the operator in the pages, shown once | `/v1/read/*`, read only. No write |
+| The operator | Cloudflare Access identity, then the app's own password | `/admin/*` |
+
+- **Tokens at rest:** only SHA-256 hashes. They are 32 random bytes, so a hash cannot be reversed
+  by guessing, and the lookup is by hash, so nothing compares a secret byte by byte. The E2E dumps
+  the `installs` table and checks no token is in it.
+- **A token opens only its prefix:** an install token on a read route, a reader token on a write,
+  is `401`. A revoked reader token is refused at its next request (no cache).
+- **Every write is authenticated, but one:** registration. An install cannot hold a token
+  before it has one. It is **closed on a fresh deploy** until the operator opens it, then
+  limited per source address and in all. An install that uploads nothing within 7 days is
+  removed. Registration gets an install nothing but its own empty space.
+- **The disk is bounded:** each install has a quota, and every write (blob, batch, registration)
+  is refused with `507 disk_full` while the blob disk has less free than the operator's floor
+  (default 5 GiB). Postgres shares that disk in the documented deploy, so a filler cannot take
+  the database, and the readers, down with it. Reads go on under the floor.
+- **Content is checked against its name:** a blob whose decoded bytes do not hash to the name it
+  was sent under is refused (`422`). So no install can plant other content under a hash another
+  install will later send, even though identical content is stored once.
+- **No oracle across installs:** "which of these blobs are missing" answers about the asking
+  install's own blobs only. Whether another install sent a given text is never revealed.
+- **Bodies:** limited on the wire and after decompression. zlib stops a decompression bomb at the
+  limit instead of expanding it in full (unit-tested).
+- **Unknown fields are refused,** not dropped: a client that starts sending a path or an
+  environment by mistake is told at once.
+
+**The operator's pages, two locks.**
+
+1. **Cloudflare Access** in front of `/admin`: the operator's identity provider, with MFA. The
+   server also checks Access's signed assertion (`Cf-Access-Jwt-Assertion`, RS256, audience,
+   issuer, expiry) when configured. So reaching the origin around Cloudflare does not get past
+   this lock.
+2. **The app's own login:** the operator's password as an scrypt hash, in the server's
+   environment file, never in the repository. The session cookie is random and stored hashed.
+   It is `HttpOnly`, `SameSite=Strict`, `Secure` and `__Host-` over https, and lasts 12 hours.
+   Every form carries a CSRF token, and every POST must come from the configured origin. Logins
+   are limited per address (5 tries, then one every 3 minutes) and in all (10, then one every 2
+   minutes), so no supply of addresses gets more than about 40 tries an hour. The address is
+   nginx's `X-Real-IP`, which it sets from `CF-Connecting-IP` only for connections from
+   Cloudflare's ranges, and which the process believes only from a loopback peer (`src/addr.ts`).
+   A client that reached the process around nginx cannot name a new address per request. The
+   pages send a strict CSP and load no script.
+
+Either lock holds if the other fails: a leaked password is useless without the Access identity,
+and an Access misconfiguration still meets the password.
+
+**Without Access in front, the login can be locked by anyone.** The global login bucket (10
+tries, then one every 2 minutes) is shared by every address. Where `/admin` is reachable without
+an Access identity, anyone can spend it with wrong passwords and keep the operator out of the
+pages for as long as they keep at it. They get no access, but the operator loses theirs. So the
+runbook makes Access on `/admin` a required step: with it, only the operator's identity reaches
+the login form, and the bucket is theirs alone. An instance run without Cloudflare should put an
+equivalent identity check in front of `/admin` (a VPN, or an SSO proxy), or accept this denial of
+service.
+
+**Transport.** TLS ends at Cloudflare, which reaches the origin over TLS again with a Cloudflare
+Origin CA certificate. The Node process listens on loopback only, behind nginx.
+
+- **What keeps other Cloudflare accounts out: per-hostname Authenticated Origin Pulls with the
+  operator's own client certificate.** The operator makes a small CA of their own, and a client
+  certificate signed by it. The certificate and its key are uploaded to Cloudflare and tied to
+  this one hostname. nginx answers only a TLS client that presents a certificate signed by that
+  CA (`ssl_client_certificate` is the operator's CA, `ssl_verify_client on`). Cloudflare presents
+  it only when proxying this hostname of this zone.
+- **Why not the zone-level setting:** zone-level Authenticated Origin Pulls use Cloudflare's
+  shared certificate, which Cloudflare presents for every account. Anyone could put their own
+  hostname on Cloudflare, point it at this origin's address, and be let in. That would go around
+  this zone's Access application and WAF rules, which belong to the hostname and not to the
+  origin.
+- **The firewall** accepts port 443 from Cloudflare's published ranges only. Those ranges are
+  shared by every Cloudflare customer, so the firewall keeps out the rest of the internet but
+  does not keep out other Cloudflare accounts: the client certificate does.
+- **What it still trusts:** Cloudflare holds the client certificate's private key, as it must
+  in order to present it. Whoever controls this zone's Cloudflare account (or an API token with
+  SSL and certificate rights on it) can tie that certificate to another hostname of the same
+  zone. The CA's private key never leaves the operator: losing the server does not let anyone
+  mint a new client certificate. A leaked client key is revoked by replacing the CA, not by
+  deleting the certificate at Cloudflare: nginx trusts whatever the CA signed until its CA file
+  changes (`OPERATIONS.md`, "Trace back-office", Cloudflare § 4).
+- **The only TLS site:** the back-office's server block is nginx's `default_server` on 443, and
+  the only one. A handshake without SNI, or naming another host, lands on it and meets the same
+  client-certificate check. A second TLS site on that nginx would become where such a handshake
+  lands, with no check at all.
+
+**What it does not protect.**
+
+- **Content is stored as sent.** Scrubbing secrets is the client's job, before upload. The server
+  stores what it is given, and the operator and every reader with a token can read it all. An
+  install's user must know who reads before opting in: that is the privacy notice's job, not this
+  code's.
+- **Readers' copies:** once read, content is in the reader's hands. The deletion feed tells a
+  reader what to delete. The server cannot make it.
+- **The operator's own server:** root on the server reads everything. The blobs are not encrypted
+  at rest beyond the disk's own encryption. The backups are, by restic, with a key kept off the
+  server.
+- **Rate limits are per process, in memory:** a restart refills them. Cloudflare's own rate rules
+  in front are the durable limit.

@@ -1,0 +1,38 @@
+# systemd unit for the trace back-office. Install as /etc/systemd/system/tars-backoffice.service.
+# The code lives in /opt/tars-backoffice (a checkout of the repository's backoffice/ folder),
+# the blobs in /var/lib/tars-backoffice/blobs, the configuration in /etc/tars-backoffice/env (0600).
+[Unit]
+Description=Tars trace back-office
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+User=tbo
+Group=tbo
+WorkingDirectory=/opt/tars-backoffice
+EnvironmentFile=/etc/tars-backoffice/env
+# Pending migrations are applied before each start; the server itself refuses a schema that is behind.
+ExecStartPre=/usr/bin/node src/cli.ts migrate up
+ExecStart=/usr/bin/node src/server.ts
+Restart=on-failure
+RestartSec=5
+# Hardening: the process reads its code, writes its blob folder, and nothing else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadWritePaths=/var/lib/tars-backoffice
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+LockPersonality=true
+MemoryDenyWriteExecute=false
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

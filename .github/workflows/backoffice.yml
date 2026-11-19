@@ -1,0 +1,34 @@
+name: CI - Trace back-office
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['backoffice/**', '.github/workflows/backoffice.yml']
+  push:
+    branches: [main]
+    paths: ['backoffice/**', '.github/workflows/backoffice.yml']
+
+jobs:
+  test:
+    name: Units and E2E against a real Postgres
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backoffice
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backoffice/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      # The runner image ships PostgreSQL; the E2E runs its own throwaway instance from its binaries.
+      - run: PG_BIN="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)" npm test
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backoffice-e2e
+          path: backoffice/.runs/
+          if-no-files-found: ignore

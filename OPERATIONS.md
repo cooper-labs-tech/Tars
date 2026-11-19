@@ -2791,3 +2791,193 @@ and it may hold the only copy of a version never published (see *Which builds ar
 `CLAUDE.md` at the repo root carries a block re-written by `next dev`
 (`node_modules/next/dist/server/lib/generate-agent-files.js`). Removing it from a diff only
 re-creates the uncommitted change; commit it with your work to keep the tree clean.
+
+## Trace back-office
+
+`backoffice/` (API in `backoffice/API.md`, boundaries in `SECURITY.md` § 9) runs on one Linux
+server behind Cloudflare. This is the generic runbook. `traces.example.com` stands for the
+instance's host name, and `192.0.2.10` for the server's address.
+
+### Size
+
+One small VPS is enough to start: 2 vCPU, 4 GB of memory, 80 GB of disk. A session is about
+100 KB once compressed and deduplicated, so 80 GB holds several hundred thousand. Watch the free
+disk on the overview page, and grow the disk before it falls under 20 %.
+
+### 1. Server
+
+- Debian 12 or Ubuntu 24.04, with automatic security updates (`unattended-upgrades`).
+- SSH by key only (`PasswordAuthentication no`, `PermitRootLogin prohibit-password`).
+- A user for the service: `useradd --system --home /var/lib/tars-backoffice --shell /usr/sbin/nologin tbo`.
+
+### 2. Software
+
+- Node.js 22 LTS (22.18 or later), from NodeSource or the distribution.
+- PostgreSQL 16 or 17 and nginx, from the distribution. restic for the backups.
+
+### 3. Database
+
+```bash
+sudo -u postgres createuser tbo
+sudo -u postgres createdb --owner tbo tars_backoffice
+```
+
+The service connects over the local unix socket with peer authentication, so the database has no
+password and no TCP listener (`listen_addresses = ''` in `postgresql.conf`).
+
+### 4. Code and configuration
+
+```bash
+sudo git clone --depth 1 https://github.com/cooper-labs-tech/Tars /opt/tars-src
+sudo ln -s /opt/tars-src/backoffice /opt/tars-backoffice
+cd /opt/tars-backoffice && sudo npm ci --omit=dev
+sudo install -d -o tbo -g tbo -m 700 /var/lib/tars-backoffice /var/lib/tars-backoffice/blobs
+sudo install -d -m 700 /etc/tars-backoffice
+```
+
+`/etc/tars-backoffice/env`, mode 0600, owned by root (systemd reads it before dropping to `tbo`):
+
+```
+PGHOST=/var/run/postgresql
+PGDATABASE=tars_backoffice
+BACKOFFICE_DATA_DIR=/var/lib/tars-backoffice/blobs
+BACKOFFICE_LISTEN=127.0.0.1:8787
+BACKOFFICE_PUBLIC_ORIGIN=https://traces.example.com
+BACKOFFICE_TRUST_PROXY=1
+BACKOFFICE_OWNER_PASSWORD_HASH=<from: node src/cli.ts hash-password>
+BACKOFFICE_ACCESS_ISSUER=https://<team>.cloudflareaccess.com
+BACKOFFICE_ACCESS_AUDIENCE=<the Access application's AUD tag>
+```
+
+Then install `deploy/tars-backoffice.service` into `/etc/systemd/system/` and
+`systemctl enable --now tars-backoffice`. The unit applies pending migrations before each start
+(`ExecStartPre`). The owner's password hash comes from
+`printf '%s' '<password>' | node /opt/tars-backoffice/src/cli.ts hash-password`, run anywhere.
+Commands that need the database (`reader create`, `retention run`) run as the service would:
+`sudo systemd-run --uid=tbo --pipe --wait -p EnvironmentFile=/etc/tars-backoffice/env -p WorkingDirectory=/opt/tars-backoffice /usr/bin/node src/cli.ts <command>`.
+
+### 5. Cloudflare
+
+1. **DNS:** an `A` record `traces` to `192.0.2.10`, proxied (orange cloud).
+2. **SSL/TLS:** mode "Full (strict)". "Always Use HTTPS" on. Minimum TLS 1.2.
+3. **Origin certificate:** SSL/TLS, Origin Server, Create certificate for `traces.example.com`.
+   The certificate goes to `/etc/ssl/tars-backoffice/origin.pem`, the key to `origin.key`
+   (0600, root).
+4. **Authenticated Origin Pulls, per hostname, with the operator's own certificate.** Not the
+   zone-level setting: that one uses Cloudflare's shared certificate, which any Cloudflare
+   account can make Cloudflare present (`SECURITY.md` § 9, Transport). On the operator's own
+   machine, never on the server:
+
+   ```bash
+   # A CA of the operator's own. Its key stays offline (a password manager); the server gets only aop-ca.pem.
+   openssl req -x509 -newkey rsa:4096 -nodes -days 3650 -subj "/CN=traces origin-pull CA" \
+     -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+     -keyout aop-ca.key -out aop-ca.pem
+   # The client certificate Cloudflare will present, signed by that CA.
+   openssl req -newkey rsa:2048 -nodes -subj "/CN=traces.example.com origin pull" -keyout aop-client.key -out aop-client.csr
+   printf 'extendedKeyUsage=clientAuth\n' > aop-client.ext
+   openssl x509 -req -in aop-client.csr -CA aop-ca.pem -CAkey aop-ca.key -CAcreateserial -days 825 \
+     -extfile aop-client.ext -out aop-client.pem
+   ```
+
+   Upload the client certificate and its key, then tie them to this hostname only. This needs
+   an API token with "Zone, SSL and Certificates, Edit" on the zone:
+
+   ```bash
+   # The key reaches curl on its standard input, never in its arguments, which any local process can read.
+   jq -n --rawfile c aop-client.pem --rawfile k aop-client.key '{certificate: $c, private_key: $k}' |
+     curl -sX POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames/certificates" \
+       -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" --data @-
+   # note the "id" it returns, then:
+   curl -sX PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames" \
+     -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+     --data '{"config":[{"hostname":"traces.example.com","cert_id":"<id>","enabled":true}]}'
+   ```
+
+   `aop-ca.pem` goes to `/etc/ssl/tars-backoffice/aop-ca.pem` on the server. Delete
+   `aop-client.key` from the machine once uploaded: Cloudflare holds it now. Renew the client
+   certificate before its 825 days run out: sign a new one with the same CA, upload it, tie it
+   to the hostname, then delete the old one. The server changes nothing.
+
+   **If the client key or the CA key leaks: a new CA, not just a new certificate.** nginx
+   trusts every certificate the CA signed, so deleting the leaked certificate at Cloudflare
+   leaves the stolen copy valid at the origin for the rest of its 825 days. Replace the CA, in
+   this order, so the origin never refuses Cloudflare:
+   1. On the operator's machine, make a new CA and a new client certificate, as above.
+   2. On the server, trust both CAs for a moment: `cat aop-ca-new.pem aop-ca-old.pem >
+      /etc/ssl/tars-backoffice/aop-ca.pem`, then `nginx -t && systemctl reload nginx`.
+   3. Upload the new client certificate and tie it to the hostname (the two calls above).
+   4. On the server, trust only the new CA: copy `aop-ca-new.pem` to
+      `/etc/ssl/tars-backoffice/aop-ca.pem` and reload nginx. From here the stolen certificate
+      opens nothing.
+   5. Before deleting it, save the old certificate (public, `GET
+      .../origin_tls_client_auth/hostnames/certificates/<old id>` returns it as `certificate`)
+      into `old-client.pem`. Then delete it at Cloudflare (`DELETE` on the same URL), and
+      destroy the old CA key.
+
+   Check, on the server: `openssl verify -CAfile /etc/ssl/tars-backoffice/aop-ca.pem
+   old-client.pem` must fail, and `curl -s https://traces.example.com/healthz` through
+   Cloudflare must still answer `{"ok":true}`.
+5. **Access on `/admin`: required.** Zero Trust, Access, Applications, a self-hosted application
+   for `traces.example.com/admin`, with a policy allowing only the operator's email and requiring
+   MFA. Its "Application Audience (AUD) tag" is `BACKOFFICE_ACCESS_AUDIENCE`, and the team domain
+   is `BACKOFFICE_ACCESS_ISSUER`. Set both in the env file, so the server refuses `/admin` without
+   Access's assertion. Without Access, anyone can spend the global login bucket and lock the
+   operator out of the pages (`SECURITY.md` § 9). `/v1/*` stays outside Access: installs and
+   readers use their tokens.
+6. **Rate limiting rule** (WAF): `/v1/installs` POST, 20 per 10 minutes per IP, block. This is
+   the durable limit in front of the in-process one.
+
+### 6. nginx and firewall
+
+- `deploy/nginx.conf` goes to `/etc/nginx/sites-available/tars-backoffice`, linked into
+  `sites-enabled`. **It must be the only TLS site of this nginx:** remove
+  `sites-enabled/default` and add no other `listen 443`. Its server block is the
+  `default_server`, so a handshake without SNI, or naming another host, still meets the client
+  certificate check. A second TLS site would become where such a handshake lands, with no check
+  at all. `grep -rn 'listen.*443' /etc/nginx/` must show only this file. `/etc/nginx/cloudflare-ips.conf` lists one `set_real_ip_from` per range of
+  https://www.cloudflare.com/ips-v4 and `ips-v6`.
+- Firewall (ufw or nftables): SSH from the operator's own address, and 443 from Cloudflare's
+  ranges only. Nothing else in.
+- Refresh the ranges monthly (a timer that rewrites both the nginx include and the firewall
+  set from the two lists, then reloads).
+
+### 7. Backups
+
+`deploy/backup.sh` from a nightly systemd timer: `pg_dump --format=custom`, then the dump and the
+blob folder into a restic repository off the server (another provider's object store, or a
+storage box). `/etc/tars-backoffice/backup.env` (0600) holds `RESTIC_REPOSITORY` and
+`RESTIC_PASSWORD_FILE`. Keep a copy of the restic password outside the server too. Snapshots age
+out in 35 days, so a deletion reaches the backups within 35 days.
+
+**Restore drill, once after setup and then quarterly:** `restic restore latest --target /tmp/r`,
+`pg_restore --clean --dbname tars_backoffice /tmp/r/var/lib/tars-backoffice/backup/db.dump`, copy
+the blobs back, start the service, read one session through the read API.
+
+### 8. Updates
+
+```bash
+cd /opt/tars-src && sudo git pull --ff-only
+cd /opt/tars-backoffice && sudo npm ci --omit=dev
+sudo systemctl restart tars-backoffice      # applies pending migrations first
+```
+
+The server refuses to start while a migration is pending. Every migration has its reverse
+(`migrate down`, run by hand with `systemd-run` as above). A `down` that drops data says so in
+its first line. Take a backup before an update that carries a migration.
+
+### 9. Day to day
+
+- **Registration** is closed on a fresh deploy: no install can register until the operator opens
+  it in Settings. Open it once the privacy notice the installs' users read is published.
+- **Free-disk floor** (Settings, default 5 GiB): under it, every write (blobs, batches,
+  registrations) gets `507 disk_full` with a `Retry-After`, and reads go on. Postgres shares the
+  disk in this deploy, so the floor keeps it writable. Raise the floor with the disk, or move the
+  blobs to a disk of their own.
+- **Overview page:** installs, sessions, disk, the last 14 days.
+- **Readers:** create a token (shown once), revoke one. `node src/cli.ts reader create <name>`
+  does the same from the shell.
+- **Retention:** Settings, in days. It runs hourly, and on demand from the same page.
+- **Deletions:** every deletion with its receipt and counts. An install's own deletion is
+  immediate, and readers learn of it from `/v1/read/deletions`.
+- **Logs:** `journalctl -u tars-backoffice`. Request bodies are never logged.
