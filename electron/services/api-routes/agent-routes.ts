@@ -67,6 +67,7 @@ import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-updat
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
+import { remoteLaunchFor } from '../remote-agents';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
@@ -242,6 +243,17 @@ async function spawnAgentSessionInSlot(
   // the name) or a chat's runner (core/agent-role.ts).
   const isSuperAgentApi = hasOrchestratorPowers(agent);
 
+  // A worker placed on one of the owner's remote hosts (2.0.7, services/remote-agents.ts): its CLI runs there, over
+  // ssh, and what cannot run there is said before anything is ended.
+  const remoteAsk = remoteLaunchFor(agent, { providerId: cliProvider.id, leads: isSuperAgentApi });
+  if (remoteAsk && !remoteAsk.ok) {
+    sendJson({ error: remoteAsk.error, code: remoteAsk.code }, remoteAsk.status);
+    return false;
+  }
+  const remote = remoteAsk?.launch;
+  // The host's claude, found on its own PATH: the binary of this computer means nothing there.
+  const launchBinary = remote ? 'claude' : binaryPath;
+
   // Provider env vars: CLAUDE_* tracking vars + ANTHROPIC_BASE_URL /
   // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, Moonshot...).
   const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort });
@@ -284,9 +296,11 @@ async function spawnAgentSessionInSlot(
   const identityHeader =
     `[Tars: you are agent "${agent.name || agent.id}" (id ${agent.id}), ` +
     `${agent.kind === 'chat' ? 'orchestrator' : agent.role || 'worker'} of project ${agent.projectPath}` +
-    (agent.worktreePath
-      ? `, working in worktree ${agent.worktreePath}${agent.branchName ? ` (branch ${agent.branchName})` : ''}: stay inside this directory`
-      : '') +
+    (remote
+      ? `, running on the remote host ${remote.host.name}, in ${remote.folder}: stay inside this directory`
+      : agent.worktreePath
+        ? `, working in worktree ${agent.worktreePath}${agent.branchName ? ` (branch ${agent.branchName})` : ''}: stay inside this directory`
+        : '') +
     `. Work autonomously without asking for confirmation and end with a clear report of your results` +
     (isSuperAgentApi ? '' : ': an orchestrator reads your final message') +
     `.` + (chatIdentityOf(agent) ? ` ${chatIdentityOf(agent)}` : '') + `]`;
@@ -358,7 +372,7 @@ async function spawnAgentSessionInSlot(
       agentId: agent.id,
       resumeSessionId,
       forkSession,
-      binaryPath,
+      binaryPath: launchBinary,
       prompt: taskPrompt,
       model: resolvedModel && resolvedModel !== 'default' ? resolvedModel : undefined,
       permissionMode: effectiveMode,
@@ -375,7 +389,9 @@ async function spawnAgentSessionInSlot(
       // BUG 5: an orchestrator cannot edit files directly.
       orchestratorMode: isSuperAgentApi,
       verbose: appSettings.verboseModeEnabled,
-      chrome: appSettings.chromeEnabled,
+      // The owner's Chrome is on this computer, never on a host.
+      chrome: appSettings.chromeEnabled && !remote,
+      remote: !!remote,
     });
   } catch (err) {
     sendJson({ error: err instanceof Error ? err.message : 'Invalid agent configuration' }, 400);
@@ -384,7 +400,7 @@ async function spawnAgentSessionInSlot(
 
   // Print mode: inject -p right after the binary token.
   if (usePrintMode) {
-    const binToken = `'${binaryPath.replace(/'/g, "'\\''")}'`;
+    const binToken = `'${launchBinary.replace(/'/g, "'\\''")}'`;
     if (cliCommand.startsWith(binToken)) {
       cliCommand = `${binToken} -p${cliCommand.slice(binToken.length)}`;
     }
@@ -479,6 +495,7 @@ async function spawnAgentSessionInSlot(
       rows: 40,
       cwd: rawWorkingDir,
       env: start.env,
+      ...(remote ? { remote: { launch: { ...remote, mcpConfigPath }, cliCommand } } : {}),
     });
   } catch (err) {
     launchAbandoned(agent.id, launch);

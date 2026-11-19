@@ -1247,6 +1247,11 @@ async function initAgentPtyLocked(
   // Re-check under the lock: the caller's check happened before it queued here,
   // and the call it was queued behind may have just created the PTY it wanted.
   if (agent.ptyId && ptyProcesses.has(agent.ptyId)) return agent.ptyId;
+  // A worker placed on a remote host (2.0.7, services/remote-agents.ts) starts there, through spawnAgentSession,
+  // never in a shell of this computer, where a typed launch would run its CLI on the wrong machine.
+  if (agent.remote) {
+    throw new Error(`${agent.name || agent.id} runs on a remote host: Tars starts its CLI there with a task (start_agent, a message, its queue), never in a terminal of this computer.`);
+  }
 
   const cli = cliToStart.get(agent);
   cliToStart.delete(agent);

@@ -12,6 +12,9 @@ import * as crypto from 'crypto';
  * - The host gets one command, the wrapper Tars installed (`~/.tars-remote/bin/tars-remote`), every word quoted.
  * - The CLI's environment goes in a file, over ssh's stdin, never on a command line: only what the CLI needs, with
  *   the tunnel's address.
+ * - At each launch, the agent's terminal first sends the host Tars's wrapper, its hook scripts, the agent's hooks and
+ *   MCP files and its environment, over ssh's stdin (remoteBootstrap), then starts the CLI there in tmux
+ *   (remoteLaunchLine, remoteStartCommand). The host's own Claude Code settings are never written.
  */
 
 export interface RemoteHost {
@@ -145,4 +148,127 @@ export function remoteEnvFile(env: Record<string, string | undefined>, o: { rpor
   }
   lines.push(`export CLAUDE_MGR_API_URL=${posixQuote(`http://127.0.0.1:${o.rport}`)}`);
   return `${lines.join('\n')}\n`;
+}
+
+/** An agent's id as the wrapper takes it (tars-remote.sh, valid_id). */
+const AGENT_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
+
+/** The variable the wrapper sets for the CLI's command line: the agent's own folder of Tars's files on the host. */
+export const REMOTE_AGENT_DIR_VAR = 'TARS_REMOTE_AGENT_DIR';
+
+/**
+ * Claude Code's flags for a CLI on a host (2.1.327 takes both): its hooks and Tars's MCP servers from the files Tars put
+ * in the agent's folder there. Constant text that the host's shell reads: nothing in it comes from an agent or the owner.
+ */
+export const REMOTE_CLAUDE_FLAGS = ` --settings "$${REMOTE_AGENT_DIR_VAR}"/settings.json --mcp-config "$${REMOTE_AGENT_DIR_VAR}"/mcp.json`;
+
+/** A hook as Claude Code is told to run it (claude-provider.ts, CLAUDE_HOOK_FILES). */
+export interface HookSpec { type: string; file: string; matcher?: string }
+
+const HOOK_FILE = /^[a-z0-9][a-z0-9-]*\.sh$/;
+
+/**
+ * The --settings file of a CLI on a host: Tars's hooks, run from the copies installed in ~/.tars-remote/hooks, and
+ * nothing else of Claude Code's settings.
+ */
+export function remoteHookSettings(specs: readonly HookSpec[]): string {
+  const hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout: number }> }>> = {};
+  for (const { type, file, matcher } of specs) {
+    if (!HOOK_FILE.test(file) || !/^[A-Za-z]+$/.test(type)) continue;
+    (hooks[type] ??= []).push({ ...(matcher ? { matcher } : {}), hooks: [{ type: 'command', command: `"$HOME"/.tars-remote/hooks/${file}`, timeout: 30 }] });
+  }
+  return `${JSON.stringify({ hooks }, null, 2)}\n`;
+}
+
+/**
+ * The --mcp-config file of a CLI on a host: each of Tars's servers this Tars serves over its API (the HTTP entries of
+ * the agent's role file, services/mcp-roles.ts), reached through the agent's tunnel, with the agent's token by name as
+ * Tars writes it (services/mcp-shared.ts). Nothing else of that file: a server started as a program is a program of
+ * this Mac, and an HTTP entry anywhere else is the owner's, with whatever its headers hold.
+ */
+export function remoteMcpConfig(localConfig: string | undefined, o: { apiPort: number; rport: number }): string {
+  let servers: Record<string, unknown> = {};
+  try {
+    const found = (JSON.parse(localConfig ?? '') as { mcpServers?: unknown } | null)?.mcpServers;
+    if (found && typeof found === 'object' && !Array.isArray(found)) servers = found as Record<string, unknown>;
+  } catch {
+    // Not JSON: no server, rather than a guess.
+  }
+  const out: Record<string, { type: 'http'; url: string; headers: { Authorization: string } }> = {};
+  for (const [name, entry] of Object.entries(servers)) {
+    const e = (entry ?? {}) as { type?: unknown; url?: unknown };
+    if (!/^[A-Za-z0-9._-]+$/.test(name) || e.type !== 'http' || e.url !== `http://127.0.0.1:${o.apiPort}/api/mcp/${name}`) continue;
+    // ${CLAUDE_MGR_API_TOKEN}: expanded by the CLI from its own environment, as services/mcp-shared.ts writes it.
+    out[name] = { type: 'http', url: `http://127.0.0.1:${o.rport}/api/mcp/${name}`, headers: { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } };
+  }
+  return `${JSON.stringify({ mcpServers: out }, null, 2)}\n`;
+}
+
+/** A file Tars puts on a host, its path under ~/.tars-remote. */
+export interface RemoteFile { path: string; content: string; executable?: boolean }
+
+const REMOTE_FILE_PATH = /^(?:bin|hooks|agents\/[A-Za-z0-9][A-Za-z0-9-]{0,63})\/[A-Za-z0-9][A-Za-z0-9._-]*$/;
+/** The line that ends a file's base64: base64 never holds an underscore. */
+const FILE_END = 'TARS_FILE_END';
+
+/**
+ * What `sh -s` on the host reads from ssh's stdin to prepare a launch: Tars's files, the agent's folder trusted in the
+ * host's Claude Code, then the agent's environment, last. Nothing of it is on a command line of either machine. Each
+ * file is written whole (a new name, then renamed over the old one), readable by the host's user only; its content
+ * goes as base64, so the shell never reads a byte of it.
+ *
+ * The trust: Claude Code asks "Do you trust the files in this folder?" in a folder it has not been told to trust, bypass
+ * or not, and the agent's first task would be taken as the answer. Tars accepts it for the agent's own folder before
+ * the CLI starts, as it does on this computer (ensureProjectTrusted), in the host's ~/.claude.json, with jq, which
+ * Tars's hooks need there anyway; that key of that folder, and nothing else of the file.
+ */
+export function remoteBootstrap(o: { agentId: string; folder: string; files: RemoteFile[]; env: string }): string {
+  if (!AGENT_ID.test(o.agentId)) throw new Error(`not an agent id Tars hands a host: ${o.agentId}`);
+  if (!o.folder.startsWith('/') || BAD_PATH.test(o.folder)) throw new Error(`not a folder Tars hands a host: ${o.folder}`);
+  const dir = `agents/${o.agentId}`;
+  const lines = ['set -e', 'umask 077', 'R="$HOME/.tars-remote"', `mkdir -p "$R/bin" "$R/hooks" "$R/${dir}"`];
+  const trust = () => {
+    const folder = posixQuote(o.folder);
+    lines.push(
+      'T="$HOME/.claude.json"',
+      '[ -s "$T" ] || printf \'{}\\n\' > "$T"',
+      `D=$(cd ${folder} 2>/dev/null && pwd -P || printf '%s' ${folder})`,
+      `jq --arg d ${folder} --arg r "$D" '.projects[$d].hasTrustDialogAccepted = true | .projects[$r].hasTrustDialogAccepted = true' "$T" > "$T.tars-new"`,
+      'mv -f "$T.tars-new" "$T"',
+    );
+  };
+  const put = (file: RemoteFile) => {
+    if (!REMOTE_FILE_PATH.test(file.path)) throw new Error(`not a path Tars writes on a host: ${file.path}`);
+    const b64 = Buffer.from(file.content, 'utf8').toString('base64').replace(/.{1,76}/g, '$&\n').trimEnd();
+    const next = `"$R/${file.path}.tars-new"`;
+    lines.push(`base64 -d > ${next} <<'${FILE_END}'`, ...(b64 ? [b64] : []), FILE_END,
+      `chmod ${file.executable ? '700' : '600'} ${next}`, `mv -f ${next} "$R/${file.path}"`);
+  };
+  for (const file of o.files) {
+    if (file.path === `${dir}/env`) throw new Error('the environment goes last, as env');
+    put(file);
+  }
+  trust();
+  put({ path: `${dir}/env`, content: o.env });
+  return `${lines.join('\n')}\n`;
+}
+
+/**
+ * The command the host runs in the agent's terminal: the wrapper's start, which ends a session of the agent's left
+ * there and starts this one in tmux. The CLI's command line goes as one word of base64.
+ */
+export function remoteStartCommand(o: { agentId: string; folder: string; cliCommand: string }): string {
+  if (!AGENT_ID.test(o.agentId)) throw new Error(`not an agent id Tars hands a host: ${o.agentId}`);
+  return remoteCommand('start', [o.agentId, o.folder, Buffer.from(o.cliCommand, 'utf8').toString('base64')]);
+}
+
+/**
+ * What the agent's terminal runs on this computer (`/bin/sh -c`): the host prepared first, `prepare` reading the file
+ * Tars wrote for it (0600, it holds the agent's token) on its stdin; the file removed whatever the outcome; then, only
+ * when that went well, the terminal's own ssh in its place. Each ssh says in the terminal why it failed, in its words.
+ */
+export function remoteLaunchLine(o: { prepare: string[]; prepFile: string; terminal: string[] }): string {
+  const words = (argv: string[]) => argv.map(posixQuote).join(' ');
+  const file = posixQuote(o.prepFile);
+  return `${words(o.prepare)} < ${file}; s=$?; rm -f ${file}; [ "$s" -eq 0 ] || exit "$s"; exec ${words(o.terminal)}`;
 }

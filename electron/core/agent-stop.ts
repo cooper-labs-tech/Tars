@@ -7,6 +7,7 @@ import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
 import { describeBorn, endBornProcesses, stopLabelledContainers } from './born-processes';
 import { oneTaskQueue } from './one-task';
+import { endRemoteSession } from '../services/remote-agents';
 
 /**
  * Stopping an agent: it is ended, and it says who stopped it, when and why
@@ -104,6 +105,8 @@ export async function stopAgent(
   notify.announce(agent);
 
   if (terminal) await endTerminalTree(terminal);
+  // On a remote host the CLI outlives its ssh in tmux: its session there ends too (services/remote-agents.ts).
+  if (agent.remote) await endRemoteSession(agent);
   const ended = await endBornOf(agent, { terminal: () => (agent.ptyId ? ptyProcesses.get(agent.ptyId)?.pid : undefined) });
   // On the record and in what whoever asked is told (stopOf), unless a start came first (the Audit's L2 on #523).
   if (ended && agent.status === 'stopped') {
