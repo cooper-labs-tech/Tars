@@ -3031,9 +3031,13 @@ export interface UploadState {
   lastError?: string;
   /** Waiting before the next try (offline, the server busy or full). */
   nextTryAt?: number;
-  /** The back-office does not take new installs ('registration_closed'), or blocked this install ('install_blocked'):
-   *  say it plainly ("this back-office does not take new installs"), not as an error. Looked at again in 6 hours. */
-  notice?: 'registration_closed' | 'install_blocked';
+  /** Say each plainly, not as an error:
+   *  - 'registration_closed': "this back-office does not take new installs" (looked at again in 6 hours);
+   *  - 'install_blocked': "this back-office blocked this install" (looked at again in 6 hours);
+   *  - 'forgotten': "this back-office no longer knows this Tars" (the user's deletion, or its operator's). Uploads
+   *    stop, the local traces stay, and the consent is withdrawn: sharing again is the user's own act (the upload
+   *    notice, then giveUploadConsent), which registers a new install. */
+  notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
 }
 
 export interface TraceStats {

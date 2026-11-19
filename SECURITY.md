@@ -1163,6 +1163,11 @@ would be sent.
 - One action in the window asks the back-office to delete everything the install sent, then forgets the install and
   takes the consent back. Without that, the next pass would register again and send everything back, undoing the
   deletion. Sharing starts again only when the user consents again.
+- A pass under way is stopped and waited for before the deletion, and every pass reads the consent again before
+  each session and before any registration, so nothing it sends lands after a deletion or a withdrawn consent.
+- When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
+  registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
+  Registering again is the user's own act.
 - The scrubbing applies to what is uploaded only: the endpoint the agent talked to, and the local store, saw the
   session as it was.
 

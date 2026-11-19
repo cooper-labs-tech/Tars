@@ -57,8 +57,13 @@ export interface UploadStateView {
   lastUploadAt?: number;
   lastError?: string;
   nextTryAt?: number;
-  /** The back-office does not take new installs, or blocked this one: a state to say, tried again in 6 hours. */
-  notice?: 'registration_closed' | 'install_blocked';
+  /**
+   * - `registration_closed` or `install_blocked`: the back-office takes no new install, or blocked this one; a state
+   *   to say, looked at again in 6 hours.
+   * - `forgotten`: the back-office no longer knows this install (a 401: the user's deletion, or its operator's).
+   *   Uploads stop, the local data stays, and only the user's consent again registers a new install.
+   */
+  notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
 }
 
 class HttpError extends Error {
@@ -84,6 +89,10 @@ export class TraceUploader {
   private lastError?: string;
   private notice?: UploadStateView['notice'];
   private running = false;
+  /** The pass under way, which a deletion stops and waits for before it deletes anything. */
+  private pass?: Promise<unknown>;
+  private abort?: AbortController;
+  private halted = false;
 
   constructor(private readonly deps: UploaderDeps) {
     this.now = deps.now ?? Date.now;
@@ -121,7 +130,8 @@ export class TraceUploader {
       headers['Content-Type'] = json ? 'application/json' : 'application/octet-stream';
     }
     // No redirect is followed: the install token, and the session, go to the address the user set and no other.
-    const res = await this.http(`${base.replace(/\/+$/, '')}${route}`, { method, headers, body: payload ? new Uint8Array(payload) : undefined, redirect: 'manual', signal: AbortSignal.timeout(60_000) });
+    const signal = this.abort ? AbortSignal.any([AbortSignal.timeout(60_000), this.abort.signal]) : AbortSignal.timeout(60_000);
+    const res = await this.http(`${base.replace(/\/+$/, '')}${route}`, { method, headers, body: payload ? new Uint8Array(payload) : undefined, redirect: 'manual', signal });
     const text = await res.text();
     if (res.status >= 300 && res.status < 400) throw new HttpError(res.status, 'redirect_refused');
     let parsed: unknown = {};
@@ -143,42 +153,49 @@ export class TraceUploader {
     return install;
   }
 
+  /** Whether a pass may go on: not halted by a deletion, the consent and the address as they were at its start. */
+  private mayGoOn(url: string): boolean {
+    const now = this.deps.settings();
+    return !this.halted && !!now.consentAt && now.url === url;
+  }
+
   /** One pass: what is new or grew, for sessions opted in now. Never throws. */
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
     const s = this.deps.settings();
-    if (!s.url || !s.consentAt) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.url || !s.consentAt || this.halted) return { sent: 0, failed: 0, skipped: 'off' };
     if (this.nextTryAt !== undefined && this.now() < this.nextTryAt) return { sent: 0, failed: 0, skipped: 'waiting' };
     if (this.running) return { sent: 0, failed: 0, skipped: 'busy' };
     this.running = true;
-    let sent = 0;
-    let reRegistered = false;
+    this.abort = new AbortController();
+    const pass = this.passOnce(s.url);
+    this.pass = pass;
     try {
+      return await pass;
+    } finally {
+      this.running = false;
+      this.abort = undefined;
+      this.pass = undefined;
+    }
+  }
+
+  private async passOnce(url: string): Promise<{ sent: number; failed: number }> {
+    let sent = 0;
+    try {
+      // The consent is read again before a registration and before each session: a deletion, or a withdrawn
+      // consent, stops the pass between two calls (the re-audit's M1 at ec6951aa5).
+      if (!this.mayGoOn(url)) return { sent, failed: 0 };
       let install = this.readInstall();
-      if (!install || install.url !== s.url) install = await this.register(s.url);
-      // Rounds of at most BATCH_SESSIONS sessions; the queue is read wide and filtered, so sessions not opted in
-      // any more never hold the others back.
+      if (!install || install.url !== url) install = await this.register(url);
       for (let round = 0; round < 40; round++) {
         const queue = this.deps.store.uploadQueue(5000).filter(q => this.deps.eligible(q)).slice(0, BATCH_SESSIONS);
         if (!queue.length) break;
-        let restarted = false;
         for (const q of queue) {
-          try {
-            await this.sendSession(install, q.traceId, q.seq);
-          } catch (err) {
-            // The back-office no longer knows this install (its data went with it): register again, once a pass,
-            // and send everything again under the new install.
-            if (err instanceof HttpError && err.status === 401 && !reRegistered) {
-              reRegistered = true;
-              install = await this.register(s.url);
-              restarted = true;
-              break;
-            }
-            throw err;
-          }
+          if (!this.mayGoOn(url)) return { sent, failed: 0 };
+          await this.sendSession(install, q.traceId, q.seq);
           this.deps.store.markUploaded(q.traceId, q.seq, this.now());
           sent++;
         }
-        if (!restarted && queue.length < BATCH_SESSIONS) break;
+        if (queue.length < BATCH_SESSIONS) break;
       }
       this.failures = 0;
       this.nextTryAt = undefined;
@@ -186,8 +203,20 @@ export class TraceUploader {
       this.notice = undefined;
       return { sent, failed: 0 };
     } catch (err) {
-      this.failures++;
+      // Stopped by a deletion: no failure, no backoff.
+      if (this.halted) return { sent, failed: 0 };
       const e = err as HttpError;
+      // The back-office no longer knows this install: never register again on our own, which would send back what
+      // a deletion took away. The local data stays; the user's consent registers a new install.
+      if (e instanceof HttpError && e.status === 401) {
+        fs.rmSync(this.deps.installFile, { force: true });
+        this.notice = 'forgotten';
+        this.lastError = 'This back-office no longer knows this Tars. Nothing is sent until you share again.';
+        this.nextTryAt = undefined;
+        this.deps.withdrawConsent();
+        return { sent, failed: 1 };
+      }
+      this.failures++;
       const backoff = Math.min(30 * 60_000, 30_000 * 2 ** (this.failures - 1));
       // A back-office closed to new installs, or one that blocked this install, is the operator's decision: a state the
       // window says plainly, looked at again in 6 hours, not an error retried on the backoff.
@@ -202,8 +231,6 @@ export class TraceUploader {
       this.nextTryAt = this.now() + (e instanceof HttpError && e.retryAfterMs !== undefined ? e.retryAfterMs : blocked ? 3600_000 : backoff);
       this.lastError = e instanceof HttpError ? `${e.status} ${e.code}` : (err as Error).message;
       return { sent, failed: 1 };
-    } finally {
-      this.running = false;
     }
   }
 
@@ -305,14 +332,7 @@ export class TraceUploader {
     for (let k = 0; k < parts.length; k++) {
       const body = bodyOf(parts[k], parts.length === 1 || k === 0 && parts[k].length === requests.length);
       const id = parts.length === 1 ? `${traceId}.${seq}` : `${traceId}.${seq}.${k}`;
-      let answer: { missingBlobs?: string[] };
-      try {
-        answer = await this.call(install, install.url, 'PUT', `/v1/batches/${id}`, body) as { missingBlobs?: string[] };
-      } catch (err) {
-        // The same state sent before with other bytes (a .env value changed the scrubbing in between): an id of its own.
-        if (!(err instanceof HttpError && err.status === 409)) throw err;
-        answer = await this.call(install, install.url, 'PUT', `/v1/batches/${id}.${this.now()}`, body) as { missingBlobs?: string[] };
-      }
+      const answer = await this.putBatch(install, id, body);
       for (const h of answer.missingBlobs ?? []) {
         if (blobs.has(h) && !missing.has(h)) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
       }
@@ -321,12 +341,37 @@ export class TraceUploader {
     const named = new Set(requests.map(q => q.turnId));
     const alone = turns.filter(x => !named.has(x.turnId));
     if (parts.length > 1 && alone.length) {
-      await this.call(install, install.url, 'PUT', `/v1/batches/${traceId}.${seq}.turns`, Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns: alone, requests: [], messages: [] })));
+      await this.putBatch(install, `${traceId}.${seq}.turns`, Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns: alone, requests: [], messages: [] })));
     }
   }
 
-  /** Asks the back-office to delete everything this install sent, then forgets the install and the progress. */
+  /** One batch, and once more under an id of its own if that id was used before with other bytes (409). */
+  private async putBatch(install: Install, id: string, body: Buffer): Promise<{ missingBlobs?: string[] }> {
+    try {
+      return await this.call(install, install.url, 'PUT', `/v1/batches/${id}`, body) as { missingBlobs?: string[] };
+    } catch (err) {
+      // The same state sent before with other bytes (a .env value changed the scrubbing in between).
+      if (!(err instanceof HttpError && err.status === 409)) throw err;
+      return await this.call(install, install.url, 'PUT', `/v1/batches/${id}.${this.now()}`, body) as { missingBlobs?: string[] };
+    }
+  }
+
+  /**
+   * Asks the back-office to delete everything this install sent, then forgets the install and the progress, and takes
+   * the consent back. A pass under way is stopped first, and waited for: nothing it sends can land after the deletion.
+   */
   async deleteEverywhere(): Promise<{ ok: true; deleted?: number } | { ok: false; error: string }> {
+    this.halted = true;
+    try {
+      this.abort?.abort();
+      await this.pass?.catch(() => undefined);
+      return await this.deleteNow();
+    } finally {
+      this.halted = false;
+    }
+  }
+
+  private async deleteNow(): Promise<{ ok: true; deleted?: number } | { ok: false; error: string }> {
     const install = this.readInstall();
     if (!install) return { ok: false, error: 'This install has sent nothing: there is nothing to delete.' };
     try {
