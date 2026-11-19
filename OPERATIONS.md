@@ -208,7 +208,11 @@ or a mock:
    `seedSandbox` writes; a spec that needs its own CLI writes one through `cliPath`, as
    `terminal-replay-modes.spec.ts` does. `launchSandboxed` refuses to hand the app the caller's
    `CLAUDE_*`, `DOROTHY_*`, `ANTHROPIC_*` or `TARS_*`: a variable of that family the app needs is
-   set in the spec's `env`. Check which hook scripts the sandbox's `~/.claude/settings.json` names
+   set in the spec's `env`. It hands on none of the caller's CLI homes either (`CODEX_HOME`,
+   `KIMI_CODE_HOME`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, the four `XDG_*_HOME`,
+   `ZDOTDIR`), and it fails the launch, before the app starts, when the spec's `env` names one
+   outside the sandbox (`homesOutside`). Without that, an exported `CODEX_HOME` let a sandboxed
+   Tars write into the owner's real codex folder. Check which hook scripts the sandbox's `~/.claude/settings.json` names
    before a CLI starts: they must post to the sandbox's port.
    The app finds no CLI of the machine: the PATH it is handed keeps no folder of the account's
    home (`~/.local/bin`, nvm, npm, pnpm), and begins with the sandbox's own `sandbox-clis/`, where
