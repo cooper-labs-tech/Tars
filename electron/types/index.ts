@@ -366,6 +366,8 @@ export interface AgentStatus {
     state: 'applied' | 'queued' | 'cancelled' | 'failed';
     askedAt: string;
     effectiveAt?: string;
+    /** A revert: the id of the change it takes back. */
+    revertOf?: string;
   };
   kanbanTaskId?: string;  // For kanban task completion tracking
   statusLine?: string;       // ANSI-stripped last meaningful output line

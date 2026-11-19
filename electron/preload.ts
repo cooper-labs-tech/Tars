@@ -235,6 +235,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       /** `fields`: every setting the change touched; `asked`: those the caller named, what a line shows. */
       fields: string[]; asked: string[]; before: Record<string, unknown>; after: Record<string, unknown>;
       state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string; waitingFor?: string;
+      /** A revert: the id of the change it takes back. */
+      revertOf?: string;
     }) => void) => {
       const listener = (_: unknown, data: unknown) => callback(data as Parameters<typeof callback>[0]);
       ipcRenderer.on('agent:retuned', listener);

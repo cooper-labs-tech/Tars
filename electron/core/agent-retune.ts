@@ -154,15 +154,18 @@ function announce(agent: AgentStatus, change: AgentChange): void {
   // What the caller named (`asked`), beside what the change touched (`fields`): a provider change also clears the
   // model and CLI path it was not given, which the window keeps out of its line (#604's Audit, L1).
   const asked = change.asked ?? change.fields;
+  // A revert names the change it takes back, so the window shows it as an undo, with no undo of its own (#604's QA, F4).
+  const revertOf = change.revertOf ? { revertOf: change.revertOf } : {};
   agent.lastRetune = {
     changeId: change.id, by: change.by, fields: change.fields, asked, state: change.state, askedAt: change.askedAt,
-    ...(change.effectiveAt ? { effectiveAt: change.effectiveAt } : {}),
+    ...(change.effectiveAt ? { effectiveAt: change.effectiveAt } : {}), ...revertOf,
   };
   saveAgents();
   broadcastToAllWindows('agent:retuned', {
     changeId: change.id, agentId: change.agentId, agentName: change.agentName, projectPath: change.projectPath, by: change.by,
     fields: change.fields, asked, before: change.before, after: change.after, state: change.state, askedAt: change.askedAt,
     ...(change.effectiveAt ? { effectiveAt: change.effectiveAt } : {}), ...(change.waitingFor ? { waitingFor: change.waitingFor } : {}),
+    ...revertOf,
   });
   scheduleTick();
 }

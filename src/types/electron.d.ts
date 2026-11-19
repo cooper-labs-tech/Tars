@@ -273,6 +273,9 @@ export interface AgentRetuned {
   askedAt: string;
   effectiveAt?: string;
   waitingFor?: string;
+  /** A revert (the window's undo, or revert_agent_change): the id of the change it takes back. Absent on any other
+   *  change. */
+  revertOf?: string;
 }
 
 export interface AgentPendingRestart {
@@ -714,7 +717,7 @@ export interface AgentStatus {
   checkpoint?: { line: string; at: string };
   /** The last change of its settings asked over the API (2.0.7): who asked, which settings, applied or queued, when
    *  asked and when it took effect. The whole change is in the change log (GET /api/agent-changes, agent_changes). */
-  lastRetune?: { changeId: string; by: AgentChangeBy; fields: string[]; asked?: string[]; state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string };
+  lastRetune?: { changeId: string; by: AgentChangeBy; fields: string[]; asked?: string[]; state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string; revertOf?: string };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;
