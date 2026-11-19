@@ -70,6 +70,9 @@ import { EventEmitter } from 'events';
  *        session in its terminal goes on under its old name and skills, its
  *        next session taking the new ones (the Audit's L2 on #480: it said
  *        "now", and "nothing it reads when it starts was changed").
+ *     g. a new place (2.0.7, remote: a host of the owner's, or null): its next
+ *        start runs there, which the answer must say; it said "nothing it
+ *        reads when it starts was changed" (found by e2e/remote-agents.spec.ts).
  */
 
 const mockPtyProcess = { onData: vi.fn(), onExit: vi.fn(), kill: vi.fn(), write: vi.fn() };
@@ -563,6 +566,19 @@ describe('when it applies: a running turn is never cut', () => {
 
     const character = await update('w2', { character: 'wizard' });
     expect(character.answer).toMatchObject({ applies: 'now', session: 'kept' });
+  });
+
+  it('16g. a new place: its next start runs on that host, or on this computer again, and the answer says so', async () => {
+    const { remoteHosts } = await import('../../../../electron/services/remote-hosts');
+    expect(remoteHosts().set({ id: 'build-1', name: 'Build host', sshTarget: 'buildbox', workRoot: '/home/agent/work' })).toMatchObject({ ok: true });
+    const there = await update('w2', { remote: { hostId: 'build-1' } });
+    expect(there.status).toBe(200);
+    expect(there.answer).toMatchObject({ applies: 'next-start' });
+    expect(String(there.answer.text)).toMatch(/next start runs on the remote host Build host, in \/home\/agent\/work\/\S+/);
+    expect(String(there.answer.text)).not.toMatch(/Nothing it reads when it starts/);
+    const back = await update('w2', { remote: null });
+    expect(back.status).toBe(200);
+    expect(String(back.answer.text)).toMatch(/next start runs on this computer/);
   });
 
   it('answers with the agent as GET /api/agents/:id shows it, without its output buffer', async () => {
