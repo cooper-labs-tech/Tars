@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
+import * as net from 'net';
 import * as os from 'os';
 import * as path from 'path';
 import {
   parseRemoteHost, parseAgentRemote, sshArgv, remoteCommand, remoteEnvFile, remotePort, REMOTE_ENV_KEYS,
-  remoteHookSettings, remoteMcpConfig, remoteBootstrap, remoteStartCommand, remoteLaunchLine,
+  remoteHookSettings, remoteMcpConfig, remoteBootstrap, remoteStartCommand, remoteLaunchLine, PORT_MARK,
 } from '../../../electron/core/remote-launch';
 
 /**
@@ -48,6 +49,22 @@ import {
  *    lets the folder or the CLI's command line break out of their words. Run in a real sh with an ssh stand-in.
  * 11. (claude-provider.test.ts) The claude command for a host names a path of this Mac (its binary, ~/.tars, the MCP
  *    file, a secondary folder, the orchestrator's instructions), or leaves out the settings or the MCP file.
+ *
+ * The Audit's gate of #600 (FIX FIRST at dfccd9fc3), written before the fixes:
+ * 12. (L2, I-a, I-d) The owner's ssh config decides for Tars's ssh: a ControlMaster/ControlPersist keeps the tunnel to
+ *    this Mac's API open past the agent's terminal; StrictHostKeyChecking accept-new or no trusts any key on a first
+ *    connection; a RemoteCommand makes every launch fail. Tars's lines must say ControlMaster=no, ControlPath=none,
+ *    StrictHostKeyChecking=yes and RemoteCommand=none.
+ * 13. (L3) A folder or a work root a host's shell would read as more than a path: a space, ; | & < > ( ) { } [ ] * ? !
+ *    # ~ or a newline. A tmux older than 3.0 runs new-session's arguments through sh -c, so the wrapper takes none
+ *    (and refuses such a tmux, its environment file removed).
+ * 14. (L4) The tunnel's port is fixed per agent: one taken on the host (another service, another user, an agent whose
+ *    port collides) blocks every launch there. The host must choose a free one among the agent's candidates, say it,
+ *    and the terminal must open the tunnel there; none free fails with why, the token's file removed all the same.
+ * 15. The environment file names a tunnel's address of its own: the port is the host's choice, so the wrapper sets
+ *    CLAUDE_MGR_API_URL from it, and the MCP file names it the same way, never this Mac's port.
+ * 16. (the gate's must-fix) The hooks on a host prove the port before sending their token by a route the tunnel no
+ *    longer serves without one: the wrapper tells them the port is the tunnel's (TARS_API_TUNNEL=1).
  */
 
 const host = { id: 'build-1', name: 'Build host', sshTarget: 'buildbox', workRoot: '/home/agent/work' };
@@ -59,7 +76,7 @@ describe('parseRemoteHost', () => {
     for (const sshTarget of ['', '-oProxyCommand=touch /tmp/x', 'a b', "a'b", 'a;b', 'a\nb', 'a$(id)', 'a`id`', 'a|b']) {
       expect(parseRemoteHost({ ...host, sshTarget }), JSON.stringify(sshTarget)).toMatchObject({ ok: false, code: 'invalid_target' });
     }
-    for (const workRoot of ['work', '/home/../etc', "/home/a'b", '/home/a\nb', '', '~/work']) {
+    for (const workRoot of ['work', '/home/../etc', "/home/a'b", '/home/a\nb', '', '~/work', '/home/a b', '/home/a;id', '/home/a|b', '/home/a&b', '/home/a>b', '/home/a(b)', '/home/a{b}', '/home/a[b]', '/home/a*', '/home/a?', '/home/a!', '/home/a#b', '/home/~a']) {
       expect(parseRemoteHost({ ...host, workRoot }), JSON.stringify(workRoot)).toMatchObject({ ok: false, code: 'invalid_work_root' });
     }
     for (const extra of [{ identityFile: '/Users/x/.ssh/id' }, { password: 'x' }, { key: 'x' }]) {
@@ -84,6 +101,14 @@ describe('sshArgv', () => {
     expect(argv).toContain('-tt');
     expect(sshArgv(host, { rport: 41234, apiPort: 31415, tty: false, command: 'true' })).not.toContain('-tt');
     expect(sshArgv(host, { apiPort: 31415, tty: false, command: 'true' })).not.toContain('-R');
+  });
+
+  it("12. none of the owner's multiplexing, a known host key required, and no RemoteCommand of the config, on every line", () => {
+    for (const line of [argv, sshArgv(host, { apiPort: 31415, tty: false, command: 'sh -s' })]) {
+      const opts = line.filter((_, i) => line[i - 1] === '-o');
+      expect(opts).toEqual(expect.arrayContaining(['ControlMaster=no', 'ControlPath=none', 'StrictHostKeyChecking=yes', 'RemoteCommand=none']));
+      expect(line.indexOf('ControlMaster=no')).toBeLessThan(line.indexOf('--'));
+    }
   });
 });
 
@@ -117,13 +142,13 @@ describe('remoteEnvFile', () => {
     CLAUDE_PROJECT_PATH: '/Users/me/p', CLAUDE_SKILLS: 'a,b', ANTHROPIC_BASE_URL: 'https://example.com/v1', ANTHROPIC_AUTH_TOKEN: "k'ey$(id)",
     'NOT-A-NAME': 'x',
   };
-  const text = remoteEnvFile(local, { rport: 41234 });
+  const text = remoteEnvFile(local);
 
-  it("5. only what the CLI needs, the tunnel's address, quoted to be sourced", () => {
-    for (const k of ['PATH', 'HOME', 'TMPDIR', 'CLAUDE_CODE_TMPDIR', 'TARS_SLOT', 'TARS_SLOT_SCRIPT', 'TARS_NODE', 'CLAUDE_CODE_PLUGIN_DIRS', 'CLAUDE_CONFIG_DIR', 'SSH_AUTH_SOCK', 'NOT-A-NAME']) {
+  it('5, 15. only what the CLI needs, quoted to be sourced, and no API address: the wrapper sets the tunnel\'s', () => {
+    for (const k of ['PATH', 'HOME', 'TMPDIR', 'CLAUDE_CODE_TMPDIR', 'TARS_SLOT', 'TARS_SLOT_SCRIPT', 'TARS_NODE', 'CLAUDE_CODE_PLUGIN_DIRS', 'CLAUDE_CONFIG_DIR', 'SSH_AUTH_SOCK', 'NOT-A-NAME', 'CLAUDE_MGR_API_URL']) {
       expect(text, k).not.toMatch(new RegExp(`^export ${k.replace('-', '\\-')}=`, 'm'));
     }
-    expect(text).toMatch(/^export CLAUDE_MGR_API_URL='http:\/\/127\.0\.0\.1:41234'$/m);
+    expect(text).not.toContain('31415');
     for (const k of ['CLAUDE_MGR_API_TOKEN', 'TARS_INSTANCE_ID', 'CLAUDE_AGENT_ID', 'CLAUDE_PROJECT_PATH', 'CLAUDE_SKILLS', 'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN']) {
       expect(text, k).toMatch(new RegExp(`^export ${k}=`, 'm'));
     }
@@ -144,6 +169,14 @@ describe('parseAgentRemote', () => {
     for (const folder of ['/etc', '/home/agent/work/../x', '/home/agent/workshop', 'project-a', "/home/agent/work/a'b", '/home/agent/work']) {
       expect(parseAgentRemote({ hostId: 'build-1', folder }, hosts, project), folder).toMatchObject({ ok: false, code: 'invalid_folder' });
     }
+    // 13. Nothing a host's shell reads as more than a path, as a tmux before 3.0 would hand it to sh -c.
+    for (const sign of [' ', ';', '|', '&', '<', '>', '(', ')', '{', '}', '[', ']', '*', '?', '!', '#', '~', '\n']) {
+      const folder = `/home/agent/work/a${sign}id`;
+      expect(parseAgentRemote({ hostId: 'build-1', folder }, hosts, project), JSON.stringify(folder)).toMatchObject({ ok: false, code: 'invalid_folder' });
+    }
+    expect(parseAgentRemote({ hostId: 'build-1', folder: '/home/agent/work/my-app_2.0+x@y' }, hosts, project)).toMatchObject({ ok: true });
+    // A project's name that is no such path gives the plain default.
+    expect(parseAgentRemote({ hostId: 'build-1' }, hosts, '/Users/me/projects/my app;x')).toEqual({ ok: true, remote: { hostId: 'build-1', folder: '/home/agent/work/project' } });
     expect(parseAgentRemote('build-1', hosts, project)).toMatchObject({ ok: false, code: 'invalid_remote' });
   });
 });
@@ -178,14 +211,14 @@ describe('remoteMcpConfig', () => {
     'renamed': { type: 'http', url: 'http://127.0.0.1:31415/api/mcp/tars-memory' },
   } });
 
-  it("8. only Tars's own servers on this Tars's API, through the tunnel, the token by name", () => {
-    const remote = JSON.parse(remoteMcpConfig(local, { apiPort: 31415, rport: 41234 }));
+  it("8, 15. only Tars's own servers on this Tars's API, through the tunnel's port as the host chose it, the token by name", () => {
+    const remote = JSON.parse(remoteMcpConfig(local, { apiPort: 31415 }));
     expect(Object.keys(remote.mcpServers).sort()).toEqual(['claude-mgr-orchestrator', 'tars-memory']);
-    expect(remote.mcpServers['tars-memory']).toEqual({ type: 'http', url: 'http://127.0.0.1:41234/api/mcp/tars-memory', headers: { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } });
+    expect(remote.mcpServers['tars-memory']).toEqual({ type: 'http', url: `http://127.0.0.1:${PORT_MARK}/api/mcp/tars-memory`, headers: { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } });
     const text = JSON.stringify(remote);
     expect(text).not.toMatch(/31415|31499|literal-secret|\/Applications\//);
-    expect(JSON.parse(remoteMcpConfig('not json', { apiPort: 31415, rport: 41234 }))).toEqual({ mcpServers: {} });
-    expect(JSON.parse(remoteMcpConfig(undefined, { apiPort: 31415, rport: 41234 }))).toEqual({ mcpServers: {} });
+    expect(JSON.parse(remoteMcpConfig('not json', { apiPort: 31415 }))).toEqual({ mcpServers: {} });
+    expect(JSON.parse(remoteMcpConfig(undefined, { apiPort: 31415 }))).toEqual({ mcpServers: {} });
   });
 });
 
@@ -194,41 +227,98 @@ function hostHome(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'tars-remote-unit-'));
 }
 
+/** A port nothing listens on: taken, then given back. */
+async function freePort(): Promise<number> {
+  const s = net.createServer();
+  await new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()));
+  const port = (s.address() as net.AddressInfo).port;
+  await new Promise<void>((r) => s.close(() => r()));
+  return port;
+}
+
+/** A port something listens on, as another service of the host, until `close`. */
+async function takenPort(): Promise<{ port: number; close: () => Promise<void> }> {
+  const s = net.createServer((c) => c.destroy());
+  await new Promise<void>((r) => s.listen(0, '127.0.0.1', () => r()));
+  return { port: (s.address() as net.AddressInfo).port, close: () => new Promise<void>((r) => s.close(() => r())) };
+}
+
+describe('remoteBootstrap: the tunnel\'s port', () => {
+  const agentId = 'aaaa1111-0000-4000-8000-00000000a003';
+
+  it('14. the first of the candidates nothing listens on, said on its own line; none free fails with why, no environment left', async () => {
+    const home = hostHome();
+    const busy = await takenPort();
+    const busy2 = await takenPort();
+    try {
+      const work = path.join(home, 'work');
+      fs.mkdirSync(work, { recursive: true });
+      const free = await freePort();
+      const env = { HOME: home, PATH: '/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin' };
+      const run = (ports: number[]) => spawnSync('/bin/sh', ['-s'], {
+        input: remoteBootstrap({ agentId, folder: work, files: [], env: "export CLAUDE_MGR_API_TOKEN='tok'\n", ports }), cwd: home, env, encoding: 'utf8',
+      });
+      const chose = run([busy.port, free]);
+      expect(chose.status, chose.stderr).toBe(0);
+      expect(chose.stdout.trim()).toBe(`TARS_PORT=${free}`);
+      const envFile = path.join(home, '.tars-remote', 'agents', agentId, 'env');
+      fs.rmSync(envFile, { force: true });
+      const none = run([busy.port, busy2.port]);
+      expect(none.status).not.toBe(0);
+      expect(none.stdout).not.toMatch(/TARS_PORT=/);
+      expect(none.stderr).toMatch(new RegExp(`no free port.*${busy.port}`));
+      expect(fs.existsSync(envFile)).toBe(false);
+    } finally {
+      await busy.close();
+      await busy2.close();
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('remoteBootstrap', () => {
   const agentId = 'aaaa1111-0000-4000-8000-00000000a002';
   const hostile = "line one\n$(touch pwned) `touch pwned2` ${HOME}\nTARS_FILE_END\n'quoted' \"double\"\n";
 
   const folder = '/home/agent/work/project-a';
 
-  it('9. refuses an id, a folder or a path that is not one, and puts the environment last', () => {
-    expect(() => remoteBootstrap({ agentId: 'a b', folder, files: [], env: '' })).toThrow(/agent id/);
-    for (const bad of ['work/project-a', "/home/agent/it's", '/home/$(id)']) {
-      expect(() => remoteBootstrap({ agentId, folder: bad, files: [], env: '' }), bad).toThrow(/folder/);
+  const ports = [41001];
+
+  it('9. refuses an id, a folder, a path or a port that is not one, and puts the environment last', () => {
+    expect(() => remoteBootstrap({ agentId: 'a b', folder, files: [], env: '', ports })).toThrow(/agent id/);
+    for (const bad of ['work/project-a', "/home/agent/it's", '/home/$(id)', '/home/a;b', '/home/a b']) {
+      expect(() => remoteBootstrap({ agentId, folder: bad, files: [], env: '', ports }), bad).toThrow(/folder/);
     }
     for (const bad of ['../.ssh/authorized_keys', '/etc/passwd', 'hooks/../../x', 'agents/x/../../y', 'other/x', 'hooks/a b']) {
-      expect(() => remoteBootstrap({ agentId, folder, files: [{ path: bad, content: '' }], env: '' }), bad).toThrow(/path/);
+      expect(() => remoteBootstrap({ agentId, folder, files: [{ path: bad, content: '' }], env: '', ports }), bad).toThrow(/path/);
     }
-    const script = remoteBootstrap({ agentId, folder, files: [{ path: 'bin/tars-remote', content: '#!/bin/sh\n', executable: true }], env: "export CLAUDE_MGR_API_TOKEN='tok'\n" });
+    for (const bad of [[], [80], [70000], [41001.5]]) {
+      expect(() => remoteBootstrap({ agentId, folder, files: [], env: '', ports: bad }), JSON.stringify(bad)).toThrow(/port/);
+    }
+    const script = remoteBootstrap({ agentId, folder, files: [{ path: 'bin/tars-remote', content: '#!/bin/sh\n', executable: true }], env: "export CLAUDE_MGR_API_TOKEN='tok'\n", ports });
     expect(script).toMatch(/^set -e\numask 077\n/);
     expect(script).not.toContain('tok');
     expect(script.indexOf(`agents/${agentId}/env.tars-new`)).toBeGreaterThan(script.indexOf('bin/tars-remote.tars-new'));
   });
 
-  it("9. run in a real sh: every file byte for byte, 0600 or 0700, nothing of a content run, the folder trusted and nothing else of ~/.claude.json", () => {
+  it("9. run in a real sh: every file byte for byte, 0600 or 0700, nothing of a content run, the folder trusted and nothing else of ~/.claude.json", async () => {
     const home = hostHome();
     try {
       const dir = path.join(home, '.tars-remote', 'agents', agentId);
       const work = path.join(home, 'work', 'project-a');
       fs.mkdirSync(work, { recursive: true });
       fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ keep: true, projects: { '/elsewhere': { hasTrustDialogAccepted: false, other: 1 } } }));
+      const free = await freePort();
       const script = remoteBootstrap({
         agentId,
         folder: work,
         files: [{ path: 'bin/tars-remote', content: '#!/bin/sh\necho wrapper\n', executable: true }, { path: `agents/${agentId}/settings.json`, content: hostile }],
         env: `export CLAUDE_MGR_API_TOKEN='tok'\n${hostile}`,
+        ports: [free],
       });
       const r = spawnSync('/bin/sh', ['-s'], { input: script, cwd: home, env: { HOME: home, PATH: '/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin' }, encoding: 'utf8' });
       expect(r.status, r.stderr).toBe(0);
+      expect(r.stdout.trim()).toBe(`TARS_PORT=${free}`);
       const claudeJson = JSON.parse(fs.readFileSync(path.join(home, '.claude.json'), 'utf8'));
       expect(claudeJson.keep).toBe(true);
       expect(claudeJson.projects['/elsewhere']).toEqual({ hasTrustDialogAccepted: false, other: 1 });
@@ -257,18 +347,18 @@ describe('remoteStartCommand', () => {
     const out = path.join(home, 'handed.txt');
     const bin = path.join(home, '.tars-remote', 'bin');
     fs.mkdirSync(bin, { recursive: true });
-    fs.writeFileSync(path.join(bin, 'tars-remote'), `#!/bin/sh\nprintf '%s\\n' "$1" "$2" "$3" > '${out}'\nprintf '%s' "$4" | base64 -d >> '${out}'\n`, { mode: 0o700 });
+    fs.writeFileSync(path.join(bin, 'tars-remote'), `#!/bin/sh\nprintf '%s\\n' "$1" "$2" "$3" > '${out}'\nprintf '%s' "$4" | base64 -d >> '${out}'\nprintf '\\n%s' "$5" >> '${out}'\n`, { mode: 0o700 });
     return out;
   }
 
-  it('10. refuses an id that is not one; run in a real sh, hands the wrapper the folder and the command line whole', () => {
+  it('10, 14. refuses an id that is not one; run in a real sh, hands the wrapper the folder, the command line whole, and the port the host chose', () => {
     expect(() => remoteStartCommand({ agentId: '$(id)', folder, cliCommand })).toThrow(/agent id/);
     const home = hostHome();
     try {
       const out = stubWrapper(home);
       const ran = spawnSync('/bin/sh', ['-c', remoteStartCommand({ agentId, folder, cliCommand })], { cwd: home, env: { HOME: home, PATH: '/usr/bin:/bin' }, encoding: 'utf8' });
       expect(ran.status, ran.stderr).toBe(0);
-      expect(fs.readFileSync(out, 'utf8')).toBe(`start\n${agentId}\n${folder}\n${cliCommand}`);
+      expect(fs.readFileSync(out, 'utf8')).toBe(`start\n${agentId}\n${folder}\n${cliCommand}\n${PORT_MARK}`);
       expect(['pwned', 'pwned3'].some((f) => fs.existsSync(path.join(home, f)))).toBe(false);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
@@ -277,7 +367,10 @@ describe('remoteStartCommand', () => {
 });
 
 describe('remoteLaunchLine', () => {
-  /** An ssh stand-in: each call's arguments one a line, the first call's stdin, and the exit code FAKE_SSH_EXIT_<n>. */
+  /**
+   * An ssh stand-in: each call's arguments one a line, the first call's stdin, what call n prints (FAKE_SSH_OUT_<n>)
+   * and its exit code (FAKE_SSH_EXIT_<n>).
+   */
   function fakeSsh(home: string): { bin: string; log: string } {
     const bin = path.join(home, 'bin');
     const log = path.join(home, 'log');
@@ -288,6 +381,8 @@ describe('remoteLaunchLine', () => {
       `n=$(ls '${log}' | grep -c 'args$'); n=$((n+1))`,
       `printf '%s\\n' "$@" > '${log}'/call-$n.args`,
       `[ "$n" = 1 ] && cat > '${log}'/call-1.stdin`,
+      'said=$(eval "printf %s \\"\\${FAKE_SSH_OUT_$n:-}\\"")',
+      '[ -n "$said" ] && printf \'%s\\n\' "$said"',
       'code=$(eval "printf %s \\"\\${FAKE_SSH_EXIT_$n:-0}\\"")',
       '[ "$code" = 0 ] || echo "ssh: refused on call $n" >&2',
       'exit "$code"',
@@ -295,23 +390,131 @@ describe('remoteLaunchLine', () => {
     ].join('\n'), { mode: 0o755 });
     return { bin, log };
   }
-  const terminal = ['ssh', '-tt', '-o', 'BatchMode=yes', '--', 'buildbox', `"$HOME"/.tars-remote/bin/tars-remote 'start' 'x' $(touch pwned)`];
+  const terminal = ['ssh', '-tt', '-o', 'BatchMode=yes', '-R', `127.0.0.1:${PORT_MARK}:127.0.0.1:31415`, '--', 'buildbox', `"$HOME"/.tars-remote/bin/tars-remote 'start' 'x' $(touch pwned) '${PORT_MARK}'`];
   const prepare = ['ssh', '-T', '--', 'buildbox', 'sh -s'];
 
-  it('10. the host prepared first from the file on stdin, the file gone, then the terminal ssh in its place', () => {
+  it('10, 14. the host prepared first from the file on stdin, the file gone, then the terminal ssh in its place, on the port the host chose', () => {
     const home = hostHome();
     try {
       const { bin, log } = fakeSsh(home);
       const prepFile = path.join(home, "prep it's.sh");
       fs.writeFileSync(prepFile, 'the files and the env\n', { mode: 0o600 });
       const line = remoteLaunchLine({ prepare, prepFile, terminal });
-      const r = spawnSync('/bin/sh', ['-c', line], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, FAKE_SSH_EXIT_2: '7' }, encoding: 'utf8' });
+      // A login that prints a line of its own before the port: the port is the line that says it.
+      const said = 'Welcome to the host\nTARS_PORT=41777';
+      const r = spawnSync('/bin/sh', ['-c', line], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, FAKE_SSH_OUT_1: said, FAKE_SSH_EXIT_2: '7' }, encoding: 'utf8' });
       expect(r.status, r.stderr).toBe(7);
       expect(fs.readFileSync(path.join(log, 'call-1.stdin'), 'utf8')).toBe('the files and the env\n');
       expect(fs.readFileSync(path.join(log, 'call-1.args'), 'utf8')).toBe('-T\n--\nbuildbox\nsh -s\n');
-      expect(fs.readFileSync(path.join(log, 'call-2.args'), 'utf8')).toBe(`${terminal.slice(1).join('\n')}\n`);
+      expect(fs.readFileSync(path.join(log, 'call-2.args'), 'utf8')).toBe(`${terminal.slice(1).map((w) => w.split(PORT_MARK).join('41777')).join('\n')}\n`);
       expect(fs.existsSync(prepFile)).toBe(false);
       expect(fs.existsSync(path.join(home, 'pwned'))).toBe(false);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('14. a host that named no port: no terminal ssh, the file gone, and why', () => {
+    const home = hostHome();
+    try {
+      const { bin, log } = fakeSsh(home);
+      const prepFile = path.join(home, 'prep.sh');
+      fs.writeFileSync(prepFile, 'x\n', { mode: 0o600 });
+      const line = remoteLaunchLine({ prepare, prepFile, terminal });
+      const r = spawnSync('/bin/sh', ['-c', line], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, FAKE_SSH_OUT_1: 'TARS_PORT=41a' }, encoding: 'utf8' });
+      expect(r.status).toBe(6);
+      expect(r.stderr).toMatch(/no port for the tunnel/);
+      expect(fs.existsSync(path.join(log, 'call-2.args'))).toBe(false);
+      expect(fs.existsSync(prepFile)).toBe(false);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('tars-remote.sh, the wrapper on the host', () => {
+  const WRAPPER = path.join(__dirname, '../../../electron/resources/tars-remote.sh');
+  const agentId = 'aaaa1111-0000-4000-8000-00000000a004';
+
+  /** A tmux stand-in: `-V` answers `version`, anything else is logged, one argument a line, then `--`. */
+  function fakeTmux(home: string, version: string): { bin: string; log: string } {
+    const bin = path.join(home, 'bin');
+    const log = path.join(home, 'tmux.args');
+    fs.mkdirSync(bin, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'tmux'), [
+      '#!/bin/sh',
+      `[ "$1" = -V ] && { echo 'tmux ${version}'; exit 0; }`,
+      `printf '%s\\n' "$@" >> '${log}'`,
+      `echo -- >> '${log}'`,
+      'exit 0',
+      '',
+    ].join('\n'), { mode: 0o755 });
+    return { bin, log };
+  }
+
+  /** An agent's folder on the host, its environment file and its MCP file as the bootstrap leaves them. */
+  function prepared(home: string): { dir: string; work: string } {
+    const dir = path.join(home, '.tars-remote', 'agents', agentId);
+    const work = path.join(home, 'work', 'project-a');
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(work, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'env'), "export CLAUDE_MGR_API_TOKEN='tok-x'\nexport CLAUDE_MGR_API_URL='http://127.0.0.1:31415'\n", { mode: 0o600 });
+    fs.writeFileSync(path.join(dir, 'mcp.tmpl'), JSON.stringify({ mcpServers: { o: { type: 'http', url: `http://127.0.0.1:${PORT_MARK}/api/mcp/o` } } }), { mode: 0o600 });
+    return { dir, work };
+  }
+  const b64 = (line: string) => Buffer.from(line, 'utf8').toString('base64');
+
+  it('13. refuses a tmux older than 3.0, which hands its arguments to sh -c, and leaves no environment', () => {
+    const home = hostHome();
+    try {
+      const { bin, log } = fakeTmux(home, '2.8');
+      const { dir, work } = prepared(home);
+      const r = spawnSync('bash', [WRAPPER, 'start', agentId, work, b64('true'), '41777'], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' });
+      expect(r.status).toBe(3);
+      expect(r.stderr).toMatch(/tmux 3\.0 or newer/);
+      expect(r.stderr).toMatch(/2\.8/);
+      expect(fs.existsSync(path.join(dir, 'env'))).toBe(false);
+      expect(fs.existsSync(log) ? fs.readFileSync(log, 'utf8') : '').not.toMatch(/new-session/);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('13, 14. with tmux 3.0 or newer: the old session ended, the new one started with each argument its own, the port handed on', () => {
+    const home = hostHome();
+    try {
+      const { bin, log } = fakeTmux(home, '3.5a');
+      const { work } = prepared(home);
+      const r = spawnSync('bash', [WRAPPER, 'start', agentId, work, b64('true'), '41777'], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      const calls = fs.readFileSync(log, 'utf8').split('--\n').filter(Boolean);
+      expect(calls[0]).toBe(`kill-session\n-t\ntars-${agentId}\n`);
+      expect(calls[1]).toBe([
+        'new-session', '-s', `tars-${agentId}`, '-c', work, `${home}/.tars-remote/bin/tars-remote`, 'session', agentId, work, b64('true'), '41777', ';', 'set-option', 'status', 'off', '',
+      ].join('\n'));
+      for (const port of ['', '80', '4177a', '700000']) {
+        const bad = spawnSync('bash', [WRAPPER, 'start', agentId, work, b64('true'), port], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin` }, encoding: 'utf8' });
+        expect(bad.status, JSON.stringify(port)).not.toBe(0);
+      }
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it("15, 16. its session: the environment Tars sent, the tunnel's address from the port, the hooks told it is the tunnel, the MCP file rendered, nothing left", () => {
+    const home = hostHome();
+    try {
+      const { dir, work } = prepared(home);
+      const r = spawnSync('bash', [WRAPPER, 'session', agentId, work, b64('env'), '41777'], { cwd: home, env: { HOME: home, PATH: '/usr/bin:/bin' }, encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(0);
+      const env = r.stdout.split('\n');
+      expect(env).toContain('CLAUDE_MGR_API_URL=http://127.0.0.1:41777');
+      expect(env).toContain('TARS_API_TUNNEL=1');
+      expect(env).toContain('CLAUDE_MGR_API_TOKEN=tok-x');
+      expect(env).toContain(`TARS_REMOTE_AGENT_DIR=${dir}`);
+      expect(fs.existsSync(path.join(dir, 'env'))).toBe(false);
+      expect(JSON.parse(fs.readFileSync(path.join(dir, 'mcp.json'), 'utf8')).mcpServers.o.url).toBe('http://127.0.0.1:41777/api/mcp/o');
+      expect(fs.statSync(path.join(dir, 'mcp.json')).mode & 0o777).toBe(0o600);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }

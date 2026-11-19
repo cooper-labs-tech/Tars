@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createRemoteHosts } from '../../../electron/services/remote-hosts';
+import { createRemoteHosts, hostRemovalRefusal } from '../../../electron/services/remote-hosts';
 
 /**
  * The owner's remote hosts (2.0.7, item 14; reports/remote-agents/PLAN.md): where agents may run their CLI over ssh.
@@ -15,6 +15,8 @@ import { createRemoteHosts } from '../../../electron/services/remote-hosts';
  * 3. An entry that does not parse is written; setting the same id twice keeps two hosts.
  * 4. A host removed is still listed, or removing one that is not there throws.
  * 5. A change is not told (the window and the agents' launches read the list).
+ * 6. (the Audit's M1 on #600) A host is removed while agents are placed on it: their sessions there go on, and no stop
+ *    reaches them any more. The removal must be refused, naming them.
  */
 
 let dir: string;
@@ -72,5 +74,18 @@ describe('the remote hosts store', () => {
     store.remove('build-1');
     store.set({ ...host, sshTarget: 'a b' });
     expect(told).toBe(2);
+  });
+
+  it('6. refuses to remove a host agents are placed on, naming them; removes it once none is', () => {
+    const fleet = [
+      { id: 'w1', name: 'Remote One', remote: { hostId: 'build-1', folder: '/home/agent/work/p' } },
+      { id: 'w2', name: 'Here', remote: undefined },
+      { id: 'w3', name: '', remote: { hostId: 'build-1', folder: '/home/agent/work/q' } },
+      { id: 'w4', name: 'Elsewhere', remote: { hostId: 'build-2', folder: '/x/y' } },
+    ];
+    expect(hostRemovalRefusal('build-1', fleet)).toMatch(/Remote One, w3/);
+    expect(hostRemovalRefusal('build-2', fleet)).toMatch(/Elsewhere/);
+    expect(hostRemovalRefusal('build-3', fleet)).toBeUndefined();
+    expect(hostRemovalRefusal('build-1', fleet.filter((a) => a.remote?.hostId !== 'build-1'))).toBeUndefined();
   });
 });

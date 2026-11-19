@@ -73,6 +73,14 @@ import { EventEmitter } from 'events';
  *     g. a new place (2.0.7, remote: a host of the owner's, or null): its next
  *        start runs there, which the answer must say; it said "nothing it
  *        reads when it starts was changed" (found by e2e/remote-agents.spec.ts).
+ *     h. (the Audit's M1 on #600) a move away from a host leaves the agent's
+ *        session there running for good: no later stop reaches it, since a
+ *        stop ends the place the agent has now. The move must end it there
+ *        first, and say in its answer when the host could not be reached.
+ * 13d. (M1) The window moves an agent to another place while its CLI works:
+ *     the turn goes on on the former host, out of Tars's reach. The window's
+ *     move is refused then, as the API's is, whatever ends the terminal for
+ *     its other changes.
  */
 
 const mockPtyProcess = { onData: vi.fn(), onExit: vi.fn(), kill: vi.fn(), write: vi.fn() };
@@ -445,6 +453,21 @@ describe('when it applies: a running turn is never cut', () => {
     expect(ptyProcesses.get('pty-w1')).toBe(terminal);
   });
 
+  it("13d. the window's move to another place is refused while a CLI works in the terminal, as the API's is", async () => {
+    const { remoteHosts } = await import('../../../../electron/services/remote-hosts');
+    remoteHosts().set({ id: 'build-1', name: 'Build host', sshTarget: 'buildbox', workRoot: '/home/agent/work' });
+    const terminal = liveCli('pty-w2', 'claude');
+    agents.get('w2')!.ptyId = 'pty-w2';
+    agents.get('w2')!.status = 'running';
+    const before = recordOf('w2');
+    const result = await updateAgent({ id: 'w2', remote: { hostId: 'build-1' } });
+    expect(result).toMatchObject({ success: false, code: 'cli_running' });
+    expect(recordOf('w2')).toEqual(before);
+    expect(terminal.kill).not.toHaveBeenCalled();
+    // Its other changes the window makes as before, ending what they need ended.
+    expect(await updateAgent({ id: 'w2', name: 'Reviewer' })).toMatchObject({ success: true });
+  });
+
   it('13b. refuses a change of CLI while a launch is under way in a bare shell, the launch untouched', async () => {
     const shell = bareShell('pty-w1');
     agents.get('w1')!.ptyId = 'pty-w1';
@@ -579,6 +602,38 @@ describe('when it applies: a running turn is never cut', () => {
     const back = await update('w2', { remote: null });
     expect(back.status).toBe(200);
     expect(String(back.answer.text)).toMatch(/next start runs on this computer/);
+  });
+
+  it('16h. a move away from a host ends the agent session there first, and says when the host could not be reached', async () => {
+    const { remoteHosts } = await import('../../../../electron/services/remote-hosts');
+    remoteHosts().set({ id: 'build-1', name: 'Build host', sshTarget: 'host-a', workRoot: '/home/agent/work' });
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ssh-stand-in-'));
+    const log = path.join(bin, 'ssh.args');
+    const realFs = await vi.importActual<typeof import('fs')>('fs');
+    realFs.writeFileSync(path.join(bin, 'ssh'), `#!/bin/sh\nprintf '%s\\n' "$@" >> '${log}'\n[ "\${FAKE_SSH_EXIT:-0}" = 0 ] || { echo 'ssh: connect to host host-a port 22: No route to host' >&2; exit 255; }\n`, { mode: 0o755 });
+    const pathBefore = process.env.PATH;
+    process.env.PATH = `${bin}:${pathBefore}`;
+    try {
+      agents.get('w2')!.remote = { hostId: 'build-1', folder: '/home/agent/work/p' };
+      const back = await update('w2', { remote: null });
+      expect(back.status).toBe(200);
+      const called = realFs.readFileSync(log, 'utf8');
+      expect(called.split('\n')).toContain('host-a');
+      expect(called).toMatch(/tars-remote 'stop' 'w2'/);
+      expect(String(back.answer.text)).not.toMatch(/could not/);
+      expect(agents.get('w2')!.remote).toBeUndefined();
+
+      agents.get('w2')!.remote = { hostId: 'build-1', folder: '/home/agent/work/p' };
+      process.env.FAKE_SSH_EXIT = '255';
+      const unreachable = await update('w2', { remote: null });
+      expect(unreachable.status).toBe(200);
+      expect(String(unreachable.answer.text)).toMatch(/could not end its session on Build host/);
+      expect(String(unreachable.answer.text)).toMatch(/No route to host/);
+    } finally {
+      process.env.PATH = pathBefore;
+      delete process.env.FAKE_SSH_EXIT;
+      realFs.rmSync(bin, { recursive: true, force: true });
+    }
   });
 
   it('answers with the agent as GET /api/agents/:id shows it, without its output buffer', async () => {
