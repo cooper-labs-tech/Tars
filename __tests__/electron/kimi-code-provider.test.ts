@@ -25,6 +25,9 @@ import { ENDPOINT_HARNESSES } from '../../electron/services/inference-endpoints'
  * 7. A model of one family is offered by default: only the user's own default.
  * 8. On an inference endpoint, kimi is not given the proxy (a key in a variable or a file), or is refused as a
  *    harness of an endpoint.
+ * 11. On an endpoint, kimi is started with `-m <model>`: `-m` names an alias of the user's config.toml, and the
+ *     endpoint's model is no such alias, so kimi says "Model ... is not configured in config.toml" and starts no
+ *     session (the conformance run, 19/11). The model is KIMI_MODEL_NAME's alone there.
  * 10. A restart that applies new settings (forkSession) resumes the session it just stopped under its own id: that id
  *     is the stop's tombstone, and every post of it would be refused as stale. Until `kimi fork` is measured, such a
  *     restart starts kimi on a new session.
@@ -115,6 +118,11 @@ describe('KimiCodeProvider', () => {
 
   it('7: no model of any family by default', () => {
     expect(p.getModels().map((m) => m.id)).toEqual(['default']);
+  });
+
+  it('11: an agent on an endpoint is started without -m; another agent keeps its alias', () => {
+    expect(p.buildInteractiveCommand({ agentId: 'on-ep', binaryPath: 'kimi', prompt: '', model: 'org/Model-1', permissionMode: 'bypass' })).toBe("'kimi' --auto");
+    expect(p.buildInteractiveCommand({ agentId: 'not-on-ep', binaryPath: 'kimi', prompt: '', model: 'my-alias', permissionMode: 'bypass' })).toBe("'kimi' --auto -m 'my-alias'");
   });
 
   it('9: an agent on an endpoint gets the launch\'s variables in its terminal; another agent does not', () => {
