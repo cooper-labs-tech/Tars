@@ -28,7 +28,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
  * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI); a harness with none is skipped, and says so.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
- * its start and after each task), endpoint-requests.jsonl, the app's logs, reproduce.txt.
+ * its start and after each task), endpoint-requests.jsonl, the app's logs, the agent's whole
+ * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
  */
 
 type Harness = { id: string; provider: string; pathKey: string; env: string };
@@ -95,6 +96,7 @@ for (const h of HARNESSES) {
     const withTars = async (label: string, run: (lead: (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>, api: <T>(g: string, n: string, ...a: unknown[]) => Promise<T>) => Promise<void>) => {
       let app: ElectronApplication | undefined;
       let mcp: ChildProcessWithoutNullStreams | undefined;
+      let keepScreen: (() => Promise<void>) | undefined;
       try {
         app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' } });
         const appLog = test.info().outputPath(`app-${label}.log`);
@@ -105,6 +107,8 @@ for (const h of HARNESSES) {
         await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
         const api = <T>(group: string, name: string, ...args: unknown[]) =>
           page.evaluate(({ group, name, args }) => ((window as unknown as Api).electronAPI[group][name] as (...a: unknown[]) => Promise<unknown>)(...args), { group, name, args }) as Promise<T>;
+        keepScreen = async () => fs.writeFileSync(test.info().outputPath(`screen-${label}.txt`),
+          plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')));
         const identity = await app.evaluate((_e, { dist, lead }) => {
           const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
           return { token: tokens.mintRunToken(lead).token as string, instance: tokens.tarsInstanceId() as string };
@@ -133,6 +137,7 @@ for (const h of HARNESSES) {
         };
         await run(lead, api);
       } finally {
+        await keepScreen?.().catch(() => undefined);
         mcp?.kill();
         await app?.close();
       }
