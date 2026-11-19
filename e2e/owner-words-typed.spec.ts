@@ -72,6 +72,7 @@ async function turn(prompt) {
   hook('on-stop.sh', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'noted' });
   // Claude Code's own end of the turn, which Tars reads.
   line({ type: 'system', subtype: 'turn_duration', durationMs: 1 });
+  fs.appendFileSync(path.join(process.env.HOME, 'ends.jsonl'), JSON.stringify({ id, prompt }) + '\n');
   busy = false;
 }
 let busy = false;
@@ -169,12 +170,15 @@ for (const newInterface of [false, true]) {
       }, { id, chunks });
       const keys = (text: string) => Array.from(text);
       const submitted = async (id: string, marker: string) => until(`${id} took ${marker}`, () => prompts(id).some((p) => p.includes(marker)));
+      // The turn on that prompt ended: its Stop posted, then Claude Code's turn_duration on record. A line typed before
+      // that is typed into the turn, and is rightly not the owner's at rest.
+      const ended = async (id: string, marker: string) => until(`${id} ended ${marker}`, () => (lines(path.join(home, 'ends.jsonl')) as Array<{ id: string; prompt: string }>).some((e) => e.id === id && e.prompt.includes(marker)));
 
       for (const id of ['lead-a', 'dev-a', 'lead-b']) await start(id);
       const started = () => new Set((lines(path.join(home, 'starts.jsonl')) as Array<{ id: string }>).map((s) => s.id));
       await until('three sessions up', () => ['lead-a', 'dev-a', 'lead-b'].every((id) => started().has(id)), 60_000);
       // Each session's first turn ended: its transcript says it rests.
-      for (const id of ['lead-a', 'dev-a', 'lead-b']) await submitted(id, 'FIRST>>');
+      for (const id of ['lead-a', 'dev-a', 'lead-b']) await ended(id, 'FIRST>>');
       await new Promise((r) => setTimeout(r, 1500));
       await readTokens();
       seen.tokensRead = Object.fromEntries(Object.entries(tokens).map(([id, t]) => [id, t.length > 0]));
@@ -194,7 +198,9 @@ for (const newInterface of [false, true]) {
       await submitted('lead-a', 'REPORTED-1');
       await send('dev-a', [...keys('TYPED-W the owner types to a worker'), '\r']);
       await submitted('dev-a', 'TYPED-W');
-      // g2. A turn of lead-a, and the owner's answer to what it shows.
+      // g2. A turn of lead-a, typed at rest once the report's turn ended, and the owner's answer to what it shows.
+      await ended('lead-a', 'REPORTED-1');
+      await new Promise((r) => setTimeout(r, 800));
       await send('lead-a', [...keys('SLOW>> a long turn'), '\r']);
       await submitted('lead-a', 'SLOW>>');
       await until('lead-a forged its rest', () => (lines(path.join(home, 'forged.jsonl')) as unknown[]).length > 0);
