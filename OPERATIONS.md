@@ -2863,13 +2863,47 @@ Commands that need the database (`reader create`, `retention run`) run as the se
 3. **Origin certificate:** SSL/TLS, Origin Server, Create certificate for `traces.example.com`.
    The certificate goes to `/etc/ssl/tars-backoffice/origin.pem`, the key to `origin.key`
    (0600, root).
-4. **Authenticated Origin Pulls:** turned on for the zone. Cloudflare's origin-pull CA goes to
-   `/etc/ssl/tars-backoffice/cloudflare-origin-pull-ca.pem`.
-5. **Access:** Zero Trust, Access, Applications, a self-hosted application for
-   `traces.example.com/admin`, with a policy allowing only the operator's email and requiring
+4. **Authenticated Origin Pulls, per hostname, with the operator's own certificate.** Not the
+   zone-level setting: that one uses Cloudflare's shared certificate, which any Cloudflare
+   account can make Cloudflare present (`SECURITY.md` § 9, Transport). On the operator's own
+   machine, never on the server:
+
+   ```bash
+   # A CA of the operator's own. Its key stays offline (a password manager); the server gets only aop-ca.pem.
+   openssl req -x509 -newkey rsa:4096 -nodes -days 3650 -subj "/CN=traces origin-pull CA" \
+     -addext "basicConstraints=critical,CA:TRUE" -addext "keyUsage=critical,keyCertSign,cRLSign" \
+     -keyout aop-ca.key -out aop-ca.pem
+   # The client certificate Cloudflare will present, signed by that CA.
+   openssl req -newkey rsa:2048 -nodes -subj "/CN=traces.example.com origin pull" -keyout aop-client.key -out aop-client.csr
+   printf 'extendedKeyUsage=clientAuth\n' > aop-client.ext
+   openssl x509 -req -in aop-client.csr -CA aop-ca.pem -CAkey aop-ca.key -CAcreateserial -days 825 \
+     -extfile aop-client.ext -out aop-client.pem
+   ```
+
+   Upload the client certificate and its key, then tie them to this hostname only. This needs
+   an API token with "Zone, SSL and Certificates, Edit" on the zone:
+
+   ```bash
+   curl -sX POST "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames/certificates" \
+     -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+     --data "$(jq -n --rawfile c aop-client.pem --rawfile k aop-client.key '{certificate: $c, private_key: $k}')"
+   # note the "id" it returns, then:
+   curl -sX PUT "https://api.cloudflare.com/client/v4/zones/$ZONE_ID/origin_tls_client_auth/hostnames" \
+     -H "Authorization: Bearer $CF_API_TOKEN" -H "Content-Type: application/json" \
+     --data '{"config":[{"hostname":"traces.example.com","cert_id":"<id>","enabled":true}]}'
+   ```
+
+   `aop-ca.pem` goes to `/etc/ssl/tars-backoffice/aop-ca.pem` on the server. Delete
+   `aop-client.key` from the machine once uploaded: Cloudflare holds it now. Renew the client
+   certificate before its 825 days run out: sign a new one with the same CA, upload it, tie it
+   to the hostname, then delete the old one. The server changes nothing.
+5. **Access on `/admin`: required.** Zero Trust, Access, Applications, a self-hosted application
+   for `traces.example.com/admin`, with a policy allowing only the operator's email and requiring
    MFA. Its "Application Audience (AUD) tag" is `BACKOFFICE_ACCESS_AUDIENCE`, and the team domain
-   is `BACKOFFICE_ACCESS_ISSUER`. `/v1/*` stays outside Access: installs and readers use their
-   tokens.
+   is `BACKOFFICE_ACCESS_ISSUER`. Set both in the env file, so the server refuses `/admin` without
+   Access's assertion. Without Access, anyone can spend the global login bucket and lock the
+   operator out of the pages (`SECURITY.md` § 9). `/v1/*` stays outside Access: installs and
+   readers use their tokens.
 6. **Rate limiting rule** (WAF): `/v1/installs` POST, 20 per 10 minutes per IP, block. This is
    the durable limit in front of the in-process one.
 

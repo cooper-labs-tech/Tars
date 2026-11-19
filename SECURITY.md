@@ -1098,11 +1098,37 @@ opted in send it their agent traces, and readers its operator trusts read them. 
 Either lock holds if the other fails: a leaked password is useless without the Access identity,
 and an Access misconfiguration still meets the password.
 
+**Without Access in front, the login can be locked by anyone.** The global login bucket (10
+tries, then one every 2 minutes) is shared by every address. Where `/admin` is reachable without
+an Access identity, anyone can spend it with wrong passwords and keep the operator out of the
+pages for as long as they keep at it. They get no access, but the operator loses theirs. So the
+runbook makes Access on `/admin` a required step: with it, only the operator's identity reaches
+the login form, and the bucket is theirs alone. An instance run without Cloudflare should put an
+equivalent identity check in front of `/admin` (a VPN, or an SSO proxy), or accept this denial of
+service.
+
 **Transport.** TLS ends at Cloudflare, which reaches the origin over TLS again with a Cloudflare
-Origin CA certificate. The origin's firewall accepts port 443 from Cloudflare's published ranges
-only, and nginx requires Cloudflare's client certificate (Authenticated Origin Pulls). So an
-attacker who learns the origin's address gets no answer. The Node process listens on loopback
-only.
+Origin CA certificate. The Node process listens on loopback only, behind nginx.
+
+- **What keeps other Cloudflare accounts out: per-hostname Authenticated Origin Pulls with the
+  operator's own client certificate.** The operator makes a small CA of their own, and a client
+  certificate signed by it. The certificate and its key are uploaded to Cloudflare and tied to
+  this one hostname. nginx answers only a TLS client that presents a certificate signed by that
+  CA (`ssl_client_certificate` is the operator's CA, `ssl_verify_client on`). Cloudflare presents
+  it only when proxying this hostname of this zone.
+- **Why not the zone-level setting:** zone-level Authenticated Origin Pulls use Cloudflare's
+  shared certificate, which Cloudflare presents for every account. Anyone could put their own
+  hostname on Cloudflare, point it at this origin's address, and be let in. That would go around
+  this zone's Access application and WAF rules, which belong to the hostname and not to the
+  origin.
+- **The firewall** accepts port 443 from Cloudflare's published ranges only. Those ranges are
+  shared by every Cloudflare customer, so the firewall keeps out the rest of the internet but
+  does not keep out other Cloudflare accounts: the client certificate does.
+- **What it still trusts:** Cloudflare holds the client certificate's private key, as it must
+  in order to present it. Whoever controls this zone's Cloudflare account (or an API token with
+  SSL and certificate rights on it) can tie that certificate to another hostname of the same
+  zone. The CA's private key never leaves the operator: losing the server does not let anyone
+  mint a new client certificate.
 
 **What it does not protect.**
 
