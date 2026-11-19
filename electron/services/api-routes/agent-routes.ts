@@ -68,6 +68,7 @@ import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/age
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
 import { remoteLaunchFor } from '../remote-agents';
+import { remoteHosts } from '../remote-hosts';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
@@ -2049,6 +2050,13 @@ function whenItApplies(
     };
   };
   if (how.newCli) return nextStart(`Its next start runs ${cli.displayName}${agent.cliPath ? ` (${agent.cliPath})` : ''}`);
+  // A new place (2.0.7, services/remote-agents.ts): refused while a CLI runs, so it is read at the next start, there.
+  if (how.changed.includes('remote')) {
+    const host = agent.remote ? remoteHosts().get(agent.remote.hostId) : undefined;
+    return nextStart(agent.remote
+      ? `Its next start runs on the remote host ${host?.name ?? agent.remote.hostId}, in ${agent.remote.folder}`
+      : 'Its next start runs on this computer');
+  }
   if (how.changedAtLaunch.length === 0) {
     // Its name and skills are given to a session when it starts (the identity Tars types, CLAUDE_SKILLS), and are
     // no launch setting: nothing restarts for them, and the session up keeps the old ones (the Audit's L2 on #480).
