@@ -1526,7 +1526,9 @@ window; agents may only ask for a scan.
     its newest is held), untouched for 3 days; `agent-tmp-entry`, an entry of a live agent's TMPDIR (`t/`) or of its
     current session's scratchpad, untouched for 7 days; `release-folder`, the `release/` of a project or a worktree
     that is electron-builder's output by its own evidence (its `builder-debug.yml` or
-    `builder-effective-config.yaml`, no file git tracks in it, ignored by git, or untracked in a worktree: at a
+    `builder-effective-config.yaml`, and a second sign it writes with it: an update manifest `latest*.yml`, or an
+    artefact beside its `.blockmap`, so that a marker planted alone in an owner's folder is not enough; no file git
+    tracks in it, ignored by git, or untracked in a worktree: at a
     project's root an untracked one is uncommitted work), untouched for 3 days, the re-check applying the same (the
     Audit's M1 on #605: any folder named `release/` was proposed); `worktree-node-modules`, the `node_modules` of a worktree nothing changed in for 7 days
     (caches aside). A temporary item carries its agent's project, so that project's orchestrator is shown it. A
