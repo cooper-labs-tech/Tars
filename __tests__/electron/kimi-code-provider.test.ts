@@ -25,6 +25,9 @@ import { ENDPOINT_HARNESSES } from '../../electron/services/inference-endpoints'
  * 7. A model of one family is offered by default: only the user's own default.
  * 8. On an inference endpoint, kimi is not given the proxy (a key in a variable or a file), or is refused as a
  *    harness of an endpoint.
+ * 10. A restart that applies new settings (forkSession) resumes the session it just stopped under its own id: that id
+ *     is the stop's tombstone, and every post of it would be refused as stale. Until `kimi fork` is measured, such a
+ *     restart starts kimi on a new session.
  * 9. On an endpoint, the launch's own variables (KIMI_MODEL_NAME, _PROVIDER_TYPE, _BASE_URL) never reach the terminal:
  *    the endpoint session fills only the token's variable (services/traces-runtime.ts openEndpointSession), so the
  *    provider must add the rest, and only for the agent on an endpoint (Tars-Backend's note, 19/11).
@@ -84,6 +87,11 @@ describe('KimiCodeProvider', () => {
     for (const bad of ['session_x; rm -rf /', '../session_feabbac1', 'feabbac1-fc87-4756-8076-0c6adc57127b']) {
       expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: bad })).toBe("'kimi'");
     }
+  });
+
+  it('10: a restart that forks starts a new session, never the tombstone under its own id', () => {
+    const sid = 'session_feabbac1-fc87-4756-8076-0c6adc57127b';
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: sid, forkSession: true })).toBe("'kimi'");
   });
 
   it('4: the folder is trusted through the environment', () => {
