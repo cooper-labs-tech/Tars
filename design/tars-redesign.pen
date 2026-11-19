@@ -857560,6 +857560,112 @@
                 },
                 {
                   "type": "frame",
+                  "id": "I4E76",
+                  "name": "record traces · no project",
+                  "width": 660,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 12,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "I8yblx",
+                      "name": "l",
+                      "width": 460,
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GiHl3",
+                          "fill": "$text-muted",
+                          "content": "Record traces",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "xt2qn",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "No project picked yet.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Mgcc1",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Pj7xC",
+                              "name": "d",
+                              "fill": "$text-muted",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "luAea",
+                              "fill": "$text-muted",
+                              "content": "not offered: pick a project first",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "y0xHl",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x2ZWQ",
+                      "name": "Toggle off",
+                      "opacity": 0.45,
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "q4PNU",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
                   "id": "oW5qm",
                   "name": "f ON",
                   "width": "fill_container",
@@ -861047,6 +861153,112 @@
                         {
                           "type": "rectangle",
                           "id": "XSDiz",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tKkWz",
+                  "name": "record traces · no project",
+                  "width": 660,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 12,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "c5mKDV",
+                      "name": "l",
+                      "width": 460,
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n0TJ1",
+                          "fill": "$text-muted",
+                          "content": "Record traces",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZfGee",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "No project picked yet.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "a4Rjz0",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "UYcj2",
+                              "name": "d",
+                              "fill": "$text-muted",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "E2s8Zd",
+                              "fill": "$text-muted",
+                              "content": "not offered: pick a project first",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zpyBz",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rJpOL",
+                      "name": "Toggle off",
+                      "opacity": 0.45,
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "pmw0r",
                           "x": 2,
                           "y": 1,
                           "name": "knob",
