@@ -18,8 +18,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. Resources, Disk, does not show the request under ASKED BY AGENTS: who asked, how much, in which project, its
  *    items, and one button to approve it.
  * 2. Something is deleted before the click: by the request, by the periodic report (every 3 s here) or by showing it.
- * 3. The click does not delete exactly the requested items, or the request does not then say it was approved by the
- *    owner and what it freed; anything not asked for (fresh entries, the active worktree's) goes.
+ * 3. The click does not delete exactly the requested items still matching their rule, or the request does not then say
+ *    it was approved by the owner, what it freed and what it kept (F2, reports/qa-windows-specs.md), each item with
+ *    its outcome; anything not asked for (fresh entries, the active worktree's) goes, or so does an item touched since
+ *    the request (here the agent's temporary files, which the approval checks again and keeps).
+ *    Red on #606's code before 9b9cc6090 and #605's 3d110db14 (its head 8df2dd9b4 of 19/11): no freed, no kept.
  * 4. What agents leave does not show the project's worktrees with their agent, or the agent's temporary files.
  * 5. An uncaught error in the page.
  * In the classic shell and in the new interface's.
@@ -29,7 +32,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 const DAY = 86_400_000;
 type Item = { id: string; kind: string; path?: string; label: string };
-type Api = { electronAPI: { diskJanitor: { state(): Promise<{ deleting: unknown; cleanupRequests?: Array<{ id: string; ids: string[]; state?: string; by?: string }> }> } } };
+type Outcome = { kind: string; bytes?: number; why?: string } | null;
+type Api = { electronAPI: { diskJanitor: { state(): Promise<{ deleting: unknown; cleanupRequests?: Array<{ id: string; ids: string[]; state?: string; by?: string; freedBytes?: number; items?: Array<{ id: string; path?: string; bytes?: number; outcome?: Outcome }> }> }> } } };
 const shortIdOf = (id: string) => crypto.createHash('sha256').update(id).digest('hex').slice(0, 10);
 function age(dir: string, days: number): void {
   const t = new Date(Date.now() - days * DAY);
@@ -161,6 +165,8 @@ for (const newInterface of [false, true]) {
       expect.soft(shown.text, 'the request: who, in which project').toMatch(/Harbor Lead asks to free [\s\S]+ in harbor/);
       expect.soft(shown.items, 'its items').toBe(4);
       expect.soft(Object.values(beforeClick).every(Boolean), 'something deleted before the click').toBe(true);
+      // The agent writes into its temporary folder after it asked: the approval checks each item again, and keeps it.
+      age(oldTmp, 0);
 
       // 3. One click.
       await approve.click();
@@ -174,12 +180,23 @@ for (const newInterface of [false, true]) {
         .filter(i => wanted.includes(i.id)).map(i => ({ id: i.id, outcome: i.outcome ?? null }));
       await page.waitForTimeout(2_000);
       const requestAfter = await approvedRow.innerText();
+      const shownOutcomes = (await approvedRow.locator('[data-request-item]').evaluateAll(els => els.map(e => e.getAttribute('data-outcome')))).sort();
+      const approvedRequest = ((await state()).cleanupRequests ?? []).find(r => r.state === 'approved');
+      const requestItems = approvedRequest?.items ?? [];
+      const deletedBytes = requestItems.filter(i => i.outcome?.kind === 'deleted').reduce((n, i) => n + (i.outcome?.bytes ?? 0), 0);
+      const touched = requestItems.find(i => i.id === at(oldTmp)?.id);
       await stepShot(page, `${tag}2-approved`);
-      keep({ afterClick, kept, outcomes, requestAfter });
-      expect(Object.values(afterClick).every(e => !e), 'the requested items gone').toBe(true);
+      keep({ afterClick, kept, outcomes, requestAfter, shownOutcomes, approvedRequest });
+      const gone = [ended, oldOut, idleRelease].map(p => path.relative(home, p));
+      expect(gone.every(p => afterClick[p] === false), 'the requested items still matching their rule gone').toBe(true);
+      expect(afterClick[path.relative(home, oldTmp)], 'the item touched since the request kept').toBe(true);
       expect(Object.values(kept).every(Boolean), 'something not asked for gone').toBe(true);
-      // An approved request says what it freed (the PR: "An approved request says what was freed and what was kept").
-      expect.soft(requestAfter, 'the approved request says what it freed').toMatch(/approved by you at \d\d:\d\d · \S+ \S*B freed/);
+      // An approved request says what it freed and what it kept (F2), each item with its outcome, from the request.
+      expect.soft(requestAfter, 'the approved request: what it freed, what it kept').toMatch(/approved by you at \d\d:\d\d · \S+ \S*B freed, 1 item kept: \S/);
+      expect.soft(shownOutcomes, "each item's outcome, shown").toEqual(['deleted', 'deleted', 'deleted', 'kept']);
+      expect.soft(touched?.outcome, 'the touched item, kept and why').toMatchObject({ kind: 'kept', why: expect.stringMatching(/no longer matches its rule|not in the scan/) });
+      expect.soft(approvedRequest?.freedBytes, 'what it freed: the bytes of the items deleted').toBe(deletedBytes);
+      expect.soft(deletedBytes, 'something freed').toBeGreaterThan(0);
 
       // 4. What agents leave, the Disk view's second half: the project's worktrees with their agent, the agent's
       // temporary files.
