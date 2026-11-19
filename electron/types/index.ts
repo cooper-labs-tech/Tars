@@ -1038,4 +1038,8 @@ export interface TraceSettings {
   uploadConsentAt?: string;
   /** The owner allowed plain http to a public back-office address (private ones need no allowance). */
   uploadAllowPlainHttp?: boolean;
+  /** When the user last deleted what was shared: only sessions started after it are ever sent again. */
+  uploadDeletedAt?: number;
+  /** A deletion asked for and not confirmed by the back-office yet: sharing stays off until it is. */
+  uploadDeletionOwed?: boolean;
 }

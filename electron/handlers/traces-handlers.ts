@@ -215,6 +215,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   // The upload to a back-office (its address a setting, empty until the user sets one): what leaves the machine,
   // shown before the first upload, and a session as it would be sent.
   ipcMain.handle('traces:uploadNotice', () => ({
+    // After a deletion, only what was recorded after it goes: the deleted sessions are never sent again.
+    ...(traceSettingsOf(deps.getAppSettings()).uploadDeletedAt !== undefined
+      ? { onlyAfter: new Date(traceSettingsOf(deps.getAppSettings()).uploadDeletedAt!).toISOString() } : {}),
     leaves: [
       'the sessions of the projects and agents you opted in, in full: system prompts, tool definitions, your messages and the agents\', tool calls and their results, thinking the model returned',
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
@@ -238,6 +241,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('traces:giveUploadConsent', () => {
     const t = traceSettingsOf(deps.getAppSettings());
     if (!t.uploadUrl) return { ok: false, error: 'Set the back-office address first.' };
+    if (t.uploadDeletionOwed) return { ok: false, error: 'The deletion of what was shared is not confirmed yet: delete again first.' };
     const at = new Date().toISOString();
     apply({ ...deps.getAppSettings(), traces: { ...t, uploadConsentAt: at } });
     return { ok: true, at };

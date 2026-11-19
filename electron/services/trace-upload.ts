@@ -30,7 +30,13 @@ export interface UploaderDeps {
   store: TraceStore;
   /** `~/.tars-private/traces-install.json` (0600). */
   installFile: string;
-  settings(): { url: string; consentAt?: string };
+  settings(): { url: string; consentAt?: string; since?: number; deletionOwed?: boolean };
+  /**
+   * What a deletion leaves behind, kept in the settings: `since`, the moment of the user's deletion (only sessions
+   * started after it are sent again: the deletion is the user's word), and whether a DELETE is still owed (asked
+   * for, not yet confirmed by the back-office).
+   */
+  setDeletion(d: { owed: boolean; since?: number }): void;
   /** Whether a session may be sent now: its project and its agent opted in at this moment. */
   eligible(session: { projectPath: string; agentId: string }): boolean;
   scrubContext(projectPath: string): ScrubContext;
@@ -64,6 +70,8 @@ export interface UploadStateView {
    *   Uploads stop, the local data stays, and only the user's consent again registers a new install.
    */
   notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
+  /** A deletion asked for and not yet confirmed by the back-office: sharing stays off until it is done. */
+  deletionOwed: boolean;
 }
 
 class HttpError extends Error {
@@ -92,7 +100,8 @@ export class TraceUploader {
   /** The pass under way, which a deletion stops and waits for before it deletes anything. */
   private pass?: Promise<unknown>;
   private abort?: AbortController;
-  private halted = false;
+  /** Deletions in progress: a counter, so two at once never clear each other's stop. */
+  private halts = 0;
 
   constructor(private readonly deps: UploaderDeps) {
     this.now = deps.now ?? Date.now;
@@ -116,6 +125,7 @@ export class TraceUploader {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
       pendingSessions: counts.pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
       lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
+      deletionOwed: s.deletionOwed === true,
     };
   }
 
@@ -156,13 +166,13 @@ export class TraceUploader {
   /** Whether a pass may go on: not halted by a deletion, the consent and the address as they were at its start. */
   private mayGoOn(url: string): boolean {
     const now = this.deps.settings();
-    return !this.halted && !!now.consentAt && now.url === url;
+    return this.halts === 0 && !!now.consentAt && now.url === url;
   }
 
   /** One pass: what is new or grew, for sessions opted in now. Never throws. */
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
     const s = this.deps.settings();
-    if (!s.url || !s.consentAt || this.halted) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.url || !s.consentAt || s.deletionOwed || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
     if (this.nextTryAt !== undefined && this.now() < this.nextTryAt) return { sent: 0, failed: 0, skipped: 'waiting' };
     if (this.running) return { sent: 0, failed: 0, skipped: 'busy' };
     this.running = true;
@@ -187,7 +197,10 @@ export class TraceUploader {
       let install = this.readInstall();
       if (!install || install.url !== url) install = await this.register(url);
       for (let round = 0; round < 40; round++) {
-        const queue = this.deps.store.uploadQueue(5000).filter(q => this.deps.eligible(q)).slice(0, BATCH_SESSIONS);
+        const since = this.deps.settings().since;
+        const queue = this.deps.store.uploadQueue(5000)
+          .filter(q => this.deps.eligible(q) && (since === undefined || q.startedAt > since))
+          .slice(0, BATCH_SESSIONS);
         if (!queue.length) break;
         for (const q of queue) {
           if (!this.mayGoOn(url)) return { sent, failed: 0 };
@@ -204,7 +217,7 @@ export class TraceUploader {
       return { sent, failed: 0 };
     } catch (err) {
       // Stopped by a deletion: no failure, no backoff.
-      if (this.halted) return { sent, failed: 0 };
+      if (this.halts > 0) return { sent, failed: 0 };
       const e = err as HttpError;
       // The back-office no longer knows this install: never register again on our own, which would send back what
       // a deletion took away. The local data stays; the user's consent registers a new install.
@@ -361,13 +374,18 @@ export class TraceUploader {
    * the consent back. A pass under way is stopped first, and waited for: nothing it sends can land after the deletion.
    */
   async deleteEverywhere(): Promise<{ ok: true; deleted?: number } | { ok: false; error: string }> {
-    this.halted = true;
+    this.halts++;
     try {
+      // The consent first: sending stops at once, and stays off if the DELETE fails or never goes, the deletion
+      // kept as owed (the re-audit at 36690e547). Only sessions started after this moment may ever go again.
+      const since = this.now();
+      if (this.readInstall()) this.deps.setDeletion({ owed: true, since });
+      this.deps.withdrawConsent();
       this.abort?.abort();
       await this.pass?.catch(() => undefined);
       return await this.deleteNow();
     } finally {
-      this.halted = false;
+      this.halts--;
     }
   }
 
@@ -377,11 +395,15 @@ export class TraceUploader {
     try {
       const r = await this.call(install, install.url, 'DELETE', '/v1/installs/me') as { deleted?: { sessions?: number } };
       this.forget();
-      this.deps.withdrawConsent();
+      this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
       return { ok: true, deleted: r.deleted?.sessions };
     } catch (err) {
       // The token already gone (a deletion that went through before its answer was lost): nothing is left there.
-      if (err instanceof HttpError && err.status === 401) { this.forget(); this.deps.withdrawConsent(); return { ok: true }; }
+      if (err instanceof HttpError && err.status === 401) {
+        this.forget();
+        this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
+        return { ok: true };
+      }
       return { ok: false, error: err instanceof HttpError ? `The back-office answered ${err.status} ${err.code}.` : (err as Error).message };
     }
   }

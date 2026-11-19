@@ -1163,6 +1163,9 @@ would be sent.
 - One action in the window asks the back-office to delete everything the install sent, then forgets the install and
   takes the consent back. Without that, the next pass would register again and send everything back, undoing the
   deletion. Sharing starts again only when the user consents again.
+- The deletion withdraws the consent first, so sending stops at once. A DELETE that fails or never goes leaves sharing
+  off and the deletion shown as owed, until it is done.
+- A deletion is the user's word: sharing again sends only the sessions started after it, and the consent says so.
 - A pass under way is stopped and waited for before the deletion, and every pass reads the consent again before
   each session and before any registration, so nothing it sends lands after a deletion or a withdrawn consent.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never

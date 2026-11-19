@@ -329,11 +329,11 @@ export class TraceStore {
   }
 
   /** The sessions with something not yet uploaded (new, or grown since), oldest change first. */
-  uploadQueue(limit: number): Array<{ traceId: string; seq: number; projectPath: string; agentId: string }> {
-    return (this.db.prepare(`SELECT t.trace_id, t.updated_seq, t.project_path, t.agent_id FROM traces t
+  uploadQueue(limit: number): Array<{ traceId: string; seq: number; projectPath: string; agentId: string; startedAt: number }> {
+    return (this.db.prepare(`SELECT t.trace_id, t.updated_seq, t.project_path, t.agent_id, t.started_at FROM traces t
       LEFT JOIN uploads u ON u.trace_id = t.trace_id
       WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0) ORDER BY t.updated_seq ASC LIMIT ?`).all(limit) as Row[])
-      .map(r => ({ traceId: String(r.trace_id), seq: num(r.updated_seq), projectPath: String(r.project_path), agentId: String(r.agent_id) }));
+      .map(r => ({ traceId: String(r.trace_id), seq: num(r.updated_seq), projectPath: String(r.project_path), agentId: String(r.agent_id), startedAt: num(r.started_at) }));
   }
 
   /** A session uploaded as it was at `seq`. */

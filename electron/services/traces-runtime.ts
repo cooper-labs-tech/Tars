@@ -87,6 +87,8 @@ export function traceSettingsOf(settings: Partial<AppSettings> | undefined): Tra
     uploadUrl: typeof t?.uploadUrl === 'string' ? t.uploadUrl : '',
     ...(typeof t?.uploadConsentAt === 'string' ? { uploadConsentAt: t.uploadConsentAt } : {}),
     ...(t?.uploadAllowPlainHttp === true ? { uploadAllowPlainHttp: true } : {}),
+    ...(typeof t?.uploadDeletedAt === 'number' ? { uploadDeletedAt: t.uploadDeletedAt } : {}),
+    ...(t?.uploadDeletionOwed === true ? { uploadDeletionOwed: true } : {}),
   };
 }
 
@@ -137,7 +139,14 @@ export function traceUploader(): TraceUploader {
       settings: () => {
         const t = traceSettingsOf(deps?.getSettings());
         const allowed = !t.uploadUrl || transportOf(t.uploadUrl) !== 'http-public' || t.uploadAllowPlainHttp === true;
-        return { url: allowed ? t.uploadUrl : '', consentAt: t.uploadConsentAt };
+        return { url: allowed ? t.uploadUrl : '', consentAt: t.uploadConsentAt, since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true };
+      },
+      setDeletion: (d) => {
+        if (!deps) return;
+        const t = traceSettingsOf(deps.getSettings());
+        const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, ...rest } = t;
+        deps.saveSettings({ ...deps.getSettings(), traces: { ...rest, ...(d.since !== undefined ? { uploadDeletedAt: d.since } : {}), ...(d.owed ? { uploadDeletionOwed: true } : {}) } });
+        deps.emit('traces:changed');
       },
       // Opted in now, not only when the session was recorded: a project or an agent switched off since is not sent.
       eligible: (q) => traceSettingsOf(deps?.getSettings()).projects.includes(q.projectPath) && agentOf(q.agentId)?.traces === true,

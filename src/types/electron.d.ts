@@ -2908,7 +2908,7 @@ export interface ElectronAPI {
     uploadNotice: () => Promise<UploadNotice>;
     /** One session as it would be uploaded: scrubbed, with what was masked by kind. */
     preview: (traceId: string) => Promise<{ document: unknown; counts: Record<string, number>; scrubVersion: string } | null>;
-    /** The user has read the notice: uploads may start (refused while no address is set). */
+    /** The user has read the notice: uploads may start (refused while no address is set, or a deletion is owed). */
     giveUploadConsent: () => Promise<{ ok: true; at: string } | { ok: false; error: string }>;
     /** The uploader's state. */
     uploadState: () => Promise<UploadState>;
@@ -3010,9 +3010,15 @@ export interface TraceSettingsView {
   uploadConsentAt?: string;
   /** The owner allowed plain http to a public back-office address. */
   uploadAllowPlainHttp?: boolean;
+  /** The last deletion of what was shared (ms): only later sessions are sent again. */
+  uploadDeletedAt?: number;
+  /** A deletion not confirmed yet: consent is refused until it is. */
+  uploadDeletionOwed?: boolean;
 }
 
 export interface UploadNotice {
+  /** After a deletion: only sessions started after this moment are sent; say it with the consent. */
+  onlyAfter?: string;
   leaves: string[];
   stays: string[];
   scrubbing: { version: string; catches: string[]; cannot: string[] };
@@ -3038,6 +3044,8 @@ export interface UploadState {
    *    stop, the local traces stay, and the consent is withdrawn: sharing again is the user's own act (the upload
    *    notice, then giveUploadConsent), which registers a new install. */
   notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
+  /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
+  deletionOwed: boolean;
 }
 
 export interface TraceStats {
