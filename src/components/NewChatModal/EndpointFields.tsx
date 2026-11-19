@@ -117,6 +117,8 @@ export function EndpointFields({ provider, model, onModelChange, projectPath, ch
 
   const project = lastPathPart(projectPath) || 'this project';
   const reason = useMemo(() => {
+    // No project picked yet: the gate is not asked (it rules per project), and the row says why it is off.
+    if (!projectPath) return { word: 'not offered: pick a project first', tone: 'idle' as StatusTone };
     if (!offer) return null;
     if (offer.offered) return { word: `allowed: the endpoint allows traces, and ${project} records them`, tone: 'running' as StatusTone };
     switch (offer.reason) {
@@ -129,7 +131,7 @@ export function EndpointFields({ provider, model, onModelChange, projectPath, ch
       case 'project-off': return { word: `not offered: ${project} does not record traces`, tone: 'waiting' as StatusTone, go: '/projects', goLabel: 'open Projects' };
       default: return { word: `not offered: ${offer.said}`, tone: 'idle' as StatusTone };
     }
-  }, [offer, provider, model, project, endpoint]);
+  }, [offer, provider, model, project, endpoint, projectPath]);
 
   const endpointOptions = (endpoints ?? []).map(e => ({
     value: e.id,
