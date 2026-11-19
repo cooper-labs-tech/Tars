@@ -230,11 +230,25 @@ const UPDATE_MANIFEST = /^latest(-[a-z0-9]+)?\.yml$/;
  * other entry, a file or a folder of the owner's, keeps the folder out, whatever was planted beside it.
  */
 const BUILD_FILE = /(\.(dmg|zip|exe|appimage|deb|rpm|snap|msi|pkg|7z)(\.blockmap)?|^latest(-[a-z0-9]+)?\.yml|^builder-[a-z0-9-]+\.ya?ml|^\.ds_store)$/i;
-const BUILD_DIR = /^(mac(-[a-z0-9]+)*|win(-[a-z0-9]+)*-unpacked|linux(-[a-z0-9]+)*-unpacked)$/i;
+/**
+ * electron-builder's own unpacked folders, by its arch names and no other (the Audit's L1 at b8d8539c7: mac-<any word>
+ * admitted an owner's mac-signing/). A mac one holds .app bundles only (Finder's .DS_Store aside): anything else in it
+ * is the owner's; a win or linux one holds the unpacked app itself.
+ */
+const MAC_DIRS = new Set(['mac', 'mac-arm64', 'mac-universal', 'mac-x64']);
+const UNPACKED_DIRS = new Set(['win-unpacked', 'win-arm64-unpacked', 'win-ia32-unpacked', 'linux-unpacked', 'linux-arm64-unpacked', 'linux-armv7l-unpacked', 'linux-ia32-unpacked']);
+const onlyAppBundles = (dir: string): boolean => {
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir); } catch { return false; }
+  return names.every(n => n === '.DS_Store' || (n.endsWith('.app') && isDir(path.join(dir, n))));
+};
 const ofABuild = (dir: string, name: string): boolean => {
   let st: fs.Stats;
   try { st = fs.lstatSync(path.join(dir, name)); } catch { return false; }
-  return st.isFile() ? BUILD_FILE.test(name) : st.isDirectory() ? BUILD_DIR.test(name) : false;
+  if (st.isFile()) return BUILD_FILE.test(name);
+  if (!st.isDirectory()) return false;
+  if (MAC_DIRS.has(name)) return onlyAppBundles(path.join(dir, name));
+  return UNPACKED_DIRS.has(name);
 };
 
 function builtHere(dir: string): boolean {
@@ -260,7 +274,7 @@ async function releaseItem(world: JanitorWorld, folder: string, label: string, p
   if (changed > world.now - RELEASE_IDLE_DAYS * DAY) return undefined;
   return {
     id: idOf('release-folder', p), kind: 'release-folder', path: p, project, label: `${label}/release`, sizeBytes: await world.sizeOf(p),
-    rule: `electron-builder's output, every entry a build's (its artefacts and their .blockmap, latest*.yml, builder-*.yml, the unpacked apps), with its builder-debug.yml and its update manifest or an artefact beside its .blockmap, git tracking nothing in it, untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
+    rule: `electron-builder's output, every entry a build's (its artefacts and their .blockmap, latest*.yml, builder-*.yml, its own mac, win and linux folders, a mac one holding only .app bundles), with its builder-debug.yml and its update manifest or an artefact beside its .blockmap, git tracking nothing in it, untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
     why: `last changed ${day(changed)}`,
   };
 }

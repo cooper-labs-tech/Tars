@@ -1527,7 +1527,9 @@ window; agents may only ask for a scan.
     current session's scratchpad, untouched for 7 days; `release-folder`, the `release/` of a project or a worktree
     that is electron-builder's output by its own evidence (every entry of a build's kind: artefacts (`dmg`, `zip`,
     `exe`, `AppImage`, `deb`, `rpm`, `snap`, `msi`, `pkg`, `7z`) and their `.blockmap`, `latest*.yml`, `builder-*.yml`,
-    the unpacked apps `mac*`, `win*-unpacked`, `linux*-unpacked`, Finder's `.DS_Store`, so that one file or folder of
+    electron-builder's own folders by its arch names only (`mac`, `mac-arm64`, `mac-universal`, `mac-x64`, holding only
+    `.app` bundles; `win-unpacked`, `win-arm64-unpacked`, `win-ia32-unpacked`; `linux-unpacked`, `linux-arm64-unpacked`,
+    `linux-armv7l-unpacked`, `linux-ia32-unpacked`), Finder's `.DS_Store`, so that one file or folder of
     the owner's keeps it out whatever is planted beside it; its `builder-debug.yml` or
     `builder-effective-config.yaml`, and a second sign it writes with it: an update manifest `latest*.yml`, or an
     artefact beside its `.blockmap`, so that a marker planted alone in an owner's folder is not enough; no file git
