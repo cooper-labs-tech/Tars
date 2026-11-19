@@ -1514,10 +1514,31 @@ window; agents may only ask for a scan.
   - `closed-worktree`: a worktree whose branch is merged into its project's main branch, clean, with no ignored file
     but the rebuildable caches (a `.env.local`, an e2e run keep it), in no rebase or merge, unlocked, idle a day, its
     caches aside (removed by `git worktree remove`, never `--force`, with `scripts/worktree.mjs`'s own refusals);
-  - `npx-cache`: an entry of `~/.npm/_npx` untouched for 14 days;
+  - `npx-cache`: an entry of `~/.npm/_npx` untouched for 14 days, read to its packages' folders, not to their last file
+    (2.0.7: the whole walk took 38.8 s of a 57 s scan on the owner's Mac);
   - `docker-image`: an image no container uses, a stopped one included (`docker image rm <id>`, never `-f`);
   - `docker-vm-trim`: `colima ssh -- sudo fstrim -a`, which gives the disk back what the VM freed;
-  - `agent-tmp`: `~/.tars/tmp/<id>` of an agent no longer in the fleet.
+  - `agent-tmp`: `~/.tars/tmp/<id>` of an agent no longer in the fleet;
+  - and what agents leave behind (2.0.7, an orchestrator's report of 19/11: 5.4 GB in live agents' temporary folders
+    on the owner's Mac, none of it proposed), none of it when a report names it or a process works in it:
+    `session-scratchpad`, an ended session's folder in a live agent's Claude Code temporary folder
+    (`~/.tars/tmp/<id>/c/<user>/<project>/<session>`, neither its current nor its resumable session; with none known,
+    its newest is held), untouched for 3 days; `agent-tmp-entry`, an entry of a live agent's TMPDIR (`t/`) or of its
+    current session's scratchpad, untouched for 7 days; `release-folder`, the `release/` of a project or a worktree
+    that is electron-builder's output by its own evidence (every entry of a build's kind: artefacts (`dmg`, `zip`,
+    `exe`, `AppImage`, `deb`, `rpm`, `snap`, `msi`, `pkg`, `7z`) and their `.blockmap`, `latest*.yml`, `builder-*.yml`,
+    electron-builder's own folders by its arch names only (`mac`, `mac-arm64`, `mac-universal`, `mac-x64`, holding only
+    `.app` bundles; `win-unpacked`, `win-arm64-unpacked`, `win-ia32-unpacked`; `linux-unpacked`, `linux-arm64-unpacked`,
+    `linux-armv7l-unpacked`, `linux-ia32-unpacked`), Finder's `.DS_Store`, so that one file or folder of
+    the owner's keeps it out whatever is planted beside it; its `builder-debug.yml` or
+    `builder-effective-config.yaml`, and a second sign it writes with it: an update manifest `latest*.yml`, or an
+    artefact beside its `.blockmap`, so that a marker planted alone in an owner's folder is not enough; no file git
+    tracks in it, ignored by git, or untracked in a worktree: at a
+    project's root an untracked one is uncommitted work), untouched for 3 days, the re-check applying the same (the
+    Audit's M1 on #605: any folder named `release/` was proposed); `worktree-node-modules`, the `node_modules` of a worktree nothing changed in for 7 days
+    (caches aside). A temporary item carries its agent's project, so that project's orchestrator is shown it. A
+    `node_modules` cloned by `scripts/worktree.mjs` shares most of its blocks with the others: it frees less than the
+    size `du` gives, and `janitor.log` records the size the scan measured.
 - **Never proposed, never deleted:**
   - `~/.tars-private`, `~/Documents`, the uv cache, the Trash, `~/Library/Developer` (Xcode, the iOS runtimes and
     simulators), any Docker volume, a project's own folder;
@@ -1539,10 +1560,29 @@ window; agents may only ask for a scan.
   - What no longer matches is kept, with why.
   - Every deletion (with the bytes it freed) and every item kept goes to `~/.tars/logs/janitor.log`.
 - **For agents.** `GET /api/janitor/scan` and the orchestrator server's `disk_scan` tool run a scan, which the window
-  shows with who asked; the agent is answered with its own project's items only, and once in five minutes. No route
-  takes an approval.
+  shows with who asked; the agent is answered with its own project's items only, and once in five minutes. Since
+  2.0.7 the route answers within `?wait=` seconds (20 when not given, 110 at most) with `running: true` and the last
+  ended scan's items, the scan going on: under load the whole scan outlasted the 30 s an MCP call waits (19/11), and
+  `disk_scan` asks again in segments of 100 s, for 10 minutes at most, keeping its caller listening. An approved
+  item is checked again in its own place only (its project, its agent's temporary folder, Docker for an image): the
+  re-check ran the whole scan for each item. No route takes an approval.
+- **Cleanup requests** (2.0.7). `POST /api/janitor/request { ids, why }` (`disk_cleanup_request`): an agent asks the
+  owner for a cleanup of items of the last scan, every one in its own project (403 otherwise; 400 without ids, past
+  200, or without a short why). It records, deletes nothing; the window shows it in `state().cleanupRequests`, each item with its kind, label,
+  path, size and rule, and the
+  owner approves it in one click, `diskJanitor.approveRequest(id)`, each item then checked again as for any approval.
+  The request then keeps what became of each of its items (`items[].outcome`: deleted and its bytes, kept or failed
+  and why) and what it freed (`freedBytes`, 0 until approved), past later scans; the window's approval of the same
+  ids from the scan's list writes nothing into it.
+- **The report** (2.0.7, `services/disk-report.ts`): after each scan, and a scan every 6 hours with nobody asking
+  (`startDiskReports`, deleting nothing), what agents leave behind: each project's worktrees with their agent (the
+  fleet agent in it, else the worktree tool's registry), idle days, what `.next`, `release/`, test artefacts and,
+  for a worktree idle 7 days, `node_modules` take, and the janitor items in each; each agent with what its temporary
+  folders take and their items; the machine's free disk, swap used and swap growth (the last health sample).
+  `state().report` in the window, `GET /api/disk/report?wait=` and `disk_report` for an agent, its own project's part.
+  Under `DOROTHY_E2E` only, `DOROTHY_DISK_REPORT_EVERY_MS` (2 s at least) shortens the period.
 - **Tests.** Under `DOROTHY_E2E` only, `DOROTHY_DOCKER_BIN` and `DOROTHY_COLIMA_BIN` name stand-ins, so a test never
-  reaches the machine's Docker (`e2e/disk-janitor.spec.ts`).
+  reaches the machine's Docker (`e2e/disk-janitor.spec.ts`, `e2e/disk-hygiene.spec.ts`).
 
 ## What each agent and each project costs
 
