@@ -10,6 +10,18 @@
  * 127.0.0.1 at a port the system picks; closed with the API.
  */
 
+/**
+ * The listener's room (the re-audit's I-g on #600): every connection to the tunnel's end on the host is a socket of
+ * this Tars's main process, and any user of the host can open them. An agent's CLI holds a few at once (its MCP
+ * servers, a hook's post); past this many under one agent's token, a new one is answered 429 and closed.
+ */
+export const TUNNEL_SOCKETS_PER_AGENT = 16;
+/** And past this many in all, open or idle, the listener takes no more until some close. */
+export const TUNNEL_MAX_CONNECTIONS = 128;
+/** A connection that has not sent its headers in this long is closed; one whose request is not in, in REQUEST_MS. */
+export const TUNNEL_HEADERS_MS = 10_000;
+export const TUNNEL_REQUEST_MS = 30_000;
+
 let opener: (() => Promise<number>) | undefined;
 let opening: Promise<number> | undefined;
 

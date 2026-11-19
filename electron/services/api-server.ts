@@ -1,5 +1,6 @@
 import { noteApiPhase } from '../core/api-listening';
 import * as http from 'http';
+import type * as net from 'net';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
@@ -42,7 +43,7 @@ import { inApiCall } from './api-routes/call-context';
 import { apiAnswerReports, reportAgentToolError, reportHandledError } from './error-reports/handled';
 import { TOOL_TOPIC } from './agent-guide';
 import { agents } from '../core/agent-manager';
-import { setTunnelOpener } from './api-tunnel';
+import { setTunnelOpener, TUNNEL_HEADERS_MS, TUNNEL_MAX_CONNECTIONS, TUNNEL_REQUEST_MS, TUNNEL_SOCKETS_PER_AGENT } from './api-tunnel';
 import { tunnelAdmits } from './remote-agents';
 import { getProvider } from '../providers';
 import { apiAnswerForError } from '../core/pty-pool';
@@ -60,16 +61,44 @@ let tunnelServer: http.Server | null = null;
  * its two exempt routes to anyone on this computer.
  */
 function openTunnelListener(handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>): Promise<number> {
+  // The sockets each agent's token holds here (the re-audit's I-g on #600), each released when it closes.
+  const held = new Map<string, Set<net.Socket>>();
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
-      const pathname = new URL(req.url || '/', 'http://localhost').pathname;
-      if (!tunnelAdmits(resolveCaller(req.headers, pathname), (id) => agents.get(id))) {
-        res.writeHead(401, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: "Unauthorized: through a remote agent's tunnel, Tars answers only an agent placed on a host, by its own token" }));
+      const pathname = requestPath(req);
+      if (pathname === undefined) {
+        refuseAndClose(res, 400, 'Bad request target');
         return;
       }
-      void handle(req, res);
+      const caller = resolveCaller(req.headers, pathname);
+      if (!tunnelAdmits(caller, (id) => agents.get(id))) {
+        refuseAndClose(res, 401, "Unauthorized: through a remote agent's tunnel, Tars answers only an agent placed on a host, by its own token");
+        return;
+      }
+      const agentId = (caller as { agentId: string }).agentId;
+      const socket = req.socket;
+      let mine = held.get(agentId);
+      if (!mine) {
+        mine = new Set();
+        held.set(agentId, mine);
+      }
+      if (!mine.has(socket)) {
+        if (mine.size >= TUNNEL_SOCKETS_PER_AGENT) {
+          refuseAndClose(res, 429, `This agent holds ${TUNNEL_SOCKETS_PER_AGENT} connections through its tunnel already: close one first.`);
+          return;
+        }
+        const set = mine;
+        set.add(socket);
+        socket.once('close', () => {
+          set.delete(socket);
+          if (set.size === 0 && held.get(agentId) === set) held.delete(agentId);
+        });
+      }
+      answerOrReport(handle, req, res);
     });
+    server.maxConnections = TUNNEL_MAX_CONNECTIONS;
+    server.headersTimeout = TUNNEL_HEADERS_MS;
+    server.requestTimeout = TUNNEL_REQUEST_MS;
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
       tunnelServer = server;
@@ -79,6 +108,39 @@ function openTunnelListener(handle: (req: http.IncomingMessage, res: http.Server
     });
   });
 }
+
+/**
+ * The path of a request's target, or undefined when it does not parse as a URL (the re-audit's L5 on #600): `//`,
+ * `//[`, `/\` or `//:99999` threw from `new URL`, uncaught in the tunnel's gate and an unhandled rejection on the API's
+ * own port, the request left unanswered.
+ */
+function requestPath(req: http.IncomingMessage): string | undefined {
+  try {
+    return new URL(req.url || '/', 'http://localhost').pathname;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An answer that ends the connection: nothing more is read from a caller refused. */
+function refuseAndClose(res: http.ServerResponse, status: number, error: string): void {
+  res.writeHead(status, { 'Content-Type': 'application/json', Connection: 'close' });
+  res.end(JSON.stringify({ error }));
+}
+
+/** The handler's promise, never left to reject unseen: a request it failed on is answered 500 when nothing was sent. */
+function answerOrReport(
+  handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>,
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+): void {
+  handle(req, res).catch((err: unknown) => {
+    console.error('[api] a request failed outside its route:', err);
+    if (!res.headersSent) refuseAndClose(res, 500, 'Internal error');
+    else res.end();
+  });
+}
+
 let apiToken: string | null = null;
 
 /**
@@ -356,7 +418,14 @@ export function startApiServer(
       return;
     }
 
-    const url = new URL(req.url || '/', `http://localhost:${API_PORT}`);
+    // A target that does not parse is answered 400, never thrown (the re-audit's L5 on #600).
+    let url: URL;
+    try {
+      url = new URL(req.url || '/', `http://localhost:${API_PORT}`);
+    } catch {
+      refuseAndClose(res, 400, 'Bad request target');
+      return;
+    }
     const pathname = url.pathname;
 
     // Auth check: two local-only endpoints are exempt, and nothing else.
@@ -513,7 +582,7 @@ export function startApiServer(
       if (reports.agentTool) reportAgentToolError(reports.agentTool);
     }
   };
-  apiServer = http.createServer(handleRequest);
+  apiServer = http.createServer((req, res) => answerOrReport(handleRequest, req, res));
   // The listener a remote agent's tunnel reaches (services/api-tunnel.ts): the same routes, behind a gate.
   setTunnelOpener(() => openTunnelListener(handleRequest));
 
