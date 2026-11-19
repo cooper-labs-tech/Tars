@@ -62,11 +62,11 @@ export class CodexProvider implements CLIProvider {
   }
 
   /**
-   * The installed codex's flags, read off the main thread before a launch builds its line (codex-cli.ts): in auto
-   * only, the one mode whose flag depends on them.
+   * The installed codex's flags, read off the main thread before a launch builds its line (codex-cli.ts), in every
+   * mode since every line may carry `--no-daemon` (below); kept per binary and version, so codex is asked once.
    */
-  async prepareLaunch(binaryPath: string, permissionMode?: string): Promise<void> {
-    if (permissionMode === 'auto') await readCodexFlags(binaryPath);
+  async prepareLaunch(binaryPath: string): Promise<void> {
+    await readCodexFlags(binaryPath);
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
@@ -102,12 +102,18 @@ export class CodexProvider implements CLIProvider {
 
     // The mode in flags the installed codex has: 0.163 refuses --full-auto, and
     // every agent in auto or bypass died at launch on it (codex-cli.ts).
-    const permission = codexPermissionArgs(params.permissionMode, codexAccepts(params.binaryPath));
+    const accepts = codexAccepts(params.binaryPath);
+    const permission = codexPermissionArgs(params.permissionMode, accepts);
     if (permission.length) command += ` ${permission.join(' ')}`;
+
+    // The turns in this terminal, not in codex's shared background server: that server outlives the terminal, so a
+    // stop, a restart or a quit killed the terminal and the turn went on, shell calls included (measured on 0.163.0
+    // and 0.170.0, codex-commands.test.ts 9). Only where the installed codex lists the flag: an unknown one is exit 2.
+    if (accepts('--no-daemon')) command += ' --no-daemon';
 
     // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
     // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
-    const role = codexRoleArgs(params.orchestratorMode === true);
+    const role = codexRoleArgs(params.orchestratorMode === true, path.join(this.configDir, 'config.toml'));
     for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
