@@ -10,6 +10,8 @@ import { describe, it, expect } from 'vitest';
  * R1. wait_for_agent or task_status, which only read, is not marked: an orchestrator following several agents waits
  *     on them one at a time.
  * R2. delegate_task, or any tool that changes something, is marked: the mark also tells a CLI it needs no permission.
+ *     The marked ones only read: wait_for_agent, task_status, and agent_changes (2.0.7, the change log, a GET), never
+ *     revert_agent_change or update_agent beside it.
  */
 
 type Registered = { name: string; annotations?: Record<string, unknown> };
@@ -38,6 +40,6 @@ describe('the agent tools Claude Code may run together', () => {
   it('R2. marks no tool that changes anything, delegate_task first', async () => {
     const tools = await registered();
     expect(tools.find(t => t.name === 'delegate_task')).toBeDefined();
-    expect(tools.filter(t => t.annotations).map(t => t.name).sort()).toEqual(['task_status', 'wait_for_agent']);
+    expect(tools.filter(t => t.annotations).map(t => t.name).sort()).toEqual(['agent_changes', 'task_status', 'wait_for_agent']);
   });
 });

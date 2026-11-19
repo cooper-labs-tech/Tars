@@ -14,7 +14,8 @@ import { EventEmitter } from 'node:events';
  * A4. An agent of one project reads another project's agent with get_agent, its processes, its full record: it must
  *     be refused as an unknown id is (404, `Agent not found`), naming nothing.
  * A5. list_agents with `all` gives another project's agents with their tasks, memory, since or who asked: only who
- *     they are (id, name, status, project, role).
+ *     they are (id, name, status, project, role), and since 2.0.7 their inference settings (provider, model, effort),
+ *     which any agent may retune.
  * A6. get_agent gives a process's command line, which carries what the masking misses (a password after a flag, a
  *     key with no known prefix): through the API a process is its program, pid, memory and CPU, no arguments.
  * And from the Audit's re-check at 5a250033 (H1 still open):
@@ -104,9 +105,9 @@ describe('what one project reads of another\'s agents', () => {
     expect((await get('/api/agents/b', { id: 'b' }, 'a')).agent).toMatchObject({ id: 'b', resources: { memMb: null } });
   });
 
-  it('A5. list_agents with all names another project\'s agents, nothing more', async () => {
+  it('A5. list_agents with all names another project\'s agents, nothing more than their inference settings (2.0.7)', async () => {
     const { agents } = await get('/api/agents?all=true', {}, 'a') as { agents: Array<Record<string, unknown>> };
-    expect(agents.find(x => x.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'running', projectPath: '/w/cove', role: 'worker' });
+    expect(agents.find(x => x.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'running', projectPath: '/w/cove', role: 'worker', provider: 'claude', model: null, effort: null });
     expect(agents.find(x => x.id === 'b')).toMatchObject({ memMb: null, statusSince: '2026-10-28T09:00:00.000Z' });
     expect(JSON.stringify(agents)).not.toContain('rotate the cove');
   });

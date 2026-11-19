@@ -20,11 +20,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Asserted, in order:
  * 1. create_agent makes a codex agent (model-a, effort low), and start_agent starts codex on model-a;
- * 2. update_agent sets model-b and effort high while codex works: taken, said to apply at its next start on a new
- *    conversation, and codex is not touched (same process, no second launch);
- * 3. a move to claude while codex works is queued (2.0.7: never refused, never cutting the turn), and nothing is
- *    written; reverted while still queued, it is dropped, and codex is left alone;
- * 4. stopped and started again, codex runs on model-b;
+ * 2. update_agent sets model-b and effort high while codex works on the task start_agent gave it: queued behind that
+ *    run (2.0.7: a change of what the CLI runs waits until the agent is free), nothing written, and codex is not
+ *    touched (same process, no second launch);
+ * 3. a move to claude while codex works is queued behind that change (2.0.7: never refused, never cutting the turn),
+ *    and nothing is written; reverted while still queued, it is dropped, and codex is left alone;
+ * 4. stopped, the queued model and effort go in; started again, codex runs on model-b;
  * 5. stopped, the agent moves to claude (model opus, effort max, the stand-in as its CLI path): taken, said to apply
  *    at its next start on a new conversation; agents.json has it;
  * 6. started, claude runs with --model opus and --effort max, on a new session (no --resume);
@@ -218,22 +219,23 @@ setInterval(() => {}, 1 << 30);
       const first = launchesOf(id, 'codex')[0];
       expect(first.argv.join(' ')).toContain('--model model-a');
 
-      // ── 2. Model and effort changed while codex works: at its next start, codex untouched ──
+      // ── 2. Model and effort changed while codex works on its task: queued behind the run, nothing written, codex untouched ──
       const tuned = await lead('update_agent', { id, model: 'model-b', effort: 'high' });
       keep({ tuned, afterTuned: recordOf(id) });
       expect(tuned.isError, tuned.text).toBe(false);
-      expect(tuned.text).toMatch(/next start/);
-      expect(tuned.text).toMatch(/new conversation/);
-      await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'codex', model: 'model-b', effort: 'high' });
+      expect(tuned.text).toMatch(/\bqueued\b/);
+      expect(tuned.text).toMatch(/the delegated run it holds ends/);
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-a', effort: 'low' });
       expect(alive(first.pid)).toBe(true);
       expect(launchesOf(id, 'codex')).toHaveLength(1);
 
-      // ── 3. A move to claude while codex works: queued, nothing written; reverted while queued, dropped ──
+      // ── 3. A move to claude while codex works: queued behind that change, nothing written; reverted while queued, dropped ──
       const tooSoon = await lead('update_agent', { id, provider: 'claude' });
       keep({ tooSoon, afterTooSoon: recordOf(id) });
       expect(tooSoon.isError).toBe(false);
       expect(tooSoon.text).toMatch(/\bqueued\b/);
-      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
+      expect(tooSoon.text).toMatch(/the change queued before it/);
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-a' });
       expect(alive(first.pid)).toBe(true);
       const queuedChange = /\bchg-[0-9a-f]{8}\b/.exec(tooSoon.text)?.[0];
       expect(queuedChange).toBeTruthy();
@@ -241,12 +243,13 @@ setInterval(() => {}, 1 << 30);
       keep({ dropped });
       expect(dropped.isError).toBe(false);
       expect(dropped.text).toContain('cancelled');
-      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-a' });
       expect(alive(first.pid)).toBe(true);
 
-      // ── 4. Stopped and started again: codex runs on model-b ──
+      // ── 4. Stopped: the queued model and effort go in; started again, codex runs on model-b ──
       expect((await lead('stop_agent', { id, reason: 'restart it on its new model' })).isError).toBe(false);
       await expect.poll(() => alive(first.pid), { timeout: 30_000 }).toBe(false);
+      await expect.poll(() => recordOf(id), { timeout: 15_000 }).toMatchObject({ provider: 'codex', model: 'model-b', effort: 'high' });
       expect((await lead('start_agent', { id, prompt: 'CODEX>> second task' })).isError).toBe(false);
       await expect.poll(() => launchesOf(id, 'codex').length, { timeout: 30_000 }).toBe(2);
       const second = launchesOf(id, 'codex')[1];
