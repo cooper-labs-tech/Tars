@@ -20,7 +20,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot, registerRemoteStarter } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -69,6 +69,7 @@ import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
 import { remoteLaunchFor } from '../remote-agents';
 import { remoteHosts } from '../remote-hosts';
+import { tunnelListenerPort } from '../api-tunnel';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
@@ -252,6 +253,15 @@ async function spawnAgentSessionInSlot(
     return false;
   }
   const remote = remoteAsk?.launch;
+  if (remote) {
+    // The tunnel reaches the API's second listener, which takes only a remote agent's token (services/api-tunnel.ts).
+    try {
+      remote.apiPort = await tunnelListenerPort();
+    } catch (err) {
+      sendJson({ error: `${agent.name || agent.id} runs on a remote host, and the listener its tunnel reaches could not open: ${err instanceof Error ? err.message : String(err)}`, code: 'remote_tunnel' }, 503);
+      return false;
+    }
+  }
   // The host's claude, found on its own PATH: the binary of this computer means nothing there.
   const launchBinary = remote ? 'claude' : binaryPath;
 
@@ -2131,6 +2141,20 @@ function answersFor(agent: AgentStatus, req: RouteRequest):
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   replayContext = ctx;
+  // An agent placed on a remote host starts through spawnAgentSession, whoever starts it: a restart, the window's start,
+  // any launchAgent (core/agent-launch.ts, the Audit's L1 on #600).
+  registerRemoteStarter(async (agentId, prompt, options) => {
+    const agent = agents.get(agentId);
+    if (!agent) return { success: false, error: 'Agent not found' };
+    let refused: string | undefined;
+    const started = await spawnAgentSession(agent, prompt, {
+      ...(options?.model ? { model: options.model } : {}),
+      ...(options?.sender ? { sender: options.sender } : {}),
+    }, ctx, (data, status) => {
+      if ((status ?? 200) >= 400) refused = (data as { error?: string } | undefined)?.error ?? `refused (${status})`;
+    });
+    return started ? { success: true } : { success: false, error: refused ?? 'the launch on its host did not start' };
+  });
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
     const agent = visibleAgent(req);
@@ -2599,10 +2623,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const newBinary = getProvider(result.agent.provider).binaryName !== binaryBefore;
       if (newBinary) newConversationOnNextStart(agent.id);
       const { lastCleanOutput, ...updated } = projectAgent(result.agent);
+      const applies = whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart });
+      // A move away from a host ended the agent's session there first (the Audit's M1 on #600), or says it could not.
+      const former = result.formerPlace;
+      const leftThere = former && !former.ended
+        ? ` It could not end its session on ${former.host}: ${former.why}. End it there with ~/.tars-remote/bin/tars-remote stop ${agent.id}.`
+        : '';
       sendJson({
         agent: { ...updated, ...(readsAnswersOf(result.agent, req, result.agent.requestedBy?.agentId) && lastCleanOutput !== undefined ? { lastCleanOutput } : {}) },
         changed: result.changed,
-        ...whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart }),
+        ...applies,
+        text: `${applies.text}${leftThere}`,
+        ...(former ? { formerPlace: former } : {}),
       });
     });
   });

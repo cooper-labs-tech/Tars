@@ -47,7 +47,13 @@ HOOK_DEBUG_LOG="$TARS_LOG_DIR/hooks-debug.log"
 # runs in a subshell of its own for each post, where nothing it learnt would
 # be kept.
 TARS_TOKEN_OK=no
-if [ -n "${CLAUDE_MGR_API_TOKEN:-}" ] && [ -n "${TARS_INSTANCE_ID:-}" ]; then
+# On a remote host (2.0.7, services/remote-agents.ts), told so by Tars's wrapper there and by nothing else: the port
+# is the tunnel's end, held by sshd for as long as the agent's terminal and so its token live, and its listener on this
+# side answers nothing without an agent's token, /api/health included. The check would never pass there; skipping it
+# gives a squatter nothing the check would keep from it, since any other agent's tunnel on that host answers it.
+if [ "${TARS_API_TUNNEL:-}" = 1 ] && [ -n "${CLAUDE_MGR_API_TOKEN:-}" ]; then
+  TARS_TOKEN_OK=yes
+elif [ -n "${CLAUDE_MGR_API_TOKEN:-}" ] && [ -n "${TARS_INSTANCE_ID:-}" ]; then
   tars_challenge=$(od -An -tx1 -N16 /dev/urandom 2>/dev/null | tr -d ' \n')
   if [ ${#tars_challenge} -eq 32 ]; then
     tars_proof=$(curl -s --max-time 5 "${CLAUDE_MGR_API_URL:-http://127.0.0.1:31415}/api/health?challenge=$tars_challenge" 2>/dev/null \

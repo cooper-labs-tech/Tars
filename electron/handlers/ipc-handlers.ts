@@ -65,7 +65,7 @@ import { tasksReport } from '../services/task-watch';
 import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, launchResumes, resolveResumeSessionId, spendResume } from '../utils/resume-session';
-import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
+import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, startRemoteAgent, type AgentLauncher } from '../core/agent-launch';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
@@ -953,6 +953,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // The agent's first task (core/first-task.ts): typed by a start that opens a new conversation, read from the one
     // this launch resolves (a wake gives no option and continues it all the same), and spent once it launched.
     const agent = agents.get(id);
+    // On a remote host: started there, through the API's own path (core/agent-launch.ts), never typed into a shell here.
+    if (agent?.remote) return startRemoteAgent(id, prompt ?? '', options);
     const resumes = !!agent && launchResumes(agent, options?.resumeSessionId);
     const first = withFirstTask(agent, prompt ?? '', { message: options?.message, resumes });
     const launch = launchBegins(id, { withTask: !!first.prompt.trim() });

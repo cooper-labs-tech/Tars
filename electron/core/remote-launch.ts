@@ -49,11 +49,28 @@ export function parseRemoteHost(raw: unknown): RemoteHostParse {
     return { ok: false, code: 'invalid_target', error: 'sshTarget is an alias of your ssh config, or user@host: no space, quote, shell sign, or leading dash.' };
   }
   const root = r.workRoot;
-  if (typeof root !== 'string' || !root.startsWith('/') || root.length > 300 || /[\u0000-\u001f\u007f'"`$\\]/.test(root)
-    || root.split('/').some((seg) => seg === '..')) {
-    return { ok: false, code: 'invalid_work_root', error: 'workRoot is an absolute path on the host, with no "..", quote, backslash or $.' };
+  if (typeof root !== 'string' || root.length > 300 || !isPlainPath(root)) {
+    return { ok: false, code: 'invalid_work_root', error: `workRoot is an absolute path on the host, ${PLAIN_PATH_WORDS}.` };
   }
   return { ok: true, host: { id: r.id, name: r.name.trim(), sshTarget: r.sshTarget, workRoot: root.replace(/\/+$/, '') || '/' } };
+}
+
+/**
+ * A path a host's shell reads as nothing but a path (the Audit's L3 on #600): each name of letters, digits and
+ * `. _ - + @`, never "." or "..". No space, quote, `$`, backslash, glob or sign of a command, so that a tmux older than
+ * 3.0, or any shell that ever reads it, runs nothing from it.
+ */
+const PLAIN_NAME = /^[A-Za-z0-9._+@-]+$/;
+const PLAIN_PATH_WORDS = 'each of its names of letters, digits and . _ - + @ only, never "." or ".."';
+
+function isPlainName(name: string): boolean {
+  return PLAIN_NAME.test(name) && name !== '.' && name !== '..';
+}
+
+function isPlainPath(p: string): boolean {
+  if (!p.startsWith('/')) return false;
+  const names = p.replace(/\/+$/, '').split('/').slice(1);
+  return names.every(isPlainName);
 }
 
 /** Where an agent runs when it runs on a host: the host's id and the folder on it, under its work root. */
@@ -62,8 +79,6 @@ export interface AgentRemote { hostId: string; folder: string }
 export type AgentRemoteParse =
   | { ok: true; remote: AgentRemote | null }
   | { ok: false; error: string; code: 'invalid_remote' | 'unknown_host' | 'invalid_folder' };
-
-const BAD_PATH = /[\u0000-\u001f\u007f'"`$\\]/;
 
 /**
  * An agent's placement as asked (the window, or its project's orchestrator): a host the owner added, and a folder
@@ -77,10 +92,10 @@ export function parseAgentRemote(raw: unknown, hosts: RemoteHost[], projectPath:
   const host = typeof hostId === 'string' ? hosts.find((h) => h.id === hostId) : undefined;
   if (!host) return { ok: false, code: 'unknown_host', error: 'hostId names none of the owner\'s remote hosts: only the owner adds one, in the window.' };
   const name = projectPath.split(/[\\/]/).filter(Boolean).pop() ?? 'project';
-  const asked = folder === undefined ? `${host.workRoot}/${BAD_PATH.test(name) ? 'project' : name}` : folder;
-  if (typeof asked !== 'string' || !asked.startsWith(`${host.workRoot}/`) || BAD_PATH.test(asked) || asked.length > 400
-    || asked.split('/').some((seg) => seg === '..' || seg === '.')) {
-    return { ok: false, code: 'invalid_folder', error: `folder is an absolute path under the host's work root (${host.workRoot}/...), with no "..", quote, backslash or $.` };
+  const asked = folder === undefined ? `${host.workRoot}/${isPlainName(name) ? name : 'project'}` : folder;
+  if (typeof asked !== 'string' || !asked.startsWith(`${host.workRoot === '/' ? '' : host.workRoot}/`) || asked.length > 400
+    || !isPlainPath(asked) || asked.replace(/\/+$/, '') === host.workRoot) {
+    return { ok: false, code: 'invalid_folder', error: `folder is an absolute path under the host's work root (${host.workRoot}/...), ${PLAIN_PATH_WORDS}.` };
   }
   return { ok: true, remote: { hostId: host.id, folder: asked.replace(/\/+$/, '') } };
 }
@@ -106,15 +121,25 @@ export function remoteCommand(sub: string, args: string[]): string {
 }
 
 /**
- * ssh's arguments. `rport` opens the reverse tunnel to this Tars's API on the host's loopback; `tty` asks the host for
- * a terminal (the agent's PTY), else none (a command whose output is read).
+ * ssh's arguments. `rport` opens the reverse tunnel to this Tars's API on the host's loopback (a number, or PORT_MARK
+ * for the port the host chooses at the launch); `tty` asks the host for a terminal (the agent's PTY), else none (a
+ * command whose output is read).
+ *
+ * What the owner's ssh config must not decide for these lines, given here since the command line wins over it (the
+ * Audit's L2, I-a and I-d on #600): no multiplexing (a ControlMaster or ControlPersist would keep the tunnel to this
+ * Mac's API open past the agent's terminal), a host key already known (an `accept-new` or `no` there would trust any
+ * key on a first connection), and no RemoteCommand (it would refuse the command Tars gives).
  */
-export function sshArgv(host: Pick<RemoteHost, 'sshTarget'>, o: { rport?: number; apiPort: number; tty: boolean; command: string }): string[] {
+export function sshArgv(host: Pick<RemoteHost, 'sshTarget'>, o: { rport?: number | string; apiPort: number; tty: boolean; command: string }): string[] {
   return [
     ...(o.tty ? ['-tt'] : ['-T']),
     '-o', 'BatchMode=yes',
     '-o', 'ForwardAgent=no',
     '-o', 'ForwardX11=no',
+    '-o', 'ControlMaster=no',
+    '-o', 'ControlPath=none',
+    '-o', 'StrictHostKeyChecking=yes',
+    '-o', 'RemoteCommand=none',
     '-o', 'ServerAliveInterval=15',
     '-o', 'ServerAliveCountMax=3',
     '-o', 'ConnectTimeout=15',
@@ -138,17 +163,26 @@ export const REMOTE_ENV_KEYS: readonly string[] = [
 
 const NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-/** The environment file the wrapper sources on the host, then deletes: `export KEY='value'` lines. */
-export function remoteEnvFile(env: Record<string, string | undefined>, o: { rport: number }): string {
+/**
+ * The environment file the wrapper sources on the host, then deletes: `export KEY='value'` lines. No API address: the
+ * tunnel's port is the host's choice at the launch, and the wrapper sets CLAUDE_MGR_API_URL from it, after this file.
+ */
+export function remoteEnvFile(env: Record<string, string | undefined>): string {
   const lines: string[] = [];
   for (const key of REMOTE_ENV_KEYS) {
     const value = env[key];
     if (value === undefined || !NAME.test(key)) continue;
     lines.push(`export ${key}=${posixQuote(value)}`);
   }
-  lines.push(`export CLAUDE_MGR_API_URL=${posixQuote(`http://127.0.0.1:${o.rport}`)}`);
   return `${lines.join('\n')}\n`;
 }
+
+/**
+ * Where the port the host chose for the tunnel goes, in what Tars writes before it is known: the MCP file (the wrapper
+ * puts the port in at the session's start) and the terminal's ssh line (its shell, once the preparation said it).
+ * Braces: refused in every folder, target and id, and never in base64.
+ */
+export const PORT_MARK = '{{TARS_PORT}}';
 
 /** An agent's id as the wrapper takes it (tars-remote.sh, valid_id). */
 const AGENT_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,63}$/;
@@ -186,7 +220,7 @@ export function remoteHookSettings(specs: readonly HookSpec[]): string {
  * Tars writes it (services/mcp-shared.ts). Nothing else of that file: a server started as a program is a program of
  * this Mac, and an HTTP entry anywhere else is the owner's, with whatever its headers hold.
  */
-export function remoteMcpConfig(localConfig: string | undefined, o: { apiPort: number; rport: number }): string {
+export function remoteMcpConfig(localConfig: string | undefined, o: { apiPort: number }): string {
   let servers: Record<string, unknown> = {};
   try {
     const found = (JSON.parse(localConfig ?? '') as { mcpServers?: unknown } | null)?.mcpServers;
@@ -199,7 +233,8 @@ export function remoteMcpConfig(localConfig: string | undefined, o: { apiPort: n
     const e = (entry ?? {}) as { type?: unknown; url?: unknown };
     if (!/^[A-Za-z0-9._-]+$/.test(name) || e.type !== 'http' || e.url !== `http://127.0.0.1:${o.apiPort}/api/mcp/${name}`) continue;
     // ${CLAUDE_MGR_API_TOKEN}: expanded by the CLI from its own environment, as services/mcp-shared.ts writes it.
-    out[name] = { type: 'http', url: `http://127.0.0.1:${o.rport}/api/mcp/${name}`, headers: { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } };
+    // The tunnel's port, PORT_MARK until the session's start puts in the one the host chose (tars-remote.sh).
+    out[name] = { type: 'http', url: `http://127.0.0.1:${PORT_MARK}/api/mcp/${name}`, headers: { Authorization: 'Bearer ${CLAUDE_MGR_API_TOKEN}' } };
   }
   return `${JSON.stringify({ mcpServers: out }, null, 2)}\n`;
 }
@@ -222,10 +257,23 @@ const FILE_END = 'TARS_FILE_END';
  * the CLI starts, as it does on this computer (ensureProjectTrusted), in the host's ~/.claude.json, with jq, which
  * Tars's hooks need there anyway; that key of that folder, and nothing else of the file.
  */
-export function remoteBootstrap(o: { agentId: string; folder: string; files: RemoteFile[]; env: string }): string {
+export function remoteBootstrap(o: { agentId: string; folder: string; files: RemoteFile[]; env: string; ports: number[] }): string {
   if (!AGENT_ID.test(o.agentId)) throw new Error(`not an agent id Tars hands a host: ${o.agentId}`);
-  if (!o.folder.startsWith('/') || BAD_PATH.test(o.folder)) throw new Error(`not a folder Tars hands a host: ${o.folder}`);
+  if (!isPlainPath(o.folder)) throw new Error(`not a folder Tars hands a host: ${o.folder}`);
+  if (o.ports.length === 0 || o.ports.some((p) => !Number.isInteger(p) || p < 1024 || p > 65535)) {
+    throw new Error(`not a list of tunnel ports: ${o.ports.join(' ')}`);
+  }
   const dir = `agents/${o.agentId}`;
+  // The tunnel's port (the Audit's L4 on #600): the first of the agent's candidates nothing listens on, asked of the
+  // host's own loopback (bash's /dev/tcp: a connection refused is a free port), before its environment is written.
+  // None free: the launch ends, and no environment is left. Said on stdout, on a line of its own, once all is written.
+  const port = () => {
+    const list = o.ports.join(' ');
+    lines.push(
+      `P=$(bash -c 'for p in "$@"; do (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null || { printf "%s" "$p"; exit 0; }; done; exit 1' tars-port ${list}) `
+        + `|| { echo 'tars-remote: no free port on this host for the tunnel to Tars among ${list}' >&2; exit 6; }`,
+    );
+  };
   const lines = ['set -e', 'umask 077', 'R="$HOME/.tars-remote"', `mkdir -p "$R/bin" "$R/hooks" "$R/${dir}"`];
   const trust = () => {
     const folder = posixQuote(o.folder);
@@ -249,26 +297,38 @@ export function remoteBootstrap(o: { agentId: string; folder: string; files: Rem
     put(file);
   }
   trust();
+  port();
   put({ path: `${dir}/env`, content: o.env });
+  lines.push('printf \'TARS_PORT=%s\\n\' "$P"');
   return `${lines.join('\n')}\n`;
 }
 
 /**
  * The command the host runs in the agent's terminal: the wrapper's start, which ends a session of the agent's left
- * there and starts this one in tmux. The CLI's command line goes as one word of base64.
+ * there and starts this one in tmux. The CLI's command line goes as one word of base64; the tunnel's port as PORT_MARK,
+ * which the terminal's shell replaces with the one the host chose (remoteLaunchLine).
  */
 export function remoteStartCommand(o: { agentId: string; folder: string; cliCommand: string }): string {
   if (!AGENT_ID.test(o.agentId)) throw new Error(`not an agent id Tars hands a host: ${o.agentId}`);
-  return remoteCommand('start', [o.agentId, o.folder, Buffer.from(o.cliCommand, 'utf8').toString('base64')]);
+  return remoteCommand('start', [o.agentId, o.folder, Buffer.from(o.cliCommand, 'utf8').toString('base64'), PORT_MARK]);
 }
 
 /**
  * What the agent's terminal runs on this computer (`/bin/sh -c`): the host prepared first, `prepare` reading the file
  * Tars wrote for it (0600, it holds the agent's token) on its stdin; the file removed whatever the outcome; then, only
  * when that went well, the terminal's own ssh in its place. Each ssh says in the terminal why it failed, in its words.
+ *
+ * The port the host chose for the tunnel is the last `TARS_PORT=<digits>` line the preparation printed (a login that
+ * prints lines of its own changes nothing); it goes wherever `terminal` holds PORT_MARK. None: the terminal ends with
+ * why, and no ssh is started.
  */
 export function remoteLaunchLine(o: { prepare: string[]; prepFile: string; terminal: string[] }): string {
   const words = (argv: string[]) => argv.map(posixQuote).join(' ');
   const file = posixQuote(o.prepFile);
-  return `${words(o.prepare)} < ${file}; s=$?; rm -f ${file}; [ "$s" -eq 0 ] || exit "$s"; exec ${words(o.terminal)}`;
+  // PORT_MARK sits inside a single-quoted word: close it, the port, open it again.
+  const terminal = words(o.terminal).split(PORT_MARK).join(`'"$port"'`);
+  return `out=$(${words(o.prepare)} < ${file}); s=$?; rm -f ${file}; [ "$s" -eq 0 ] || exit "$s"; `
+    + `port=$(printf '%s\\n' "$out" | sed -n 's/^TARS_PORT=\\([0-9][0-9]*\\)$/\\1/p' | tail -n 1); `
+    + `case "$port" in ''|*[!0-9]*) echo 'tars: the host named no port for the tunnel to Tars' >&2; exit 6;; esac; `
+    + `exec ${terminal}`;
 }

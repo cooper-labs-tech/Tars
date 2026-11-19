@@ -7,7 +7,7 @@ import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { endWorkerRequests } from './task-requests';
 import { describeBorn, endBornProcesses, stopLabelledContainers } from './born-processes';
 import { oneTaskQueue } from './one-task';
-import { endRemoteSession } from '../services/remote-agents';
+import { endRemoteSession, type RemoteEnd } from '../services/remote-agents';
 
 /**
  * Stopping an agent: it is ended, and it says who stopped it, when and why
@@ -105,9 +105,11 @@ export async function stopAgent(
   notify.announce(agent);
 
   if (terminal) await endTerminalTree(terminal);
-  // On a remote host the CLI outlives its ssh in tmux: its session there ends too (services/remote-agents.ts).
-  if (agent.remote) await endRemoteSession(agent);
-  const ended = await endBornOf(agent, { terminal: () => (agent.ptyId ? ptyProcesses.get(agent.ptyId)?.pid : undefined) });
+  // On a remote host the CLI outlives its ssh in tmux: its session there ends too (services/remote-agents.ts), and a
+  // host the stop cannot reach is said, the session left there named with why (the Audit's L4 on #600).
+  const leftOnHost = agent.remote ? remoteLeft(await endRemoteSession(agent)) : undefined;
+  const born = await endBornOf(agent, { terminal: () => (agent.ptyId ? ptyProcesses.get(agent.ptyId)?.pid : undefined) });
+  const ended = leftOnHost ? { ended: born?.ended ?? [], kept: [...(born?.kept ?? []), leftOnHost], containers: born?.containers ?? [] } : born;
   // On the record and in what whoever asked is told (stopOf), unless a start came first (the Audit's L2 on #523).
   if (ended && agent.status === 'stopped') {
     agent.stopProcesses = ended;
@@ -121,6 +123,15 @@ export async function stopAgent(
  * label: said in one line each, `pid <n>: <command>`, the kept ones with why. Undefined when there was nothing.
  * A stop and a removal (agent-remove.ts) run it.
  */
+/**
+ * The line a stop or a removal keeps when the agent's session on its host could not be ended (the Audit's L4 on #600),
+ * undefined when it was: in the record's kept list, which whoever asked is told.
+ */
+export function remoteLeft(end: RemoteEnd): string | undefined {
+  if (end.ended) return undefined;
+  return `its CLI's session on ${end.host ?? 'its remote host'} goes on there: ${end.why}. End it on that host with ~/.tars-remote/bin/tars-remote stop <agent id>`;
+}
+
 export async function endBornOf(agent: AgentStatus, opts: { terminal?: () => number | undefined } = {}): Promise<AgentStatus['stopProcesses']> {
   const born = await endBornProcesses(agent.id, { terminal: opts.terminal });
   const boxes = await stopLabelledContainers(agent.id);

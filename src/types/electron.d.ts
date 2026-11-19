@@ -3009,7 +3009,8 @@ export interface ElectronAPI {
     list: () => Promise<RemoteHost[]>;
     /** Added, or replaced by its id. Refused with `code`: invalid_host, invalid_id, invalid_name, invalid_target, invalid_work_root, no_credentials_here. */
     set: (host: RemoteHost) => Promise<{ success: true; host: RemoteHost } | { success: false; error: string; code: string }>;
-    remove: (id: string) => Promise<{ success: boolean }>;
+    /** Refused with `code: 'host_in_use'` and an error naming them while agents are placed on the host (the Audit's M1 on #600). */
+    remove: (id: string) => Promise<{ success: boolean; error?: string; code?: 'host_in_use' }>;
     onChanged: (callback: (hosts: RemoteHost[]) => void) => () => void;
   };
 

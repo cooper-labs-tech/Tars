@@ -9,8 +9,8 @@ import { getHooksPath } from '../utils/hooks-path';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { CLAUDE_HOOK_FILES } from '../providers/claude-hook-files';
 import {
-  remoteBootstrap, remoteCommand, remoteEnvFile, remoteHookSettings, remoteLaunchLine, remoteMcpConfig, remotePort,
-  remoteStartCommand, sshArgv, type RemoteFile, type RemoteHost,
+  PORT_MARK, remoteBootstrap, remoteCommand, remoteEnvFile, remoteHookSettings, remoteLaunchLine, remoteMcpConfig,
+  remotePort, remoteStartCommand, sshArgv, type AgentRemote, type RemoteFile, type RemoteHost,
 } from '../core/remote-launch';
 import type { AgentStatus } from '../types';
 
@@ -21,8 +21,10 @@ import type { AgentStatus } from '../types';
  * A remote agent is still one terminal of this Tars: spawnAgentSession asks remoteLaunchFor, and spawnAgentPty, the
  * one place an agent's terminal starts, runs remoteTerminal with the environment it composed. The terminal is
  * `/bin/sh -c`: ssh prepares the host from a file Tars wrote for it in ~/.tars-private (0600, removed at once, it holds
- * the agent's token), then ssh -tt starts the CLI in tmux there, the API reached back through a reverse tunnel on the
- * host's loopback. A stop ends the tmux session (endRemoteSession).
+ * the agent's token), the host choosing a free port for the tunnel among the agent's; then ssh -tt starts the CLI in
+ * tmux there, Tars reached back through a reverse tunnel from the host's loopback to the tunnel's own listener here
+ * (api-server.ts), which answers nothing without the token of an agent placed on a host. A stop, a removal and a change
+ * of place end the tmux session (endRemoteSession).
  *
  * Not in this part (reports/remote-agents/PLAN.md): re-attaching after a dropped connection with the token kept and the
  * hooks' spool, the worktree on the host, the readers of the CLI's own files there, the window's views.
@@ -37,14 +39,19 @@ export function sshConfigArgs(): string[] {
   return process.env.DOROTHY_E2E === '1' && app?.isPackaged !== true && file ? ['-F', file] : [];
 }
 
+/** How many ports the host is offered for an agent's tunnel, in its own order (the Audit's L4 on #600). */
+const PORT_CANDIDATES = 6;
+
 export interface RemoteLaunch {
   host: RemoteHost;
   agentId: string;
   folder: string;
-  /** The tunnel's port on the host. */
-  rport: number;
+  /** The tunnel's candidate ports on the host: it takes the first nothing listens on. */
+  ports: number[];
   /** The agent's MCP role file (services/mcp-roles.ts), read for Tars's servers on its API. */
   mcpConfigPath?: string;
+  /** The port of the tunnel's own listener on this computer (api-tunnel.ts), which the tunnel reaches. */
+  apiPort?: number;
 }
 
 export type RemoteLaunchAsk = { ok: true; launch: RemoteLaunch } | { ok: false; status: number; code: string; error: string };
@@ -73,7 +80,8 @@ export function remoteLaunchFor(
   if (o.leads) {
     return { ok: false, status: 409, code: 'remote_lead', error: `${who} has an orchestrator's powers: an orchestrator and a chat's runner run on this computer, only a worker on a remote host.` };
   }
-  return { ok: true, launch: { host, agentId: agent.id, folder: agent.remote.folder, rport: remotePort(agent.id), mcpConfigPath: o.mcpConfigPath } };
+  const ports = [...new Set(Array.from({ length: PORT_CANDIDATES }, (_, i) => remotePort(agent.id, i)))];
+  return { ok: true, launch: { host, agentId: agent.id, folder: agent.remote.folder, ports, mcpConfigPath: o.mcpConfigPath } };
 }
 
 /** The wrapper this build ships (electron/resources/tars-remote.sh). */
@@ -96,12 +104,16 @@ function remoteFiles(launch: RemoteLaunch): RemoteFile[] {
     roleFile = undefined;
   }
   files.push({ path: `agents/${launch.agentId}/settings.json`, content: remoteHookSettings(CLAUDE_HOOK_FILES) });
-  files.push({ path: `agents/${launch.agentId}/mcp.json`, content: remoteMcpConfig(roleFile, { apiPort: API_PORT, rport: launch.rport }) });
+  // The MCP file with PORT_MARK: the wrapper writes mcp.json from it once the tunnel's port is known.
+  files.push({ path: `agents/${launch.agentId}/mcp.tmpl`, content: remoteMcpConfig(roleFile, { apiPort: API_PORT }) });
   return files;
 }
 
 /** What ssh itself gets of the agent's environment on this computer: what it needs to find the owner's keys, no token. */
 const SSH_ENV_KEYS = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'LANG', 'LC_ALL', 'LC_CTYPE', 'SSH_AUTH_SOCK'];
+
+/** Where the files that prepare a host wait, each for the moment its launch takes. */
+export const PREP_DIR = () => privatePath('remote-launch');
 
 /**
  * The agent's terminal for a launch on its host: the program, its arguments and its environment, and the file that
@@ -111,14 +123,18 @@ const SSH_ENV_KEYS = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TERM', 'LANG'
 export function remoteTerminal(launch: RemoteLaunch, cliCommand: string, env: Record<string, string | undefined>): {
   shell: string; args: string[]; env: Record<string, string>; prepFile: string;
 } {
-  const prepFile = privatePath('remote-launch', `${launch.agentId}-${crypto.randomBytes(8).toString('hex')}.sh`);
-  fs.mkdirSync(path.dirname(prepFile), { recursive: true, mode: 0o700 });
-  writeSecretFileSync(prepFile, remoteBootstrap({ agentId: launch.agentId, folder: launch.folder, files: remoteFiles(launch), env: remoteEnvFile(env, { rport: launch.rport }) }));
-  const ssh = (o: { tty: boolean; rport?: number; command: string }) => ['ssh', ...sshConfigArgs(), ...sshArgv(launch.host, { apiPort: API_PORT, ...o })];
+  if (launch.apiPort === undefined) throw new Error('the tunnel has no listener to reach on this computer');
+  const apiPort = launch.apiPort;
+  const prepFile = path.join(PREP_DIR(), `${launch.agentId}-${crypto.randomBytes(8).toString('hex')}.sh`);
+  fs.mkdirSync(PREP_DIR(), { recursive: true, mode: 0o700 });
+  writeSecretFileSync(prepFile, remoteBootstrap({
+    agentId: launch.agentId, folder: launch.folder, files: remoteFiles(launch), env: remoteEnvFile(env), ports: launch.ports,
+  }));
+  const ssh = (o: { tty: boolean; rport?: string; command: string }) => ['ssh', ...sshConfigArgs(), ...sshArgv(launch.host, { apiPort, ...o })];
   const line = remoteLaunchLine({
     prepare: ssh({ tty: false, command: 'sh -s' }),
     prepFile,
-    terminal: ssh({ tty: true, rport: launch.rport, command: remoteStartCommand({ agentId: launch.agentId, folder: launch.folder, cliCommand }) }),
+    terminal: ssh({ tty: true, rport: PORT_MARK, command: remoteStartCommand({ agentId: launch.agentId, folder: launch.folder, cliCommand }) }),
   });
   const sshEnv: Record<string, string> = {};
   for (const key of SSH_ENV_KEYS) if (env[key] !== undefined) sshEnv[key] = env[key] as string;
@@ -131,22 +147,70 @@ export function forgetPrepFile(file: string): void {
 }
 
 /**
- * End the agent's tmux session on its host (a stop, a removal): its CLI and what runs under it. Resolves whether ssh
- * said so; never throws, and gives up after 20 s.
+ * At Tars's start (the Audit's I-e on #600): the files that prepare a host left by a Tars that died between writing one
+ * and its terminal's start. No launch is under way yet, and the token each holds died with that Tars. How many went.
  */
-export function endRemoteSession(agent: Pick<AgentStatus, 'id' | 'remote'>): Promise<boolean> {
-  const host = agent.remote ? remoteHosts().get(agent.remote.hostId) : undefined;
-  if (!host) return Promise.resolve(false);
+export function sweepPrepFiles(): number {
+  let names: string[];
+  try {
+    names = fs.readdirSync(PREP_DIR());
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const name of names) {
+    try {
+      fs.rmSync(path.join(PREP_DIR(), name), { force: true });
+      removed++;
+    } catch { /* left for the next start */ }
+  }
+  return removed;
+}
+
+/** What ending a session on a host came to: ended, or why not, in ssh's words when it was ssh. */
+export type RemoteEnd = { ended: true; host: string } | { ended: false; host?: string; why: string };
+
+/**
+ * End the agent's tmux session on a host (a stop, a removal, a change of place): its CLI and what runs under it.
+ * `place` is the place to end, the agent's own by default; a change of place passes the former one. Never throws; gives
+ * up after 20 s.
+ */
+export function endRemoteSession(agent: Pick<AgentStatus, 'id' | 'remote'>, place: AgentRemote | undefined = agent.remote): Promise<RemoteEnd> {
+  if (!place) return Promise.resolve({ ended: false, why: 'it is placed on no remote host' });
+  const host = remoteHosts().get(place.hostId);
+  if (!host) return Promise.resolve({ ended: false, why: `its host (${place.hostId}) is no longer one of the owner's hosts` });
   return new Promise((resolve) => {
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn('ssh', [...sshConfigArgs(), ...sshArgv(host, { apiPort: API_PORT, tty: false, command: remoteCommand('stop', [agent.id]) })], { stdio: 'ignore' });
-    } catch {
-      resolve(false);
+      child = spawn('ssh', [...sshConfigArgs(), ...sshArgv(host, { apiPort: API_PORT, tty: false, command: remoteCommand('stop', [agent.id]) })], { stdio: ['ignore', 'ignore', 'pipe'] });
+    } catch (err) {
+      resolve({ ended: false, host: host.name, why: `ssh could not start: ${err instanceof Error ? err.message : String(err)}` });
       return;
     }
-    const timer = setTimeout(() => { child.kill(); resolve(false); }, 20_000);
-    child.on('error', () => { clearTimeout(timer); resolve(false); });
-    child.on('exit', (code) => { clearTimeout(timer); resolve(code === 0); });
+    let said = '';
+    child.stderr?.on('data', (d) => { said = (said + String(d)).slice(-400); });
+    const words = () => said.trim().split('\n').filter(Boolean).pop() ?? '';
+    const timer = setTimeout(() => {
+      child.kill();
+      resolve({ ended: false, host: host.name, why: 'the host did not answer in 20 s' });
+    }, 20_000);
+    child.on('error', (err) => { clearTimeout(timer); resolve({ ended: false, host: host.name, why: `ssh could not start: ${err.message}` }); });
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      resolve(code === 0 ? { ended: true, host: host.name } : { ended: false, host: host.name, why: words() || `ssh ended with ${code}` });
+    });
   });
+}
+
+/**
+ * Whether the tunnel's own listener takes a call (the Audit's gate of #600): only from an agent placed on a host, by
+ * its own token, on every route, /api/health and /api/local-file included. Never the shared token, Tars's own pass,
+ * a Hermes gateway's secret, an agent of this computer, or no token at all.
+ */
+export function tunnelAdmits(
+  caller: { ok: boolean; agentId?: string },
+  agentOf: (id: string) => { remote?: unknown } | undefined,
+): boolean {
+  if (!caller.ok || !caller.agentId) return false;
+  return !!agentOf(caller.agentId)?.remote;
 }

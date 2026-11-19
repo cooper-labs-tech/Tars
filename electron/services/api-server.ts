@@ -42,11 +42,43 @@ import { inApiCall } from './api-routes/call-context';
 import { apiAnswerReports, reportAgentToolError, reportHandledError } from './error-reports/handled';
 import { TOOL_TOPIC } from './agent-guide';
 import { agents } from '../core/agent-manager';
+import { setTunnelOpener } from './api-tunnel';
+import { tunnelAdmits } from './remote-agents';
 import { getProvider } from '../providers';
 import { apiAnswerForError } from '../core/pty-pool';
 export { agentStatusEmitter };
 
 let apiServer: http.Server | null = null;
+/** The listener a remote agent's tunnel reaches, open from the first launch on a host (openTunnelListener). */
+let tunnelServer: http.Server | null = null;
+
+/**
+ * The local API's second listener (2.0.7, the Audit's gate of #600; services/api-tunnel.ts): 127.0.0.1, a port the
+ * system picks, the same routes as the API's own port, and before any of them a gate. Only the token of an agent placed
+ * on a remote host passes it, on every route, /api/health and /api/local-file included: a process of the host that
+ * reaches the tunnel's end on its loopback gets a 401 for anything without that token, where the API's own port answers
+ * its two exempt routes to anyone on this computer.
+ */
+function openTunnelListener(handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const pathname = new URL(req.url || '/', 'http://localhost').pathname;
+      if (!tunnelAdmits(resolveCaller(req.headers, pathname), (id) => agents.get(id))) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: "Unauthorized: through a remote agent's tunnel, Tars answers only an agent placed on a host, by its own token" }));
+        return;
+      }
+      void handle(req, res);
+    });
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', () => {
+      tunnelServer = server;
+      const port = (server.address() as { port: number }).port;
+      console.log(`[api] the remote agents' tunnel listener runs on http://127.0.0.1:${port}`);
+      resolve(port);
+    });
+  });
+}
 let apiToken: string | null = null;
 
 /**
@@ -313,7 +345,7 @@ export function startApiServer(
   };
   registerAllRoutes(routeApp, ctx);
 
-  apiServer = http.createServer(async (req, res) => {
+  const handleRequest = async (req: http.IncomingMessage, res: http.ServerResponse) => {
     res.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -480,7 +512,10 @@ export function startApiServer(
       if (reports.handled) reportHandledError(reports.handled);
       if (reports.agentTool) reportAgentToolError(reports.agentTool);
     }
-  });
+  };
+  apiServer = http.createServer(handleRequest);
+  // The listener a remote agent's tunnel reaches (services/api-tunnel.ts): the same routes, behind a gate.
+  setTunnelOpener(() => openTunnelListener(handleRequest));
 
   // In the Node 22 the tests run and the Node 24 of Electron 44, not yet in
   // the @types/node 20 this repo pins.
@@ -602,6 +637,12 @@ export function stopApiServer() {
   if (apiServer) {
     const stopping = apiServer;
     apiServer = null;
+    stopping.close();
+  }
+  setTunnelOpener(undefined);
+  if (tunnelServer) {
+    const stopping = tunnelServer;
+    tunnelServer = null;
     stopping.close();
   }
   setApiServerState({

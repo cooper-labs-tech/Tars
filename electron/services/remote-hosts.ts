@@ -77,6 +77,19 @@ export function createRemoteHosts(file: string = REMOTE_HOSTS_FILE()) {
 
 export type RemoteHosts = ReturnType<typeof createRemoteHosts>;
 
+/**
+ * Why a host cannot be removed now, or undefined: agents are placed on it (the Audit's M1 on #600). Their sessions there
+ * would go on, and no stop could reach them once the host is gone. Bring them back, or place them elsewhere, first.
+ */
+export function hostRemovalRefusal(
+  hostId: string,
+  fleet: Iterable<{ id: string; name?: string; remote?: { hostId: string } }>,
+): string | undefined {
+  const placed = [...fleet].filter((a) => a.remote?.hostId === hostId).map((a) => a.name || a.id);
+  if (placed.length === 0) return undefined;
+  return `Agents are placed on this host: ${placed.join(', ')}. Bring them back to this computer or place them on another host first: removed, nothing could end their sessions there any more.`;
+}
+
 let current: RemoteHosts | undefined;
 /** The one for the process: made at the first call, from ~/.tars-private. */
 export function remoteHosts(): RemoteHosts {

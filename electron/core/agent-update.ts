@@ -13,6 +13,7 @@ import { handedFolderProblem } from '../utils/handed-folder';
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
 import { parseAgentRemote, type AgentRemote } from './remote-launch';
 import { remoteHosts } from '../services/remote-hosts';
+import { endRemoteSession, type RemoteEnd } from '../services/remote-agents';
 
 /**
  * An agent's settings changed: the one way in, for the window (agent:update)
@@ -74,6 +75,8 @@ export type AgentUpdateResult =
     changedAtLaunch: string[];
     /** What became of the restart they asked for, when they asked for one. */
     restart?: RestartOutcome;
+    /** A move away from a host: whether its session there was ended (the Audit's M1 on #600), and if not, why. */
+    formerPlace?: RemoteEnd;
   };
 
 /**
@@ -144,6 +147,16 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   }
   const placing = remote !== undefined && JSON.stringify(remote ?? undefined) !== JSON.stringify(agent.remote);
   const makesWorktree = !!(params.worktree?.enabled && params.worktree.branchName && (moving || !agent.worktreePath));
+  // A move while a CLI works, whoever asks, the window too (the Audit's M1 on #600): ending the terminal here would
+  // leave a turn on a host going on there, out of every stop's reach.
+  if (placing && !opts.endsNoCli && cliAtWork(agent)) {
+    return {
+      success: false,
+      code: 'cli_running',
+      error: `A CLI works in the terminal of "${agent.name || agent.id}": stop the agent before moving it to another place, `
+        + 'or its turn would go on where it runs now, out of Tars\'s reach. Nothing was changed.',
+    };
+  }
   // Last of the checks, before the one that writes: what would end the terminal, while a CLI is at work in it.
   if (opts.endsNoCli) {
     const ending = [
@@ -239,6 +252,7 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   if (params.obsidianVaultPaths !== undefined) {
     agent.obsidianVaultPaths = params.obsidianVaultPaths;
   }
+  let formerPlace: RemoteEnd | undefined;
   if (placing) {
     // A terminal started here, or on the former host, is not where its CLI must run now: ended, as for a new binary.
     if (agent.ptyId) {
@@ -252,7 +266,10 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
       agent.status = 'idle';
       agent.currentTask = undefined;
     }
+    // And its session on the former host (the Audit's M1 on #600): once the place changes, no stop reaches it there.
+    const former = agent.remote;
     agent.remote = remote ?? undefined;
+    if (former) formerPlace = await endRemoteSession(agent, former);
   }
   if (params.cliPath !== undefined) {
     const newCliPath = params.cliPath === null ? undefined : params.cliPath;
@@ -301,5 +318,5 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   for (const other of demoted) restartForSettings(other.id, ['orchestrator']);
 
   const changed = FIELDS.filter((field, i) => JSON.stringify(agent[field]) !== before[i]);
-  return { success: true, agent, changed, changedAtLaunch, ...(restart ? { restart } : {}) };
+  return { success: true, agent, changed, changedAtLaunch, ...(restart ? { restart } : {}), ...(formerPlace ? { formerPlace } : {}) };
 }

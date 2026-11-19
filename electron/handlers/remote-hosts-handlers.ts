@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
-import { remoteHosts } from '../services/remote-hosts';
+import { remoteHosts, hostRemovalRefusal } from '../services/remote-hosts';
+import { agents } from '../core/agent-manager';
 import { broadcastToAllWindows } from '../utils/broadcast';
 
 /**
@@ -8,7 +9,7 @@ import { broadcastToAllWindows } from '../utils/broadcast';
  *
  * remoteHosts:list                 -> RemoteHost[]
  * remoteHosts:set(host)            -> { success: true, host } | { success: false, error, code }
- * remoteHosts:remove(id)           -> { success: boolean }
+ * remoteHosts:remove(id)           -> { success: boolean } | { success: false, error, code: 'host_in_use' }
  * remoteHosts:changed (pushed)     -> RemoteHost[]
  */
 export function registerRemoteHostsHandlers(): void {
@@ -19,5 +20,11 @@ export function registerRemoteHostsHandlers(): void {
     const r = store.set(host);
     return r.ok ? { success: true, host: r.host } : { success: false, error: r.error, code: r.code };
   });
-  ipcMain.handle('remoteHosts:remove', (_e, id: unknown) => ({ success: typeof id === 'string' && store.remove(id) }));
+  ipcMain.handle('remoteHosts:remove', (_e, id: unknown) => {
+    if (typeof id !== 'string') return { success: false };
+    // Never while agents are placed there (the Audit's M1 on #600): their sessions would be out of every stop's reach.
+    const refusal = hostRemovalRefusal(id, agents.values());
+    if (refusal) return { success: false, error: refusal, code: 'host_in_use' };
+    return { success: store.remove(id) };
+  });
 }
