@@ -19,6 +19,8 @@ import { hasOrchestratorPowers } from '../../core/agent-role';
 import { slotTurnEnded } from '../heavy-slot-runtime';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
+import { noteOutputPosted } from '../task-answers';
+import { confirmOwnerTyped, noteTurnSeen } from '../owner-typed';
 
 /**
  * The four shell hooks whose posts the state mod makes instead, for a session
@@ -290,6 +292,9 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
         return;
       }
       agent.lastCleanOutput = output;
+      // With when it came: a task's answer for a CLI with no transcript Tars reads, and the check of one it does
+      // (task-answers.ts), never an earlier turn's.
+      noteOutputPosted(agent.id, output);
       saveAgents();
     }
 
@@ -478,6 +483,14 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       if (bindTurn(agent, current_task)) saveAgents();
       // The turn opens a task, or is counted in the one open (task-ledger.ts).
       noteTurn(agent, { sessionId: session_id, text: current_task });
+      // What the agent works on now, its card's line, from every prompt it takes (2.0.7): a task Tars typed into its
+      // session had already set it running, and the transition below never came, so the card kept the brief its
+      // session started on for days.
+      if (current_task) agent.currentTask = current_task;
+      // A line the owner typed into an orchestrator's terminal, which this prompt confirms (SECURITY.md §8).
+      confirmOwnerTyped(agent, current_task);
+      // And a rest Tars read is cleared: a hook may clear one, never set one (owner-typed.ts).
+      noteTurnSeen(agent);
       // And the one post that proves a field emptied. An Enter on a line
       // beginning with `/` may run a command or open a dialog, and the keys
       // alone cannot tell which, so the draft model hedges until something

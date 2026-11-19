@@ -1034,12 +1034,98 @@ reply to a report or a message, "@project text", the answer to an `ask_user`
 question). That last rests on Hermes's own configuration, which Tars cannot
 check: whatever its plugin delivers for that chat is taken as the owner's.
 Slack and Discord are not the owner: anyone in the channel writes
-there. Keys typed by hand into a terminal are not recorded either: Tars cannot
-tell where such a message starts or ends.
+there. Since 2.0.7, what the owner types by hand into an orchestrator's
+terminal is recorded too (below, "Typed in a terminal").
+
+**Typed in a terminal (2.0.7).** Written before the code, at the request of an
+orchestrator that relays the owner all day (its report of 19/11): the words the
+owner types into its terminal could not be relayed under the mark, and it typed
+them on as its own claim. Until 2.0.7 Tars said it could not tell
+where such a message starts or ends. It can, from two things it already
+holds, and records a line only when both agree:
+
+- *The keys.* A person's keys reach an agent through one path only, the
+  window's `agent:input` (`electron/handlers/ipc-handlers.ts`, then
+  `writeHumanInput`), and Tars already rebuilds the field from them, key by
+  key, to know when it may type into it (`electron/core/input-draft.ts`). An
+  Enter on a field that model holds as known, built from keys alone, is a line
+  the owner typed: its text is the model's. Nothing Tars types goes that way:
+  a delegation, a message, a relay, a hook's or a bot's text is written by
+  `writeProgrammaticInput`, only into a field the model holds empty, while the
+  person's keys are held back, and is never fed to the model as keys.
+- *The CLI.* The line counts only once the CLI says it took that line as a
+  prompt: its UserPromptSubmit (the shell hook or the state mod for claude and
+  Qwen Code, codex's and pi's own session logs), from the agent's current
+  session, with a prompt that is that same text (the first 200 characters the
+  hook carries). An Enter that answered a dialog, opened a slash command or
+  went nowhere is never confirmed by the CLI. The hook can confirm a line,
+  never supply one: what is recorded is the text the keys built, and a forged
+  hook with no such line pending records nothing.
+- *At rest, briefly* (the Audit's L1 on #594). The hook is posted with the
+  agent's own token, which the agent itself holds: a prompt-injected
+  orchestrator can post a UserPromptSubmit naming a line its owner typed that
+  its CLI never took as a prompt, a "yes" or a "2" typed to a dialog or to an
+  AskUserQuestion's free text Tars did not see. So a line waits for its
+  confirmation only when the owner submitted it with the CLI at rest at its
+  prompt: the agent idle, completed or failed, or waiting at its idle prompt;
+  never in a turn (a line typed then is queued by the CLI, or answers what the
+  turn shows), never with a dialog or question open (the PermissionRequest
+  hook, the screen) or a permission question held by Tars. And at rest is only
+  what Tars reads itself, never what the agent posts: its status and its Stop
+  are hook posts made with its own token, and two of them mid-turn forged rest
+  (the Audit's re-reads at f211ff380 and 82f13ebd2). For the claude binary and
+  every provider that runs it (Kimi through moonshot included), the tail of the
+  current session's transcript, with no turn on record after the last prompt
+  (Claude Code's own `turn_duration`, or its interrupt marker) and nothing
+  queued (`turnRecordOf`, the reading the status watch makes). For codex and pi,
+  the turn's end Tars's own watcher read in that CLI's session log, kept in
+  memory for the current session (`cli-rest.ts`). A hook post can only clear
+  it (a UserPromptSubmit), never set it. No reading, no rest: a fresh session
+  whose transcript holds no ended turn yet, Qwen Code (its transcript writes no
+  turn end, measured on 0.25.2), gemini, opencode, amp and grok never have a
+  typed line recorded. What an agent can still do is write a forged end of turn
+  into its own transcript or session log, files its own tools can write, at the
+  moment its owner types an answer to a dialog Tars does not see, then forge
+  the UserPromptSubmit: that is the agent writing the CLI's own file format into
+  the file the CLI is writing, and Tars does not defend against it (§1: an agent
+  runs as the owner's account). Keys typed into a
+  dialog Tars sees never reach the key model at all. And a line waits 60
+  seconds at most: the hook comes some 40 ms after an Enter at rest. What an
+  agent can still do is confirm, within that minute, a line its owner typed at
+  rest that a completion swallowed: the owner's own words, at rest, in that
+  terminal, which is what the mark says.
+
+Recorded so, with `via: 'terminal'`, for the agent's project, and its chat when
+the agent is a chat's runner, as the window's chat words are: then the same
+rules hold (who may relay them, to whom, once, within 24 hours). Only an
+orchestrator's terminal: the project's orchestrator or a chat's runner, the
+agents that could relay them. Never a worker's: what the owner types there is
+work for that worker, and no worker relays.
+
+**Pastes are left out, and why.** A paste is text the owner put into the field
+but did not write: it may come from an agent's output, a web page, a message,
+any text a third party controls, and the mark would then vouch for it as the
+owner's words. So a line that holds a paste is not recorded at all, not even
+its typed part: cut out of the line, the paste could leave the typed words
+saying something else. Tars tells a paste from keys two ways: xterm wraps it in
+bracketed paste markers whenever the CLI asks for them (Claude Code, codex and
+Qwen Code do); a CLI that does not gets the paste as plain text in one piece,
+and every chunk of more than one character that is not a single key's sequence
+counts as a paste too. That also leaves out a line an input method composed
+several characters at once (Chinese, Japanese): such a line is not recorded,
+which is the safe side. A line that starts with `/` is a command to the CLI,
+not words, and is left out as well. The owner who wants a pasted text relayed
+writes it in the chat, where it is the owner's message as sent.
+
+**What it trusts.** The window, as the chat's words do: whatever the renderer
+sends through `agent:input` is taken as the owner's keys, a click on a
+renderer button that types for the owner included (the skill picker's line,
+which has no Enter, and `/add-dir`, a command). A process that can drive the
+renderer is the owner's session already (§1).
 
 **What it is.** Tars records each of those messages when it receives it: an
 id (`ow-` and 12 hex characters), its text as received, when, how
-(`window` or `Telegram`), the project it was addressed to, the chat that
+(`window`, `terminal` or `Telegram`), the project it was addressed to, the chat that
 received it when one did, what it was (an answer to a question, a reply to a
 report or to a message, a message to the project) and, for an answer, the
 question with who asked it and when. In memory only:
@@ -1106,7 +1192,8 @@ it and who relayed them, and check the id against them.
 
 **What it does not prove.** That the owner meant the words for the receiver,
 or for the work the receiver is doing now; that whatever the relaying agent
-says around them, in a message of its own, is the owner's; anything the owner
-typed by hand into a terminal, or said in Slack or Discord. The mark says
+says around them, in a message of its own, is the owner's; a line the owner
+pasted, typed into a worker's terminal, typed in a turn, or into a CLI whose rest Tars cannot read itself
+(Qwen Code, gemini, opencode, amp, grok); anything said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.

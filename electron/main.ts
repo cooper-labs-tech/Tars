@@ -136,6 +136,7 @@ import { keepQueue, keptQueueRefs, restoreQueues } from './services/agent-queues
 import { oneTaskQueue } from './core/one-task';
 import { replayQueuedItem } from './services/api-routes/agent-routes';
 import { startTaskWatch, turnInterrupted } from './services/task-watch';
+import { startOwnerTypedWatch } from './services/owner-typed';
 import { cliRunningIn } from './core/agent-pty';
 import { beginRun, type PreviousRun } from './services/run-state';
 import { endRestartRecovery, startRestartRecovery } from './services/restart-recovery';
@@ -783,6 +784,8 @@ app.whenReady().then(async () => {
   // The tasks the Usage page prices: who handed what, from turn to rest
   // (services/task-ledger.ts).
   startTaskWatch();
+  // What the owner types into an orchestrator's terminal, its owner's words once its CLI took it (SECURITY.md §8).
+  startOwnerTypedWatch();
   // And an agent that reads running while it does nothing is told to whoever
   // handed it the work (services/stall-watch.ts).
   startStallWatch();

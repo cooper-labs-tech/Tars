@@ -160,6 +160,13 @@ import { emitAgentStatus } from '../../../../electron/services/agent-events';
 import { oneTaskQueue } from '../../../../electron/core/one-task';
 import { endInterruptedTurnsNow } from '../../../../electron/services/agent-watch';
 import { transcriptPath } from '../../../../electron/utils/resume-session';
+import { noteOutputPosted } from '../../../../electron/services/task-answers';
+
+/** What a hook's output post does (hooks-routes.ts /api/hooks/output): the copy, and when it came (2.0.7). */
+function posted(agent: AgentStatus, text: string): void {
+  agent.lastCleanOutput = text;
+  noteOutputPosted(agent.id, text);
+}
 import type { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../../electron/types';
 
@@ -312,7 +319,7 @@ describe('a task delegated into the agent\'s own terminal', () => {
     expect(Buffer.byteLength(long)).toBeGreaterThan(4000);
     reply(dev, 'Let me read them.');
     reply(dev, long, Date.now() + 5);
-    dev.lastCleanOutput = long.slice(0, 4000);
+    posted(dev, long.slice(0, 4000));
     rests(dev);
     const wait = call('GET', `/api/tasks/${ref}?wait=10`, 'lead');
     const ended = (await wait.answer).data.task as Record<string, unknown>;
@@ -410,7 +417,7 @@ describe('a task delegated into a gemini agent, whose hooks say when its turns b
     await new Promise((r) => setTimeout(r, 30));
     expect(((await call('GET', `/api/tasks/${data.taskId}`, 'lead').answer).data.task as Record<string, unknown>).outcome).toBe('running');
     // AfterAgent: its answer (prompt_response), then the rest.
-    gem.lastCleanOutput = 'The notes are fine.';
+    posted(gem, 'The notes are fine.');
     rests(gem);
     const ended = (await call('GET', `/api/tasks/${data.taskId}?wait=10`, 'lead').answer).data.task as Record<string, unknown>;
     expect(ended).toMatchObject({ outcome: 'completed', stopReason: 'end_turn', result: 'The notes are fine.' });
@@ -426,13 +433,13 @@ describe('a task delegated into a gemini agent, whose hooks say when its turns b
     expect(second.data).toMatchObject({ queued: true, outcome: 'queued' });
     await new Promise((r) => setTimeout(r, 300));
     expect(typed).toHaveLength(1);
-    gem.lastCleanOutput = 'first answer';
+    posted(gem, 'first answer');
     rests(gem);
     expect(((await call('GET', `/api/tasks/${first.data.taskId}?wait=10`, 'lead').answer).data.task as Record<string, unknown>).result).toBe('first answer');
     await until(() => typed.length === 2);
     turnBegins(gem, promptOf(typed[1]));
     await new Promise((r) => setTimeout(r, 30));
-    gem.lastCleanOutput = 'second answer';
+    posted(gem, 'second answer');
     rests(gem);
     expect(((await call('GET', `/api/tasks/${second.data.taskId}?wait=10`, 'lead').answer).data.task as Record<string, unknown>)).toMatchObject({ outcome: 'completed', result: 'second answer' });
   });
@@ -472,7 +479,7 @@ describe('a task delegated to a codex agent', () => {
     await new Promise((r) => setTimeout(r, 30));
     // The answer codex wrote at the turn's end (task_complete's last_agent_message), posted in full.
     const long = `Done. ${'detail '.repeat(1200)}END`;
-    dev.lastCleanOutput = long;
+    posted(dev, long);
     rests(dev);
     const ended = (await call('GET', `/api/tasks/${data.taskId}?wait=10`, 'lead').answer).data.task as Record<string, unknown>;
     expect(ended).toMatchObject({ outcome: 'completed', stopReason: 'end_turn', result: long });
@@ -502,7 +509,7 @@ describe('a task delegated to a codex agent, its turn interrupted', () => {
     turnBegins(dev, promptOf(typed[0]));
     await new Promise((r) => setTimeout(r, 30));
     turnInterrupted(dev.id, 'an-older-session');
-    dev.lastCleanOutput = 'all done';
+    posted(dev, 'all done');
     rests(dev);
     const ended = (await call('GET', `/api/tasks/${data.taskId}?wait=10`, 'lead').answer).data.task as Record<string, unknown>;
     expect(ended).toMatchObject({ outcome: 'completed', stopReason: 'end_turn', result: 'all done' });
@@ -719,7 +726,7 @@ describe('who reads an agent\'s answers (the Audit\'s M1 and L1 on #550, the orc
     turnBegins(dev, promptOf(typed[0]));
     await new Promise((r) => setTimeout(r, 30));
     reply(dev, 'THE REPORT, whole.');
-    dev.lastCleanOutput = 'THE REPORT, whole.';
+    posted(dev, 'THE REPORT, whole.');
     rests(dev);
     const ended = (await call('GET', `/api/tasks/${String(data.taskId)}?wait=10`, 'lead').answer).data.task as Record<string, unknown>;
     expect(ended).toMatchObject({ outcome: 'completed', result: 'THE REPORT, whole.' });

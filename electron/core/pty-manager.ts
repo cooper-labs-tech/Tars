@@ -11,7 +11,7 @@ import { killTree } from '../platform/kill-tree';
 import { v4 as uuidv4 } from 'uuid';
 import * as os from 'os';
 import { app, BrowserWindow } from 'electron';
-import { Draft, confirmSubmitted, emptyDraft, feedDraft, isKeystroke } from './input-draft';
+import { Draft, confirmSubmitted, emptyDraft, feedDraft, isKeystroke, typedLines } from './input-draft';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { envelopeValue } from '../utils/envelope-value';
 import { twoZones } from '../utils/two-zones';
@@ -459,7 +459,7 @@ export type MessageSender =
    * record of them, never the relaying agent's text. Made by the relay route
    * and nowhere else.
    */
-  | { kind: 'owner-relay'; wordsId: string; at: number; via: 'window' | 'Telegram'; by: { id: string; name?: string };
+  | { kind: 'owner-relay'; wordsId: string; at: number; via: 'window' | 'terminal' | 'Telegram'; by: { id: string; name?: string };
     /** What the words were, in Tars's words (services/owner-words.ts): "an answer to a question", ... */
     about?: string };
 
@@ -592,9 +592,45 @@ interface TerminalInput {
    * have made the CLI put back depends on it (noteTurnCut).
    */
   sinceTurnOpened?: { chars: number; keys: string; alone: boolean };
+  /**
+   * Whether the field holds the owner's single keys only since it was last empty: no paste, nothing the CLI put back
+   * (core/input-draft.ts typedLines). Undefined counts as true: a new terminal's field is empty.
+   */
+  keysOnly?: boolean;
 }
 
 const inputs = new WeakMap<pty.IPty, TerminalInput>();
+
+/**
+ * Told each line the owner submits by hand into an agent's terminal, from the keys the window sent (2.0.7;
+ * SECURITY.md §8, "Typed in a terminal"): services/owner-typed.ts keeps it until the CLI confirms it took that line.
+ */
+type OwnerLineListener = (agentId: string, line: string) => void;
+let ownerLineListener: OwnerLineListener | undefined;
+
+export function onOwnerLine(listener: OwnerLineListener | undefined): void {
+  ownerLineListener = listener;
+}
+
+/**
+ * The owner's keys into the field model, and each line they submit told: the one way a person's keys move the model,
+ * straight in (writeHumanInput) or held while Tars typed and replayed after (takeField). Never thrown: a listener
+ * that fails must not cost the owner a key.
+ */
+function feedOwnerKeys(ptyProcess: pty.IPty, state: TerminalInput, data: string): void {
+  const read = typedLines(state.draft, state.keysOnly ?? true, data);
+  state.keysOnly = read.keysOnly;
+  state.draft = feedDraft(state.draft, data);
+  const owner = state.agentId ?? terminalOwner.get(ptyProcess);
+  if (!owner || !ownerLineListener) return;
+  for (const line of read.lines) {
+    try {
+      ownerLineListener(owner, line);
+    } catch (err) {
+      console.warn('[pty] a line the owner typed was not noted:', err instanceof Error ? err.message : err);
+    }
+  }
+}
 
 /**
  * Which agent a terminal belongs to.
@@ -721,7 +757,7 @@ export function writeHumanInput(ptyProcess: pty.IPty, data: string): void {
     state.held.push(data);
     return;
   }
-  state.draft = feedDraft(state.draft, data);
+  feedOwnerKeys(ptyProcess, state, data);
   ptyProcess.write(data);
   if (state.queue.length > 0) pump(ptyProcess);
   fieldChanged(ptyProcess);
@@ -994,7 +1030,7 @@ function takeField(ptyProcess: pty.IPty, state: TerminalInput, item: Waiting): v
     state.held = null;
     state.lastWriteAt = Date.now();
     for (const data of held) {
-      state.draft = feedDraft(state.draft, data);
+      feedOwnerKeys(ptyProcess, state, data);
       write(ptyProcess, state, data);
     }
     pump(ptyProcess);

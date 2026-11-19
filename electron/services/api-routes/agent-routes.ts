@@ -1,7 +1,6 @@
 import { apiListening, NOT_LISTENING } from '../../core/api-listening';
 import { agentResources } from '../fleet-resources-runtime';
 import type { AgentProcess } from '../fleet-resources';
-import { hasClaudeHooks } from '../../core/end-of-turn';
 import * as path from 'path';
 import { maskedAsk } from '../permission-asks';
 import { redactSecrets } from '../../utils/redact-secrets';
@@ -45,9 +44,7 @@ import { getTasmaniaStatus } from '../tasmania-client';
 import { emitAgentStatus } from '../agent-events';
 import { handOffFrom, liveTaskLedger, noteHandOff, watchTurns, type TaskWithResult } from '../task-ledger';
 import { readTaskCosts } from '../task-cost';
-import { readFinalAnswer } from '../terminal-answer';
 import { typeLaunchTask } from '../../core/typed-task';
-import { accountDir } from '../claude-accounts/registry';
 import { announceTask, firstLineOf } from '../task-banner';
 import { keptSender, queueRight, queueView, replayJobOf, type RunTaskReplay } from '../agent-queues';
 import { taskOfPrompt, requestTitle, enqueueRequest, requestDelivered, requestDropped, requestStartsSession, requestGivenUp, endWorkerRequests, mayInterrupt, mayRestart, cutWorkOf } from '../../core/task-requests';
@@ -61,7 +58,8 @@ import { scheduleTick } from '../../utils/agents-tick';
 import { checkpointProblem, writeCheckpoint, checkpointOfTask } from '../../core/agent-checkpoint';
 import { noteWaitingOn } from '../agent-watch';
 import { lastInterruptAt, pendingBackgroundWork, withSessionTruth } from '../agent-truth';
-import { turnInterruptedAt } from '../task-watch';
+import { readAnswerOf, turnInterruptedAt } from '../task-watch';
+import { answerPending } from '../task-answers';
 import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
 import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-update';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
@@ -1135,11 +1133,6 @@ function turnsHeard(agent: AgentStatus): boolean {
   return hasEndOfTurn(agent);
 }
 
-/** Whether its final answer can be read from a transcript Tars knows: Claude Code's, Qwen Code's. */
-function transcriptRead(agent: AgentStatus): boolean {
-  return hasClaudeHooks(agent);
-}
-
 /** What the asker is told of a task typed into a CLI whose turns Tars cannot see. */
 function deliveredText(agent: AgentStatus): string {
   return `The task went into ${agent.name || agent.id}'s terminal. Its CLI, ${agent.provider ?? 'this one'}, gives Tars no hook: Tars cannot see when its turn ends, `
@@ -1160,16 +1153,6 @@ async function terminalUsage(task: TaskWithResult): Promise<Record<string, unkno
     };
   } catch (err) {
     console.warn('[run-task] what a task used could not be read:', (err as Error).message);
-    return undefined;
-  }
-}
-
-/** The folder of the Claude account a task ran on, after the first; undefined for account 1 (~/.claude). */
-function accountFolderOf(accountId: string | null): string | undefined {
-  if (!accountId || accountId === 'default') return undefined;
-  try {
-    return accountDir(accountId);
-  } catch {
     return undefined;
   }
 }
@@ -1316,8 +1299,9 @@ async function runInTerminal(
       // Or its CLI's own log said the turn was interrupted, which stopped its task (codex: task-watch.ts).
       if (!interrupted && outcome === 'stopped' && ended && (turnInterruptedAt(agent.id) ?? -Infinity) >= ended.startedAt) interrupted = true;
       const stopReason = interrupted ? 'interrupted' : outcome === 'completed' ? 'end_turn' : outcome === 'error' ? 'error' : 'stopped';
-      const result = (ended && transcriptRead(agent) ? await readFinalAnswer({ ...ended, configDir: accountFolderOf(ended.accountId) }) : null)
-        ?? agent.lastCleanOutput ?? undefined;
+      // Read once with its end's own read (task-watch.ts, 2.0.7): its transcript once it holds the turn's last
+      // message, or what its CLI's watcher posted during it; never an earlier turn's copy.
+      const result = (ended && ended.endedAt !== null ? await readAnswerOf(ended) : null) ?? undefined;
       // What it left running in the background: told to its asker, never waited for.
       const backgroundLeft = ended && !interrupted ? pendingBackgroundWork(agent, ended.startedAt) : [];
       if ((outcome === 'error' && agent.error) || backgroundLeft.length) {
@@ -1768,11 +1752,48 @@ export function replayQueuedItem(item: QueuedTask): void {
 }
 
 /** Waits for a queued dispatch's turn, then hands it over, its turn kept until it is in the terminal or given up. */
+/**
+ * The turn a queued message opens once it went in (2.0.7): its id is followed to that turn's task, to its end and its
+ * answer, as a delegation's is, instead of reading `delivered` for ever (an orchestrator's report of 19/11: a message
+ * sent with mode 'queue' was "that agent's work now", its answer never kept). The turn whose prompt carries the id
+ * its line named, or, for a line that named none and for a session started on it (a launch's prompt names none), the
+ * first turn that carries no other. Watched from before it is typed, since the turn's UserPromptSubmit comes some
+ * 40 ms after its Enter; once it went into a terminal whose turns Tars sees, it reads `starting` until that turn
+ * begins (the E2E's new interface read `delivered` 300 ms before it), and `delivered` again if none begins within
+ * TURN_START_MAX_MS.
+ */
+function followDeliveredTurn(agent: AgentStatus, ref: string, lineRef: string | undefined): { delivered(how: 'typed' | 'started'): void; stop(): void } {
+  let line = lineRef;
+  let stop: () => void = () => undefined;
+  const timer = setTimeout(() => { oneTaskQueue.turnAwaited(ref, false); stop(); }, TURN_START_MAX_MS);
+  const stopWatching = watchTurns((turnAgentId, taskId, prompt) => {
+    if (turnAgentId !== agent.id) return;
+    const tagged = taskOfPrompt(prompt);
+    if (line ? tagged?.ref !== line : !!tagged) return;
+    oneTaskQueue.named(ref, taskId);
+    stop();
+  });
+  stop = () => { clearTimeout(timer); stopWatching(); };
+  return {
+    delivered(how) {
+      if (how === 'started') line = undefined;
+      if (turnsHeard(agent)) oneTaskQueue.turnAwaited(ref, true);
+      else stop();
+    },
+    stop: () => stop(),
+  };
+}
+
 function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: RouteContext, ref: string, taskRef: string | undefined): void {
   const queued = { ref };
   void waitTurn(agent, queued.ref).then(async (taken) => {
     announceTask(agent.id);
     if (!taken) { dropped(agent, taskRef); return; }
+    // Watched before it is typed: the turn's UserPromptSubmit comes some 40 ms after its Enter.
+    const follow = followDeliveredTurn(agent, queued.ref, taskRef ?? opts.taskId);
+    // At the agent's rest, as a delegation (runInTerminal): a task its background work keeps open ends now, and this
+    // message's turn opens its own.
+    liveTaskLedger()?.endedForDelegation(agent.id);
     // The turn stays taken until the task is in its terminal (or given up):
     // ended when performDispatch returned, a task held behind another message
     // read delivered and let the next one in behind it, into the same turn
@@ -1783,8 +1804,13 @@ function awaitTurnAndDispatch(agent: AgentStatus, opts: DispatchOpts, ctx: Route
       if (settled) return;
       settled = true;
       oneTaskQueue.runEnded(agent.id);
-      if (how) oneTaskQueue.delivered(queued.ref, how);
-      else oneTaskQueue.notStarted(queued.ref, why ?? 'it could not be handed over');
+      if (how) {
+        oneTaskQueue.delivered(queued.ref, how);
+        follow.delivered(how);
+      } else {
+        follow.stop();
+        oneTaskQueue.notStarted(queued.ref, why ?? 'it could not be handed over');
+      }
     };
     let answer: { data: { mode?: unknown; error?: unknown; held?: unknown; queued?: unknown }; status: number } | undefined;
     try {
@@ -2939,6 +2965,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
           found = liveTaskLedger()?.task(found.id) ?? found;
         }
         timedOut = open(found);
+      }
+      // Ended, its answer still being read at its end (task-watch.ts, a few seconds at most): waited for, asked with a
+      // wait or not, rather than said ended with no answer.
+      if (!timedOut && found.outcome !== 'running' && answerPending(found.id)) {
+        await readAnswerOf(found);
+        found = liveTaskLedger()?.task(found.id) ?? found;
       }
       const end = runEnds.get(found.id);
       // What the turn used and cost, read from the session (transcripts, the
