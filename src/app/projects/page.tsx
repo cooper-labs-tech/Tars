@@ -10,6 +10,7 @@ import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from 
 import type { ClaudeProject } from '@/lib/claude-code';
 import type { AgentStatus, AgentCharacter } from '@/types/electron';
 import NewChatModal from '@/components/NewChatModal';
+import { ProjectFleet } from '@/components/Fleet/ProjectFleet';
 import ProjectSetup from '@/components/ProjectSetup';
 import { BrandSpinner, Button, DialogShell, ErrorState, LoadingState, MetaChip, PageHeader, Panel, PanelCaption, StatusSquare } from '@/components/ui';
 import { STATUS_COLORS, statusTone, statusWord } from '@/app/agents/constants';
@@ -678,6 +679,9 @@ export default function ProjectsPage() {
                     />
                   </Panel>
                 )}
+
+                {/* Its hours and its cap (2.0.7) */}
+                {hasElectron && <ProjectFleet projectPath={selectedProject.path} />}
 
                 {/* Project Agents */}
                 {hasElectron && projectAgents.length > 0 && (

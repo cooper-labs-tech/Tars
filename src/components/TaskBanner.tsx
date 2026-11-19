@@ -51,6 +51,8 @@ export default function TaskBanner({ agent }: { agent: AgentStatus }) {
     ? q.queue.items.map((i) => ({ ref: i.ref, from: i.from ?? 'someone', queuedAt: i.queuedAt, firstLine: i.title, via: `${i.how ?? 'task'} · ${i.ref}` }))
     : banner?.waiting ?? [];
   const paused = q.queue?.paused ?? null;
+  // 2.0.7: why its first item waits besides the agent's own work, in main's words ("its project's cap: 3 of 3 agents at work").
+  const waitingFor = q.queue?.waitingFor ?? null;
   const [now, setNow] = useState(() => Date.now());
   const [open, setOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -68,7 +70,7 @@ export default function TaskBanner({ agent }: { agent: AgentStatus }) {
   useEffect(() => { setError(null); }, [task?.ref]);
   useEffect(() => { if (waiting.length === 0) { setOpen(false); setAsking(null); } }, [waiting.length]);
 
-  if (!task && !(paused && waiting.length > 0)) return null;
+  if (!task && !((paused || waitingFor) && waiting.length > 0)) return null;
 
   const stop = async () => {
     if (!task) return;
@@ -164,10 +166,26 @@ export default function TaskBanner({ agent }: { agent: AgentStatus }) {
       <p className="px-3 pt-[7px] pb-[9px] border-t border-border font-mono text-[10.5px] text-muted-foreground">
         {paused
           ? `paused at ${clockOf(paused.since)}${task ? ' · the turn in progress goes on' : ''}`
-          : `the first starts when this task ends${q.has ? ' · drag one to move it before another' : ''}`}
+          : waitingFor
+            ? `the first waits for ${waitingFor}`
+            : `the first starts when this task ends${q.has ? ' · drag one to move it before another' : ''}`}
       </p>
     </div>
   );
+
+  // Nothing in hand, the first item held by its project's cap: the strip says so, in main's words.
+  if (!task && !paused && waitingFor) {
+    return (
+      <div data-queue-strip data-waiting-for role="status" className="@container relative shrink-0 bg-secondary border-b border-border select-none">
+        <div className="flex items-center gap-2 pl-3 pr-1.5 py-1 min-w-0">
+          <StatusSquare tone="waiting" />
+          <p className="flex-1 min-w-0 truncate text-[11.5px] text-text-secondary">{`Waiting for ${waitingFor}. ${waiting.length} waiting.`}</p>
+          {count}
+        </div>
+        {list}
+      </div>
+    );
+  }
 
   // Nothing in hand, the queue kept paused: the strip, in the banner's place.
   if (!task && paused) {
