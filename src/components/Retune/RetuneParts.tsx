@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { AgentStatus, AgentRetuned } from '@/types/electron';
 import { Button, PanelCaption, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
-import { askedOf, byWords, clockOfIso, dismissRetune, impliedOf, latestRetune, noteRevert, useRetunes, whatWords } from '@/hooks/useRetunes';
+import { askedOf, byWords, clockOfIso, dismissRetune, impliedOf, latestRetune, useRetunes, whatWords } from '@/hooks/useRetunes';
 
 type Undo = { word: string; tone: StatusTone } | null;
 
@@ -15,7 +15,6 @@ async function undoChange(changeId: string): Promise<Undo> {
   if (!revert) return { word: 'not undone: this Tars cannot undo a change from the window', tone: 'error' };
   const r = await revert({ changeId });
   if (!r.ok) return { word: `not undone: ${r.error}`, tone: 'error' };
-  if (r.revertChangeId) noteRevert(r.revertChangeId, changeId);
   const left = r.leftAlone && r.leftAlone.length > 0 ? ` · ${r.leftAlone.join(', ')} left alone: changed since` : '';
   if (r.state === 'cancelled') return { word: `cancelled by you at ${clockOfIso(new Date().toISOString())}, before it took effect${left}`, tone: 'running' };
   if (r.state === 'queued') return { word: `undo asked: it waits for the agent's turn to end${left}`, tone: 'waiting' };
@@ -39,14 +38,14 @@ function stateWords(state: AgentRetuned['state'], effectiveAt?: string, waitingF
  * Values before and after come from the event the window heard; after a restart of the window, the fields alone.
  */
 export function RetuneLine({ agent }: { agent: AgentStatus }) {
-  const { byAgent, reverts } = useRetunes();
+  const { byAgent } = useRetunes();
   const [undo, setUndo] = useState<Undo>(null);
   const known = latestRetune(agent, byAgent);
   if (!known) return null;
   const { last, heard } = known;
   const asked = last.state === 'queued';
-  // The window's own undo is no retune to undo: it says what it took back, with no undo on it.
-  const undoes = reverts[last.changeId];
+  // An undo (revertOf: the change it takes back) is no retune to undo: it says it undid, with no undo on it.
+  const undoes = last.revertOf;
   const head = undoes
     ? { word: `undone by ${byWords(last.by)} at ${clockOfIso(last.effectiveAt ?? last.askedAt)}`, tone: 'running' as const }
     : { word: `${asked ? 'retune asked' : 'retuned'} by ${byWords(last.by)} at ${clockOfIso(last.askedAt)}`, tone: 'waiting' as const };
@@ -68,12 +67,12 @@ export function RetuneLine({ agent }: { agent: AgentStatus }) {
 
 /** LAST RETUNE in an agent's panel: by, what, asked, in effect, and undo. */
 export function RetunePanel({ agent }: { agent: AgentStatus }) {
-  const { byAgent, reverts } = useRetunes();
+  const { byAgent } = useRetunes();
   const [undo, setUndo] = useState<Undo>(null);
   const known = latestRetune(agent, byAgent);
   if (!known) return null;
   const { last, heard } = known;
-  const undoes = reverts[last.changeId];
+  const undoes = last.revertOf;
   const row = (k: string, v: string) => (
     <div className="flex gap-2.5"><span className="w-[74px] shrink-0 font-mono text-[10.5px] text-muted-foreground">{k}</span><span className="min-w-0 text-[11.5px] text-text-secondary">{v}</span></div>
   );
@@ -114,12 +113,12 @@ export function RetuneNotices({ className = '' }: { className?: string }) {
         const text = u ? u.word
           : n.state === 'queued'
             ? `${byWords(n.by)} asked ${n.agentName}${project ? ` (${project})` : ''} to move to ${whatWords(askedOf(n), n.before, n.after)}: it ${n.waitingFor ? `waits for ${n.waitingFor}` : 'waits for its turn to end'}.`
-            : `${byWords(n.by)} retuned ${n.agentName}${project ? ` (${project})` : ''}: ${whatWords(askedOf(n), n.before, n.after)}, ${stateWords(n.state, n.effectiveAt)}.`;
+            : `${byWords(n.by)} ${n.revertOf ? 'undid a change to' : 'retuned'} ${n.agentName}${project ? ` (${project})` : ''}: ${whatWords(askedOf(n), n.before, n.after)}, ${stateWords(n.state, n.effectiveAt)}.`;
         return (
           <div key={n.changeId} role="status" className="flex items-center gap-2.5 h-10 px-3 bg-secondary border border-border-accent">
             <StatusSquare tone={u ? u.tone : n.state === 'failed' ? 'error' : 'waiting'} />
             <p className="flex-1 min-w-0 truncate text-xs text-foreground">{text}</p>
-            {!u && n.state !== 'cancelled' && n.state !== 'failed' && (
+            {!u && !n.revertOf && n.state !== 'cancelled' && n.state !== 'failed' && (
               <Button size="sm" onClick={() => { void undoChange(n.changeId).then(r => setUndone(m => ({ ...m, [n.changeId]: r }))); }}>undo</Button>
             )}
             <Button size="sm" variant="ghost" onClick={() => router.push(`/agents?agent=${encodeURIComponent(n.agentId)}`)}>show</Button>
