@@ -622,6 +622,14 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * spec that runs two Tars on one home gives the second a profile of its own.
  */
 export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+  // A CLI home the spec names outside the sandbox: refused before the app, or a CLI, starts on it.
+  const strays = homesOutside(env, sandboxHome);
+  if (strays.length > 0) {
+    throw new Error(
+      `the spec hands the app a CLI home outside its sandbox ${sandboxHome}:\n`
+      + strays.map(([name, where]) => `  ${name}: ${where}`).join('\n'),
+    );
+  }
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
@@ -694,9 +702,43 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  * carry DOROTHY_* or ANTHROPIC_* of its own; a spec that wants one sets it in
  * its env.
  */
-const LEAKY = /^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$/;
+/**
+ * The folders the CLIs Tars drives keep their config, sessions and login in, as the
+ * environment names them. HOME moves none of them.
+ * - Tars reads CODEX_HOME (codex-cli.ts), KIMI_CODE_HOME (kimi-cli.ts), PI_CODING_AGENT_DIR
+ *   (pi-provider.ts), XDG_CONFIG_HOME (opencode-provider.ts, and git through safe-git) and
+ *   CLAUDE_CONFIG_DIR (a Claude account's folder).
+ * - The CLIs it starts read the rest: pi's sessions, and the other XDG homes, where opencode and
+ *   others keep their data, state and caches.
+ * - ZDOTDIR makes the login shells of the agents' terminals, and the one Tars asks for codex's
+ *   CODEX_HOME, read the rc files it names, and whatever they export.
+ * With one of them exported in the runner, a sandboxed Tars wrote into the owner's real
+ * folder, and the CLIs it started ran on the owner's login (#608's Audit, L2). On 2026-11-20 a
+ * test that reached the real ~/.codex the same way deleted the owner's config.toml. So the
+ * caller's are never handed on, and a spec may name one only inside its sandbox (homesOutside).
+ * Tests: __tests__/e2e-cli-homes.test.ts.
+ */
+export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR)$/;
+const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}`);
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
+}
+
+/**
+ * The CLI homes of `env` that land outside `sandboxHome`, as [name, value]. The comparison
+ * uses where a path lands, after its links and its `..` are resolved. A relative path is
+ * outside, because a CLI resolves it against whatever folder it runs in. An empty value means
+ * none and is not outside.
+ */
+export function homesOutside(env, sandboxHome) {
+  const root = landing(sandboxHome);
+  return Object.entries(env)
+    .filter(([name, value]) => CLI_HOMES.test(name) && typeof value === 'string' && value.trim() !== '')
+    .filter(([, value]) => {
+      if (!path.isAbsolute(value)) return true;
+      const where = landing(path.resolve(value));
+      return !(where === root || where.startsWith(root + path.sep));
+    });
 }
 
 /**
