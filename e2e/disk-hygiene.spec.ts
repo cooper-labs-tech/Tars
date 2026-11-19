@@ -75,7 +75,8 @@ function filled(dir: string, days: number, kb = 64): string {
 }
 /** A release/ as electron-builder leaves it: its builder-debug.yml and its update manifest inside. */
 function built(dir: string, days: number, kb = 64): string {
-  filled(dir, days, kb);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'App-1.0.0-arm64.dmg'), Buffer.alloc(kb * 1024, 1));
   fs.writeFileSync(path.join(dir, 'builder-debug.yml'), 'x: 1\n');
   fs.writeFileSync(path.join(dir, 'latest-mac.yml'), 'version: 1\n');
   age(dir, days);

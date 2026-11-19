@@ -36,6 +36,11 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  *     agent plants builder-debug.yml, is proposed. A second sign electron-builder writes with it is required: an
  *     update manifest (latest.yml, latest-mac.yml, latest-linux.yml), or an artefact beside its .blockmap; a .blockmap
  *     alone, its artefact gone, is no sign.
+ * L10. (the Audit's stronger form at 142a60c53) A release/ holding the owner's own files beside a planted build is
+ *      proposed. Only one whose every entry is of a build's kind: dmg, zip, exe, AppImage, deb, rpm, snap, msi, pkg,
+ *      7z and their .blockmap, latest*.yml, builder-*.yml or .yaml, the unpacked app folders (mac*, win*-unpacked,
+ *      linux*-unpacked), and Finder's .DS_Store; one other entry, a file or a folder, keeps it out. The Tars
+ *      checkout's own release/ passes.
  */
 
 const DAY = 86_400_000;
@@ -78,10 +83,10 @@ function world(over: Over = {}): JanitorWorld {
     tracking: async (dir) => over.tracking?.[dir] ?? 'ignored',
   };
 }
-/** A release/ as electron-builder leaves it: its marker and its update manifest inside (as the Tars checkout's). */
+/** A release/ as electron-builder leaves it: an artefact, its marker and its update manifest (as the Tars checkout's). */
 function release(dir: string, days: number, marker = 'builder-debug.yml', signs: string[] = ['latest-mac.yml']): string {
-  mk(dir, days);
-  for (const f of [...(marker ? [marker] : []), ...signs]) { fs.writeFileSync(path.join(dir, f), 'x: 1\n'); old(path.join(dir, f), days); }
+  fs.mkdirSync(dir, { recursive: true });
+  for (const f of ['App-1.0.0-arm64.dmg', ...(marker ? [marker] : []), ...signs]) { fs.writeFileSync(path.join(dir, f), 'x: 1\n'); old(path.join(dir, f), days); }
   old(dir, days);
   return dir;
 }
@@ -239,6 +244,38 @@ describe('a planted marker is not enough (the Audit\'s Info on #605)', () => {
       const dir = fresh();
       release(dir, 10, 'builder-debug.yml', signs);
       expect((await kindsAt(world())).get(dir)?.kind, signs.join(', ')).toBe('release-folder');
+    }
+  });
+});
+
+describe('every entry of a build\'s kind (the Audit\'s stronger form at 142a60c53)', () => {
+  const fresh = () => { const dir = path.join(wt('idle'), 'release'); fs.rmSync(dir, { recursive: true, force: true }); return dir; };
+  /** The Tars checkout's release/ of 2.0.6, entry for entry. */
+  const tarsShape = (dir: string) => {
+    release(dir, 10, 'builder-debug.yml', ['latest-mac.yml', 'Tars-2.0.6-arm64-mac.zip', 'Tars-2.0.6-arm64-mac.zip.blockmap', 'Tars-2.0.6-arm64.dmg', 'Tars-2.0.6-arm64.dmg.blockmap', '.DS_Store']);
+    mk(path.join(dir, 'mac-arm64', 'Tars.app'), 10);
+    old(path.join(dir, 'mac-arm64'), 10);
+    old(dir, 10);
+  };
+
+  it('L10: the Tars checkout\'s shape passes, and so do the other platforms\' outputs', async () => {
+    let dir = fresh();
+    tarsShape(dir);
+    expect((await kindsAt(world())).get(dir)?.kind).toBe('release-folder');
+    dir = fresh();
+    release(dir, 10, 'builder-effective-config.yaml', ['latest.yml', 'Tars Setup 2.0.6.exe', 'Tars Setup 2.0.6.exe.blockmap', 'Tars-2.0.6.AppImage', 'tars_2.0.6_amd64.deb', 'latest-linux.yml']);
+    for (const unpacked of ['win-unpacked', 'win-arm64-unpacked', 'linux-unpacked']) mk(path.join(dir, unpacked), 10);
+    old(dir, 10);
+    expect((await kindsAt(world())).get(dir)?.kind).toBe('release-folder');
+  });
+
+  it('L10: one entry of the owner\'s, a file or a folder, keeps it out, whatever build is beside it', async () => {
+    for (const own of ['NOTES.md', 'changelog.txt', 'docs']) {
+      const dir = fresh();
+      tarsShape(dir);
+      if (own === 'docs') mk(path.join(dir, own), 10); else { fs.writeFileSync(path.join(dir, own), 'mine\n'); old(path.join(dir, own), 10); }
+      old(dir, 10);
+      expect((await kindsAt(world())).get(dir), own).toBeUndefined();
     }
   });
 });
