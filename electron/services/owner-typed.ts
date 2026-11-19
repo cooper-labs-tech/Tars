@@ -20,7 +20,7 @@ function noteTyped(agentId: string, line: string): void {
   const agent = agents.get(agentId);
   if (!agent || !agent.projectPath || !hasOrchestratorPowers(agent)) return;
   // Typed at rest only: the hook that confirms it carries the agent's own token (the Audit's L1 on #594).
-  if (!typedAtRest(agent, dialogShown(agent, agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined))) return;
+  if (!typedAtRest(agent, dialogShown(agent, agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined), ownerWords.restOf(agent.id))) return;
   const chatId = chatNameOf(agent)?.id;
   ownerWords.typed(agent.id, line, { projectPath: agent.projectPath, ...(chatId ? { chatId } : {}) });
 }
@@ -28,6 +28,20 @@ function noteTyped(agentId: string, line: string): void {
 /** Called once, with the app's other watches (main.ts). */
 export function startOwnerTypedWatch(): void {
   onOwnerLine(noteTyped);
+}
+
+/**
+ * Tars saw the agent come to rest in its current session: a turn's Stop (/api/hooks/agent-stopped, from the state
+ * mod, the shell hook or a session log's watcher), or the session's start (hooks-routes.ts). The rest typedAtRest
+ * requires, never the status the agent posts alone (the Audit's re-read at f211ff380).
+ */
+export function noteRestSeen(agent: Pick<AgentStatus, 'id'>, session: string | undefined): void {
+  if (session) ownerWords.restSeen(agent.id, session);
+}
+
+/** A turn of the agent began (its UserPromptSubmit): no longer at rest. */
+export function noteTurnSeen(agent: Pick<AgentStatus, 'id'>): void {
+  ownerWords.turnSeen(agent.id);
 }
 
 /** The agent's CLI took this prompt, from its current session (hooks-routes.ts): a line it confirms is recorded. */

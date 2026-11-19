@@ -20,7 +20,7 @@ import { slotTurnEnded } from '../heavy-slot-runtime';
 import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
 import { noteOutputPosted } from '../task-answers';
-import { confirmOwnerTyped } from '../owner-typed';
+import { confirmOwnerTyped, noteRestSeen, noteTurnSeen } from '../owner-typed';
 
 /**
  * The four shell hooks whose posts the state mod makes instead, for a session
@@ -420,6 +420,8 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       // Registered is not started: this only puts the task this session was
       // spawned with on the clock.
       noteSessionRegistered(agent);
+      // A session that starts sits at its prompt, at rest, until its first turn (owner-typed.ts).
+      noteRestSeen(agent, session_id);
       // A permission question an earlier session left with Tars goes back to it.
       dropPermissionAsks(agent.id);
       // Registered by the state mod: the shell hooks' four posts for this
@@ -489,6 +491,8 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       if (current_task) agent.currentTask = current_task;
       // A line the owner typed into an orchestrator's terminal, which this prompt confirms (SECURITY.md §8).
       confirmOwnerTyped(agent, current_task);
+      // And the agent is no longer at rest, whatever status it posts next, until its next Stop.
+      noteTurnSeen(agent);
       // And the one post that proves a field emptied. An Enter on a line
       // beginning with `/` may run a command or open a dialog, and the keys
       // alone cannot tell which, so the draft model hedges until something
@@ -841,6 +845,8 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       sendJson({ success: false, stale: true });
       return;
     }
+    // Its turn ended, as Tars saw it for the current session: the rest a line the owner types needs (owner-typed.ts).
+    if (session_id && session_id === agent.currentSessionId) noteRestSeen(agent, session_id);
 
     if (ctx.getAppSettings().notificationsEnabled && ctx.getAppSettings().notifyOnStop) {
       const agentName = agent.name || `Agent ${agent.id.slice(0, 6)}`;

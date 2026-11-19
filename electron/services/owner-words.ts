@@ -32,8 +32,18 @@ export const OWNER_TYPED_PENDING_MS = 60_000;
  * question held by Tars. The hook that confirms it carries the agent's own token: a prompt-injected agent could
  * otherwise confirm a "yes" its owner typed to a dialog Tars did not see.
  */
-export function typedAtRest(agent: { status?: string; waitingReason?: string; permissionAsk?: unknown }, dialogShown: boolean): boolean {
+export function typedAtRest(
+  agent: { status?: string; waitingReason?: string; permissionAsk?: unknown; currentSessionId?: string },
+  dialogShown: boolean,
+  /**
+   * Tars's own last-seen rest of the agent (OwnerWords.restOf): a turn's end (its Stop, /api/hooks/agent-stopped) or
+   * its session's start, with no turn begun since. The status alone is what the agent posts, and it can post "idle"
+   * mid-turn (the Audit's re-read at f211ff380).
+   */
+  rest: { session: string } | undefined,
+): boolean {
   if (dialogShown || agent.permissionAsk) return false;
+  if (!rest || !agent.currentSessionId || rest.session !== agent.currentSessionId) return false;
   if (agent.status === 'waiting') return agent.waitingReason === 'idle';
   return agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error';
 }
@@ -114,6 +124,8 @@ export function createOwnerWords(deps: { now?: () => number } = {}) {
   const held: Array<OwnerWords & { relayedTo: Map<string, { by: { id: string; name?: string }; at: number }> }> = [];
   /** Lines typed into an orchestrator's terminal, by agent, waiting for its CLI to take them as a prompt. */
   const typedLines = new Map<string, Array<{ text: string; scope: TypedScope; at: number }>>();
+  /** Each agent's rest as Tars last saw it: a Stop, or its session's start, until its next turn begins. */
+  const rests = new Map<string, { session: string }>();
   const copy = (w: OwnerWords): OwnerWords => ({
     id: w.id, text: w.text, at: w.at, via: w.via, projectPath: w.projectPath,
     ...(w.chatId ? { chatId: w.chatId } : {}), ...(w.about ? { about: w.about } : {}),
@@ -156,6 +168,19 @@ export function createOwnerWords(deps: { now?: () => number } = {}) {
       const [line] = waiting.splice(at, 1);
       if (waiting.length) typedLines.set(agentId, waiting); else typedLines.delete(agentId);
       return record({ text: line.text, via: 'terminal', projectPath: line.scope.projectPath, ...(line.scope.chatId ? { chatId: line.scope.chatId } : {}) });
+    },
+    /** Tars saw that agent come to rest in that session: its Stop, or the session's start (hooks-routes.ts). */
+    restSeen(agentId: string, session: string): void {
+      rests.set(agentId, { session });
+    },
+    /** That agent's turn began (its UserPromptSubmit): no longer at rest until its next Stop. */
+    turnSeen(agentId: string): void {
+      rests.delete(agentId);
+    },
+    /** The agent's rest as Tars last saw it, or undefined in a turn or before anything was seen. */
+    restOf(agentId: string): { session: string } | undefined {
+      const rest = rests.get(agentId);
+      return rest ? { ...rest } : undefined;
     },
     /** Records words the owner sent, as Tars received them. */
     record,
