@@ -41,6 +41,11 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  *      7z and their .blockmap, latest*.yml, builder-*.yml or .yaml, the unpacked app folders (mac*, win*-unpacked,
  *      linux*-unpacked), and Finder's .DS_Store; one other entry, a file or a folder, keeps it out. The Tars
  *      checkout's own release/ passes.
+ * L11. (the Audit's L1 at b8d8539c7) A folder named like a build's but of the owner's goes with the release/: mac-* admitted
+ *      any word (mac-scripts, mac-keys, mac-signing), and no folder's contents were looked at. Only electron-builder's
+ *      own arch names (mac, mac-arm64, mac-universal, mac-x64; win-unpacked, win-arm64-unpacked, win-ia32-unpacked;
+ *      linux-unpacked, linux-arm64-unpacked, linux-armv7l-unpacked, linux-ia32-unpacked), and a mac folder holding
+ *      only .app bundles (Finder's .DS_Store aside; the Tars checkout's mac-arm64 is empty).
  */
 
 const DAY = 86_400_000;
@@ -276,6 +281,45 @@ describe('every entry of a build\'s kind (the Audit\'s stronger form at 142a60c5
       if (own === 'docs') mk(path.join(dir, own), 10); else { fs.writeFileSync(path.join(dir, own), 'mine\n'); old(path.join(dir, own), 10); }
       old(dir, 10);
       expect((await kindsAt(world())).get(dir), own).toBeUndefined();
+    }
+  });
+});
+
+describe('electron-builder\'s own folder names only (the Audit\'s L1 at b8d8539c7)', () => {
+  const fresh = () => { const dir = path.join(wt('idle'), 'release'); fs.rmSync(dir, { recursive: true, force: true }); return dir; };
+  const withFolder = (dir: string, folder: string, inside: string[]) => {
+    release(dir, 10, 'builder-debug.yml', ['latest-mac.yml']);
+    fs.mkdirSync(path.join(dir, folder), { recursive: true });
+    for (const f of inside) {
+      if (f.endsWith('.app')) mk(path.join(dir, folder, f), 10);
+      else { fs.writeFileSync(path.join(dir, folder, f), 'mine\n'); old(path.join(dir, folder, f), 10); }
+    }
+    old(path.join(dir, folder), 10);
+    old(dir, 10);
+  };
+
+  it('L11: a folder named like a build\'s but not one of electron-builder\'s keeps it out', async () => {
+    for (const folder of ['mac-scripts', 'mac-keys', 'mac-signing', 'win-x64-unpacked', 'linux-docs-unpacked', 'macos']) {
+      const dir = fresh();
+      withFolder(dir, folder, ['Tars.app']);
+      expect((await kindsAt(world())).get(dir), folder).toBeUndefined();
+    }
+  });
+
+  it('L11: a mac folder holding anything but .app bundles keeps it out; one holding only those, or nothing, passes', async () => {
+    let dir = fresh();
+    withFolder(dir, 'mac-arm64', ['Tars.app', 'notes.txt']);
+    expect((await kindsAt(world())).get(dir), 'a note beside the app').toBeUndefined();
+    dir = fresh();
+    withFolder(dir, 'mac-arm64', ['Tars.app', 'Other.app', '.DS_Store']);
+    expect((await kindsAt(world())).get(dir)?.kind).toBe('release-folder');
+    dir = fresh();
+    withFolder(dir, 'mac-universal', []);
+    expect((await kindsAt(world())).get(dir)?.kind).toBe('release-folder');
+    for (const name of ['mac', 'mac-x64', 'win-unpacked', 'win-ia32-unpacked', 'linux-arm64-unpacked', 'linux-armv7l-unpacked', 'linux-ia32-unpacked']) {
+      dir = fresh();
+      withFolder(dir, name, name.startsWith('mac') ? ['Tars.app'] : []);
+      expect((await kindsAt(world())).get(dir)?.kind, name).toBe('release-folder');
     }
   });
 });
