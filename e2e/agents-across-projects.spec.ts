@@ -219,7 +219,10 @@ for (const newInterface of [false, true]) {
       expect(retuned.text).toMatch(/\bapplied\b/);
       expect(recordOf('b-c')).toMatchObject({ provider: 'codex', model: 'gpt-5.5', effort: 'high' });
       expect(retunedLead.isError).toBe(false);
-      expect(recordOf('b-o')).toMatchObject({ model: 'opus', effort: 'max', role: 'orchestrator' });
+      // B's orchestrator may still be in a turn (its task's end, or the note Tars types it about its worker's change):
+      // the change to it goes in at once or as that turn ends, never cutting it.
+      expect(retunedLead.text).toMatch(/\bapplied\b|once its turn ends/);
+      await expect.poll(() => recordOf('b-o'), { timeout: 30_000 }).toMatchObject({ model: 'opus', effort: 'max', role: 'orchestrator' });
       // On the agent's card, and in the window's notice, with who did it.
       await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
       await expect(card('b-c')).toContainText('gpt-5.5', { timeout: 30_000 });
