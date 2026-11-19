@@ -1231,7 +1231,7 @@ export async function launchIntoTerminal(
   if (getProvider(agent.provider).binaryName === 'kimi') kimiSessionWatch.noteLaunch(agent.id, start.cwd, kimiSessionOfCommand(start.typedLine));
   // What the terminal shows from its line on is the new CLI's: a box an earlier one left above never reads as this one
   // up (terminal-mirror.ts, rowsSinceLaunch; the Audit's L1 on #601).
-  markCliLaunch(ptyProcess);
+  markCliLaunch(ptyProcess, !!getProvider(agent.provider).upOnScreen);
   if (opts.delayMs) {
     await new Promise<void>((resolve) => {
       setTimeout(() => {

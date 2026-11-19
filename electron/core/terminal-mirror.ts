@@ -117,29 +117,41 @@ interface Mirror {
 
 interface LaunchLog {
   chunks: string[];
+  /** UTF-8 bytes kept (the Audit's L4 on #601: counted in characters, wide ones ran past the cap). */
   bytes: number;
-  since: number;
   /** More was written than is kept: what the CLI drew cannot be known from it. */
   overflowed: boolean;
   /** The last reading, kept until a chunk comes. */
   cache?: { count: number; rows: string[] };
+  /** Lets it go at the launch window's end, written to or not. */
+  timer: ReturnType<typeof setTimeout>;
 }
 
 /** How much of a launch's output is kept, and for how long: the launch window (core/agent-launch.ts, CLI_UP_MS). */
 const LAUNCH_LOG_BYTES = 1024 * 1024;
 const LAUNCH_LOG_MS = 180_000;
-const newLaunchLog = (): LaunchLog => ({ chunks: [], bytes: 0, since: Date.now(), overflowed: false });
+
+/** A launch log from now, for the launch window and no longer, in place of any before it. */
+function startLaunchLog(mirror: Mirror): void {
+  dropLaunchLog(mirror);
+  const log: LaunchLog = {
+    chunks: [], bytes: 0, overflowed: false,
+    timer: setTimeout(() => { if (mirror.launchLog === log) mirror.launchLog = undefined; }, LAUNCH_LOG_MS),
+  };
+  log.timer.unref?.();
+  mirror.launchLog = log;
+}
+
+function dropLaunchLog(mirror: Mirror): void {
+  if (mirror.launchLog) clearTimeout(mirror.launchLog.timer);
+  mirror.launchLog = undefined;
+}
 
 function logLaunchOutput(mirror: Mirror, data: string): void {
   const log = mirror.launchLog;
   if (!log || log.overflowed) return;
-  if (Date.now() - log.since > LAUNCH_LOG_MS) {
-    // Past the launch window: nothing reads it any more, and it is let go.
-    mirror.launchLog = undefined;
-    return;
-  }
   log.chunks.push(data);
-  log.bytes += data.length;
+  log.bytes += Buffer.byteLength(data, 'utf8');
   if (log.bytes > LAUNCH_LOG_BYTES) {
     log.overflowed = true;
     log.chunks = [];
@@ -162,7 +174,7 @@ const mirrors = new WeakMap<IPty, Mirror>();
  */
 export function attachTerminalMirror(
   pty: IPty,
-  opts: { cols: number; rows: number; watchRepaint: boolean; label: string },
+  opts: { cols: number; rows: number; watchRepaint: boolean; label: string; logLaunch?: boolean },
 ): void {
   if (!xterm) return;
   const term = new xterm.Terminal({
@@ -181,9 +193,10 @@ export function attachTerminalMirror(
     core: (term as unknown as { _core: XtermInternals })._core,
     serializer,
     repaint: opts.watchRepaint ? new RepaintWatch(term, opts.label) : undefined,
-    // From its first byte: a CLI spawned as the terminal itself is launched with it.
-    launchLog: newLaunchLog(),
   };
+  // From its first byte, for a CLI that reads as up from its screen: one spawned as the terminal itself is launched with
+  // it. Any other terminal keeps none (the Audit's L4 on #601).
+  if (opts.logLaunch) startLaunchLog(mirror);
   mirrors.set(pty, mirror);
 
   pty.onData(data => {
@@ -208,6 +221,7 @@ export function attachTerminalMirror(
 
 function forget(pty: IPty, mirror: Mirror): void {
   if (mirrors.get(pty) === mirror) mirrors.delete(pty);
+  dropLaunchLog(mirror);
   mirror.term.dispose();
 }
 
@@ -412,9 +426,12 @@ export function terminalText(pty: IPty | undefined): string[] | undefined {
  * A CLI is being launched into `pty` (core/agent-manager.ts, launchIntoTerminal; core/agent-restart.ts): what the
  * terminal is sent from here on is that CLI's, and rowsSinceLaunch reads only that.
  */
-export function markCliLaunch(pty: IPty | undefined): void {
+export function markCliLaunch(pty: IPty | undefined, log: boolean): void {
   const mirror = pty && mirrors.get(pty);
-  if (mirror) mirror.launchLog = newLaunchLog();
+  if (!mirror) return;
+  // Only for a CLI that reads as up from its screen (CLIProvider.upOnScreen); the log of an earlier CLI goes either way.
+  if (log) startLaunchLog(mirror);
+  else dropLaunchLog(mirror);
 }
 
 /** How many of the bottom rows a provider's upOnScreen is given: a TUI's field and its footer, never the answer above. */

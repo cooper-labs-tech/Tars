@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, markCliLaunch, rowsSinceLaunch } from './terminal-mirror';
+import { dialogOnScreen, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -202,8 +202,6 @@ const cliLaunchedAtByTerminal = new WeakMap<object, number>();
 
 export function noteCliLaunched(ptyProcess: object): void {
   cliLaunchedAtByTerminal.set(ptyProcess, Date.now());
-  // And where on its screen: what it draws from here on is the new CLI's (terminal-mirror.ts, rowsSinceLaunch).
-  markCliLaunch(ptyProcess as import('node-pty').IPty);
 }
 
 export function cliLaunchedAt(ptyProcess: object | undefined): number | undefined {

@@ -47,7 +47,7 @@ import { resolveWorktreePath } from '../utils/worktree-path';
 import { landsUnderSafeRoot } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
-import { planModeRefusal } from '../providers/plan-mode';
+import { planModeRefusal, launchPlanRefusal } from '../providers/plan-mode';
 import { withoutRetiredSettings } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
@@ -599,9 +599,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const handTyped = agent.ptyId && ptyProcesses.has(agent.ptyId) ? cliStartRefusal(agent) : undefined;
     if (handTyped) return { success: false, cliRunning: true, error: handTyped };
 
-    // A mode the agent's CLI does not have refuses the launch with the reason create and update give, before anything
-    // is spent: an agent saved in plan on a provider with none (kimi-code) never starts in it (the Audit's I3 on #601).
-    const noPlan = planModeRefusal(agent.provider, options?.permissionMode ?? agent.permissionMode);
+    // A kimi agent saved in plan is refused with the reason create and update give, before anything is spent or killed
+    // (the Audit's I3 on #601); every other provider saved in plan launches as before (its L3).
+    const noPlan = launchPlanRefusal(agent.provider, options?.permissionMode ?? agent.permissionMode);
     if (noPlan) return { success: false, error: noPlan };
 
     // If the agent's worktreePath changed after the PTY was spawned, the

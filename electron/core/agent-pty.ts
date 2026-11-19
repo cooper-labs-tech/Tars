@@ -19,6 +19,7 @@ import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
+import { getAllProviders } from '../providers';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
 
@@ -254,7 +255,9 @@ export function spawnAgentPty(opts: {
   // left-fullscreen watch only for the claude binary, whose two renderers it
   // was measured on.
   if (agentId) {
-    attachTerminalMirror(spawned, { ...size, watchRepaint: opts.binaryName === 'claude', label: agentId });
+    // A launch log only for a CLI that reads as up from its screen (CLIProvider.upOnScreen): no other terminal keeps one.
+    const logLaunch = !!(agentId && getAllProviders().some((p) => p.binaryName === opts.binaryName && p.upOnScreen));
+    attachTerminalMirror(spawned, { ...size, watchRepaint: opts.binaryName === 'claude', label: agentId, logLaunch });
     // What shellReady waits on: a launch typed before the shell has printed its
     // prompt goes through the terminal's canonical mode (see shellReady).
     listening.add(spawned);
