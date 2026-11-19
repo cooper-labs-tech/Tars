@@ -25,6 +25,8 @@ import { ENDPOINT_HARNESSES } from '../../electron/services/inference-endpoints'
  * 7. A model of one family is offered by default: only the user's own default.
  * 8. On an inference endpoint, kimi is not given the proxy (a key in a variable or a file), or is refused as a
  *    harness of an endpoint.
+ * 13. An agent saved in plan mode starts kimi with `--plan`, which runs commands after dialogs nobody answers: kimi-code
+ *     has no plan mode, so such a launch is refused, with the reason create and update give (the Audit's I3 on #601).
  * 11. On an endpoint, kimi is started with `-m <model>`: `-m` names an alias of the user's config.toml, and the
  *     endpoint's model is no such alias, so kimi says "Model ... is not configured in config.toml" and starts no
  *     session (the conformance run, 19/11). The model is KIMI_MODEL_NAME's alone there.
@@ -79,7 +81,12 @@ describe('KimiCodeProvider', () => {
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'bypass' })).toBe("'kimi' --auto");
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'auto' })).toBe("'kimi' --auto");
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'normal' })).toBe("'kimi'");
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'plan' })).toBe("'kimi' --plan");
+  });
+
+  it('13: never --plan: an agent saved in plan is refused at its launch, with the reason an update gives', () => {
+    // Kimi's --plan still runs commands, each after a dialog nobody answers (measured): the Audit's I3 on #601.
+    expect(() => p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'plan' }))
+      .toThrow('Kimi Code has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.');
   });
 
   it('3: a model alias and a session id only in their own forms; Tars knows a kimi session by its UUID', () => {
