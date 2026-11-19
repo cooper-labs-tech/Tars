@@ -6,6 +6,7 @@ import { randomBytes, timingSafeEqual } from 'crypto';
 import { API_TOKEN_FILE, BRIDGE_TOKEN_FILE, DATA_DIR, ENDPOINT_PROXY_PORT, privatePath } from '../constants';
 import type { AgentStatus, AppSettings, TraceSettings } from '../types';
 import { writeSecretFileSync } from '../utils/secret-file';
+import { hasOrchestratorPowers } from '../core/agent-role';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
@@ -382,7 +383,8 @@ export function noteTypedForTraces(origin: { agentId: string; from?: string; sen
   let closed = false;
   if (s?.kind === 'agent') {
     const sender = deps.getAgent(s.id);
-    author = sender?.role === 'orchestrator' || sender?.orchestratorMode ? 'orchestrator' : 'agent';
+    // Anyone with the orchestrator's powers, a chat's runner included, writes as an orchestrator (core/agent-role.ts).
+    author = sender && hasOrchestratorPowers(sender) ? 'orchestrator' : 'agent';
     detail = `${s.name ?? sender?.name ?? s.id} (${sender?.provider ?? 'unknown'}${sender?.model ? ` ${sender.model}` : ''})`;
     closed = !onEndpoint(sender);
   } else if (s?.kind === 'tars') {

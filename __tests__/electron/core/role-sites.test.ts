@@ -158,6 +158,7 @@ const SITES: Site[] = [
   { file: 'electron/services/orchestrator-routing.ts', line: 'const orchestrators = [...agents.values()].filter(…);', is: 'identity', why: 'a message that names no project goes to the only orchestrator' },
   { file: 'electron/services/slack-bot.ts', line: 'const emoji = … ? \':crown:\' : face(agent);', is: 'identity', why: 'the crown on the answer to a start' },
   { file: 'electron/services/task-watch.ts', line: '|| (… && receiver.projectPath === sender.projectPath);', is: 'powers', why: 'the task ledger: a message to it is a report' },
+  { file: 'electron/services/traces-runtime.ts', line: "author = sender && … ? 'orchestrator' : 'agent';", is: 'powers', why: 'a typed turn\'s author in a trace: orchestrator for anyone with the orchestrator\'s powers, a chat\'s runner included' },
   { file: 'electron/services/user-questions.ts', line: 'if (!…) {', is: 'powers', why: 'who asks the user' },
 
   // types/
