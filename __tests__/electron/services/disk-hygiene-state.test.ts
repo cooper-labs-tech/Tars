@@ -24,6 +24,10 @@ import type { JanitorWorld, JanitorOps } from '../../../electron/services/janito
  * S7. A periodic scan starts while one runs (two at once), or says nobody asked.
  * S8. (the Audit's L1 on #606, written before its code) A request names its items by id only: the window cannot show
  *     what each one is, its size, nor the rule it matched.
+ * S9. (QA's spec on #606, F2, written before its code) Once approved, a request cannot say what became of each of its
+ *     items (deleted and its bytes, kept or failed and why) nor what it freed; or it says so only until the next
+ *     scan replaces the items the window showed; or a waiting request already claims an outcome or bytes freed.
+ * S10. The window's approval of the same ids from the scan's list writes into a request it did not approve.
  * And of the report itself (services/disk-report.ts):
  * D1. A worktree's row lacks its agent: the fleet agent working in it, else the one the worktree tool's registry names.
  * D2. A worktree's caches (.next, release, test artefacts) are not measured; or an active worktree's node_modules is,
@@ -167,6 +171,48 @@ describe('cleanup requests', () => {
     expect(j.state().cleanupRequests[0].state).toBe('approved');
     await expect(j.approveRequest(asked.id)).rejects.toThrow();
     expect(fs.existsSync(path.join(wt(other, 'old'), 'release'))).toBe(true);
+  });
+
+  it('S9: an approved request keeps what became of each item and what it freed, past the next scan', async () => {
+    const j = janitor();
+    await j.scan(null);
+    const mine = j.state().scan!.items.filter(i => i.path.startsWith(project));
+    const cache = mine.find(i => i.kind === 'next-cache');
+    if (!cache) throw new Error('no .next item in the fixture');
+    expect(mine.length).toBeGreaterThan(1);
+    const asked = j.request(lead(), mine.map(i => i.id), 'disk low');
+    if (!asked.ok) throw new Error('refused');
+    const waiting = j.state().cleanupRequests[0];
+    expect(waiting.freedBytes).toBe(0);
+    expect(waiting.items.every(i => i.outcome === undefined)).toBe(true);
+    // By the time of the click, one item no longer matches its rule: it is kept, and says why.
+    fs.writeFileSync(path.join(cache.path, 'fresh'), 'x');
+    await j.approveRequest(asked.id);
+    const approved = j.state().cleanupRequests[0];
+    const deleted = mine.filter(i => i.id !== cache.id);
+    for (const i of deleted) expect(approved.items.find(r => r.id === i.id)!.outcome).toEqual({ kind: 'deleted', bytes: i.bytes });
+    expect(approved.items.find(r => r.id === cache.id)!.outcome).toMatchObject({ kind: 'kept', why: expect.stringMatching(/no longer matches/) });
+    expect(approved.freedBytes).toBe(deleted.reduce((sum, i) => sum + (i.bytes ?? 0), 0));
+    expect(approved.freedBytes).toBeGreaterThan(0);
+    // Kept past the next scan, which replaces the items the window showed.
+    await j.scan(null);
+    const later = j.state().cleanupRequests[0];
+    expect(later.items.map(i => i.outcome)).toEqual(approved.items.map(i => i.outcome));
+    expect(later.freedBytes).toBe(approved.freedBytes);
+  });
+
+  it('S10: the window\'s approval of the same ids from the scan writes nothing into a request it did not approve', async () => {
+    const j = janitor();
+    await j.scan(null);
+    const mine = j.state().scan!.items.filter(i => i.path.startsWith(project));
+    const asked = j.request(lead(), mine.map(i => i.id), 'disk low');
+    if (!asked.ok) throw new Error('refused');
+    await j.approve(mine.map(i => i.id));
+    expect(gone.length).toBeGreaterThan(0);
+    const still = j.state().cleanupRequests[0];
+    expect(still.state).toBe('waiting');
+    expect(still.freedBytes).toBe(0);
+    expect(still.items.every(i => i.outcome === undefined)).toBe(true);
   });
 });
 
