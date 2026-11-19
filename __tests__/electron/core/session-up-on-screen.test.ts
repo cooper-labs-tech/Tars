@@ -67,6 +67,7 @@ const PI_AT_REST = [
   ...PI_BANNER,
   ' Press ctrl+o to show full startup help and loaded resources.',
   ' fd not found. Downloading...',
+  ' fd installed to /tmp/e2e/.pi/agent/bin/fd',
   '────────────────────────────────────────────────────────────────────────',
   '',
   '────────────────────────────────────────────────────────────────────────',

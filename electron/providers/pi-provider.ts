@@ -105,7 +105,13 @@ export class PiProvider implements CLIProvider {
    * used over its window, `0.0%/128k (auto)` (one decimal, always), or `?/200k` when the share is unknown (its footer.js).
    */
   upOnScreen(lines: readonly string[]): boolean {
-    return lines.some((line) => /(?:^|\s)(?:\d+\.\d%|\?)\/\d+(?:\.\d)?[kM]?(?: \(auto\))?(?:\s|$)/.test(line));
+    if (!lines.some((line) => /(?:^|\s)(?:\d+\.\d%|\?)\/\d+(?:\.\d)?[kM]?(?: \(auto\))?(?:\s|$)/.test(line))) return false;
+    // Its footer comes before its startup ends: pi first fetches fd and ripgrep when they are missing, and until then
+    // answers Enter with "Startup is still in progress", the task left unsent (its interactive-mode.js and
+    // tools-manager.js). Up once every download it announced has its outcome.
+    const text = lines.join('\n');
+    return [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)]
+      .every(([, tool]) => text.includes(`${tool} installed to `) || text.includes(`Failed to download ${tool}`));
   }
 
   /** Measured on 1.5.2 (20/11): a note typed during a slow tool call went out with that call's result. */
