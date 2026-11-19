@@ -233,6 +233,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));
   ipcMain.handle('traces:uploadState', () => traceUploader().state());
+  // The user gives up a deletion an old back-office never confirmed: its install is forgotten, and what was recorded
+  // before the deletion is still never sent.
+  ipcMain.handle('traces:abandonDeletion', () => {
+    traceUploader().abandonDeletion();
+    tell('traces:changed');
+    return traceUploader().state();
+  });
   ipcMain.handle('traces:deleteEverywhere', async () => {
     const r = await traceUploader().deleteEverywhere();
     tell('traces:changed');
@@ -241,7 +248,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('traces:giveUploadConsent', () => {
     const t = traceSettingsOf(deps.getAppSettings());
     if (!t.uploadUrl) return { ok: false, error: 'Set the back-office address first.' };
-    if (t.uploadDeletionOwed) return { ok: false, error: 'The deletion of what was shared is not confirmed yet: delete again first.' };
+    if (traceUploader().state().deletionOwed) return { ok: false, error: 'The deletion of what was shared is not confirmed yet: delete again, or give it up.' };
     const at = new Date().toISOString();
     apply({ ...deps.getAppSettings(), traces: { ...t, uploadConsentAt: at } });
     return { ok: true, at };

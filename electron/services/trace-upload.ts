@@ -117,7 +117,32 @@ export class TraceUploader {
     }
   }
 
+  /**
+   * Whether a deletion is still owed: only while the install it was asked for is still here. With no install file
+   * left there is nothing to delete with, and an owed mark would lock sharing out for good (the re-read's L1 at
+   * ee4d55975): it is cleared, the moment of the deletion kept.
+   */
+  private owed(): boolean {
+    const s = this.deps.settings();
+    if (!s.deletionOwed) return false;
+    if (this.readInstall()) return true;
+    this.deps.setDeletion({ owed: false, since: s.since });
+    return false;
+  }
+
+  /**
+   * The user gives up the deletion an old back-office never confirmed (it is gone, or will not answer): its install
+   * is forgotten, sharing may start again, and the moment of the deletion still holds, so what was recorded before
+   * it is never sent anywhere.
+   */
+  abandonDeletion(): void {
+    fs.rmSync(this.deps.installFile, { force: true });
+    this.deps.store.resetUploads();
+    this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
+  }
+
   state(): UploadStateView {
+    const owed = this.owed();
     const s = this.deps.settings();
     const counts = this.deps.store.uploadCounts();
     const install = this.readInstall();
@@ -125,7 +150,7 @@ export class TraceUploader {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
       pendingSessions: counts.pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
       lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
-      deletionOwed: s.deletionOwed === true,
+      deletionOwed: owed,
     };
   }
 
@@ -172,7 +197,7 @@ export class TraceUploader {
   /** One pass: what is new or grew, for sessions opted in now. Never throws. */
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
     const s = this.deps.settings();
-    if (!s.url || !s.consentAt || s.deletionOwed || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.url || !s.consentAt || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
     if (this.nextTryAt !== undefined && this.now() < this.nextTryAt) return { sent: 0, failed: 0, skipped: 'waiting' };
     if (this.running) return { sent: 0, failed: 0, skipped: 'busy' };
     this.running = true;
@@ -378,7 +403,9 @@ export class TraceUploader {
     try {
       // The consent first: sending stops at once, and stays off if the DELETE fails or never goes, the deletion
       // kept as owed (the re-audit at 36690e547). Only sessions started after this moment may ever go again.
-      const since = this.now();
+      // The moment of the deletion, never earlier than the newest session it covers: a clock moved backward since
+      // those sessions must not let them through on re-consent (the re-read's L2 at ee4d55975).
+      const since = Math.max(this.now(), this.deps.store.newestStartedAt() ?? 0);
       if (this.readInstall()) this.deps.setDeletion({ owed: true, since });
       this.deps.withdrawConsent();
       this.abort?.abort();

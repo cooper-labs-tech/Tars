@@ -1166,6 +1166,10 @@ would be sent.
 - The deletion withdraws the consent first, so sending stops at once. A DELETE that fails or never goes leaves sharing
   off and the deletion shown as owed, until it is done.
 - A deletion is the user's word: sharing again sends only the sessions started after it, and the consent says so.
+  Its moment is never earlier than the newest session it covers, so a clock moved backward lets none through.
+- An owed deletion holds only while its install is still here: with the install file lost, it is cleared. The user
+  can also give up a deletion an old back-office never confirmed. Tars stops asking it, and what was recorded before
+  the deletion is still never sent.
 - A pass under way is stopped and waited for before the deletion, and every pass reads the consent again before
   each session and before any registration, so nothing it sends lands after a deletion or a withdrawn consent.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never

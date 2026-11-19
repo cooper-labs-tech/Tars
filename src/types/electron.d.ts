@@ -2914,6 +2914,10 @@ export interface ElectronAPI {
     uploadState: () => Promise<UploadState>;
     /** Asks the back-office to delete everything this install sent, then forgets the install and what was sent. */
     deleteEverywhere: () => Promise<{ ok: true; deleted?: number } | { ok: false; error: string }>;
+    /** Gives up a deletion the old back-office never confirmed (gone, or not answering). Say plainly what it means:
+     *  "what you shared there may still be there; Tars stops trying to delete it, and still never sends what was
+     *  recorded before the deletion". Sharing may then start again, to this or another back-office. */
+    abandonDeletion: () => Promise<UploadState>;
     /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
      *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
      *  when it is the one missing. */
