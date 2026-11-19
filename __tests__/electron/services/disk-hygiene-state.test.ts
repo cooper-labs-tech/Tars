@@ -22,6 +22,8 @@ import type { JanitorWorld, JanitorOps } from '../../../electron/services/janito
  *     or approves a request that is not there.
  * S6. The report is not made after a scan, or an agent reads another project's rows or agents.
  * S7. A periodic scan starts while one runs (two at once), or says nobody asked.
+ * S8. (the Audit's L1 on #606, written before its code) A request names its items by id only: the window cannot show
+ *     what each one is, its size, nor the rule it matched.
  * And of the report itself (services/disk-report.ts):
  * D1. A worktree's row lacks its agent: the fleet agent working in it, else the one the worktree tool's registry names.
  * D2. A worktree's caches (.next, release, test artefacts) are not measured; or an active worktree's node_modules is,
@@ -58,6 +60,7 @@ function world(slowDocker: { ms: number }): JanitorWorld {
     named: () => false,
     docker: { images: async () => { await new Promise(r => setTimeout(r, slowDocker.ms)); return null; }, vm: false },
     sizeOf: async (p) => (fs.existsSync(p) ? 4096 : 0),
+    tracking: async () => 'ignored',
   };
 }
 
@@ -80,9 +83,15 @@ beforeEach(() => {
   gone = [];
   slow = { ms: 0 };
   mk(path.join(wt(project, 'idle'), 'release'), 10);
+  fs.writeFileSync(path.join(wt(project, 'idle'), 'release', 'builder-debug.yml'), 'x: 1\n');
+  { const t = new Date(now - 10 * DAY); fs.utimesSync(path.join(wt(project, 'idle'), 'release', 'builder-debug.yml'), t, t); }
+  mk(path.join(wt(project, 'idle'), 'release'), 10);
   mk(path.join(wt(project, 'idle'), '.next'), 10);
   mk(path.join(wt(project, 'active'), 'node_modules', 'x'), 0);
   mk(path.join(wt(project, 'active'), 'release'), 0);
+  mk(path.join(wt(other, 'old'), 'release'), 10);
+  fs.writeFileSync(path.join(wt(other, 'old'), 'release', 'builder-debug.yml'), 'x: 1\n');
+  { const t = new Date(now - 10 * DAY); fs.utimesSync(path.join(wt(other, 'old'), 'release', 'builder-debug.yml'), t, t); }
   mk(path.join(wt(other, 'old'), 'release'), 10);
   for (const w of [wt(project, 'idle'), wt(other, 'old')]) { const t = new Date(now - 10 * DAY); fs.utimesSync(w, t, t); }
 });
@@ -127,6 +136,13 @@ describe('cleanup requests', () => {
     expect(shown).toHaveLength(1);
     expect(shown[0]).toMatchObject({ by: 'Harbor Lead', project, why: 'disk low', state: 'waiting' });
     expect(shown[0].ids.sort()).toEqual([...mine].sort());
+    // S8: each item as the window shows it.
+    const byId = new Map(all.map(i => [i.id, i]));
+    expect(shown[0].items.map(i => i.id).sort()).toEqual([...mine].sort());
+    for (const item of shown[0].items) {
+      const scanned = byId.get(item.id)!;
+      expect(item).toEqual({ id: scanned.id, kind: scanned.kind, label: scanned.label, path: scanned.path, bytes: scanned.bytes, rule: scanned.rule });
+    }
     expect(gone).toEqual([]);
   });
 

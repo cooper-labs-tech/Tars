@@ -32,7 +32,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. one click in the window (diskJanitor.approveRequest) deletes exactly the requested items, each checked again,
  *    and the approval of four items with the slow Docker takes well under the four whole scans it took (red: no such
  *    channel);
- * 6. the periodic report is made with no one asking (DOROTHY_DISK_REPORT_EVERY_MS), and deletes nothing.
+ * 6. the periodic report is made with no one asking (DOROTHY_DISK_REPORT_EVERY_MS), and deletes nothing;
+ * 7. (the Audit's M1 on #605) a release/ is proposed only as electron-builder's output, on its evidence: its marker
+ *    (builder-debug.yml), git ignoring it; the project's own release/, committed, holding no marker, never.
  * The artefact: values.json (every answer, the timings, what stayed and what went).
  */
 
@@ -71,6 +73,13 @@ function filled(dir: string, days: number, kb = 64): string {
   age(dir, days);
   return dir;
 }
+/** A release/ as electron-builder leaves it: its builder-debug.yml inside. */
+function built(dir: string, days: number, kb = 64): string {
+  filled(dir, days, kb);
+  fs.writeFileSync(path.join(dir, 'builder-debug.yml'), 'x: 1\n');
+  age(dir, days);
+  return dir;
+}
 const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@example.com', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@example.com' } });
 function repo(at: string, worktrees: string[]): void {
   fs.mkdirSync(at, { recursive: true });
@@ -94,11 +103,18 @@ for (const newInterface of [false, true]) {
     repo(harbor, ['idle', 'active']);
     repo(quay, ['old']);
     filled(path.join(wt(harbor, 'idle'), 'node_modules', 'left-pad'), 10);
-    filled(path.join(wt(harbor, 'idle'), 'release'), 10, 256);
+    built(path.join(wt(harbor, 'idle'), 'release'), 10, 256);
     age(wt(harbor, 'idle'), 10);
     filled(path.join(wt(harbor, 'active'), 'node_modules', 'left-pad'), 0);
-    filled(path.join(wt(harbor, 'active'), 'release'), 0);
-    filled(path.join(wt(quay, 'old'), 'release'), 10);
+    built(path.join(wt(harbor, 'active'), 'release'), 0);
+    built(path.join(wt(quay, 'old'), 'release'), 10);
+    // The project's own release/: committed notes, no builder's marker (the Audit's M1 on #605).
+    const ownRelease = path.join(harbor, 'release');
+    fs.mkdirSync(ownRelease, { recursive: true });
+    fs.writeFileSync(path.join(ownRelease, 'NOTES.md'), 'how we cut a release\n');
+    git(harbor, 'add', '-f', 'release/NOTES.md');
+    git(harbor, 'commit', '-q', '-m', 'release notes');
+    age(ownRelease, 10);
     age(wt(quay, 'old'), 10);
     // The worker's temporary folders, as Tars hands them (services/agent-tmp.ts): t is its TMPDIR, c Claude Code's.
     const tmp = path.join(home, '.tars', 'tmp', shortIdOf('live'));
@@ -173,7 +189,7 @@ for (const newInterface of [false, true]) {
       expect.soft(at(oldTmp)?.kind).toBe('agent-tmp-entry');
       expect.soft(at(path.join(wt(harbor, 'idle'), 'release'))?.kind).toBe('release-folder');
       expect.soft(at(path.join(wt(harbor, 'idle'), 'node_modules'))?.kind).toBe('worktree-node-modules');
-      for (const never of [newOut, newTmp, path.join(wt(harbor, 'active'), 'release'), path.join(wt(harbor, 'active'), 'node_modules'), path.join(wt(quay, 'old'), 'release')]) {
+      for (const never of [newOut, newTmp, ownRelease, path.join(wt(harbor, 'active'), 'release'), path.join(wt(harbor, 'active'), 'node_modules'), path.join(wt(quay, 'old'), 'release')]) {
         expect.soft(at(never), path.relative(home, never)).toBeUndefined();
       }
 
@@ -219,7 +235,7 @@ for (const newInterface of [false, true]) {
       for (const gone of [path.dirname(path.dirname(ended)), oldOut, oldTmp, path.join(wt(harbor, 'idle'), 'release')]) {
         expect.soft(fs.existsSync(gone), `approved, deleted: ${path.relative(home, gone)}`).toBe(false);
       }
-      for (const stays of [newOut, newTmp, path.join(wt(harbor, 'idle'), 'node_modules'), path.join(wt(harbor, 'active'), 'release'), path.join(wt(quay, 'old'), 'release')]) {
+      for (const stays of [newOut, newTmp, path.join(ownRelease, 'NOTES.md'), path.join(wt(harbor, 'idle'), 'node_modules'), path.join(wt(harbor, 'active'), 'release'), path.join(wt(quay, 'old'), 'release')]) {
         expect.soft(fs.existsSync(stays), `not requested, stays: ${path.relative(home, stays)}`).toBe(true);
       }
       // 6 (second half). The periodic report deleted nothing on its own, and the window holds a report.

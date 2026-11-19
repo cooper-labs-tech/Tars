@@ -27,6 +27,11 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  * L6. The npx cache is walked to its last file: an entry of 30,000 files takes seconds, under load tens.
  * L7. An approved item is checked again by the whole scan, Docker included: approving four items with a Docker that
  *     answers in 40 s took four whole scans. The re-check reads its own kind's rule, in its own place, only.
+ * And from the Audit's M1 on #605 (written before its fix):
+ * L8. Any folder named release/ is proposed as electron-builder's output: a user's own source release/ folder could
+ *     go in one click. Only one git ignores, or does not track, with no tracked file in it, holding electron-builder's
+ *     marker (builder-debug.yml, as the Tars checkout's release/ holds it, or builder-effective-config.yaml); at a
+ *     project's root, only an ignored one (an untracked one is uncommitted work); and the re-check applies the same.
  */
 
 const DAY = 86_400_000;
@@ -47,7 +52,7 @@ const ageTree = (dir: string, days: number) => {
   walk(dir);
 };
 
-type Over = Partial<{ fleet: JanitorWorld['fleet']; processes: JanitorWorld['processes']; named: string[]; images: () => Promise<null> }>;
+type Over = Partial<{ fleet: JanitorWorld['fleet']; processes: JanitorWorld['processes']; named: string[]; images: () => Promise<null>; tracking: Record<string, 'tracked' | 'ignored' | 'untracked'> }>;
 const wt = (n: string) => path.join(project, '.worktrees', n);
 const tmpOf = (id: string) => path.join(home, '.tars', 'tmp', shortIdOf(id));
 const sessionsOf = (id: string) => path.join(tmpOf(id), 'c', 'claude-501', project.replace(/[^a-zA-Z0-9]/g, '-'));
@@ -65,7 +70,15 @@ function world(over: Over = {}): JanitorWorld {
     named: (folder) => (over.named ?? []).some(n => folder === n),
     docker: { images: over.images ?? (async () => null), vm: false },
     sizeOf: async () => 1000,
+    // As git says it: ignored unless a test says otherwise.
+    tracking: async (dir) => over.tracking?.[dir] ?? 'ignored',
   };
+}
+/** A release/ as electron-builder leaves it: its marker inside. */
+function release(dir: string, days: number, marker = 'builder-debug.yml'): string {
+  mk(dir, days);
+  if (marker) { fs.writeFileSync(path.join(dir, marker), 'x: 1\n'); old(path.join(dir, marker), days); old(dir, days); }
+  return dir;
 }
 
 beforeEach(() => {
@@ -75,15 +88,15 @@ beforeEach(() => {
   now = Date.now();
   for (const n of ['idle', 'active', 'busy']) fs.mkdirSync(wt(n), { recursive: true });
   mk(path.join(wt('idle'), 'node_modules', 'left-pad'), 10);
-  mk(path.join(wt('idle'), 'release'), 10);
+  release(path.join(wt('idle'), 'release'), 10);
   ageTree(wt('idle'), 10);
   mk(path.join(wt('active'), 'node_modules', 'left-pad'), 10);
-  mk(path.join(wt('active'), 'release'), 1);
+  release(path.join(wt('active'), 'release'), 1);
   mk(path.join(wt('active'), 'src'), 0);
   mk(path.join(wt('busy'), 'node_modules', 'left-pad'), 10);
-  mk(path.join(wt('busy'), 'release'), 10);
+  release(path.join(wt('busy'), 'release'), 10);
   ageTree(wt('busy'), 10);
-  mk(path.join(project, 'release'), 10);
+  release(path.join(project, 'release'), 10);
   mk(path.join(sessionsOf('live'), 'sess-old', 'scratchpad', 'out-run'), 10);
   ageTree(path.join(sessionsOf('live'), 'sess-old'), 10);
   mk(path.join(sessionsOf('live'), 'sess-now', 'scratchpad', 'out-old'), 10);
@@ -171,4 +184,36 @@ describe('the scan\'s cost', () => {
     expect(report.removed).toBe(ids.length);
     expect(Date.now() - started).toBeLessThan(2_500);
   }, 30_000);
+});
+
+describe('a release/ folder is electron-builder\'s output only on its evidence (the Audit\'s M1 on #605)', () => {
+  it('L8: never one without the builder\'s marker, one git tracks anything in, or an untracked one at a project\'s root', async () => {
+    const own = path.join(wt('idle'), 'release');
+    fs.rmSync(path.join(own, 'builder-debug.yml'));
+    old(own, 10);
+    const ownAtRoot = path.join(project, 'release');
+    const at = await kindsAt(world({ tracking: { [ownAtRoot]: 'tracked' } }));
+    expect(at.get(own), 'no marker: a user\'s own release/').toBeUndefined();
+    expect(at.get(ownAtRoot), 'tracked files inside').toBeUndefined();
+    const untrackedRoot = await kindsAt(world({ tracking: { [ownAtRoot]: 'untracked' } }));
+    expect(untrackedRoot.get(ownAtRoot), 'untracked at a project\'s root: uncommitted work').toBeUndefined();
+  });
+
+  it('L8: an ignored one with the marker, or an untracked one in a worktree; the other marker counts too', async () => {
+    const effective = release(path.join(wt('idle'), 'release'), 10, 'builder-effective-config.yaml');
+    const inWorktree = await kindsAt(world({ tracking: { [effective]: 'untracked' } }));
+    expect(inWorktree.get(effective)?.kind).toBe('release-folder');
+    expect((await kindsAt(world())).get(path.join(project, 'release'))?.kind).toBe('release-folder');
+  });
+
+  it('L8: the re-check applies the same rule: one git tracks since the scan is kept', async () => {
+    const root = path.join(project, 'release');
+    const items = await scanJanitor(world());
+    const id = items.find(i => i.path === root)!.id;
+    const gone: string[] = [];
+    const ops: JanitorOps = { rm: async (p) => { gone.push(p); }, removeWorktree: async () => {}, dockerRm: async () => {}, trim: async () => {}, log: () => {} };
+    const report = await approveJanitor([id], () => world({ tracking: { [root]: 'tracked' } }), ops);
+    expect(gone).toEqual([]);
+    expect(report.kept.map(k => k.id)).toEqual([id]);
+  });
 });
