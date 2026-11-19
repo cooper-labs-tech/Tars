@@ -153,7 +153,9 @@ for (const h of HARNESSES) {
         keep({ screenAtStart: await screenOf() });
         // 2. Delegated to, answered with its own final answer, after a real tool round.
         const delegated = await lead('delegate_task', { id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-1` });
-        const taskId = /\bt-[0-9a-f]{8}\b/.exec(delegated.text)?.[0];
+        // The ledger's task, as delegate_task names it at the end of its answer (`task <id>`): a UUID once its turn ran,
+        // the request's `t-xxxxxxxx` while it waits.
+        const taskId = /\btask ((?:t-[0-9a-f]{8})|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/.exec(delegated.text)?.[1];
         // What Tars knows of the agent and its tasks at that moment, for a run that goes wrong.
         const view = (a: Record<string, unknown> | null) => a && Object.fromEntries(['status', 'currentSessionId', 'resumableSessionId', 'lastTurnStartedAt', 'sessionRegisteredAt', 'requestedBy', 'taskQueue', 'currentTask'].map((k) => [k, a[k]]));
         const ledger = async () => ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => t.agentId === WORKER);
