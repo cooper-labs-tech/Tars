@@ -848523,6 +848523,146 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nqwsQ",
+                  "name": "card Worker One · after the undo",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "m0T3QS",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "CHPwb",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "MV4qC",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Ie5Zx",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "uZyME",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "LudQe",
+                      "fill": "$text-muted",
+                      "content": "codex · glm-4.6 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "TP6WA",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "jrpnY",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "gzNv3",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "XHGOX",
+                                  "name": "d",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "oqlUl",
+                                  "fill": "$status-running",
+                                  "content": "undone by you at 14:20: Lead B's change taken back",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "I9GH1",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "o56Lqu",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · applied 14:20",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -849979,6 +850119,146 @@
                           "id": "R3RZXe",
                           "fill": "$text-secondary",
                           "content": "model glm-4.6 to kimi-k2 · applied 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "J9gKw",
+                  "name": "card Worker One · after the undo",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ACJoZ",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ApFhW",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "WJ3gn",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "P2qNOq",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "UXa0u",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "XuhiL",
+                      "fill": "$text-muted",
+                      "content": "codex · glm-4.6 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JCr1X",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "uz8hR",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "VOUJt",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "KzheO",
+                                  "name": "d",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "iEUi0",
+                                  "fill": "$status-running",
+                                  "content": "undone by you at 14:20: Lead B's change taken back",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "DxSGV",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "LbrZp",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · applied 14:20",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
