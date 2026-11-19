@@ -914,6 +914,164 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "endpoint_list",
+            "description": "List the inference endpoints Tars knows (OpenAI-compatible, for codex, pi, qwen-code or opencode agents): approval, key set or not (never the key), models, last health check, and which agents use each.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_add",
+            "description": "Add an OpenAI-compatible inference endpoint. It stays unusable until the owner approves it once in Tars's window. Give the key, if any, as a drop file name (key_file), never as text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "A name people will recognise."
+                },
+                "base_url": {
+                  "type": "string",
+                  "description": "http(s), up to the routes, for example https://host.example.com/v1."
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600,
+                  "description": "How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 120)."
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "name",
+                "base_url"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_update",
+            "description": "Change an endpoint's name, base URL, hold ceiling, or turn its traces off. A new base URL makes it wait for the owner's approval again; the rest keeps the approval. Only the owner turns traces on.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "base_url": {
+                  "type": "string"
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600
+                },
+                "traces_off": {
+                  "type": "boolean",
+                  "description": "true to stop allowing traces on this endpoint."
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_set_key",
+            "description": "Set or rotate an endpoint's key from a drop file: write the key, one line, into ~/.tars/endpoint-keys/<name>.key, then call this with that name. Tars takes it into its private folder and deletes the file. The key is never readable back. No approval is needed.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "id",
+                "key_file"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_refresh_models",
+            "description": "Read the endpoint's own model list (/v1/models) again. An agent can only be set on a model the endpoint lists.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_check",
+            "description": "Probe an endpoint (/v1/models with its key): status, latency and the time it was taken.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -6341,6 +6499,164 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "endpoint_list",
+            "description": "List the inference endpoints Tars knows (OpenAI-compatible, for codex, pi, qwen-code or opencode agents): approval, key set or not (never the key), models, last health check, and which agents use each.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_add",
+            "description": "Add an OpenAI-compatible inference endpoint. It stays unusable until the owner approves it once in Tars's window. Give the key, if any, as a drop file name (key_file), never as text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "A name people will recognise."
+                },
+                "base_url": {
+                  "type": "string",
+                  "description": "http(s), up to the routes, for example https://host.example.com/v1."
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600,
+                  "description": "How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 120)."
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "name",
+                "base_url"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_update",
+            "description": "Change an endpoint's name, base URL, hold ceiling, or turn its traces off. A new base URL makes it wait for the owner's approval again; the rest keeps the approval. Only the owner turns traces on.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "base_url": {
+                  "type": "string"
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600
+                },
+                "traces_off": {
+                  "type": "boolean",
+                  "description": "true to stop allowing traces on this endpoint."
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_set_key",
+            "description": "Set or rotate an endpoint's key from a drop file: write the key, one line, into ~/.tars/endpoint-keys/<name>.key, then call this with that name. Tars takes it into its private folder and deletes the file. The key is never readable back. No approval is needed.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "id",
+                "key_file"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_refresh_models",
+            "description": "Read the endpoint's own model list (/v1/models) again. An agent can only be set on a model the endpoint lists.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_check",
+            "description": "Probe an endpoint (/v1/models with its key): status, latency and the time it was taken.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -7406,6 +7722,164 @@
             "execution": {
               "taskSupport": "forbidden"
             }
+          },
+          {
+            "name": "endpoint_list",
+            "description": "List the inference endpoints Tars knows (OpenAI-compatible, for codex, pi, qwen-code or opencode agents): approval, key set or not (never the key), models, last health check, and which agents use each.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_add",
+            "description": "Add an OpenAI-compatible inference endpoint. It stays unusable until the owner approves it once in Tars's window. Give the key, if any, as a drop file name (key_file), never as text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "A name people will recognise."
+                },
+                "base_url": {
+                  "type": "string",
+                  "description": "http(s), up to the routes, for example https://host.example.com/v1."
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600,
+                  "description": "How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 120)."
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "name",
+                "base_url"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_update",
+            "description": "Change an endpoint's name, base URL, hold ceiling, or turn its traces off. A new base URL makes it wait for the owner's approval again; the rest keeps the approval. Only the owner turns traces on.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "base_url": {
+                  "type": "string"
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600
+                },
+                "traces_off": {
+                  "type": "boolean",
+                  "description": "true to stop allowing traces on this endpoint."
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_set_key",
+            "description": "Set or rotate an endpoint's key from a drop file: write the key, one line, into ~/.tars/endpoint-keys/<name>.key, then call this with that name. Tars takes it into its private folder and deletes the file. The key is never readable back. No approval is needed.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "id",
+                "key_file"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_refresh_models",
+            "description": "Read the endpoint's own model list (/v1/models) again. An agent can only be set on a model the endpoint lists.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_check",
+            "description": "Probe an endpoint (/v1/models with its key): status, latency and the time it was taken.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
           }
         ]
       },
@@ -8395,6 +8869,164 @@
               "$schema": "http://json-schema.org/draft-07/schema#",
               "type": "object",
               "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_list",
+            "description": "List the inference endpoints Tars knows (OpenAI-compatible, for codex, pi, qwen-code or opencode agents): approval, key set or not (never the key), models, last health check, and which agents use each.",
+            "inputSchema": {
+              "$schema": "http://json-schema.org/draft-07/schema#",
+              "type": "object",
+              "properties": {}
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_add",
+            "description": "Add an OpenAI-compatible inference endpoint. It stays unusable until the owner approves it once in Tars's window. Give the key, if any, as a drop file name (key_file), never as text.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60,
+                  "description": "A name people will recognise."
+                },
+                "base_url": {
+                  "type": "string",
+                  "description": "http(s), up to the routes, for example https://host.example.com/v1."
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600,
+                  "description": "How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 120)."
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "name",
+                "base_url"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_update",
+            "description": "Change an endpoint's name, base URL, hold ceiling, or turn its traces off. A new base URL makes it wait for the owner's approval again; the rest keeps the approval. Only the owner turns traces on.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 60
+                },
+                "base_url": {
+                  "type": "string"
+                },
+                "hold_max_seconds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 3600
+                },
+                "traces_off": {
+                  "type": "boolean",
+                  "description": "true to stop allowing traces on this endpoint."
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_set_key",
+            "description": "Set or rotate an endpoint's key from a drop file: write the key, one line, into ~/.tars/endpoint-keys/<name>.key, then call this with that name. Tars takes it into its private folder and deletes the file. The key is never readable back. No approval is needed.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                },
+                "key_file": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9._-]{1,64}\\.key$",
+                  "description": "The name of a file you wrote in Tars's key drop folder (~/.tars/endpoint-keys/<name>.key), one line holding the key. Tars takes the key into its private folder and deletes the file. Never put a key in a tool argument or a message."
+                }
+              },
+              "required": [
+                "id",
+                "key_file"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_refresh_models",
+            "description": "Read the endpoint's own model list (/v1/models) again. An agent can only be set on a model the endpoint lists.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
+            },
+            "execution": {
+              "taskSupport": "forbidden"
+            }
+          },
+          {
+            "name": "endpoint_check",
+            "description": "Probe an endpoint (/v1/models with its key): status, latency and the time it was taken.",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^ep-[0-9a-f]{6}$"
+                }
+              },
+              "required": [
+                "id"
+              ],
+              "additionalProperties": false,
+              "$schema": "http://json-schema.org/draft-07/schema#"
             },
             "execution": {
               "taskSupport": "forbidden"
