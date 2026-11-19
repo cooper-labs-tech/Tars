@@ -9,7 +9,7 @@ import { comparablePath } from '@/lib/display-path';
 type Zone = 'UTC' | 'local' | '';
 type OnStart = NonNullable<FleetScheduleInput['onStart']>;
 const ZONES: readonly SegmentedOption<'UTC' | 'local'>[] = [{ value: 'UTC', label: 'UTC' }, { value: 'local', label: "this computer's" }];
-const ON_START: readonly SegmentedOption<OnStart>[] = [{ value: 'resume-queues', label: 'resume the queues' }, { value: 'start-agents', label: 'also start agents at rest' }];
+const ON_START: readonly SegmentedOption<OnStart>[] = [{ value: 'resume-queues', label: 'resume the queues' }, { value: 'start-agents', label: 'also start workers at rest' }];
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -77,8 +77,9 @@ function WindowRecord({ w, zone, open }: { w: FleetWindow; zone: 'UTC' | 'local'
 
 /**
  * A project's hours and its cap (2.0.7, PR 593), in its Projects panel. The hours open and close a daily window, the
- * zone always said (UTC or this computer's); outside, its queues pause and its agents stop, each after its turn. The
- * cap holds its workers at work at once. Below, the window open now or the last one, as main recorded it. Frames:
+ * zone always said (UTC or this computer's); outside, its workers' queues pause and its workers stop, each after its
+ * turn, while its orchestrator and its chats' runners keep running (PR 593 since 65341b1d1). The cap holds its workers
+ * at work at once. Below, the window open now or the last one, as main recorded it. Frames:
  * `Projects · a project · hours and cap`, `Projects · hours and cap · states`, and their light copies.
  */
 export function ProjectFleet({ projectPath }: { projectPath: string }) {
@@ -157,8 +158,8 @@ export function ProjectFleet({ projectPath }: { projectPath: string }) {
       <Panel data-fleet-hours>
         <PanelCaption className="mb-2">HOURS</PanelCaption>
         <p className="mb-2.5 text-[11.5px] leading-snug text-text-secondary">
-          {s ? `${s.line.charAt(0).toUpperCase()}${s.line.slice(1)}. Outside them, its queues pause and its agents stop, each after its turn.`
-            : 'No hours: its agents work whenever they have work. Set a start and a stop to pause and stop them outside.'}
+          {s ? `${s.line.charAt(0).toUpperCase()}${s.line.slice(1)}. Outside them, its workers' queues pause and its workers stop, each after its turn; its orchestrator and its chats keep running.`
+            : 'No hours: its agents work whenever they have work. Set a start and a stop to pause and stop its workers outside them; its orchestrator stays on.'}
         </p>
         <div className="flex items-end gap-2.5">
           <label className="space-y-1">
