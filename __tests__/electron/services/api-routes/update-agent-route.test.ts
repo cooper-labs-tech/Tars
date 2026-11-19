@@ -123,6 +123,12 @@ import { EventEmitter } from 'events';
  *     provider change reads as resets of the model and CLI path nobody asked
  *     for. The event agent:retuned and the agent's lastRetune must carry what
  *     the caller named (`asked`), the implied resets left in `fields` only.
+ * 28. (#604's QA, F4) The window cannot tell an undo from a change: its own
+ *     revert shows as one more change, with an undo of its own, even after a
+ *     reload. The event agent:retuned and the agent's lastRetune must carry
+ *     the change a revert takes back (`revertOf`), from the window's undo and
+ *     from revert_agent_change alike, and a change that takes nothing back
+ *     must carry none.
  * 21. The window's undo (agent.revertChange, 2.0.7) goes another way than
  *     revert_agent_change, or is filed under an agent or Tars: it must take
  *     the same engine, filed under the window; of a queued change it applies
@@ -953,6 +959,25 @@ describe('the Audit of #595: the queue, the revert, the log', () => {
     expect(agents.get('w2')!.lastRetune).toMatchObject({ fields: ['cliPath', 'model', 'provider'], asked: ['provider'] });
     const pushed = vi.mocked(broadcastToAllWindows).mock.calls.filter(([channel]) => channel === 'agent:retuned').map(([, event]) => event as Record<string, unknown>);
     expect(pushed.at(-1)).toMatchObject({ changeId: answer.changeId, asked: ['provider'], fields: ['cliPath', 'model', 'provider'] });
+  });
+
+  it('28. tells the window which change a revert takes back, from its own undo and from the API alike', async () => {
+    vi.mocked(broadcastToAllWindows).mockClear();
+    const retunes = () => vi.mocked(broadcastToAllWindows).mock.calls.filter(([channel]) => channel === 'agent:retuned').map(([, event]) => event as Record<string, unknown>);
+    const first = await update('w2', { effort: 'high' }, { callerAgentId: 'w1' });
+    expect(agents.get('w2')!.lastRetune).not.toHaveProperty('revertOf');
+    expect(retunes().at(-1)).not.toHaveProperty('revertOf');
+
+    const undone = (await revertAsWindow({ changeId: String(first.answer.changeId) })) as { revertChangeId: string };
+    expect(agents.get('w2')!.lastRetune).toMatchObject({ changeId: undone.revertChangeId, by: { kind: 'window' }, revertOf: first.answer.changeId });
+    expect(retunes().at(-1)).toMatchObject({ changeId: undone.revertChangeId, revertOf: first.answer.changeId });
+
+    const second = await update('w2', { effort: 'low' }, { callerAgentId: 'w1' });
+    const back = await call('POST', '/api/agent-changes/revert', { changeId: second.answer.changeId }, { callerAgentId: 'w1' });
+    const result = (back.answer.results as Array<{ state: string; revertChangeId?: string }>)[0];
+    expect(result.state, JSON.stringify(back.answer)).toBe('applied');
+    expect(agents.get('w2')!.lastRetune).toMatchObject({ changeId: result.revertChangeId, revertOf: second.answer.changeId });
+    expect(retunes().at(-1)).toMatchObject({ changeId: result.revertChangeId, revertOf: second.answer.changeId });
   });
 
   it('25. refuses a value the log does not keep before writing anything', async () => {
