@@ -16,9 +16,10 @@ import * as path from 'node:path';
  *    agent set to low), or the model.
  * 4. A permission mode turned into a flag the installed codex does not have, which is the same exit 2
  *    (codex-cli.test.ts says which flags each mode becomes; these say every builder uses them). The installed codex's
- *    flags are read before a launch builds its line (prepareLaunch, off the main thread: codex-cli.test.ts, 8), in
- *    auto only: no flag of normal or bypass depends on the installed codex, and a launch in those modes waited on a
- *    --help it never used, up to 10 s on a loaded machine.
+ *    flags are read before a launch builds its line (prepareLaunch, off the main thread: codex-cli.test.ts, 8). Until
+ *    codex 0.170 only auto needed one, so only auto read them (a launch in normal or bypass waited on a --help it
+ *    never used, up to 10 s on a loaded machine); since 0.170 every mode needs one (9), so every mode reads them,
+ *    once per binary and version: a second launch of the same codex never asks it again.
  * 5. A prompt that leaves its quotes: a task is user text, and the line is run by a shell or read back into argv.
  * 6. A session Tars resumes after a restart started anew, or its id where codex does not read it. Measured on
  *    0.163: `codex resume [OPTIONS] [SESSION_ID] [PROMPT]` continues the session in its own rollout file, with its
@@ -31,6 +32,14 @@ import * as path from 'node:path';
  *    files set. Where they differ, codex asked "Trust this folder?" for good, and Tars's servers had no identity. The
  *    codex Tars starts is handed Tars's own: on macOS and Linux in its command line, which no rc file can change; on
  *    Windows, where nothing is sourced and the first word of the line is the binary itself, in its environment.
+ * 9. A turn that outlives its terminal. codex 0.170's TUI hands its turns to a shared background server, an app-server
+ *    daemon it starts under CODEX_HOME (or finds there, the user's own codex's included), detached from the terminal.
+ *    Measured on 0.170.0 (20/11, a 15 s shell call, the terminal killed 3 s in, as Tars stops an agent): the call ran
+ *    to its end and its result reached the endpoint 7 s after the kill, and two codex processes stayed up after it,
+ *    so stopping, restarting or quitting stopped nothing a codex agent was doing. With `--no-daemon` the same kill
+ *    ended the turn and left no process. So: `--no-daemon` in every mode, resumed and forked alike, on a codex whose
+ *    --help lists it; never on one that does not (an unknown flag is exit 2, as in 4); never in `codex exec`, whose
+ *    --help does not list it.
  */
 
 import { CodexProvider } from '../../../electron/providers/codex-provider';
@@ -40,6 +49,11 @@ const HELP_0163 = `Codex CLI
       --approve-for-me
       --dangerously-bypass-approvals-and-sandbox
   -a, --ask-for-approval <APPROVAL_POLICY>`;
+
+/** What 0.170.0's --help lists of these (measured 20/11): its daemon's switch besides 0.163's. */
+const HELP_0170 = `${HELP_0163}
+      --no-daemon
+          Run without the shared background server, even if it is already running`;
 
 let codex016 = '';
 const nowhere = path.join(os.tmpdir(), 'no-such-codex-for-tars-tests');
@@ -101,20 +115,62 @@ describe("an agent's terminal", () => {
   });
 });
 
+/** A codex at a path of its own whose --help is `help`, counting how often it is asked. */
+function fakeCodex(help: string): { bin: string; asks: () => number } {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-codex-modes-'));
+  const count = path.join(dir, 'count');
+  const bin = path.join(dir, 'codex');
+  fs.writeFileSync(bin, `#!/bin/sh\necho x >> '${count}'\ncat <<'EOF'\n${help}\nEOF\n`, { mode: 0o755 });
+  return { bin, asks: () => (fs.existsSync(count) ? fs.readFileSync(count, 'utf8').trim().split('\n').length : 0) };
+}
+
 describe("what a launch reads of codex first", () => {
-  it('4. its --help in auto only: a launch in normal or bypass mode does not wait on codex', async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-codex-modes-'));
-    const count = path.join(dir, 'count');
-    const bin = path.join(dir, 'codex');
-    fs.writeFileSync(bin, `#!/bin/sh\necho x >> '${count}'\ncat <<'EOF'\n${HELP_0163}\nEOF\n`, { mode: 0o755 });
-    const asks = () => (fs.existsSync(count) ? fs.readFileSync(count, 'utf8').trim().split('\n').length : 0);
+  it('4. its --help in every mode, once per binary: a second launch of the same codex does not ask it again', async () => {
+    for (const mode of ['normal', 'bypass', undefined, 'auto']) {
+      const { bin, asks } = fakeCodex(HELP_0170);
+      await provider.prepareLaunch(bin, mode);
+      expect(asks(), `a launch in ${mode ?? 'no mode'} read codex's flags`).toBe(1);
+      expect(argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: PROMPT, permissionMode: mode })), `in ${mode ?? 'no mode'}`).toContain('--no-daemon');
+    }
+    const { bin, asks } = fakeCodex(HELP_0163);
     await provider.prepareLaunch(bin, 'normal');
     await provider.prepareLaunch(bin, 'bypass');
-    await provider.prepareLaunch(bin, undefined);
-    expect(asks(), 'codex was asked for a mode that needs none of its flags').toBe(0);
     await provider.prepareLaunch(bin, 'auto');
-    expect(asks()).toBe(1);
+    expect(asks(), 'the same codex was asked again').toBe(1);
     expect(argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: PROMPT, permissionMode: 'auto' }))).toContain('--approve-for-me');
+    // Five codex started one after the other: over 5 s on a loaded machine (a load average of 21, measured 20/11).
+  }, 30_000);
+});
+
+describe("codex's shared background server", () => {
+  const ID = '01a14fb7-9e95-7c81-8980-2b82c8316805';
+
+  it('9. a codex that lists --no-daemon runs without it, in every mode, started, resumed or forked', async () => {
+    const { bin } = fakeCodex(HELP_0170);
+    await provider.prepareLaunch(bin, 'bypass');
+    for (const mode of ['normal', 'auto', 'bypass', undefined]) {
+      const fresh = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: PROMPT, permissionMode: mode }));
+      expect(fresh, `started in ${mode ?? 'no mode'}`).toContain('--no-daemon');
+      expect(fresh[fresh.length - 1]).toBe(PROMPT);
+    }
+    const resumed = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: PROMPT, permissionMode: 'bypass', resumeSessionId: ID }));
+    expect(resumed.slice(0, 2)).toEqual([bin, 'resume']);
+    expect(resumed).toContain('--no-daemon');
+    expect(resumed.slice(-2)).toEqual([ID, PROMPT]);
+    const forked = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: '', resumeSessionId: ID, forkSession: true }));
+    expect(forked.slice(0, 2)).toEqual([bin, 'fork']);
+    expect(forked).toContain('--no-daemon');
+    expect(forked[forked.length - 1]).toBe(ID);
+  });
+
+  it('9. never on a codex that does not list it, nor on one that could not answer, nor in codex exec', async () => {
+    for (const mode of ['normal', 'auto', 'bypass']) {
+      expect(argvOf(provider.buildInteractiveCommand({ binaryPath: codex016, prompt: PROMPT, permissionMode: mode })), `0.163 in ${mode}`).not.toContain('--no-daemon');
+      expect(argvOf(provider.buildInteractiveCommand({ binaryPath: nowhere, prompt: PROMPT, permissionMode: mode })), `no codex in ${mode}`).not.toContain('--no-daemon');
+    }
+    const { bin } = fakeCodex(HELP_0170);
+    await provider.prepareLaunch(bin, 'bypass');
+    expect(words(provider.buildOneShotCommand({ binaryPath: bin, prompt: PROMPT }))).not.toContain('--no-daemon');
   });
 });
 
