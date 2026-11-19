@@ -27,6 +27,12 @@ import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX, type
  *      free text Tars did not see), with a dialog or a question open, or a permission question held by Tars, waits for
  *      a confirmation.
  * W13. A line waits longer than the hook needs at rest: 10 minutes gave a forged hook all that time.
+ * And from the Audit's re-read at f211ff380 (written before its code):
+ * W14. Rest is read from the status the agent posts, which it can post itself mid-turn ("idle"), so a dialog the
+ *      screen check does not know (Qwen Code, pi, Kimi, unmeasured) gets the owner's answer confirmed. Rest is Tars's
+ *      own last-seen turn end for the current session (the Stop, /api/hooks/agent-stopped, from the state mod, the
+ *      shell hook or a session log's watcher), or that session's start, with no turn begun since; never the status
+ *      alone, never another session's Stop.
  */
 
 const A = '/projects/alpha';
@@ -117,14 +123,32 @@ describe('a line typed into an orchestrator\'s terminal', () => {
 
 describe('a line counts only when typed at rest (the Audit\'s L1 on #594)', () => {
   it('W12: at the CLI\'s prompt only: never in a turn, a dialog, a question or a permission question', () => {
-    for (const status of ['idle', 'completed', 'error']) expect(typedAtRest({ status }, false), status).toBe(true);
-    expect(typedAtRest({ status: 'waiting', waitingReason: 'idle' }, false)).toBe(true);
-    expect(typedAtRest({ status: 'running' }, false)).toBe(false);
-    expect(typedAtRest({ status: 'waiting', waitingReason: 'permission' }, false)).toBe(false);
-    expect(typedAtRest({ status: 'waiting', waitingReason: 'question' }, false)).toBe(false);
-    expect(typedAtRest({ status: 'idle' }, true)).toBe(false);
-    expect(typedAtRest({ status: 'idle', permissionAsk: { tool: 'Bash' } }, false)).toBe(false);
-    for (const status of ['asleep', 'stopped', undefined]) expect(typedAtRest({ status }, false), String(status)).toBe(false);
+    const rest = { session: 's1' };
+    const at = (a: { status?: string; waitingReason?: string; permissionAsk?: unknown }, dialog = false) => typedAtRest({ ...a, currentSessionId: 's1' }, dialog, rest);
+    for (const status of ['idle', 'completed', 'error']) expect(at({ status }), status).toBe(true);
+    expect(at({ status: 'waiting', waitingReason: 'idle' })).toBe(true);
+    expect(at({ status: 'running' })).toBe(false);
+    expect(at({ status: 'waiting', waitingReason: 'permission' })).toBe(false);
+    expect(at({ status: 'waiting', waitingReason: 'question' })).toBe(false);
+    expect(at({ status: 'idle' }, true)).toBe(false);
+    expect(at({ status: 'idle', permissionAsk: { tool: 'Bash' } })).toBe(false);
+    for (const status of ['asleep', 'stopped', undefined]) expect(at({ status }), String(status)).toBe(false);
+  });
+
+  it('W14: rest is Tars\'s own last-seen turn end for the current session, never a posted idle alone', () => {
+    // A forged "idle" mid-turn: no Stop seen since the turn began.
+    expect(typedAtRest({ status: 'idle', currentSessionId: 's1' }, false, undefined)).toBe(false);
+    expect(typedAtRest({ status: 'idle', currentSessionId: 's1' }, false, { session: 's0' })).toBe(false);
+    expect(typedAtRest({ status: 'idle', currentSessionId: 's1' }, false, { session: 's1' })).toBe(true);
+    // The store: a Stop, or the session's start, is rest until the next turn begins.
+    expect(words.restOf('lead-a')).toBeUndefined();
+    words.restSeen('lead-a', 's1');
+    expect(words.restOf('lead-a')).toEqual({ session: 's1' });
+    words.turnSeen('lead-a');
+    expect(words.restOf('lead-a')).toBeUndefined();
+    words.restSeen('lead-a', 's1');
+    words.restSeen('dev-a', 's9');
+    expect(words.restOf('lead-a')).toEqual({ session: 's1' });
   });
 
   it('W13: a line waits a minute at most for its confirmation', () => {
