@@ -1070,7 +1070,13 @@ holds, and records a line only when both agree:
   prompt: the agent idle, completed or failed, or waiting at its idle prompt;
   never in a turn (a line typed then is queued by the CLI, or answers what the
   turn shows), never with a dialog or question open (the PermissionRequest
-  hook, the screen) or a permission question held by Tars. Keys typed into a
+  hook, the screen) or a permission question held by Tars. And at rest is what
+  Tars itself last saw for the agent's current session, not the status the
+  agent posts, which it can post as "idle" mid-turn (the Audit's re-read at
+  f211ff380): a turn's Stop (`/api/hooks/agent-stopped`, from the state mod,
+  the shell hook or a session log's watcher) or the session's start, with no
+  turn begun since; a dialog the screen check does not know (Qwen Code, pi and
+  Kimi are unmeasured) is then inside a turn, and its answer never waits. Keys typed into a
   dialog Tars sees never reach the key model at all. And a line waits 60
   seconds at most: the hook comes some 40 ms after an Enter at rest. What an
   agent can still do is confirm, within that minute, a line its owner typed at
