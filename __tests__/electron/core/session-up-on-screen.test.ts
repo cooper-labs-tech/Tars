@@ -21,6 +21,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  *    discipline echoed the paste, Pi came up with an empty field, and delegate_task waited 200 s on a turn that never
  *    began. A pi session is up once its footer is drawn, the context used over its window (`0.0%/128k (auto)`, or
  *    `?/200k` when the share is unknown), never on its command line, the text typed ahead, or a line of its banner.
+ * 7. Pi draws its footer before its startup ends: it first fetches fd and ripgrep when they are missing, and until
+ *    then takes text but answers Enter with "Startup is still in progress", keeping the task unsent (its
+ *    interactive-mode.js, the conformance run's second try). Up only once every download it announced
+ *    (`<tool> not found. Downloading...`) has its outcome (`<tool> installed to ...`, or `Failed to download <tool>`).
  */
 
 const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined, history: undefined as string[] | undefined }));
@@ -116,6 +120,18 @@ describe('a session up on its screen', () => {
     expect(p.upOnScreen(PI_BANNER)).toBe(false);
     expect(p.upOnScreen(['  Run it at 100%/4 speed, see https://x.dev/a?/b'])).toBe(false);
     expect(p.upOnScreen([])).toBe(false);
+  });
+
+  it('7: pi is not up while a tool it announced is still downloading, and up once each has its outcome', () => {
+    const p = new PiProvider();
+    const footer = ['────────', '', '────────', '~/projects/project-a (main)', '0.0%/128k (auto)      stand-in-coder'];
+    const fd = ' fd not found. Downloading...';
+    const rg = ' ripgrep not found. Downloading...';
+    expect(p.upOnScreen([...PI_BANNER, fd, ...footer])).toBe(false);
+    expect(p.upOnScreen([...PI_BANNER, fd, ' Startup is still in progress', rg, ' fd installed to /h/.pi/agent/bin/fd', ...footer])).toBe(false);
+    expect(p.upOnScreen([...PI_BANNER, fd, ' fd installed to /h/.pi/agent/bin/fd', ...footer])).toBe(true);
+    expect(p.upOnScreen([...PI_BANNER, fd, rg, ' fd installed to /h/.pi/agent/bin/fd', ' Warning: Failed to download ripgrep: fetch failed', ...footer])).toBe(true);
+    expect(p.upOnScreen([...PI_BANNER, ' Warning: fd not found. Offline mode enabled, skipping download.', ...footer])).toBe(true);
   });
 
   it('3: a codex session is up at its exec, whatever its screen', () => {
