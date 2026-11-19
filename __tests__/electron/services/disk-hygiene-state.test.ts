@@ -84,6 +84,8 @@ beforeEach(() => {
   slow = { ms: 0 };
   mk(path.join(wt(project, 'idle'), 'release'), 10);
   fs.writeFileSync(path.join(wt(project, 'idle'), 'release', 'builder-debug.yml'), 'x: 1\n');
+  fs.writeFileSync(path.join(wt(project, 'idle'), 'release', 'latest-mac.yml'), 'version: 1\n');
+  { const t = new Date(now - 10 * DAY); fs.utimesSync(path.join(wt(project, 'idle'), 'release', 'latest-mac.yml'), t, t); }
   { const t = new Date(now - 10 * DAY); fs.utimesSync(path.join(wt(project, 'idle'), 'release', 'builder-debug.yml'), t, t); }
   mk(path.join(wt(project, 'idle'), 'release'), 10);
   mk(path.join(wt(project, 'idle'), '.next'), 10);
@@ -91,6 +93,8 @@ beforeEach(() => {
   mk(path.join(wt(project, 'active'), 'release'), 0);
   mk(path.join(wt(other, 'old'), 'release'), 10);
   fs.writeFileSync(path.join(wt(other, 'old'), 'release', 'builder-debug.yml'), 'x: 1\n');
+  fs.writeFileSync(path.join(wt(other, 'old'), 'release', 'latest-mac.yml'), 'version: 1\n');
+  { const t = new Date(now - 10 * DAY); fs.utimesSync(path.join(wt(other, 'old'), 'release', 'latest-mac.yml'), t, t); }
   { const t = new Date(now - 10 * DAY); fs.utimesSync(path.join(wt(other, 'old'), 'release', 'builder-debug.yml'), t, t); }
   mk(path.join(wt(other, 'old'), 'release'), 10);
   for (const w of [wt(project, 'idle'), wt(other, 'old')]) { const t = new Date(now - 10 * DAY); fs.utimesSync(w, t, t); }

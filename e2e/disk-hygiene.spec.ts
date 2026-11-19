@@ -73,10 +73,11 @@ function filled(dir: string, days: number, kb = 64): string {
   age(dir, days);
   return dir;
 }
-/** A release/ as electron-builder leaves it: its builder-debug.yml inside. */
+/** A release/ as electron-builder leaves it: its builder-debug.yml and its update manifest inside. */
 function built(dir: string, days: number, kb = 64): string {
   filled(dir, days, kb);
   fs.writeFileSync(path.join(dir, 'builder-debug.yml'), 'x: 1\n');
+  fs.writeFileSync(path.join(dir, 'latest-mac.yml'), 'version: 1\n');
   age(dir, days);
   return dir;
 }

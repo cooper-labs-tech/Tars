@@ -32,6 +32,10 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  *     go in one click. Only one git ignores, or does not track, with no tracked file in it, holding electron-builder's
  *     marker (builder-debug.yml, as the Tars checkout's release/ holds it, or builder-effective-config.yaml); at a
  *     project's root, only an ignored one (an untracked one is uncommitted work); and the re-check applies the same.
+ * L9. (the Audit's Info on #605 at 480718889) An ignored release/ holding the owner's own files, into which an injected
+ *     agent plants builder-debug.yml, is proposed. A second sign electron-builder writes with it is required: an
+ *     update manifest (latest.yml, latest-mac.yml, latest-linux.yml), or an artefact beside its .blockmap; a .blockmap
+ *     alone, its artefact gone, is no sign.
  */
 
 const DAY = 86_400_000;
@@ -74,10 +78,11 @@ function world(over: Over = {}): JanitorWorld {
     tracking: async (dir) => over.tracking?.[dir] ?? 'ignored',
   };
 }
-/** A release/ as electron-builder leaves it: its marker inside. */
-function release(dir: string, days: number, marker = 'builder-debug.yml'): string {
+/** A release/ as electron-builder leaves it: its marker and its update manifest inside (as the Tars checkout's). */
+function release(dir: string, days: number, marker = 'builder-debug.yml', signs: string[] = ['latest-mac.yml']): string {
   mk(dir, days);
-  if (marker) { fs.writeFileSync(path.join(dir, marker), 'x: 1\n'); old(path.join(dir, marker), days); old(dir, days); }
+  for (const f of [...(marker ? [marker] : []), ...signs]) { fs.writeFileSync(path.join(dir, f), 'x: 1\n'); old(path.join(dir, f), days); }
+  old(dir, days);
   return dir;
 }
 
@@ -215,5 +220,25 @@ describe('a release/ folder is electron-builder\'s output only on its evidence (
     const report = await approveJanitor([id], () => world({ tracking: { [root]: 'tracked' } }), ops);
     expect(gone).toEqual([]);
     expect(report.kept.map(k => k.id)).toEqual([id]);
+  });
+});
+
+describe('a planted marker is not enough (the Audit\'s Info on #605)', () => {
+  const fresh = () => { const dir = path.join(wt('idle'), 'release'); fs.rmSync(dir, { recursive: true, force: true }); return dir; };
+
+  it('L9: builder-debug.yml alone, or with a .blockmap whose artefact is gone, is no build', async () => {
+    const dir = fresh();
+    release(dir, 10, 'builder-debug.yml', []);
+    expect((await kindsAt(world())).get(dir), 'a planted marker alone').toBeUndefined();
+    release(dir, 10, 'builder-debug.yml', ['Tars-2.0.6-arm64.dmg.blockmap']);
+    expect((await kindsAt(world())).get(dir), 'a blockmap, its artefact gone').toBeUndefined();
+  });
+
+  it('L9: with an update manifest, or an artefact beside its blockmap, it is', async () => {
+    for (const signs of [['latest.yml'], ['latest-linux.yml'], ['Tars-2.0.6-arm64.dmg', 'Tars-2.0.6-arm64.dmg.blockmap'], ['Tars Setup 2.0.6.exe', 'Tars Setup 2.0.6.exe.blockmap']]) {
+      const dir = fresh();
+      release(dir, 10, 'builder-debug.yml', signs);
+      expect((await kindsAt(world())).get(dir)?.kind, signs.join(', ')).toBe('release-folder');
+    }
   });
 });
