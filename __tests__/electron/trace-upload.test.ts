@@ -29,6 +29,11 @@ import { hasPosixModes } from '../setup/platform-limits';
  *    back-office no longer knows this Tars", and leave registering again to the user's own consent (the
  *    orchestrator's decision on #596).
  * 19. A consent withdrawn (sharing turned off, no deletion) while a pass runs: the pass sends the next sessions.
+ * 20. (L1 at 36690e547.) Sharing again after a deletion sends the deleted sessions back: a deletion is the user's
+ *     word, and only sessions started after it may go.
+ * 21. The consent is withdrawn only once the DELETE succeeded, so sending goes on meanwhile; a DELETE that fails or
+ *     never goes leaves sharing on, or says nothing of the deletion still owed.
+ * 22. Two deletions at once clear each other's stop: a pass starts while the second is still deleting.
  * 18. A deletion that lands while a pass runs: the pass goes on with the consent it read at its start, and sends
  *     after the deletion (the re-audit's M1 at ec6951aa5).
  * 9. A restart sends every session again, or forgets the install and registers anew.
@@ -132,6 +137,7 @@ let bo: FakeBackOffice;
 let clock: number;
 let settings: { url: string; consentAt?: string; projects: string[]; agentsTraced: Set<string> };
 let withdrawn = 0;
+let deletion: { owed: boolean; since?: number } = { owed: false };
 
 function seed(traceId: string, text: string, startedAt = 1000) {
   store.openTrace({ traceId, projectPath: PROJECT, agentId: 'agent-1', agentName: 'Q', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'Remote host', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'open-coder-1', startedAt });
@@ -145,7 +151,8 @@ function uploader(over: Partial<UploaderDeps> = {}) {
   return new TraceUploader({
     store,
     installFile: path.join(dir, 'private', 'traces-install.json'),
-    settings: () => ({ url: settings.url, consentAt: settings.consentAt }),
+    settings: () => ({ url: settings.url, consentAt: settings.consentAt, since: deletion.since, deletionOwed: deletion.owed }),
+    setDeletion: (d) => { deletion = d; },
     eligible: (s) => settings.projects.includes(s.projectPath) && settings.agentsTraced.has(s.agentId),
     scrubContext: () => ({ homeDirs: [HOME], knownSecrets: [SECRET], envValues: [] }),
     client: { name: 'tars', version: '0.0.0-test', platform: process.platform },
@@ -162,6 +169,7 @@ beforeEach(async () => {
   await bo.start();
   clock = 1_000_000;
   withdrawn = 0;
+  deletion = { owed: false };
   settings = { url: bo.base, consentAt: '2026-11-19T00:00:00Z', projects: [PROJECT], agentsTraced: new Set(['agent-1']) };
 });
 afterEach(async () => {
@@ -373,6 +381,62 @@ describe('the trace uploader', () => {
     }) as typeof fetch;
     await uploader({ fetch: spy }).runOnce();
     expect(bo.seen.filter(x => x.method === 'PUT' && x.url.startsWith('/v1/batches/'))).toHaveLength(1);
+  });
+
+  it('20: sharing again after a deletion sends only the sessions started after it', async () => {
+    seed('old', 'before the deletion', 1000);
+    const u = uploader();
+    await u.runOnce();
+    clock = 2_000_000;
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    expect(deletion.since).toBe(2_000_000);
+    seed('new', 'after the deletion', 2_500_000);
+    settings.consentAt = '2026-11-19T07:00:00Z';
+    const r = await u.runOnce();
+    expect(r.sent).toBe(1);
+    expect([...bo.sessions.keys()]).toEqual(['new']);
+  });
+
+  it('21: the consent goes before the DELETE; a DELETE that fails leaves sharing off and the deletion owed', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    const order: string[] = [];
+    const spy = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE') { order.push(`DELETE (consent ${settings.consentAt ? 'on' : 'off'})`); return new Response('{"error":"unavailable"}', { status: 503 }); }
+      return fetch(url, init);
+    }) as typeof fetch;
+    const failing = uploader({ fetch: spy });
+    const d = await failing.deleteEverywhere();
+    expect(d.ok).toBe(false);
+    expect(order).toEqual(['DELETE (consent off)']);
+    expect(deletion.owed).toBe(true);
+    expect(failing.state()).toMatchObject({ deletionOwed: true });
+    expect((await failing.runOnce()).skipped).toBe('off');
+    expect(await uploader().deleteEverywhere()).toMatchObject({ ok: true });
+    expect(deletion.owed).toBe(false);
+  });
+
+  it('22: two deletions at once: no pass starts until the last one is done', async () => {
+    seed('t1', 'first');
+    let releaseSecond!: () => void;
+    const secondHeld = new Promise<void>(r => { releaseSecond = r; });
+    let deletes = 0;
+    const spy = (async (url: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE' && ++deletes === 1) await secondHeld;
+      return fetch(url, init);
+    }) as typeof fetch;
+    const u = uploader({ fetch: spy });
+    await u.runOnce();
+    // The first click's DELETE is slow; the second click's goes through at once and ends first.
+    const first = u.deleteEverywhere();
+    const second = u.deleteEverywhere();
+    await second;
+    settings.consentAt = '2026-11-19T08:00:00Z';
+    seed('t2', 'second', clock + 1);
+    expect((await u.runOnce()).skipped).toBe('off');
+    releaseSecond();
+    await first;
   });
 
   it('18: a deletion landing while a pass runs stops it, and nothing is sent after the deletion', async () => {
