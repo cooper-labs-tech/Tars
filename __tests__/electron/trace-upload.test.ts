@@ -34,6 +34,9 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 21. The consent is withdrawn only once the DELETE succeeded, so sending goes on meanwhile; a DELETE that fails or
  *     never goes leaves sharing on, or says nothing of the deletion still owed.
  * 22. Two deletions at once clear each other's stop: a pass starts while the second is still deleting.
+ * 23. (L1 at ee4d55975.) A deletion owed for ever locks sharing out: the install file lost, or an old back-office gone
+ *     for good, and consent is refused even to a new back-office.
+ * 24. (L2.) A clock moved backward between the sessions and the deletion lets them through on re-consent.
  * 18. A deletion that lands while a pass runs: the pass goes on with the consent it read at its start, and sends
  *     after the deletion (the re-audit's M1 at ec6951aa5).
  * 9. A restart sends every session again, or forgets the install and registers anew.
@@ -437,6 +440,34 @@ describe('the trace uploader', () => {
     expect((await u.runOnce()).skipped).toBe('off');
     releaseSecond();
     await first;
+  });
+
+  it('23: an owed deletion with no install file left is no longer owed; and the user can give up an old one', async () => {
+    seed('t1', 'first');
+    deletion = { owed: true, since: 5000 };
+    const u = uploader();
+    expect(u.state().deletionOwed).toBe(false);
+    expect(deletion).toEqual({ owed: false, since: 5000 });
+    // An old back-office gone for good, its install file still here: the user gives its deletion up.
+    await u.runOnce();
+    deletion = { owed: true, since: 5000 };
+    expect(u.state().deletionOwed).toBe(true);
+    u.abandonDeletion();
+    expect(deletion).toEqual({ owed: false, since: 5000 });
+    expect(fs.existsSync(path.join(dir, 'private', 'traces-install.json'))).toBe(false);
+    expect(u.state()).toMatchObject({ deletionOwed: false, registered: false });
+  });
+
+  it('24: a clock moved backward does not let sessions present at the deletion through', async () => {
+    seed('present', 'recorded at a later clock', 5_000_000);
+    const u = uploader();
+    await u.runOnce();
+    clock = 1_000_000;
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    expect(deletion.since).toBeGreaterThanOrEqual(5_000_000);
+    settings.consentAt = '2026-11-19T09:00:00Z';
+    expect((await u.runOnce()).sent).toBe(0);
+    expect(bo.sessions.size).toBe(0);
   });
 
   it('18: a deletion landing while a pass runs stops it, and nothing is sent after the deletion', async () => {
