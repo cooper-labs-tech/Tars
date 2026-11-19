@@ -848963,6 +848963,233 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "s7jeA",
+                  "name": "last retune · a provider change",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "qutaz",
+                      "fill": "$text-muted",
+                      "content": "LAST RETUNE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yppA6",
+                      "name": "rec by",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Q6454X",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "by",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "k3PNpn",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "Lead B, orchestrator of project-b",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "h8SqQY",
+                      "name": "rec what",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qqPHq",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "what",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "FHlQc",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "provider claude to codex",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Xsf6d",
+                      "name": "rec also reset",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "X4Egdv",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "also reset",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "SIGyb",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "model, cliPath",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zqY7E",
+                      "name": "rec asked",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "W2OI3",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "asked",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "zbXPT",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "19/11 14:02",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w9hQS",
+                      "name": "rec in effect",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "W0V1q7",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "in effect",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "JiHUZ",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "19/11 14:02, its terminal restarted on the same conversation",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "A1HLuh",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "M191j",
+                          "name": "b undo",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LkStn",
+                              "fill": "$text-primary",
+                              "content": "undo",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -850188,6 +850415,233 @@
                             {
                               "type": "text",
                               "id": "SEYNW",
+                              "fill": "$text-primary",
+                              "content": "undo",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Qjr3V",
+                  "name": "last retune · a provider change",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    12,
+                    14
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "aCO5q",
+                      "fill": "$text-muted",
+                      "content": "LAST RETUNE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mFyAz",
+                      "name": "rec by",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Fcpq6",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "by",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XobaE",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "Lead B, orchestrator of project-b",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "nTVZY",
+                      "name": "rec what",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FOmQv",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "what",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Rnfbx",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "provider claude to codex",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T177fh",
+                      "name": "rec also reset",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OKhtx",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "also reset",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "jqlpP",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "model, cliPath",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n93WCX",
+                      "name": "rec asked",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "hbRq3",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "asked",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "rocB7",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "19/11 14:02",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EmlBD",
+                      "name": "rec in effect",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n8CkTz",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 74,
+                          "content": "in effect",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "xd92X",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 366,
+                          "content": "19/11 14:02, its terminal restarted on the same conversation",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oSenv",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Glblh",
+                          "name": "b undo",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "EAeao",
                               "fill": "$text-primary",
                               "content": "undo",
                               "lineHeight": 1.4,
