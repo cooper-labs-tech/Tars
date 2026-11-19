@@ -1315,17 +1315,21 @@ A worker can run its CLI on one of the owner's Linux hosts (2.0.7; SPECS.md §1 
 holds). What the host needs, and what to check when a launch fails.
 
 - **The owner, once, outside Tars:**
-  - an entry in `~/.ssh/config` (or a `user@host`) that logs in with a key, and the host's key in `known_hosts`. Tars runs ssh with `BatchMode=yes`, so a passphrase or an unknown host fails there, in ssh's words, in the agent's terminal;
+  - an entry in `~/.ssh/config` (or a `user@host`) that logs in with a key, and the host's key in `known_hosts`. Tars runs ssh with `BatchMode=yes` and `StrictHostKeyChecking=yes`, so a passphrase or a host key not yet known fails there, in ssh's words, in the agent's terminal, whatever `accept-new` the config says;
   - Claude Code installed and signed in on the host, as that account, and `claude` on the PATH of its login shell.
-- **The host:** bash, tmux, base64, jq and curl (the hooks), and an sshd that allows remote forwarding (`AllowTcpForwarding remote` or `yes`).
-- **The host's folder:** it must exist. Tars makes none yet (the worktree on the host comes later). A missing one ends the launch with `no such folder on this host`.
-- **Adding the host:** in the window (`remoteHosts.set`; its page is the window's part). Then place the agent (`update_agent` with `remote: { hostId }`, or the window), and hand it a task.
+- **What Tars's ssh takes of that config, and what it overrides:** the target, user, port, keys and proxy are the config's. Multiplexing is turned off (`ControlMaster=no`, `ControlPath=none`): a `ControlPersist` there would keep the tunnel to this computer open past the agent's terminal. A `RemoteCommand` there is overridden (`RemoteCommand=none`): with one, every launch would fail with "Cannot execute command-line and remote command".
+- **The host:** bash, tmux 3.0 or newer (an older one is refused: it runs the session's arguments through `sh -c`), base64, sed, jq and curl (the hooks), and an sshd that allows remote forwarding (`AllowTcpForwarding remote` or `yes`).
+- **The host's folder:** it must exist. Tars makes none yet (the worktree on the host comes later). A missing one ends the launch with `no such folder on this host`. Its names, and the work root's, are letters, digits and `. _ - + @` only.
+- **The tunnel's port:** the host takes the first of the agent's six candidate ports, from 41000 to 42999, that nothing listens on. With none free, the launch ends with `no free port on this host for the tunnel to Tars`.
+- **Adding the host:** in the window (`remoteHosts.set`; its page is the window's part). Then place the agent (`update_agent` with `remote: { hostId }`, or the window), and hand it a task, or start it from the window.
+- **Removing the host:** refused while agents are placed on it (`host_in_use`, naming them). Bring them back with `remote: null`, or place them elsewhere: each move ends the agent's session on the host it leaves.
 - **What a launch shows:** the terminal's first lines are the two ssh's. If the preparation fails, the CLI never starts, and the terminal ends with ssh's exit code (`error`).
 - **What to look at on the host:**
   - `tmux ls` shows `tars-<agent id>` while it runs;
-  - `~/.tars-remote/agents/<id>/` holds `settings.json` and `mcp.json`, and never `env` once the CLI has started;
+  - `~/.tars-remote/agents/<id>/` holds `settings.json`, `mcp.tmpl` and `mcp.json`, and never `env` once the CLI has started;
   - `~/.tars/logs/hooks.log` holds the hooks' posts.
-- **A stop** ends the tmux session over ssh. The window's start for such an agent is refused with why.
+- **A stop, a removal, a move or a restart** ends the tmux session over ssh. When the host cannot be reached, the stop's record says the session was left there, with ssh's words; end it there with `~/.tars-remote/bin/tars-remote stop <agent id>`.
+- **Files Tars leaves on this computer:** a launch's preparation file in `~/.tars-private/remote-launch/` lives for the moment the preparation takes; Tars's start removes any a stopped Tars left.
 - **Not yet:**
   - a dropped connection is the terminal's exit, and there is no re-attach;
   - quitting Tars leaves the session on the host until the agent's next launch, which ends it first.

@@ -32,7 +32,13 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    machine holds the agent's token (read from the CLI's own /proc/<pid>/environ); the host's own
  *    ~/.claude/settings.json was never written; the agent's folder is trusted in its ~/.claude.json; the API answers on
  *    the host's loopback through the tunnel, and not on the container's network address.
+ *    The tunnel reaches a listener of its own (the Audit's gate of #600): from the host, /api/health and
+ *    /api/local-file answer 401 without a token, and /api/health answers with the agent's.
+ * 4b. (M1) The window cannot remove the host while Remote One is placed on it (host_in_use).
+ * 4c. (L1) The window's restart ends the session on the host and starts it again there: a new tmux pane, a new session.
  * 5. stop_agent: the tmux session is gone, the tunnel's port closed, Remote One stopped.
+ * 6. (M1) Started again, its link dropped (this computer's ssh ended by its pid): the session goes on on the host; the
+ *    move back to this computer (update_agent remote null) ends it there. The host can then be removed.
  * The artefact: values.json (each tool's answer, the host's log, what the host held), the app's trace.
  * Red on three mutants (reports kept with the PR): the placement without the launch, as at 288a8cddd (the CLI starts
  * on this computer, nothing runs in the container); a remote agent's CLI pid compared with its local terminal's (its
@@ -50,8 +56,15 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Reply = { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown };
 type Win = { electronAPI: {
-  agent: { get(id: string): Promise<{ status: string; currentSessionId?: string; remote?: { hostId: string; folder: string } } | null> };
-  remoteHosts: { set(host: unknown): Promise<{ success: boolean; error?: string }>; list(): Promise<unknown[]> };
+  agent: {
+    get(id: string): Promise<{ status: string; currentSessionId?: string; remote?: { hostId: string; folder: string } } | null>;
+    restart(id: string): Promise<{ success: boolean; error?: string }>;
+  };
+  remoteHosts: {
+    set(host: unknown): Promise<{ success: boolean; error?: string }>;
+    remove(id: string): Promise<{ success: boolean; error?: string; code?: string }>;
+    list(): Promise<unknown[]>;
+  };
 } };
 
 const dockerOk = spawnSync('docker', ['info', '--format', '{{.ServerVersion}}'], { encoding: 'utf8' }).status === 0;
@@ -60,9 +73,9 @@ function docker(args: string[], input?: string): string {
   return execFileSync('docker', args, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'], timeout: 600_000 }).trim();
 }
 
-/** A command in the container, as the host's account; its exit code and output. */
-function onHost(id: string, script: string): { code: number; out: string } {
-  const r = spawnSync('docker', ['exec', '-u', 'agent', id, 'sh', '-c', script], { encoding: 'utf8', timeout: 30_000 });
+/** A command in the container, as the host's account, `input` on its stdin; its exit code and output. */
+function onHost(id: string, script: string, input?: string): { code: number; out: string } {
+  const r = spawnSync('docker', ['exec', ...(input !== undefined ? ['-i'] : []), '-u', 'agent', id, 'sh', '-c', script], { encoding: 'utf8', timeout: 30_000, input });
   return { code: r.status ?? -1, out: `${r.stdout ?? ''}`.trim() };
 }
 
@@ -259,18 +272,44 @@ test("an agent placed on a remote host runs there in tmux, reports through its t
     const agentFiles = onHost(host.id, `ls /home/agent/.tars-remote/agents/${REMOTE}`).out.split('\n').sort();
     const settingsWritten = onHost(host.id, 'test -e /home/agent/.claude/settings.json').code === 0;
     const trusted = JSON.parse(onHost(host.id, 'cat /home/agent/.claude.json').out).projects?.[FOLDER]?.hasTrustDialogAccepted;
-    const throughTunnel = onHost(host.id, `curl -s -m 3 http://127.0.0.1:${rport}/api/health`);
+    const status = (route: string) => onHost(host.id, `curl -s -m 3 -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${rport}${route}'`).out;
+    const healthNoToken = status('/api/health');
+    const localFileNoToken = status('/api/local-file?path=/etc/hosts');
     const onNetwork = onHost(host.id, `curl -s -m 3 http://$(hostname -i):${rport}/api/health || echo refused`);
-    keep({ tokenFound: token.length > 20, tunnel, agentFiles, settingsWritten, trusted, throughTunnel, onNetwork: onNetwork.out });
+    keep({ tokenFound: token.length > 20, tunnel, agentFiles, settingsWritten, trusted, healthNoToken, localFileNoToken, onNetwork: onNetwork.out });
     expect(token.length).toBeGreaterThan(20);
     expect(tunnel).toMatch(/^http:\/\/127\.0\.0\.1:4[0-9]{4}$/);
     expect(hostCommandLines.includes(token)).toBe(false);
     expect(macCommandLines.includes(token)).toBe(false);
-    expect(agentFiles).toEqual(['mcp.json', 'settings.json']);
+    expect(agentFiles).toEqual(['mcp.json', 'mcp.tmpl', 'settings.json']);
     expect(settingsWritten).toBe(false);
     expect(trusted).toBe(true);
-    expect(throughTunnel.out).toBe('{"ok":true}');
+    // The tunnel's listener: nothing without the agent's token, the two routes the API's own port exempts included.
+    expect(healthNoToken).toBe('401');
+    expect(localFileNoToken).toBe('401');
     expect(onNetwork.out).toBe('refused');
+    // With it (the header on curl's stdin, never on a command line): answered.
+    const healthWithToken = onHost(host.id, `curl -s -m 3 -H @- http://127.0.0.1:${rport}/api/health`, `Authorization: Bearer ${token}\n`).out;
+    keep({ healthWithToken });
+    expect(healthWithToken).toBe('{"ok":true}');
+
+    // 4b. The host cannot be removed while Remote One is placed on it.
+    const removeRefused = await page.evaluate((h) => (window as unknown as Win).electronAPI.remoteHosts.remove(h), HOST_ID);
+    keep({ removeRefused });
+    expect(removeRefused).toMatchObject({ success: false, code: 'host_in_use' });
+    expect(removeRefused.error).toMatch(/Remote One/);
+
+    // 4c. The window's restart: the session on the host ended, then started again there.
+    const sessionBefore = (await agent(REMOTE))?.currentSessionId;
+    const restarted = await page.evaluate((i) => (window as unknown as Win).electronAPI.agent.restart(i), REMOTE);
+    keep({ restarted });
+    expect(restarted).toMatchObject({ success: true });
+    await expect.poll(async () => { const s = (await agent(REMOTE))?.currentSessionId; return !!s && s !== sessionBefore; }, { timeout: 60_000 }).toBe(true);
+    const paneAfter = onHost(host.id, `tmux display-message -p -t tars-${REMOTE} '#{pane_pid}'`).out;
+    keep({ paneBefore: pane, paneAfter, launches: hostLog(host.id).filter((e) => e.launch === true).length });
+    expect(paneAfter).toMatch(/^[0-9]+$/);
+    expect(paneAfter).not.toBe(pane);
+    expect(hostLog(host.id).filter((e) => e.launch === true)).toHaveLength(2);
 
     // 5. The stop ends the session on the host and its tunnel.
     const stopped = await lead('stop_agent', { id: REMOTE, reason: 'its task on the host is done' });
@@ -279,7 +318,31 @@ test("an agent placed on a remote host runs there in tmux, reports through its t
     await expect.poll(() => onHost(host.id, `tmux has-session -t tars-${REMOTE}`).code, { timeout: 30_000 }).not.toBe(0);
     await expect.poll(() => onHost(host.id, `curl -s -m 2 http://127.0.0.1:${rport}/api/health || echo closed`).out, { timeout: 30_000 }).toBe('closed');
     await expect.poll(async () => (await agent(REMOTE))?.status, { timeout: 30_000 }).toBe('stopped');
-    keep({ hostLogAtEnd: hostLog(host.id) });
+
+    // 6. Started again, its link dropped: the session goes on on the host, and the move back ends it there.
+    const again = await lead('start_agent', { id: REMOTE, prompt: 'ECHO again' });
+    keep({ again });
+    expect(again.isError, again.text).toBe(false);
+    await expect.poll(() => hostLog(host.id).some((e) => e.answer === 'echo again'), { timeout: 90_000 }).toBe(true);
+    const terminalSsh = () => execFileSync('ps', ['-axww', '-o', 'pid=,command='], { encoding: 'utf8' }).split('\n')
+      .filter((l) => / -tt /.test(l) && l.includes(SSH_ALIAS) && l.includes(REMOTE))
+      .map((l) => Number(l.trim().split(/\s+/)[0]));
+    const [sshPid] = terminalSsh();
+    keep({ sshPid });
+    expect(sshPid).toBeGreaterThan(0);
+    process.kill(sshPid, 'SIGKILL');
+    await expect.poll(() => terminalSsh().length, { timeout: 20_000 }).toBe(0);
+    await sleep(1_000);
+    expect(onHost(host.id, `tmux has-session -t tars-${REMOTE}`).code, 'the session on the host outlived its link').toBe(0);
+    const back = await lead('update_agent', { id: REMOTE, remote: null });
+    keep({ back });
+    expect(back.isError, back.text).toBe(false);
+    expect(back.text).not.toMatch(/could not end/);
+    await expect.poll(() => onHost(host.id, `tmux has-session -t tars-${REMOTE}`).code, { timeout: 30_000 }).not.toBe(0);
+    expect((await agent(REMOTE))?.remote).toBeUndefined();
+    const removed = await page.evaluate((h) => (window as unknown as Win).electronAPI.remoteHosts.remove(h), HOST_ID);
+    keep({ removed, hostLogAtEnd: hostLog(host.id) });
+    expect(removed).toMatchObject({ success: true });
     expect(errors).toEqual([]);
   } finally {
     for (const s of servers) s.kill();
