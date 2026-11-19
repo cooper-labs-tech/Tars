@@ -65,6 +65,24 @@ function writeMcpJson(servers: string[]) {
 }
 const serversIn = (file: string) => Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers).sort();
 
+/**
+ * A CodexProvider whose codex home is this test's own folder, set here and not left to the suite's home isolation: a
+ * run of this file without the repository's setup files (a bench with a vitest config of its own) wrote and then
+ * deleted the owner's real ~/.codex/config.toml on 20/11. The provider takes its home when it is built, and the test
+ * refuses to write anywhere else.
+ */
+function codexIn(dir: string): CodexProvider {
+  const was = process.env.CODEX_HOME;
+  process.env.CODEX_HOME = path.join(dir, '.codex');
+  try {
+    const codex = new CodexProvider();
+    if (path.relative(dir, codex.configDir).startsWith('..')) throw new Error(`codex home ${codex.configDir} is outside ${dir}`);
+    return codex;
+  } finally {
+    if (was === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = was;
+  }
+}
+
 describe('the claude family: a file per role', () => {
   it('1. an orchestrator gets all seven, a worker all but telegram and x, and a server the user added', () => {
     expect([...ORCHESTRATOR_ONLY_MCP].sort()).toEqual(['claude-mgr-telegram', 'dorothy-x']);
@@ -173,7 +191,7 @@ process.stderr.write('not in this stand-in: ' + a.join(' ')); process.exit(2);
 
 describe('the CLIs that read their own config: a switch per run', () => {
   it('3. codex: a worker runs with the two switched off, an orchestrator with all', () => {
-    const codex = new CodexProvider();
+    const codex = codexIn(home);
     fs.mkdirSync(codex.configDir, { recursive: true });
     fs.writeFileSync(path.join(codex.configDir, 'config.toml'), SEVEN.map(n => `[mcp_servers.${n}]\ncommand = "node"\n`).join('\n'));
     const worker = codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: false, appSettings: {} as never });
@@ -201,7 +219,7 @@ describe('the CLIs that read their own config: a switch per run', () => {
   });
 
   it('10. codex: the line Tars builds reads the config.toml of the home it hands codex', () => {
-    const codex = new CodexProvider();
+    const codex = codexIn(home);
     fs.mkdirSync(codex.configDir, { recursive: true });
     fs.writeFileSync(path.join(codex.configDir, 'config.toml'), '[mcp_servers.dorothy-x]\ncommand = "node"\n');
     const worker = codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: false, appSettings: {} as never });
