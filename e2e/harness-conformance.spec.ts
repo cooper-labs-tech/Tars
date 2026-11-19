@@ -154,7 +154,10 @@ for (const h of HARNESSES) {
         // 2. Delegated to, answered with its own final answer, after a real tool round.
         const delegated = await lead('delegate_task', { id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-1` });
         const taskId = /\bt-[0-9a-f]{8}\b/.exec(delegated.text)?.[0];
-        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf() });
+        // What Tars knows of the agent and its tasks at that moment, for a run that goes wrong.
+        const view = (a: Record<string, unknown> | null) => a && Object.fromEntries(['status', 'currentSessionId', 'resumableSessionId', 'lastTurnStartedAt', 'sessionRegisteredAt', 'requestedBy', 'taskQueue', 'currentTask'].map((k) => [k, a[k]]));
+        const ledger = async () => ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => t.agentId === WORKER);
+        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask: await ledger() });
         expect.soft(delegated.text, 'delegate_task returns the harness\'s final answer').toContain(`PROBE-OK ${standin.marker}`);
         expect.soft(posts().some((r, i) => i > 0 && JSON.stringify(r.body ?? '').includes(standin.marker)), 'the tool\'s result reached the endpoint').toBe(true);
 
