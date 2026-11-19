@@ -69,6 +69,15 @@ function valueWords(field: string, v: unknown): string {
   return typeof v === 'object' ? JSON.stringify(v) : String(v);
 }
 
+/**
+ * The settings a line about a change names: the ones its caller asked for (`asked`), never the resets they implied
+ * (a provider change also clears the model and CLI path it was not given). A record written before `asked` existed
+ * has none: its fields stand in.
+ */
+export const askedOf = (c: { fields: string[]; asked?: string[] }): string[] => c.asked ?? c.fields;
+/** The settings a change reset on its own, as a consequence of what was asked: shown apart, in the panel's detail. */
+export const impliedOf = (c: { fields: string[]; asked?: string[] }): string[] => (c.asked ? c.fields.filter(f => !c.asked!.includes(f)) : []);
+
 /** "model glm-4.6 to kimi-k2, effort medium to high", or the fields alone when the values are not known. */
 export function whatWords(fields: string[], before?: Record<string, unknown>, after?: Record<string, unknown>): string {
   return fields.map(f => (before && after && (f in before || f in after) ? `${f} ${valueWords(f, before[f])} to ${valueWords(f, after[f])}` : f)).join(', ');

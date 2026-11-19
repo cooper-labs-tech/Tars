@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { AgentStatus, AgentRetuned } from '@/types/electron';
 import { Button, PanelCaption, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
-import { byWords, clockOfIso, dismissRetune, useRetunes, whatWords } from '@/hooks/useRetunes';
+import { askedOf, byWords, clockOfIso, dismissRetune, impliedOf, useRetunes, whatWords } from '@/hooks/useRetunes';
 
 type Undo = { word: string; tone: StatusTone } | null;
 
@@ -54,7 +54,7 @@ export function RetuneLine({ agent }: { agent: AgentStatus }) {
         )}
       </div>
       <p className="font-mono text-[10.5px] text-text-secondary truncate">
-        {`${whatWords(last.fields, heard?.before, heard?.after)} · ${stateWords(last.state, last.effectiveAt, heard?.waitingFor)}`}
+        {`${whatWords(askedOf(last), heard?.before, heard?.after)} · ${stateWords(last.state, last.effectiveAt, heard?.waitingFor)}`}
       </p>
     </div>
   );
@@ -76,7 +76,8 @@ export function RetunePanel({ agent }: { agent: AgentStatus }) {
       {undo ? <Line word={undo.word} tone={undo.tone} /> : (
         <>
           {row('by', byWords(last.by))}
-          {row('what', whatWords(last.fields, heard?.before, heard?.after))}
+          {row('what', whatWords(askedOf(last), heard?.before, heard?.after))}
+          {impliedOf(last).length > 0 && row('also reset', impliedOf(last).join(', '))}
           {row('asked', `${new Date(last.askedAt).toLocaleDateString(undefined, { day: '2-digit', month: '2-digit' })} ${clockOfIso(last.askedAt)}`)}
           {row('in effect', last.state === 'applied' ? clockOfIso(last.effectiveAt) : stateWords(last.state, last.effectiveAt, heard?.waitingFor))}
           {last.state !== 'cancelled' && last.state !== 'failed' && (
@@ -105,8 +106,8 @@ export function RetuneNotices({ className = '' }: { className?: string }) {
         const project = n.projectPath.split(/[\\/]/).filter(Boolean).pop();
         const text = u ? u.word
           : n.state === 'queued'
-            ? `${byWords(n.by)} asked ${n.agentName}${project ? ` (${project})` : ''} to move to ${whatWords(n.fields, n.before, n.after)}: it ${n.waitingFor ? `waits for ${n.waitingFor}` : 'waits for its turn to end'}.`
-            : `${byWords(n.by)} retuned ${n.agentName}${project ? ` (${project})` : ''}: ${whatWords(n.fields, n.before, n.after)}, ${stateWords(n.state, n.effectiveAt)}.`;
+            ? `${byWords(n.by)} asked ${n.agentName}${project ? ` (${project})` : ''} to move to ${whatWords(askedOf(n), n.before, n.after)}: it ${n.waitingFor ? `waits for ${n.waitingFor}` : 'waits for its turn to end'}.`
+            : `${byWords(n.by)} retuned ${n.agentName}${project ? ` (${project})` : ''}: ${whatWords(askedOf(n), n.before, n.after)}, ${stateWords(n.state, n.effectiveAt)}.`;
         return (
           <div key={n.changeId} role="status" className="flex items-center gap-2.5 h-10 px-3 bg-secondary border border-border-accent">
             <StatusSquare tone={u ? u.tone : n.state === 'failed' ? 'error' : 'waiting'} />
