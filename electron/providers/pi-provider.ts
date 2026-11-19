@@ -174,12 +174,22 @@ export class PiProvider implements CLIProvider {
       const config = JSON.parse(fs.readFileSync(mcpConfigFile(), 'utf-8')) as McpServersFile;
       const server = config.mcpServers && typeof config.mcpServers === 'object' ? config.mcpServers[name] : undefined;
       if (!server) return false;
-      // Written by a Tars before its tools were declared: written again (registerMcpServer).
-      if ((server as { exposure?: unknown }).exposure !== 'direct') return false;
       // The path as JSON writes it too: a Windows path has every backslash
       // doubled there, never matched, and was registered again at every launch.
       const entry = JSON.stringify(server);
       return entry.includes(expectedServerPath) || entry.includes(JSON.stringify(expectedServerPath).slice(1, -1));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Registered, and with its tools declared to the model: a server an older Tars wrote without that is written again. */
+  isMcpServerCurrent(name: string, expectedServerPath: string): boolean {
+    if (!this.isMcpServerRegistered(name, expectedServerPath)) return false;
+    try {
+      const config = JSON.parse(fs.readFileSync(mcpConfigFile(), 'utf-8')) as McpServersFile;
+      const server = config.mcpServers?.[name] as { exposure?: unknown } | undefined;
+      return server?.exposure === 'direct';
     } catch {
       return false;
     }

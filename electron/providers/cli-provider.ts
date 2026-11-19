@@ -174,6 +174,13 @@ export interface CLIProvider {
    */
   isMcpServerRegistered(name: string, expectedServerPath: string, envVars?: readonly string[]): boolean;
 
+  /**
+   * Whether that server is written as this Tars writes it now (pi: with `"exposure": "direct"`), which decides a
+   * rewrite at setup (services/mcp-orchestrator.ts). Kept apart from isMcpServerRegistered, which only says the server
+   * is there, by name and path: a retirement and Settings' "configured" ask that. Absent: registered is current.
+   */
+  isMcpServerCurrent?(name: string, expectedServerPath: string, envVars?: readonly string[]): boolean;
+
   /** Directories where this provider reads skills from */
   getSkillDirectories(): string[];
 
