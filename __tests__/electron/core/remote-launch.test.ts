@@ -430,6 +430,23 @@ describe('remoteLaunchLine', () => {
       fs.rmSync(home, { recursive: true, force: true });
     }
   });
+
+  it("10. a host that could not be prepared: the file gone all the same, no terminal ssh, ssh's own words and code", () => {
+    const home = hostHome();
+    try {
+      const { bin, log } = fakeSsh(home);
+      const prepFile = path.join(home, 'prep.sh');
+      fs.writeFileSync(prepFile, 'x\n', { mode: 0o600 });
+      const line = remoteLaunchLine({ prepare, prepFile, terminal });
+      const r = spawnSync('/bin/sh', ['-c', line], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, FAKE_SSH_EXIT_1: '255' }, encoding: 'utf8' });
+      expect(r.status).toBe(255);
+      expect(r.stderr).toMatch(/refused on call 1/);
+      expect(fs.existsSync(path.join(log, 'call-2.args'))).toBe(false);
+      expect(fs.existsSync(prepFile)).toBe(false);
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('tars-remote.sh, the wrapper on the host', () => {
@@ -515,23 +532,6 @@ describe('tars-remote.sh, the wrapper on the host', () => {
       expect(fs.existsSync(path.join(dir, 'env'))).toBe(false);
       expect(JSON.parse(fs.readFileSync(path.join(dir, 'mcp.json'), 'utf8')).mcpServers.o.url).toBe('http://127.0.0.1:41777/api/mcp/o');
       expect(fs.statSync(path.join(dir, 'mcp.json')).mode & 0o777).toBe(0o600);
-    } finally {
-      fs.rmSync(home, { recursive: true, force: true });
-    }
-  });
-
-  it("10. a host that could not be prepared: the file gone all the same, no terminal ssh, ssh's own words and code", () => {
-    const home = hostHome();
-    try {
-      const { bin, log } = fakeSsh(home);
-      const prepFile = path.join(home, 'prep.sh');
-      fs.writeFileSync(prepFile, 'x\n', { mode: 0o600 });
-      const line = remoteLaunchLine({ prepare, prepFile, terminal });
-      const r = spawnSync('/bin/sh', ['-c', line], { cwd: home, env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, FAKE_SSH_EXIT_1: '255' }, encoding: 'utf8' });
-      expect(r.status).toBe(255);
-      expect(r.stderr).toMatch(/refused on call 1/);
-      expect(fs.existsSync(path.join(log, 'call-2.args'))).toBe(false);
-      expect(fs.existsSync(prepFile)).toBe(false);
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
