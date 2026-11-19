@@ -2,7 +2,8 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen } from './terminal-mirror';
+import { dialogOnScreen, terminalText } from './terminal-mirror';
+import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
 /**
@@ -229,7 +230,11 @@ type StartingAgent = {
 function sessionUp(agent: StartingAgent, launch: { since: number; withTask: boolean }): boolean {
   const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   if (!terminal || !cliRunningIn(terminal)) return false;
-  if (!hasClaudeHooks(agent)) return true;
+  // A CLI with no SessionStart is up at its exec, unless it says its TUI takes keys only once its field is drawn.
+  if (!hasClaudeHooks(agent)) {
+    const provider = getProvider(agent.provider);
+    return provider.upOnScreen ? provider.upOnScreen(terminalText(terminal) ?? []) : true;
+  }
   const at = launch.withTask ? agent.lastTurnStartedAt : agent.sessionRegisteredAt;
   return !!at && Date.parse(at) >= launch.since;
 }

@@ -73,6 +73,14 @@ export class KimiCodeProvider implements CLIProvider {
 
   readonly taskTypedAfterLaunch = true;
 
+  /**
+   * Up once its input box is drawn (`│ >`): it writes nothing to disk before its first prompt, and a paste sent before
+   * the box was lost (measured on 2.6.3, the box about 6 s after the process ran, under load).
+   */
+  upOnScreen(lines: readonly string[]): boolean {
+    return lines.some((line) => /^\s*│ >/.test(line));
+  }
+
   /** Measured on 2.6.3: a note typed with Enter during a slow tool call went out as its own next turn. */
   readonly noteDuringTurn = 'after-the-turn' as const;
 

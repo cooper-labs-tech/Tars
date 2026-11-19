@@ -412,7 +412,7 @@ describe('an inference endpoint over the API (native traces)', () => {
     }
     const { answer, status } = await update('w2', { endpointId: EP.id, model: 'open-coder-1' });
     expect(status).toBe(400);
-    expect(String(answer.error)).toMatch(/codex, pi, qwen-code or opencode/);
+    expect(String(answer.error)).toMatch(/codex, pi, qwen-code, opencode, kimi-code/);
   });
 
   it('12d. takes a valid endpoint and traces, checked against the settings the app holds', async () => {

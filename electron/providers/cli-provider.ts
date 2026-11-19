@@ -127,6 +127,13 @@ export interface CLIProvider {
   typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;
 
   /**
+   * For a CLI that sends no SessionStart and takes keys only once its TUI has drawn its field: whether the screen's
+   * lines (core/terminal-mirror.ts, terminalText) show it so. A session is up then, not at the CLI's exec
+   * (core/agent-launch.ts, sessionUp). Absent: up at its exec.
+   */
+  upOnScreen?(lines: readonly string[]): boolean;
+
+  /**
    * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured
    * on the CLI itself: `next-tool-round`, it reaches the model at the turn's next tool round (Claude Code);
    * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3).
