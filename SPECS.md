@@ -140,6 +140,13 @@ A worker can run its CLI on one of the owner's Linux hosts instead of this compu
 
   Each ssh says in the terminal why it failed, in its own words. The one on this computer runs with `BatchMode`, never `-A`, with `ExitOnForwardFailure`, and gets none of the agent's environment but what it needs to find the owner's keys. It also runs with `ControlMaster=no`, `ControlPath=none`, `StrictHostKeyChecking=yes` and `RemoteCommand=none`, whatever the owner's config says: no multiplexed connection keeps the tunnel past the terminal, no unknown host key is trusted, and no RemoteCommand is run.
 - **The tunnel's listener** (`services/api-tunnel.ts`, `api-server.ts`). The tunnel never reaches the API's own port. It reaches a second listener on 127.0.0.1, opened at the first launch on a host, which serves the same routes behind a gate: only the token of an agent placed on a host passes, on every route, `/api/health` and `/api/local-file` included. A process of the host that reaches the tunnel's end gets a 401 for anything else. The hooks on the host therefore send their token without the port's proof (`TARS_API_TUNNEL=1`, SECURITY.md §5).
+
+  Its bounds, since any user of the host can open connections to it, each a socket of Tars's main process:
+  - a request target that does not parse is answered 400, never thrown (the API's own port answers it the same way);
+  - a 400, 401 or 429 closes the connection;
+  - one agent's token holds at most 16 connections, and is answered 429 beyond;
+  - the listener holds at most 128 connections in all;
+  - a connection is closed when it has sent no headers in 10 s, or no whole request in 30 s.
 - **The CLI.** Claude Code only, a worker only (an orchestrator and a chat's runner run here), from macOS or Linux only. Anything else is refused before anything is ended, with a code: `remote_cli`, `remote_lead`, `remote_platform`, `remote_host_gone`.
   - Its command names no path of this computer. It is `claude` found on the host's PATH, with `--settings "$TARS_REMOTE_AGENT_DIR"/settings.json --mcp-config "$TARS_REMOTE_AGENT_DIR"/mcp.json`: no `--add-dir`, no orchestrator instructions, no `--chrome`.
   - It reaches the API through the tunnel, on the host's loopback only (`CLAUDE_MGR_API_URL=http://127.0.0.1:<port>`).

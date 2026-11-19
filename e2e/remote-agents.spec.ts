@@ -33,7 +33,8 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    ~/.claude/settings.json was never written; the agent's folder is trusted in its ~/.claude.json; the API answers on
  *    the host's loopback through the tunnel, and not on the container's network address.
  *    The tunnel reaches a listener of its own (the Audit's gate of #600): from the host, /api/health and
- *    /api/local-file answer 401 without a token, and /api/health answers with the agent's.
+ *    /api/local-file answer 401 without a token, and /api/health answers with the agent's; a request target that
+ *    does not parse ("//") is answered 400 (the re-audit's L5).
  * 4b. (M1) The window cannot remove the host while Remote One is placed on it (host_in_use).
  * 4c. (L1) The window's restart ends the session on the host and starts it again there: a new tmux pane, a new session.
  * 5. stop_agent: the tmux session is gone, the tunnel's port closed, Remote One stopped.
@@ -275,8 +276,11 @@ test("an agent placed on a remote host runs there in tmux, reports through its t
     const status = (route: string) => onHost(host.id, `curl -s -m 3 -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${rport}${route}'`).out;
     const healthNoToken = status('/api/health');
     const localFileNoToken = status('/api/local-file?path=/etc/hosts');
+    // A target that does not parse (the re-audit's L5): answered 400, never thrown.
+    const badTarget = onHost(host.id, `curl -s -m 3 --path-as-is -o /dev/null -w '%{http_code}' 'http://127.0.0.1:${rport}//'`).out;
     const onNetwork = onHost(host.id, `curl -s -m 3 http://$(hostname -i):${rport}/api/health || echo refused`);
-    keep({ tokenFound: token.length > 20, tunnel, agentFiles, settingsWritten, trusted, healthNoToken, localFileNoToken, onNetwork: onNetwork.out });
+    keep({ tokenFound: token.length > 20, tunnel, agentFiles, settingsWritten, trusted, healthNoToken, localFileNoToken, badTarget, onNetwork: onNetwork.out });
+    expect(badTarget).toBe('400');
     expect(token.length).toBeGreaterThan(20);
     expect(tunnel).toMatch(/^http:\/\/127\.0\.0\.1:4[0-9]{4}$/);
     expect(hostCommandLines.includes(token)).toBe(false);
