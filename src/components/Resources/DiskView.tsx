@@ -221,7 +221,7 @@ export function DiskView() {
           )}
         </Box>
         <div className="w-[380px] max-xl:w-[292px] shrink-0 flex flex-col gap-3 min-h-0">
-          {state && <AskedByAgents requests={state.cleanupRequests ?? []} items={items} busy={busy} onApprove={(id) => void approveRequest(id)} />}
+          {state && <AskedByAgents requests={state.cleanupRequests ?? []} busy={busy} onApprove={(id) => void approveRequest(id)} />}
           <Box name="Never proposed" caption="NEVER PROPOSED, NEVER DELETED">
             {state?.never.length ? (
               <ul className="pb-2.5">

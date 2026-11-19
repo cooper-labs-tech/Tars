@@ -24,9 +24,8 @@ function openItems(ids: string[], items: JanitorItem[]): JanitorItem[] {
  * own project, with why, its items and their size, and the owner's one click (diskJanitor.approveRequest). Nothing is
  * deleted without it; each item is checked again first, as for any approval.
  */
-export function AskedByAgents({ requests, items, busy, onApprove }: {
+export function AskedByAgents({ requests, busy, onApprove }: {
   requests: JanitorCleanupRequest[];
-  items: JanitorItem[];
   busy: boolean;
   onApprove: (id: string) => void;
 }) {
@@ -37,9 +36,12 @@ export function AskedByAgents({ requests, items, busy, onApprove }: {
         <Empty>No agent has asked for a cleanup. An agent may ask for items in its own project; you approve it here.</Empty>
       ) : (
         [...requests].reverse().map((r) => {
-          const own = items.filter((i) => r.ids.includes(i.id));
-          const freed = sum(own.filter((i) => i.outcome?.kind === 'deleted').map((i) => i.outcome?.bytes ?? 0));
-          const kept = own.filter((i) => i.outcome && i.outcome.kind !== 'deleted').length;
+          // What the approval did, as the request keeps it (2.0.7): each item's outcome and the bytes freed, past
+          // later scans, which no longer list what was deleted.
+          const freed = r.freedBytes;
+          const keptItems = r.items.filter((i) => i.outcome && i.outcome.kind !== 'deleted');
+          const kept = keptItems.length;
+          const keptWhy = keptItems.find((i) => i.outcome?.why)?.outcome?.why;
           return (
             <Row key={r.id} data-cleanup-request={r.state} className="space-y-1.5 py-2.5">
               <p className="flex items-center gap-2 text-xs text-foreground">
@@ -49,10 +51,10 @@ export function AskedByAgents({ requests, items, busy, onApprove }: {
               <p className="text-[11.5px] leading-[1.45] text-text-secondary">{r.why}</p>
               <ul className="space-y-1">
                 {r.items.map((it) => {
-                  const outcome = own.find((i) => i.id === it.id)?.outcome;
+                  const outcome = it.outcome;
                   const kept = outcome && outcome.kind !== 'deleted';
                   return (
-                    <li key={it.id} data-request-item={it.kind} className="border-l border-border pl-2 py-1" title={it.path}>
+                    <li key={it.id} data-request-item={it.kind} data-outcome={outcome?.kind} className="border-l border-border pl-2 py-1" title={kept && outcome.why ? `${it.path}\n${outcome.kind}: ${outcome.why}` : it.path}>
                       <p className="flex items-center gap-2 font-mono text-[11px]">
                         <span className="min-w-0 flex-1 truncate text-foreground">{it.label}</span>
                         <span className={kept ? 'text-status-waiting' : 'text-text-secondary'}>{kept ? outcome.kind : it.bytes === null ? 'size not known' : bytes(it.bytes)}</span>
@@ -65,7 +67,7 @@ export function AskedByAgents({ requests, items, busy, onApprove }: {
               <p className="font-mono text-[10.5px] text-muted-foreground">{`${r.items.length} ${r.items.length === 1 ? 'item' : 'items'} · asked ${clock(r.at)}`}</p>
               {r.state === 'approved' ? (
                 <p className={`font-mono text-[10.5px] ${kept ? 'text-status-waiting' : 'text-status-running'}`}>
-                  {`approved by you${r.approvedAt ? ` at ${clock(r.approvedAt)}` : ''}${freed ? ` · ${bytes(freed)} freed` : ''}${kept ? `, ${kept} ${kept === 1 ? 'item' : 'items'} kept` : ''}`}
+                  {`approved by you${r.approvedAt ? ` at ${clock(r.approvedAt)}` : ''}${freed ? ` · ${bytes(freed)} freed` : ''}${kept ? `, ${kept} ${kept === 1 ? 'item' : 'items'} kept${keptWhy ? `: ${keptWhy}` : ''}` : ''}`}
                 </p>
               ) : (
                 <Button size="sm" variant="primary" className="font-mono" disabled={busy} onClick={() => onApprove(r.id)}>{`Approve, delete ${bytes(r.bytes)}`}</Button>
