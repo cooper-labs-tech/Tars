@@ -5,7 +5,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { problem, registerTools, text, tool, type Tool, type ToolResult } from "../../../mcp-shared/src/tools.js";
+import { problem, refusalCode, registerTools, text, tool, type Tool, type ToolResult } from "../../../mcp-shared/src/tools.js";
 import { apiRequest, getCallerIdentity } from "../utils/api.js";
 
 /** What each refusal of POST /api/tasks/:ref/cancel means, for the agent that asked (core/task-cancel.ts). */
@@ -411,8 +411,11 @@ async function runTask(
     try {
       started = (await apiRequest(`/api/agents/${id}/run-task`, "POST", body, (RUN_START_WAIT_SECONDS + 30) * 1000)) as RunAnswer;
     } catch (err) {
-      // Tars answered: that is the answer (refused, never started, an id used for another request).
-      if (answerOf(err)) return problem(`Not delegated: ${(err as Error).message}`);
+      // Tars answered: that is the answer (refused, never started, an id used for another request), with its code.
+      if (answerOf(err)) {
+        const code = refusalCode(err);
+        return problem(`Not delegated${code ? ` (${code})` : ""}: ${(err as Error).message}`);
+      }
       // No answer at all: the task may have been handed over. Ask again, for a while.
       const now = Date.now();
       if (!failingSince) failingSince = now;
