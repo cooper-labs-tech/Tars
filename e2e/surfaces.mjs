@@ -47,6 +47,8 @@ export const PAGES = [
   { name: 'review', route: '/review' },
   { name: 'logs', route: '/logs', settle: 3000 },
   { name: 'usage', route: '/usage' },
+  // After Usage, as in both shells (#599): its first view, Sessions, empty as a new Tars has it.
+  { name: 'traces', route: '/traces' },
   // This computer's own figures (free disk, memory, swap, load) are marked data-volatile and masked below.
   { name: 'resources', route: '/resources' },
   // The three tabs of Brain, clicked by role rather than by text. Measured on
@@ -68,13 +70,16 @@ export const PAGES = [
   { name: 'tray-panel', route: '/tray-panel', settle: 2000 },
 ];
 
-// Les 19 sections de Settings. Depuis le regroupement, chaque section est un
+// Les 20 sections de Settings. Depuis le regroupement, chaque section est un
 // groupe cliqué puis son enfant : le nom de surface reste celui d'avant pour
 // que les baselines et l'inventaire ne bougent pas.
 const SETTINGS_TREE = [
   ['terminal', 'General', 'Terminal'],
   ['ai-providers', 'AI & Providers', 'Providers'],
   ['claude-accounts', 'AI & Providers', 'Claude accounts'],
+  // #599: OpenAI-compatible endpoints and Never record closed models, between Claude accounts and CLI Paths as in
+  // the settings' own list.
+  ['inference-endpoints', 'AI & Providers', 'Inference endpoints'],
   ['cli-paths', 'AI & Providers', 'CLI Paths'],
   ['permissions', 'AI & Providers', 'Permissions'],
   ['hermes', 'Hermes', 'Connection'],
