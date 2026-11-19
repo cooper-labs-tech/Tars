@@ -68,9 +68,10 @@ export interface UploadStateView {
    *   to say, looked at again in 6 hours.
    * - `forgotten`: the back-office no longer knows this install (a 401: the user's deletion, or its operator's).
    *   Uploads stop, the local data stays, and only the user's consent again registers a new install.
-   * - `deletion_cleared`: an owed deletion was cleared because its install file is gone; said once.
    */
-  notice?: 'registration_closed' | 'install_blocked' | 'forgotten' | 'deletion_cleared';
+  notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
+  /** An owed deletion was cleared because its install file is gone: said until the window acknowledges it. */
+  deletionCleared: boolean;
   /** A deletion asked for and not yet confirmed by the back-office: sharing stays off until it is done. */
   deletionOwed: boolean;
 }
@@ -103,7 +104,7 @@ export class TraceUploader {
   private abort?: AbortController;
   /** Deletions in progress: a counter, so two at once never clear each other's stop. */
   private halts = 0;
-  /** An owed deletion cleared by itself since the last state the window read: said once. */
+  /** An owed deletion cleared by itself, not yet acknowledged by the window. */
   private clearedUnsaid = false;
 
   constructor(private readonly deps: UploaderDeps) {
@@ -149,18 +150,26 @@ export class TraceUploader {
     return { ok: true };
   }
 
+  /** Whether a deletion is owed now: for the consent check, which must not touch what the window is told. */
+  isDeletionOwed(): boolean {
+    return this.owed();
+  }
+
+  /** The window has said that an owed deletion cleared by itself. */
+  ackDeletionCleared(): void {
+    this.clearedUnsaid = false;
+  }
+
   state(): UploadStateView {
     const owed = this.owed();
     const s = this.deps.settings();
-    const cleared = this.clearedUnsaid;
-    this.clearedUnsaid = false;
     const counts = this.deps.store.uploadCounts();
     const install = this.readInstall();
     return {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
       pendingSessions: counts.pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
-      lastError: this.lastError, nextTryAt: this.nextTryAt,
-      ...(this.notice ? { notice: this.notice } : cleared ? { notice: 'deletion_cleared' as const } : {}),
+      lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
+      deletionCleared: this.clearedUnsaid,
       deletionOwed: owed,
     };
   }

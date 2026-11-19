@@ -1108,6 +1108,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     uploadState: () => ipcRenderer.invoke('traces:uploadState'),
     deleteEverywhere: () => ipcRenderer.invoke('traces:deleteEverywhere'),
     abandonDeletion: () => ipcRenderer.invoke('traces:abandonDeletion'),
+    ackDeletionCleared: () => ipcRenderer.invoke('traces:ackDeletionCleared'),
     offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => ipcRenderer.invoke('traces:offer', q),
     stats: () => ipcRenderer.invoke('traces:stats'),
     list: (filter: Record<string, unknown>) => ipcRenderer.invoke('traces:list', filter),

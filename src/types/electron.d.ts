@@ -2919,6 +2919,8 @@ export interface ElectronAPI {
      *  recorded before the deletion". Sharing may then start again, to this or another back-office. Refused, with a
      *  reason, when no deletion is waiting for confirmation. */
     abandonDeletion: () => Promise<{ ok: true; state: UploadState } | { ok: false; error: string }>;
+    /** The window has shown UploadState.deletionCleared: it stops being reported. */
+    ackDeletionCleared: () => Promise<{ ok: true }>;
     /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
      *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
      *  when it is the one missing. */
@@ -3047,10 +3049,11 @@ export interface UploadState {
    *  - 'install_blocked': "this back-office blocked this install" (looked at again in 6 hours);
    *  - 'forgotten': "this back-office no longer knows this Tars" (the user's deletion, or its operator's). Uploads
    *    stop, the local traces stay, and the consent is withdrawn: sharing again is the user's own act (the upload
-   *    notice, then giveUploadConsent), which registers a new install.
-   *  - 'deletion_cleared': a deletion that waited for confirmation was cleared because this install's record is gone
-   *    (said once): sharing may start again, and what was recorded before the deletion is still never sent. */
-  notice?: 'registration_closed' | 'install_blocked' | 'forgotten' | 'deletion_cleared';
+   *    notice, then giveUploadConsent), which registers a new install. */
+  notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
+  /** A deletion that waited for confirmation was cleared because this install's record is gone: say it ("sharing may
+   *  start again; what was recorded before the deletion is still never sent") until traces.ackDeletionCleared(). */
+  deletionCleared: boolean;
   /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
   deletionOwed: boolean;
 }
