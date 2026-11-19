@@ -48,6 +48,18 @@ export class PiProvider implements CLIProvider {
   readonly binaryName = 'pi';
   readonly configDir = path.join(os.homedir(), '.pi');
 
+  /**
+   * Pi sends no SessionStart and loses keys typed before its TUI runs (1.5.2, measured 20/11: a task typed at its exec
+   * was echoed by the shell and never reached it). It takes keys once its footer is drawn under its field: the context
+   * used over its window, `0.0%/128k (auto)` (one decimal, always), or `?/200k` when the share is unknown (its footer.js).
+   */
+  upOnScreen(lines: readonly string[]): boolean {
+    return lines.some((line) => /(?:^|\s)(?:\d+\.\d%|\?)\/\d+(?:\.\d)?[kM]?(?: \(auto\))?(?:\s|$)/.test(line));
+  }
+
+  /** Measured on 1.5.2 (20/11): a note typed during a slow tool call went out with that call's result. */
+  readonly noteDuringTurn = 'next-tool-round' as const;
+
   getModels(): ProviderModel[] {
     return [
       { id: 'default', name: 'Default', description: 'Use configured model' },

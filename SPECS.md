@@ -184,7 +184,7 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 | Memory base path | `<configDir>/projects` for the claude-binary family; `codex`, `gemini`, `grok`, `opencode` and `pi` return `configDir` itself, a placeholder; they have no Claude-like memory tree |
 | Prompt-injected memory | every provider whose `configDir` is not `~/.claude` (see §5) |
 | ACP mode | `claude`, `codex`, `gemini`, `grok`, `opencode`, `pi` (see §4), no longer used to delegate since 2.0.4 |
-| A note typed during a turn (`noteDuringTurn`) | `claude` and `codex` (0.170): reaches the model at the turn's next tool round; `kimi-code` (2.6.3): held by the CLI and sent as its own next turn once the turn ends; not measured yet for the others. send_message's `auto` types it at once in every case |
+| A note typed during a turn (`noteDuringTurn`) | `claude`, `codex` (0.170) and `pi` (1.5.2): reaches the model at the turn's next tool round; `kimi-code` (2.6.3): held by the CLI and sent as its own next turn once the turn ends; not measured yet for the others. send_message's `auto` types it at once in every case |
 | Orchestrator tool block | a CLI flag on the claude-binary family (`--disallowed-tools`) and on `qwen-code` (`--exclude-tools`); `codex`, `gemini`, `grok`, `opencode`, `pi` and `amp` get none, so their orchestrator is told and not stopped. ACP permission arbitration denied the same tools to a delegated run until 2.0.4, when delegation left ACP |
 
 ### Qwen Code (2.0.4): `providers/qwen-code-provider.ts`, `services/qwen-code.ts`
@@ -241,7 +241,9 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   at load. The user's `config.toml` is not touched.
 - **qwen-code 0.25.2:** `--auth-type openai` with `OPENAI_BASE_URL`, `OPENAI_MODEL`, and the token in
   `OPENAI_API_KEY`.
-- **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
+- **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`. Measured through the proxy by
+  the harness conformance run: a delegated task goes in once pi's footer is drawn (`upOnScreen`, the context used over
+  its window, `0.0%/128k`), since pi sends no SessionStart and loses keys typed before its TUI runs.
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
 - **kimi-code 2.6.3:** the whole model from its environment, `KIMI_MODEL_NAME`, `KIMI_MODEL_PROVIDER_TYPE=openai`,
   `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written, and no `-m` (it names an alias of the
