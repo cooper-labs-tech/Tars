@@ -599,6 +599,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const handTyped = agent.ptyId && ptyProcesses.has(agent.ptyId) ? cliStartRefusal(agent) : undefined;
     if (handTyped) return { success: false, cliRunning: true, error: handTyped };
 
+    // A mode the agent's CLI does not have refuses the launch with the reason create and update give, before anything
+    // is spent: an agent saved in plan on a provider with none (kimi-code) never starts in it (the Audit's I3 on #601).
+    const noPlan = planModeRefusal(agent.provider, options?.permissionMode ?? agent.permissionMode);
+    if (noPlan) return { success: false, error: noPlan };
+
     // If the agent's worktreePath changed after the PTY was spawned, the
     // existing PTY is stuck in the wrong cwd. Kill it so initAgentPty below
     // respawns with the correct working directory.

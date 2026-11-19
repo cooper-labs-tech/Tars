@@ -64,8 +64,10 @@ export class KimiCodeProvider implements CLIProvider {
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
     let command = shellQuote(params.binaryPath);
+    // Never --plan: kimi's runs commands after dialogs nobody answers (measured). Refused, with the reason create and
+    // update give (plan-mode.ts planModeRefusal, not imported here: it reads the registry, which loads this file).
+    if (params.permissionMode === 'plan') throw new Error(`${this.displayName} has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.`);
     if (params.permissionMode === 'auto' || params.permissionMode === 'bypass') command += ' --auto';
-    else if (params.permissionMode === 'plan') command += ' --plan';
     // On an inference endpoint the model is KIMI_MODEL_NAME's (getPtyEnvVars): `-m` names an alias of the user's
     // config.toml, which the endpoint's model is not, and kimi then starts no session (measured on 2.6.3).
     const onEndpoint = !!endpointLaunchForAgent(params.agentId, 'kimi-code');

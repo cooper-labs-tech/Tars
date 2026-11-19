@@ -109,10 +109,41 @@ interface Mirror {
    *  writes nothing, and its snapshot is not made again. */
   snapshot?: string;
   /**
-   * Where the CLI now in the terminal was launched (markCliLaunch): a marker on the normal buffer's line the cursor was
-   * on, which xterm keeps on that line as the scrollback drops lines from the top. Unset: the terminal's first line.
+   * What the terminal was sent since the CLI now in it was launched (markCliLaunch), or since the terminal began when
+   * none was: replayed into a fresh terminal, it is that CLI's screen and nothing before it (rowsSinceLaunch).
    */
-  launch?: { readonly line: number; readonly isDisposed: boolean; dispose(): void };
+  launchLog?: LaunchLog;
+}
+
+interface LaunchLog {
+  chunks: string[];
+  bytes: number;
+  since: number;
+  /** More was written than is kept: what the CLI drew cannot be known from it. */
+  overflowed: boolean;
+  /** The last reading, kept until a chunk comes. */
+  cache?: { count: number; rows: string[] };
+}
+
+/** How much of a launch's output is kept, and for how long: the launch window (core/agent-launch.ts, CLI_UP_MS). */
+const LAUNCH_LOG_BYTES = 1024 * 1024;
+const LAUNCH_LOG_MS = 180_000;
+const newLaunchLog = (): LaunchLog => ({ chunks: [], bytes: 0, since: Date.now(), overflowed: false });
+
+function logLaunchOutput(mirror: Mirror, data: string): void {
+  const log = mirror.launchLog;
+  if (!log || log.overflowed) return;
+  if (Date.now() - log.since > LAUNCH_LOG_MS) {
+    // Past the launch window: nothing reads it any more, and it is let go.
+    mirror.launchLog = undefined;
+    return;
+  }
+  log.chunks.push(data);
+  log.bytes += data.length;
+  if (log.bytes > LAUNCH_LOG_BYTES) {
+    log.overflowed = true;
+    log.chunks = [];
+  }
 }
 
 const mirrors = new WeakMap<IPty, Mirror>();
@@ -150,6 +181,8 @@ export function attachTerminalMirror(
     core: (term as unknown as { _core: XtermInternals })._core,
     serializer,
     repaint: opts.watchRepaint ? new RepaintWatch(term, opts.label) : undefined,
+    // From its first byte: a CLI spawned as the terminal itself is launched with it.
+    launchLog: newLaunchLog(),
   };
   mirrors.set(pty, mirror);
 
@@ -158,6 +191,8 @@ export function attachTerminalMirror(
     try {
       mirror.snapshot = undefined;
       mirror.core.writeSync(data);
+      // After the parse, inside the guard: a chunk the mirror cannot take costs no other listener anything.
+      logLaunchOutput(mirror, data);
       mirror.repaint?.endChunk();
     } catch (err) {
       // node-pty calls its data listeners in a loop with nothing around them,
@@ -375,39 +410,47 @@ export function terminalText(pty: IPty | undefined): string[] | undefined {
 
 /**
  * A CLI is being launched into `pty` (core/agent-manager.ts, launchIntoTerminal; core/agent-restart.ts): what the
- * terminal shows from here on is that CLI's. rowsSinceLaunch reads from this line on.
+ * terminal is sent from here on is that CLI's, and rowsSinceLaunch reads only that.
  */
 export function markCliLaunch(pty: IPty | undefined): void {
   const mirror = pty && mirrors.get(pty);
-  if (!mirror) return;
-  mirror.launch?.dispose();
-  // On the normal buffer, the cursor's line: xterm moves it up as the scrollback drops lines, disposes it once its
-  // line is gone. None while a full-screen program holds the alternate screen: the next one starts on a fresh one.
-  mirror.launch = mirror.term.registerMarker(0) ?? undefined;
+  if (mirror) mirror.launchLog = newLaunchLog();
 }
 
 /** How many of the bottom rows a provider's upOnScreen is given: a TUI's field and its footer, never the answer above. */
 const LAUNCH_ROWS = 8;
 
 /**
- * The bottom rows the CLI launched into `pty` has drawn since its launch (markCliLaunch), empty rows left out, at
- * most `max`: what a provider's upOnScreen reads (core/agent-launch.ts, sessionUp). Never a row from before the launch,
- * an earlier CLI's box in the history or still on the screen, nor one higher up in what it drew, a quoted box in an
- * answer (the Audit's L1 on #601). A full-screen CLI is read on its alternate screen. Undefined with no mirror.
+ * The bottom rows the CLI launched into `pty` has drawn since its launch, empty rows left out, at most `max`: what a
+ * provider's upOnScreen reads (core/agent-launch.ts, sessionUp). What the terminal was sent since markCliLaunch (since
+ * the terminal began when nothing marked a launch) is replayed into a fresh terminal of its size, so nothing from
+ * before the launch can be read: no earlier CLI's box in the history, below the cursor or on an alternate screen it
+ * left on, whatever the output since does to the screen (a deleted line, reverse indexes); and only the bottom rows,
+ * never a box quoted higher up in an answer (the Audit's L1 and L2 on #601). Read on the alternate screen when the CLI
+ * entered one. Empty when it cannot be known: more was written than is kept, or the launch window is past. Undefined
+ * with no mirror.
  */
 export function rowsSinceLaunch(pty: IPty | undefined, max = LAUNCH_ROWS): string[] | undefined {
   const mirror = pty && mirrors.get(pty);
   if (!mirror) return undefined;
-  const term = mirror.term;
-  const alternate = term.buffer.active.type === 'alternate';
-  const buffer = alternate ? term.buffer.alternate : term.buffer.normal;
-  const marked = !alternate && mirror.launch && !mirror.launch.isDisposed && mirror.launch.line >= 0 ? mirror.launch.line : 0;
-  const rows: string[] = [];
-  for (let y = buffer.length - 1; y >= marked && rows.length < max; y--) {
-    const text = buffer.getLine(y)?.translateToString(true) ?? '';
-    if (text.trim()) rows.unshift(text);
+  const log = mirror.launchLog;
+  if (!log || log.overflowed || !xterm) return [];
+  if (log.cache && log.cache.count === log.chunks.length) return log.cache.rows.slice(-max);
+  const term = new xterm.Terminal({ cols: mirror.term.cols, rows: mirror.term.rows, scrollback: 0, convertEol: true, allowProposedApi: true, logLevel: 'error' });
+  try {
+    const core = (term as unknown as { _core: XtermInternals })._core;
+    for (const chunk of log.chunks) core.writeSync(chunk);
+    const buffer = term.buffer.active;
+    const rows: string[] = [];
+    for (let y = buffer.length - 1; y >= 0 && rows.length < LAUNCH_ROWS; y--) {
+      const text = buffer.getLine(y)?.translateToString(true) ?? '';
+      if (text.trim()) rows.unshift(text);
+    }
+    log.cache = { count: log.chunks.length, rows };
+    return rows.slice(-max);
+  } finally {
+    term.dispose();
   }
-  return rows;
 }
 
 /**
