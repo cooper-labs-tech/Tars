@@ -1070,13 +1070,25 @@ holds, and records a line only when both agree:
   prompt: the agent idle, completed or failed, or waiting at its idle prompt;
   never in a turn (a line typed then is queued by the CLI, or answers what the
   turn shows), never with a dialog or question open (the PermissionRequest
-  hook, the screen) or a permission question held by Tars. And at rest is what
-  Tars itself last saw for the agent's current session, not the status the
-  agent posts, which it can post as "idle" mid-turn (the Audit's re-read at
-  f211ff380): a turn's Stop (`/api/hooks/agent-stopped`, from the state mod,
-  the shell hook or a session log's watcher) or the session's start, with no
-  turn begun since; a dialog the screen check does not know (Qwen Code, pi and
-  Kimi are unmeasured) is then inside a turn, and its answer never waits. Keys typed into a
+  hook, the screen) or a permission question held by Tars. And at rest is only
+  what Tars reads itself, never what the agent posts: its status and its Stop
+  are hook posts made with its own token, and two of them mid-turn forged rest
+  (the Audit's re-reads at f211ff380 and 82f13ebd2). For the claude binary and
+  every provider that runs it (Kimi through moonshot included), the tail of the
+  current session's transcript, with no turn on record after the last prompt
+  (Claude Code's own `turn_duration`, or its interrupt marker) and nothing
+  queued (`turnRecordOf`, the reading the status watch makes). For codex and pi,
+  the turn's end Tars's own watcher read in that CLI's session log, kept in
+  memory for the current session (`cli-rest.ts`). A hook post can only clear
+  it (a UserPromptSubmit), never set it. No reading, no rest: a fresh session
+  whose transcript holds no ended turn yet, Qwen Code (its transcript writes no
+  turn end, measured on 0.25.2), gemini, opencode, amp and grok never have a
+  typed line recorded. What an agent can still do is write a forged end of turn
+  into its own transcript or session log, files its own tools can write, at the
+  moment its owner types an answer to a dialog Tars does not see, then forge
+  the UserPromptSubmit: that is the agent writing the CLI's own file format into
+  the file the CLI is writing, and Tars does not defend against it (§1: an agent
+  runs as the owner's account). Keys typed into a
   dialog Tars sees never reach the key model at all. And a line waits 60
   seconds at most: the hook comes some 40 ms after an Enter at rest. What an
   agent can still do is confirm, within that minute, a line its owner typed at
@@ -1181,7 +1193,7 @@ it and who relayed them, and check the id against them.
 **What it does not prove.** That the owner meant the words for the receiver,
 or for the work the receiver is doing now; that whatever the relaying agent
 says around them, in a message of its own, is the owner's; a line the owner
-pasted, typed into a worker's terminal, or into a CLI that reports no
-submission (opencode, amp, grok); anything said in Slack or Discord. The mark says
+pasted, typed into a worker's terminal, typed in a turn, or into a CLI whose rest Tars cannot read itself
+(Qwen Code, gemini, opencode, amp, grok); anything said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
