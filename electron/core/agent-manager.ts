@@ -21,6 +21,7 @@ import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
 import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput, type MessageSender } from './pty-manager';
 import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
+import { markCliLaunch } from './terminal-mirror';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
 import { killPty } from './pty-kill';
@@ -1223,6 +1224,9 @@ export async function launchIntoTerminal(
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).
   if (getProvider(agent.provider).binaryName === 'codex') codexLaunching(agent.id, start.cwd);
+  // What the terminal shows from its line on is the new CLI's: a box an earlier one left above never reads as this one
+  // up (terminal-mirror.ts, rowsSinceLaunch; the Audit's L1 on #601).
+  markCliLaunch(ptyProcess);
   if (opts.delayMs) {
     await new Promise<void>((resolve) => {
       setTimeout(() => {

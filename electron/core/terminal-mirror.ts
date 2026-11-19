@@ -108,6 +108,11 @@ interface Mirror {
    *  for it on every call, the Kanban and the tray included: an agent at rest
    *  writes nothing, and its snapshot is not made again. */
   snapshot?: string;
+  /**
+   * Where the CLI now in the terminal was launched (markCliLaunch): a marker on the normal buffer's line the cursor was
+   * on, which xterm keeps on that line as the scrollback drops lines from the top. Unset: the terminal's first line.
+   */
+  launch?: { readonly line: number; readonly isDisposed: boolean; dispose(): void };
 }
 
 const mirrors = new WeakMap<IPty, Mirror>();
@@ -366,6 +371,43 @@ function textOf(term: Terminal): string[] {
 export function terminalText(pty: IPty | undefined): string[] | undefined {
   const mirror = pty && mirrors.get(pty);
   return mirror ? textOf(mirror.term) : undefined;
+}
+
+/**
+ * A CLI is being launched into `pty` (core/agent-manager.ts, launchIntoTerminal; core/agent-restart.ts): what the
+ * terminal shows from here on is that CLI's. rowsSinceLaunch reads from this line on.
+ */
+export function markCliLaunch(pty: IPty | undefined): void {
+  const mirror = pty && mirrors.get(pty);
+  if (!mirror) return;
+  mirror.launch?.dispose();
+  // On the normal buffer, the cursor's line: xterm moves it up as the scrollback drops lines, disposes it once its
+  // line is gone. None while a full-screen program holds the alternate screen: the next one starts on a fresh one.
+  mirror.launch = mirror.term.registerMarker(0) ?? undefined;
+}
+
+/** How many of the bottom rows a provider's upOnScreen is given: a TUI's field and its footer, never the answer above. */
+const LAUNCH_ROWS = 8;
+
+/**
+ * The bottom rows the CLI launched into `pty` has drawn since its launch (markCliLaunch), empty rows left out, at
+ * most `max`: what a provider's upOnScreen reads (core/agent-launch.ts, sessionUp). Never a row from before the launch,
+ * an earlier CLI's box in the history or still on the screen, nor one higher up in what it drew, a quoted box in an
+ * answer (the Audit's L1 on #601). A full-screen CLI is read on its alternate screen. Undefined with no mirror.
+ */
+export function rowsSinceLaunch(pty: IPty | undefined, max = LAUNCH_ROWS): string[] | undefined {
+  const mirror = pty && mirrors.get(pty);
+  if (!mirror) return undefined;
+  const term = mirror.term;
+  const alternate = term.buffer.active.type === 'alternate';
+  const buffer = alternate ? term.buffer.alternate : term.buffer.normal;
+  const marked = !alternate && mirror.launch && !mirror.launch.isDisposed && mirror.launch.line >= 0 ? mirror.launch.line : 0;
+  const rows: string[] = [];
+  for (let y = buffer.length - 1; y >= marked && rows.length < max; y--) {
+    const text = buffer.getLine(y)?.translateToString(true) ?? '';
+    if (text.trim()) rows.unshift(text);
+  }
+  return rows;
 }
 
 /**

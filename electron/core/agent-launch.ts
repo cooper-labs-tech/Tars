@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, terminalText } from './terminal-mirror';
+import { dialogOnScreen, markCliLaunch, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -202,6 +202,8 @@ const cliLaunchedAtByTerminal = new WeakMap<object, number>();
 
 export function noteCliLaunched(ptyProcess: object): void {
   cliLaunchedAtByTerminal.set(ptyProcess, Date.now());
+  // And where on its screen: what it draws from here on is the new CLI's (terminal-mirror.ts, rowsSinceLaunch).
+  markCliLaunch(ptyProcess as import('node-pty').IPty);
 }
 
 export function cliLaunchedAt(ptyProcess: object | undefined): number | undefined {
@@ -233,7 +235,8 @@ function sessionUp(agent: StartingAgent, launch: { since: number; withTask: bool
   // A CLI with no SessionStart is up at its exec, unless it says its TUI takes keys only once its field is drawn.
   if (!hasClaudeHooks(agent)) {
     const provider = getProvider(agent.provider);
-    return provider.upOnScreen ? provider.upOnScreen(terminalText(terminal) ?? []) : true;
+    // The rows drawn since its launch, at the bottom: never a box left in the history (the Audit's L1 on #601).
+    return provider.upOnScreen ? provider.upOnScreen(rowsSinceLaunch(terminal) ?? []) : true;
   }
   const at = launch.withTask ? agent.lastTurnStartedAt : agent.sessionRegisteredAt;
   return !!at && Date.parse(at) >= launch.since;
