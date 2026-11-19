@@ -178,7 +178,7 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 | Capability | Value per provider |
 |---|---|
 | Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini` and `qwen-code`; `false` for `codex`, `grok`, `opencode`, `pi`, `kimi-code` and `amp`. codex's, pi's and Kimi Code's turns are read from their own session log instead (`turnsReported`, below) |
-| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi`, `kimi-code` (`mcp.json` of its home) |
+| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi` (with `"exposure": "direct"`: pi 1.5.2 otherwise leaves a server's tools to its code tool, never declared to the model), `kimi-code` (`mcp.json` of its home) |
 | Skills | `true` everywhere except `pi`, which has packages rather than skills |
 | Skill directories | claude family: `~/.claude/skills` + `~/.agents/skills`; `gemini`: `~/.gemini/skills`; `grok`: `~/.grok/skills` + `~/.agents/skills`; `codex`, `opencode`: `~/.agents/skills`; `pi`: `~/.pi/packages` |
 | Memory base path | `<configDir>/projects` for the claude-binary family; `codex`, `gemini`, `grok`, `opencode` and `pi` return `configDir` itself, a placeholder; they have no Claude-like memory tree |
