@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import { execFile } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import { randomBytes, timingSafeEqual } from 'crypto';
@@ -7,6 +6,7 @@ import { API_TOKEN_FILE, BRIDGE_TOKEN_FILE, DATA_DIR, ENDPOINT_PROXY_PORT, priva
 import type { AgentStatus, AppSettings, TraceSettings } from '../types';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { hasOrchestratorPowers } from '../core/agent-role';
+import { safeGit } from '../utils/safe-git';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
@@ -348,12 +348,14 @@ export function closeEndpointSession(token: string | undefined): void {
   });
 }
 
-/** The branch and head of the folder the agent worked in, when it is a git checkout (argv, never a shell). */
+/**
+ * The branch and head of the folder the agent worked in, when it is a git checkout: through safe-git, like every git
+ * call of the main process (its environment, its git command, its guards).
+ */
 function gitOutcome(folder: string | undefined): Promise<{ branch?: string; head?: string }> {
   if (!folder) return Promise.resolve({});
-  const git = (args: string[]) => new Promise<string | undefined>((resolve) => {
-    execFile('git', ['-C', folder, ...args], { timeout: 5000, windowsHide: true }, (err, out) => resolve(err ? undefined : String(out).trim() || undefined));
-  });
+  const git = (args: string[]) => safeGit(folder, args, { timeout: 5000 })
+    .then(r => r.stdout.trim() || undefined, () => undefined);
   return Promise.all([git(['rev-parse', '--abbrev-ref', 'HEAD']), git(['rev-parse', 'HEAD'])]).then(([branch, head]) => ({
     ...(branch ? { branch } : {}), ...(head ? { head } : {}),
   }));
