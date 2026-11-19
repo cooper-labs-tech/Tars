@@ -11,12 +11,21 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * 2. It never reads up although its field is drawn: every message would then wait out the launch (CLI_UP_MS).
  * 3. A CLI that says nothing of its screen (codex, pi) now waits for one: it must stay up at its exec, as before.
  * 4. The provider takes another screen for its field: the folder trust question, or the banner drawn before the box.
+ * 5. The screen is read from the terminal's whole history (terminalText): a box an earlier CLI left there reads as up
+ *    at once, and the task is typed before kimi takes keys (the Audit's L1 on #601). Only the rows drawn since the
+ *    launch, at the bottom, count (terminal-mirror.ts, rowsSinceLaunch).
  */
 
-const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined }));
+const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined, history: undefined as string[] | undefined }));
 vi.mock('../../../electron/core/pty-manager', () => ({ ptyProcesses: new Map([['p1', { pid: 1 }]]) }));
 vi.mock('../../../electron/core/agent-pty', () => ({ cliRunningIn: () => state.running }));
-vi.mock('../../../electron/core/terminal-mirror', () => ({ dialogOnScreen: () => false, terminalText: () => state.screen }));
+vi.mock('../../../electron/core/terminal-mirror', () => ({
+  dialogOnScreen: () => false,
+  // The whole history, an earlier CLI's box in it, and the rows drawn since the launch.
+  terminalText: () => state.history ?? state.screen,
+  rowsSinceLaunch: () => state.screen,
+  markCliLaunch: () => undefined,
+}));
 vi.mock('../../../electron/services/agent-truth', () => ({ lastInterruptAt: () => undefined }));
 
 import { launchBegins, sessionStarting, resetLaunches } from '../../../electron/core/agent-launch';
@@ -48,6 +57,15 @@ describe('a session up on its screen', () => {
     expect(sessionStarting(agent)).toBe(true);
     state.screen = AT_REST;
     expect(sessionStarting(agent)).toBe(false);
+  });
+
+  it('5: a box an earlier CLI left in the history does not make a kimi session up', () => {
+    const agent = { id: 'k5', ptyId: 'p1', provider: 'kimi-code' as const };
+    launchBegins('k5');
+    state.history = [...AT_REST, '$ ', ...BOOTING];
+    state.screen = BOOTING;
+    expect(sessionStarting(agent)).toBe(true);
+    state.history = undefined;
   });
 
   it('3: a codex session is up at its exec, whatever its screen', () => {
