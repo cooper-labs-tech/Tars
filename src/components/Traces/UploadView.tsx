@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Button, DialogShell, Input, PanelCaption } from '@/components/ui';
 import type { TraceSettingsView, UploadNotice, UploadState } from '@/types/electron';
+import type { ElectronAPI } from '@/types/electron';
+
+/** What traces.preview answers for a session: the exact payload the upload sends, and what was masked, by kind. */
+type UploadPreview = NonNullable<Awaited<ReturnType<NonNullable<ElectronAPI['traces']>['preview']>>>;
 import { Box, Row, Unread } from '@/components/Resources/bits';
 import { Toggle } from '@/components/Settings/Toggle';
 import { clockOf, dayClockOf, dayOf } from '@/lib/traces-format';
@@ -56,7 +60,8 @@ export function UploadView() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showNotice, setShowNotice] = useState(false);
-  const [preview, setPreview] = useState<{ title: string; document: unknown; counts: Record<string, number>; scrubVersion: string } | 'none' | null>(null);
+  /** The session as the upload sends it, built by the same function: its batches (id and body) and blobs (hash and content). */
+  const [preview, setPreview] = useState<({ title: string } & UploadPreview) | 'none' | null>(null);
   const [deleting, setDeleting] = useState(false);
   /** The deletion under way: main stops the running upload pass first, then asks the back-office to delete. */
   const [inProgress, setInProgress] = useState(false);
