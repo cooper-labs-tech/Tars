@@ -500,14 +500,14 @@ describe('the trace uploader', () => {
 
   it('18: a deletion landing while a pass runs stops it, and nothing is sent after the deletion', async () => {
     for (const id of ['a', 'b', 'c', 'd']) seed(id, `task ${id}`, id.charCodeAt(0) * 1000);
-    let u!: TraceUploader;
     let deletion: Promise<unknown> | undefined;
+    // The spy reads `u` only when the pass calls it, once `u` is set.
     const spy = (async (url: string, init?: RequestInit) => {
       // The user presses "delete everything sent" while the pass is at its first batch.
       if (!deletion && String(url).includes('/v1/batches/')) deletion = u.deleteEverywhere();
       return fetch(url, init);
     }) as typeof fetch;
-    u = uploader({ fetch: spy });
+    const u = uploader({ fetch: spy });
     await u.runOnce();
     await deletion;
     const at = bo.seen.findIndex(x => x.method === 'DELETE');
