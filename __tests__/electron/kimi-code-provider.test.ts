@@ -82,18 +82,20 @@ describe('KimiCodeProvider', () => {
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'plan' })).toBe("'kimi' --plan");
   });
 
-  it('3: a model alias and a session id only in their own forms', () => {
-    const sid = 'session_feabbac1-fc87-4756-8076-0c6adc57127b';
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', model: 'my/alias-1.5', resumeSessionId: sid }))
-      .toBe(`'kimi' -m 'my/alias-1.5' --session '${sid}'`);
+  it('3: a model alias and a session id only in their own forms; Tars knows a kimi session by its UUID', () => {
+    const uuid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
+    // The UUID the hook routes took (services/kimi-sessions.ts posts it), resumed under kimi's own name for it.
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', model: 'my/alias-1.5', resumeSessionId: uuid }))
+      .toBe(`'kimi' -m 'my/alias-1.5' --session 'session_${uuid}'`);
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: `session_${uuid}` })).toBe(`'kimi' --session 'session_${uuid}'`);
     expect(() => p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', model: 'a;rm -rf' })).toThrow();
-    for (const bad of ['session_x; rm -rf /', '../session_feabbac1', 'feabbac1-fc87-4756-8076-0c6adc57127b']) {
+    for (const bad of ['session_x; rm -rf /', '../session_feabbac1', 'session_feabbac1', `${uuid}'; rm -rf /`]) {
       expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: bad })).toBe("'kimi'");
     }
   });
 
   it('10: a restart that forks starts a new session, never the tombstone under its own id', () => {
-    const sid = 'session_feabbac1-fc87-4756-8076-0c6adc57127b';
+    const sid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: sid, forkSession: true })).toBe("'kimi'");
   });
 

@@ -35,6 +35,7 @@ import {
  * `session_<uuid>`, which `kimi --session <id>` resumes (measured on 2.6.3). How it fails: its id refused for not
  * being a bare UUID, so it began anew after every restart; an id resumed that the index no longer lists, or whose
  * session folder is gone; an id of another form reaching the command line; a Claude agent resumed on a kimi session.
+ * Tars keeps it as the UUID the hook routes took (kimi's own name is session_<uuid>), and gives that back.
  */
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-resume-'));
@@ -138,9 +139,11 @@ describe("a codex agent's session", () => {
 });
 
 describe("a Kimi Code agent's session", () => {
-  const KIMI = 'session_feabbac1-fc87-4756-8076-0c6adc57127b';
+  // Tars knows it by its UUID (the hook routes take nothing else); kimi lists it as session_<uuid>.
+  const KIMI = 'feabbac1-fc87-4756-8076-0c6adc57127b';
   const kimiHome = path.join(home, '.kimi-code-home');
-  const listed = (id: string, withFolder = true) => {
+  const listed = (uuid: string, withFolder = true) => {
+    const id = `session_${uuid}`;
     const dir = path.join(kimiHome, 'sessions', 'wd_tars_0123456789ab', id);
     if (withFolder) fs.mkdirSync(path.join(dir, 'agents', 'main'), { recursive: true });
     if (withFolder) fs.writeFileSync(path.join(dir, 'agents', 'main', 'wire.jsonl'), '{"type":"metadata"}\n');
@@ -164,7 +167,7 @@ describe("a Kimi Code agent's session", () => {
     expect(resolveResumeSessionId({ provider: 'kimi-code', resumableSessionId: KIMI, projectPath: PROJECT }, home)).toBeNull();
     fs.rmSync(kimiHome, { recursive: true, force: true });
     listed(KIMI);
-    for (const bad of [`${KIMI}'; rm -rf /`, 'feabbac1-fc87-4756-8076-0c6adc57127b', 'session_../x']) {
+    for (const bad of [`${KIMI}'; rm -rf /`, `session_${KIMI}`, 'session_../x']) {
       expect(resolveResumeSessionId({ provider: 'kimi-code', resumableSessionId: bad, projectPath: PROJECT }, home)).toBeNull();
     }
     expect(resolveResumeSessionId({ provider: 'claude', resumableSessionId: KIMI, projectPath: PROJECT }, home)).toBeNull();

@@ -28,7 +28,14 @@ import { kimiEventOf, KimiSessionWatch, type HookPost } from '../../electron/ser
  * 9. A line still being written is parsed before its end.
  * 10. The posts are out of the order the hook routes expect: the session's registration, then the prompt, then the
  *     answer, the rest and the stop.
+ * 11. A post names the session in kimi's own form, `session_<uuid>`: the hook routes take the UUID a CLI gave its
+ *     session and nothing else, and answer 400, so every post was dropped (the conformance run, 19/11). Posted as the
+ *     UUID alone.
  */
+
+/** A kimi session id, and the UUID Tars knows it by. */
+const K = (n: number) => `session_00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const T = (n: number) => K(n).slice('session_'.length);
 
 describe('kimiEventOf', () => {
   it('1: only turn.prompt, a text content.part and turn.ended are events', () => {
@@ -110,24 +117,24 @@ describe('KimiSessionWatch', () => {
   it('5 and 10: a session locked by the agent\'s kimi is followed, its turn posted in order, its report the answer', async () => {
     watch.noteLaunch('a1', work);
     pids.a1 = [100, 101];
-    const wire = session('session_1');
-    lock('session_1', 101);
+    const wire = session(K(1));
+    lock(K(1), 101);
     write(wire, prompt(0, 'do it'), said(0, 1, 'Looking at the files.'), said(0, 2, 'The report: all tests pass, and here is why in detail.'), said(0, 3, 'Saved.'), ended(0, 'completed'));
     await watch.tick();
     expect(of('a1')).toEqual([
-      ['/api/hooks/status', 'running', 'startup', 'session_1'],
-      ['/api/hooks/status', 'running', 'do it', 'session_1'],
-      ['/api/hooks/output', 'Stop', 'The report: all tests pass, and here is why in detail.\n\nSaved.', 'session_1'],
-      ['/api/hooks/status', 'idle', '', 'session_1'],
-      ['/api/hooks/agent-stopped', 'Stop', '', 'session_1'],
+      ['/api/hooks/status', 'running', 'startup', T(1)],
+      ['/api/hooks/status', 'running', 'do it', T(1)],
+      ['/api/hooks/output', 'Stop', 'The report: all tests pass, and here is why in detail.\n\nSaved.', T(1)],
+      ['/api/hooks/status', 'idle', '', T(1)],
+      ['/api/hooks/agent-stopped', 'Stop', '', T(1)],
     ]);
   });
 
   it('4: text parts of one block are one message, read whole', async () => {
     watch.noteLaunch('a1', work);
     pids.a1 = [7];
-    const wire = session('session_1');
-    lock('session_1', 7);
+    const wire = session(K(1));
+    lock(K(1), 7);
     write(wire, prompt(0, 'go'), said(0, 1, 'Part one, '), said(0, 1, 'part two.'), ended(0, 'completed'));
     await watch.tick();
     expect(of('a1').find((p) => p[0] === '/api/hooks/output')?.[2]).toBe('Part one, part two.');
@@ -136,13 +143,13 @@ describe('KimiSessionWatch', () => {
   it('5: cancelled is an interruption, with no answer; another reason is a failure that says it', async () => {
     watch.noteLaunch('a1', work);
     pids.a1 = [7];
-    const wire = session('session_1');
-    lock('session_1', 7);
+    const wire = session(K(1));
+    lock(K(1), 7);
     write(wire, prompt(0, 'long'), said(0, 1, 'half'), ended(0, 'cancelled'));
     await watch.tick();
     expect(interrupted).toEqual(['a1']);
     expect(of('a1').some((p) => p[0] === '/api/hooks/output')).toBe(false);
-    expect(of('a1').at(-1)).toEqual(['/api/hooks/status', 'idle', '', 'session_1']);
+    expect(of('a1').at(-1)).toEqual(['/api/hooks/status', 'idle', '', T(1)]);
     posts = [];
     write(wire, prompt(1, 'again'), ended(1, 'max_steps_reached'));
     await watch.tick();
@@ -153,13 +160,13 @@ describe('KimiSessionWatch', () => {
   it('6: no evidence, no binding: another folder, a lock of a process outside the terminal, a prompt naming another agent', async () => {
     watch.noteLaunch('a1', work);
     pids.a1 = [7];
-    const elsewhere = session('session_x', path.join(work, 'other'));
-    lock('session_x', 7);
+    const elsewhere = session(K(91), path.join(work, 'other'));
+    lock(K(91), 7);
     write(elsewhere, prompt(0, 'not here'), ended(0, 'completed'));
-    const foreign = session('session_y');
-    lock('session_y', 999);
+    const foreign = session(K(92));
+    lock(K(92), 999);
     write(foreign, prompt(0, 'the user\'s own kimi'), ended(0, 'completed'));
-    const named = session('session_z');
+    const named = session(K(93));
     write(named, prompt(0, `${IDENTITY('other-agent-id-1234')} work`), ended(0, 'completed'));
     await watch.tick();
     clock += 60_000;
@@ -170,7 +177,7 @@ describe('KimiSessionWatch', () => {
   it('6: where no process can be read, the first prompt naming the agent binds the session', async () => {
     watch.noteLaunch('a1-0000-1111', work);
     pids['a1-0000-1111'] = undefined;
-    const wire = session('session_1');
+    const wire = session(K(1));
     write(wire, prompt(0, `${IDENTITY('a1-0000-1111')} the task`), said(0, 1, 'ok'), ended(0, 'completed'));
     await watch.tick();
     expect(of('a1-0000-1111').map((p) => p[1])).toEqual(['running', 'running', 'Stop', 'idle', 'Stop']);
@@ -186,12 +193,12 @@ describe('KimiSessionWatch', () => {
     watch.noteTyped('a2', 'Message from agent "Lead" ("lead-id"), task t-99999999:\n\nsomething else entirely');
     watch.noteTyped('a1', typed);
     watch.noteTyped('a1', 'ok');
-    const wire = session('session_1');
+    const wire = session(K(1));
     write(wire, prompt(0, typed), said(0, 1, 'none failed'), ended(0, 'completed'));
-    const short = session('session_2');
+    const short = session(K(2));
     write(short, prompt(0, 'ok'), ended(0, 'completed'));
     await watch.tick();
-    expect(of('a1').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['none failed', 'session_1']);
+    expect(of('a1').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['none failed', T(1)]);
     expect(of('a2')).toEqual([]);
   });
 
@@ -203,14 +210,14 @@ describe('KimiSessionWatch', () => {
     const same = 'Message from Tars: the release is cut, rebase your branch onto main.';
     watch.noteTyped('a1-0000-1111', same);
     watch.noteTyped('a2-0000-2222', same);
-    write(session('session_1'), prompt(0, same), said(0, 1, 'rebased'), ended(0, 'completed'));
-    write(session('session_2'), prompt(0, same), said(0, 1, 'rebased too'), ended(0, 'completed'));
+    write(session(K(1)), prompt(0, same), said(0, 1, 'rebased'), ended(0, 'completed'));
+    write(session(K(2)), prompt(0, same), said(0, 1, 'rebased too'), ended(0, 'completed'));
     await watch.tick();
     expect(posts).toEqual([]);
-    write(session('session_3'), prompt(0, `${IDENTITY('a2-0000-2222')} ${same}`), said(0, 1, 'mine'), ended(0, 'completed'));
+    write(session(K(3)), prompt(0, `${IDENTITY('a2-0000-2222')} ${same}`), said(0, 1, 'mine'), ended(0, 'completed'));
     await watch.tick();
     expect(of('a1-0000-1111')).toEqual([]);
-    expect(of('a2-0000-2222').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['mine', 'session_3']);
+    expect(of('a2-0000-2222').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['mine', T(3)]);
   });
 
   it('7: two agents in one folder each get the session their own kimi holds', async () => {
@@ -218,42 +225,42 @@ describe('KimiSessionWatch', () => {
     watch.noteLaunch('a2', work);
     pids.a1 = [10, 11];
     pids.a2 = [20, 21];
-    const one = session('session_1');
-    const two = session('session_2');
-    lock('session_1', 21);
-    lock('session_2', 11);
+    const one = session(K(1));
+    const two = session(K(2));
+    lock(K(1), 21);
+    lock(K(2), 11);
     write(one, prompt(0, 'for a2'), said(0, 1, 'two'), ended(0, 'completed'));
     write(two, prompt(0, 'for a1'), said(0, 1, 'one'), ended(0, 'completed'));
     await watch.tick();
-    expect(of('a1').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['one', 'session_2']);
-    expect(of('a2').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['two', 'session_1']);
+    expect(of('a1').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['one', T(2)]);
+    expect(of('a2').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['two', T(1)]);
   });
 
   it('8: a resumed session is followed from where it stood at the launch, registered as a resume', async () => {
-    const wire = session('session_1');
+    const wire = session(K(1));
     write(wire, prompt(0, 'old task'), said(0, 1, 'old answer'), ended(0, 'completed'));
-    watch.noteLaunch('a1', work, 'session_1');
+    watch.noteLaunch('a1', work, K(1));
     pids.a1 = [7];
-    lock('session_1', 7);
+    lock(K(1), 7);
     await watch.tick();
     expect(posts).toEqual([]);
     write(wire, prompt(1, 'new task'), said(1, 1, 'new answer'), ended(1, 'completed'));
     await watch.tick();
     expect(of('a1')).toEqual([
-      ['/api/hooks/status', 'running', 'resume', 'session_1'],
-      ['/api/hooks/status', 'running', 'new task', 'session_1'],
-      ['/api/hooks/output', 'Stop', 'new answer', 'session_1'],
-      ['/api/hooks/status', 'idle', '', 'session_1'],
-      ['/api/hooks/agent-stopped', 'Stop', '', 'session_1'],
+      ['/api/hooks/status', 'running', 'resume', T(1)],
+      ['/api/hooks/status', 'running', 'new task', T(1)],
+      ['/api/hooks/output', 'Stop', 'new answer', T(1)],
+      ['/api/hooks/status', 'idle', '', T(1)],
+      ['/api/hooks/agent-stopped', 'Stop', '', T(1)],
     ]);
   });
 
   it('8: a session already there at the launch, bound by its lock, is read from where it stood, as a resume', async () => {
-    const wire = session('session_1');
+    const wire = session(K(1));
     write(wire, prompt(0, 'old task'), said(0, 1, 'old answer'), ended(0, 'completed'));
     watch.noteLaunch('a1', work);
     pids.a1 = [7];
-    lock('session_1', 7);
+    lock(K(1), 7);
     write(wire, prompt(1, 'new task'), said(1, 1, 'new answer'), ended(1, 'completed'));
     await watch.tick();
     expect(of('a1').map((p) => p.slice(1, 3))).toEqual([
@@ -264,8 +271,8 @@ describe('KimiSessionWatch', () => {
   it('9: a line still being written waits for its end', async () => {
     watch.noteLaunch('a1', work);
     pids.a1 = [7];
-    const wire = session('session_1');
-    lock('session_1', 7);
+    const wire = session(K(1));
+    lock(K(1), 7);
     const whole = `${JSON.stringify(prompt(0, 'go'))}\n${JSON.stringify(ended(0, 'completed'))}\n`;
     const cut = whole.length - 10;
     fs.appendFileSync(wire, whole.slice(0, cut));
