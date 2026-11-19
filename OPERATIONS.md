@@ -1525,7 +1525,10 @@ window; agents may only ask for a scan.
     (`~/.tars/tmp/<id>/c/<user>/<project>/<session>`, neither its current nor its resumable session; with none known,
     its newest is held), untouched for 3 days; `agent-tmp-entry`, an entry of a live agent's TMPDIR (`t/`) or of its
     current session's scratchpad, untouched for 7 days; `release-folder`, the `release/` of a project or a worktree
-    that is electron-builder's output by its own evidence (its `builder-debug.yml` or
+    that is electron-builder's output by its own evidence (every entry of a build's kind: artefacts (`dmg`, `zip`,
+    `exe`, `AppImage`, `deb`, `rpm`, `snap`, `msi`, `pkg`, `7z`) and their `.blockmap`, `latest*.yml`, `builder-*.yml`,
+    the unpacked apps `mac*`, `win*-unpacked`, `linux*-unpacked`, Finder's `.DS_Store`, so that one file or folder of
+    the owner's keeps it out whatever is planted beside it; its `builder-debug.yml` or
     `builder-effective-config.yaml`, and a second sign it writes with it: an update manifest `latest*.yml`, or an
     artefact beside its `.blockmap`, so that a marker planted alone in an owner's folder is not enough; no file git
     tracks in it, ignored by git, or untracked in a worktree: at a

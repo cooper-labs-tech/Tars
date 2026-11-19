@@ -25,7 +25,8 @@ import { shortIdOf } from './agent-tmp';
  *   (~/.tars/tmp/<id>/c/<user>/<project>/<session>, neither its current nor its resumable session), untouched 3 days;
  * - agent-tmp-entry: an entry of a live agent's TMPDIR (t/) or of its current session's scratchpad, untouched 7 days;
  * - release-folder: the release/ of a project or a worktree (electron-builder's output), untouched 3 days, holding
- *   its marker (builder-debug.yml, builder-effective-config.yaml) and a second sign of a build (an update manifest
+ *   every entry of a build's kind (artefacts and their .blockmap, latest*.yml, builder-*.yml, the unpacked apps), its
+ *   marker (builder-debug.yml, builder-effective-config.yaml) and a second sign of a build (an update manifest
  *   latest*.yml, or an artefact beside its .blockmap), no file git tracks in it, and ignored by git (at a
  *   project's root) or ignored or untracked (in a worktree): a user's own release/ is never proposed;
  * - worktree-node-modules: the node_modules of a worktree nothing changed in for 7 days (caches aside).
@@ -223,9 +224,23 @@ const UPDATE_MANIFEST = /^latest(-[a-z0-9]+)?\.yml$/;
  * owner's (the Audit's Info on #605): an update manifest, or an artefact beside its .blockmap (measured in the Tars
  * checkout's release/: latest-mac.yml, the .dmg and the .zip each with theirs). A .blockmap alone is none.
  */
+/**
+ * The entries a build leaves, and nothing else (the Audit's stronger form at 142a60c53: this rule deletes files):
+ * artefacts and their .blockmap, electron-builder's manifests and logs, the unpacked apps, Finder's .DS_Store. One
+ * other entry, a file or a folder of the owner's, keeps the folder out, whatever was planted beside it.
+ */
+const BUILD_FILE = /(\.(dmg|zip|exe|appimage|deb|rpm|snap|msi|pkg|7z)(\.blockmap)?|^latest(-[a-z0-9]+)?\.yml|^builder-[a-z0-9-]+\.ya?ml|^\.ds_store)$/i;
+const BUILD_DIR = /^(mac(-[a-z0-9]+)*|win(-[a-z0-9]+)*-unpacked|linux(-[a-z0-9]+)*-unpacked)$/i;
+const ofABuild = (dir: string, name: string): boolean => {
+  let st: fs.Stats;
+  try { st = fs.lstatSync(path.join(dir, name)); } catch { return false; }
+  return st.isFile() ? BUILD_FILE.test(name) : st.isDirectory() ? BUILD_DIR.test(name) : false;
+};
+
 function builtHere(dir: string): boolean {
   let names: string[] = [];
   try { names = fs.readdirSync(dir); } catch { return false; }
+  if (!names.every(n => ofABuild(dir, n))) return false;
   if (!BUILDER_MARKERS.some(m => names.includes(m) && isFile(path.join(dir, m)))) return false;
   return names.some(n => (UPDATE_MANIFEST.test(n) && isFile(path.join(dir, n)))
     || (n.endsWith('.blockmap') && names.includes(n.slice(0, -'.blockmap'.length)) && isFile(path.join(dir, n.slice(0, -'.blockmap'.length)))));
@@ -245,7 +260,7 @@ async function releaseItem(world: JanitorWorld, folder: string, label: string, p
   if (changed > world.now - RELEASE_IDLE_DAYS * DAY) return undefined;
   return {
     id: idOf('release-folder', p), kind: 'release-folder', path: p, project, label: `${label}/release`, sizeBytes: await world.sizeOf(p),
-    rule: `electron-builder's output (its builder-debug.yml, and its update manifest or an artefact beside its .blockmap), git tracking nothing in it, untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
+    rule: `electron-builder's output, every entry a build's (its artefacts and their .blockmap, latest*.yml, builder-*.yml, the unpacked apps), with its builder-debug.yml and its update manifest or an artefact beside its .blockmap, git tracking nothing in it, untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
     why: `last changed ${day(changed)}`,
   };
 }
