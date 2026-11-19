@@ -34239,6 +34239,60 @@
                             },
                             {
                               "type": "frame",
+                              "id": "FBCDo",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "TKDKT",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "kZr4H",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "UCGWM",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "ojrld",
                               "name": "s CLI Paths",
                               "width": "fill_container",
@@ -35813,6 +35867,60 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "s7EYKU",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "L8oad",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "zrdZ1",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "V5Ybq",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -57794,6 +57902,60 @@
                                   "name": "l",
                                   "fill": "$text-primary",
                                   "content": "Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "b71RPE",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "yIWSV",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "WdXlf",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Nhc16",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -80973,6 +81135,60 @@
                                   "name": "l",
                                   "fill": "$text-primary",
                                   "content": "Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "NygyG",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "BLjyy",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "gjpQf",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "jlaHH",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -158753,6 +158969,33 @@
                             },
                             {
                               "type": "frame",
+                              "id": "LfS7P",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "b6bRo",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "rrf2s",
                               "name": "s CLI Paths",
                               "width": "fill_container",
@@ -167479,6 +167722,33 @@
                                   "name": "l",
                                   "fill": "$text-primary",
                                   "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "afqc0",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "M0SRO",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -270742,6 +271012,31 @@
                     },
                     {
                       "type": "frame",
+                      "id": "EBtSU",
+                      "name": "item Inference endpoints",
+                      "width": "fill_container",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PyRsU",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Inference endpoints",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
                       "id": "cp3XL",
                       "name": "item CLI Paths",
                       "width": "fill_container",
@@ -281809,6 +282104,31 @@
                           "name": "label",
                           "fill": "$text-secondary",
                           "content": "Claude accounts",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "F8JupB",
+                      "name": "item Inference endpoints",
+                      "width": "fill_container",
+                      "height": 26,
+                      "padding": [
+                        0,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "StvLe",
+                          "name": "label",
+                          "fill": "$text-secondary",
+                          "content": "Inference endpoints",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 12,
@@ -439008,6 +439328,33 @@
                             },
                             {
                               "type": "frame",
+                              "id": "cZRs4",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "arI9l",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "jUHtG",
                               "name": "s CLI Paths",
                               "width": "fill_container",
@@ -441802,6 +442149,33 @@
                             },
                             {
                               "type": "frame",
+                              "id": "WFCqO",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "WvKTS",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "cLXG8",
                               "name": "s CLI Paths",
                               "width": "fill_container",
@@ -444422,6 +444796,33 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Gexhq",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "OuRy9",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -447216,6 +447617,33 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "C1peM",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "c3rc0",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -647842,6 +648270,33 @@
                             },
                             {
                               "type": "frame",
+                              "id": "J2wr4s",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "d8uGC",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "hHYoE",
                               "name": "s CLI Paths",
                               "width": "fill_container",
@@ -649948,6 +650403,33 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "T2T8Ea",
+                              "name": "s Inference endpoints",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "TC7bY",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Inference endpoints",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -857548,7 +858030,7 @@
                               "type": "text",
                               "id": "twAxd",
                               "fill": "$text-muted",
-                              "content": "not offered: opencode on kimi-k2 is not among your pairs",
+                              "content": "not offered: opencode on kimi-k2 is not among the pairs that may be traced",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -857797,6 +858279,137 @@
                         {
                           "type": "rectangle",
                           "id": "TbtFx",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "r5NKv",
+                  "name": "record traces · endpoint not approved",
+                  "width": 660,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 12,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "bvzwp",
+                      "name": "l",
+                      "width": 460,
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VIkhV",
+                          "fill": "$text-muted",
+                          "content": "Record traces",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "eIRZb",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Its sessions are kept in Traces, inside Tars, as long as Traces keeps them. An external reader reads them with the reader token.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rXS9I",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "K01BfK",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "u9QEe",
+                              "fill": "$status-waiting",
+                              "content": "not offered: Home vLLM waits for your approval",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o1UY5",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ok42l",
+                      "name": "b open Settings",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "yfwIE",
+                          "fill": "$text-muted",
+                          "content": "open Settings",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JRngs",
+                      "name": "Toggle off",
+                      "opacity": 0.45,
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Mj093",
                           "x": 2,
                           "y": 1,
                           "name": "knob",
@@ -860917,7 +861530,7 @@
                               "type": "text",
                               "id": "LkiRz",
                               "fill": "$text-muted",
-                              "content": "not offered: opencode on kimi-k2 is not among your pairs",
+                              "content": "not offered: opencode on kimi-k2 is not among the pairs that may be traced",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -861166,6 +861779,137 @@
                         {
                           "type": "rectangle",
                           "id": "zqiiR",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "iX94k",
+                  "name": "record traces · endpoint not approved",
+                  "width": 660,
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "gap": 12,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "deLNL",
+                      "name": "l",
+                      "width": 460,
+                      "layout": "vertical",
+                      "gap": 3,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Lk9bE",
+                          "fill": "$text-muted",
+                          "content": "Record traces",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "enmAv",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Its sessions are kept in Traces, inside Tars, as long as Traces keeps them. An external reader reads them with the reader token.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Pqwd8",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "bLcE6",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "GyOXp",
+                              "fill": "$status-waiting",
+                              "content": "not offered: Home vLLM waits for your approval",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "C3SiU",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N8WehM",
+                      "name": "b open Settings",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "khfcR",
+                          "fill": "$text-muted",
+                          "content": "open Settings",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oCOPS",
+                      "name": "Toggle off",
+                      "opacity": 0.45,
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "sH18r",
                           "x": 2,
                           "y": 1,
                           "name": "knob",
