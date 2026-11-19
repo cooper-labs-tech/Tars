@@ -164,7 +164,8 @@ test('codex 0.170 starts in a worker\'s terminal, and its turn ends when Tars st
     await expect.poll(async () => !!(await agent())?.cliRunning, { timeout: 30_000 }).toBe(false);
     await sleep(25_000);
     const afterStop = posts().filter(r => r.at > stoppedAt && carriesOutput(r));
-    const leftAfterStop = runningFrom(home);
+    // Tars itself still runs here, its Electron with the sandbox home in its arguments: everything else counts.
+    const leftAfterStop = runningFrom(home).filter(p => !p.command.includes(`${path.sep}node_modules${path.sep}electron${path.sep}dist${path.sep}`));
     keep({ stoppedAt, requestsAfterStop: short().filter(r => r.at > stoppedAt), leftAfterStop, screenAfterStop: (await screen()).slice(-6000) });
     expect.soft(afterStop, 'a tool\'s output reached the endpoint after the agent was stopped: its turn went on').toEqual([]);
     expect.soft(leftAfterStop, 'what still ran from the sandbox home 25 s after the stop').toEqual([]);
