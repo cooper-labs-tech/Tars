@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX, typedAtRest } from '../../../electron/services/owner-words';
+import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX, typedAtRest, restFromReadings } from '../../../electron/services/owner-words';
 
 /**
  * The owner's words typed by hand into an orchestrator's terminal (2.0.7; SECURITY.md §8, "Typed in a terminal",
@@ -29,10 +29,14 @@ import { createOwnerWords, OWNER_TYPED_PENDING_MS, OWNER_TYPED_PENDING_MAX, type
  * W13. A line waits longer than the hook needs at rest: 10 minutes gave a forged hook all that time.
  * And from the Audit's re-read at f211ff380 (written before its code):
  * W14. Rest is read from the status the agent posts, which it can post itself mid-turn ("idle"), so a dialog the
- *      screen check does not know (Qwen Code, pi, Kimi, unmeasured) gets the owner's answer confirmed. Rest is Tars's
- *      own last-seen turn end for the current session (the Stop, /api/hooks/agent-stopped, from the state mod, the
- *      shell hook or a session log's watcher), or that session's start, with no turn begun since; never the status
- *      alone, never another session's Stop.
+ *      screen check does not know (Qwen Code, pi, Kimi, unmeasured) gets the owner's answer confirmed.
+ * And from the Audit's re-read at 82f13ebd2 (written before its code):
+ * W15. Rest is set by a Stop the agent posts with its own token: two posts mid-turn (its Stop, its "idle") forge it.
+ *      Rest is only what Tars reads itself, in the current session: for the claude binary, the transcript's tail with
+ *      no turn on record (its turn_duration, or the interrupt marker, after the last prompt), nothing queued; for codex
+ *      and pi, their session log's turn end as Tars's watcher read it; for any other CLI (Qwen Code, whose transcript
+ *      writes no turn end, gemini, opencode, amp, grok), never. No reading (a fresh session's missing transcript) is
+ *      no rest.
  */
 
 const A = '/projects/alpha';
@@ -140,15 +144,21 @@ describe('a line counts only when typed at rest (the Audit\'s L1 on #594)', () =
     expect(typedAtRest({ status: 'idle', currentSessionId: 's1' }, false, undefined)).toBe(false);
     expect(typedAtRest({ status: 'idle', currentSessionId: 's1' }, false, { session: 's0' })).toBe(false);
     expect(typedAtRest({ status: 'idle', currentSessionId: 's1' }, false, { session: 's1' })).toBe(true);
-    // The store: a Stop, or the session's start, is rest until the next turn begins.
-    expect(words.restOf('lead-a')).toBeUndefined();
-    words.restSeen('lead-a', 's1');
-    expect(words.restOf('lead-a')).toEqual({ session: 's1' });
-    words.turnSeen('lead-a');
-    expect(words.restOf('lead-a')).toBeUndefined();
-    words.restSeen('lead-a', 's1');
-    words.restSeen('dev-a', 's9');
-    expect(words.restOf('lead-a')).toEqual({ session: 's1' });
+  });
+
+  it('W15: rest is only what Tars reads itself, in the current session, never for a CLI it cannot read', () => {
+    // The claude binary: the transcript's tail.
+    expect(restFromReadings({ cli: 'transcript', session: 's1', record: { inTurn: false } })).toEqual({ session: 's1' });
+    expect(restFromReadings({ cli: 'transcript', session: 's1', record: { inTurn: true } })).toBeUndefined();
+    expect(restFromReadings({ cli: 'transcript', session: 's1', record: { inTurn: false, queued: true } })).toBeUndefined();
+    expect(restFromReadings({ cli: 'transcript', session: 's1', record: undefined })).toBeUndefined();
+    // codex and pi: the watcher's own reading of their session log, for this session only.
+    expect(restFromReadings({ cli: 'session-log', session: 's1', logRestSession: 's1' })).toEqual({ session: 's1' });
+    expect(restFromReadings({ cli: 'session-log', session: 's1', logRestSession: 's0' })).toBeUndefined();
+    expect(restFromReadings({ cli: 'session-log', session: 's1' })).toBeUndefined();
+    // Anything else, and no session: never.
+    expect(restFromReadings({ cli: 'none', session: 's1', record: { inTurn: false }, logRestSession: 's1' })).toBeUndefined();
+    expect(restFromReadings({ cli: 'transcript', record: { inTurn: false } })).toBeUndefined();
   });
 
   it('W13: a line waits a minute at most for its confirmation', () => {

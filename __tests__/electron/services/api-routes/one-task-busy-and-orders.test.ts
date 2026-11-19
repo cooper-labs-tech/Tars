@@ -323,7 +323,10 @@ describe('nothing goes into a terminal beside a run (M1)', () => {
     expect(typedInto(terminal)).toContain('TASK-B');
     const seen = call('GET', `/api/tasks/${ref}`, {}, 'orch');
     await seen.done;
-    expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ id: ref, outcome: 'delivered', how: 'typed' });
+    // 2.0.7 (#594): its id follows the turn it opened, its own task from the asker, no longer `delivered` for ever.
+    const task = seen.answer()?.data.task as Record<string, unknown>;
+    expect(task, JSON.stringify(seen.answer())).toMatchObject({ outcome: 'running', requesterAgentId: 'orch', source: 'agent' });
+    expect(task.id).not.toBe(ref);
   });
 
   it('6. /message to an agent at its prompt while its delegated run works types nothing, and says to send it with /dispatch', async () => {
@@ -588,7 +591,8 @@ describe('an answer, a held message and queued tasks (the Audit\'s gate of 9d9a7
       for (const [key, ref] of [['TASK-T', tRef], ['TASK-U', uRef]] as const) {
         const seen = call('GET', `/api/tasks/${ref}`, {}, 'orch');
         await seen.done;
-        expect(seen.answer()?.data.task, `${key} at rest ${rest}`).toMatchObject(order.includes(key) ? { outcome: 'delivered', how: 'typed' } : { outcome: 'queued' });
+        // In: its own turn's task (2.0.7, #594), or going in until that turn begins; before: queued.
+        expect(seen.answer()?.data.task, `${key} at rest ${rest}`).toMatchObject(order.includes(key) ? { outcome: expect.stringMatching(/^(starting|running|completed)$/) } : { outcome: 'queued' });
       }
       // The turn of what went in ends.
       agent.status = 'idle';
@@ -780,10 +784,19 @@ describe('a task that waited its turn and went in (L3)', () => {
     await later(5000);
     const seen = call('GET', `/api/tasks/${ref}`, {}, 'orch');
     await seen.done;
-    expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ id: ref, outcome: 'delivered', how: 'typed' });
+    // 2.0.7 (#594): typed in, it reads going in until the turn it opens begins, then follows that turn: never
+    // `starting` for ever (the Audit's L3 on #449), and never `delivered` for ever either.
+    expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ id: ref, outcome: 'starting' });
     // Into the one session started for the task before it: no second one.
     expect(spawned).toHaveLength(1);
     expect(typedInto(spawned[0])).toContain('TASK-B');
+    const typed = typedInto(spawned[0]).replace(/\x1b\[20[01]~/g, '');
+    begin(agents.get('w3')!, typed.slice(typed.lastIndexOf('Message from'), typed.indexOf('TASK-B') + 'TASK-B fix it'.length));
+    const followed = call('GET', `/api/tasks/${ref}`, {}, 'orch');
+    await followed.done;
+    const task = followed.answer()?.data.task as Record<string, unknown>;
+    expect(task, JSON.stringify(followed.answer())).toMatchObject({ outcome: 'running', requesterAgentId: 'orch' });
+    expect(task.id).not.toBe(ref);
   });
 });
 
@@ -823,7 +836,14 @@ describe('after the Audit\'s gate of 6fb17592 on #453', () => {
     await later(5000);
     const seen = call('GET', `/api/tasks/${ref}`, {}, 'orch');
     await seen.done;
-    expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ id: ref, outcome: 'delivered', how: 'started' });
+    // 2.0.7 (#594): a session started on it, it reads going in until that session's first turn begins, then follows it.
+    expect(seen.answer()?.data.task, JSON.stringify(seen.answer())).toMatchObject({ id: ref, outcome: 'starting' });
+    begin(agents.get('cl')!, 'TASK-B fix it');
+    const followed = call('GET', `/api/tasks/${ref}`, {}, 'orch');
+    await followed.done;
+    const task = followed.answer()?.data.task as Record<string, unknown>;
+    expect(task, JSON.stringify(followed.answer())).toMatchObject({ outcome: 'running' });
+    expect(task.id).not.toBe(ref);
   });
 });
 

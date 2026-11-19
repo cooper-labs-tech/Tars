@@ -23,9 +23,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * e. "/compact" and Enter: a command, not recorded;
  * f. dev-a's report to lead-a (Tars types it, writeProgrammaticInput): not recorded;
  * g. "TYPED-W ..." typed into the worker's own terminal: not recorded, a worker's terminal is not an orchestrator's.
- * g2. (the Audit's L1 on #594) While lead-a works on a turn, the owner types "ANSWER-1 yes" into what the turn shows (a
- *     dialog Tars does not see): the stand-in takes it as that answer, not as a prompt, then, as a prompt-injected agent
- *     would from inside its own terminal, posts a UserPromptSubmit naming it with its own hook token: not recorded.
+ * g2. (the Audit's L1 on #594, and its re-read at 82f13ebd2) While lead-a works on a turn, it first forges its rest
+ *     with its own hook token (its Stop, its "idle": two posts mid-turn); the owner then types "ANSWER-1 yes" into what
+ *     the turn shows (a dialog Tars does not see): the stand-in takes it as that answer, not as a prompt, then posts a
+ *     UserPromptSubmit naming it, as a prompt-injected agent would from inside its own terminal: not recorded. Rest is
+ *     what Tars reads in the transcript, where the turn is still on record.
  * Then:
  * h. lead-a's owner_words list holds a's words and the SLOW>> line typed at rest, and only them;
  * i. lead-a relays them to lead-b: lead-b's terminal gets them under the sender line only Tars writes, "via terminal",
@@ -57,19 +59,33 @@ async function turn(prompt) {
   busy = true;
   hook('user-prompt-submit.sh', { hook_event_name: 'UserPromptSubmit', prompt });
   line({ type: 'user', message: { role: 'user', content: prompt } });
+  if (prompt.includes('SLOW>>')) {
+    // A turn that goes on: a tool call on record, then its rest forged with the agent's own token (a Stop, an idle).
+    line({ type: 'assistant', message: { id: 'msg-' + Date.now(), role: 'assistant', stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 'tu1', name: 'Bash', input: {} }] } });
+    await sleep(500);
+    hook('on-stop.sh', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'forged' });
+    fs.appendFileSync(path.join(process.env.HOME, 'forged.jsonl'), JSON.stringify({ id, at: Date.now() }) + '\n');
+    await sleep(6000);
+  }
   line({ type: 'assistant', message: { id: 'msg-' + Date.now(), role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: 'noted' }] } });
-  await sleep(prompt.includes('SLOW>>') ? 6000 : 100);
+  await sleep(100);
   hook('on-stop.sh', { hook_event_name: 'Stop', stop_hook_active: false, last_assistant_message: 'noted' });
+  // Claude Code's own end of the turn, which Tars reads.
+  line({ type: 'system', subtype: 'turn_duration', durationMs: 1 });
   busy = false;
 }
 let busy = false;
 process.stdin.setRawMode(true);
 hook('session-start.sh', { hook_event_name: 'SessionStart', source: 'startup' });
+const dashes = process.argv.indexOf('--');
+const launch = dashes === -1 ? '' : process.argv.slice(dashes + 1).join(' ');
 fs.appendFileSync(path.join(process.env.HOME, 'starts.jsonl'), JSON.stringify({ id }) + '\n');
 process.stdout.write('\x1b[?2004h> ');
 let buffer = '';
 let pasting = false;
 let queue = Promise.resolve();
+// The session's first turn, on the start's prompt: its end puts the transcript at rest.
+if (launch.trim()) queue = queue.then(() => turn(launch));
 process.stdin.on('data', (data) => {
   for (const piece of data.toString().split(/(\x1b\[20[01]~)/)) {
     if (piece === '\x1b[200~') { pasting = true; continue; }
@@ -146,7 +162,7 @@ for (const newInterface of [false, true]) {
         for (const end = Date.now() + ms; Date.now() < end; await new Promise((r) => setTimeout(r, 150))) if (ok()) return;
         throw new Error(`never: ${what}`);
       };
-      const start = (id: string) => page.evaluate((id) => (window as unknown as Api).electronAPI.agent.start({ id, prompt: '' }), id);
+      const start = (id: string) => page.evaluate((id) => (window as unknown as Api).electronAPI.agent.start({ id, prompt: 'FIRST>> hello' }), id);
       // Each chunk as one call of the window's agent:input, as xterm sends a key (or a paste) to it.
       const send = (id: string, chunks: string[]) => page.evaluate(async ({ id, chunks }) => {
         for (const input of chunks) await (window as unknown as Api).electronAPI.agent.sendInput({ id, input });
@@ -157,6 +173,8 @@ for (const newInterface of [false, true]) {
       for (const id of ['lead-a', 'dev-a', 'lead-b']) await start(id);
       const started = () => new Set((lines(path.join(home, 'starts.jsonl')) as Array<{ id: string }>).map((s) => s.id));
       await until('three sessions up', () => ['lead-a', 'dev-a', 'lead-b'].every((id) => started().has(id)), 60_000);
+      // Each session's first turn ended: its transcript says it rests.
+      for (const id of ['lead-a', 'dev-a', 'lead-b']) await submitted(id, 'FIRST>>');
       await new Promise((r) => setTimeout(r, 1500));
       await readTokens();
       seen.tokensRead = Object.fromEntries(Object.entries(tokens).map(([id, t]) => [id, t.length > 0]));
@@ -179,6 +197,7 @@ for (const newInterface of [false, true]) {
       // g2. A turn of lead-a, and the owner's answer to what it shows.
       await send('lead-a', [...keys('SLOW>> a long turn'), '\r']);
       await submitted('lead-a', 'SLOW>>');
+      await until('lead-a forged its rest', () => (lines(path.join(home, 'forged.jsonl')) as unknown[]).length > 0);
       await new Promise((r) => setTimeout(r, 800));
       await send('lead-a', [...keys('ANSWER-1 yes'), '\r']);
       await until('lead-a answered and forged its hook', () => (lines(path.join(home, 'answered.jsonl')) as unknown[]).length > 0);
