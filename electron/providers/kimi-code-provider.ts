@@ -55,7 +55,10 @@ export class KimiCodeProvider implements CLIProvider {
     let command = shellQuote(params.binaryPath);
     if (params.permissionMode === 'auto' || params.permissionMode === 'bypass') command += ' --auto';
     else if (params.permissionMode === 'plan') command += ' --plan';
-    if (params.model && params.model !== 'default') {
+    // On an inference endpoint the model is KIMI_MODEL_NAME's (getPtyEnvVars): `-m` names an alias of the user's
+    // config.toml, which the endpoint's model is not, and kimi then starts no session (measured on 2.6.3).
+    const onEndpoint = !!endpointLaunchForAgent(params.agentId, 'kimi-code');
+    if (params.model && params.model !== 'default' && !onEndpoint) {
       if (!SAFE_MODEL.test(params.model)) throw new Error('Invalid model name');
       command += ` -m ${shellQuote(params.model)}`;
     }
