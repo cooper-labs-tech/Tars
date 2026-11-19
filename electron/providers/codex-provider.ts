@@ -38,6 +38,12 @@ const CODEX_MODELS_FLOOR: ProviderModel[] = [
 export class CodexProvider implements CLIProvider {
   readonly id = 'codex' as const;
   readonly displayName = 'Codex CLI';
+  /**
+   * A message typed while a turn runs goes out with the turn's next tool result (0.170.0, measured 20/11: a note typed
+   * during a 12 s shell call was in the request that carried that call's output; codex says "Messages to be submitted
+   * after next tool call").
+   */
+  readonly noteDuringTurn = 'next-tool-round' as const;
   readonly binaryName = 'codex';
   readonly configDir = codexHome();
 
