@@ -4,6 +4,7 @@ import type { DiskReport, JanitorCleanupRequest, JanitorItem } from '@/types/ele
 import { Button, StatusSquare } from '@/components/ui';
 import { Box, Empty, Row } from './bits';
 import { bytes } from './format';
+import { KINDS } from './kinds';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const clock = (ms: number) => { const d = new Date(ms); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
@@ -39,7 +40,6 @@ export function AskedByAgents({ requests, items, busy, onApprove }: {
           const own = items.filter((i) => r.ids.includes(i.id));
           const freed = sum(own.filter((i) => i.outcome?.kind === 'deleted').map((i) => i.outcome?.bytes ?? 0));
           const kept = own.filter((i) => i.outcome && i.outcome.kind !== 'deleted').length;
-          const names = own.slice(0, 3).map((i) => i.path.split(/[\\/]/).filter(Boolean).slice(-2).join('/')).join(', ');
           return (
             <Row key={r.id} data-cleanup-request={r.state} className="space-y-1.5 py-2.5">
               <p className="flex items-center gap-2 text-xs text-foreground">
@@ -47,7 +47,22 @@ export function AskedByAgents({ requests, items, busy, onApprove }: {
                 {`${r.by} asks to free ${bytes(r.bytes)} in ${projectName(r.project)}`}
               </p>
               <p className="text-[11.5px] leading-[1.45] text-text-secondary">{r.why}</p>
-              <p className="font-mono text-[10.5px] text-muted-foreground">{`${r.ids.length} ${r.ids.length === 1 ? 'item' : 'items'}${names ? ` · ${names}` : ''} · asked ${clock(r.at)}`}</p>
+              <ul className="space-y-1">
+                {r.items.map((it) => {
+                  const outcome = own.find((i) => i.id === it.id)?.outcome;
+                  const kept = outcome && outcome.kind !== 'deleted';
+                  return (
+                    <li key={it.id} data-request-item={it.kind} className="border-l border-border pl-2 py-1" title={it.path}>
+                      <p className="flex items-center gap-2 font-mono text-[11px]">
+                        <span className="min-w-0 flex-1 truncate text-foreground">{it.label}</span>
+                        <span className={kept ? 'text-status-waiting' : 'text-text-secondary'}>{kept ? outcome.kind : it.bytes === null ? 'size not known' : bytes(it.bytes)}</span>
+                      </p>
+                      <p className="font-mono text-[10px] leading-[1.4] text-muted-foreground">{`${KINDS[it.kind]} · ${it.rule}`}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+              <p className="font-mono text-[10.5px] text-muted-foreground">{`${r.items.length} ${r.items.length === 1 ? 'item' : 'items'} · asked ${clock(r.at)}`}</p>
               {r.state === 'approved' ? (
                 <p className={`font-mono text-[10.5px] ${kept ? 'text-status-waiting' : 'text-status-running'}`}>
                   {`approved by you${r.approvedAt ? ` at ${clock(r.approvedAt)}` : ''}${freed ? ` · ${bytes(freed)} freed` : ''}${kept ? `, ${kept} ${kept === 1 ? 'item' : 'items'} kept` : ''}`}

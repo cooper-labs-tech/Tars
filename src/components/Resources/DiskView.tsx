@@ -9,24 +9,11 @@ import { Box, Empty, Figure, Figures, Notice, Unread } from './bits';
 import { bytes, diskGb, gb, stamp, sum } from './format';
 import { useDiskJanitor, useDiskSpace } from './hooks';
 import { AskedByAgents, WhatAgentsLeave } from './DiskReport';
+import { KINDS } from './kinds';
 
 /** Each kind of item, one group, under the window's own title; the items' line is the rule they matched. */
 const VIEWS: readonly SegmentedOption<'cleanup' | 'leave'>[] = [{ value: 'cleanup', label: 'The cleanup' }, { value: 'leave', label: 'What agents leave' }];
 
-const KINDS: Record<JanitorItem['kind'], string> = {
-  'closed-worktree': 'Worktrees of merged branches',
-  'next-cache': 'Build caches of idle worktrees',
-  'test-artefacts': 'Test artefacts',
-  'npx-cache': 'The npx cache',
-  'docker-image': 'Docker images',
-  'docker-vm-trim': 'The Docker VM',
-  'agent-tmp': 'Temporary folders of removed agents',
-  // 2.0.7, what agents leave behind (services/disk-report.ts).
-  'session-scratchpad': 'Folders of ended agent sessions',
-  'agent-tmp-entry': "Old files in agents' temporary folders",
-  'release-folder': 'Release builds',
-  'worktree-node-modules': 'node_modules of idle worktrees',
-};
 const ORDER = Object.keys(KINDS) as JanitorItem['kind'][];
 const INK = { deleted: 'text-status-running', kept: 'text-status-waiting', failed: 'text-status-error' } as const;
 const PHASE = { checking: 'checking again', deleted: 'deleted', kept: 'kept', failed: 'failed' } as const;
