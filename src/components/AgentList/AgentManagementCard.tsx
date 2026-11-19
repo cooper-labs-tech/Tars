@@ -1,5 +1,6 @@
 'use client';
 
+import { RetuneLine } from '@/components/Retune/RetuneParts';
 import type { AgentStatus } from '@/types/electron';
 import { AgentMark, Button } from '@/components/ui';
 import { errorReason, wakeRefusedReason } from '@/app/agents/constants';
@@ -114,6 +115,9 @@ export function AgentManagementCard({ agent, onClick, onEdit, onStart, onStop, o
         <p className="font-mono text-[10.5px] text-muted-foreground truncate" title={facts}>
           {facts}
         </p>
+
+        {/* Its last retune by another agent, with an undo (2.0.7). Frame: `Agents · retuned by an agent`, the card. */}
+        <RetuneLine agent={agent} />
 
         <div className="flex items-center gap-2 pt-0.5" onClick={(e) => e.stopPropagation()}>
           <Button size="sm" className={ROW_ACTION} onClick={onClick}>

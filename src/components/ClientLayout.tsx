@@ -9,6 +9,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import NewShell from '@/components/NewShell/NewShell';
 import { DataFolderNotice } from '@/components/DataFolderNotice';
+import { RetuneNotices } from '@/components/Retune/RetuneParts';
 import { useNewInterface } from '@/hooks/useNewInterface';
 import { Splash } from '@/components/Splash';
 import { Button, BrandSpinner } from '@/components/ui';
@@ -306,6 +307,8 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
         >
           {/* Across the top of the column, above the page's own 22px header gutter. */}
           <DataFolderNotice className="-mx-4 -mt-4 mb-4 lg:-mx-[26px] lg:-mt-[22px] lg:mb-[22px]" />
+          {/* An agent retuned one of yours (2.0.7): who, what, undo. */}
+          <RetuneNotices className="mb-[22px]" />
           {children}
         </motion.main>
         </>
