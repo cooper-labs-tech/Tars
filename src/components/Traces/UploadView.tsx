@@ -61,6 +61,9 @@ export function UploadView() {
   /** The deletion under way: main stops the running upload pass first, then asks the back-office to delete. */
   const [inProgress, setInProgress] = useState(false);
   const [deleted, setDeleted] = useState<{ word: string; tone: 'running' | 'error' } | null>(null);
+  /** Giving up an owed deletion: asked first in its plain words, then main's refusal if none is owed. */
+  const [givingUp, setGivingUp] = useState(false);
+  const [giveUpError, setGiveUpError] = useState<string | null>(null);
 
   const read = useCallback(async () => {
     const api = tracesApi();
@@ -135,6 +138,21 @@ export function UploadView() {
     void read();
   };
 
+  const giveUp = async () => {
+    const api = tracesApi();
+    if (!api) return;
+    setGivingUp(false);
+    const r = await api.abandonDeletion();
+    if (r.ok) { setState(r.state); setGiveUpError(null); } else setGiveUpError(r.error);
+    void read();
+  };
+
+  /** A deletion cleared by itself stays said until the window acknowledges it. */
+  const ackCleared = async () => {
+    await tracesApi()?.ackDeletionCleared();
+    void read();
+  };
+
   if (error) return <Unread text="could not read the upload's settings:" detail={error} onRetry={() => { void read(); }} />;
 
   const address = settings?.uploadUrl ?? '';
@@ -142,10 +160,14 @@ export function UploadView() {
     ? { word: 'no address: nothing leaves this computer', tone: 'idle' as const }
     : settings?.uploadConsentAt
       ? { word: `consent given ${dayClockOf(Date.parse(settings.uploadConsentAt))}${state?.registered ? ' · this install is registered' : ''}`, tone: 'running' as const }
+      : settings?.uploadDeletionOwed || state?.deletionOwed
+        ? { word: "a deletion waits for the back-office's confirmation: sharing stays off until it confirms, or you give it up", tone: 'waiting' as const }
       : state?.notice === 'forgotten'
         ? { word: 'consent withdrawn: nothing is sent until you read what leaves this computer', tone: 'waiting' as const }
         : { word: 'nothing is sent until you read what leaves this computer', tone: 'waiting' as const };
   const status = state && address ? stateWord(state) : null;
+  /** A deletion asked for and not confirmed: sharing stays off; delete again, or give it up. */
+  const owed = !!(settings?.uploadDeletionOwed || state?.deletionOwed);
   const masked = preview && preview !== 'none'
     ? Object.entries(preview.counts).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(' · ')
     : '';
@@ -154,6 +176,15 @@ export function UploadView() {
     <div className="flex flex-col gap-2.5 flex-1 min-h-0 overflow-y-auto">
       <div className="grid grid-cols-2 gap-2.5 items-start">
         <div className="flex flex-col gap-2.5 min-w-0">
+          {state?.deletionCleared && (
+            <Box name="Deletion cleared" caption="DELETION CLEARED">
+              <div className="px-4 pb-3 space-y-2" data-deletion-cleared>
+                <StateLine word="the deletion that waited for confirmation was cleared: this install's record is gone on the back-office" tone="waiting" />
+                <p className="text-[11.5px] leading-relaxed text-text-secondary">Sharing may start again; what was recorded before the deletion is still never sent.</p>
+                <Button size="sm" onClick={() => { void ackCleared(); }}>OK</Button>
+              </div>
+            </Box>
+          )}
           <Box name="Back-office" caption="BACK-OFFICE">
             <div className="px-4 pb-3 space-y-2.5">
               <p className="text-[11.5px] leading-relaxed text-text-secondary">
@@ -233,7 +264,12 @@ export function UploadView() {
               </p>
               {inProgress && <StateLine word="stopping the upload under way, then asking the back-office to delete" tone="waiting" />}
               {deleted && !inProgress && <StateLine word={deleted.word} tone={deleted.tone} />}
-              <Button size="sm" variant="danger" disabled={!address || inProgress} onClick={() => setDeleting(true)}>{inProgress ? 'deleting' : 'Delete everything this Tars sent'}</Button>
+              {owed && !inProgress && <StateLine word={`not confirmed yet${state?.lastError ? `: ${state.lastError}` : ''}. Nothing new is sent meanwhile.`} tone="waiting" />}
+              {giveUpError && <StateLine word={`not given up: ${giveUpError}`} tone="error" />}
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="danger" disabled={!address || inProgress} onClick={() => setDeleting(true)}>{inProgress ? 'deleting' : owed ? 'Delete again' : 'Delete everything this Tars sent'}</Button>
+                {owed && !inProgress && <Button size="sm" variant="ghost" onClick={() => { setGiveUpError(null); setGivingUp(true); }}>Give up this deletion</Button>}
+              </div>
             </div>
           </Box>
         </div>
@@ -248,10 +284,13 @@ export function UploadView() {
           footerLeft={<Button onClick={() => { void previewOne(); }}>Preview a session</Button>}
           footerRight={<>
             <Button onClick={() => setShowNotice(false)}>Not now</Button>
-            <Button variant="primary" disabled={!address || !!settings?.uploadConsentAt} onClick={() => { void consent(); }}>Upload what I opt in</Button>
+            <Button variant="primary" disabled={!address || !!settings?.uploadConsentAt || owed} onClick={() => { void consent(); }}>Upload what I opt in</Button>
           </>}
         >
           <div className="space-y-4">
+            {notice.onlyAfter && (
+              <p data-only-after className="text-[12px] text-status-waiting">{`Only sessions started after ${dayClockOf(Date.parse(notice.onlyAfter))} are sent: what was recorded before your deletion never is.`}</p>
+            )}
             <div className="grid grid-cols-2 gap-6">
               <Bullets caption="WHAT LEAVES" items={notice.leaves} tone="text-status-waiting" />
               <Bullets caption="WHAT STAYS" items={notice.stays} tone="text-status-running" />
@@ -294,6 +333,19 @@ export function UploadView() {
           footerRight={<>
             <Button onClick={() => setDeleting(false)}>Cancel</Button>
             <Button variant="danger" onClick={() => { void deleteAll(); }}>Delete everything</Button>
+          </>}
+        />
+      )}
+
+      {givingUp && (
+        <DialogShell
+          onClose={() => setGivingUp(false)}
+          width={560}
+          title="Give up this deletion?"
+          subtitle="What you shared there may still be there; Tars stops trying to delete it, and still never sends what was recorded before the deletion. Sharing may then start again, to this or another back-office."
+          footerRight={<>
+            <Button onClick={() => setGivingUp(false)}>Keep trying</Button>
+            <Button variant="danger" onClick={() => { void giveUp(); }}>Give up the deletion</Button>
           </>}
         />
       )}
