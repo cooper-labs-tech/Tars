@@ -19,6 +19,10 @@ import { attachTerminalMirror, markCliLaunch, rowsSinceLaunch } from '../../../e
  * 8. An alternate screen an earlier CLI left on, with its box, is read as the new CLI's.
  * 9. A reused shell whose earlier CLI left the cursor above its intact box: the rows below the mark are that box.
  * 10. What cannot be known (more written since the launch than is kept) reads as up.
+ * The Audit's L4 on #601 (1.91 MB per terminal at the cap, measured):
+ * 11. A terminal whose CLI reads no screen (no upOnScreen) keeps a launch log all the same.
+ * 12. A quiet terminal keeps its log past the launch window.
+ * 13. The cap is counted in characters, so a log of wide characters runs past it in bytes.
  */
 
 type FakePty = { onData: (l: (d: string) => void) => { dispose(): void }; onExit: () => { dispose(): void }; emit(d: string): void };
@@ -34,7 +38,7 @@ const BOX = ' ╭──────────────╮\r\n │ >        
 const hasBox = (rows: string[] | undefined) => !!rows?.some((r) => /^\s*│ >/.test(r));
 const mirrored = () => {
   const p = fakePty();
-  attachTerminalMirror(p as never, { cols: 60, rows: 12, watchRepaint: false, label: 't' });
+  attachTerminalMirror(p as never, { cols: 60, rows: 12, watchRepaint: false, label: "t", logLaunch: true });
   return p;
 };
 
@@ -42,7 +46,7 @@ describe('the rows a CLI drew since its launch', () => {
   it('1 and 3: an earlier box is not read; the new one is, once drawn', () => {
     const p = mirrored();
     p.emit(`$ kimi\r\n${BOX}$ `);
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit("'kimi' --auto\r\n  Kimi Code v2.6.3\r\n  Loading...\r\n");
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
     p.emit(BOX);
@@ -51,7 +55,7 @@ describe('the rows a CLI drew since its launch', () => {
 
   it('2: a quote higher up in what the CLI drew is not read', () => {
     const p = mirrored();
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit(`  answer: the box looks like\r\n │ >  this\r\n${Array.from({ length: 9 }, (_, i) => `  line ${i}`).join('\r\n')}\r\n`);
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
   });
@@ -59,7 +63,7 @@ describe('the rows a CLI drew since its launch', () => {
   it('4: a full-screen CLI is read on its alternate screen', () => {
     const p = mirrored();
     p.emit(`$ old\r\n${BOX}$ `);
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit('\x1b[?1049h\x1b[H  Loading...');
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
     p.emit(`\x1b[2J\x1b[H${BOX}`);
@@ -75,7 +79,7 @@ describe('the rows a CLI drew since its launch', () => {
   it('6: a CSI M on the marked row does not bring back what was before the launch', () => {
     const p = mirrored();
     p.emit(`$ old\r\n${BOX}$ `);
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit('\x1b[M  Loading...\r\n');
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
   });
@@ -84,7 +88,7 @@ describe('the rows a CLI drew since its launch', () => {
     const p = mirrored();
     // The earlier box at the top, the launch on the last row, and three reverse indexes at the top push that row off.
     p.emit(`${BOX}\x1b[12;1H$ `);
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit('\x1b[H\x1bM\x1bM\x1bM\x1b[12;1H  Loading...');
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
   });
@@ -92,7 +96,7 @@ describe('the rows a CLI drew since its launch', () => {
   it('8: an alternate screen an earlier CLI left on, with its box, is not the new CLI\'s', () => {
     const p = mirrored();
     p.emit(`\x1b[?1049h\x1b[H${BOX}$ `);
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit("'kimi' --auto\r\n  Loading...\r\n");
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
   });
@@ -100,16 +104,49 @@ describe('the rows a CLI drew since its launch', () => {
   it('9: a reused shell with the cursor above an earlier CLI\'s intact box', () => {
     const p = mirrored();
     p.emit(`  answer\r\n${BOX}\x1b[5A`);
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit("$ 'kimi' --auto\r\n");
     expect(hasBox(rowsSinceLaunch(p as never))).toBe(false);
   });
 
   it('10: more written since the launch than is kept reads as nothing, not as up', () => {
     const p = mirrored();
-    markCliLaunch(p as never);
+    markCliLaunch(p as never, true);
     p.emit(BOX);
     p.emit('x'.repeat(2 * 1024 * 1024));
+    p.emit(BOX);
+    expect(rowsSinceLaunch(p as never)).toEqual([]);
+  });
+
+  it('11: a terminal not asked to log keeps nothing: neither from its birth nor from a launch', () => {
+    const p = fakePty();
+    attachTerminalMirror(p as never, { cols: 60, rows: 12, watchRepaint: false, label: 'plain' });
+    p.emit(BOX);
+    expect(rowsSinceLaunch(p as never)).toEqual([]);
+    markCliLaunch(p as never, false);
+    p.emit(BOX);
+    expect(rowsSinceLaunch(p as never)).toEqual([]);
+  });
+
+  it('12: the log goes when the launch window ends, on a quiet terminal too', () => {
+    vi.useFakeTimers();
+    try {
+      const p = mirrored();
+      markCliLaunch(p as never, true);
+      p.emit(BOX);
+      expect(hasBox(rowsSinceLaunch(p as never))).toBe(true);
+      vi.advanceTimersByTime(180_001);
+      expect(rowsSinceLaunch(p as never)).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('13: the cap is counted in bytes', () => {
+    const p = mirrored();
+    markCliLaunch(p as never, true);
+    // 400,000 characters of three bytes each: 1.2 MB, past the cap in bytes, under it in characters.
+    p.emit('│'.repeat(400_000));
     p.emit(BOX);
     expect(rowsSinceLaunch(p as never)).toEqual([]);
   });
