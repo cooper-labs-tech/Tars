@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, DialogShell, Input, PanelCaption } from '@/components/ui';
 import type { TraceSettingsView, UploadNotice, UploadState } from '@/types/electron';
 import type { ElectronAPI } from '@/types/electron';
@@ -55,6 +55,11 @@ export function UploadView() {
   const [state, setState] = useState<UploadState | null>(null);
   const [notice, setNotice] = useState<UploadNotice | null>(null);
   const [url, setUrl] = useState('');
+  /**
+   * The address the owner is typing, not yet saved: a read of the settings (at mount, on every traces event) never
+   * overwrites it, until it is saved or Escape takes it back (QA's M7: a typed address was wiped without a word).
+   */
+  const edited = useRef(false);
   const [plainHttp, setPlainHttp] = useState(false);
   const isHttp = /^http:\/\//i.test(url.trim());
   const [error, setError] = useState<string | null>(null);
@@ -76,8 +81,10 @@ export function UploadView() {
     try {
       const s = await api.settings();
       setSettings(s);
-      setUrl(s.uploadUrl);
-      setPlainHttp(s.uploadAllowPlainHttp === true);
+      if (!edited.current) {
+        setUrl(s.uploadUrl);
+        setPlainHttp(s.uploadAllowPlainHttp === true);
+      }
       setState(await api.uploadState());
       setError(null);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -94,13 +101,23 @@ export function UploadView() {
 
   const saveUrl = async () => {
     const api = tracesApi();
+    // The field takes no typing before the settings are read, so there is nothing to lose here.
     if (!api || !settings) return;
     const leave = isHttp && plainHttp;
-    if (url.trim() === settings.uploadUrl && leave === (settings.uploadAllowPlainHttp === true)) return;
-    const r = await api.setSettings({ uploadUrl: url.trim(), uploadAllowPlainHttp: leave });
+    if (url.trim() === settings.uploadUrl && leave === (settings.uploadAllowPlainHttp === true)) { edited.current = false; return; }
+    let r: Awaited<ReturnType<typeof api.setSettings>>;
+    try {
+      r = await api.setSettings({ uploadUrl: url.trim(), uploadAllowPlainHttp: leave });
+    } catch (e) {
+      setSaveError(`not saved: ${e instanceof Error ? e.message : String(e)}. Enter tries again, Escape goes back.`);
+      return;
+    }
+    // Main's refusal says why in its own words (a public address over plain http); the address stays as typed.
     if (!r.ok) { setSaveError(r.error); return; }
+    edited.current = false;
     setSaveError(null);
     setSettings(r.settings);
+    setUrl(r.settings.uploadUrl);
     // A new address clears the consent: the notice comes before anything is sent.
     if (r.settings.uploadUrl && r.settings.uploadUrl !== settings.uploadUrl) setShowNotice(true);
     void read();
@@ -201,10 +218,19 @@ export function UploadView() {
                 <p className="text-[12.5px] text-foreground">Address</p>
                 <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">The back-office&apos;s API, yours or a hosted one. Empty: nothing leaves this computer. A new address asks for your consent again.</p>
               </div>
-              <Input aria-label="Back-office address" mono width="control" placeholder="https://traces.example.com" value={url} error={!!saveError}
-                onChange={e => { setUrl(e.target.value); setSaveError(null); }}
+              <Input aria-label="Back-office address" mono width="control" value={url} error={!!saveError}
+                disabled={!settings} placeholder={settings ? 'https://traces.example.com' : 'reading the settings'}
+                onChange={e => { edited.current = true; setUrl(e.target.value); setSaveError(null); }}
                 onBlur={() => { void saveUrl(); }}
-                onKeyDown={e => { if (e.key === 'Enter') void saveUrl(); }} />
+                onKeyDown={e => {
+                  if (e.key === 'Enter') void saveUrl();
+                  if (e.key === 'Escape' && settings) {
+                    edited.current = false;
+                    setUrl(settings.uploadUrl);
+                    setPlainHttp(settings.uploadAllowPlainHttp === true);
+                    setSaveError(null);
+                  }
+                }} />
             </Row>
             {isHttp && (
               <Row className="space-y-1.5 py-2.5" data-plain-http>
@@ -213,7 +239,7 @@ export function UploadView() {
                     <p className="text-[12.5px] text-foreground">Allow plain http to the back-office</p>
                     <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">The sessions you opt in cross the network unencrypted: anyone on the way can read them. Only for a network you trust. A private address needs no leave; a public one needs yours.</p>
                   </div>
-                  <Toggle label="Allow plain http to the back-office" enabled={plainHttp} onChange={() => setPlainHttp(v => !v)} />
+                  <Toggle label="Allow plain http to the back-office" enabled={plainHttp} onChange={() => { edited.current = true; setPlainHttp(v => !v); }} />
                 </div>
                 {plainHttp && <StateLine word="allowed by you: unencrypted" tone="waiting" />}
               </Row>
