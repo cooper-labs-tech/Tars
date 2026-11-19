@@ -119,6 +119,10 @@ import { EventEmitter } from 'events';
  * 26. (the re-audit's I1 on #595) Two changes asked of a free agent at the
  *     same moment are both applied, the second over the first's apply: the
  *     second must wait for it, queued, then apply.
+ * 27. (#604's Audit, L1) The window is handed only the whole change: a
+ *     provider change reads as resets of the model and CLI path nobody asked
+ *     for. The event agent:retuned and the agent's lastRetune must carry what
+ *     the caller named (`asked`), the implied resets left in `fields` only.
  * 21. The window's undo (agent.revertChange, 2.0.7) goes another way than
  *     revert_agent_change, or is filed under an agent or Tars: it must take
  *     the same engine, filed under the window; of a queued change it applies
@@ -157,6 +161,12 @@ vi.mock('../../../../electron/core/pty-manager', () => ({
 
 vi.mock('../../../../electron/utils/path-builder', () => ({ buildFullPath: vi.fn(() => '/usr/bin') }));
 
+// What the window is pushed, kept to read (agent:retuned).
+vi.mock('../../../../electron/utils/broadcast', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../electron/utils/broadcast')>()),
+  broadcastToAllWindows: vi.fn(),
+}));
+
 // What the restart module answers is set by each case: the module itself, its
 // waits and its relaunch, is held by agent-restart's own tests and by the E2E.
 vi.mock('../../../../electron/core/agent-restart', async (importOriginal) => ({
@@ -185,6 +195,7 @@ import { updateAgent } from '../../../../electron/core/agent-update';
 import { checkQueued, resetRetune, revertAsWindow } from '../../../../electron/core/agent-retune';
 import { changeById, resetChanges, type AgentChange } from '../../../../electron/services/agent-changes';
 import { setGrant, resetGrants } from '../../../../electron/services/cross-project-grants';
+import { broadcastToAllWindows } from '../../../../electron/utils/broadcast';
 import { consumeResumeSessionId, resetResumeTracking, transcriptPath } from '../../../../electron/utils/resume-session';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../../electron/types';
@@ -932,6 +943,16 @@ describe('the Audit of #595: the queue, the revert, the log', () => {
     await checkQueued();
     expect(agents.get('w2')).toMatchObject({ model: 'opus', effort: 'max' });
     expect(changeById(String(b.answer.changeId))!.state).toBe('applied');
+  });
+
+  it('27. hands the window what the caller named, apart from what a provider change implied', async () => {
+    vi.mocked(broadcastToAllWindows).mockClear();
+    const { answer } = await update('w2', { provider: 'codex' }, { callerAgentId: 'w1' });
+    const change = changeById(String(answer.changeId))!;
+    expect(change.fields).toEqual(['cliPath', 'model', 'provider']);
+    expect(agents.get('w2')!.lastRetune).toMatchObject({ fields: ['cliPath', 'model', 'provider'], asked: ['provider'] });
+    const pushed = vi.mocked(broadcastToAllWindows).mock.calls.filter(([channel]) => channel === 'agent:retuned').map(([, event]) => event as Record<string, unknown>);
+    expect(pushed.at(-1)).toMatchObject({ changeId: answer.changeId, asked: ['provider'], fields: ['cliPath', 'model', 'provider'] });
   });
 
   it('25. refuses a value the log does not keep before writing anything', async () => {
