@@ -243,7 +243,10 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
 - **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
 - **kimi-code 2.6.3:** the whole model from its environment, `KIMI_MODEL_NAME`, `KIMI_MODEL_PROVIDER_TYPE=openai`,
-  `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written.
+  `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written, and no `-m` (it names an alias of the
+  user's `config.toml`). Measured through the proxy by the harness conformance run: delegated, answered, read back and
+  resumed. Its session is known to Tars by the UUID in kimi's `session_<uuid>`, the only form the hook routes take; a
+  task goes in once its input box is drawn (`upOnScreen`), since kimi writes nothing before its first prompt.
 
 The proxy:
 - swaps the token for the endpoint's key;
