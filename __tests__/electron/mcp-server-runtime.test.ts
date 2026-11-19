@@ -93,6 +93,10 @@ import { Leftovers, RECORDS_ITS_PID, endLeftUnder, processesUnder, takePidsRecor
  *     ~/.claude/mcp.json, the guard refused it, and `npm test` exited 1 with
  *     every test passed. A server that does not end on its own outlives the
  *     file as well.
+ * The Audit's re-read of #601 (2026-11-19), written before the fix:
+ * 23. A server present but not written as this Tars writes it now (pi's without `"exposure": "direct"`) is never
+ *     written again, or "present" is made to mean "current": then a check that only asks whether a server is there
+ *     (the retirement of an old server, Settings' "configured") reads it as absent and leaves it for ever.
  */
 
 const home = () => os.homedir();
@@ -293,6 +297,19 @@ describe('registering the servers', () => {
     (process as unknown as { resourcesPath: string }).resourcesPath = path.join(scratch, 'no-resources');
     await setupMcpOrchestrator({} as never);
     expect(fs.existsSync(path.join(home(), '.tars', 'mcp-servers-runtime.json'))).toBe(false);
+  });
+
+  it('23. writes again a server present but not current, and only that one', async () => {
+    await setupMcpOrchestrator({} as never);
+    calls.length = 0;
+    const provider = fakeProvider as typeof fakeProvider & { isMcpServerCurrent?: (name: string) => boolean };
+    provider.isMcpServerCurrent = (name) => name !== 'tars-memory';
+    try {
+      await setupMcpOrchestrator({} as never);
+    } finally {
+      delete provider.isMcpServerCurrent;
+    }
+    expect(calls).toEqual(['remove tars-memory', 'add tars-memory']);
   });
 
   it('9. registers nothing again at the next start', async () => {
