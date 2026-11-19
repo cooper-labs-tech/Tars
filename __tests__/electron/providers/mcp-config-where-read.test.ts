@@ -37,6 +37,9 @@ import { PiProvider } from '../../../electron/providers/pi-provider';
  *      every start), or removes it from another file than the one it wrote.
  *  W6. What Tars wrote in the old places, where nothing reads, stays there
  *      for ever under Tars's names.
+ *  W7. pi (1.5.2, measured 19/11) declares a server's tools to the model only with `"exposure": "direct"`: its
+ *      default, `codemode`, leaves them callable from its code tool alone, so an agent on pi never sees
+ *      send_message or delegate_task as tools. A server an older Tars wrote without it is written again.
  */
 
 const SERVER = '/Applications/Tars.app/Contents/Resources/mcp-orchestrator/dist/bundle.js';
@@ -111,7 +114,17 @@ describe('pi', () => {
 
   it('W3. writes mcpServers.<name> into ~/.pi/agent/mcp.json', async () => {
     await new PiProvider().registerMcpServer('claude-mgr-orchestrator', '/usr/local/bin/node', [SERVER]);
-    expect(read(file()).mcpServers['claude-mgr-orchestrator']).toEqual({ command: '/usr/local/bin/node', args: [SERVER] });
+    expect(read(file()).mcpServers['claude-mgr-orchestrator']).toEqual({ command: '/usr/local/bin/node', args: [SERVER], exposure: 'direct' });
+  });
+
+  it('W7. its tools declared to the model, and a server written without that written again', async () => {
+    fs.mkdirSync(path.dirname(file()), { recursive: true });
+    fs.writeFileSync(file(), JSON.stringify({ mcpServers: { 'tars-memory': { command: 'node', args: [SERVER] } } }));
+    const p = new PiProvider();
+    expect(p.isMcpServerRegistered('tars-memory', SERVER)).toBe(false);
+    await p.registerMcpServer('tars-memory', 'node', [SERVER]);
+    expect(read(file()).mcpServers['tars-memory'].exposure).toBe('direct');
+    expect(p.isMcpServerRegistered('tars-memory', SERVER)).toBe(true);
   });
 
   it('W2. follows PI_CODING_AGENT_DIR', async () => {
