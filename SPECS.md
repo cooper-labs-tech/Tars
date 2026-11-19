@@ -117,6 +117,34 @@ Every agent terminal also has a mirror, `electron/core/terminal-mirror.ts`: a he
 
 The mirror of a `claude` PTY also watches how it is repainted. Fullscreen Claude Code positions absolutely (`CSI H`) and never moves the cursor up or back; inline, it climbs back over what it drew (`CSI A`, `CSI D`). An alternate screen repainted the second way over a window of 8 chunks is a CLI that left fullscreen without telling its terminal, which Claude Code 2.1.280 did twice among seventeen sessions on 2026-09-22: every panel kept the alternate screen and the mouse request, and the wheel reached nothing. The flag, `leftFullscreen`, rides on `agent:list`, `agent:get` and the tick, and clears when the terminal really leaves the alternate screen, when a program asks for it again, or with the PTY.
 
+### An agent on a remote host (2.0.7): `services/remote-agents.ts`, `core/remote-launch.ts`
+
+A worker can run its CLI on one of the owner's Linux hosts instead of this computer. It stays one terminal of this Tars, with its card, queue, delegation, hooks, token and stop.
+
+- **The hosts.** The owner adds them, in the window only (`remoteHosts.*`, `services/remote-hosts.ts`, `~/.tars-private/remote-hosts.json`). Each one is an alias of the owner's ssh config (or `user@host`) and a work root. It holds no key, no path to a key and no password.
+- **The placement.** The window or the project's orchestrator places an agent on a host (`update_agent` with `remote: { hostId, folder? }`; `null` brings it back). The folder must sit strictly under the host's work root, and is the project's folder name there by default. A placement is refused while a CLI runs.
+- **The launch.** It happens in `spawnAgentSession`, through `spawnAgentPty`, and nowhere else. The terminal is `/bin/sh -c` and does two things in order:
+  1. `ssh -T <host> sh -s` reads a file Tars wrote for this launch (`~/.tars-private/remote-launch/`, 0600, removed at once, or when the terminal ends). Over stdin it installs, under `~/.tars-remote` on the host:
+     - the wrapper (`electron/resources/tars-remote.sh`) and Tars's hook scripts;
+     - the agent's `settings.json` (its hooks, pointing at those copies) and `mcp.json` (Tars's servers on this API, through the tunnel, the token by name);
+     - the agent's folder, marked trusted in the host's `~/.claude.json` (only that key, with jq). Claude Code asks for trust in a new folder, bypass or not, and would take the first task as its answer;
+     - its environment, last, at 0600.
+  2. Only when that went well, `ssh -tt -R 127.0.0.1:<port>:127.0.0.1:<API port>` runs `tars-remote start`. That ends any session of the agent left on the host and starts the CLI in tmux (`tars-<id>`). The environment file is sourced and deleted before the CLI runs.
+
+  Each ssh says in the terminal why it failed, in its own words. The one on this computer runs with `BatchMode`, never `-A`, with `ExitOnForwardFailure`, and gets none of the agent's environment but what it needs to find the owner's keys.
+- **The CLI.** Claude Code only, a worker only (an orchestrator and a chat's runner run here), from macOS or Linux only. Anything else is refused before anything is ended, with a code: `remote_cli`, `remote_lead`, `remote_platform`, `remote_host_gone`.
+  - Its command names no path of this computer. It is `claude` found on the host's PATH, with `--settings "$TARS_REMOTE_AGENT_DIR"/settings.json --mcp-config "$TARS_REMOTE_AGENT_DIR"/mcp.json`: no `--add-dir`, no orchestrator instructions, no `--chrome`.
+  - It reaches the API through the tunnel, on the host's loopback only (`CLAUDE_MGR_API_URL=http://127.0.0.1:<port>`, the port one per agent in 41000 to 42999).
+- **Its session.** SessionStart compares the CLI's pid with its terminal's for an agent here (`core/terminal-cli.ts`). For an agent on a host, the pid is the host's, so it is not compared: the token is the proof. A Claude Code started from inside that CLI on the host is therefore not told apart, as it is here.
+- **What ends it.** A stop and a removal end the tmux session over ssh (`tars-remote stop`, 20 s at most). The window's start, and anything else that would open a shell of this computer for it (`initAgentPty`), is refused with why: Tars starts a remote agent with a task (`start_agent`, a message, its queue).
+- **Not yet:**
+  - re-attaching after a dropped connection, with the token kept and the hooks' posts spooled (a dropped ssh is the terminal's exit today, `error`);
+  - the worktree on the host;
+  - the readers of the CLI's own files there (the status truth, Esc, background work and resume read nothing for it: the Stop hook's `last_assistant_message` is its answer);
+  - the quit (it ends the terminal, not the session on the host);
+  - the window's views.
+- **The proof.** `e2e/remote-agents.spec.ts` runs it against a container on this computer (`e2e/remote-host/Dockerfile`, about 250 MB). The units are in `__tests__/electron/core/remote-launch.test.ts`.
+
 ### Renderer
 
 Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `src/app/api` temporarily moved aside). React 19, Tailwind 4, Zustand, xterm 5.3, framer-motion. Served from `app://-/index.html` in production, `http://localhost:3000` in dev. The app:// scheme has the `codeCache` privilege: V8 keeps the compiled bundle in the profile, and a later launch does not compile it again (OPERATIONS.md, "Run the app").
