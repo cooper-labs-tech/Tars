@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -25,7 +25,19 @@ import { ENDPOINT_HARNESSES } from '../../electron/services/inference-endpoints'
  * 7. A model of one family is offered by default: only the user's own default.
  * 8. On an inference endpoint, kimi is not given the proxy (a key in a variable or a file), or is refused as a
  *    harness of an endpoint.
+ * 9. On an endpoint, the launch's own variables (KIMI_MODEL_NAME, _PROVIDER_TYPE, _BASE_URL) never reach the terminal:
+ *    the endpoint session fills only the token's variable (services/traces-runtime.ts openEndpointSession), so the
+ *    provider must add the rest, and only for the agent on an endpoint (Tars-Backend's note, 19/11).
  */
+
+// The fleet's endpoint choice, as traces-runtime resolves it: agent 'on-ep' runs kimi-code on an endpoint, no other.
+vi.mock('../../electron/services/traces-runtime', async () => {
+  const { endpointLaunchFor: launchFor } = await vi.importActual<typeof import('../../electron/services/endpoint-harness')>('../../electron/services/endpoint-harness');
+  return {
+    endpointLaunchForAgent: (agentId: string | undefined, harness: string) =>
+      agentId === 'on-ep' ? launchFor(harness, { proxyBase: 'http://127.0.0.1:31417/v1', model: 'org/Model-1' }) : null,
+  };
+});
 
 const BASE = 'http://127.0.0.1:31417/v1';
 let home: string;
@@ -95,6 +107,14 @@ describe('KimiCodeProvider', () => {
 
   it('7: no model of any family by default', () => {
     expect(p.getModels().map((m) => m.id)).toEqual(['default']);
+  });
+
+  it('9: an agent on an endpoint gets the launch\'s variables in its terminal; another agent does not', () => {
+    expect(p.getPtyEnvVars('on-ep', '/p', [])).toMatchObject({
+      KIMI_MODEL_NAME: 'org/Model-1', KIMI_MODEL_PROVIDER_TYPE: 'openai', KIMI_MODEL_BASE_URL: 'http://127.0.0.1:31417/v1',
+    });
+    const plain = p.getPtyEnvVars('not-on-ep', '/p', []);
+    expect(Object.keys(plain).filter((k) => k.startsWith('KIMI_MODEL_'))).toEqual([]);
   });
 
   it('8: on an endpoint, kimi gets the proxy from its environment, the token in KIMI_MODEL_API_KEY', () => {

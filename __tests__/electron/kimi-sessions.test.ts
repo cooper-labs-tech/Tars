@@ -195,6 +195,24 @@ describe('KimiSessionWatch', () => {
     expect(of('a2')).toEqual([]);
   });
 
+  it('7: a text typed into two agents\' terminals binds neither, and the identity line wins over a typed text (the Audit\'s L1 on #601)', async () => {
+    watch.noteLaunch('a1-0000-1111', work);
+    watch.noteLaunch('a2-0000-2222', work);
+    pids['a1-0000-1111'] = [10];
+    pids['a2-0000-2222'] = [20];
+    const same = 'Message from Tars: the release is cut, rebase your branch onto main.';
+    watch.noteTyped('a1-0000-1111', same);
+    watch.noteTyped('a2-0000-2222', same);
+    write(session('session_1'), prompt(0, same), said(0, 1, 'rebased'), ended(0, 'completed'));
+    write(session('session_2'), prompt(0, same), said(0, 1, 'rebased too'), ended(0, 'completed'));
+    await watch.tick();
+    expect(posts).toEqual([]);
+    write(session('session_3'), prompt(0, `${IDENTITY('a2-0000-2222')} ${same}`), said(0, 1, 'mine'), ended(0, 'completed'));
+    await watch.tick();
+    expect(of('a1-0000-1111')).toEqual([]);
+    expect(of('a2-0000-2222').find((p) => p[0] === '/api/hooks/output')?.slice(2)).toEqual(['mine', 'session_3']);
+  });
+
   it('7: two agents in one folder each get the session their own kimi holds', async () => {
     watch.noteLaunch('a1', work);
     watch.noteLaunch('a2', work);
