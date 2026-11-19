@@ -4,7 +4,10 @@ import { chatNameOf } from '../core/chat-inbox';
 import { onOwnerLine, ptyProcesses } from '../core/pty-manager';
 import { dialogShown } from '../core/agent-launch';
 import type { AgentStatus } from '../types';
-import { ownerWords, typedAtRest } from './owner-words';
+import { ownerWords, restFromReadings, typedAtRest } from './owner-words';
+import { getProvider } from '../providers';
+import { turnRecordOf } from './status-truth';
+import { restReadOf, turnRead } from './cli-rest';
 
 /**
  * The owner's words typed by hand into an orchestrator's terminal (2.0.7; SECURITY.md §8, "Typed in a terminal").
@@ -20,7 +23,7 @@ function noteTyped(agentId: string, line: string): void {
   const agent = agents.get(agentId);
   if (!agent || !agent.projectPath || !hasOrchestratorPowers(agent)) return;
   // Typed at rest only: the hook that confirms it carries the agent's own token (the Audit's L1 on #594).
-  if (!typedAtRest(agent, dialogShown(agent, agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined), ownerWords.restOf(agent.id))) return;
+  if (!typedAtRest(agent, dialogShown(agent, agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined), restOf(agent))) return;
   const chatId = chatNameOf(agent)?.id;
   ownerWords.typed(agent.id, line, { projectPath: agent.projectPath, ...(chatId ? { chatId } : {}) });
 }
@@ -31,17 +34,23 @@ export function startOwnerTypedWatch(): void {
 }
 
 /**
- * Tars saw the agent come to rest in its current session: a turn's Stop (/api/hooks/agent-stopped, from the state
- * mod, the shell hook or a session log's watcher), or the session's start (hooks-routes.ts). The rest typedAtRest
- * requires, never the status the agent posts alone (the Audit's re-read at f211ff380).
+ * The agent's rest as Tars itself reads it at the owner's Enter (owner-words.ts restFromReadings): the claude binary's
+ * transcript, codex's and pi's session logs as the watchers read them. Never a hook post: the agent makes those.
  */
-export function noteRestSeen(agent: Pick<AgentStatus, 'id'>, session: string | undefined): void {
-  if (session) ownerWords.restSeen(agent.id, session);
+function restOf(agent: AgentStatus): { session: string } | undefined {
+  let provider: ReturnType<typeof getProvider> | undefined;
+  try { provider = getProvider(agent.provider); } catch { provider = undefined; }
+  const cli = provider?.binaryName === 'claude' ? 'transcript' : provider?.id === 'codex' || provider?.id === 'pi' ? 'session-log' : 'none';
+  return restFromReadings({
+    cli, session: agent.currentSessionId,
+    ...(cli === 'transcript' ? { record: turnRecordOf(agent) } : {}),
+    ...(cli === 'session-log' ? { logRestSession: restReadOf(agent.id) } : {}),
+  });
 }
 
-/** A turn of the agent began (its UserPromptSubmit): no longer at rest. */
+/** A turn of the agent began (its UserPromptSubmit): a hook may clear a rest Tars read, never set one. */
 export function noteTurnSeen(agent: Pick<AgentStatus, 'id'>): void {
-  ownerWords.turnSeen(agent.id);
+  turnRead(agent.id);
 }
 
 /** The agent's CLI took this prompt, from its current session (hooks-routes.ts): a line it confirms is recorded. */
