@@ -22,6 +22,8 @@ import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnPr
 import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import { markCliLaunch } from './terminal-mirror';
+import { kimiSessionWatch } from '../services/kimi-sessions';
+import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
 import { killPty } from './pty-kill';
@@ -1224,6 +1226,9 @@ export async function launchIntoTerminal(
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).
   if (getProvider(agent.provider).binaryName === 'codex') codexLaunching(agent.id, start.cwd);
+  // Kimi Code typed into a shell already there, a restart's included: noted now, with the session its line resumes,
+  // so that the session an earlier launch left counts only as that one (services/kimi-sessions.ts, the Audit's M1).
+  if (getProvider(agent.provider).binaryName === 'kimi') kimiSessionWatch.noteLaunch(agent.id, start.cwd, kimiSessionOfCommand(start.typedLine));
   // What the terminal shows from its line on is the new CLI's: a box an earlier one left above never reads as this one
   // up (terminal-mirror.ts, rowsSinceLaunch; the Audit's L1 on #601).
   markCliLaunch(ptyProcess);

@@ -33,6 +33,15 @@ import { endpointLaunchForAgent } from '../services/traces-runtime';
  * (services/endpoint-harness.ts): no model of any family is assumed here.
  */
 
+/**
+ * The session a kimi launch line resumes (`--session session_<uuid>`, as buildInteractiveCommand writes it, in the
+ * POSIX or the Windows quoting), or undefined: what the session reader is told at the launch, so that the session
+ * there before it counts only as that one (services/kimi-sessions.ts, the Audit's M1 on #601).
+ */
+export function kimiSessionOfCommand(command: string): string | undefined {
+  return /--session\s+['"]?(session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})['"]?(?=\s|$)/.exec(command)?.[1];
+}
+
 /** A model alias of the user's config (`-m`), letters, digits and `. _ : / -` only: it reaches a command line. */
 const SAFE_MODEL = /^[A-Za-z0-9._:/-]{1,200}$/;
 

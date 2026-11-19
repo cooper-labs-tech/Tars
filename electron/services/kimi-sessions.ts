@@ -162,17 +162,8 @@ export class KimiSessionWatch {
     if (launch.typed.length > 20) launch.typed.shift();
   }
 
-  forget(agentId: string): void {
-    this.launches.delete(agentId);
-  }
-
   get watching(): boolean {
     return this.launches.size > 0;
-  }
-
-  /** The session the agent's kimi is bound to, for a resume (utils/resume-session.ts). */
-  sessionOf(agentId: string): string | undefined {
-    return this.launches.get(agentId)?.bound?.sessionId;
   }
 
   private index(): IndexEntry[] {
@@ -244,17 +235,25 @@ export class KimiSessionWatch {
       if (entry) return { sessionId: entry.sessionId, file: wireOf(entry.sessionDir), offset: launch.resume.size, partial: '', resumed: true, registered: false };
     }
     const pids = await this.deps.pidsOf(agentId);
-    for (const entry of entries) {
-      if (taken.has(entry.sessionId) || !sameDir(entry.workDir, launch.cwd)) continue;
-      const file = wireOf(entry.sessionDir);
-      if (!fs.existsSync(file)) continue;
-      const holder = this.lockPid(entry.sessionId);
-      const held = pids !== undefined && holder !== undefined;
+    const candidates = entries.filter((e) => !taken.has(e.sessionId) && sameDir(e.workDir, launch.cwd) && fs.existsSync(wireOf(e.sessionDir)));
+    const boundTo = (entry: IndexEntry): Bound => {
       const before = launch.sizes.get(entry.sessionId);
-      const bound = { sessionId: entry.sessionId, file, offset: before ?? 0, partial: '', resumed: before !== undefined, registered: false };
-      if (held && pids!.includes(holder!)) return bound;
-      if (held) continue;
-      if (this.promptIsOurs(agentId, launch, file)) return bound;
+      return { sessionId: entry.sessionId, file: wireOf(entry.sessionDir), offset: before ?? 0, partial: '', resumed: before !== undefined, registered: false };
+    };
+    // A held lock first, before any prompt: a session the agent's own kimi writes now, there before the launch or not.
+    if (pids !== undefined) {
+      for (const entry of candidates) {
+        const holder = this.lockPid(entry.sessionId);
+        if (holder !== undefined && pids.includes(holder)) return boundTo(entry);
+      }
+    }
+    // Then a prompt, and only of a session made since the launch: one there before it is an earlier launch's, the
+    // stop's tombstone after a restart (the Audit's M1 on #601), whatever agent its first prompt names.
+    for (const entry of candidates) {
+      if (launch.sizes.has(entry.sessionId)) continue;
+      const holder = pids !== undefined ? this.lockPid(entry.sessionId) : undefined;
+      if (holder !== undefined) continue;
+      if (this.promptIsOurs(agentId, launch, wireOf(entry.sessionDir))) return boundTo(entry);
     }
     return undefined;
   }

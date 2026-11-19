@@ -18,6 +18,7 @@ import { cliLaunchExit, reportHandledError } from '../services/error-reports/han
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
+import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
 
@@ -224,7 +225,11 @@ export function spawnAgentPty(opts: {
   // pi's, from the session file it writes in the agent's own folder (services/pi-sessions.ts).
   if (agentId && opts.binaryName === 'pi') piSessionWatch.noteLaunch(agentId);
   // Kimi Code's, from its session log; the session its kimi holds is the agent's (services/kimi-sessions.ts).
-  if (agentId && opts.binaryName === 'kimi') kimiSessionWatch.noteLaunch(agentId, opts.cwd);
+  // With the session its line resumes, when it runs the CLI itself (an exec launch, every terminal on Windows); a kimi
+  // typed into this shell later is noted again then (agent-manager.ts, launchIntoTerminal).
+  if (agentId && opts.binaryName === 'kimi') {
+    kimiSessionWatch.noteLaunch(agentId, opts.cwd, kimiSessionOfCommand(Array.isArray(opts.args) ? opts.args.join(' ') : opts.args));
+  }
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {
