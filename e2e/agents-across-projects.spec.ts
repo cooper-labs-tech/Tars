@@ -171,7 +171,10 @@ for (const newInterface of [false, true]) {
       };
       const recordOf = (id: string) => records().find((a) => a.id === id) ?? {};
       const card = (id: string) => page.locator(`[data-agent-card="${id}"]`);
-      const taskIdOf = (said: Said) => /\bt-[0-9a-f]{8}\b/.exec(said.text)?.[0];
+      // A task still working is named by its ref (t-xxxxxxxx); one that ended within the wait by the ledger's id, on the
+      // answer's last line (`... | task <uuid>`), which task_status and get_agent_output read as well.
+      const taskIdOf = (said: Said) => /\bt-[0-9a-f]{8}\b/.exec(said.text)?.[0]
+        ?? /\| task ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/.exec(said.text)?.[1];
 
       // ── 1. Read-back: another project's agents, their inference settings and status, no task content ──
       const listed = await other('list_agents', { project: B });

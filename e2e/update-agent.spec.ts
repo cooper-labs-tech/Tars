@@ -29,8 +29,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. stopped, the agent moves to claude (model opus, effort max, the stand-in as its CLI path): taken, said to apply
  *    at its next start on a new conversation; agents.json has it;
  * 6. started, claude runs with --model opus and --effort max, on a new session (no --resume);
- * 7. its effort changed to low once its turn has ended: taken, its conversation kept, and claude is restarted with
- *    --effort low, --resume <its session> and --fork-session;
+ * 7. its effort changed to low once its task is over: taken (or queued for the moment its run is released), its
+ *    conversation kept, and claude is restarted with --effort low, --resume <its session> and --fork-session;
  * 8. refused, and nothing written, for a setting outside the inference ones (2.0.7: those any agent changes): the
  *    worker changing it (worker_may_not_update), the orchestrator changing an agent of another project
  *    (other_project), and the orchestrator changing itself (orchestrator_settings).
@@ -267,18 +267,25 @@ setInterval(() => {}, 1 << 30);
       await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'claude', model: 'opus', effort: 'max', cliPath: claudeCli });
 
       // ── 6. Started: claude on opus at max, a new session ──
-      expect((await lead('start_agent', { id, prompt: 'CLAUDE>> third task' })).isError).toBe(false);
+      const third = await lead('start_agent', { id, prompt: 'CLAUDE>> third task' });
+      expect(third.isError).toBe(false);
+      const thirdTask = /\bt-[0-9a-f]{8}\b/.exec(third.text)?.[0];
+      expect(thirdTask, third.text).toBeTruthy();
       await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(1);
       const onClaude = launchesOf(id, 'claude')[0];
       expect(onClaude).toMatchObject({ model: 'opus', effort: 'max', resume: null });
       await expect.poll(async () => (await agentNow(id))?.currentSessionId ?? null, { timeout: 60_000 }).toBe(onClaude.sid);
       await expect.poll(async () => (await agentNow(id))?.status, { timeout: 60_000 }).toMatch(/^(idle|completed|waiting)$/);
+      // Its task over, as the ledger closes it once its turn's end is read (a moment after the status, under load more).
+      await expect.poll(async () => (await lead('task_status', { taskId: thirdTask })).text, { timeout: 60_000 }).toMatch(/: completed\b/);
 
       // ── 7. Its effort changed at rest: restarted on low, on its conversation ──
+      // Applied at once; or, in the moment between its task's close and the release of the run (its answer being read),
+      // queued behind that run and applied as it ends. Either way, the same restart.
       const lowered = await lead('update_agent', { id, effort: 'low' });
       keep({ lowered });
       expect(lowered.isError, lowered.text).toBe(false);
-      expect(lowered.text).toMatch(/same conversation/);
+      expect(lowered.text).toMatch(/same conversation|the delegated run it holds ends/);
       await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(2);
       const restarted = launchesOf(id, 'claude')[1];
       keep({ claudeLaunches: launchesOf(id, 'claude') });
