@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { parse as parseToml } from 'smol-toml';
 import type { CLIProvider } from '../providers/cli-provider';
 import { writeAtomicSync } from '../utils/secret-file';
 
@@ -83,9 +84,20 @@ export function mcpConfigPathFor(
   return worker;
 }
 
-/** codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too). */
-export function codexRoleArgs(orchestrator: boolean): string[] {
-  return orchestrator ? [] : ORCHESTRATOR_ONLY_MCP.flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
+/**
+ * codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too), each only where
+ * `configFile`, the config.toml codex reads, defines it: an override of a server it does not define makes an entry
+ * with nothing to run, and codex refuses to start on it ("invalid transport", exit 1, measured on 0.163.0 and 0.170.0,
+ * 20/11). Nothing when the file is missing or is not TOML.
+ */
+export function codexRoleArgs(orchestrator: boolean, configFile: string): string[] {
+  if (orchestrator) return [];
+  let servers: unknown;
+  try { servers = parseToml(fs.readFileSync(configFile, 'utf-8')).mcp_servers; } catch { return []; }
+  const defined = servers && typeof servers === 'object' ? servers : {};
+  return ORCHESTRATOR_ONLY_MCP
+    .filter(name => Object.prototype.hasOwnProperty.call(defined, name))
+    .flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
 }
 
 /** Qwen Code: the two disabled for a worker, for this invocation (0.25.2). */
