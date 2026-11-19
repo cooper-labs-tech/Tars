@@ -41,6 +41,8 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     sends everything again, and leaves the old copy out of reach of "delete everything sent".
  * 26. An owed deletion that clears itself (its install file gone) says nothing; or its word is consumed by a read the
  *     window did not make (the consent check), or masked by another notice.
+ * 27. (QA's gate on #596.) The preview the user consents on is not what leaves: the local document with paths and
+ *     names, where the back-office gets HMAC keys and no names. It must be the very batches and blobs sent.
  * 18. A deletion that lands while a pass runs: the pass goes on with the consent it read at its start, and sends
  *     after the deletion (the re-audit's M1 at ec6951aa5).
  * 9. A restart sends every session again, or forgets the install and registers anew.
@@ -496,6 +498,23 @@ describe('the trace uploader', () => {
     settings.consentAt = '2026-11-19T09:00:00Z';
     expect((await u.runOnce()).sent).toBe(0);
     expect(bo.sessions.size).toBe(0);
+  });
+
+  it('27: the preview is exactly what the back-office receives for that session, batches and blobs', async () => {
+    seed('t1', `look at ${PROJECT}/src`);
+    const u = uploader();
+    const preview = u.preview('t1')!;
+    expect(preview).not.toBeNull();
+    expect(JSON.stringify(preview.document)).not.toContain(HOME);
+    expect(JSON.stringify(preview.document)).not.toContain('Remote host');
+    await u.runOnce();
+    const sent = bo.seen.filter(x => x.method === 'PUT' && x.url.startsWith('/v1/batches/'));
+    const decode = (raw: Buffer, enc?: string | string[]) => enc === 'zstd' ? (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer }).zstdDecompressSync(raw) : raw;
+    expect(preview.document.batches.map(b => b.batchId)).toEqual(sent.map(x => x.url.slice('/v1/batches/'.length)));
+    expect(preview.document.batches.map(b => b.body)).toEqual(sent.map(x => JSON.parse(decode(x.body, x.headers['content-encoding']).toString())));
+    const blobsSent = new Map([...bo.blobs.entries()].map(([h, b]) => [h, JSON.parse(b.toString())]));
+    expect(Object.keys(preview.document.blobs).sort()).toEqual([...blobsSent.keys()].sort());
+    for (const [h, content] of Object.entries(preview.document.blobs)) expect(content).toEqual(blobsSent.get(h));
   });
 
   it('18: a deletion landing while a pass runs stops it, and nothing is sent after the deletion', async () => {

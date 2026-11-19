@@ -342,6 +342,12 @@ export class TraceStore {
       ON CONFLICT(trace_id) DO UPDATE SET uploaded_seq = MAX(uploaded_seq, excluded.uploaded_seq), uploaded_at = excluded.uploaded_at`).run(traceId, seq, at);
   }
 
+  /** A session's change sequence: what an upload of it now is keyed on. */
+  seqOf(traceId: string): number | undefined {
+    const r = this.db.prepare('SELECT updated_seq FROM traces WHERE trace_id = ?').get(traceId) as { updated_seq?: number } | undefined;
+    return r?.updated_seq;
+  }
+
   /** The start of the newest session in the store, if any. */
   newestStartedAt(): number | undefined {
     const r = this.db.prepare('SELECT MAX(started_at) AS m FROM traces').get() as { m: number | null };

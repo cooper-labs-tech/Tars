@@ -13,8 +13,7 @@ import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
 import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
-import { projectEnvValues, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
-import { sessionDocument } from './trace-export';
+import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
 import { SECRET_FIELDS } from './settings-secrets';
 
@@ -116,13 +115,12 @@ export function scrubContextFor(projectPath: string | undefined): ScrubContext {
   };
 }
 
-/** One session as it would be uploaded: its document, scrubbed, and what was masked, by kind. */
-export function previewUpload(traceId: string): { document: unknown; counts: Record<string, number>; scrubVersion: string } | null {
-  const doc = sessionDocument(traceStore(), traceId);
-  if (!doc) return null;
-  const counts: Record<string, number> = {};
-  const document = scrubValue(doc, scrubContextFor(String(doc.trace.project_path ?? '')), counts);
-  return { document, counts, scrubVersion: SCRUB_VERSION };
+/**
+ * One session exactly as its upload would send it now: the batches and blobs the uploader builds for it, through the
+ * same function, and what was masked, by kind. The window shows this document as the one Tars would send.
+ */
+export function previewUpload(traceId: string): ReturnType<TraceUploader['preview']> {
+  return traceUploader().preview(traceId);
 }
 
 export function traceStore(): TraceStore {

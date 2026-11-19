@@ -6,7 +6,7 @@ import { writeSecretFileSync } from '../utils/secret-file';
 import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
-import { scrubValue, type ScrubContext } from './trace-scrub';
+import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 
 /**
  * Uploading opted-in traces to a back-office (the trace back-office's HTTP API v1: register, blobs, batches,
@@ -201,7 +201,8 @@ export class TraceUploader {
 
   private async register(url: string): Promise<Install> {
     const r = await this.call(null, url, 'POST', '/v1/installs', Buffer.from(JSON.stringify({ client: this.deps.client }))) as { installId: string; token: string };
-    const install: Install = { url, installId: r.installId, token: r.token, secret: randomBytes(32).toString('hex'), registeredAt: this.now() };
+    // The secret the preview keyed with, so the preview's keys are the keys sent.
+    const install: Install = { url, installId: r.installId, token: r.token, secret: this.secret(), registeredAt: this.now() };
     fs.mkdirSync(path.dirname(this.deps.installFile), { recursive: true, mode: 0o700 });
     writeSecretFileSync(this.deps.installFile, `${JSON.stringify(install)}\n`);
     this.deps.store.resetUploads();
@@ -292,14 +293,19 @@ export class TraceUploader {
     }
   }
 
-  private async sendSession(install: Install, traceId: string, seq: number): Promise<void> {
+  /**
+   * Exactly what a session's upload sends, at this change sequence: its blobs (hash and bytes) and its batches (id and
+   * body), scrubbed and keyed with the install's secret. The upload sends it, and the preview shows it, so what the
+   * user consents on is what leaves (QA's gate on #596).
+   */
+  private buildPayload(secret: string, traceId: string, seq: number): { blobs: Map<string, Buffer>; batches: Array<{ id: string; body: Buffer }>; counts: Record<string, number> } | null {
     const doc = sessionDocument(this.deps.store, traceId);
-    if (!doc) return;
+    if (!doc) return null;
     const t = doc.trace as Record<string, unknown>;
     const projectPath = String(t.project_path ?? '');
     const ctx = this.deps.scrubContext(projectPath);
     const counts: Record<string, number> = {};
-    const key = (v: string) => createHmac('sha256', install.secret).update(v).digest('hex');
+    const key = (v: string) => createHmac('sha256', secret).update(v).digest('hex');
 
     // Every message, system prompt and tool set as its scrubbed blob.
     const blobs = new Map<string, Buffer>();
@@ -361,13 +367,6 @@ export class TraceUploader {
       hash: m.hash, role: m.role, createdAt: Number(t.started_at), size: m.size, toolCallCount: m.toolCallCount, hasThinking: m.hasThinking,
     }));
 
-    const all = [...blobs.keys()];
-    const missing = new Set<string>();
-    for (let i = 0; i < all.length; i += 1000) {
-      const r = await this.call(install, install.url, 'POST', '/v1/blobs/missing', Buffer.from(JSON.stringify({ hashes: all.slice(i, i + 1000) }))) as { missing?: string[] };
-      for (const h of r.missing ?? []) missing.add(h);
-    }
-    for (const h of missing) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
     // One batch per session state, or several when it is over the limit: each request names its whole history, so
     // a long session's metadata grows with the square of its requests. Each part carries the session row (an
     // upsert), the requests of that part, the turns they name and the metadata of the messages they name.
@@ -387,19 +386,63 @@ export class TraceUploader {
       return [...split(part.slice(0, half)), ...split(part.slice(half))];
     };
     const parts = compress(bodyOf(requests, true)).body.length <= limit ? [requests] : split(requests);
-    for (let k = 0; k < parts.length; k++) {
-      const body = bodyOf(parts[k], parts.length === 1 || k === 0 && parts[k].length === requests.length);
-      const id = parts.length === 1 ? `${traceId}.${seq}` : `${traceId}.${seq}.${k}`;
-      const answer = await this.putBatch(install, id, body);
-      for (const h of answer.missingBlobs ?? []) {
-        if (blobs.has(h) && !missing.has(h)) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
-      }
-    }
+    const batches = parts.map((part, k) => ({
+      id: parts.length === 1 ? `${traceId}.${seq}` : `${traceId}.${seq}.${k}`,
+      body: bodyOf(part, parts.length === 1 || k === 0 && part.length === requests.length),
+    }));
     // A turn no request names (none today) still goes, with the last part.
     const named = new Set(requests.map(q => q.turnId));
     const alone = turns.filter(x => !named.has(x.turnId));
     if (parts.length > 1 && alone.length) {
-      await this.putBatch(install, `${traceId}.${seq}.turns`, Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns: alone, requests: [], messages: [] })));
+      batches.push({ id: `${traceId}.${seq}.turns`, body: Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns: alone, requests: [], messages: [] })) });
+    }
+    return { blobs, batches, counts };
+  }
+
+  /** The secret projects and endpoints are keyed with: the install's, kept from before its registration. */
+  private secret(): string {
+    try {
+      const held = JSON.parse(fs.readFileSync(this.deps.installFile, 'utf8')) as { secret?: unknown };
+      if (typeof held?.secret === 'string' && held.secret.length >= 32) return held.secret;
+    } catch { /* none yet */ }
+    const secret = randomBytes(32).toString('hex');
+    fs.mkdirSync(path.dirname(this.deps.installFile), { recursive: true, mode: 0o700 });
+    writeSecretFileSync(this.deps.installFile, `${JSON.stringify({ secret })}\n`);
+    return secret;
+  }
+
+  /** One session as its upload would send it now: the batches' bodies and the blobs' contents, decoded. */
+  preview(traceId: string): { document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null {
+    const seq = this.deps.store.seqOf(traceId);
+    if (seq === undefined) return null;
+    const payload = this.buildPayload(this.secret(), traceId, seq);
+    if (!payload) return null;
+    return {
+      document: {
+        batches: payload.batches.map(b => ({ batchId: b.id, body: JSON.parse(b.body.toString('utf8')) })),
+        blobs: Object.fromEntries([...payload.blobs.entries()].map(([h, b]) => [h, JSON.parse(b.toString('utf8'))])),
+      },
+      counts: payload.counts,
+      scrubVersion: SCRUB_VERSION,
+    };
+  }
+
+  private async sendSession(install: Install, traceId: string, seq: number): Promise<void> {
+    const payload = this.buildPayload(install.secret, traceId, seq);
+    if (!payload) return;
+    const { blobs, batches } = payload;
+    const all = [...blobs.keys()];
+    const missing = new Set<string>();
+    for (let i = 0; i < all.length; i += 1000) {
+      const r = await this.call(install, install.url, 'POST', '/v1/blobs/missing', Buffer.from(JSON.stringify({ hashes: all.slice(i, i + 1000) }))) as { missing?: string[] };
+      for (const h of r.missing ?? []) missing.add(h);
+    }
+    for (const h of missing) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
+    for (const b of batches) {
+      const answer = await this.putBatch(install, b.id, b.body);
+      for (const h of answer.missingBlobs ?? []) {
+        if (blobs.has(h) && !missing.has(h)) await this.call(install, install.url, 'PUT', `/v1/blobs/${h}`, blobs.get(h)!, false);
+      }
     }
   }
 

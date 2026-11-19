@@ -2907,7 +2907,9 @@ export interface ElectronAPI {
     /** What leaves the machine on upload, what stays, and what the scrubbing catches and cannot: the first-time notice. */
     uploadNotice: () => Promise<UploadNotice>;
     /** One session as it would be uploaded: scrubbed, with what was masked by kind. */
-    preview: (traceId: string) => Promise<{ document: unknown; counts: Record<string, number>; scrubVersion: string } | null>;
+    /** One session exactly as it would be uploaded: the batches (id and body) and the blobs (hash and content) the
+     *  upload sends, built by the same function, with what was masked, by kind. */
+    preview: (traceId: string) => Promise<{ document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null>;
     /** The user has read the notice: uploads may start (refused while no address is set, or a deletion is owed). */
     giveUploadConsent: () => Promise<{ ok: true; at: string } | { ok: false; error: string }>;
     /** The uploader's state. */
