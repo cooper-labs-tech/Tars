@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useSyncExternalStore } from 'react';
-import type { AgentChangeBy, AgentRetuned } from '@/types/electron';
+import type { AgentChangeBy, AgentRetuned, AgentStatus } from '@/types/electron';
 
 /**
  * The retunes the window has heard of (agent:retuned, 2.0.7), kept for the window's life: the last event per agent,
@@ -9,8 +9,8 @@ import type { AgentChangeBy, AgentRetuned } from '@/types/electron';
  * change asked by an agent, never one made in the window). One subscription for the whole window, made by the first
  * hook that mounts.
  */
-type Store = { byAgent: Record<string, AgentRetuned>; notices: AgentRetuned[] };
-let store: Store = { byAgent: {}, notices: [] };
+type Store = { byAgent: Record<string, AgentRetuned>; notices: AgentRetuned[]; reverts: Record<string, string> };
+let store: Store = { byAgent: {}, notices: [], reverts: {} };
 const listeners = new Set<() => void>();
 let subscribed = false;
 
@@ -29,8 +29,29 @@ function subscribeOnce() {
     // One notice per change: its later state (queued, then applied) replaces the earlier.
     const others = store.notices.filter(n => n.changeId !== e.changeId);
     const notices = e.by.kind === 'agent' ? [e, ...others].slice(0, 3) : others;
-    emit({ byAgent, notices });
+    emit({ ...store, byAgent, notices });
   });
+}
+
+/**
+ * The window's own undo: the change agent.revertChange made (revertChangeId) takes back `ofChangeId`. The card then
+ * says it was undone, with no undo on it. Kept for the window's life: the contract carries no `revertOf` yet.
+ */
+export function noteRevert(revertChangeId: string, ofChangeId: string) {
+  emit({ ...store, reverts: { ...store.reverts, [revertChangeId]: ofChangeId } });
+}
+
+type LastRetune = NonNullable<AgentStatus['lastRetune']>;
+
+/**
+ * An agent's last retune as the window knows it now: the event heard live when it is newer than the agent's record
+ * (which the window reads again only on a reload), else the record; with the event's values when they match.
+ */
+export function latestRetune(agent: AgentStatus, byAgent: Record<string, AgentRetuned>): { last: LastRetune; heard?: AgentRetuned } | null {
+  const rec = agent.lastRetune;
+  const ev = byAgent[agent.id];
+  if (ev && (!rec || ev.changeId === rec.changeId || ev.askedAt >= rec.askedAt)) return { last: ev, heard: ev };
+  return rec ? { last: rec } : null;
 }
 
 export function dismissRetune(changeId: string) {
