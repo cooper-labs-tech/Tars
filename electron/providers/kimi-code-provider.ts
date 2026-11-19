@@ -59,7 +59,10 @@ export class KimiCodeProvider implements CLIProvider {
       if (!SAFE_MODEL.test(params.model)) throw new Error('Invalid model name');
       command += ` -m ${shellQuote(params.model)}`;
     }
-    if (params.resumeSessionId && KIMI_SESSION_ID.test(params.resumeSessionId)) command += ` --session ${shellQuote(params.resumeSessionId)}`;
+    // A resume continues the session under its own id. A restart that forks would resume the session it just stopped,
+    // whose id is the stop's tombstone (hooks-routes.ts refuses its posts): it starts a new session instead, until
+    // `kimi fork` is measured.
+    if (params.resumeSessionId && !params.forkSession && KIMI_SESSION_ID.test(params.resumeSessionId)) command += ` --session ${shellQuote(params.resumeSessionId)}`;
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
     if (secondary) command += ` --add-dir ${shellQuote(secondary)}`;
     for (const vp of params.obsidianVaultPaths ?? []) {
