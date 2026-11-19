@@ -27,8 +27,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
  * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI); a harness with none is skipped, and says so.
- * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short), endpoint-requests.jsonl,
- * app.log, reproduce.txt.
+ * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
+ * its start and after each task), endpoint-requests.jsonl, the app's logs, reproduce.txt.
  */
 
 type Harness = { id: string; provider: string; pathKey: string; env: string };
@@ -42,6 +42,8 @@ const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
 const WORKER = 'eeee5555-0000-4000-8000-0000000000c2';
 const EP = 'ep-0c0f01';
 const TASK = 'Run the shell command that prints the probe marker, then tell me what it printed.';
+/** A terminal's text, its escapes taken out: what the artefact keeps of the harness's screen. */
+const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 type Reply = { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
@@ -147,10 +149,12 @@ for (const h of HARNESSES) {
         await api('agent', 'start', { id: WORKER, prompt: '' });
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000, message: 'its CLI runs in the agent\'s terminal' }).toBe(true);
 
+        const screenOf = async () => plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000);
+        keep({ screenAtStart: await screenOf() });
         // 2. Delegated to, answered with its own final answer, after a real tool round.
         const delegated = await lead('delegate_task', { id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-1` });
         const taskId = /\bt-[0-9a-f]{8}\b/.exec(delegated.text)?.[0];
-        keep({ delegated, taskId, requests: short() });
+        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf() });
         expect.soft(delegated.text, 'delegate_task returns the harness\'s final answer').toContain(`PROBE-OK ${standin.marker}`);
         expect.soft(posts().some((r, i) => i > 0 && JSON.stringify(r.body ?? '').includes(standin.marker)), 'the tool\'s result reached the endpoint').toBe(true);
 
@@ -170,6 +174,7 @@ for (const h of HARNESSES) {
         await api('agent', 'start', { id: WORKER, prompt: '' });
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
         const again = await lead('delegate_task', { id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-2` });
+        keep({ screenAfterResume: plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000) });
         const after = posts().slice(before);
         keep({ again, resumedRequests: after.map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) })) });
         expect.soft(after.length, 'the resumed session reached the endpoint').toBeGreaterThan(0);
