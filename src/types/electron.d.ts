@@ -262,7 +262,11 @@ export interface AgentRetuned {
   agentName: string;
   projectPath: string;
   by: AgentChangeBy;
+  /** Every setting the change touched, with its before and after: a provider change also clears the model and the CLI
+   *  path it was not given. */
   fields: string[];
+  /** The settings the caller named: what a line about the change shows, the implied resets of `fields` left out. */
+  asked: string[];
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   state: 'applied' | 'queued' | 'cancelled' | 'failed';
@@ -710,7 +714,7 @@ export interface AgentStatus {
   checkpoint?: { line: string; at: string };
   /** The last change of its settings asked over the API (2.0.7): who asked, which settings, applied or queued, when
    *  asked and when it took effect. The whole change is in the change log (GET /api/agent-changes, agent_changes). */
-  lastRetune?: { changeId: string; by: AgentChangeBy; fields: string[]; state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string };
+  lastRetune?: { changeId: string; by: AgentChangeBy; fields: string[]; asked?: string[]; state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;

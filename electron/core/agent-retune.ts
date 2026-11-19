@@ -151,14 +151,17 @@ export function setRetuneDeps(next: RetuneDeps): void {
 }
 
 function announce(agent: AgentStatus, change: AgentChange): void {
+  // What the caller named (`asked`), beside what the change touched (`fields`): a provider change also clears the
+  // model and CLI path it was not given, which the window keeps out of its line (#604's Audit, L1).
+  const asked = change.asked ?? change.fields;
   agent.lastRetune = {
-    changeId: change.id, by: change.by, fields: change.fields, state: change.state, askedAt: change.askedAt,
+    changeId: change.id, by: change.by, fields: change.fields, asked, state: change.state, askedAt: change.askedAt,
     ...(change.effectiveAt ? { effectiveAt: change.effectiveAt } : {}),
   };
   saveAgents();
   broadcastToAllWindows('agent:retuned', {
     changeId: change.id, agentId: change.agentId, agentName: change.agentName, projectPath: change.projectPath, by: change.by,
-    fields: change.fields, before: change.before, after: change.after, state: change.state, askedAt: change.askedAt,
+    fields: change.fields, asked, before: change.before, after: change.after, state: change.state, askedAt: change.askedAt,
     ...(change.effectiveAt ? { effectiveAt: change.effectiveAt } : {}), ...(change.waitingFor ? { waitingFor: change.waitingFor } : {}),
   });
   scheduleTick();

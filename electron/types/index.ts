@@ -361,6 +361,8 @@ export interface AgentStatus {
     changeId: string;
     by: { kind: 'agent'; id: string; name: string; projectPath: string } | { kind: 'tars' } | { kind: 'window' };
     fields: string[];
+    /** The settings the caller named: `fields` holds besides what they implied (a provider change's cleared model and CLI path). */
+    asked?: string[];
     state: 'applied' | 'queued' | 'cancelled' | 'failed';
     askedAt: string;
     effectiveAt?: string;
