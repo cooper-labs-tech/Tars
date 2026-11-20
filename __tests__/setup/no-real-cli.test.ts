@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFile } from 'node:child_process';
-import { realBinary, programOfLine, narrowRootsForTest, takeViolations } from './no-real-cli';
+import { realBinary, programOfLine, startedPrograms, narrowRootsForTest, takeViolations } from './no-real-cli';
 
 /**
  * No unit test reaches a real claude or tailscale (__tests__/setup/no-real-cli.ts, the Audit's I-3 on #616): a
@@ -21,6 +21,12 @@ import { realBinary, programOfLine, narrowRootsForTest, takeViolations } from '.
  * G5. The product's own probe (core/cli-probe.ts, a spawn) goes around a guard on execFile alone, as the suite's
  *     mocks did (a guard on execFile alone turns this case red: measured).
  * G6. A claude that is not installed at all (nothing on the PATH by that name) reads as a real one.
+ * And after this week's two incidents (codex's config.toml deleted by a test, Kilo writing into the real home), the
+ * Audit's I-4 on #616:
+ * G7. The other agent CLIs Tars runs go through: codex, gemini, kimi, opencode, pi, kilo, qwen, grok, amp, goose, in
+ *     any case, and their .exe, .cmd and .bat forms.
+ * G8. A CLI at the head of a shell's script (`sh -c 'codex ...'`, `zsh -ilc ...`) or of a line spawned with
+ *     `shell: true` goes through.
  */
 
 const files = (...present: string[]) => (p: string) => present.includes(p);
@@ -52,6 +58,32 @@ describe('which binary is a real one', () => {
 
   it('G6. a claude installed nowhere on the PATH is not a real one', () => {
     expect(realBinary('claude', '/usr/bin:/bin', ['/tmp/run'], files(), 'linux')).toBeNull();
+  });
+
+  it.each(['codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose'])('G7. %s, in any case and in its Windows forms', (name) => {
+    const roots = ['/tmp/run'];
+    const posix = `/home/me/.local/bin/${name}`;
+    expect(realBinary(posix, undefined, roots, files(posix), 'linux'), name).toBe(posix);
+    expect(realBinary(name, '/usr/bin:/home/me/.local/bin', roots, files(posix), 'linux'), `${name} on the PATH`).toBe(posix);
+    const upper = `/opt/bin/${name.toUpperCase()}`;
+    expect(realBinary(upper, undefined, roots, files(upper), 'darwin'), `${name} in capitals`).toBe(upper);
+    for (const ext of ['.exe', '.cmd', '.bat', '.EXE', '.Cmd']) {
+      const windows = `C:\\Users\\me\\AppData\\Roaming\\npm\\${name}${ext}`;
+      expect(realBinary(windows, undefined, roots, files(windows), 'win32'), `${name}${ext}`).toBe(windows);
+    }
+    const shim = `C:\\Users\\me\\AppData\\Roaming\\npm\\${name}.cmd`;
+    expect(realBinary(name, 'C:\\Users\\me\\AppData\\Roaming\\npm', roots, files(shim), 'win32'), `${name} on a Windows PATH`).toBe(shim);
+    expect(realBinary(`/tmp/run/stand-in/${name}`, undefined, roots, files(`/tmp/run/stand-in/${name}`), 'linux'), `a stand-in ${name}`).toBeNull();
+  });
+
+  it('G8. the CLI at the head of a shell\'s script, or of a line spawned with shell: true', () => {
+    expect(startedPrograms('spawn', '/bin/sh', [['-c', 'codex --help'], {}])).toEqual(['/bin/sh', 'codex']);
+    expect(startedPrograms('execFile', 'zsh', [['-ilc', 'echo $PATH'], () => {}])).toEqual(['zsh', 'echo']);
+    expect(startedPrograms('spawnSync', 'bash', [['-lc', '"/opt/bin/gemini" -p hi']])).toEqual(['bash', '/opt/bin/gemini']);
+    expect(startedPrograms('spawn', 'kilo --version', [{ shell: true }])).toEqual(['kilo']);
+    expect(startedPrograms('exec', 'amp -x hi', [])).toEqual(['amp']);
+    expect(startedPrograms('spawn', '/usr/bin/git', [['status'], {}])).toEqual(['/usr/bin/git']);
+    expect(startedPrograms('spawn', '/bin/sh', [['/tmp/script.sh'], {}])).toEqual(['/bin/sh']);
   });
 });
 
