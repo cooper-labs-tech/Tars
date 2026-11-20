@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { promisify } from 'node:util';
+import { realCliOptIn } from './real-cli-opt-in';
 
 /**
  * No unit test starts a real claude or tailscale (the Audit's I-3 on #616). secrets-shown-by-main.test.ts ran the
@@ -26,6 +27,10 @@ import { promisify } from 'node:util';
  * HOME and fixture.mjs's CLI_HOMES keep it out of the real one); fork (a node script, not a CLI binary); a CLI later
  * in a shell's line than its first word (`cd x && codex`); and a CLI another program starts (npx, a script, a CLI
  * starting another).
+ *
+ * Opting in (real-cli-opt-in.ts): TARS_REAL_CLAUDE=1 or an absolute path for claude, TARS_TEST_REAL_CLIS=codex (or
+ * codex=/abs/path) for any CLI; `0`, `false` or an empty value opt nothing in. An opt-in counts for the whole run, not
+ * for the one test that asks: every test of that run may then start that CLI, so run the opted-in files alone.
  */
 
 const NAMES = new Set(['claude', 'tailscale', 'codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose']);
@@ -57,15 +62,15 @@ function allowedRoots(): string[] {
  */
 export function realBinary(
   file: string, envPath: string | undefined, roots: string[], exists: (p: string) => boolean = isFile, platform: NodeJS.Platform = process.platform,
-  optedIn: string = `${process.env.TARS_TEST_REAL_CLIS ?? ''},${process.env.TARS_REAL_CLAUDE ? 'claude' : ''}`,
+  env: NodeJS.ProcessEnv = process.env,
 ): string | null {
   const p = platform === 'win32' ? path.win32 : path.posix;
   const name = p.basename(file).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase();
   if (!NAMES.has(name)) return null;
-  // A test that runs a real CLI on purpose (codex's own parser reading a config Tars wrote) runs only when
-  // TARS_TEST_REAL_CLIS names that CLI, and that one alone is let through; TARS_REAL_CLAUDE, the suite's older opt-in
-  // for the tests that start a real claude, lets claude through.
-  if (optedIn.split(/[\s,]+/).some(n => n.toLowerCase() === name)) return null;
+  // A test that runs a real CLI on purpose (codex's own parser reading a config Tars wrote) runs only when asked:
+  // `1` lets that CLI through, an absolute path that binary alone (real-cli-opt-in.ts).
+  const asked = realCliOptIn(name, env);
+  if (asked === 'any') return null;
   const exts = platform === 'win32' && !/\.(exe|cmd|bat)$/i.test(file) ? ['', '.exe', '.cmd', '.bat'] : [''];
   const candidates = /[\\/]/.test(file)
     ? exts.map(ext => p.resolve(file + ext))
@@ -73,6 +78,7 @@ export function realBinary(
   const found = candidates.find(exists);
   if (!found) return null;
   const resolved = platform === process.platform ? real(found) : found;
+  if (asked && (resolved === asked || resolved === (platform === process.platform ? real(asked) : asked))) return null;
   const inside = (root: string) => resolved === root || resolved.startsWith(root.endsWith(p.sep) ? root : root + p.sep);
   return roots.some(inside) ? null : resolved;
 }

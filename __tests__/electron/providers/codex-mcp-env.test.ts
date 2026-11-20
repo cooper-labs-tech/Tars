@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { realCliOptIn } from '../../setup/real-cli-opt-in';
 
 /**
  * Tars's MCP servers inside codex know which agent they run for (2.0.4).
@@ -41,7 +42,9 @@ const configFile = () => path.join(home, '.codex', 'config.toml');
 // codex, as __tests__/setup/no-real-cli.ts lets it through then and refuses a real codex otherwise (the Audit's I-4
 // on #616: a unit test runs no real CLI by default). Its home is this file's own folder.
 const codexOnPath = (() => {
-  if (!(process.env.TARS_TEST_REAL_CLIS ?? '').split(/[\s,]+/).some(n => n.toLowerCase() === 'codex')) return '';
+  const asked = realCliOptIn('codex');
+  if (!asked) return '';
+  if (asked !== 'any') return asked;
   try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; }
 })();
 
