@@ -28,6 +28,8 @@ export type AgentProvider =
   | 'kilo'
   /** Goose, the binary `goose` (block/goose). */
   | 'goose'
+  /** Cline CLI, the binary `cline` (npm `cline`). */
+  | 'cline'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -395,6 +397,7 @@ export const CLI_PATH_KEYS = [
   'kimi',
   'kilo',
   'goose',
+  'cline',
   'gws',
   'gcloud',
   'gh',

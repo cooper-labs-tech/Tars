@@ -16,6 +16,7 @@ import { QwenCodeProvider } from './qwen-code-provider';
 import { KimiCodeProvider } from './kimi-code-provider';
 import { KiloProvider } from './kilo-provider';
 import { GooseProvider } from './goose-provider';
+import { ClineProvider } from './cline-provider';
 import { ZhipuProvider } from './zhipu-provider';
 import { MiniMaxProvider } from './minimax-provider';
 import { NvidiaProvider } from './nvidia-provider';
@@ -55,6 +56,8 @@ const providers: Record<string, CLIProvider> = {
   kilo: new KiloProvider(),
   // Goose, the binary goose: its servers on its line, its turns from its sessions.db (goose-provider.ts).
   goose: new GooseProvider(),
+  // Cline CLI, the binary cline: each agent on a folder of its own, its turns told by its hooks (cline-provider.ts).
+  cline: new ClineProvider(),
   zhipu: new ZhipuProvider(),
   minimax: new MiniMaxProvider(),
   nvidia: new NvidiaProvider(),
