@@ -28,13 +28,23 @@ vi.mock('os', async (importOriginal) => {
   return { ...mod, homedir: () => home, default: { ...mod, homedir: () => home } };
 });
 
-beforeAll(() => {
+/**
+ * The registry, imported once the home is set (what it reads at load, ~/.tars-private and the CLIs' folders, is then
+ * that home's) and in the hook, not in the first case: its first, cold import is most of this file's time, and under
+ * load it took cases 1 to 3 to their 5 s budget (5967 ms on #601 at d7150da1e, load 23: QA's L5, 20/11). The cases
+ * then time only the lines they build.
+ */
+let getProvider: typeof import('../../../electron/providers').getProvider;
+
+beforeAll(async () => {
   root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'secondary-launch-')));
   home = path.join(root, 'home');
   fs.mkdirSync(path.join(home, '.tars-private', 'accounts'), { recursive: true });
   fs.mkdirSync(path.join(home, 'projects', 'demo'), { recursive: true });
   fs.mkdirSync(path.join(home, 'projects', 'shared'), { recursive: true });
   fs.symlinkSync(path.join(home, '.tars-private'), path.join(home, 'projects', 'demo', 'secrets'));
+  vi.resetModules();
+  ({ getProvider } = await import('../../../electron/providers'));
 });
 
 afterAll(() => {
@@ -45,8 +55,6 @@ afterAll(() => {
 const HANDING = { claude: '--add-dir', codex: '--add-dir', gemini: '--include-directories', 'qwen-code': '--include-directories' } as const;
 
 async function lineFor(id: keyof typeof HANDING, secondaryProjectPath?: string, obsidianVaultPaths?: string[]): Promise<string> {
-  vi.resetModules();
-  const { getProvider } = await import('../../../electron/providers');
   return getProvider(id).buildInteractiveCommand({
     binaryPath: 'cli',
     prompt: 'go',
