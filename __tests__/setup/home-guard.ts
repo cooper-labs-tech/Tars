@@ -4,11 +4,15 @@
 const fs = process.getBuiltinModule('node:fs') as typeof import('node:fs');
 const os = process.getBuiltinModule('node:os') as typeof import('node:os');
 const path = process.getBuiltinModule('node:path') as typeof import('node:path');
+// The CLI homes, judged as the E2E fixture judges a spec's; that module takes Node's own modules the same way.
+import { CLI_HOMES, homesOutside } from '../../e2e/cli-homes.mjs';
 
 /**
- * Imported first by every test file that writes under os.homedir(), and throws unless HOME lies
- * inside the run's temporary folder. A file run without the repo's setup files then stops before
- * any of its own code runs, instead of writing into the owner's real home.
+ * Imported first by every test file, and throws unless HOME, and every CLI home a variable names (CODEX_HOME,
+ * XDG_CONFIG_HOME, PI_CODING_AGENT_DIR, KIMI_CODE_HOME...), lie inside the run's temporary folder. A file run without
+ * the repo's setup files then stops before any of its own code runs, instead of writing into the owner's real home.
+ * Every file, not only those the sweep sees writing under the home: a write made by the code under test, a child
+ * process or a parameter is out of the sweep's sight (#609's re-audit).
  *
  * With the setup files (vitest.config.mts):
  * - tmpdir-run.ts makes the run's folder, `tars-vitest-run-*`;
@@ -48,5 +52,23 @@ export function homeOutsideRun(home: string, run: string | undefined): string | 
   return null;
 }
 
-const why = homeOutsideRun(os.homedir(), (globalThis as typeof globalThis & { [key: symbol]: string | undefined })[Symbol.for('tars.test.runTmpdir')]);
-if (why) throw new Error(`This test file writes under os.homedir(), so it does not run: ${why}`);
+/**
+ * The CLI homes of `env` (CODEX_HOME, XDG_CONFIG_HOME, PI_CODING_AGENT_DIR, KIMI_CODE_HOME...: e2e/cli-homes.mjs) that
+ * land outside the run's folder `run`, as [name, value]: the code under test reads them before HOME (#609's re-audit,
+ * M1). With no run folder recorded, every one set is outside.
+ */
+export function cliHomesOutsideRun(env: NodeJS.ProcessEnv, run: string | undefined): Array<[string, string]> {
+  if (!run) return Object.entries(env).filter((entry): entry is [string, string] => CLI_HOMES.test(entry[0]) && typeof entry[1] === 'string' && entry[1].trim() !== '');
+  return homesOutside(env, run) as Array<[string, string]>;
+}
+
+const run = (globalThis as typeof globalThis & { [key: symbol]: string | undefined })[Symbol.for('tars.test.runTmpdir')];
+const why = homeOutsideRun(os.homedir(), run);
+if (why) throw new Error(`This test file does not run outside the repo's setup: ${why}`);
+const strays = cliHomesOutsideRun(process.env, run);
+if (strays.length > 0) {
+  throw new Error(
+    `This test file runs code that reads a CLI's home before HOME, and these point outside the run's temporary folder ${run}: `
+    + strays.map(([name, where]) => `${name}=${where}`).join(', ') + `. ${HOW}`,
+  );
+}
