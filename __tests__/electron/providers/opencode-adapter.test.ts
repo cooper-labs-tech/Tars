@@ -24,10 +24,13 @@ import Database from 'better-sqlite3';
  * 5. Its data folder read elsewhere than opencode writes it: `$XDG_DATA_HOME/opencode`, else `~/.local/share/opencode`.
  * 6. Its turns still taken for unseen: delegate_task then answers `delivered` at once, with neither answer nor tokens,
  *    and task_status never reads it completed. Its provider says its turns are reported, as codex's, pi's and kimi's.
+ * 7. (The Audit's M1 on #613) A restart's line, `--session '<S>' --fork`, read as a resume of S: the reader then bound S
+ *    while opencode went on under a new id. Read as a fork of S, and the launch's own `--prompt` read back as the text
+ *    it sent, quotes and all.
  */
 
 import { OpenCodeProvider } from '../../../electron/providers/opencode-provider';
-import { opencodeDbPath, opencodeUuidOf, opencodeSessionOfCommand } from '../../../electron/providers/opencode-cli';
+import { opencodeDbPath, opencodeUuidOf, opencodeSessionOfCommand, opencodeLaunchOf } from '../../../electron/providers/opencode-cli';
 import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
 import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 
@@ -117,5 +120,18 @@ describe('a task typed once opencode takes keys (4)', () => {
 describe('its turns are heard (6)', () => {
   it('an opencode agent reads as one whose turn end Tars sees, so delegate_task waits for its answer', () => {
     expect(hasEndOfTurn({ provider: 'opencode' })).toBe(true);
+  });
+});
+
+describe("a launch line, read back (7)", () => {
+  it("a fork is a fork of S, never a resume of it; a resume is one; the launch's prompt comes back as sent", () => {
+    const oc = new OpenCodeProvider();
+    const fork = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: "it's the task", resumeSessionId: SES, forkSession: true });
+    expect(opencodeLaunchOf(fork)).toEqual({ forkOf: SES, prompt: "it's the task" });
+    expect(opencodeSessionOfCommand(fork)).toBeUndefined();
+    const resume = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '', resumeSessionId: SES });
+    expect(opencodeLaunchOf(resume)).toEqual({ resume: SES });
+    expect(opencodeLaunchOf("'/bin/opencode' --auto")).toEqual({});
+    expect(opencodeLaunchOf(undefined)).toEqual({});
   });
 });

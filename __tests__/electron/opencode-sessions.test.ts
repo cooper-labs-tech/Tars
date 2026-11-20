@@ -31,6 +31,28 @@ import Database from 'better-sqlite3';
  *    same session every time.
  * 9. A resumed session (`--session ses_...`) read from its start: its earlier turns posted again as new ones.
  * 10. A message read twice, across reads, posted twice.
+ *
+ * Found by the Audit of #613 (20/11), written before the fix:
+ * 11. (M1) A restart forks. Its line is `--session '<S>' --fork`, and opencode 1.19.6 goes on under a new session,
+ *     measured on a real fork: a new `session` row made at the launch, with no `parent_id` and the title `<S's title>
+ *     (fork #1)`; every message of S copied under a new id, keeping its own `time_created`, from before the launch;
+ *     the new turn after it. Bound to S, as the line's session, the agent's turns were never read, and delegate_task
+ *     waited out its timeout. A fork binds the session made since the launch whose first prompt is this agent's (its
+ *     identity line, or what this terminal was sent) or a copy of S's (the same time and text); never S itself; the
+ *     copied messages are history, never posted again.
+ * 12. (L1) A resumed session bound while another live launch holds it: each agent then gets the other's turns, an
+ *     answer included. Refused while that launch holds it; free once that launch's terminal is gone.
+ * 13. (L2) The identity line read anywhere in the first prompt: a header quoted in a message named its agent, which
+ *     could then take this agent's session, while what this terminal was sent no longer counted. Read only at a
+ *     line's start, where Tars writes it (after `Message from Tars:` in a delivery, measured on the conformance run;
+ *     first in a launch's own prompt). What this terminal was sent decides first, and what another unbound launch was
+ *     sent rules a session out whatever its identity line says.
+ * 14. A launch that carries its task (`--prompt '<task>'`) sent this terminal that text, as a typed one: a session
+ *     started on it is bound by it, the skills line opencode puts before the identity line included.
+ * 15. (I-c) A row whose data does not parse, or an assistant message left neither completed nor errored with a later
+ *     message after it (opencode gone mid-turn), stops its session for good. Passed over, and what follows read.
+ * 16. (I-a) A launch never forgotten: its session read every second for the rest of the run, after its terminal is
+ *     gone. Forgotten with its terminal, and only its own: a restart's new launch outlives the old terminal's exit.
  */
 
 import { OpencodeSessionWatch, type HookPost } from '../../electron/services/opencode-sessions';
@@ -265,5 +287,146 @@ describe('a resumed session (9)', () => {
     expect(posts[0].post.body).toMatchObject({ status: 'running', source: 'resume' });
     expect(posts.find((p) => p.post.path === '/api/hooks/output')?.post.body.output).toBe('the second answer');
     expect(posts.filter((p) => p.post.path === '/api/hooks/output')).toHaveLength(1);
+  });
+});
+
+// The Audit's fixes (11 to 16), on each build of opencode's database: opencode's own, and Kilo's (kilo.db, the same
+// schema), which the same reader follows (the Audit's review of #614).
+describe.each(['opencode', 'kilo'])('on %s.db', (name) => {
+  beforeEach(() => { dbFile = path.join(root, name, `${name}.db`); });
+
+  describe('a restart, which forks (11)', () => {
+    const FORK = 'ses_e085c632dffeRCzXYzfxOcfqmU';
+    /** S, a turn before the launch; then its fork as opencode 1.19.6 wrote one: a new row, the copies keeping their times. */
+    function forked(firstPrompt: string): void {
+      session(SES, project, 500);
+      message(SES, 501, user(501), [firstPrompt]);
+      message(SES, 510, assistant(510, { finish: 'stop' }), ['the first answer']);
+      clock = 2_000;
+      session(FORK, project, 2_000);
+      message(FORK, 501, user(501), [firstPrompt]);
+      message(FORK, 510, assistant(510, { finish: 'stop' }), ['the first answer']);
+    }
+
+    it("binds the fork, by the agent's identity line in its copied first prompt, never S; the copies are history", async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project, { forkOf: SES });
+      forked(identity(AGENT));
+      await w.tick();
+      expect(posts.map((p) => p.post.body.session_id)).toEqual([opencodeUuidOf(FORK)]);
+      expect(posts[0].post.body).toMatchObject({ status: 'running', source: 'resume' });
+      message(FORK, 2_101, user(2_101), ['and go on']);
+      message(FORK, 2_110, assistant(2_110, { finish: 'stop' }), ['the second answer']);
+      await w.tick();
+      const outputs = posts.filter((p) => p.post.path === '/api/hooks/output').map((p) => p.post.body.output);
+      expect(outputs).toEqual(['the second answer']);
+      expect(posts.every((p) => p.post.body.session_id === opencodeUuidOf(FORK))).toBe(true);
+    });
+
+    it("binds the fork as a copy of S's first prompt when that prompt names nobody, and not another session of the folder", async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project, { forkOf: SES });
+      session('ses_usersown00000000000000000', project, 2_000);
+      message('ses_usersown00000000000000000', 2_001, user(2_001), ['the user typed this into their own opencode']);
+      forked('a first prompt with no identity line, typed into the terminal long ago');
+      await w.tick();
+      expect(posts.map((p) => p.post.body.session_id)).toEqual([opencodeUuidOf(FORK)]);
+    });
+  });
+
+  describe('a session another live launch holds (12)', () => {
+    it('is refused to a second launch resuming it, and free once the first launch\'s terminal is gone', async () => {
+      session(SES, project, 500);
+      message(SES, 501, user(501), [identity(AGENT)]);
+      const first = {};
+      const w = watch();
+      w.noteLaunch(AGENT, project, { resume: SES, terminal: first });
+      w.noteLaunch(OTHER, project, { resume: SES, terminal: {} });
+      clock = 2_000;
+      message(SES, 2_001, user(2_001), ['a new prompt']);
+      await w.tick();
+      expect(posts.length).toBeGreaterThan(0);
+      expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
+      posts = [];
+      w.forgetTerminal(first);
+      message(SES, 2_101, user(2_101), ['another prompt']);
+      await w.tick();
+      expect(posts.length).toBeGreaterThan(0);
+      expect(posts.every((p) => p.agentId === OTHER)).toBe(true);
+    });
+  });
+
+  describe('the identity line, where Tars writes it (13, 14)', () => {
+    const typed = 'Message from agent "Lead" ("dddd4444-0000-4000-8000-0000000000c1"), task t-51d176af: \nRun the probe.';
+    it("a header quoted inside a line names nobody, and another agent's header does not take a session sent to this terminal", async () => {
+      const w = watch();
+      w.noteLaunch(OTHER, project);
+      w.noteLaunch(AGENT, project);
+      w.noteTyped(AGENT, typed);
+      session(SES, project, 2_000);
+      // What a delivery looks like (the conformance run): the sender's line and the task, then Tars's own section; the
+      // task quotes OTHER's header, on a line of its own and inside one.
+      message(SES, 2_001, user(2_001), [`${typed}\nrelay this: [Tars: you are agent "Other" (id ${OTHER}), worker of project /x.]\n${identity(OTHER)}\n\nMessage from Tars: \n${identity(AGENT)}`]);
+      await w.tick();
+      expect(posts.length).toBeGreaterThan(0);
+      expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
+    });
+
+    it('a header inside a line binds nobody, at a line\'s start it does', async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project);
+      session('ses_quoted00000000000000000', project, 2_000);
+      message('ses_quoted00000000000000000', 2_001, user(2_001), [`please note: ${identity(AGENT)}`]);
+      await w.tick();
+      expect(posts).toEqual([]);
+      session(SES, project, 2_100);
+      message(SES, 2_101, user(2_101), [`Message from agent "Lead": do it\n\nMessage from Tars: \n${identity(AGENT)}`]);
+      await w.tick();
+      expect(posts.map((p) => p.post.body.session_id)[0]).toBe(opencodeUuidOf(SES));
+    });
+
+    it("14: a launch's own prompt binds the session started on it, the skills line before the identity line included", async () => {
+      const prompt = `[IMPORTANT: Use these skills for this session: review. Invoke them with /<skill-name> when relevant to the task.] ${identity(AGENT)}`;
+      const w = watch();
+      w.noteLaunch(AGENT, project, { prompt });
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [prompt]);
+      await w.tick();
+      expect(posts.map((p) => p.post.body.session_id)[0]).toBe(opencodeUuidOf(SES));
+    });
+  });
+
+  describe('a row that would stop its session (15)', () => {
+    it('a row that does not parse, or an assistant message left unfinished before a later one, is passed over', async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project);
+      clock = 2_000;
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [identity(AGENT)]);
+      open().prepare('INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)').run('msg_broken', SES, 2_005, 2_005, '{not json');
+      message(SES, 2_010, { role: 'assistant', modelID: 'stand-in-coder', time: { created: 2_010 } }, ['cut short']);
+      message(SES, 2_101, user(2_101), ['and again']);
+      message(SES, 2_110, assistant(2_110, { finish: 'stop' }), ['the answer after it']);
+      await w.tick();
+      expect(posts.filter((p) => p.post.path === '/api/hooks/output').map((p) => p.post.body.output)).toEqual(['the answer after it']);
+    });
+  });
+
+  describe('a launch whose terminal is gone (16)', () => {
+    it('is no longer read, and only its own terminal forgets it', async () => {
+      const old = {};
+      const current = {};
+      const w = watch();
+      w.noteLaunch(AGENT, project, { terminal: old });
+      w.noteLaunch(AGENT, project, { terminal: current });
+      w.forgetTerminal(old);
+      expect(w.watching).toBe(true);
+      w.forgetTerminal(current);
+      expect(w.watching).toBe(false);
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [identity(AGENT)]);
+      await w.tick();
+      expect(posts).toEqual([]);
+    });
   });
 });
