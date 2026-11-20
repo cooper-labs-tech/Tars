@@ -166,9 +166,9 @@ export class ClineProvider implements CLIProvider {
 
   getHookConfig(): HookConfig {
     return {
-      supportsNativeHooks: false,
-      // Its hooks post its turns to Tars (hooks/cline-hook.mjs), installed in each agent's own folder.
-      turnsReported: true,
+      // Its own hooks post its turns to Tars (hooks/cline-hook.mjs), installed in each agent's own folder: Tars's start
+      // gives it the hooks folder (services/hooks-manager.ts, configureStatusHooks) for that.
+      supportsNativeHooks: true,
       configDir: this.configDir,
       settingsFile: path.join(this.configDir, 'data', 'settings', 'cline_mcp_settings.json'),
     };
