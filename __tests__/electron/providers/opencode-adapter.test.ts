@@ -27,6 +27,12 @@ import Database from 'better-sqlite3';
  * 7. (The Audit's M1 on #613) A restart's line, `--session '<S>' --fork`, read as a resume of S: the reader then bound S
  *    while opencode went on under a new id. Read as a fork of S, and the launch's own `--prompt` read back as the text
  *    it sent, quotes and all.
+ * 8. (Its conformance run with a restart, 20/11) A task typed into a forking opencode at its first bar, its home view's
+ *    (`tab agents  ctrl+p commands`, nothing before it): it started a new session without the history, measured twice,
+ *    and landed in the fork when typed once the forked session's view was drawn (`<folder>  <tokens>  ctrl+p
+ *    commands`, about 5 s later). A plain resume's first bar is already its session's (`<folder>  tab agents  ctrl+p
+ *    commands`), where a task typed at once landed in the session (twice). On a launch on a session, up on a bar with
+ *    something before it, never the bare home view's; on a fresh launch, on either.
  */
 
 import { OpenCodeProvider } from '../../../electron/providers/opencode-provider';
@@ -137,5 +143,23 @@ describe("a launch line, read back (7)", () => {
     expect(opencodeLaunchOf(['-l', '-c', `cd '/p' && exec ${fork}`])).toEqual({ forkOf: SES, prompt: "it's the task" });
     expect(opencodeLaunchOf(['--auto', '--session', SES, '--fork', '--prompt', "it's the task"])).toEqual({ forkOf: SES, prompt: "it's the task" });
     expect(opencodeLaunchOf(['--session', SES])).toEqual({ resume: SES });
+  });
+});
+
+describe('up on a launch on a session (8)', () => {
+  const HOME = ['  ╹▀▀▀▀▀▀▀▀▀▀', '                                    tab agents  ctrl+p commands', '  ~/project                                   1.19.6'];
+  const RESUMED = ['  ╹▀▀▀▀▀▀▀▀▀▀', '   /home/someone/project                     tab agents  ctrl+p commands'];
+  const FORKED = ['  ╹▀▀▀▀▀▀▀▀▀▀', '   /home/someone/project                            132  ctrl+p commands'];
+  it("a fork or a resume waits for its session's view; a fresh launch takes the home view", () => {
+    const oc = new OpenCodeProvider();
+    const fork = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '', resumeSessionId: SES, forkSession: true });
+    const resume = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '', resumeSessionId: SES });
+    const fresh = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '' });
+    expect(oc.upOnScreen(HOME, fork)).toBe(false);
+    expect(oc.upOnScreen(FORKED, fork)).toBe(true);
+    expect(oc.upOnScreen(HOME, resume)).toBe(false);
+    expect(oc.upOnScreen(RESUMED, resume)).toBe(true);
+    expect(oc.upOnScreen(HOME, fresh)).toBe(true);
+    expect(oc.upOnScreen(HOME)).toBe(true);
   });
 });
