@@ -33,6 +33,12 @@ import Database from 'better-sqlite3';
  * 10. A task typed into a Kilo forking a session at its home view's bar: on opencode 1.19.6 it started a new session
  *     without the history; Kilo's own timing is measured by its conformance run's restart step.
  * 11. (M2) Two Kilo agents with the same four skills, launched before either binds, ruling each other out.
+ * 12. (The #614 Audit's Info 5) A Kilo worker keeps all seven of Tars's servers, X and Telegram among them, against
+ *     the owner's rule of 28/10 that a worker gets neither. Measured on 7.8.27 (20/11): `KILO_CONFIG_CONTENT` with
+ *     `{"mcp":{"<name>":{"enabled":false}}}` switches that server of kilo.json off for the run (`kilo mcp list` shows
+ *     it disabled), and an entry for a server kilo.json does not define is ignored, with no error. So a worker's
+ *     inline config switches the two off, merged with an endpoint's provider; an orchestrator, or an agent whose role
+ *     the launch was not told, keeps all seven. opencode's own switch is not measured: its workers are as before.
  */
 
 // The fleet's endpoint choice, as traces-runtime resolves it: agent 'on-ep' runs on an endpoint, no other.
@@ -247,5 +253,22 @@ describe('two Kilo agents with the same four skills (11, the Audit\'s M2)', () =
     const by = (id: string) => [...new Set(posts.filter((p) => p.agentId === id).map((p) => p.post.body.session_id))];
     expect(by(A)).toEqual([opencodeUuidOf('ses_kiloagenta000000000000')]);
     expect(by(B)).toEqual([opencodeUuidOf('ses_kiloagentb000000000000')]);
+  });
+});
+
+describe("a Kilo worker's servers (12, the #614 Audit's Info 5)", () => {
+  it('a worker gets X and Telegram switched off in its own inline config; an orchestrator, or a role untold, keeps all seven', () => {
+    const kilo = new KiloProvider();
+    const worker = kilo.getPtyEnvVars('not-on-ep', project, [], undefined, { orchestrator: false });
+    expect(JSON.parse(worker.KILO_CONFIG_CONTENT).mcp).toEqual({ 'claude-mgr-telegram': { enabled: false }, 'dorothy-x': { enabled: false } });
+    expect(kilo.getPtyEnvVars('not-on-ep', project, [], undefined, { orchestrator: true }).KILO_CONFIG_CONTENT).toBeUndefined();
+    expect(kilo.getPtyEnvVars('not-on-ep', project, []).KILO_CONFIG_CONTENT).toBeUndefined();
+    // On an endpoint: one inline config, the endpoint's provider and the switch together.
+    const onEp = JSON.parse(kilo.getPtyEnvVars('on-ep', project, [], undefined, { orchestrator: false }).KILO_CONFIG_CONTENT);
+    expect(onEp.provider['tars-endpoint'].options.baseURL).toBe(BASE);
+    expect(onEp.mcp).toEqual({ 'claude-mgr-telegram': { enabled: false }, 'dorothy-x': { enabled: false } });
+    expect(JSON.parse(kilo.getPtyEnvVars('on-ep', project, [], undefined, { orchestrator: true }).KILO_CONFIG_CONTENT).mcp).toBeUndefined();
+    // opencode's own switch is not measured: a worker of its keeps them, as before.
+    expect(new OpenCodeProvider().getPtyEnvVars('not-on-ep', project, [], undefined, { orchestrator: false }).OPENCODE_CONFIG_CONTENT).toBeUndefined();
   });
 });

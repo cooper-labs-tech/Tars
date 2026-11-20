@@ -15,16 +15,20 @@ import Database from 'better-sqlite3';
  * 2. A Kilo terminal's exit forgetting only opencode's watch: Kilo's launch read every second for the rest of the run
  *    (I-a, back for Kilo).
  * 3. A Kilo launch noted in opencode's watch, or an opencode one in Kilo's: a turn read from the wrong database.
+ * 4. (The #614 Audit's Info 5) A Kilo worker's terminal spawned without the role reaching its provider: it keeps X and
+ *    Telegram (kilo-adapter.test.ts, case 12, for what the provider does with it).
  */
 
-const ptys: Array<{ onExit: ReturnType<typeof vi.fn> }> = [];
+const ptys: Array<{ onExit: ReturnType<typeof vi.fn>; env: Record<string, string> }> = [];
 vi.mock('node-pty', () => ({
-  spawn: vi.fn(() => {
-    const pty = { onData: vi.fn(), onExit: vi.fn(), kill: vi.fn(), write: vi.fn(), pid: 1, resize: vi.fn() };
+  spawn: vi.fn((_shell: string, _args: string[], opts: { env: Record<string, string> }) => {
+    const pty = { onData: vi.fn(), onExit: vi.fn(), kill: vi.fn(), write: vi.fn(), pid: 1, resize: vi.fn(), env: opts.env };
     ptys.push(pty);
     return pty;
   }),
 }));
+vi.mock('uuid', () => ({ v4: vi.fn(() => 'test-uuid') }));
+vi.mock('../../../electron/services/tasmania-client', () => ({ getTasmaniaStatus: vi.fn(async () => ({ status: 'stopped' })) }));
 vi.mock('electron', () => ({ app: { getPath: () => os.tmpdir() }, BrowserWindow: vi.fn(), Notification: vi.fn() }));
 vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.fn() }));
 vi.mock('../../../electron/utils/agents-tick', () => ({ scheduleTick: vi.fn() }));
@@ -32,6 +36,9 @@ vi.mock('../../../electron/services/agent-events', () => ({ emitAgentStatus: vi.
 vi.mock('../../../electron/utils/path-builder', () => ({ buildFullPath: vi.fn(() => '/usr/bin') }));
 
 import { spawnAgentPty } from '../../../electron/core/agent-pty';
+import { initAgentPty, agents } from '../../../electron/core/agent-manager';
+import type { AgentStatus } from '../../../electron/types';
+import { moveTestHome } from '../../setup/test-home';
 import { opencodeWatchFor, type HookPost } from '../../../electron/services/opencode-sessions';
 import { opencodeDbPath, opencodeUuidOf } from '../../../electron/providers/opencode-cli';
 import { KiloProvider } from '../../../electron/providers/kilo-provider';
@@ -95,5 +102,28 @@ describe("a Kilo terminal and Kilo's watch", () => {
     // The terminal exits: every listener it was given hears it, as node-pty's would.
     for (const [listener] of ptys[ptys.length - 1].onExit.mock.calls as Array<[(e: { exitCode?: number }) => void]>) listener({ exitCode: 0 });
     expect(kiloWatch.watching).toBe(false);
+  });
+});
+
+describe("a Kilo agent's role, at its terminal's spawn (4)", () => {
+  it("a worker's terminal carries Kilo's switch for X and Telegram, an orchestrator's does not", async () => {
+    const restoreHome = moveTestHome(path.join(root, 'home'));
+    try {
+      const envOf = async (role: 'worker' | 'orchestrator') => {
+        agents.clear();
+        const agent = {
+          id: `kilo-${role}`, name: role, status: 'idle', provider: 'kilo', role, projectPath: project,
+          skills: [], output: [], lastActivity: new Date().toISOString(),
+        } as AgentStatus;
+        await initAgentPty(agent, null, vi.fn(), vi.fn());
+        return ptys[ptys.length - 1].env;
+      };
+      const worker = await envOf('worker');
+      expect(JSON.parse(worker.KILO_CONFIG_CONTENT ?? '{}').mcp).toEqual({ 'claude-mgr-telegram': { enabled: false }, 'dorothy-x': { enabled: false } });
+      const lead = await envOf('orchestrator');
+      expect(lead.KILO_CONFIG_CONTENT).toBeUndefined();
+    } finally {
+      restoreHome();
+    }
   });
 });
