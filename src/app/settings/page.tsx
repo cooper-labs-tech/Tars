@@ -21,6 +21,7 @@ import {
   GoogleWorkspaceSection,
   AIProvidersSection,
   ClaudeAccountsSection,
+  InferenceEndpointsSection,
   PermissionsSection,
   SkillsSection,
   McpSection,
@@ -62,6 +63,8 @@ const HEADER_ACTIONS: Record<SettingsSection, { label: string; kind: HeaderActio
   'ai-providers': { label: 'Detect', kind: 'unwired' },
   // Every control acts at once, as drawn: add an account sits in its list.
   'claude-accounts': { label: '', kind: 'none' },
+  // Every control acts at once, as drawn: add an endpoint sits in its list.
+  'inference-endpoints': { label: '', kind: 'none' },
   cli: { label: 'Detect', kind: 'unwired' },
   hermes: { label: 'Test connection', kind: 'unwired' },
   // Opens the name row at the top of the list, as drawn: Gateways · states, adding a gateway.
@@ -192,6 +195,8 @@ function SettingsPageInner() {
         );
       case 'claude-accounts':
         return <ClaudeAccountsSection />;
+      case 'inference-endpoints':
+        return <InferenceEndpointsSection />;
       case 'permissions':
         return <PermissionsSection settings={settings} />;
       case 'skills':

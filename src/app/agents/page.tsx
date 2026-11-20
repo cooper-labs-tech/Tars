@@ -131,6 +131,8 @@ export default function AgentsPage() {
       savedPrompt: agent.savedPrompt,
       role: agent.role,
       cliPath: agent.cliPath,
+      endpointId: agent.endpointId,
+      traces: agent.traces,
     };
   // Snapshot on open: depending on `agents` would rebuild this object on every
   // status tick and reset the edit form mid-typing.
@@ -154,10 +156,11 @@ export default function AgentsPage() {
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max',
     role?: 'orchestrator' | 'worker',
     cliPath?: string,
+    endpoint?: { endpointId: string | null; traces: boolean },
   ) => {
     try {
       const resolvedModel = (provider !== 'local' && model && model !== 'default') ? model : undefined;
-      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort, provider, model: resolvedModel, localModel, obsidianVaultPaths, role, cliPath });
+      const agent = await createAgent({ projectPath, skills, worktree, character, name, secondaryProjectPath, permissionMode, effort, provider, model: resolvedModel, localModel, obsidianVaultPaths, role, cliPath, endpointId: endpoint?.endpointId ?? undefined, traces: endpoint?.traces });
       if (prompt) {
         const options = { model: resolvedModel, provider, localModel };
         await startAgent(agent.id, prompt, options);
@@ -187,6 +190,8 @@ export default function AgentsPage() {
     worktree?: { enabled: boolean; branchName: string };
     role?: 'orchestrator' | 'worker';
     cliPath?: string | null;
+    endpointId?: string | null;
+    traces?: boolean;
   }) => {
     try {
       // A refusal keeps the dialog open with the changes made, and says why.

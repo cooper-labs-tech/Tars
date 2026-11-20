@@ -35,6 +35,9 @@ export interface EditAgentData {
   /** The Orchestrator toggle. */
   role?: 'orchestrator' | 'worker';
   cliPath?: string;
+  /** The inference endpoint it runs on, when it runs on one, and whether it records traces. */
+  endpointId?: string;
+  traces?: boolean;
 }
 
 /** Which half of the "One agent | A team" switch the overlay opens on. */
@@ -59,6 +62,7 @@ export interface NewChatModalProps {
     effort?: AgentEffort,
     role?: 'orchestrator' | 'worker',
     cliPath?: string,
+    endpoint?: { endpointId: string | null; traces: boolean },
   ) => void | Promise<boolean | void | { error: string }>;
   onUpdate?: (id: string, updates: {
     projectPath?: string;
@@ -76,6 +80,8 @@ export interface NewChatModalProps {
     worktree?: WorktreeConfig;
     role?: 'orchestrator' | 'worker';
     cliPath?: string | null;
+    endpointId?: string | null;
+    traces?: boolean;
   }) => void | Promise<boolean | void | { error: string }>;
   /** Called after a team is deployed, with the ids of the agents created. */
   onTeamDeployed?: (agentIds: string[]) => void;

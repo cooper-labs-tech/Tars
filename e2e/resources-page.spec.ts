@@ -12,8 +12,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * and what each view says before its backend is there.
  *
  * How it can fail, written before the page:
- * 1. no Resources entry, or one out of place: it sits between Usage and Brain, in the classic sidebar and in the new
- *    interface's More;
+ * 1. no Resources entry, or one out of place: it sits between Traces and Brain (between Usage and Brain until 2.0.7
+ *    put Traces after Usage, #599), in the classic sidebar and in the new interface's More;
  * 2. the page does not open, or opens on a view other than Heavy runs;
  * 3. the views do not switch, or ?view= does not open the one it names;
  * 4. the free disk card says a figure the machine did not give: it must be system.disk's free space;
@@ -32,7 +32,7 @@ const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
 const VIEWS = ['Heavy runs', 'Agents and projects', 'Disk'] as const;
 
 for (const newInterface of [false, true]) {
-  test(`the resources page: its entry between usage and brain, its three views, the free disk, what it cannot read yet${newInterface ? ' (new interface)' : ''}`, async () => {
+  test(`the resources page: its entry between traces and brain, its three views, the free disk, what it cannot read yet${newInterface ? ' (new interface)' : ''}`, async () => {
     test.setTimeout(300_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-resources-page-'));
     const dir = path.join(home, '.tars');
@@ -54,7 +54,7 @@ for (const newInterface of [false, true]) {
       await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
       await page.setViewportSize({ width: 1440, height: 900 });
 
-      // 1. The entry, between Usage and Brain; 2. the page opens on Heavy runs.
+      // 1. The entry, between Traces and Brain; 2. the page opens on Heavy runs.
       const open = async (p: Page): Promise<Locator> => {
         if (!newInterface) {
           await p.goto(`${DEV_URL}/usage`, { waitUntil: 'domcontentloaded' });
@@ -66,7 +66,7 @@ for (const newInterface of [false, true]) {
           seen.entries = labels;
           const at = labels.indexOf('Resources');
           expect(at).toBeGreaterThan(0);
-          expect(labels[at - 1]).toBe('Usage');
+          expect(labels[at - 1]).toBe('Traces');
           expect(labels[at + 1]).toBe('Brain');
           await nav.getByRole('link', { name: /^Resources/ }).click();
           await expect(p).toHaveURL(/\/resources/);
@@ -82,7 +82,7 @@ for (const newInterface of [false, true]) {
         seen.entries = labels;
         const at = labels.indexOf('Resources');
         expect(at).toBeGreaterThan(0);
-        expect(labels[at - 1]).toBe('Usage');
+        expect(labels[at - 1]).toBe('Traces');
         expect(labels[at + 1]).toBe('Brain');
         await more.getByRole('menuitem', { name: 'Resources' }).click();
         return p.getByRole('dialog', { name: 'Resources' });

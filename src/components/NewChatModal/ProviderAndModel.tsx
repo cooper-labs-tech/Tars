@@ -72,12 +72,15 @@ export function ProviderAndModel({
   model,
   onModelChange,
   installedProviders,
+  hideModel = false,
 }: {
   provider: AgentProvider;
   onProviderChange: (provider: AgentProvider) => void;
   model: string;
   onModelChange: (model: string) => void;
   installedProviders?: Record<string, boolean>;
+  /** The model comes from the agent's inference endpoint instead: EndpointFields draws its picker. */
+  hideModel?: boolean;
 }) {
   const [dynamicModels, setDynamicModels] = useState<ProviderModel[] | null>(null);
 
@@ -189,7 +192,7 @@ export function ProviderAndModel({
         </div>
       )}
 
-      <Dropdown
+      {!hideModel && <Dropdown
         mono
         ariaLabel="Model"
         searchable={resolvedModels.length > 12}
@@ -197,7 +200,7 @@ export function ProviderAndModel({
         value={model}
         options={resolvedModels.map(modelOption)}
         onChange={onModelChange}
-      />
+      />}
     </div>
   );
 }

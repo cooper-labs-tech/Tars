@@ -6,6 +6,9 @@ import type { AgentEffort, AgentPermissionMode } from '@/types/agent';
 import type { AgentProvider } from '@/types/electron';
 import { AgentMark, Button, Dropdown, Input, PanelCaption, Textarea } from '@/components/ui';
 import { ProviderAndModel } from './ProviderAndModel';
+import { EndpointFields } from './EndpointFields';
+import type { EndpointChoice } from './EndpointFields';
+import type { EndpointView, HarnessSupport } from '@/types/electron';
 import { OptionsRow } from './OptionsRow';
 import { AgentOptionsBody } from './AgentOptionsBody';
 import { agentOptionsSummary } from './logic';
@@ -56,6 +59,11 @@ export function AgentPanel(props: {
   editing?: boolean;
   cliPath: string;
   onCliPathChange: (p: string) => void;
+  endpointChoice: EndpointChoice;
+  onEndpointChoiceChange: (c: EndpointChoice) => void;
+  onEndpointBlocked: (why: string | null) => void;
+  endpoints: EndpointView[] | null;
+  harnesses: HarnessSupport[];
 }) {
   const orderedProjects = useMemo(() => {
     const rank = (p: Project) =>
@@ -143,6 +151,19 @@ export function AgentPanel(props: {
         model={props.model}
         onModelChange={props.onModelChange}
         installedProviders={props.installedProviders}
+        hideModel={!!props.endpointChoice.endpointId}
+      />
+
+      <EndpointFields
+        provider={props.provider}
+        model={props.model}
+        onModelChange={props.onModelChange}
+        projectPath={props.projectPath}
+        choice={props.endpointChoice}
+        onChoiceChange={props.onEndpointChoiceChange}
+        onBlocked={props.onEndpointBlocked}
+        endpoints={props.endpoints}
+        harnesses={props.harnesses}
       />
 
       {/* THE TASK - the hero. Everything above it exists to be set once and

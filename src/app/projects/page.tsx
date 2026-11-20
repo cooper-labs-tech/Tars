@@ -10,6 +10,7 @@ import { useElectronAgents, useElectronFS, useElectronSkills, isElectron } from 
 import type { ClaudeProject } from '@/lib/claude-code';
 import type { AgentStatus, AgentCharacter } from '@/types/electron';
 import NewChatModal from '@/components/NewChatModal';
+import { ProjectTraces } from '@/components/Traces/ProjectTraces';
 import { BrandSpinner, Button, DialogShell, ErrorState, LoadingState, MetaChip, PageHeader, Panel, PanelCaption, StatusSquare } from '@/components/ui';
 import { STATUS_COLORS, statusTone, statusWord } from '@/app/agents/constants';
 import { wakingLine } from '@/lib/asleep-line';
@@ -315,6 +316,7 @@ export default function ProjectsPage() {
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max',
     role?: 'orchestrator' | 'worker',
     cliPath?: string,
+    endpoint?: { endpointId: string | null; traces: boolean },
   ) => {
     try {
       const resolvedModel = (provider !== 'local' && model && model !== 'default') ? model : undefined;
@@ -333,6 +335,8 @@ export default function ProjectsPage() {
         obsidianVaultPaths,
         role,
         cliPath,
+        endpointId: endpoint?.endpointId ?? undefined,
+        traces: endpoint?.traces,
       });
 
       if (prompt) {
@@ -653,6 +657,9 @@ export default function ProjectsPage() {
                     <p className="text-[11px] text-muted-foreground mt-1">Last active</p>
                   </Panel>
                 </div>
+
+                {/* Whether its sessions may be recorded as traces */}
+                {hasElectron && <ProjectTraces projectPath={selectedProject.path} agents={projectAgents} />}
 
                 {/* Project Agents */}
                 {hasElectron && projectAgents.length > 0 && (
