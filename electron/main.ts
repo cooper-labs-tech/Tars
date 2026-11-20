@@ -189,7 +189,7 @@ import {
   ensureAgentInstructions,
   migrateFromClaudeManager,
 } from './utils';
-import { endVersionProbes } from './core/version-probe';
+import { endCliProbes } from './core/cli-probe';
 import { endAuthCommands } from './services/claude-accounts/auth';
 import { TOOL_TOPIC } from './services/agent-guide';
 import { getAllProviders } from './providers';
@@ -1097,9 +1097,12 @@ app.on('before-quit', (event) => {
       ['stopTmpRetention', () => stopTmpRetention()],
       // A claude asked for an account's usage (get_usage) just before the quit.
       ['endUsageProbes', endUsageProbes],
-      // A CLI's --version asked for by Settings just before the quit: amp's
-      // kept writing into the home after Tars was gone (gate of #298).
-      ['endVersionProbes', endVersionProbes],
+      // Every one-shot CLI probe still running (core/cli-probe.ts) and what it
+      // started: a CLI's --version asked for by Settings (amp's kept writing
+      // into the home after Tars was gone, gate of #298), codex's --help and
+      // login status at a launch, the login shells, gws, tailscale and
+      // `claude mcp` calls (four orphans of PID 1 after a quit, 20/11).
+      ['endCliProbes', endCliProbes],
       // A `claude auth status` the accounts list started just before the
       // quit: it wrote .claude.json into the home after Tars was gone.
       ['endAuthCommands', endAuthCommands],

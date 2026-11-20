@@ -21,8 +21,9 @@ import { CMD_SHIM_NODE, GCLOUD_CMD, SH_SHIM, pinPlatform } from '../providers/wi
  * 5. win32: gws.cmd is registered as the MCP server's command, which the CLIs
  *    cannot start; it must be node.exe with the shim's script.
  * 6. darwin/linux: the folders probed, the `which` asked and the PATH handed
- *    to gws differ from before, or `auth status` is not the line /bin/sh has
- *    always run.
+ *    to gws differ from before. (`auth status` was the line /bin/sh had always
+ *    run; since 20/11 it is gws's argv on every system, a CLI probe ended at its
+ *    time and at the quit: core/cli-probe.ts, the Audit's P3 on probe orphans.)
  * Found with 5 (ETHOS 8, the sibling in the same file), written before its fix:
  * 7. win32: the MCP status asks the providers for the .cmd, which setup no
  *    longer writes: "not configured" after every setup.
@@ -105,6 +106,23 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
+// `gws auth status` as a CLI probe (core/cli-probe.ts): with an answer set, recorded and answered here; else the real
+// probe, which the Windows tests run on a real npm shim.
+const probed: Array<{ binary: string; args: string[]; PATH?: string }> = [];
+let probeAnswer: ((binary: string, args: string[]) => string | undefined) | null = null;
+vi.mock('../../../electron/core/cli-probe', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../electron/core/cli-probe')>();
+  return {
+    ...actual,
+    probeCli: (binary: string, args: string[], opts: { env?: Record<string, string>; timeoutMs: number }) => {
+      if (!probeAnswer) return actual.probeCli(binary, args, opts as never);
+      probed.push({ binary, args, ...(opts?.env ? { PATH: opts.env.PATH } : {}) });
+      const out = probeAnswer(binary, args);
+      return out === undefined ? Promise.reject(new Error(`${binary}: no answer in this test`)) : Promise.resolve({ stdout: out, stderr: '' });
+    },
+  };
+});
+
 async function register() {
   const { registerGwsHandlers } = await import('../../../electron/handlers/gws-handlers');
   registerGwsHandlers({ getAppSettings: () => ({}) as never, setAppSettings: () => {}, saveAppSettings: () => {} });
@@ -125,6 +143,8 @@ beforeEach(() => {
   handlers.clear();
   shellLines.length = 0;
   spawned.length = 0;
+  probed.length = 0;
+  probeAnswer = null;
   registered.length = 0;
   askedRegistered.length = 0;
   capture = null;
@@ -247,19 +267,21 @@ describe.each(['darwin', 'linux'] as const)('%s: as before', (platform) => {
     expect(spawned).toEqual([]);
   });
 
-  it('auth status: the line /bin/sh has always run, the PATH as before', async () => {
+  it('auth status: gws with its argv, never a line for a shell, the PATH as before', async () => {
     unpin = pinPlatform(platform);
+    // A path a shell line would have had to quote: a space and parentheses.
     const nvmBin = path.join(tmpDir, '.nvm/versions/node', 'v 22 (x)', 'bin');
     fs.mkdirSync(nvmBin, { recursive: true });
     fs.writeFileSync(path.join(nvmBin, 'gws'), '#!/bin/sh\n');
     fakeExisting = new Set([path.join('/usr/local/bin', 'gcloud')]);
-    captureLine = (cmd) => (cmd.endsWith(' auth status --json') ? JSON.stringify(AUTH) : undefined);
+    probeAnswer = (_binary, args) => (args.join(' ') === 'auth status --json' ? JSON.stringify(AUTH) : undefined);
     await register();
 
     const status = await handlers.get('gws:authStatus')!({}) as { authenticated: boolean };
 
     const gwsPath = path.join(nvmBin, 'gws');
-    expect(shellLines).toEqual([{ cmd: `"${gwsPath}" auth status --json`, PATH: `${path.dirname(path.join('/usr/local/bin', 'gcloud'))}:/full/path` }]);
+    expect(probed).toEqual([{ binary: gwsPath, args: ['auth', 'status', '--json'], PATH: `${path.dirname(path.join('/usr/local/bin', 'gcloud'))}:/full/path` }]);
+    expect(shellLines).toEqual([]);
     expect(spawned).toEqual([]);
     expect(status.authenticated).toBe(true);
   });

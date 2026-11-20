@@ -74,6 +74,22 @@ vi.mock('child_process', async (importOriginal) => {
   };
 });
 
+// The orchestrator setup's `claude mcp ...` are CLI probes since 20/11 (core/cli-probe.ts, the Audit's P3 on probe
+// orphans): a spawn of their own, which the execFile above no longer sees. Recorded and refused here the same way,
+// so claude never runs; any other probe is the real one.
+vi.mock('../../electron/core/cli-probe', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../electron/core/cli-probe')>();
+  return {
+    ...actual,
+    probeCli: (binary: string, args: string[], opts: unknown) => {
+      if (binary !== 'claude') return actual.probeCli(binary, args, opts as never);
+      claudeRuns.push(args);
+      claudeOptions.push(opts);
+      return Promise.reject(new Error('claude: command not found'));
+    },
+  };
+});
+
 type Handler = (event: unknown, ...args: unknown[]) => Promise<unknown>;
 const handlers = new Map<string, Handler>();
 
@@ -905,8 +921,9 @@ describe('~/.claude/mcp.json, from the orchestrator setup when `claude mcp add` 
     const launcher = 'node';
     expect(claudeRuns).toContainEqual(['mcp', 'add', '-s', 'user', 'claude-mgr-orchestrator', launcher, bundle]);
     // Bounded for good: the default SIGTERM leaves a child that ignores it
-    // running, and the setup waiting on it (the gate of #128).
-    expect(claudeOptions.at(-1)).toMatchObject({ timeout: 15_000, killSignal: 'SIGKILL' });
+    // running, and the setup waiting on it (the gate of #128). A CLI probe
+    // ends its whole group with SIGKILL at its time (cli-probe.test.ts, 1, 2).
+    expect(claudeOptions.at(-1)).toMatchObject({ timeoutMs: 15_000 });
     expect(readAsJson(mcpJson())).toEqual({
       mcpServers: { ...mcpServersNow.mcpServers, 'claude-mgr-orchestrator': { command: launcher, args: [bundle] } },
     });
