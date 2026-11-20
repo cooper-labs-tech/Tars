@@ -290,6 +290,29 @@ c.on('close', (code) => process.exit(code ?? 1));`;
     }
   });
 
+  it('registers the session again from a new Cline process on it, a resume (11)', async () => {
+    const tars = await standIn('instance-5');
+    const env = { CLAUDE_MGR_API_URL: tars.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-5', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir };
+    try {
+      typed('the first');
+      expect(await runHook('TaskStart', JSON.stringify(payload()), env)).toEqual({ code: 0, out: '{}\n' });
+      // Cline started again on the same session (--id): its hooks are another process's children.
+      const intermediate = `const { spawn } = require('node:child_process');
+const c = spawn(process.execPath, ['--input-type=module', '-e', ${JSON.stringify(`import(${JSON.stringify(pathToFileURL(HOOK).href)}).then((m) => m.run('TaskResume'))`)}], { stdio: ['pipe', 'inherit', 'inherit'] });
+c.stdin.end(process.argv[1]);
+c.on('close', (code) => process.exit(code ?? 1));`;
+      typed('the first', 'the second');
+      const code = await new Promise<number | null>((resolve) => {
+        const child = spawn(process.execPath, ['-e', intermediate, JSON.stringify(payload())], { stdio: ['ignore', 'pipe', 'inherit'], env: { PATH: process.env.PATH ?? '', ...env } });
+        child.on('close', resolve);
+      });
+      expect(code).toBe(0);
+      expect(tars.posts.map((p) => p.body.source ?? p.body.event)).toEqual(['startup', 'UserPromptSubmit', 'resume', 'UserPromptSubmit']);
+    } finally {
+      tars.close();
+    }
+  });
+
   it("holds a turn's end until its start has reached Tars, the order Cline fired them in (12)", async () => {
     const tars = await standIn('instance-4');
     const env = { CLAUDE_MGR_API_URL: tars.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-4', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir };
