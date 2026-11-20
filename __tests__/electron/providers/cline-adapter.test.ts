@@ -127,7 +127,7 @@ describe("the agent's own folder, never the user's (2, 3, 4, 6)", () => {
     await cline.registerMcpServer('claude-mgr-orchestrator', '/opt/node', ['/res/mcp-orchestrator/dist/bundle.js']);
     await cline.registerMcpServer('dorothy-x', '/opt/node', ['/res/mcp-x/dist/bundle.js']);
     const dir = clineAgentDir(AGENT);
-    const line = cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: '/opt/cline', prompt: 'do the task', orchestratorMode: false });
+    const line = cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: '/opt/cline', prompt: 'do the task', orchestratorMode: false, permissionMode: 'bypass' });
     expect(line).toBe(`'/opt/cline' -i --config '${dir}' --data-dir '${path.join(dir, 'data')}' --auto-approve 'true'`);
     expect(dir.startsWith(path.join(os.homedir(), '.tars-private'))).toBe(true);
     expect(readJson(path.join(dir, 'data', 'settings', 'providers.json'))).toEqual(USER_PROVIDERS);
