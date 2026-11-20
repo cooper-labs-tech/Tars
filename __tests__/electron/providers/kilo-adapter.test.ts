@@ -1,0 +1,200 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import Database from 'better-sqlite3';
+
+/**
+ * Kilo CLI as an agent of its own: the provider `kilo`, the binary `kilo` (Kilo-Org/kilocode), a build of opencode.
+ * Measured on 7.8.27 (20/11/2026) in throwaway homes:
+ * - it takes opencode's flags (`--model`, `--auto`, `--session`, `--fork`, `--prompt`, its --help);
+ * - it draws opencode's bottom bar (`tab agents  ctrl+p commands`) 13 to 47 s after it starts on a loaded machine, and
+ *   took a key written the moment that bar appeared 64 to 106 ms later, three fresh starts out of three, whether its
+ *   terminal answered its queries (kitty keyboard, DECRQM, XTGETTCAP, kitty graphics, colours) or not;
+ * - it keeps its sessions in opencode's schema, in its own database, `$XDG_DATA_HOME/kilo/kilo.db` (`kilo debug paths`);
+ * - it reads its own config, never opencode's.
+ *
+ * How it fails, written before the code:
+ * 1. Run as an opencode agent, its endpoint's provider handed in OPENCODE_CONFIG_CONTENT, which Kilo ignores (only
+ *    KILO_CONFIG_CONTENT put the endpoint's model on its bar): it falls back to its own Kilo Gateway, and the task
+ *    leaves for a service the user did not choose.
+ * 2. Tars's MCP servers written into opencode's folder, which Kilo never reads (`kilo mcp list` saw none there, and saw
+ *    one in kilo.json, kilo.jsonc, opencode.json or config.json of `$XDG_CONFIG_HOME/kilo`): the agent has no Tars tools.
+ *    Or a Kilo agent's servers written into the user's opencode files, or opencode's into Kilo's.
+ * 3. Its turns looked for in opencode.db: delegate_task never sees one end.
+ * 4. Its session resumed against opencode.db: it begins anew after every restart.
+ * 5. A task typed before its bar is drawn, and lost.
+ * 6. Its binary read from opencode's path setting: a Kilo agent starts opencode.
+ * 7. Its launch noted in opencode's reader, or opencode's in Kilo's: a turn read from the wrong database, or none.
+ * 8. A claim not measured: how a note typed mid-turn reaches Kilo has not been measured, so nothing is said of it.
+ */
+
+// The fleet's endpoint choice, as traces-runtime resolves it: agent 'on-ep' runs on an endpoint, no other.
+vi.mock('../../../electron/services/traces-runtime', async () => {
+  const { endpointLaunchFor: launchFor } = await vi.importActual<typeof import('../../../electron/services/endpoint-harness')>('../../../electron/services/endpoint-harness');
+  return {
+    endpointLaunchForAgent: (agentId: string | undefined, harness: string) =>
+      agentId === 'on-ep' ? launchFor(harness, { proxyBase: 'http://127.0.0.1:31417/v1', model: 'org/Model-1' }) : null,
+  };
+});
+
+import { KiloProvider } from '../../../electron/providers/kilo-provider';
+import { OpenCodeProvider } from '../../../electron/providers/opencode-provider';
+import { getProvider } from '../../../electron/providers';
+import { endpointLaunchFor, ENDPOINT_TOKEN_VAR } from '../../../electron/services/endpoint-harness';
+import { ENDPOINT_HARNESSES } from '../../../electron/services/inference-endpoints';
+import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
+import { opencodeDbPath, opencodeUuidOf } from '../../../electron/providers/opencode-cli';
+import { opencodeWatchFor, type HookPost } from '../../../electron/services/opencode-sessions';
+import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
+
+const BASE = 'http://127.0.0.1:31417/v1';
+const SES = 'ses_e0a2b2f04ffeyXxkOfD77KQMP5';
+const DDL = `
+CREATE TABLE session (id text PRIMARY KEY, project_id text NOT NULL, slug text NOT NULL, directory text NOT NULL,
+  title text NOT NULL, version text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL);
+CREATE TABLE message (id text PRIMARY KEY, session_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+CREATE TABLE part (id text PRIMARY KEY, message_id text NOT NULL, session_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, data text NOT NULL);
+`;
+
+let root: string;
+let project: string;
+
+beforeEach(() => {
+  root = fs.realpathSync(fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-kilo-adapter-')));
+  project = path.join(root, 'project');
+  fs.mkdirSync(project, { recursive: true });
+  vi.stubEnv('XDG_DATA_HOME', path.join(root, 'data'));
+  vi.stubEnv('XDG_CONFIG_HOME', path.join(root, 'config'));
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+/** A database in opencode's schema, `name`'s own (opencode.db or kilo.db), with a session of `project` and one turn. */
+function turnIn(name: string, id: string, agentId: string, at: number): void {
+  const file = opencodeDbPath(process.env, os.homedir(), name);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const db = new Database(file);
+  db.exec(DDL);
+  db.prepare("INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES (?, 'p', 's', ?, 't', '7.8.27', ?, ?)").run(id, project, at, at);
+  const msg = (mid: string, t: number, data: Record<string, unknown>, text: string) => {
+    db.prepare('INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?)').run(mid, id, t, t, JSON.stringify(data));
+    db.prepare('INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, ?, ?, ?)').run(`prt_${mid}`, mid, id, t, t, JSON.stringify({ type: 'text', text }));
+  };
+  msg('msg_000001', at + 1, { role: 'user', time: { created: at + 1 } }, `[Tars: you are agent "Worker" (id ${agentId}), worker of project /x.]\nRun the probe.`);
+  msg('msg_000002', at + 2, {
+    role: 'assistant', modelID: 'stand-in-coder', providerID: 'tars-endpoint', finish: 'stop', time: { created: at + 2, completed: at + 7 },
+    tokens: { input: 20, output: 12, reasoning: 0, cache: { read: 100, write: 0 } }, cost: 0,
+  }, 'PROBE-OK');
+  db.close();
+}
+
+describe('Kilo, an agent of its own (6, 5, 8)', () => {
+  it('is the provider kilo, on its own binary and path setting, with opencode\'s flags', () => {
+    const kilo = getProvider('kilo');
+    expect(kilo).toBeInstanceOf(KiloProvider);
+    expect(kilo.binaryName).toBe('kilo');
+    expect(kilo.resolveBinaryPath({ cliPaths: { kilo: '/opt/kilo', opencode: '/opt/opencode' } } as never)).toBe('/opt/kilo');
+    const line = kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: 'go', permissionMode: 'bypass', resumeSessionId: SES, forkSession: true });
+    expect(line.startsWith("'/opt/kilo'")).toBe(true);
+    expect(line).toContain(' --auto');
+    expect(line).toContain(`--session '${SES}' --fork`);
+    expect(line).toContain("--prompt 'go'");
+    expect(hasEndOfTurn({ provider: 'kilo' })).toBe(true);
+    expect((kilo as KiloProvider).noteDuringTurn).toBeUndefined();
+  });
+
+  it('is up on its bottom bar, never on its logo', () => {
+    const kilo = new KiloProvider();
+    expect(kilo.upOnScreen([
+      '                       ┃  Code  · Auto Free Kilo Gateway',
+      '                       ╹▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀',
+      '                                                                       tab agents  ctrl+p commands',
+      "                            ● Tip Commit your project's AGENTS.md file to Git for team sharing",
+      '  ~/project                                                                                                     7.8.27',
+    ])).toBe(true);
+    expect(kilo.upOnScreen(['                                   ██  ██ ██████ ████ ██▀▀', '                                   ▀▀  ▀▀ ▀▀▀▀▀▀ ▀▀▀▀ ▀▀'])).toBe(false);
+  });
+});
+
+describe('on an inference endpoint (1)', () => {
+  it("gets the endpoint's provider in KILO_CONFIG_CONTENT, never in opencode's variable", () => {
+    expect(ENDPOINT_HARNESSES).toContain('kilo');
+    const launch = endpointLaunchFor('kilo', { proxyBase: BASE, model: 'org/Model-1' })!;
+    expect(launch.env.OPENCODE_CONFIG_CONTENT).toBeUndefined();
+    const config = JSON.parse(launch.env.KILO_CONFIG_CONTENT);
+    expect(config.provider['tars-endpoint'].options.baseURL).toBe(BASE);
+    expect(config.provider['tars-endpoint'].models['org/Model-1']).toBeDefined();
+    expect(launch.tokenVars).toEqual([ENDPOINT_TOKEN_VAR]);
+    expect(launch.modelArg).toBe('tars-endpoint/org/Model-1');
+
+    const kilo = new KiloProvider();
+    const env = kilo.getPtyEnvVars('on-ep', project, []);
+    expect(env.KILO_CONFIG_CONTENT).toBeDefined();
+    expect(env.OPENCODE_CONFIG_CONTENT).toBeUndefined();
+    expect(env.CLAUDE_PROVIDER).toBe('kilo');
+    expect(kilo.getPtyEnvVars('not-on-ep', project, []).KILO_CONFIG_CONTENT).toBeUndefined();
+    expect(kilo.buildInteractiveCommand({ agentId: 'on-ep', binaryPath: 'kilo', prompt: '', model: 'x' })).toContain("--model 'tars-endpoint/org/Model-1'");
+    // opencode keeps its own.
+    expect(new OpenCodeProvider().getPtyEnvVars('on-ep', project, []).KILO_CONFIG_CONTENT).toBeUndefined();
+  });
+});
+
+describe("Tars's MCP servers (2)", () => {
+  it("go into Kilo's own kilo.json, never opencode's files, and opencode's never into Kilo's", async () => {
+    const config = path.join(root, 'config');
+    const kilo = new KiloProvider();
+    await kilo.registerMcpServer('tars-probe', '/bin/node', ['/srv/probe/bundle.js']);
+    const written = JSON.parse(fs.readFileSync(path.join(config, 'kilo', 'kilo.json'), 'utf8'));
+    expect(written.mcp['tars-probe']).toEqual({ type: 'local', command: ['/bin/node', '/srv/probe/bundle.js'], enabled: true });
+    expect(fs.existsSync(path.join(config, 'opencode'))).toBe(false);
+    expect(kilo.isMcpServerRegistered('tars-probe', '/srv/probe/bundle.js')).toBe(true);
+    expect(new OpenCodeProvider().isMcpServerRegistered('tars-probe', '/srv/probe/bundle.js')).toBe(false);
+
+    await new OpenCodeProvider().registerMcpServer('tars-other', '/bin/node', ['/srv/other.js']);
+    expect(JSON.parse(fs.readFileSync(path.join(config, 'kilo', 'kilo.json'), 'utf8')).mcp['tars-other']).toBeUndefined();
+
+    await kilo.removeMcpServer('tars-probe');
+    expect(JSON.parse(fs.readFileSync(path.join(config, 'kilo', 'kilo.json'), 'utf8')).mcp['tars-probe']).toBeUndefined();
+    expect(JSON.parse(fs.readFileSync(path.join(config, 'opencode', 'opencode.json'), 'utf8')).mcp['tars-other']).toBeDefined();
+  });
+});
+
+describe('its sessions, in its own database (3, 4, 7)', () => {
+  it("are resumed from kilo.db, never from opencode's", () => {
+    const uuid = opencodeUuidOf(SES)!;
+    const agent = { id: 'k1', provider: 'kilo', resumableSessionId: uuid, projectPath: project };
+    turnIn('opencode', SES, 'k1', 1);
+    expect(resolveResumeSessionId(agent, root)).toBeNull();
+    turnIn('kilo', SES, 'k1', 1);
+    expect(resolveResumeSessionId(agent, root)).toBe(SES);
+  });
+
+  it("are read by Kilo's own watch from kilo.db, and a Kilo launch is not opencode's", async () => {
+    const kiloWatch = opencodeWatchFor('kilo')!;
+    const opencodeWatch = opencodeWatchFor('opencode')!;
+    expect(kiloWatch).toBeDefined();
+    expect(kiloWatch).not.toBe(opencodeWatch);
+    expect(opencodeWatchFor('claude')).toBeUndefined();
+
+    const posts: Array<{ agentId: string; post: HookPost }> = [];
+    kiloWatch.setDeps({ now: () => 1_000, post: async (agentId, post) => { posts.push({ agentId, post }); } });
+    const AGENT = 'a1b2c3d4-0000-4000-8000-00000000000a';
+    kiloWatch.noteLaunch(AGENT, project);
+    expect(opencodeWatch.watching).toBe(false);
+
+    // The same turn in opencode's database only: nothing of Kilo's.
+    turnIn('opencode', SES, AGENT, 2_000);
+    await kiloWatch.tick();
+    expect(posts).toEqual([]);
+
+    turnIn('kilo', SES, AGENT, 2_000);
+    await kiloWatch.tick();
+    const uuid = opencodeUuidOf(SES);
+    expect(posts.length).toBeGreaterThan(0);
+    expect(posts.every((p) => p.agentId === AGENT && p.post.body.session_id === uuid)).toBe(true);
+    expect(posts.some((p) => p.post.path === '/api/hooks/output' && JSON.stringify(p.post.body).includes('PROBE-OK'))).toBe(true);
+  });
+});
