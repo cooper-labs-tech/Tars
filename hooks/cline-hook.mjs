@@ -3,14 +3,18 @@
 // line that imports this file and calls run(<event>) (providers/cline-provider.ts writes them). This tells Tars the
 // turn the way Claude Code's hooks do, with the same routes, token and proof as tars-hook.mjs.
 //
-// Measured on 3.0.74 (__tests__/hooks/cline-hook.test.ts says how it fails): every task of a session fires TaskStart,
-// the first of a session resumed with --id TaskResume, TaskComplete carries turn.outputText and turn.status, an Esc
-// TaskCancel. A payload names its session (sessionContext.rootSessionId) and never its prompt: the first prompt is the
-// session record's `prompt` when the first TaskStart runs, every later one the last user message of its messages
-// file, each wrapped as <user_input mode="...">. The hook is a child of the Cline process whose pid the session's
-// sessions.db row names, itself a child of Cline's node launcher: the process Tars started, the terminal's own on an
-// exec launch. So the CLI the hook names to the hook routes, which check it against the agent's terminal, is its
-// grandparent (the conformance on 66214ddc4: named as its parent, the session was refused as another CLI's).
+// Measured on 3.0.74 (__tests__/hooks/cline-hook.test.ts says how it fails): every task of a process fires TaskStart,
+// or TaskResume in a process started with --id; TaskComplete carries turn.outputText, an Esc fires TaskCancel. A
+// payload names its session (sessionContext.rootSessionId) and never its prompt. The prompt is the last line of the
+// TUI's input history, which Cline writes on the Enter, before the run begins: the session's messages file is written
+// at the end of each round, so a TaskStart found the earlier task there (the conformance on bd51c1068). Cline runs its
+// hooks detached, each a process of its own that nothing waits for: the hooks of one Cline process keep, in the agent's
+// own data folder, which of them registered the session and how many of its turns opened and ended, so that a
+// session registers once per process and a turn's end never reaches Tars before its start. The hook is a child of the
+// Cline process whose pid the session's sessions.db row names, itself a child of Cline's node launcher: the process
+// Tars started, the terminal's own on an exec launch. So the CLI the hook names to the hook routes, which check it
+// against the agent's terminal, is its grandparent (the conformance on 66214ddc4: named as its parent, the session was
+// refused as another CLI's).
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -29,28 +33,83 @@ export function clineUuidOf(sessionId) {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
-/** A prompt as typed: Cline's `<user_input mode="...">` tag taken off. */
-export function promptOf(text) {
-  const m = /^\s*<user_input(?:\s[^>]*)?>([\s\S]*)<\/user_input>\s*$/.exec(text);
-  return m ? m[1] : text;
+/**
+ * The prompt the run a TaskStart opens was given: the last good line of the TUI's input history, which Cline rewrites
+ * whole on every Enter, the latest last (a repeat moved there), before the run begins. Null when there is none.
+ */
+export function typedPrompt(dataDir) {
+  if (!dataDir) return null;
+  let lines;
+  try {
+    lines = fs.readFileSync(path.join(dataDir, 'cache', 'user_input_history.jsonl'), 'utf8').split('\n');
+  } catch {
+    return null;
+  }
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    try {
+      const prompt = JSON.parse(lines[i])?.prompt;
+      if (typeof prompt === 'string' && prompt.trim()) return prompt;
+    } catch {
+      // Not a line Cline wrote whole: the one before.
+    }
+  }
+  return null;
 }
 
-const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return null; } };
-const textOf = (content) => (Array.isArray(content) ? content : [])
-  .filter((c) => c && c.type === 'text' && typeof c.text === 'string').map((c) => c.text).join('\n');
+/** Where the hooks of an agent's Cline keep their marks: in its own data folder, never the user's. */
+const marksDir = (dataDir) => path.join(dataDir, 'tars-hooks');
 
 /**
- * The prompt of the task a TaskStart opens, and whether it is the session's first: the last user message with text of
- * the session's messages when it has one, else the first prompt of its record.
+ * Whether this hook registers the session for its Cline process (`key`: the session and that process): the first to
+ * create the mark does, every later hook of that process does not. With nowhere to keep the mark, every one does.
  */
-export function currentPrompt(dataDir, sessionId) {
-  const at = path.join(dataDir || '', 'sessions', sessionId);
-  const messages = readJson(path.join(at, `${sessionId}.messages.json`))?.messages;
-  const users = Array.isArray(messages) ? messages.filter((m) => m && m.role === 'user') : [];
-  const last = users.length > 0 ? textOf(users[users.length - 1].content) : '';
-  if (last) return { prompt: promptOf(last), first: false };
-  const recorded = readJson(path.join(at, `${sessionId}.json`))?.prompt;
-  return { prompt: typeof recorded === 'string' ? promptOf(recorded) : null, first: users.length === 0 };
+export function claimRegistration(dataDir, key) {
+  if (!dataDir) return true;
+  try {
+    fs.mkdirSync(marksDir(dataDir), { recursive: true });
+    fs.writeFileSync(path.join(marksDir(dataDir), `${key}.registered`), '', { flag: 'wx' });
+    return true;
+  } catch (err) {
+    return err?.code !== 'EEXIST';
+  }
+}
+
+/** A turn of this Cline process opened, or ended, as Tars was told: one line each, appended. */
+export function markTurn(dataDir, key, mark) {
+  if (!dataDir) return;
+  try {
+    fs.mkdirSync(marksDir(dataDir), { recursive: true });
+    fs.appendFileSync(path.join(marksDir(dataDir), `${key}.turns`), `${mark}\n`);
+  } catch {
+    // An end then waits its bound for nothing, and goes.
+  }
+}
+
+/** Whether a turn of this Cline process opened that has not ended: more openings than ends. */
+function openTurn(dataDir, key) {
+  let marks;
+  try {
+    marks = fs.readFileSync(path.join(marksDir(dataDir), `${key}.turns`), 'utf8').split('\n');
+  } catch {
+    return false;
+  }
+  let open = 0;
+  for (const m of marks) open += m === 'open' ? 1 : m === 'end' ? -1 : 0;
+  return open > 0;
+}
+
+/**
+ * A turn's end waits for its start to have reached Tars: true once it has, false after `maxMs` without it (an
+ * opening that never comes, or a hook that could not mark it), and the end goes then anyway.
+ */
+export async function waitForOpening(dataDir, key, { maxMs = 10_000, stepMs = 50 } = {}) {
+  if (!dataDir) return true;
+  const until = Date.now() + maxMs;
+  for (;;) {
+    if (openTurn(dataDir, key)) return true;
+    if (Date.now() >= until) return false;
+    await new Promise((resolve) => setTimeout(resolve, stepMs));
+  }
 }
 
 /**
@@ -85,7 +144,7 @@ export function postsFor(event, payload, ctx) {
     case 'TaskStart':
       return ctx.first ? [register('startup'), opening] : [opening];
     case 'TaskResume':
-      return [register('resume'), opening];
+      return ctx.first ? [register('resume'), opening] : [opening];
     case 'TaskComplete': {
       const turn = payload.turn && typeof payload.turn === 'object' ? payload.turn : {};
       if (turn.status && turn.status !== 'completed') {
@@ -126,18 +185,26 @@ export async function run(event) {
     try { payload = JSON.parse(await readStdin()); } catch { payload = null; }
     const agentId = env.CLAUDE_AGENT_ID;
     if (payload && agentId) {
-      const sessionId = payload.sessionContext?.rootSessionId;
-      const { prompt, first } = event === 'TaskStart' || event === 'TaskResume' ? currentPrompt(env.CLINE_DATA_DIR, sessionId) : { prompt: null, first: false };
+      const dataDir = env.CLINE_DATA_DIR || undefined;
+      // This hook's Cline process (its parent) and the session: what its marks are kept under.
+      const key = `${String(payload.sessionContext?.rootSessionId)}.${process.ppid}`;
+      const opens = event === 'TaskStart' || event === 'TaskResume';
+      const ends = event === 'TaskComplete' || event === 'TaskCancel' || event === 'TaskError';
       // The CLI Tars started: Cline's launcher, this hook's grandparent (the .cline binary is its parent).
       const cliPid = parentOf(process.ppid);
+      const valid = clineUuidOf(payload.sessionContext?.rootSessionId) !== null;
+      const prompt = opens && valid ? typedPrompt(dataDir) : null;
+      const first = opens && valid ? claimRegistration(dataDir, key) : false;
       const posts = postsFor(event, payload, { agentId, cliPid, prompt, first });
       if (posts.length > 0) {
+        if (ends) await waitForOpening(dataDir, key);
         // Named on every post too (authHeader sends it as X-Tars-Cli-Pid); none when it could not be read.
         if (cliPid) env.CLAUDE_PID = String(cliPid);
         else delete env.CLAUDE_PID;
         // The agent's token only to a port that proved to be this Tars (tars-hook-lib.mjs).
         const token = (await tarsProvesInstance(env)) ? env.CLAUDE_MGR_API_TOKEN : null;
         for (const post of posts) await postWithRetry(`${apiUrl(env)}${post.path}`, token, JSON.stringify(post.body));
+        if (opens || ends) markTurn(dataDir, key, opens ? 'open' : 'end');
       }
     }
   } catch {
