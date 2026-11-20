@@ -1,3 +1,4 @@
+import './home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { writeFileSync as namedWriteFileSync } from 'node:fs';

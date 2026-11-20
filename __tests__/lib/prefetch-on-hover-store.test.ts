@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { forgetClaudeData, readClaudeData } from '../../src/hooks/useClaude';
 import { hoverEnd, hoverStart, HOVER_MS } from '../../src/lib/prefetch-on-hover';

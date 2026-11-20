@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const foreground = vi.hoisted(() => ({ value: '2.1.280' }));

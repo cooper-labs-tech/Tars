@@ -7,6 +7,7 @@
  *    or before another's item; or the route refuses a worker's move among its own items;
  * Q2 the project's orchestrator is held to the worker's rule, and cannot put an item where it wants.
  */
+import '../../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));

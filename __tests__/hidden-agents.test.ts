@@ -1,3 +1,4 @@
+import './setup/home-guard';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 /**

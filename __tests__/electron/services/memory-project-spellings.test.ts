@@ -31,6 +31,7 @@
  *    1.9.3's Brain, or a session filed that way) is not taken as the
  *    project's, or two rows end up under one path.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

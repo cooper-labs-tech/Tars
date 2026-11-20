@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
 import { ProcessTree, parseProcessTable, processTable } from '../../../electron/services/acp/client';

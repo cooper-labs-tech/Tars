@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { twoZones } from '../../../electron/utils/two-zones';
 

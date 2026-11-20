@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { createOwnerWords, relayedBody, OWNER_WORDS_TTL_MS, OWNER_WORDS_MAX } from '../../../electron/services/owner-words';
 import { twoZones } from '../../../electron/utils/two-zones';

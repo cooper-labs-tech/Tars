@@ -1,3 +1,4 @@
+import './home-guard';
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
@@ -20,6 +21,16 @@ import { stripVTControlCharacters } from 'node:util';
  * 2. The suite's own opt-ins, named TARS_ too (TARS_STRESS, TARS_REAL_CLAUDE,
  *    TARS_HERMES_TREE, TARS_HERMES_PYTHON), go with them, and the tests they
  *    enable are skipped without a word.
+ *
+ * Added on 2026-11-20 from #609's re-audit (M1), before the fix:
+ * 3. A CLI home the runner's shell exports (CODEX_HOME, KIMI_CODE_HOME,
+ *    PI_CODING_AGENT_DIR and _SESSION_DIR, the XDG homes, ZDOTDIR, opencode's
+ *    and Kilo's config) reaches the code under test, which reads it before
+ *    HOME: codex-provider.test.ts, under npm test, wrote the runner's codex
+ *    config.toml. Nor do a CLI's config given as text, or git's own
+ *    variables, which a run started from a git hook carries. Each is dropped,
+ *    the list shared with the E2E fixture (e2e/cli-homes.mjs), and a decoy of
+ *    each comes out byte for byte.
  */
 
 const FIXTURES = '__tests__/setup/fixtures/tmpdir-guard';
@@ -42,6 +53,40 @@ describe('the environment a test file starts in', () => {
     });
     const output = stripVTControlCharacters(`${child.stdout}${child.stderr}`);
 
+    expect(output).toMatch(/Test Files {2}1 passed \(1\)/);
+    expect(child.status, output).toBe(0);
+  }, 90_000);
+
+  it('3. holds no CLI home, CLI config or git variable of the runner\'s, and the code under test leaves their decoys as they were', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'child-run-'));
+    const decoys = fs.mkdtempSync(path.join(os.tmpdir(), 'decoy-homes-'));
+    const exported: Record<string, string> = {};
+    for (const name of ['CODEX_HOME', 'KIMI_CODE_HOME', 'PI_CODING_AGENT_DIR', 'PI_CODING_AGENT_SESSION_DIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME',
+      'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ZDOTDIR', 'OPENCODE_CONFIG_DIR', 'KILO_CONFIG_DIR', 'GIT_DIR']) {
+      const dir = path.join(decoys, name.toLowerCase());
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'config.toml'), `# ${name}, a decoy\n[mcp_servers.owners-own]\ncommand = "owners"\n`);
+      exported[name] = dir;
+    }
+    for (const name of ['OPENCODE_CONFIG', 'KILO_CONFIG', 'GIT_INDEX_FILE', 'GIT_CONFIG_GLOBAL']) {
+      exported[name] = path.join(decoys, `${name.toLowerCase()}.file`);
+      fs.writeFileSync(exported[name], `${name}, a decoy\n`);
+    }
+    exported.OPENCODE_CONFIG_CONTENT = '{"decoy":true}';
+    exported.KILO_CONFIG_CONTENT = '{"decoy":true}';
+    const snapshot = () => Object.fromEntries((fs.readdirSync(decoys, { recursive: true }) as string[]).sort()
+      .map(entry => [entry, fs.statSync(path.join(decoys, entry)).isFile() ? fs.readFileSync(path.join(decoys, entry), 'utf8') : 'folder']));
+    const before = snapshot();
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('VITEST')));
+    const child = spawnSync(process.execPath, [VITEST, 'run', '--config', `${FIXTURES}/vitest.config.mts`, '--reporter=default', 'cli-homes'], {
+      cwd: process.cwd(),
+      env: { ...env, TMPDIR: tmp, TMP: tmp, TEMP: tmp, ...exported },
+      encoding: 'utf8',
+      timeout: 60_000,
+    });
+    const output = stripVTControlCharacters(`${child.stdout}${child.stderr}`);
+
+    expect(snapshot(), 'a decoy the code under test wrote').toEqual(before);
     expect(output).toMatch(/Test Files {2}1 passed \(1\)/);
     expect(child.status, output).toBe(0);
   }, 90_000);

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 
 // ── Hoisted mocks (available inside vi.mock factories) ─────────────

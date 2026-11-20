@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { asleepLine, wakingLine } from '../../src/lib/asleep-line';
 import type { AgentStatus } from '../../src/types/electron';

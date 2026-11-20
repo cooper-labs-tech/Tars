@@ -35,6 +35,7 @@
  *    there already as empty read-only folders: nothing can be written into
  *    the one or in place of the other, and both can be removed.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { cleanLine, clockOf, elapsedSince, sendersOf } from '../../src/lib/task-banner';
 

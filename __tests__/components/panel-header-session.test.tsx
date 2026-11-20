@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Maximize2, Minimize2 } from 'lucide-react';
 import { mount, ofType, textOf, elements, type Mount } from './hook-runtime';

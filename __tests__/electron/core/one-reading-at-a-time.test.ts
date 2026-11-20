@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { oneReadingAtATime } from '../../../electron/core/one-reading-at-a-time';
 

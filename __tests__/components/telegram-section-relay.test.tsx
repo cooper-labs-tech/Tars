@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, ofType, textOf, type Mount } from './hook-runtime';
 import { TelegramSection } from '../../src/components/Settings/TelegramSection';

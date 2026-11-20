@@ -20,6 +20,7 @@
  *    confirmed: called with no list, or with something that is not one, it
  *    removes what main finds.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

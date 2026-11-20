@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createHermesSessionWatch, type SessionCheck } from '../../../electron/services/hermes-session-watch';
 import { HERMES_SIGNED_OUT } from '../../../electron/services/kanban-board';

@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import { startFakeHermesGateway, type FakeHermesGateway, type HermesFlavour } from '../../fixtures/fake-hermes-gateway';

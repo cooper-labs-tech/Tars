@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // pty-manager imports node-pty (native) and electron at module load — mock both

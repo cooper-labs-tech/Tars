@@ -11,6 +11,7 @@
  * - `always` kept after the restart it asked for, so a later unchanged
  *   setting restarts the CLI for nothing.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as os from 'node:os';
 

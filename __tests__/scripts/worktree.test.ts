@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 
 // Every case runs git several times: a loaded windows-latest runner took 6.8 s

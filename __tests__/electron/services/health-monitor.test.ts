@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { SlowCalls, timeIpcHandlers, IpcChannels } from '../../../electron/services/health/monitor';
 import { abruptEndPayload } from '../../../electron/services/health/abrupt-end';

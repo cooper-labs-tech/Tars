@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { cutNote, workspacesFrom, PATCH_LINES } from '../../src/lib/review';
 import type { AgentStatus } from '../../src/types/electron';

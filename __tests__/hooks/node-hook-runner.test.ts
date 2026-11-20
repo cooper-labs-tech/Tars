@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { spawn, spawnSync } from 'node:child_process';
 import * as crypto from 'node:crypto';

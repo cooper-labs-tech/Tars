@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import * as http from 'http';
 import { uploadHermesAttachment } from '../../../electron/services/hermes-client';

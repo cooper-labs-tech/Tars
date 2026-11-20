@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { reveal as revealInMain } from '../../../electron/utils/reveal';
 import { reveal as revealInReview } from '../../../src/lib/template-review';

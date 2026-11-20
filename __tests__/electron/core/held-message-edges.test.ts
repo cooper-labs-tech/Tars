@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 /**
  * The edges of a held message, from the Database Engineer's gate of #128

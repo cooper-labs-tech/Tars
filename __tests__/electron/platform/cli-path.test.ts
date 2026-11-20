@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cliPathProblem } from '../../../electron/platform/cli-path';
 import type { FsProbe } from '../../../electron/platform/fs-probe';

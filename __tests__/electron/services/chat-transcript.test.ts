@@ -34,6 +34,7 @@
  *     note, a slash command is the command typed, and a command's output
  *     (`<local-command-stdout>`) is folded like a tool's.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';

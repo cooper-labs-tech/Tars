@@ -18,6 +18,7 @@
  *
  * The handler is the real one; node-pty and Tasmania's status are replaced.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

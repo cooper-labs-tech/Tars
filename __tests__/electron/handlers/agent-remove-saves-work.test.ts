@@ -59,6 +59,7 @@
  *
  * The handler and git are the real ones, on a repository in a throwaway folder.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

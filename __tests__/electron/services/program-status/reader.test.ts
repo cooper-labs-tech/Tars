@@ -1,3 +1,4 @@
+import '../../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { readProgramStatus, forgetProgramStatus } from '../../../../electron/services/program-status';
 import { PROGRAM_STATUS_QUERY_REPLY } from '../../../../electron/services/program-status/protocol';

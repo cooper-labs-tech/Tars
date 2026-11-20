@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, afterEach } from 'vitest';
 import type { Terminal } from 'xterm';
 

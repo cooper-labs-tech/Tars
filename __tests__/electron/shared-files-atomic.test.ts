@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { pinPlatform } from './providers/win-fake-disk';
 import * as fs from 'node:fs';

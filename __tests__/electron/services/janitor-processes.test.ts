@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { processesNow } from '../../../electron/services/janitor-processes';
 

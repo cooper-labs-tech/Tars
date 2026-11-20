@@ -62,6 +62,7 @@
  *     which carries its absolute path, the home folder included, to the
  *     window.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

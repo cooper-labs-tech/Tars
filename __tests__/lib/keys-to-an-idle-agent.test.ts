@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import { connectionLine, keySender, NOT_RUNNING_LINE } from '../../src/lib/terminal';
 

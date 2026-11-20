@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AgentDialogSuperAgentSidebar } from '../../src/components/AgentWorld/AgentDialogSuperAgentSidebar';

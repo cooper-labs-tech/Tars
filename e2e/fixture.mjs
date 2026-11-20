@@ -3,6 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { expect, test } from '@playwright/test';
+import { CLI_CONFIG_CONTENT, CLI_HOMES, GIT_OWN, homesOutside } from './cli-homes.mjs';
+
+export { CLI_HOMES, homesOutside };
 
 /**
  * What the sandboxed app has in it when we photograph it.
@@ -622,6 +625,14 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * spec that runs two Tars on one home gives the second a profile of its own.
  */
 export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+  // A CLI home the spec names outside the sandbox: refused before the app, or a CLI, starts on it.
+  const strays = homesOutside(env, sandboxHome);
+  if (strays.length > 0) {
+    throw new Error(
+      `the spec hands the app a CLI home outside its sandbox ${sandboxHome}:\n`
+      + strays.map(([name, where]) => `  ${name}: ${where}`).join('\n'),
+    );
+  }
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
@@ -694,7 +705,9 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  * carry DOROTHY_* or ANTHROPIC_* of its own; a spec that wants one sets it in
  * its env.
  */
-const LEAKY = /^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$/;
+// The CLI homes, a CLI's config as text and git's own variables: one list with the unit tests' setup (cli-homes.mjs).
+// The caller's are never handed on, and a spec may name a home only inside its sandbox (homesOutside).
+const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}`);
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
 }

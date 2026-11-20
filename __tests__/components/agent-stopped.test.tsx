@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { AgentManagementCard } from '../../src/components/AgentList/AgentManagementCard';

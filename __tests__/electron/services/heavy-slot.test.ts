@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import {
   HeavySlot, type SlotWorld, type SlotMachine,
