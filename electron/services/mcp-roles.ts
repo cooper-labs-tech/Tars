@@ -102,23 +102,135 @@ export function codexRoleArgs(orchestrator: boolean, configFile: string): string
     isDefined = name => Object.prototype.hasOwnProperty.call(defined, name);
   } catch {
     // Not TOML to smol-toml, which codex, whose parser takes more, may still read and start X in a worker (the Audit's
-    // L1 on #608): the server is then looked for as text, a table header or a dotted key at a line's start.
+    // L1 on #608): the server is then looked for as text, in every form TOML allows (L3).
     isDefined = name => definedInText(text, name);
   }
   return ORCHESTRATOR_ONLY_MCP.filter(isDefined).flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
 }
 
+/** A TOML key matching `name` exactly: bare, double-quoted or single-quoted (a regular expression's source). */
+function tomlKey(name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `(?:${escaped}|"${escaped}"|'${escaped}')`;
+}
+
+const SERVERS_KEY = tomlKey('mcp_servers');
+
 /**
- * Whether `text`, a config.toml that does not parse, defines the server `name`: a line starting with its table header,
- * `[mcp_servers.<name>]` (the name quoted or not, spaces allowed), or with a dotted key `mcp_servers.<name>.`. Never a
- * comment, a string, or a longer name that begins with it.
+ * Whether `text`, a config.toml that does not parse, defines the server `name`, in any form TOML allows (the Audit's L1
+ * and L3 on #608):
+ * - a table header of it or of one of its subtables, `[mcp_servers.<name>]`, `[mcp_servers.<name>.env]`;
+ * - under the `[mcp_servers]` header, a key `<name> = { ... }` or a dotted key `<name>.command = ...`;
+ * - before any header, a dotted key `mcp_servers.<name>.command = ...` or `mcp_servers.<name> = { ... }`, or a key of
+ *   the inline table `mcp_servers = { <name> = { ... } }`, on one line or on several;
+ * the name bare, double-quoted or single-quoted, spaces allowed around the dots. Never in a comment or a multi-line
+ * string, never a key of another table, never a value, never a longer name that begins with it.
  */
 function definedInText(text: string, name: string): boolean {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const key = `(?:${escaped}|"${escaped}")`;
-  const header = new RegExp(`^\\s*\\[\\s*mcp_servers\\s*\\.\\s*${key}\\s*\\]`, 'm');
-  const dotted = new RegExp(`^\\s*mcp_servers\\s*\\.\\s*${key}\\s*\\.`, 'm');
-  return header.test(text) || dotted.test(text);
+  const key = tomlKey(name);
+  const ownHeader = new RegExp(`^\\s*\\[\\s*${SERVERS_KEY}\\s*\\.\\s*${key}\\s*[.\\]]`);
+  const serversHeader = new RegExp(`^\\s*\\[\\s*${SERVERS_KEY}\\s*\\]\\s*$`);
+  const underServers = new RegExp(`^\\s*${key}\\s*[.=]`);
+  const dottedAtTop = new RegExp(`^\\s*${SERVERS_KEY}\\s*\\.\\s*${key}\\s*[.=]`);
+  const inlineAtTop = new RegExp(`^\\s*${SERVERS_KEY}\\s*=\\s*\\{`);
+  const plain = withoutCommentsOrLongStrings(text);
+  let table: 'top' | 'servers' | 'other' = 'top';
+  let at = 0;
+  for (const line of plain.split('\n')) {
+    const start = at;
+    at += line.length + 1;
+    if (ownHeader.test(line)) return true;
+    if (/^\s*\[/.test(line)) {
+      table = serversHeader.test(line) ? 'servers' : 'other';
+    } else if (table === 'servers') {
+      if (underServers.test(line)) return true;
+    } else if (table === 'top') {
+      if (dottedAtTop.test(line)) return true;
+      const inline = inlineAtTop.exec(line);
+      if (inline && inlineTableHasKey(plain, start + inline[0].length - 1, key)) return true;
+    }
+  }
+  return false;
+}
+
+/** Whether the character at `at` is escaped: an odd run of backslashes before it. */
+function escapedAt(text: string, at: number): boolean {
+  let n = 0;
+  while (at - 1 - n >= 0 && text[at - 1 - n] === '\\') n++;
+  return n % 2 === 1;
+}
+
+/** Where the one-line string whose quote is at `at` ends: after its closing quote, or at the line's end. */
+function oneLineStringEnd(text: string, at: number): number {
+  const quote = text[at];
+  let j = at + 1;
+  while (j < text.length && text[j] !== '\n' && !(text[j] === quote && (quote === "'" || !escapedAt(text, j)))) j++;
+  return j < text.length && text[j] === quote ? j + 1 : j;
+}
+
+/**
+ * `text` with its comments and multi-line strings blanked (each character a space, each line break kept), so neither
+ * is read as a definition. One-line strings are kept: a quoted key is one, and a line never starts inside one.
+ */
+function withoutCommentsOrLongStrings(text: string): string {
+  const blank = (part: string) => part.replace(/[^\n]/g, ' ');
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    let end: number;
+    const three = text.slice(i, i + 3);
+    if (three === '"""' || three === "'''") {
+      let close = text.indexOf(three, i + 3);
+      while (three === '"""' && close !== -1 && escapedAt(text, close)) close = text.indexOf(three, close + 1);
+      end = close === -1 ? text.length : close + 3;
+      out += blank(text.slice(i, end));
+    } else if (text[i] === '"' || text[i] === "'") {
+      end = oneLineStringEnd(text, i);
+      out += text.slice(i, end);
+    } else if (text[i] === '#') {
+      const lineEnd = text.indexOf('\n', i);
+      end = lineEnd === -1 ? text.length : lineEnd;
+      out += blank(text.slice(i, end));
+    } else {
+      end = i + 1;
+      out += text[i];
+    }
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * Whether the inline table opened at `open` (its `{`) has the key `key` (a regular expression's source) at its own
+ * level, alone or as the first part of a dotted key, never inside a value.
+ */
+function inlineTableHasKey(text: string, open: number, key: string): boolean {
+  const keyHere = new RegExp(`^${key}\\s*[.=]`);
+  let depth = 0;
+  let keyNext = false;
+  let i = open;
+  while (i < text.length) {
+    const c = text[i];
+    if (keyNext && depth === 1 && !/\s/.test(c)) {
+      if (keyHere.test(text.slice(i, i + key.length + 256))) return true;
+      keyNext = false;
+    }
+    if (c === '"' || c === "'") {
+      i = oneLineStringEnd(text, i);
+      continue;
+    }
+    if (c === '{' || c === '[') {
+      depth++;
+      keyNext = c === '{' && depth === 1;
+    } else if (c === '}' || c === ']') {
+      depth--;
+      if (depth === 0) return false;
+    } else if (c === ',') {
+      keyNext = true; // read only at the table's own level, above
+    }
+    i++;
+  }
+  return false;
 }
 
 /** Qwen Code: the two disabled for a worker, for this invocation (0.25.2). */
