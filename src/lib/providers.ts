@@ -142,6 +142,19 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     defaultModel: 'default',
   },
   {
+    // Goose, the CLI `goose` (2.0.7, #618). On its own account it runs the provider and model set in its own config,
+    // so Default passes none; on an inference endpoint the window offers the endpoint's models instead. It has no plan
+    // mode, as main says. A generic mark, the letters GO: its code is Apache-2.0, whose section 6 grants no right to
+    // its trademarks, its logo among them.
+    id: 'goose',
+    label: 'Goose',
+    icon: { type: 'text', content: 'GO' },
+    accent: 'primary',
+    requiresCli: true,
+    models: [{ id: 'default', name: 'Default', description: 'The provider and model set in Goose' }],
+    defaultModel: 'default',
+  },
+  {
     id: 'amp',
     label: 'Amp',
     // No vector mark in the tree, so the same lettered badge OpenCode and
@@ -405,6 +418,8 @@ export function computeProviderAvailability(
     opencode: !!paths?.opencode,
     amp: !!paths?.amp,
     pi: !!paths?.pi,
+    // Goose's binary is goose, found as the other CLIs are.
+    goose: !!paths?.goose,
     local: true,
     openrouter: viaOpenRouter,
     deepseek: keyed(settings?.deepSeekEnabled, 'deepSeekApiKey') || viaOpenRouter,
