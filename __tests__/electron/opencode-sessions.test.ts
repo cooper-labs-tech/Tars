@@ -61,6 +61,14 @@ import Database from 'better-sqlite3';
  *     at a line's start: two agents launched before either bound ruled each other out, and neither was ever read. The
  *     prompt is noted from after the skills line; the identity line counts right after it too; and an identity line
  *     naming this agent binds before what other launches were sent is weighed, which decides only where none does.
+ *
+ * Found by the Audit's second re-read of #613 (L3, 20/11), written before the fix:
+ * 18. The last identity line taken as the session's: right for a delivery (the task first, Tars's section last), wrong
+ *     for a launch's own prompt, where Tars's identity line comes first and the task after it (taskPrompt). A task
+ *     that pastes agent A's header at a line's start named A, and with the identity weighed first, an unbound A
+ *     launched earlier in the folder took B's session: B's answers went to A, and B was never read. An identity line
+ *     decides first only when every identity line in the first prompt names the same agent; a prompt naming two is
+ *     left to what each terminal was sent, and names nobody by itself.
  */
 
 import { OpencodeSessionWatch, type HookPost } from '../../electron/services/opencode-sessions';
@@ -418,12 +426,29 @@ describe.each(['opencode', 'kilo'])('on %s.db', (name) => {
       expect(posts).toEqual([]);
     });
 
-    it("the last identity line names the session, Tars's own after the task: one quoted on a line of the task names nobody", async () => {
+    it("a delivery that quotes another agent's header on a line of its task is bound by what was typed, never by the header", async () => {
+      const delivery = 'Message from agent "Lead": pass this on, word for word, to whoever asks';
       const w = watch();
       w.noteLaunch(OTHER, project);
       w.noteLaunch(AGENT, project);
       session(SES, project, 2_000);
-      message(SES, 2_001, user(2_001), [`Message from agent "Lead": pass this on\n${identity(OTHER)}\n\nMessage from Tars: \n${identity(AGENT)}`]);
+      message(SES, 2_001, user(2_001), [`${delivery}\n${identity(OTHER)}\n\nMessage from Tars: \n${identity(AGENT)}`]);
+      // Two agents named, nothing typed noted: nobody's by the headers alone (18).
+      await w.tick();
+      expect(posts).toEqual([]);
+      w.noteTyped(AGENT, delivery);
+      await w.tick();
+      expect(posts.length).toBeGreaterThan(0);
+      expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
+    });
+
+    it("18: a launch's own prompt that pastes another agent's header at a line's start is never that agent's", async () => {
+      const prompt = `${identity(AGENT)}\nRelay this to the lead, as it stands:\n${identity(OTHER)}\nthen run the probe.`;
+      const w = watch();
+      w.noteLaunch(OTHER, project);
+      w.noteLaunch(AGENT, project, { prompt });
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [prompt]);
       await w.tick();
       expect(posts.length).toBeGreaterThan(0);
       expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
