@@ -33,6 +33,11 @@ import Database from 'better-sqlite3';
  *    commands`, about 5 s later). A plain resume's first bar is already its session's (`<folder>  tab agents  ctrl+p
  *    commands`), where a task typed at once landed in the session (twice). On a launch on a session, up on a bar with
  *    something before it, never the bare home view's; on a fresh launch, on either.
+ * 9. (QA's gate of the stack, 21/11, gatestack613) The bar wrapped over two rows, read as never up: a long folder (the
+ *    sandbox under /private/var/folders/...) or a narrow pane puts `132 ctrl+p` at the end of one row and `commands`
+ *    alone at the end of the next. After a resume and after a restart every task was refused as still starting, and the
+ *    resumed session sent nothing. Its bar on two rows is its bar; on a launch on a session, still never the bare home
+ *    view's, and never rows of the conversation's frame.
  */
 
 import { OpenCodeProvider } from '../../../electron/providers/opencode-provider';
@@ -143,6 +148,37 @@ describe("a launch line, read back (7)", () => {
     expect(opencodeLaunchOf(['-l', '-c', `cd '/p' && exec ${fork}`])).toEqual({ forkOf: SES, prompt: "it's the task" });
     expect(opencodeLaunchOf(['--auto', '--session', SES, '--fork', '--prompt', "it's the task"])).toEqual({ forkOf: SES, prompt: "it's the task" });
     expect(opencodeLaunchOf(['--session', SES])).toEqual({ resume: SES });
+  });
+});
+
+describe('up on its bar wrapped over two rows (9)', () => {
+  /** The bottom rows of QA's screen (screen-second.txt of the opencode run, gatestack613), a pane of 120 columns. */
+  const WRAPPED = [
+    '  ┃',
+    '  ┃  Build auto · stand-in-coder Tars endpoint',
+    '  ╹' + '▀'.repeat(115),
+    '   /private/var/folders/yp/j2nr6k4915z_bnf3tjv22t940000gn/T/dorothy-e2e-conformance-opencode-GRATOx/ 132 ctrl+p         ',
+    '   projects/project-a                                                                                    commands       ',
+    '',
+  ];
+  /** The home view in a narrow pane: nothing before its keys, wrapped the same way. */
+  const HOME_NARROW = ['  ╹▀▀▀▀▀▀▀▀▀▀', '  tab agents ctrl+p', '            commands'];
+  it("is up on a session's view whose bar wraps, after a resume, a restart's fork and a fresh launch", () => {
+    const oc = new OpenCodeProvider();
+    const fork = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '', resumeSessionId: SES, forkSession: true });
+    const resume = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '', resumeSessionId: SES });
+    expect(oc.upOnScreen(WRAPPED, resume)).toBe(true);
+    expect(oc.upOnScreen(WRAPPED, fork)).toBe(true);
+    expect(oc.upOnScreen(WRAPPED)).toBe(true);
+  });
+
+  it("is never up on the home view wrapped, on a launch on a session, nor on the conversation's rows", () => {
+    const oc = new OpenCodeProvider();
+    const fork = oc.buildInteractiveCommand({ binaryPath: '/bin/opencode', prompt: '', resumeSessionId: SES, forkSession: true });
+    expect(oc.upOnScreen(HOME_NARROW, fork)).toBe(false);
+    expect(oc.upOnScreen(HOME_NARROW)).toBe(true);
+    expect(oc.upOnScreen(['  ┃  Run each of these', '  ┃                                   commands'])).toBe(false);
+    expect(oc.upOnScreen(['', '                                   commands'])).toBe(false);
   });
 });
 
