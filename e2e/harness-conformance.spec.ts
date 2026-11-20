@@ -226,7 +226,8 @@ for (const h of HARNESSES) {
             const cli = req(`${dist}/providers/cline-cli.js`);
             const file = req('path').join(cli.clineAgentDir(id), 'data', 'db', 'sessions.db');
             try {
-              const Database = req('better-sqlite3');
+              // By its path: Electron's main module, launched by Playwright, resolves no package by name.
+              const Database = req(req('path').join(dist, '..', '..', 'node_modules', 'better-sqlite3'));
               const db = new Database(file, { readonly: true, fileMustExist: true });
               out.rows = (db.prepare('SELECT session_id, cwd FROM sessions').all() as Array<{ session_id: string; cwd: string }>)
                 .map((r) => ({ ...r, uuid: cli.clineUuidOf(r.session_id) }));
