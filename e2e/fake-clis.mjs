@@ -549,6 +549,10 @@ export async function run() {
   }
   if (question === 'trust') out('\nDo you trust the files in this folder?\n> 1. Yes, proceed\n  2. No, exit\n');
   else if (question === 'api-key') out('\nDetected a custom API key in your environment\nDo you want to use this API key?\n  1. Yes\n> 2. No (recommended)\n');
+  // pi as pi 1.5.2 draws its first frames, which Tars waits for since #610 before it types into pi (pi-provider.ts,
+  // upOnScreen): something above its field's top rule, its field between two rules, and its footer under them with
+  // the context used over its window. Without them its first task is refused as a pi still starting.
+  else if (kind === 'pi') out(`pi stand-in ready\n${'─'.repeat(40)}\n> \n${'─'.repeat(40)}\n0.0%/128k (auto)\n`);
   else out(`${kind} stand-in ready\n> `);
   if (opts.prompt && !question) queue(opts.prompt);
   else if (opts.prompt) log({ lost: 'the first prompt went to the question', question });
