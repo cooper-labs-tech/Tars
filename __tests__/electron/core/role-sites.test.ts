@@ -85,6 +85,7 @@ interface Site {
 const SITES: Site[] = [
   // core/
   { file: 'electron/core/agent-manager.ts', line: 'const conversing = …;', is: 'powers', why: 'no desktop notification for the turns of the user\'s own conversations' },
+  { file: 'electron/core/agent-manager.ts', line: '{ model: agent.model, effort: agent.effort, orchestrator: … },', is: 'powers', why: 'the servers a worker\'s terminal switches off (a Kilo worker gets no X or Telegram)' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
   { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'id: agent.id, name: agent.name, projectPath: agent.projectPath, orchestrator: …,', is: 'powers', why: 'who may relay the owner\'s words, and receive them under Tars\'s mark (2.0.6): a chat\'s runner too, within its own chat (the Audit\'s M2 on #569)' },
@@ -113,6 +114,7 @@ const SITES: Site[] = [
   // handlers/
   { file: 'electron/handlers/chat-handlers.ts', line: 'const orchestrators = (): OrchestratorFacts[] => [...agents.values()].filter((a) => … && a.kind !== \'chat\').map((a) => ({', is: 'identity', why: 'the orchestrators whose conversation is their project\'s chat #1, Main' },
   { file: 'electron/handlers/ipc-handlers.ts', line: 'const isSuperAgentCheck = …;', is: 'powers', why: 'agent:start: the instructions, the skills prefix, the denied tools' },
+  { file: 'electron/handlers/ipc-handlers.ts', line: 'const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings, { model: config.model, effort: config.effort, orchestrator: … });', is: 'powers', why: 'agent:create: the servers a worker\'s terminal switches off' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'if (… || member.role === \'worker\') return member;', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'return { ...member, role, orchestratorMode: … || undefined };', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'orchestratorMode: … || undefined,', is: 'identity', why: 'a template\'s orchestrator member' },
@@ -152,6 +154,7 @@ const SITES: Site[] = [
   { file: 'electron/providers/amp-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into amp' },
   { file: 'electron/providers/kimi-code-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into Kimi Code' },
   { file: 'electron/providers/cli-provider.ts', line: "typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;", is: 'type', why: 'the task a launch types in' },
+  { file: 'electron/providers/cli-provider.ts', line: "* Whether the agent has the orchestrator's powers (core/agent-role.ts, hasOrchestratorPowers): a CLI whose servers", is: 'type', why: 'PtyLaunch.orchestrator' },
   { file: 'electron/services/bus-store.ts', line: 'return all.filter(…).map(a => a.id);', is: 'identity', why: 'the global room\'s members: the projects\' orchestrators' },
   { file: 'electron/services/discord-bot.ts', line: 'const faceOrCrown = (a: AgentStatus) => … ?', is: 'team-list', why: 'the crown' },
   { file: 'electron/services/discord-bot.ts', line: 'if (!…) line += ', is: 'team-list', why: 'no project line for the orchestrator' },
