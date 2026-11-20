@@ -34,6 +34,9 @@ import { pathToFileURL } from 'node:url';
  * 7. A hook that fails, or waits on a Tars that is not there, holding Cline up: it always answers `{}` and exits 0. A
  *    post with no proof that the port is this Tars carries no token.
  * 8. An event Tars does not read (PreToolUse, SessionShutdown) posting anything.
+ * 9. (Found by the conformance on 66214ddc4) The CLI named as the hook's parent: that is the `.cline` binary, a child
+ *    of Cline's node launcher, which is the process Tars started (the terminal's own on an exec launch). The hook
+ *    routes refused the session as another CLI's. The CLI is the launcher, the hook's grandparent.
  */
 
 const HOOK = path.resolve('hooks', 'cline-hook.mjs');
@@ -169,6 +172,30 @@ describe('the hook as Cline runs it (7)', () => {
       expect(tars.posts.map((p) => p.path)).toEqual(['/api/hooks/output', '/api/hooks/status', '/api/hooks/agent-stopped']);
       expect(tars.posts.every((p) => p.auth === 'Bearer agent-token' && /^\d+$/.test(p.pid ?? ''))).toBe(true);
       expect(tars.posts[0].body.output).toBe('PROBE-OK y');
+    } finally {
+      tars.close();
+    }
+  });
+
+  it("names its grandparent as the CLI, Cline's launcher, which Tars started (9)", async () => {
+    const tars = await standIn('instance-2');
+    try {
+      // A process standing for Cline's binary: it runs the hook as its child, as Cline does, and waits for it.
+      const intermediate = `const { spawn } = require('node:child_process');
+const c = spawn(process.execPath, ['--input-type=module', '-e', ${JSON.stringify(`import(${JSON.stringify(pathToFileURL(HOOK).href)}).then((m) => m.run('TaskResume'))`)}], { stdio: ['pipe', 'inherit', 'inherit'] });
+c.stdin.end(process.argv[1]);
+c.on('close', (code) => process.exit(code ?? 1));`;
+      const code = await new Promise<number | null>((resolve) => {
+        const child = spawn(process.execPath, ['-e', intermediate, JSON.stringify(payload())], {
+          stdio: ['ignore', 'pipe', 'inherit'],
+          env: { PATH: process.env.PATH ?? '', CLAUDE_MGR_API_URL: tars.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-2', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir },
+        });
+        child.on('close', resolve);
+      });
+      expect(code).toBe(0);
+      const registered = tars.posts.find((p) => p.body.source === 'resume');
+      expect(registered?.body.cli_pid).toBe(process.pid);
+      expect(tars.posts.every((p) => p.pid === String(process.pid))).toBe(true);
     } finally {
       tars.close();
     }
