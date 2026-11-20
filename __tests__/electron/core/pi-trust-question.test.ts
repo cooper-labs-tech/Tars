@@ -89,7 +89,7 @@ describe("pi's trust question on the screen", () => {
     const quoted = mirrored([' > pi asked "Trust project folder?" yesterday, and I chose Do not trust.', '', '0.0%/128k (auto)']);
     expect(dialogOnScreen(quoted)).toBe(false);
     expect(piTrustQuestionOnScreen(quoted)).toBeUndefined();
-    const prose = mirrored([' Trust project folder?', ' is what it asks; you can answer Trust (this session only).', '', '0.0%/128k (auto)']);
+    const prose = mirrored([' Trust project folder?', ' is what it asks; when unsure, answer Do not trust', '', '0.0%/128k (auto)']);
     expect(dialogOnScreen(prose)).toBe(false);
     expect(piTrustQuestionOnScreen(prose)).toBeUndefined();
   });
