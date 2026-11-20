@@ -425,7 +425,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Its endpoint, known to the launch before the record is: the terminal spawned below is the one its harness
     // reads the endpoint session's token from (services/traces-runtime.ts).
     if (config.endpointId) preRegisterAgent({ id, name: config.name, projectPath: config.projectPath, provider: config.provider, model: config.model, endpointId: config.endpointId, traces: config.traces === true });
-    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings, { model: config.model, effort: config.effort });
+    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings, { model: config.model, effort: config.effort, orchestrator: hasOrchestratorPowers({ role }) });
 
     // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
     // bypass/auto-mode agents never see the first-launch trust prompt.

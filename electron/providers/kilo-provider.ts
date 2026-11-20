@@ -21,6 +21,8 @@ export class KiloProvider extends OpencodeBuildProvider {
   readonly binaryName = 'kilo';
   readonly configDir = path.join(os.homedir(), '.config', 'kilo');
   protected readonly config = { folder: 'kilo', mcpFile: 'kilo.json' };
+  /** Measured on 7.8.27 (20/11): it switches a server of kilo.json off for the run, and ignores one it does not define. */
+  protected readonly roleSwitchVar = 'KILO_CONFIG_CONTENT';
 
   /** Its own default (the Kilo Gateway's, without a provider of the user's), or a `provider/model` the user names. */
   getModels(): ProviderModel[] {

@@ -10,10 +10,12 @@ import type {
   OneShotCommandParams,
   ProviderModel,
   HookConfig,
+  PtyLaunch,
 } from './cli-provider';
 import { safeEffort } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { OPENCODE_SESSION_ID, opencodeSkillsLine } from './opencode-cli';
+import { ORCHESTRATOR_ONLY_MCP } from '../services/mcp-roles';
 
 /** Where Tars wrote opencode's MCP servers until 2.0.4, which opencode never reads. */
 const legacyMcpFile = (): string => path.join(os.homedir(), '.opencode', 'config.json');
@@ -44,6 +46,24 @@ export abstract class OpencodeBuildProvider implements CLIProvider {
   abstract readonly configDir: string;
   /** Its config folder under `$XDG_CONFIG_HOME`, and the file there it reads its MCP servers from. */
   protected abstract readonly config: { folder: string; mcpFile: string };
+
+  /**
+   * The variable holding this build's inline config, when it is measured to switch a server of its config file off
+   * for one run (`{"mcp": {"<name>": {"enabled": false}}}`): a worker's then gets no orchestrator-only server. None for
+   * a build where that is not measured, whose workers keep every server (services/mcp-roles.ts).
+   */
+  protected readonly roleSwitchVar?: string;
+
+  /** The endpoint's inline config, with the orchestrator-only servers switched off in it for a worker. */
+  private withRole(env: Record<string, string>, launch: PtyLaunch | undefined): Record<string, string> {
+    const name = this.roleSwitchVar;
+    if (!name || launch?.orchestrator !== false) return env;
+    let config: Record<string, unknown> = {};
+    try { config = env[name] ? JSON.parse(env[name]) as Record<string, unknown> : {}; } catch { config = {}; }
+    const mcp = { ...(config.mcp && typeof config.mcp === 'object' ? config.mcp as Record<string, unknown> : {}) };
+    for (const server of ORCHESTRATOR_ONLY_MCP) mcp[server] = { enabled: false };
+    return { ...env, [name]: JSON.stringify({ ...config, mcp }) };
+  }
 
   /**
    * Where this build reads its MCP servers: opencode 1.19.3 (read in its compiled bundle on 19/10) reads `opencode.json`
@@ -146,7 +166,7 @@ export abstract class OpencodeBuildProvider implements CLIProvider {
     return command;
   }
 
-  getPtyEnvVars(agentId: string, projectPath: string, skills: string[] | undefined, appSettings?: AppSettings): Record<string, string> {
+  getPtyEnvVars(agentId: string, projectPath: string, skills: string[] | undefined, appSettings?: AppSettings, launch?: PtyLaunch): Record<string, string> {
     return {
       DOROTHY_SKILLS: (skills ?? []).join(','),
       DOROTHY_AGENT_ID: agentId,
@@ -159,8 +179,9 @@ export abstract class OpencodeBuildProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor(this.id, appSettings),
-      // On an inference endpoint: the provider of Tars's, inline; the token is set at spawn (core/agent-pty.ts).
-      ...(endpointLaunchForAgent(agentId, this.id)?.env ?? {}),
+      // On an inference endpoint: the provider of Tars's, inline; the token is set at spawn (core/agent-pty.ts). And for
+      // a worker of a build that switches servers inline, X and Telegram switched off there (roleSwitchVar).
+      ...this.withRole(endpointLaunchForAgent(agentId, this.id)?.env ?? {}, launch),
     };
   }
 
