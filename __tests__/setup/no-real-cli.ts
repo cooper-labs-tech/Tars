@@ -11,15 +11,24 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
  * child_process function stops standing in when the product changes function, and nothing fails.
  *
  * Here every function of child_process that starts a program (spawn, spawnSync, execFile, execFileSync, exec,
- * execSync) first asks what it would start: a binary named claude or tailscale (Tailscale.app's `Tailscale` too, and
- * a .exe or .cmd of either on Windows), by its path or by its name on the PATH it is handed, that lies outside the
- * test's own temporary folders, is refused before it starts, and the test fails, naming it. A stand-in a test plants
- * in its own folder is not concerned, nor is any other binary, nor a name nothing on the PATH answers. Named imports
- * of child_process see the guard (syncBuiltinESMExports), as home-isolation.ts's fs guard does. no-real-cli.test.ts
- * holds the ways it was written against.
+ * execSync) first asks what it would start: a binary named after one of the CLIs below, by its path or by its name on
+ * the PATH it is handed, in any case and in its .exe, .cmd or .bat form, that lies outside the test's own temporary
+ * folders, is refused before it starts, and the test fails, naming it. The CLIs: claude and tailscale (Tailscale.app's
+ * `Tailscale` too), and, after this week's two incidents (codex's config.toml deleted by a test, Kilo writing into the
+ * real home; the Audit's I-4 on #616), every agent CLI Tars runs. Also read: the program at the head of a line for a
+ * shell (exec, execSync, a spawn with `shell: true`) and at the head of a shell's script (`sh -c '...'`, `zsh -ilc`).
+ * A stand-in a test plants in its own folder is not concerned, nor is any other binary, nor a name nothing on the PATH
+ * answers. Named imports of child_process see the guard (syncBuiltinESMExports), as home-isolation.ts's fs guard does.
+ * no-real-cli.test.ts holds the ways it was written against.
+ *
+ * Not covered: node-pty (every unit test mocks it; a real agent terminal belongs to the E2E suite, whose sandbox
+ * HOME and fixture.mjs's CLI_HOMES keep it out of the real one); fork (a node script, not a CLI binary); a CLI later
+ * in a shell's line than its first word (`cd x && codex`); and a CLI another program starts (npx, a script, a CLI
+ * starting another).
  */
 
-const NAMES = new Set(['claude', 'tailscale']);
+const NAMES = new Set(['claude', 'tailscale', 'codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose']);
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
 const START = ['spawn', 'spawnSync', 'execFile', 'execFileSync', 'exec', 'execSync'] as const;
 
 export type Violation = { binary: string; how: string; test: string };
@@ -69,6 +78,23 @@ export function programOfLine(line: string): string {
   return quoted ? quoted[2] : text.split(/\s+/)[0] ?? '';
 }
 
+/**
+ * The programs a start would run that the guard reads: the file itself; for a line handed to a shell (exec, execSync,
+ * `shell: true`) its first word instead; and for a shell started with a script (`sh -c`, `zsh -ilc`), that script's
+ * first word too.
+ */
+export function startedPrograms(fn: string, first: unknown, rest: unknown[]): string[] {
+  const line = String(first);
+  if (fn === 'exec' || fn === 'execSync' || (optionsOf(rest) as { shell?: unknown } | undefined)?.shell) return [programOfLine(line)];
+  const programs = [line];
+  const args = rest.find(Array.isArray) as unknown[] | undefined;
+  if (args && SHELLS.has(path.basename(line).toLowerCase())) {
+    const at = args.findIndex(a => typeof a === 'string' && /^-[a-zA-Z]*c[a-zA-Z]*$/.test(a));
+    if (at >= 0 && typeof args[at + 1] === 'string') programs.push(programOfLine(args[at + 1] as string));
+  }
+  return programs;
+}
+
 /** For no-real-cli.test.ts only: the allowed folders, narrowed (an empty list makes every claude a real one); null restores them. */
 export function narrowRootsForTest(roots: string[] | null): void {
   guard.narrowed = roots;
@@ -99,8 +125,7 @@ if (!guard.wrapped) {
   for (const fn of START) {
     const original = childProcess[fn];
     childProcess[fn] = function guarded(this: unknown, first: unknown, ...rest: unknown[]) {
-      const program = fn === 'exec' || fn === 'execSync' ? programOfLine(String(first)) : String(first);
-      refuse(fn, program, optionsOf(rest));
+      for (const program of startedPrograms(fn, first, rest)) refuse(fn, program, optionsOf(rest));
       return original.call(this, first, ...rest);
     };
   }
