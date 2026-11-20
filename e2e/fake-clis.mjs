@@ -28,6 +28,7 @@
 //   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers.
 //   HOLD <tag>                     keeps its turn going until the file $HOME/release-<tag> exists, then answers
 //                                  "released <tag>": a turn that lasts as long as a spec needs it to.
+// A note from Tars itself ("[Note for information from "Tars"...") asks nothing: it is answered "ok", whatever it quotes.
 // Every launch, typed line, turn, hook, tool call and answer is one JSON line in FAKE_CLI_LOG, with whether Tars's
 // agent token reached it or the MCP server, never a token or a key.
 import fs from 'node:fs';
@@ -464,7 +465,11 @@ export async function run() {
       hook('StopFailure', { error: 'authentication_failed', error_details: answer });
       return;
     }
-    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE|HOLD) (\S+)(?: (.+))?$/ms.exec(text);
+    // Tars's own note asks nothing ("it is not a task"): what it quotes (a task another project handed this one's
+    // agent, `...: HOLD q1.`) is read, not done, as a model reads it. Without this, its orchestrator held its turn on
+    // a release file meant for the worker, and never came to rest again.
+    const fromTars = /\[Note for information from "Tars"/.test(text);
+    const directive = fromTars ? null : /\b(DELEGATE|SEND|ECHO|APPROVE|HOLD) (\S+)(?: (.+))?$/ms.exec(text);
     if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'HOLD') {
