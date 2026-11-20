@@ -74,6 +74,8 @@ export function UploadView() {
   /** Giving up an owed deletion: asked first in its plain words, then main's refusal if none is owed. */
   const [givingUp, setGivingUp] = useState(false);
   const [giveUpError, setGiveUpError] = useState<string | null>(null);
+  /** The acknowledgment of a cleared deletion that main could not write: said in its box, OK tries again. */
+  const [ackError, setAckError] = useState<string | null>(null);
 
   const read = useCallback(async () => {
     const api = tracesApi();
@@ -99,11 +101,12 @@ export function UploadView() {
     return () => { off?.(); clearInterval(tick); };
   }, [read]);
 
-  const saveUrl = async () => {
+  /** Saves the address and the plain http leave; `allow` is the switch's new value when the switch itself saves. */
+  const saveUrl = async (allow: boolean = plainHttp) => {
     const api = tracesApi();
     // The field takes no typing before the settings are read, so there is nothing to lose here.
     if (!api || !settings) return;
-    const leave = isHttp && plainHttp;
+    const leave = isHttp && allow;
     if (url.trim() === settings.uploadUrl && leave === (settings.uploadAllowPlainHttp === true)) { edited.current = false; return; }
     let r: Awaited<ReturnType<typeof api.setSettings>>;
     try {
@@ -153,7 +156,15 @@ export function UploadView() {
     setDeleting(false);
     setDeleted(null);
     setInProgress(true);
-    const r = await api.deleteEverywhere().finally(() => setInProgress(false));
+    let r: Awaited<ReturnType<typeof api.deleteEverywhere>>;
+    try {
+      r = await api.deleteEverywhere();
+    } catch (e) {
+      // Main can throw before the back-office is asked (a full disk): said, never an unhandled rejection.
+      r = { ok: false, error: e instanceof Error ? e.message : String(e) };
+    } finally {
+      setInProgress(false);
+    }
     setDeleted(r.ok
       ? { word: `the back-office deleted ${r.deleted ?? 'every'} session${r.deleted === 1 ? '' : 's'} · this install is forgotten, your consent withdrawn`, tone: 'running' }
       : { word: `not deleted: ${r.error}. Nothing was forgotten; try again.`, tone: 'error' });
@@ -164,14 +175,23 @@ export function UploadView() {
     const api = tracesApi();
     if (!api) return;
     setGivingUp(false);
-    const r = await api.abandonDeletion();
-    if (r.ok) { setState(r.state); setGiveUpError(null); } else setGiveUpError(r.error);
+    try {
+      const r = await api.abandonDeletion();
+      if (r.ok) { setState(r.state); setGiveUpError(null); } else setGiveUpError(r.error);
+    } catch (e) {
+      setGiveUpError(e instanceof Error ? e.message : String(e));
+    }
     void read();
   };
 
   /** A deletion cleared by itself stays said until the window acknowledges it. */
   const ackCleared = async () => {
-    await tracesApi()?.ackDeletionCleared();
+    try {
+      await tracesApi()?.ackDeletionCleared();
+      setAckError(null);
+    } catch (e) {
+      setAckError(e instanceof Error ? e.message : String(e));
+    }
     void read();
   };
 
@@ -203,6 +223,7 @@ export function UploadView() {
               <div className="px-4 pb-3 space-y-2" data-deletion-cleared>
                 <StateLine word="the deletion that waited for confirmation was cleared: this install's record is gone on the back-office" tone="waiting" />
                 <p className="text-[11.5px] leading-relaxed text-text-secondary">Sharing may start again; what was recorded before the deletion is still never sent.</p>
+                {ackError && <StateLine word={`not acknowledged: ${ackError}. OK tries again.`} tone="error" />}
                 <Button size="sm" onClick={() => { void ackCleared(); }}>OK</Button>
               </div>
             </Box>
@@ -239,9 +260,9 @@ export function UploadView() {
                     <p className="text-[12.5px] text-foreground">Allow plain http to the back-office</p>
                     <p className="mt-0.5 text-[11px] leading-tight text-muted-foreground">The sessions you opt in cross the network unencrypted: anyone on the way can read them. Only for a network you trust. A private address needs no leave; a public one needs yours.</p>
                   </div>
-                  <Toggle label="Allow plain http to the back-office" enabled={plainHttp} onChange={() => { edited.current = true; setPlainHttp(v => !v); }} />
+                  <Toggle label="Allow plain http to the back-office" enabled={plainHttp} onChange={() => { const next = !plainHttp; edited.current = true; setPlainHttp(next); void saveUrl(next); }} />
                 </div>
-                {plainHttp && <StateLine word="allowed by you: unencrypted" tone="waiting" />}
+                {plainHttp && settings?.uploadAllowPlainHttp && <StateLine word="allowed by you: unencrypted" tone="waiting" />}
               </Row>
             )}
             {saveError && <Row><StateLine word={saveError} tone="error" /></Row>}
