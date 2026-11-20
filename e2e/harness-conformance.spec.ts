@@ -166,7 +166,7 @@ for (const h of HARNESSES) {
     const short = () => posts().map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) }));
 
     // One run of Tars, with Lead's MCP: `run` gets Lead's tool caller and the window's API.
-    const withTars = async (label: string, run: (lead: (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>, api: <T>(g: string, n: string, ...a: unknown[]) => Promise<T>) => Promise<void>) => {
+    const withTars = async (label: string, run: (lead: (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>, api: <T>(g: string, n: string, ...a: unknown[]) => Promise<T>, main: { resumeOf: (id: string) => Promise<unknown>; keptOutputOf: (id: string) => Promise<string> }) => Promise<void>) => {
       let app: ElectronApplication | undefined;
       let mcp: ChildProcessWithoutNullStreams | undefined;
       let keepScreen: (() => Promise<void>) | undefined;
@@ -212,7 +212,37 @@ for (const h of HARNESSES) {
           const reply = await Promise.race([rpc('tools/call', { name: tool, arguments: args }), sleep(240_000).then(() => ({ error: `${tool} gave no answer in 240 s` }) as Reply)]);
           return { text: reply.result?.content?.map(c => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
         };
-        await run(lead, api);
+        // What this Tars would continue for an agent, read in its main process: its resumable session, what the resume
+        // check makes of it, and for Cline the rows of the agent's own sessions.db as Tars reads them.
+        const resumeOf = (id: string) => app!.evaluate((_e, { dist, id, cline }) => {
+          const req = process.mainModule!.require;
+          const agent = req(`${dist}/core/agent-manager.js`).agents.get(id);
+          if (!agent) return { agent: null };
+          const out: Record<string, unknown> = {
+            resumable: agent.resumableSessionId ?? null, projectPath: agent.projectPath, worktreePath: agent.worktreePath ?? null,
+            resolved: req(`${dist}/utils/resume-session.js`).resolveResumeSessionId({ ...agent }),
+          };
+          if (cline) {
+            const cli = req(`${dist}/providers/cline-cli.js`);
+            const file = req('path').join(cli.clineAgentDir(id), 'data', 'db', 'sessions.db');
+            try {
+              const Database = req('better-sqlite3');
+              const db = new Database(file, { readonly: true, fileMustExist: true });
+              out.rows = (db.prepare('SELECT session_id, cwd FROM sessions').all() as Array<{ session_id: string; cwd: string }>)
+                .map((r) => ({ ...r, uuid: cli.clineUuidOf(r.session_id) }));
+              db.close();
+            } catch (err) {
+              out.rows = `not read: ${(err as Error).message}`;
+            }
+            out.lookup = agent.resumableSessionId ? cli.clineSessionOf(agent.resumableSessionId, [agent.worktreePath, agent.projectPath].filter(Boolean), id) : null;
+          }
+          return out;
+        }, { dist, id, cline: h.id === 'cline' });
+        // The agent's kept output, where Tars writes its notices (core/agent-notices.ts): what /api/agents/:id/output
+        // serves, and what Logs replays once the agent's terminal is gone.
+        const keptOutputOf = (id: string) => app!.evaluate((_e, { dist, id }) =>
+          ((process.mainModule!.require(`${dist}/core/agent-manager.js`).agents.get(id)?.output ?? []) as string[]).join(''), { dist, id });
+        await run(lead, api, { resumeOf, keptOutputOf });
       } finally {
         await keepScreen?.().catch(() => undefined);
         mcp?.kill();
@@ -272,7 +302,7 @@ for (const h of HARNESSES) {
 
       // 5. Tars quits and starts again; the agent's first start continues its session.
       const before = posts().length;
-      await withTars('second', async (lead, api) => {
+      await withTars('second', async (lead, api, main) => {
         await api('agent', 'start', { id: WORKER, prompt: '' });
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
         const again = await delegate(lead, 2);
@@ -285,12 +315,13 @@ for (const h of HARNESSES) {
 
         // 6. The window restarts the agent, which forks its session: answered from the fork, with the earlier history.
         const sessionBeforeRestart = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
+        keep({ resumeBeforeRestart: await main.resumeOf(WORKER) });
         const beforeRestart = posts().length;
         await api('agent', 'restart', WORKER);
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
-        // What a person reads in Logs: the agent's kept output, where Tars writes its notices (core/agent-notices.ts).
-        // agent:get serves the terminal's screen instead, which a notice never reaches: read before the next task's
-        // redraws can trim it.
+        // Tars's notice goes into the agent's kept output (core/agent-notices.ts), read before the next task's chunks can
+        // trim it. Neither agent:get nor Logs shows it while the agent has a terminal: both read that terminal's screen.
+        const keptAfterRestart = plain(await main.keptOutputOf(WORKER));
         const logs = async () => ((await api<{ lines?: string[] } | null>('logs', 'tail', WORKER, 2000))?.lines ?? []).join('\n');
         const logsAfterRestart = await logs();
         const restarted = await delegate(lead, 3);
@@ -306,8 +337,11 @@ for (const h of HARNESSES) {
         if (h.restartsFresh) {
           // No fork: a fresh session, without the earlier history, and the agent's output says so.
           expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request starts a conversation of its own').not.toContain(standin.marker);
-          keep({ noticeInLogs: logsAfterRestart.split('\n').filter(l => l.includes('[Tars]')), noticeStillInLogsAfterTask: (await logs()).includes('[Tars] Its conversation starts over') });
-          expect.soft(logsAfterRestart, 'the agent\'s output says the conversation starts over').toContain('[Tars] Its conversation starts over');
+          keep({
+            noticeInKeptOutput: keptAfterRestart.split(/\r?\n/).filter(l => l.includes('[Tars]')),
+            noticeInLogsWhileItRuns: logsAfterRestart.split('\n').filter(l => l.includes('[Tars]')),
+          });
+          expect.soft(keptAfterRestart, 'the agent\'s output says the conversation starts over').toContain('[Tars] Its conversation starts over');
         } else {
           expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request carries the earlier history').toContain(standin.marker);
         }
