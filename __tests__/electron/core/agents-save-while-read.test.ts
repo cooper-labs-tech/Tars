@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, afterAll, afterEach } from 'vitest';
 import { spawn } from 'node:child_process';
 import * as fs from 'node:fs';

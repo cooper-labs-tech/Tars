@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { clearsField, outcomeOf, stripOf, titleOf, workingLine } from '../../src/lib/chat-send';
 

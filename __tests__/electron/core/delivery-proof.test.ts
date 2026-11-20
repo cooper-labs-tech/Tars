@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { deliveryVerdict, taskOnRecord } from '../../../electron/core/delivery-proof';
 

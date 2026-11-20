@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, settle, ofType, textOf, elements, type Mount } from './hook-runtime';
 import type { ClaudeAccountState, ClaudeAccountsView } from '../../src/types/electron';

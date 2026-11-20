@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { OpenCodeProvider } from '../../../electron/providers/opencode-provider';
 import { PiProvider } from '../../../electron/providers/pi-provider';

@@ -52,6 +52,7 @@
  * from #303's bench were still running 43 h on, and QA ended one at 17 h.
  * 13. A test leaves a stand-in, or what it started, running after it ends.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

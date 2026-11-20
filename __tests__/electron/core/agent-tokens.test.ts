@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { mintAgentToken, mintRunToken, agentForToken } from '../../../electron/core/agent-tokens';
 

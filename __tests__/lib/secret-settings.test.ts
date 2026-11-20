@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { WINDOW_SECRETS, SECRET_MASK as WINDOW_MASK, withoutSecrets, secretIsSet, withSecretState } from '../../src/lib/secret-settings';
 import { SECRET_FIELDS, WINDOW_SET_FIELDS, SECRET_MASK } from '../../electron/services/settings-secrets';

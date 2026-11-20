@@ -27,6 +27,7 @@
  * 13. A submodule inside a submodule is not looked into: work its parent's
  *     status cannot see (a stash) goes with the worktree.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

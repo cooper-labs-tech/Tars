@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, afterAll, beforeEach, afterEach } from 'vitest';
 import type { ReactElement } from 'react';
 import { mount, settle, elements, ofType, textOf, type Mount } from './hook-runtime';

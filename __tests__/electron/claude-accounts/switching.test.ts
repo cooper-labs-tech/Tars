@@ -32,6 +32,7 @@
  *   kept on the agent for its card;
  * - a threshold move followed by "Continue": nothing was cut, nothing typed.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 import * as fs from 'fs';

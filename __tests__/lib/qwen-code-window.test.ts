@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { PROVIDER_REGISTRY, getProviderDef } from '../../src/lib/providers';
 import { hasPlanMode, modeForProvider } from '../../src/lib/plan-mode';

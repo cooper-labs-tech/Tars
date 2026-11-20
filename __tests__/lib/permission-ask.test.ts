@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { permissionAskLine } from '../../src/lib/permission-ask';
 import type { AgentStatus } from '../../src/types/electron';

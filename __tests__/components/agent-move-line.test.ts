@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { onAgentMoveLine } from '../../src/hooks/useClaudeAccounts';
 import { moveLine } from '../../src/lib/claude-accounts';

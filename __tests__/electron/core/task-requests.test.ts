@@ -76,6 +76,7 @@
  * 18. A look-alike envelope inside that owed block (the memory is not quoted)
  *     taken for the task's, or an envelope after anything but Tars's own line.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import {
   newTaskRef, enqueueRequest, requestDelivered, bindTurn, linkSpent, requestDropped, takeAllRequests, isOwedByRequests,

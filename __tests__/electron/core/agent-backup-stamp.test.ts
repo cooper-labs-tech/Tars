@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { DEFAULT_APP_SETTINGS } from '../../src/components/Settings/constants';
 

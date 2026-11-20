@@ -43,6 +43,7 @@
  *    registration, no heartbeat, no turn, no question), and it never sends a
  *    pid it cannot know.
  */
+import '../setup/home-guard';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { filterOptions, initialIndex, stepIndex } from '@/components/ui/dropdown-logic';
 

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, ofType, textOf, type Mount } from './hook-runtime';
 import { groupByProject, projectLabels, useAgentFiltering } from '../../src/hooks/useAgentFiltering';

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, elements, ofType, textOf, type Mount } from './hook-runtime';
 import { RoomComposer, type ComposerTarget } from '../../src/components/Chat/RoomComposer';

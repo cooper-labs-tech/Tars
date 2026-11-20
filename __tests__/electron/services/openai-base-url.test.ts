@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { isValidOpenAIBaseUrl as mainProcess } from '../../../electron/providers/cli-provider';
 import { isValidOpenAIBaseUrl as renderer } from '../../../src/lib/validateUrl';

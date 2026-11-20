@@ -1,3 +1,4 @@
+import './home-guard';
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';

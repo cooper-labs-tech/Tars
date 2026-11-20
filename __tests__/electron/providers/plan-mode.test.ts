@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { getAllProviders } from '../../../electron/providers';
 import { hasPlanMode, planModeRefusal } from '../../../electron/providers/plan-mode';

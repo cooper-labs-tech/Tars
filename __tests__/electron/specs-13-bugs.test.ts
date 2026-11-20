@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 import * as fs from 'fs';

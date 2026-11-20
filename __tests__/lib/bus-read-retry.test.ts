@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUS_READ_MS, BUS_RETRY_MS, retryingRead } from '../../src/lib/bus-read';
 

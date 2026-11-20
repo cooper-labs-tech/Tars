@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { ROWS_CHOICES, ROWS_KEYS, pageButtons, pageCount, pageOf, pageRows, pagerShown, pagesShown, rangeText, rowsOf } from '../../src/lib/pager';
 

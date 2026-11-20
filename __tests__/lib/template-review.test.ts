@@ -50,6 +50,7 @@
  *    imported there; or, on macOS and Linux, such a folder is
  *    accepted, though it names nothing there.
  */
+import '../setup/home-guard';
 import { describe, expect, it } from 'vitest';
 import {
   reveal,

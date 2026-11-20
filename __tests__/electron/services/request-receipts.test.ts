@@ -29,6 +29,7 @@
  * 11. An outcome updated later (a delegated run that ends) loses what it
  *     already held, or the update reaches another caller's receipt.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

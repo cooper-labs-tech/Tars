@@ -58,6 +58,7 @@
  *     the window's banner cannot say them; or a task given straight, with no
  *     wait, has none of them.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import {
   createOneTaskQueue,

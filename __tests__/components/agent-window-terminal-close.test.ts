@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, settle, type Mount } from './hook-runtime';
 import { useAgentDialogTerminal } from '../../src/components/AgentWorld/useAgentDialogTerminal';

@@ -23,6 +23,7 @@
  *    orchestrator.
  * 6. A word that is none of these reaches anyone.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { replyTargetOf, type ReplyAgent } from '../../../electron/core/reply-target';
 

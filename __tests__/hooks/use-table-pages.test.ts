@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount } from '../components/hook-runtime';
 import { useTablePages } from '../../src/hooks/useTablePages';

@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createWaitsDigest, DIGEST_EVERY_MS, type WaitInput } from '../../../electron/services/waits-digest';
 import { twoZones } from '../../../electron/utils/two-zones';

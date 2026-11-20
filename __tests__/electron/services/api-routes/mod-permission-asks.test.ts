@@ -103,6 +103,7 @@
  * 33. (Low) A bypass worker's AskUserQuestion waits at its terminal all night: Tars refuses it at once, telling it to
  *     ask its orchestrator with send_message. An orchestrator's, or an agent's not in bypass, stays with the person.
  */
+import '../../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'events';
 

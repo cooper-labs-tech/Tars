@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   LAUNCH_WINDOW_MS, apiAnswerReports, cliLaunchExit, isHandlerRefusal, reportAgentToolError, reportHandledError,

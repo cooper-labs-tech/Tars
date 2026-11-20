@@ -1,3 +1,4 @@
+import './home-guard';
 import { describe, it, expect } from 'vitest';
 import * as pty from 'node-pty';
 

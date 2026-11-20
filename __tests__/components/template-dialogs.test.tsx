@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { mount, settle, elements, ofType, textOf, type Mount } from './hook-runtime';
 import { ImportDialog } from '../../src/components/Templates/ImportDialog';

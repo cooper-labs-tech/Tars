@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';

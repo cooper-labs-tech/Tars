@@ -31,6 +31,7 @@
  *    the syntax tree instead: the guard is a call in the spawn's own
  *    function, before the spawn, not in a function nested inside it.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

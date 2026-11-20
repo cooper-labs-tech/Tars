@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, settle, deferred, type Mount } from '../components/hook-runtime';
 import { useClaude, readClaudeData, forgetClaudeData } from '../../src/hooks/useClaude';

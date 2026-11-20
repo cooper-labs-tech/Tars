@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { emptyFeed, applySnapshot, applyEvent, applyEarlier } from '../../src/lib/chat-feed';
 import type { ChatEvent, ChatHistory, ChatItem, ChatView } from '../../src/types/electron';

@@ -88,6 +88,7 @@
  *     that does not settle) is looked at again, or one that does (a Stop
  *     hook's tail, no process table, a message settling) no longer is.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import * as path from 'path';
 import {

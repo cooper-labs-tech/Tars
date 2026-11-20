@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, ofType, textOf, elements, type Mount } from './hook-runtime';
 import { ClaudeAccountRow, UsageMeter, ThresholdFields } from '../../src/components/Settings/ClaudeAccountRow';

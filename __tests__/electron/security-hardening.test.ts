@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { BrowserWindow } from 'electron';
 import { safeEffort } from '../../electron/providers/cli-provider';

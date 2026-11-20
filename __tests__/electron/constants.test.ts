@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { MIME_TYPES, API_PORT, TG_CHARACTER_FACES, SLACK_CHARACTER_FACES } from '../../electron/constants';
 

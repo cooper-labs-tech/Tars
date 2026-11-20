@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { mount, settle, ofType, textOf, deferred, type Mount } from './hook-runtime';
 import { DiscordSection } from '../../src/components/Settings/DiscordSection';

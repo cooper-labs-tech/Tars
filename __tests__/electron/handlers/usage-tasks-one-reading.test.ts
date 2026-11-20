@@ -11,6 +11,7 @@
  * 2. An ask for another question starts its reading while one is under way: two readings at once.
  * The reading is tasksReport, slowed, which counts its calls and how many run at once.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const { tmpHome, reading } = vi.hoisted(() => ({

@@ -17,6 +17,7 @@
  * darwin and linux: the separator already is `/`, and a `\` there is a
  * character of the file's name, which the listing leaves where it is.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
