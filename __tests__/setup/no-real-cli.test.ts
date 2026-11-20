@@ -2,7 +2,8 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFile } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { realBinary, programOfLine, startedPrograms, narrowRootsForTest, takeViolations } from './no-real-cli';
 
 /**
@@ -27,6 +28,11 @@ import { realBinary, programOfLine, startedPrograms, narrowRootsForTest, takeVio
  *     any case, and their .exe, .cmd and .bat forms.
  * G8. A CLI at the head of a shell's script (`sh -c 'codex ...'`, `zsh -ilc ...`) or of a line spawned with
  *     `shell: true` goes through.
+ * And from the whole suite's run with the guard (20/11):
+ * G9. The guard changes what a start answers: `promisify(execFile)` and `promisify(exec)` made after it lose node's
+ *     own promisified form, and resolve with stdout alone instead of { stdout, stderr } (scope-checks.test.ts failed).
+ * G10. A test that runs a real CLI on purpose (codex's own parser reading a config Tars wrote) has no way to: it runs
+ *     only when TARS_TEST_REAL_CLIS names that CLI, and the guard then lets that one through, and only that one.
  */
 
 const files = (...present: string[]) => (p: string) => present.includes(p);
@@ -89,6 +95,24 @@ describe('which binary is a real one', () => {
 
 describe('in the suite', () => {
   afterEach(() => { narrowRootsForTest(null); });
+
+  it('G9. a start promisified after the guard answers as node\'s own does', async () => {
+    const run = promisify(execFile);
+    const ran = await run(process.execPath, ['-e', "process.stdout.write('out'); process.stderr.write('err')"]);
+    expect(ran).toEqual({ stdout: 'out', stderr: 'err' });
+    const line = await promisify(exec)(`"${process.execPath}" -e "process.stdout.write('line')"`);
+    expect(line).toEqual({ stdout: 'line', stderr: '' });
+  });
+
+  it('G10. only the CLIs TARS_TEST_REAL_CLIS names are let through, and only when it names them', () => {
+    const roots = ['/tmp/run'];
+    const real = '/home/me/.local/bin/codex';
+    expect(realBinary(real, undefined, roots, files(real), 'linux', 'codex')).toBeNull();
+    expect(realBinary(real, undefined, roots, files(real), 'linux', 'Codex, gemini')).toBeNull();
+    expect(realBinary(real, undefined, roots, files(real), 'linux', 'gemini')).toBe(real);
+    expect(realBinary('/home/me/.local/bin/claude', undefined, roots, files('/home/me/.local/bin/claude'), 'linux', 'codex')).toBe('/home/me/.local/bin/claude');
+    expect(realBinary(real, undefined, roots, files(real), 'linux', '')).toBe(real);
+  });
 
   it('G5. a real one is refused, not started, through child_process and through the product\'s probe', async () => {
     // A "real" claude: a stand-in, with the test's own folders taken off the allowed list for this case only.
