@@ -41,7 +41,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
  * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE, TARS_HARNESS_KILO,
- * TARS_HARNESS_GOOSE); a harness with none is skipped, and says so. A harness whose tokens Tars reads (opencode, Kilo,
+ * TARS_HARNESS_GOOSE, TARS_HARNESS_CLINE); a harness with none is skipped, and says so. Cline runs with every CLINE_* of
+ * the runner's blanked and a shim catching any page it would open, beside a decoy hub of the user's that must survive. A harness whose tokens Tars reads (opencode, Kilo,
  * Goose) also has them in its task's ledger entry. Goose runs with every GOOSE_* of the runner's blanked (an empty one
  * reads as unset, measured: GOOSE_PATH_ROOT would move its folders out of the sandbox), its keyring and telemetry off.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
@@ -49,8 +50,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
  */
 
-/** `tokens`: a harness whose tokens Tars reads (its task's ledger entry carries them). `pair`: it runs step 7. */
-type Harness = { id: string; provider: string; pathKey: string; env: string; tokens?: boolean; pair?: boolean };
+/**
+ * `tokens`: a harness whose tokens Tars reads (its task's ledger entry carries them). `pair`: it runs step 7.
+ * `restartsFresh`: a harness that cannot fork (Cline 3.0.74): its restart starts a session without the earlier history,
+ * and says so in the agent's output.
+ */
+type Harness = { id: string; provider: string; pathKey: string; env: string; tokens?: boolean; pair?: boolean; restartsFresh?: boolean };
 const HARNESSES: Harness[] = [
   { id: 'kimi-code', provider: 'kimi-code', pathKey: 'kimi', env: 'TARS_HARNESS_KIMI_CODE' },
   { id: 'codex', provider: 'codex', pathKey: 'codex', env: 'TARS_HARNESS_CODEX' },
@@ -58,7 +63,12 @@ const HARNESSES: Harness[] = [
   { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
   { id: 'kilo', provider: 'kilo', pathKey: 'kilo', env: 'TARS_HARNESS_KILO', tokens: true },
   { id: 'goose', provider: 'goose', pathKey: 'goose', env: 'TARS_HARNESS_GOOSE', tokens: true, pair: true },
+  { id: 'cline', provider: 'cline', pathKey: 'cline', env: 'TARS_HARNESS_CLINE', pair: true, restartsFresh: true },
 ];
+
+/** For Cline: the runner's own settings of it blanked (CLINE_DIR, CLINE_DATA_DIR... would point at its real folders). */
+const clineEnv = (): Record<string, string> =>
+  Object.fromEntries(Object.keys(process.env).filter((name) => name.startsWith('CLINE_')).map((name) => [name, '']));
 
 /** For Goose: the runner's own settings of it blanked, and no keychain nor telemetry from the sandbox. */
 const gooseEnv = (): Record<string, string> => ({
@@ -109,6 +119,10 @@ for (const h of HARNESSES) {
     fs.writeFileSync(test.info().outputPath('reproduce.txt'),
       `${h.env}=${bin} npx playwright test e2e/harness-conformance.spec.ts -g '${h.id}'\n`);
 
+    // What would open a page in the owner's browser (`open`, `xdg-open`) only says it was asked, here.
+    const shim = path.join(home, 'shim');
+    fs.mkdirSync(shim, { recursive: true });
+    for (const name of ['open', 'xdg-open']) fs.writeFileSync(path.join(shim, name), `#!/bin/sh\necho "$0 $*" >> ${JSON.stringify(path.join(shim, 'opened.log'))}\n`, { mode: 0o755 });
     const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
       id, name, character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: project, skills: [],
       createdAt: '2026-11-19T08:00:00.000Z', lastActivity: '2026-11-19T08:00:00.000Z', ...extra,
@@ -122,7 +136,8 @@ for (const h of HARNESSES) {
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
       autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9',
-      cliPaths: { [h.pathKey]: bin, additionalPaths: [path.dirname(bin)] },
+      // Cline's launcher is a node script, and a browser it might open is caught by the shim, first on its PATH.
+      cliPaths: { [h.pathKey]: bin, additionalPaths: h.id === 'cline' ? [shim, path.dirname(bin), path.dirname(process.execPath)] : [path.dirname(bin)] },
       inferenceEndpoints: [{ id: EP, name: 'Stand-in host', baseUrl: standin.baseUrl, allowTraces: false, models: [MODEL_ID], approved: true, approvedBaseUrl: standin.baseUrl, holdMaxSeconds: 30 }],
     }, null, 2));
     const drop = path.join(dir, 'endpoint-keys');
@@ -159,6 +174,7 @@ for (const h of HARNESSES) {
         app = await launchSandboxed(electron, home, { env: {
           NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', ...harnessHomes,
           ...(h.id === 'goose' ? gooseEnv() : {}),
+          ...(h.id === 'cline' ? clineEnv() : {}),
         } });
         const appLog = test.info().outputPath(`app-${label}.log`);
         app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
@@ -210,6 +226,8 @@ for (const h of HARNESSES) {
       delegateOnceUp(lead, { id: WORKER, prompt: TASK, timeoutSeconds: 200, requestId: `e2e-conformance-${h.id}-${step}` });
 
     const runnerBefore = runnerHomeFiles();
+    // A hub of the user's own Cline, in their project: nothing Tars does for its agent may stop it.
+    const decoy = h.id === 'cline' ? spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)', '--', '--cline-hub-daemon', '--cwd', project], { stdio: 'ignore' }) : undefined;
     try {
       await withTars('first', async (lead, api) => {
         fs.writeFileSync(path.join(drop, 'stand-in.key'), `${key}\n`);
@@ -280,7 +298,14 @@ for (const h of HARNESSES) {
         });
         expect.soft(restarted.text, 'after a restart, the third delegation is answered').toContain('PROBE-OK');
         expect.soft(afterRestart.length, 'the restarted session reached the endpoint').toBeGreaterThan(0);
-        expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request carries the earlier history').toContain(standin.marker);
+        if (h.restartsFresh) {
+          // No fork: a fresh session, without the earlier history, and the agent's output says so.
+          expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request starts a conversation of its own').not.toContain(standin.marker);
+          const kept = ((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('');
+          expect.soft(kept, 'the agent\'s output says the conversation starts over').toContain('[Tars] Its conversation starts over');
+        } else {
+          expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request carries the earlier history').toContain(standin.marker);
+        }
         expect.soft(sessionAfterRestart, 'the agent is on the fork, a session of its own').not.toBe(sessionBeforeRestart);
 
         // 7. Two agents with the same skills, both stopped, delegated to at the same moment.
@@ -295,7 +320,21 @@ for (const h of HARNESSES) {
           expect.soft(new Set(pairLedger.map((t) => t.agentId)).size, 'step 7: a ledger entry each').toBe(2);
         }
       });
+      if (h.id === 'cline') {
+        // After Tars quit: the decoy hub of the user's still runs, nothing of the agent's Cline folder does, no page was
+        // opened, and the user's ~/.cline was never made.
+        const ps = process.platform === 'win32' ? '' : execFileSync('ps', ['-o', 'pid=,command=', '-U', String(process.getuid?.() ?? '')], { encoding: 'utf8' });
+        const agentFolder = path.join(home, '.tars-private', 'cline');
+        const left = ps.split('\n').filter((l) => l.includes(agentFolder)).map((l) => l.trim().slice(0, 200));
+        const opened = fs.existsSync(path.join(shim, 'opened.log')) ? fs.readFileSync(path.join(shim, 'opened.log'), 'utf8') : '';
+        keep({ clineLeftRunning: left, decoyHubAlive: decoy?.exitCode === null, pagesOpened: opened, usersClineMade: fs.existsSync(path.join(home, '.cline')) });
+        expect.soft(left, 'nothing of the agent\'s Cline folder outlives Tars').toEqual([]);
+        expect.soft(decoy?.exitCode, 'the user\'s own hub still runs').toBeNull();
+        expect.soft(opened, 'no page opened in a browser').toBe('');
+        expect.soft(fs.existsSync(path.join(home, '.cline')), 'the user\'s ~/.cline was never made').toBe(false);
+      }
     } finally {
+      if (decoy && decoy.exitCode === null && decoy.pid) process.kill(decoy.pid);
       // The homes the runner exported were left as they were.
       const runnerAfter = runnerHomeFiles();
       keep({ runnerHomes: Object.keys(runnerBefore), runnerHomesChanged: Object.keys(runnerBefore).filter((f) => runnerAfter[f] !== runnerBefore[f]) });
