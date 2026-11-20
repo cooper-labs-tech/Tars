@@ -12,11 +12,16 @@
  *   data, state and caches.
  * - ZDOTDIR makes the login shells of the agents' terminals, and the one Tars asks for codex's CODEX_HOME, read the rc
  *   files it names, and whatever they export.
- * - opencode reads its own config from OPENCODE_CONFIG (a file) and OPENCODE_CONFIG_DIR (a folder). Kilo, an opencode
- *   fork, does the same from KILO_CONFIG and KILO_CONFIG_DIR: only KILO_CONFIG_CONTENT was measured
- *   (reports/harnesses-measured.md), and the other two follow the fork's naming.
- * A CLI's whole config given as text (CLI_CONFIG_CONTENT) and git's own variables (GIT_OWN: GIT_DIR, GIT_INDEX_FILE,
- * GIT_CONFIG_*..., which a run started from a git hook carries) are dropped too, and never judged as folders.
+ * - opencode reads its own config from OPENCODE_CONFIG (a file) and OPENCODE_CONFIG_DIR (a folder), and Kilo, an
+ *   opencode fork, from KILO_CONFIG and KILO_CONFIG_DIR.
+ * - Both also take a whole home of their own, OPENCODE_TEST_HOME and KILO_TEST_HOME, and these files and folders:
+ *   TEST_MANAGED_CONFIG_DIR, MODELS_PATH, PLUGIN_META_FILE and ZED_DB, and for Kilo, LANCEDB_PATH, TEST_DAEMON_LOG_DIR
+ *   and TEST_DAEMON_STATE_DIR.
+ * - These names were read from the published binaries (opencode 1.19.6 and Kilo 7.8.27, npm, 2026-11-20), never run:
+ *   Kilo writes into whatever home it is given, even for --version.
+ * A CLI's whole config or sign-in given as text (CLI_CONFIG_CONTENT: OPENCODE_ and KILO_ CONFIG_CONTENT and
+ * AUTH_CONTENT) and git's own variables (GIT_OWN: GIT_DIR, GIT_INDEX_FILE, GIT_CONFIG_*..., which a run started from a
+ * git hook carries) are dropped too, and never judged as folders.
  *
  * With one of them exported, a sandboxed Tars wrote into the owner's real folder (#608's Audit, L2), and so did the
  * code under npm test (#609's re-audit, M1: codex-provider.test.ts wrote the runner's codex config.toml). On
@@ -29,8 +34,8 @@
 const fs = process.getBuiltinModule('node:fs');
 const path = process.getBuiltinModule('node:path');
 
-export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR|OPENCODE_CONFIG|OPENCODE_CONFIG_DIR|KILO_CONFIG|KILO_CONFIG_DIR)$/;
-export const CLI_CONFIG_CONTENT = /^(OPENCODE|KILO)_CONFIG_CONTENT$/;
+export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR|(OPENCODE|KILO)_(CONFIG|CONFIG_DIR|TEST_HOME|TEST_MANAGED_CONFIG_DIR|MODELS_PATH|PLUGIN_META_FILE|ZED_DB)|KILO_(LANCEDB_PATH|TEST_DAEMON_LOG_DIR|TEST_DAEMON_STATE_DIR))$/;
+export const CLI_CONFIG_CONTENT = /^(OPENCODE|KILO)_(CONFIG|AUTH)_CONTENT$/;
 export const GIT_OWN = /^GIT_/;
 
 /** Whether `name` is one of the three families: a CLI home, a CLI's config as text, or git's own. */
