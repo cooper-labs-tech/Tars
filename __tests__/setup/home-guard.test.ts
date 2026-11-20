@@ -98,6 +98,8 @@ describe('the sweep\'s reading of a test file', () => {
     expect(homeWrites("const home = () => os.homedir();\nfs.rmSync(path.join(home(), '.tars', 'x.json'), { force: true });")).toHaveLength(1);
     expect(homeWrites("const file = () => path.join(os.homedir(), '.config', 'o.json');\nfs.writeFileSync(file(), '{}');")).toHaveLength(1);
     expect(homeWrites("const root = os.homedir();\nconst dir = path.join(root, '.pi');\nconst f = path.join(dir, 'mcp.json');\nfs.unlinkSync(f);")).toHaveLength(1);
+    // Helpers defined before what they use, as arrow functions often are: only a reading to a fixed point finds them.
+    expect(homeWrites("const f = () => path.join(dir(), 'mcp.json');\nconst dir = () => path.join(root(), '.pi');\nconst root = () => os.homedir();\nfs.unlinkSync(f());")).toHaveLength(1);
   });
 
   it('D3. flags process.env.HOME, process.env[\'HOME\'], a bare homedir() and a template string', () => {
