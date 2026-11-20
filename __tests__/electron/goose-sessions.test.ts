@@ -23,7 +23,8 @@ import Database from 'better-sqlite3';
  *    prompt names another agent, one whose first prompt holds nothing this terminal was sent.
  * 2. No database yet, or a file that is not one: a throw, or a session never bound once the database appears.
  * 3. A turn's end missed, or its answer, its usage: an assistant message with text and no tool request ends it; its
- *    answer is the turn's text; its tokens are the turn's model calls summed, under their model.
+ *    answer is the turn's text; its tokens are the turn's model calls summed, under their model, the cache read taken
+ *    out of the input, which Goose counts in it.
  * 4. A step that asked for a tool taken for the end, or a tool's response or the turn context taken for a prompt.
  * 5. An endpoint's failure not said: the agent's status is an error, in Goose's words.
  * 6. A turn cut by Ctrl+C left open for good: the next prompt closes it, said interrupted, before its own turn.
@@ -137,7 +138,9 @@ describe("a Goose agent's turns, from its database", () => {
     expect(gooseUuidOf(SES)).toBe(uuid);
     expect(posts[1].post.body.current_task).toBe(identity(AGENT));
     expect(posts[2].post.body.output).toBe('PROBE-OK TARS-PROBE-1234abcd');
-    expect(posts[5].post.body.usage).toEqual({ model: 'stand-in-coder', input_tokens: 240, output_tokens: 24, cache_read_input_tokens: 200, cache_creation_input_tokens: 0 });
+    // Goose's input counts the cache read (measured: an endpoint's prompt_tokens 120, 100 of them cached, came in as
+    // input 120 and cache read 100); Tars's input is without it, as Claude Code's.
+    expect(posts[5].post.body.usage).toEqual({ model: 'stand-in-coder', input_tokens: 40, output_tokens: 24, cache_read_input_tokens: 200, cache_creation_input_tokens: 0 });
   });
 
   it('4: a step that asked for a tool ends nothing; each message is posted once, across reads', async () => {
