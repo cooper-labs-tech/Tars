@@ -199,6 +199,13 @@ for (const newInterface of [false, true]) {
             continue;
           }
           const tag = `${A.provider}-${B.provider}`.toUpperCase().replace(/[^A-Z0-9]+/g, '');
+          // B at rest first: its turns from the pairs before (a reply, Tars's note that an agent finished) end before
+          // this pair starts, or `turn` reads their running as this one's (codex to claude, right after claude's own
+          // pairs: red on 2.0.6's final runs and on #611's first full run, 20/11). 20 s at most, then `turn` says so;
+          // not for a B whose turns Tars never shows ending (the table's CLIs without hooks).
+          if (!expectedRed({ from: A.provider, to: B.provider, step: 'turn', result: 'red', detail: '' })) {
+            for (const end = Date.now() + 20_000; Date.now() < end && (await get(B.id))?.status === 'running';) await page.waitForTimeout(200);
+          }
           // delegate_task, and B's turn as the window reads it.
           let sinceA = recs(A).length;
           let sinceB = recs(B).length;
