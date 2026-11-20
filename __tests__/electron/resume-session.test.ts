@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vites
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { PiProvider } from '../../electron/providers/pi-provider';
 import {
   encodeProjectDirName,
   resolveResumeSessionId,
@@ -36,6 +37,16 @@ import {
  * being a bare UUID, so it began anew after every restart; an id resumed that the index no longer lists, or whose
  * session folder is gone; an id of another form reaching the command line; a Claude agent resumed on a kimi session.
  * Tars keeps it as the UUID the hook routes took (kimi's own name is session_<uuid>), and gives that back.
+ *
+ * A pi agent (20/11, found by pi's harness conformance run): pi writes its sessions in a folder of the agent's own,
+ * ~/.tars/pi/sessions/<agent id>/<time>_<id>.jsonl (PI_CODING_AGENT_SESSION_DIR, services/pi-sessions.ts), and
+ * `pi --session <id>` continues one (measured on 1.5.2: the first request carried the earlier turns). How it fails,
+ * written before the code: no resume at all, so a pi agent began anew after every restart of Tars (the conformance
+ * run's step 5); an id resumed whose file is gone, or one from another agent's folder; an id of another form reaching
+ * the command line; the session after the prompt, where pi reads it as text; a Claude agent resumed on a pi session;
+ * a restart that applies new settings, which asks for a fork (a new session, the old one tombstoned), continuing the
+ * same session id, whose posts the hook routes then drop as stale. `pi --fork <id>` goes on under a new session id with
+ * the earlier turns (measured on 1.5.2).
  */
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-resume-'));
@@ -322,5 +333,49 @@ describe('a project reached through a symlink', () => {
     fs.symlinkSync(worktreeReal, worktreeLink, 'junction');
     writeTranscript(worktreeReal, SESSION);
     expect(resolveResumeSessionId({ resumableSessionId: SESSION, projectPath: link, worktreePath: worktreeLink }, home)).toBe(SESSION);
+  });
+});
+
+describe("a pi agent's session", () => {
+  const PI = '01a1f662-3700-76c7-b873-c0c609074f4d';
+  const AGENT = 'eeee5555-0000-4000-8000-0000000000c2';
+  const folder = (agentId: string) => path.join(home, '.tars', 'pi', 'sessions', agentId);
+  const written = (agentId: string, id: string) => {
+    fs.mkdirSync(folder(agentId), { recursive: true });
+    fs.writeFileSync(path.join(folder(agentId), `2026-11-20T00-36-37-926Z_${id}.jsonl`), `${JSON.stringify({ type: 'session', id })}\n`);
+  };
+  beforeEach(() => { fs.rmSync(path.join(home, '.tars'), { recursive: true, force: true }); });
+
+  it("resumes a session whose file is in the agent's own folder", () => {
+    written(AGENT, PI);
+    expect(resolveResumeSessionId({ id: AGENT, provider: 'pi', resumableSessionId: PI, projectPath: PROJECT }, home)).toBe(PI);
+  });
+
+  it("refuses one gone, one in another agent's folder, one of another form, and a Claude agent on a pi session", () => {
+    expect(resolveResumeSessionId({ id: AGENT, provider: 'pi', resumableSessionId: PI, projectPath: PROJECT }, home)).toBeNull();
+    written('ffff6666-0000-4000-8000-0000000000c3', PI);
+    expect(resolveResumeSessionId({ id: AGENT, provider: 'pi', resumableSessionId: PI, projectPath: PROJECT }, home)).toBeNull();
+    written(AGENT, PI);
+    for (const bad of [`${PI}'; rm -rf /`, `../${PI}`, 'x']) {
+      expect(resolveResumeSessionId({ id: AGENT, provider: 'pi', resumableSessionId: bad, projectPath: PROJECT }, home)).toBeNull();
+    }
+    expect(resolveResumeSessionId({ id: '../x', provider: 'pi', resumableSessionId: PI, projectPath: PROJECT }, home)).toBeNull();
+    expect(resolveResumeSessionId({ id: AGENT, provider: 'claude', resumableSessionId: PI, projectPath: PROJECT }, home)).toBeNull();
+  });
+
+  it('reaches pi as --session <id>, before the prompt; an id of another form never reaches its line', () => {
+    const pi = new PiProvider();
+    const line = pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on', resumeSessionId: PI });
+    expect(line).toContain(`--session '${PI}'`);
+    expect(line.indexOf('--session')).toBeLessThan(line.indexOf("'go on'"));
+    expect(pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: '', resumeSessionId: PI })).toContain(`--session '${PI}'`);
+    expect(pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on', resumeSessionId: `${PI}'; rm -rf ~` })).not.toContain('--session');
+    expect(pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on' })).not.toContain('--session');
+  });
+
+  it('a fork reaches pi as --fork <id>, never as --session', () => {
+    const line = new PiProvider().buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on', resumeSessionId: PI, forkSession: true });
+    expect(line).toContain(`--fork '${PI}'`);
+    expect(line).not.toContain('--session');
   });
 });

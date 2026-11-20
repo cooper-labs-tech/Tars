@@ -13,6 +13,11 @@ import * as path from 'node:path';
  * the killed CLI's late SessionStart then took the agent from the live one.
  * Scripted senders land there: the bots, the Hermes webhook, the overseer.
  *
+ * Found by the Audit of #610 (L1, 20/11), written before the code: a pi launch held by what pi waits on, a question
+ * nobody answers in an agent's terminal ("Trust project folder?") or a download that never ends, was answered as one
+ * "still starting ... as happens on a loaded machine". That is not the cause, and the sender cannot act on it. The
+ * answer names what holds it, and still types nothing.
+ *
  * What follows is the harness of start-launch-settings.test.ts: every launch from a window, and the two the main process makes on its own,
  * run on the agent's model and effort, and a change to either applies by
  * itself, at a moment that cuts nothing.
@@ -548,6 +553,42 @@ describe('a launch slower than CLI_BOOT_MS, as under load (Database Engineer, re
     // Before the MCP tools' own 30 s: an answer after it reaches nobody.
     expect(answeredAt - t0, 'answered after the caller had given up').toBeLessThan(30_000);
     expect(typedInto(terminal())).not.toContain('WORD?');
+  });
+
+  it("names what holds a pi launch, its trust question or a download, and types nothing (#610's L1)", async () => {
+    const draw = (terminal: FakePty, rows: string[]) => {
+      for (const [listener] of terminal.onData.mock.calls) (listener as (d: string) => void)('\x1b[2J\x1b[H' + rows.join('\r\n'));
+    };
+    const question = [
+      '─'.repeat(100), '', ' Trust project folder?', ` ${project}`, '',
+      ' This allows pi to load .pi settings and resources, install missing project packages, and execute project extensions.',
+      '', ' → Trust', '   Trust (this session only)', '   Do not trust', '', ' ↑↓ navigate  enter select  escape/ctrl+c cancel',
+    ];
+    const downloading = [
+      ' ▀▀█ v1.5.2', ' fd not found. Downloading...',
+      '─'.repeat(72), '', '─'.repeat(72), '~/projects/project-a (main)', '0.0%/128k (auto)                  stand-in-coder',
+    ];
+    for (const [screen, named] of [[question, /Trust project folder\?/], [downloading, /downloading fd/i]] as const) {
+      resetLaunches();
+      const { agent, terminal } = agentBeingStarted();
+      agent.provider = 'pi';
+      await dispatch(agent.id, 'Rebase onto main');
+      terminal().process = 'pi';
+      draw(terminal(), [...screen]);
+      await vi.advanceTimersByTimeAsync(10_000);
+      const second = dispatch(agent.id, 'WORD?');
+      await vi.advanceTimersByTimeAsync(40_000);
+      const answer = await second;
+
+      expect(answer.status, JSON.stringify(answer.body)).toBe(409);
+      expect(answer.body).toMatchObject({ starting: true });
+      const error = String(answer.body.error);
+      expect(error).toMatch(named);
+      if (screen === question) expect(error).toContain(project);
+      expect(error).not.toMatch(/loaded machine/);
+      expect(error).toMatch(/nothing was typed/i);
+      expect(typedInto(terminal())).not.toContain('WORD?');
+    }
   });
 
   it('answers the same for a /message, which the MCP send_message uses', async () => {

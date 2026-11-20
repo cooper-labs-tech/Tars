@@ -24,6 +24,7 @@ import { dialogOpen, dialogShown } from './agent-launch';
 import { markCliLaunch } from './terminal-mirror';
 import { kimiSessionWatch } from '../services/kimi-sessions';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
+import { ensurePiProjectTrusted } from '../providers/pi-provider';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
 import { killPty } from './pty-kill';
@@ -1226,6 +1227,8 @@ export async function launchIntoTerminal(
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).
   if (getProvider(agent.provider).binaryName === 'codex') codexLaunching(agent.id, start.cwd);
+  // pi typed into a shell already there: its folder trusted first, as at a spawn (core/agent-pty.ts).
+  if (getProvider(agent.provider).binaryName === 'pi') ensurePiProjectTrusted(start.cwd);
   // Kimi Code typed into a shell already there, a restart's included: noted now, with the session its line resumes,
   // so that the session an earlier launch left counts only as that one (services/kimi-sessions.ts, the Audit's M1).
   if (getProvider(agent.provider).binaryName === 'kimi') kimiSessionWatch.noteLaunch(agent.id, start.cwd, kimiSessionOfCommand(start.typedLine));

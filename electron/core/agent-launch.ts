@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, rowsSinceLaunch } from './terminal-mirror';
+import { dialogOnScreen, piTrustQuestionOnScreen, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -238,6 +238,20 @@ function sessionUp(agent: StartingAgent, launch: { since: number; withTask: bool
   }
   const at = launch.withTask ? agent.lastTurnStartedAt : agent.sessionRegisteredAt;
   return !!at && Date.parse(at) >= launch.since;
+}
+
+/**
+ * What its screen shows holds an agent's launch, in words a sender can act on, or undefined when nothing is named
+ * there (a launch merely slow): a question nobody answers in an agent's terminal (pi's trust question, which
+ * nothing is typed into: dialogOnScreen), or what its provider names on the rows drawn since the launch (whyNotUp).
+ * The Audit's L1 on #610: both were answered as a CLI "still starting, as happens on a loaded machine".
+ */
+export function launchHeldBy(agent: Pick<StartingAgent, 'ptyId' | 'provider'>): string | undefined {
+  const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+  if (!terminal) return undefined;
+  const question = piTrustQuestionOnScreen(terminal);
+  if (question) return `it asks "${question}" in its terminal, which nobody answers there: answer it in the agent's terminal`;
+  return getProvider(agent.provider).whyNotUp?.(rowsSinceLaunch(terminal) ?? []);
 }
 
 /**

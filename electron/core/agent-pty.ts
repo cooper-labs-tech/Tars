@@ -19,6 +19,7 @@ import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
+import { ensurePiProjectTrusted } from '../providers/pi-provider';
 import { getAllProviders } from '../providers';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
@@ -223,8 +224,12 @@ export function spawnAgentPty(opts: {
   // codex reports no turn through a hook: its session log does, and the one
   // this terminal's codex begins is the agent's (services/codex-sessions.ts).
   if (agentId && opts.binaryName === 'codex') codexLaunching(agentId, opts.cwd);
-  // pi's, from the session file it writes in the agent's own folder (services/pi-sessions.ts).
-  if (agentId && opts.binaryName === 'pi') piSessionWatch.noteLaunch(agentId);
+  // pi's, from the session file it writes in the agent's own folder (services/pi-sessions.ts); its folder trusted
+  // first, since pi asks "Trust project folder?" in some and waits there for good (providers/pi-provider.ts).
+  if (agentId && opts.binaryName === 'pi') {
+    ensurePiProjectTrusted(opts.cwd);
+    piSessionWatch.noteLaunch(agentId);
+  }
   // Kimi Code's, from its session log; the session its kimi holds is the agent's (services/kimi-sessions.ts).
   // With the session its line resumes, when it runs the CLI itself (an exec launch, every terminal on Windows); a kimi
   // typed into this shell later is noted again then (agent-manager.ts, launchIntoTerminal).

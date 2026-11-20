@@ -134,6 +134,13 @@ export interface CLIProvider {
   upOnScreen?(lines: readonly string[]): boolean;
 
   /**
+   * With upOnScreen: what the same lines show keeps the CLI from taking keys, in a few words a sender can act on
+   * ("pi is still downloading fd ..."), or undefined when nothing is named there. Told to a sender that waited for the
+   * launch (core/agent-launch.ts, launchHeldBy), instead of a launch merely slow.
+   */
+  whyNotUp?(lines: readonly string[]): string | undefined;
+
+  /**
    * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured
    * on the CLI itself: `next-tool-round`, it reaches the model at the turn's next tool round (Claude Code);
    * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3).

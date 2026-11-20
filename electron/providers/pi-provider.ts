@@ -14,6 +14,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
+import { trustsTooMuch } from '../utils/trust-too-much';
 
 /**
  * Where pi reads its MCP servers (`@earendil-works/pi-coding-agent` 1.3.0,
@@ -24,7 +25,67 @@ import { updateSharedJsonSync } from '../utils/shared-file';
  * has no MCP at all.
  */
 function mcpConfigFile(): string {
-  return path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent'), 'mcp.json');
+  return path.join(piAgentDir(), 'mcp.json');
+}
+
+/** pi's agent folder, `$PI_CODING_AGENT_DIR` or `~/.pi/agent`: where it keeps its MCP servers and its trust answers. */
+function piAgentDir(): string {
+  return process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
+}
+
+/**
+ * The agent's folder trusted in pi's `trust.json` before pi starts, as ensureCodexProjectTrusted does for codex.
+ * Measured on pi 1.5.2 (20/11): in a folder with pi resources of its own (`.pi/settings.json`, `mcp.json`,
+ * `extensions`, `skills`, `prompts`, `themes`) or under a folder holding `.agents/skills` other than the user's, pi
+ * first asks "Trust project folder?" and waits for good, which nobody answers in an agent's terminal. pi keeps the
+ * folder's real path to true or false, and the entry nearest up the tree decides (its core/trust-manager.js): any
+ * entry there already, for the folder or one above it, is the user's and is left as it is. A folder that would trust
+ * every folder below it is refused (utils/trust-too-much.ts), and pi asks. The file is written whole (utils/shared-file.ts)
+ * and left alone when it is not a JSON object.
+ */
+export function ensurePiProjectTrusted(projectPath: string, agentDir: string = piAgentDir()): 'written' | 'already' | 'refused' | 'failed' {
+  if (!projectPath || trustsTooMuch(projectPath)) return 'refused';
+  let real: string;
+  try { real = fs.realpathSync(projectPath); } catch { return 'failed'; }
+  const file = path.join(agentDir, 'trust.json');
+  const same = (a: string, b: string) => (process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b);
+  let found: 'already' | 'unreadable' | undefined;
+  try {
+    const outcome = updateSharedJsonSync<Record<string, unknown>>(file, current => {
+      if (current !== undefined && (typeof current !== 'object' || current === null || Array.isArray(current))) {
+        found = 'unreadable';
+        return undefined;
+      }
+      const entries = current ?? {};
+      for (let dir = real; ; dir = path.dirname(dir)) {
+        if (Object.entries(entries).some(([key, value]) => typeof value === 'boolean' && same(key, dir))) {
+          found = 'already';
+          return undefined;
+        }
+        if (path.dirname(dir) === dir) break;
+      }
+      return { ...entries, [real]: true };
+    });
+    if (found === 'already') return 'already';
+    if (outcome === 'written') return 'written';
+    console.warn(found === 'unreadable' || outcome === 'unreadable'
+      ? `[pi] ${file} is not a JSON object pi can read: ${real} is not trusted there, and pi will ask`
+      : `[pi] ${real} not trusted in ${file}: the file kept changing while Tars wrote it`);
+    return 'failed';
+  } catch (err) {
+    console.warn(`[pi] ${real} not trusted in ${file}: it could not be read`, err instanceof Error ? err.message : err);
+    return 'failed';
+  }
+}
+
+/** Whether the user's pi starts with no banner: `quietStartup: true` in its global settings.json. */
+function piStartsQuietly(): boolean {
+  try {
+    const settings = JSON.parse(fs.readFileSync(path.join(piAgentDir(), 'settings.json'), 'utf-8')) as { quietStartup?: unknown };
+    return settings?.quietStartup === true;
+  } catch {
+    return false;
+  }
 }
 
 /** Where Tars wrote them until 2.0.4, which pi never reads. */
@@ -42,11 +103,47 @@ function dropServer(file: string, name: string): void {
   });
 }
 
+/** The tools pi announced it downloads (`<tool> not found. Downloading...`) with no outcome yet on `lines`. */
+function downloadsUnderWay(lines: readonly string[]): string[] {
+  const text = lines.join('\n');
+  const announced = [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)].map(([, tool]) => tool);
+  return [...new Set(announced)].filter((tool) => !text.includes(`${tool} installed to `) && !text.includes(`Failed to download ${tool}`));
+}
+
 export class PiProvider implements CLIProvider {
   readonly id = 'pi' as const;
   readonly displayName = 'Pi Terminal';
   readonly binaryName = 'pi';
   readonly configDir = path.join(os.homedir(), '.pi');
+
+  /**
+   * Pi sends no SessionStart and loses keys typed before its TUI runs (1.5.2, measured 20/11: a task typed at its exec
+   * was echoed by the shell and never reached it). It takes keys once its footer is drawn under its field: the context
+   * used over its window, `0.0%/128k (auto)` (one decimal, always), or `?/200k` when the share is unknown (its footer.js).
+   */
+  upOnScreen(lines: readonly string[]): boolean {
+    if (!lines.some((line) => /(?:^|\s)(?:\d+\.\d%|\?)\/\d+(?:\.\d)?[kM]?(?: \(auto\))?(?:\s|$)/.test(line))) return false;
+    // Its footer comes before its startup ends: pi first fetches fd and ripgrep when they are missing, and until then
+    // answers Enter with "Startup is still in progress", the task left unsent (its interactive-mode.js and
+    // tools-manager.js). Up once every download it announced has its outcome.
+    if (downloadsUnderWay(lines).length > 0) return false;
+    // And its first frame holds its field and footer alone: its banner and its download line come in the next, 20 to
+    // 70 ms later (measured 20/11). These rows are the bottom ones only (terminal-mirror.ts, LAUNCH_ROWS), the banner
+    // out of their sight: the first frame is the one with nothing above its field's top border. Up once something is
+    // drawn there, or at once when the user's pi starts quietly and draws nothing there (`quietStartup: true` in its
+    // settings.json; a project's own setting is not read, and such a pi is up when its launch's wait runs out).
+    const rows = lines.filter((line) => line.trim());
+    return rows.findIndex((line) => /^─{8,}/.test(line.trim())) > 0 || piStartsQuietly();
+  }
+
+  /** A download pi announced at its start and has not ended: until it does, pi takes no task (upOnScreen). */
+  whyNotUp(lines: readonly string[]): string | undefined {
+    const tools = downloadsUnderWay(lines);
+    return tools.length > 0 ? `pi is still downloading ${tools.join(' and ')}, which it fetches at its first start when missing` : undefined;
+  }
+
+  /** Measured on 1.5.2 (20/11): a note typed during a slow tool call went out with that call's result. */
+  readonly noteDuringTurn = 'next-tool-round' as const;
 
   getModels(): ProviderModel[] {
     return [
@@ -67,6 +164,13 @@ export class PiProvider implements CLIProvider {
 
     // On an inference endpoint: Tars's provider in pi's models.json, on the endpoint proxy (services/endpoint-harness.ts).
     for (const arg of endpointLaunchForAgent(params.agentId, 'pi')?.args ?? []) command += ` '${arg.replace(/'/g, "'\\''")}'`;
+
+    // The agent's own session after a restart (utils/resume-session.ts): `--session <id>` continues it, `--fork <id>`
+    // goes on under a new session, as a restart that applies new settings wants (measured on 1.5.2). A session id and
+    // nothing else, it reaches a command line; before the prompt, which pi reads as text.
+    const session = params.resumeSessionId && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(params.resumeSessionId)
+      ? params.resumeSessionId : undefined;
+    if (session) command += ` ${params.forkSession ? '--fork' : '--session'} '${session}'`;
 
     // For interactive PTY sessions, launch the TUI (no subcommand).
     if (params.model && params.model !== 'default') {
