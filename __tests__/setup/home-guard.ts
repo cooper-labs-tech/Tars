@@ -1,6 +1,9 @@
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
+// The builtins as Node holds them, never as a test file mocks them: two guarded files mock `os`
+// with a homedir they set after their imports, which this module, imported first, would read
+// too early (home-guard-mocked-os.test.ts). The home to check is the process's, not a mock's.
+const fs = process.getBuiltinModule('node:fs') as typeof import('node:fs');
+const os = process.getBuiltinModule('node:os') as typeof import('node:os');
+const path = process.getBuiltinModule('node:path') as typeof import('node:path');
 
 /**
  * Imported first by every test file that writes under os.homedir(), and throws unless HOME lies
