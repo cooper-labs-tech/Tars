@@ -17,6 +17,8 @@ import { describe, it, expect, vi } from 'vitest';
  * 4. Resent for ever, or under the same request id, which Tars answers with the first answer: five tries at most,
  *    each with an id of its own, the "still starting" answers kept with the last one.
  * 5. A refusal, or an answer that is no error, resent.
+ * 6. (Goose, 20/11) The runner's Goose settings reach the version read: GOOSE_PROVIDER, GOOSE_MODE, GOOSE_PATH_ROOT
+ *    (which moves every folder of Goose's), so a Goose reads, and may write, the runner's own.
  */
 
 import { delegateOnceUp, versionEnv } from '../e2e/conformance-helpers.mjs';
@@ -40,12 +42,13 @@ describe("the version read's environment (1)", () => {
       OPENCODE_CONFIG: '/home/runner/oc.json', OPENCODE_CONFIG_DIR: '/home/runner/.oc', OPENCODE_CONFIG_CONTENT: '{}',
       PI_CODING_AGENT_SESSION_DIR: '/home/runner/.pi/sessions', ZDOTDIR: '/home/runner/.zsh', CLAUDE_CONFIG_DIR: '/home/runner/.claude',
       GIT_DIR: '/home/runner/repo/.git', GIT_CONFIG_GLOBAL: '/home/runner/.gitconfig',
+      GOOSE_PROVIDER: 'anthropic', GOOSE_MODE: 'auto', GOOSE_PATH_ROOT: '/home/runner/.goose-root',
       CLAUDE_MGR_API_TOKEN: 'a-token', DOROTHY_API_PORT: '31415', TARS_AGENT: 'x', ANTHROPIC_API_KEY: 'sk-x',
     };
     const harnessHomes = { XDG_CONFIG_HOME: '/sandbox/.config', XDG_DATA_HOME: '/sandbox/.local/share', CODEX_HOME: '/sandbox/.codex' };
     const env = versionEnv(runner, { home: '/sandbox', tmp: '/sandbox/tmp', harnessHomes });
     expect(env).toMatchObject({ PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', HOME: '/sandbox', TMPDIR: '/sandbox/tmp', ...harnessHomes });
-    const leaked = Object.keys(env).filter((name) => /^(KILO_|OPENCODE_|PI_CODING_AGENT_|GIT_|CLAUDE|DOROTHY|TARS_|ANTHROPIC)|^ZDOTDIR$/.test(name));
+    const leaked = Object.keys(env).filter((name) => /^(KILO_|OPENCODE_|PI_CODING_AGENT_|GOOSE_|GIT_|CLAUDE|DOROTHY|TARS_|ANTHROPIC)|^ZDOTDIR$/.test(name));
     expect(leaked).toEqual([]);
   });
 });
