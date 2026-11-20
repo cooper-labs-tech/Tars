@@ -10,8 +10,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * CLI · Codex`, design PR #457), on PR 459's key per CLI (cliKeys.list and cliKeys.set).
  *
  * The real app on a sandbox HOME. Asserted, once with the classic shell and once with the new interface:
- * 1. the page lists the CLIs from the one list every page reads: the eight Tars drives, Grok CLI among them (it was
- *    missing from Providers), Qwen Code under its command `qwen` (it showed `qwen-code`), and the three to come;
+ * 1. the page lists the CLIs from the one list every page reads: the nine Tars drives, Grok CLI among them (it was
+ *    missing from Providers) and Kilo since 2.0.7 (#615), Qwen Code under its command `qwen` (it showed `qwen-code`),
+ *    and the two to come;
  * 2. Codex's panel has an API key row: with no key it says so; a key pasted and set is saved for Codex (cliKeys.list
  *    says it is set) and never shown back, in the page or its fields;
  * 3. clear asks once, then the key is gone (cliKeys.list says so);
@@ -61,10 +62,11 @@ for (const newInterface of [false, true]) {
       const soon = page.getByRole('list', { name: 'To come' });
       const toCome = (await soon.count()) ? await soon.innerText() : '';
       keep({ listed, toCome, before: await keys() });
-      for (const name of ['Claude Code', 'Codex', 'Qwen Code', 'Gemini CLI', 'Grok CLI', 'OpenCode', 'Pi', 'Amp']) expect.soft(listed, `${name} is listed`).toContain(name);
+      for (const name of ['Claude Code', 'Codex', 'Qwen Code', 'Gemini CLI', 'Grok CLI', 'OpenCode', 'Pi', 'Amp', 'Kilo']) expect.soft(listed, `${name} is listed`).toContain(name);
       expect.soft(listed, 'Qwen Code under its command').toMatch(/Qwen Code[\s\S]*\bqwen\b/);
       expect.soft(listed, 'never qwen-code').not.toContain('qwen-code');
-      for (const name of ['oh-my-pi', 'Cline CLI', 'Kilo CLI']) expect.soft(toCome, `${name} is to come`).toContain(name);
+      for (const name of ['oh-my-pi', 'Cline CLI']) expect.soft(toCome, `${name} is to come`).toContain(name);
+      expect.soft(toCome, 'Kilo is driven, no longer to come').not.toContain('Kilo');
       await stepShot(page, '01-providers-claude');
 
       // 5. Claude Code: the Sign-in row, and the key saved by an earlier version never shown back.
