@@ -1,8 +1,9 @@
+import './home-guard';
 import { describe, it, expect } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { homeOutsideRun } from './home-guard';
+import { cliHomesOutsideRun, homeOutsideRun } from './home-guard';
 import { guardedFirst, homeWrites, hoistedHomeWrites } from './home-writers';
 
 /**
@@ -35,6 +36,15 @@ import { guardedFirst, homeWrites, hoistedHomeWrites } from './home-writers';
  * G7. It reads a home a test file mocks (vi.mock('os') with a homedir set after the imports), and
  *     the file stops before it starts. Found by QA's suite run of 20/11 04:15, in two files.
  *     Tested in home-guard-mocked-os.test.ts, which has the same shape.
+ * Added on 2026-11-20 from #609's re-audit (M1), before the fix:
+ * G8. It looks at HOME only, while the code under test reads a CLI home named by a variable
+ *     before HOME (codex's CODEX_HOME, opencode's XDG_CONFIG_HOME, pi's PI_CODING_AGENT_DIR, Kimi
+ *     Code's KIMI_CODE_HOME...): one outside the run folder must stop the file too, judged as
+ *     the E2E fixture judges a spec's (an empty one is none, a relative one is outside, a config
+ *     given as text is no path).
+ * G9. Only the files the sweep finds writing under the home import it, and a file that writes
+ *     through the code under test, a child process or a parameter goes unguarded: every test
+ *     file imports it first.
  *
  * How the sweep can fail:
  * D1. It misses a write whose path names the home: rmSync(path.join(os.homedir(), dir)).
@@ -100,6 +110,19 @@ describe('the home guard', () => {
   });
 });
 
+describe('the CLI homes the guard looks at', () => {
+  it('G8. refuses one outside the run folder, and takes one inside it, an empty one and a config given as text', () => {
+    const r = run();
+    const decoy = fs.mkdtempSync(path.join(os.tmpdir(), 'decoy-codex-home-'));
+    expect(cliHomesOutsideRun({
+      CODEX_HOME: decoy, XDG_CONFIG_HOME: path.join(r, 'home', '.config'), PI_CODING_AGENT_DIR: '',
+      OPENCODE_CONFIG_CONTENT: '{"provider":{}}', PATH: '/usr/bin',
+    }, r)).toEqual([['CODEX_HOME', decoy]]);
+    expect(cliHomesOutsideRun({ KIMI_CODE_HOME: 'kimi-home' }, r)).toEqual([['KIMI_CODE_HOME', 'kimi-home']]);
+    expect(cliHomesOutsideRun({ CODEX_HOME: decoy }, undefined)).toEqual([['CODEX_HOME', decoy]]);
+  });
+});
+
 describe('the sweep\'s reading of a test file', () => {
   it('D1. flags a write whose path names the home', () => {
     expect(homeWrites("fs.rmSync(path.join(os.homedir(), dir), { recursive: true });")).toHaveLength(1);
@@ -157,9 +180,9 @@ describe('every test file that writes under the home', () => {
     ]));
   });
 
-  it('G6, D4. import the guard before anything else', () => {
-    const unguarded = writers.filter(w => !guardedFirst(w.source)).map(w => `${w.file}: ${w.writes[0]}`);
-    expect(unguarded, `these write under the home with no guard first: import '<relative>/setup/home-guard' as their first import`).toEqual([]);
+  it('G6, D4, G9. every test file, a writer or not, imports the guard before anything else', () => {
+    const unguarded = files.filter(file => !guardedFirst(fs.readFileSync(file, 'utf8'))).map(file => path.relative(root, file));
+    expect(unguarded, `these test files do not import the guard first: import '<relative>/setup/home-guard' as their first import`).toEqual([]);
   });
 
   it('D7. write nothing under the home inside vi.hoisted', () => {
