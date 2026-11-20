@@ -15,6 +15,7 @@
  *   as an answer, an e-mail kept from a signed-out answer, a binary that does
  *   not run read as signed out.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 import * as fs from 'fs';
