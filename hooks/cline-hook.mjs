@@ -8,11 +8,14 @@
 // TaskCancel. A payload names its session (sessionContext.rootSessionId) and never its prompt: the first prompt is the
 // session record's `prompt` when the first TaskStart runs, every later one the last user message of its messages
 // file, each wrapped as <user_input mode="...">. The hook is a child of the Cline process whose pid the session's
-// sessions.db row names: its parent's pid is the CLI's, which the hook routes check against the agent's terminal.
+// sessions.db row names, itself a child of Cline's node launcher: the process Tars started, the terminal's own on an
+// exec launch. So the CLI the hook names to the hook routes, which check it against the agent's terminal, is its
+// grandparent (the conformance on 66214ddc4: named as its parent, the session was refused as another CLI's).
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { apiUrl, postWithRetry, tarsProvesInstance } from './tars-hook-lib.mjs';
 
 /** A Cline session id: `<ms>_<5 chars>` (1795204260136_9ovct). */
@@ -50,13 +53,34 @@ export function currentPrompt(dataDir, sessionId) {
   return { prompt: typeof recorded === 'string' ? promptOf(recorded) : null, first: users.length === 0 };
 }
 
+/**
+ * A live process's parent pid: from /proc/<pid>/stat on Linux, else `ps -o ppid=` (macOS); null when it cannot be read
+ * (Windows), and then the hook names no CLI, which the hook routes take as before.
+ */
+export function parentOf(pid) {
+  try {
+    const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+    const ppid = Number(stat.slice(stat.lastIndexOf(')') + 2).split(' ')[1]);
+    if (Number.isInteger(ppid) && ppid > 0) return ppid;
+  } catch {
+    // Not Linux, or gone.
+  }
+  if (process.platform === 'win32') return null;
+  try {
+    const ppid = Number(execFileSync('ps', ['-o', 'ppid=', '-p', String(pid)], { encoding: 'utf8', timeout: 2000 }).trim());
+    return Number.isInteger(ppid) && ppid > 0 ? ppid : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The posts an event of Cline's makes, in order: none for an event Tars does not read, or a payload naming no session. */
 export function postsFor(event, payload, ctx) {
   const sessionId = clineUuidOf(payload?.sessionContext?.rootSessionId);
   if (!sessionId) return [];
   const base = { agent_id: ctx.agentId, session_id: sessionId };
   const opening = { path: '/api/hooks/status', body: { ...base, status: 'running', event: 'UserPromptSubmit', ...(ctx.prompt ? { current_task: ctx.prompt } : {}) } };
-  const register = (source) => ({ path: '/api/hooks/status', body: { ...base, status: 'running', source, cli_pid: ctx.cliPid } });
+  const register = (source) => ({ path: '/api/hooks/status', body: { ...base, status: 'running', source, ...(ctx.cliPid ? { cli_pid: ctx.cliPid } : {}) } });
   switch (event) {
     case 'TaskStart':
       return ctx.first ? [register('startup'), opening] : [opening];
@@ -104,10 +128,13 @@ export async function run(event) {
     if (payload && agentId) {
       const sessionId = payload.sessionContext?.rootSessionId;
       const { prompt, first } = event === 'TaskStart' || event === 'TaskResume' ? currentPrompt(env.CLINE_DATA_DIR, sessionId) : { prompt: null, first: false };
-      const posts = postsFor(event, payload, { agentId, cliPid: process.ppid, prompt, first });
+      // The CLI Tars started: Cline's launcher, this hook's grandparent (the .cline binary is its parent).
+      const cliPid = parentOf(process.ppid);
+      const posts = postsFor(event, payload, { agentId, cliPid, prompt, first });
       if (posts.length > 0) {
-        // The CLI that posts: Cline, this hook's parent (authHeader sends it as X-Tars-Cli-Pid).
-        env.CLAUDE_PID = String(process.ppid);
+        // Named on every post too (authHeader sends it as X-Tars-Cli-Pid); none when it could not be read.
+        if (cliPid) env.CLAUDE_PID = String(cliPid);
+        else delete env.CLAUDE_PID;
         // The agent's token only to a port that proved to be this Tars (tars-hook-lib.mjs).
         const token = (await tarsProvesInstance(env)) ? env.CLAUDE_MGR_API_TOKEN : null;
         for (const post of posts) await postWithRetry(`${apiUrl(env)}${post.path}`, token, JSON.stringify(post.body));
