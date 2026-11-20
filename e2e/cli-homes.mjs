@@ -19,6 +19,8 @@
  *   and TEST_DAEMON_STATE_DIR.
  * - These names were read from the published binaries (opencode 1.19.6 and Kilo 7.8.27, npm, 2026-11-20), never run:
  *   Kilo writes into whatever home it is given, even for --version.
+ * - Goose keeps its config, data and state under GOOSE_PATH_ROOT when it is absolute (Goose 1.60.1, #618,
+ *   goose-cli.ts), else under the XDG homes, and on Windows under APPDATA, which the fixture moves already.
  * A CLI's whole config or sign-in given as text (CLI_CONFIG_CONTENT: OPENCODE_ and KILO_ CONFIG_CONTENT and
  * AUTH_CONTENT) and git's own variables (GIT_OWN: GIT_DIR, GIT_INDEX_FILE, GIT_CONFIG_*..., which a run started from a
  * git hook carries) are dropped too, and never judged as folders.
@@ -34,7 +36,7 @@
 const fs = process.getBuiltinModule('node:fs');
 const path = process.getBuiltinModule('node:path');
 
-export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR|(OPENCODE|KILO)_(CONFIG|CONFIG_DIR|TEST_HOME|TEST_MANAGED_CONFIG_DIR|MODELS_PATH|PLUGIN_META_FILE|ZED_DB)|KILO_(LANCEDB_PATH|TEST_DAEMON_LOG_DIR|TEST_DAEMON_STATE_DIR))$/;
+export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR|(OPENCODE|KILO)_(CONFIG|CONFIG_DIR|TEST_HOME|TEST_MANAGED_CONFIG_DIR|MODELS_PATH|PLUGIN_META_FILE|ZED_DB)|KILO_(LANCEDB_PATH|TEST_DAEMON_LOG_DIR|TEST_DAEMON_STATE_DIR)|GOOSE_PATH_ROOT)$/;
 export const CLI_CONFIG_CONTENT = /^(OPENCODE|KILO)_(CONFIG|AUTH)_CONTENT$/;
 export const GIT_OWN = /^GIT_/;
 
