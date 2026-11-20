@@ -171,10 +171,11 @@ for (const newInterface of [false, true]) {
       };
       const recordOf = (id: string) => records().find((a) => a.id === id) ?? {};
       const card = (id: string) => page.locator(`[data-agent-card="${id}"]`);
-      // A task still working is named by its ref (t-xxxxxxxx); one that ended within the wait by the ledger's id, on the
-      // answer's last line (`... | task <uuid>`), which task_status and get_agent_output read as well.
+      // A task waiting its turn is named by its ref (t-xxxxxxxx); one under way or ended by the ledger's id, which
+      // task_status and get_agent_output read as well: `Task <uuid> on agent ... is still working`, or the answer's
+      // last line, `... | task <uuid>`.
       const taskIdOf = (said: Said) => /\bt-[0-9a-f]{8}\b/.exec(said.text)?.[0]
-        ?? /\| task ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/.exec(said.text)?.[1];
+        ?? /\btask ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i.exec(said.text)?.[1];
 
       // ── 1. Read-back: another project's agents, their inference settings and status, no task content ──
       const listed = await other('list_agents', { project: B });
@@ -272,6 +273,7 @@ for (const newInterface of [false, true]) {
 
       // ── 6. A change to an agent mid-turn is queued, then applied once its turn ends ──
       const held = await named('delegate_task', { id: 'b-qwen', prompt: 'HOLD q1', timeoutSeconds: 3 });
+      keep({ held });
       const heldTask = taskIdOf(held);
       expect(heldTask).toBeTruthy();
       await expect.poll(() => recordOf('b-qwen').status, { timeout: 30_000 }).toBe('running');
