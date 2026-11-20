@@ -38,8 +38,12 @@ import Database from 'better-sqlite3';
  *    another folder); or a restart, which Cline cannot fork, continuing the session whose posts its stop made a
  *    tombstone, instead of starting fresh and saying so.
  * 9. On an endpoint: the key written into a file, or the user's own provider used.
+ * 10. Its hooks never written in the app: Tars's start gives its hooks folder (configureStatusHooks) only to the
+ *     providers whose hooks it installs, and Cline's said it had none.
  */
 
+const hooksRoot = vi.hoisted(() => ({ dir: '' }));
+vi.mock('../../../electron/utils/hooks-path', () => ({ getHooksPath: () => hooksRoot.dir }));
 vi.mock('../../../electron/services/traces-runtime', async () => {
   const { endpointLaunchFor: launchFor } = await vi.importActual<typeof import('../../../electron/services/endpoint-harness')>('../../../electron/services/endpoint-harness');
   return {
@@ -57,6 +61,7 @@ import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
 import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 import { launchPlanRefusal, planModeRefusal } from '../../../electron/providers/plan-mode';
 import { setAgentNoticeSink } from '../../../electron/core/agent-notices';
+import { configureStatusHooks } from '../../../electron/services/hooks-manager';
 
 const AGENT = 'a1b2c3d4-0000-4000-8000-0000000000d1';
 const SID = '1795204260136_9ovct';
@@ -228,5 +233,18 @@ describe('on an inference endpoint (9)', () => {
     expect(written.providers['openai-compatible'].settings).toEqual({ provider: 'openai-compatible', model: 'org/Model-1', baseUrl: 'http://127.0.0.1:31417/v1' });
     expect(JSON.stringify(written)).not.toContain('the-users-key');
     expect(users.snapshot()).toBe(before);
+  });
+});
+
+describe("its hooks, from Tars's start (10)", () => {
+  it("Tars's start gives the registry's Cline its hooks folder, and a launch writes hooks that run Tars's hook", async () => {
+    usersCline();
+    hooksRoot.dir = path.join(root, 'app-hooks');
+    fs.mkdirSync(hooksRoot.dir, { recursive: true });
+    await configureStatusHooks();
+    const cline = getProvider('cline');
+    cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '', permissionMode: 'bypass' });
+    const hook = fs.readFileSync(path.join(clineAgentDir(AGENT), 'hooks', 'TaskComplete.mjs'), 'utf8');
+    expect(hook).toContain(pathToFileURL(path.join(hooksRoot.dir, 'cline-hook.mjs')).href);
   });
 });
