@@ -27,6 +27,12 @@ import Database from 'better-sqlite3';
  * 6. Its binary read from opencode's path setting: a Kilo agent starts opencode.
  * 7. Its launch noted in opencode's reader, or opencode's in Kilo's: a turn read from the wrong database, or none.
  * 8. A claim not measured: how a note typed mid-turn reaches Kilo has not been measured, so nothing is said of it.
+ *
+ * With #613's fixes, which Kilo shares through OpencodeBuildProvider and the reader (the Audit's re-read, for #614):
+ * 9. A Kilo restart's line read as a resume of S rather than a fork of it, or its prompt lost: the fork never bound.
+ * 10. A task typed into a Kilo forking a session at its home view's bar: on opencode 1.19.6 it started a new session
+ *     without the history; Kilo's own timing is measured by its conformance run's restart step.
+ * 11. (M2) Two Kilo agents with the same four skills, launched before either binds, ruling each other out.
  */
 
 // The fleet's endpoint choice, as traces-runtime resolves it: agent 'on-ep' runs on an endpoint, no other.
@@ -44,7 +50,7 @@ import { getProvider } from '../../../electron/providers';
 import { endpointLaunchFor, ENDPOINT_TOKEN_VAR } from '../../../electron/services/endpoint-harness';
 import { ENDPOINT_HARNESSES } from '../../../electron/services/inference-endpoints';
 import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
-import { opencodeDbPath, opencodeUuidOf } from '../../../electron/providers/opencode-cli';
+import { opencodeDbPath, opencodeUuidOf, opencodeLaunchOf } from '../../../electron/providers/opencode-cli';
 import { opencodeWatchFor, type HookPost } from '../../../electron/services/opencode-sessions';
 import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 
@@ -196,5 +202,50 @@ describe('its sessions, in its own database (3, 4, 7)', () => {
     expect(posts.length).toBeGreaterThan(0);
     expect(posts.every((p) => p.agentId === AGENT && p.post.body.session_id === uuid)).toBe(true);
     expect(posts.some((p) => p.post.path === '/api/hooks/output' && JSON.stringify(p.post.body).includes('PROBE-OK'))).toBe(true);
+  });
+});
+
+describe("a Kilo launch's own line (9, 10)", () => {
+  const HOME = ['  ╹▀▀▀▀▀▀▀▀▀▀', '                                    tab agents  ctrl+p commands', '  ~/project                                   7.8.27'];
+  const SESSION_VIEW = ['  ╹▀▀▀▀▀▀▀▀▀▀', '   /home/someone/project                            132  ctrl+p commands'];
+  it('a restart is read as a fork of S with its prompt, and waits for its session\'s view; a fresh launch takes the home view', () => {
+    const kilo = new KiloProvider();
+    const fork = kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: "it's the task", resumeSessionId: SES, forkSession: true });
+    expect(opencodeLaunchOf(fork)).toEqual({ forkOf: SES, prompt: "it's the task" });
+    expect(opencodeLaunchOf(kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: '', resumeSessionId: SES }))).toEqual({ resume: SES });
+    expect(kilo.upOnScreen(HOME, fork)).toBe(false);
+    expect(kilo.upOnScreen(SESSION_VIEW, fork)).toBe(true);
+    expect(kilo.upOnScreen(HOME, kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: '' }))).toBe(true);
+  });
+});
+
+describe('two Kilo agents with the same four skills (11, the Audit\'s M2)', () => {
+  it('launched before either binds, each binds its own session in kilo.db, by what its own line said', async () => {
+    const SKILLS = ['vercel-react-best-practices', 'web-design-guidelines', 'frontend-design', 'supabase-postgres-best-practices'];
+    const A = 'a1b2c3d4-0000-4000-8000-0000000000a1';
+    const B = 'a1b2c3d4-0000-4000-8000-0000000000b1';
+    const header = (id: string) => `[Tars: you are agent "W" (id ${id}), worker of project /x.] Run the probe.`;
+    const kilo = new KiloProvider();
+    const lineOf = (id: string) => kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: header(id), skills: SKILLS });
+    const watch = opencodeWatchFor('kilo')!;
+    const posts: Array<{ agentId: string; post: HookPost }> = [];
+    watch.setDeps({ now: () => 1_000, post: async (agentId, post) => { posts.push({ agentId, post }); } });
+    watch.noteLaunch(A, project, opencodeLaunchOf(lineOf(A)));
+    watch.noteLaunch(B, project, opencodeLaunchOf(lineOf(B)));
+    const file = opencodeDbPath(process.env, os.homedir(), 'kilo');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const db = new Database(file);
+    db.exec(DDL);
+    for (const [sid, id] of [['ses_kiloagenta000000000000', A], ['ses_kiloagentb000000000000', B]] as const) {
+      db.prepare("INSERT INTO session (id, project_id, slug, directory, title, version, time_created, time_updated) VALUES (?, 'p', 's', ?, 't', '7.8.27', 2000, 2000)").run(sid, project);
+      db.prepare('INSERT INTO message (id, session_id, time_created, time_updated, data) VALUES (?, ?, 2001, 2001, ?)').run(`msg_${sid}`, sid, JSON.stringify({ role: 'user', time: { created: 2001 } }));
+      const prompt = opencodeLaunchOf(lineOf(id)).prompt!;
+      db.prepare('INSERT INTO part (id, message_id, session_id, time_created, time_updated, data) VALUES (?, ?, ?, 2001, 2001, ?)').run(`prt_${sid}`, `msg_${sid}`, sid, JSON.stringify({ type: 'text', text: prompt }));
+    }
+    db.close();
+    await watch.tick();
+    const by = (id: string) => [...new Set(posts.filter((p) => p.agentId === id).map((p) => p.post.body.session_id))];
+    expect(by(A)).toEqual([opencodeUuidOf('ses_kiloagenta000000000000')]);
+    expect(by(B)).toEqual([opencodeUuidOf('ses_kiloagentb000000000000')]);
   });
 });
