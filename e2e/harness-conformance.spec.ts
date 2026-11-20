@@ -5,6 +5,7 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
+import { delegateOnceUp, versionEnv } from './conformance-helpers.mjs';
 import { startStandIn, MODEL_ID } from './stand-in-openai-endpoint.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
@@ -116,7 +117,7 @@ for (const h of HARNESSES) {
     const version = (() => {
       try {
         fs.mkdirSync(path.join(home, 'tmp'), { recursive: true });
-        return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000, cwd: project, env: { ...process.env, HOME: home, TMPDIR: path.join(home, 'tmp'), ...harnessHomes } }).trim();
+        return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000, cwd: project, env: versionEnv(process.env, { home, tmp: path.join(home, 'tmp'), harnessHomes }) }).trim();
       } catch { return null; }
     })();
     const values: Record<string, unknown> = { harness: h.id, bin, version };
@@ -178,19 +179,10 @@ for (const h of HARNESSES) {
       }
     };
 
-    // delegate_task, sent again while Tars answers that the CLI is still starting (step 2), each time with an id of
-    // its own; the answers that said so are kept with the last one.
+    // delegate_task, sent again while Tars answers that the CLI is still starting (conformance-helpers.mjs).
     type Lead = (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
-    const delegateOnceUp = async (lead: Lead, step: number) => {
-      const stillStarting: string[] = [];
-      for (let attempt = 1; ; attempt++) {
-        const reply = await lead('delegate_task', {
-          id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-${step}${attempt > 1 ? `-${attempt}` : ''}`,
-        });
-        if (!(reply.isError && /still starting/.test(reply.text)) || attempt === 5) return { ...reply, stillStarting };
-        stillStarting.push(reply.text);
-      }
-    };
+    const delegate = (lead: Lead, step: number) =>
+      delegateOnceUp(lead, { id: WORKER, prompt: TASK, timeoutSeconds: 200, requestId: `e2e-conformance-${h.id}-${step}` });
 
     const runnerBefore = runnerHomeFiles();
     try {
@@ -207,7 +199,7 @@ for (const h of HARNESSES) {
         const screenOf = async () => plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000);
         keep({ screenAtStart: await screenOf() });
         // 2. Delegated to, answered with its own final answer, after a real tool round.
-        const delegated = await delegateOnceUp(lead, 1);
+        const delegated = await delegate(lead, 1);
         // The ledger's task, as delegate_task names it at the end of its answer (`task <id>`): a UUID once its turn ran,
         // the request's `t-xxxxxxxx` while it waits.
         const taskId = /\btask ((?:t-[0-9a-f]{8})|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/.exec(delegated.text)?.[1];
@@ -240,7 +232,7 @@ for (const h of HARNESSES) {
       await withTars('second', async (lead, api) => {
         await api('agent', 'start', { id: WORKER, prompt: '' });
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
-        const again = await delegateOnceUp(lead, 2);
+        const again = await delegate(lead, 2);
         keep({ screenAfterResume: plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000) });
         const after = posts().slice(before);
         keep({ again, resumedRequests: after.map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) })) });
@@ -253,7 +245,7 @@ for (const h of HARNESSES) {
         const beforeRestart = posts().length;
         await api('agent', 'restart', WORKER);
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
-        const restarted = await delegateOnceUp(lead, 3);
+        const restarted = await delegate(lead, 3);
         const sessionAfterRestart = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
         const afterRestart = posts().slice(beforeRestart);
         keep({
