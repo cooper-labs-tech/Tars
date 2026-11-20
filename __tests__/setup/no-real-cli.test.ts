@@ -18,8 +18,8 @@ import { realBinary, programOfLine, narrowRootsForTest, takeViolations } from '.
  * G3. Over-correction: a stand-in named claude in the test's own temporary folder is refused, and the suites that
  *     plant one (mcp-registration-cli, cli-updater) break.
  * G4. A line for a shell (`exec('claude mcp list')`) goes around it.
- * G5. The product's own named import of spawn (core/cli-probe.ts) goes around the hook, which patched only the
- *     module object.
+ * G5. The product's own probe (core/cli-probe.ts, a spawn) goes around a guard on execFile alone, as the suite's
+ *     mocks did (a guard on execFile alone turns this case red: measured).
  * G6. A claude that is not installed at all (nothing on the PATH by that name) reads as a real one.
  */
 
