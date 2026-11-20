@@ -19,7 +19,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * with its own identity. Each harness passes the same steps:
  * 1. starts: its CLI runs in the agent's terminal;
  * 2. delegate_task returns the harness's own final answer, `PROBE-OK <marker>`, and the endpoint saw the tool's
- *    result carry the marker: a real tool round on the wire;
+ *    result carry the marker: a real tool round on the wire. A harness whose TUI is not drawn yet is answered "still
+ *    starting ... Send it again in a moment", nothing typed (SENDER_WAIT_MS, 20 s): sent again, as an orchestrator
+ *    does, four times at most (Kilo 7.8.27 drew its bar 13 to 47 s after it started on a loaded machine, 20/11);
  * 3. task_status reads that task completed, with the same answer;
  * 4. get_agent_output with that taskId gives the same answer;
  * 5. resume: Tars quits and starts again, the agent's first start continues its session (the endpoint's first new
