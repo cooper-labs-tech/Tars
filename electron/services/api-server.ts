@@ -50,17 +50,25 @@ import { apiAnswerForError } from '../core/pty-pool';
 export { agentStatusEmitter };
 
 let apiServer: http.Server | null = null;
-/** The listener a remote agent's tunnel reaches, open from the first launch on a host (openTunnelListener). */
-let tunnelServer: http.Server | null = null;
+/** The listeners remote agents' tunnels reach, one per host, each open from the first launch there (openTunnelListener). */
+const tunnelServers = new Map<string, http.Server>();
+/** The most connections each agent's token held at once through its host's listener, since Tars started. */
+const tunnelPeaks = new Map<string, number>();
+
+/** What each agent's token held at most through its tunnel, for the record (the remote agent's e2e reads it). */
+export function tunnelSocketPeaks(): Record<string, number> {
+  return Object.fromEntries(tunnelPeaks);
+}
 
 /**
- * The local API's second listener (2.0.7, the Audit's gate of #600; services/api-tunnel.ts): 127.0.0.1, a port the
- * system picks, the same routes as the API's own port, and before any of them a gate. Only the token of an agent placed
- * on a remote host passes it, on every route, /api/health and /api/local-file included: a process of the host that
- * reaches the tunnel's end on its loopback gets a 401 for anything without that token, where the API's own port answers
- * its two exempt routes to anyone on this computer.
+ * The local API's second listener for one remote host (2.0.7, the Audit's gate of #600; services/api-tunnel.ts):
+ * 127.0.0.1, a port the system picks, the same routes as the API's own port, and before any of them a gate. Only the
+ * token of an agent placed on this host passes it, on every route, /api/health and /api/local-file included: a process
+ * of the host that reaches the tunnel's end on its loopback gets a 401 for anything without that token, where the API's
+ * own port answers its two exempt routes to anyone on this computer. One per host, so its ceiling is that host's alone
+ * (the short re-read of #600).
  */
-function openTunnelListener(handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>): Promise<number> {
+function openTunnelListener(handle: (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void>, hostId: string): Promise<number> {
   // The sockets each agent's token holds here (the re-audit's I-g on #600), each released when it closes.
   const held = new Map<string, Set<net.Socket>>();
   return new Promise((resolve, reject) => {
@@ -71,8 +79,8 @@ function openTunnelListener(handle: (req: http.IncomingMessage, res: http.Server
         return;
       }
       const caller = resolveCaller(req.headers, pathname);
-      if (!tunnelAdmits(caller, (id) => agents.get(id))) {
-        refuseAndClose(res, 401, "Unauthorized: through a remote agent's tunnel, Tars answers only an agent placed on a host, by its own token");
+      if (!tunnelAdmits(caller, (id) => agents.get(id), hostId)) {
+        refuseAndClose(res, 401, "Unauthorized: through a remote host's tunnel, Tars answers only an agent placed on that host, by its own token");
         return;
       }
       const agentId = (caller as { agentId: string }).agentId;
@@ -89,6 +97,7 @@ function openTunnelListener(handle: (req: http.IncomingMessage, res: http.Server
         }
         const set = mine;
         set.add(socket);
+        tunnelPeaks.set(agentId, Math.max(tunnelPeaks.get(agentId) ?? 0, set.size));
         socket.once('close', () => {
           set.delete(socket);
           if (set.size === 0 && held.get(agentId) === set) held.delete(agentId);
@@ -101,9 +110,9 @@ function openTunnelListener(handle: (req: http.IncomingMessage, res: http.Server
     server.requestTimeout = TUNNEL_REQUEST_MS;
     server.once('error', reject);
     server.listen(0, '127.0.0.1', () => {
-      tunnelServer = server;
+      tunnelServers.set(hostId, server);
       const port = (server.address() as { port: number }).port;
-      console.log(`[api] the remote agents' tunnel listener runs on http://127.0.0.1:${port}`);
+      console.log(`[api] the tunnel listener of remote host ${hostId} runs on http://127.0.0.1:${port}`);
       resolve(port);
     });
   });
@@ -584,7 +593,7 @@ export function startApiServer(
   };
   apiServer = http.createServer((req, res) => answerOrReport(handleRequest, req, res));
   // The listener a remote agent's tunnel reaches (services/api-tunnel.ts): the same routes, behind a gate.
-  setTunnelOpener(() => openTunnelListener(handleRequest));
+  setTunnelOpener((hostId) => openTunnelListener(handleRequest, hostId));
 
   // In the Node 22 the tests run and the Node 24 of Electron 44, not yet in
   // the @types/node 20 this repo pins.
@@ -709,11 +718,8 @@ export function stopApiServer() {
     stopping.close();
   }
   setTunnelOpener(undefined);
-  if (tunnelServer) {
-    const stopping = tunnelServer;
-    tunnelServer = null;
-    stopping.close();
-  }
+  for (const stopping of tunnelServers.values()) stopping.close();
+  tunnelServers.clear();
   setApiServerState({
     phase: 'stopped',
     attempts: 0,

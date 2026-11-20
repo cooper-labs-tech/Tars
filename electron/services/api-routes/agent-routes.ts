@@ -256,7 +256,7 @@ async function spawnAgentSessionInSlot(
   if (remote) {
     // The tunnel reaches the API's second listener, which takes only a remote agent's token (services/api-tunnel.ts).
     try {
-      remote.apiPort = await tunnelListenerPort();
+      remote.apiPort = await tunnelListenerPort(remote.host.id);
     } catch (err) {
       sendJson({ error: `${agent.name || agent.id} runs on a remote host, and the listener its tunnel reaches could not open: ${err instanceof Error ? err.message : String(err)}`, code: 'remote_tunnel' }, 503);
       return false;

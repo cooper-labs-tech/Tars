@@ -203,14 +203,15 @@ export function endRemoteSession(agent: Pick<AgentStatus, 'id' | 'remote'>, plac
 }
 
 /**
- * Whether the tunnel's own listener takes a call (the Audit's gate of #600): only from an agent placed on a host, by
+ * Whether a host's tunnel listener takes a call (the Audit's gate of #600): only from an agent placed on that host, by
  * its own token, on every route, /api/health and /api/local-file included. Never the shared token, Tars's own pass,
- * a Hermes gateway's secret, an agent of this computer, or no token at all.
+ * a Hermes gateway's secret, an agent of this computer or of another host, or no token at all.
  */
 export function tunnelAdmits(
   caller: { ok: boolean; agentId?: string },
-  agentOf: (id: string) => { remote?: unknown } | undefined,
+  agentOf: (id: string) => { remote?: { hostId: string } } | undefined,
+  hostId: string,
 ): boolean {
   if (!caller.ok || !caller.agentId) return false;
-  return !!agentOf(caller.agentId)?.remote;
+  return agentOf(caller.agentId)?.remote?.hostId === hostId;
 }
