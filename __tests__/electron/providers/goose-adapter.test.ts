@@ -62,6 +62,7 @@ import { gooseDbPath, gooseUuidOf, gooseLaunchOf } from '../../../electron/provi
 import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 import { sendModeOf } from '../../../electron/core/send-mode';
 import { shellQuote } from '../../../electron/providers/cli-provider';
+import { launchPlanRefusal, planModeRefusal } from '../../../electron/providers/plan-mode';
 
 /** The line's start before the binary: the mode, on macOS and Linux. */
 const modeWord = (mode: string) => (process.platform === 'win32' ? '' : `env GOOSE_MODE='${mode}' `);
@@ -163,6 +164,10 @@ describe('its permission mode (8)', () => {
     expect(line('auto').startsWith(`${modeWord('auto')}'/opt/goose'`)).toBe(true);
     expect(line('bypass').startsWith(`${modeWord('auto')}'/opt/goose'`)).toBe(true);
     expect(() => line('plan')).toThrow(/no plan mode/);
+    // Refused at creation and update, and at a launch, before anything is stopped (plan-mode.ts), as Kimi Code's.
+    expect(planModeRefusal('goose', 'plan')).toMatch(/no plan mode/);
+    expect(launchPlanRefusal('goose', 'plan')).toMatch(/no plan mode/);
+    expect(launchPlanRefusal('goose', 'normal')).toBeNull();
     expect(goose.getPtyEnvVars('g1', project, [], undefined, { permissionMode: 'normal' }).GOOSE_MODE).toBe('approve');
     expect(goose.getPtyEnvVars('g1', project, [], undefined, { permissionMode: 'bypass' }).GOOSE_MODE).toBe('auto');
     expect(goose.getPtyEnvVars('g1', project, [], undefined, { permissionMode: 'auto' }).GOOSE_MODE).toBe('auto');
