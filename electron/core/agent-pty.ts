@@ -18,6 +18,8 @@ import { cliLaunchExit, reportHandledError } from '../services/error-reports/han
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
+import { opencodeSessionWatch } from '../services/opencode-sessions';
+import { opencodeSessionOfCommand } from '../providers/opencode-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import { getAllProviders } from '../providers';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
@@ -230,6 +232,10 @@ export function spawnAgentPty(opts: {
   // typed into this shell later is noted again then (agent-manager.ts, launchIntoTerminal).
   if (agentId && opts.binaryName === 'kimi') {
     kimiSessionWatch.noteLaunch(agentId, opts.cwd, kimiSessionOfCommand(Array.isArray(opts.args) ? opts.args.join(' ') : opts.args));
+  }
+  // opencode's, from its database; with the session its line resumes, as for kimi (services/opencode-sessions.ts).
+  if (agentId && opts.binaryName === 'opencode') {
+    opencodeSessionWatch.noteLaunch(agentId, opts.cwd, opencodeSessionOfCommand(Array.isArray(opts.args) ? opts.args.join(' ') : opts.args));
   }
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.

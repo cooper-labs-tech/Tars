@@ -13,6 +13,7 @@ import type {
 } from './cli-provider';
 import { safeEffort } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
+import { OPENCODE_SESSION_ID } from './opencode-cli';
 
 /**
  * Where opencode reads its MCP servers (opencode 1.19.3, read in its compiled
@@ -47,6 +48,19 @@ export class OpenCodeProvider implements CLIProvider {
   readonly displayName = 'OpenCode';
   readonly binaryName = 'opencode';
   readonly configDir = path.join(os.homedir(), '.opencode');
+
+  /**
+   * opencode sends no SessionStart and drops keys typed before its TUI is ready (1.19.6, measured 20/11: its field and
+   * its bottom bar came 10 to 26 s after it started on a loaded machine; it took keys within 50 ms of that, three times
+   * out of three, and none before). Up on that bar, `<key> agents  <key> commands` (two spaces between, as Tars's
+   * mirror reads it), whatever keys are bound.
+   */
+  upOnScreen(lines: readonly string[]): boolean {
+    return lines.some((line) => /\S+ agents {2,}\S+ commands\s*$/.test(line));
+  }
+
+  /** Measured on 1.19.6 (20/11): a note typed during a slow tool call went out with that call's result. */
+  readonly noteDuringTurn = 'next-tool-round' as const;
 
   getModels(): ProviderModel[] {
     return [
@@ -92,6 +106,12 @@ export class OpenCodeProvider implements CLIProvider {
     if (params.permissionMode === 'auto' || params.permissionMode === 'bypass') {
       command += ' --auto';
     }
+
+    // The agent's own session after a restart (utils/resume-session.ts gives opencode's id back from the UUID Tars
+    // knows it by): `--session <id>` continues it, `--fork` with it goes on under a new id, as a restart that applies
+    // new settings wants (1.19.6 --help). opencode's id and nothing else: it reaches a command line.
+    const session = params.resumeSessionId && OPENCODE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
+    if (session) command += ` --session '${session}'${params.forkSession ? ' --fork' : ''}`;
 
     // A delegated task arrives as params.prompt. Dropping it launched a bare
     // TUI and reported success while the task went nowhere.
@@ -145,6 +165,8 @@ export class OpenCodeProvider implements CLIProvider {
   getHookConfig(): HookConfig {
     return {
       supportsNativeHooks: false,
+      // Its turns reach Tars from its database (services/opencode-sessions.ts), as codex's from its session log.
+      turnsReported: true,
       configDir: this.configDir,
       settingsFile: path.join(this.configDir, 'config.json'),
     };

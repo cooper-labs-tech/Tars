@@ -144,6 +144,7 @@ import { filesOpenBy, openFilesReadable } from './platform/open-files';
 import { startCodexSessionWatch, type HookPost } from './services/codex-sessions';
 import { startPiSessionWatch, piSessionDir } from './services/pi-sessions';
 import { startKimiSessionWatch } from './services/kimi-sessions';
+import { startOpencodeSessionWatch } from './services/opencode-sessions';
 import { codexHome, codexSignInGap, loginShellCodexHome } from './providers/codex-cli';
 import { codexKeyConfig } from './services/cli-keys';
 import { getProvider } from './providers';
@@ -882,6 +883,11 @@ app.whenReady().then(async () => {
       const procs = await readProcesses();
       return procs ? processTreeOf(terminal.pid, procs) : undefined;
     },
+  });
+  // opencode's turns, answers and tokens, read from its database (services/opencode-sessions.ts).
+  startOpencodeSessionWatch({
+    post: postAsTerminal('opencode-sessions'),
+    interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
   });
   startCodexSessionWatch({
     post: postAsTerminal('codex-sessions'),

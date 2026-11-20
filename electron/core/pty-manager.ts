@@ -19,6 +19,7 @@ import { twoZones } from '../utils/two-zones';
 import { AgentMessageWaiting } from '../types';
 import { handOffFrom, noteHandOff } from '../services/task-ledger';
 import { kimiSessionWatch } from '../services/kimi-sessions';
+import { opencodeSessionWatch } from '../services/opencode-sessions';
 
 export const ptyProcesses: Map<string, pty.IPty> = new Map();
 export const quickPtyProcesses: Map<string, pty.IPty> = new Map();
@@ -1337,9 +1338,13 @@ export function writeProgrammaticInput(
   data = asTypedText(data);
   // Who this is from, for a traced agent's session (services/traces-runtime.ts): the turn it opens is theirs.
   noteTypedForTraces(origin, data);
-  // And for Kimi Code's session reader: a session whose first prompt holds it is this agent's (services/kimi-sessions.ts).
+  // And for Kimi Code's and opencode's session readers: a session whose first prompt holds it is this agent's
+  // (services/kimi-sessions.ts, services/opencode-sessions.ts).
   const owner = terminalOwner.get(ptyProcess) ?? origin?.agentId;
-  if (owner) kimiSessionWatch.noteTyped(owner, data);
+  if (owner) {
+    kimiSessionWatch.noteTyped(owner, data);
+    opencodeSessionWatch.noteTyped(owner, data);
+  }
   if (!bracketPaste) {
     // Plain shell command for a raw bash/zsh prompt: send directly, or through
     // a file when it holds a tab or a newline (shellLine). Nothing

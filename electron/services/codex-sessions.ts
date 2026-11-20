@@ -36,7 +36,7 @@ import { reportOf } from './terminal-answer';
  */
 
 export interface HookPost {
-  path: '/api/hooks/status' | '/api/hooks/output' | '/api/hooks/agent-stopped';
+  path: '/api/hooks/status' | '/api/hooks/output' | '/api/hooks/agent-stopped' | '/api/hooks/turn-usage';
   body: Record<string, unknown>;
 }
 
