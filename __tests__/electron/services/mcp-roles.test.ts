@@ -59,6 +59,15 @@ import { QwenCodeProvider } from '../../../electron/providers/qwen-code-provider
  *     28/10, failing open. When the file does not parse, the two are looked for as text: a table header
  *     `[mcp_servers.<name>]` (quoted or not, spaces allowed) or a dotted key `mcp_servers.<name>.` at a line's start,
  *     and what is found is switched off. Never a name in a comment, in a string, or a longer name that starts with it.
+ * 13. (The Audit's L3 on #608) That text reading misses a server the user defined another way TOML allows, and the
+ *     worker gets X (failing open): (10b) under an `[mcp_servers]` header, as a dotted key `<name>.command = ...` or
+ *     an inline table `<name> = { ... }`, or under a header of its own subtable `[mcp_servers.<name>.env]`; (10c) in
+ *     a top-level inline table, `mcp_servers = { <name> = { ... } }` (on one line or, as TOML 1.1 allows, on several),
+ *     or `mcp_servers.<name> = { ... }`; (10d) under a single-quoted key, `'<name>'`. Or it switches off a server codex
+ *     does not define, and the worker does not start ("invalid transport", failing closed): (10e) the name on a line
+ *     of a multi-line string (`"""` or `'''`), a key of another table that is not a server (`[mcp_servers.other]`
+ *     then `<name> = ...`, or `mcp_servers.<name>...` under another table's header), or a value inside an inline
+ *     table rather than a key.
  */
 
 let home: string;
@@ -257,6 +266,40 @@ describe('the CLIs that read their own config: a switch per run', () => {
       fs.writeFileSync(toml, text);
       expect(off(codexRoleArgs(false, toml)), text).toEqual(expected);
       expect(codexRoleArgs(true, toml), text).toEqual([]);
+    }
+  });
+
+  it("13. codex: a config.toml smol-toml cannot parse: every form TOML allows for a server is read, and only those (the Audit's L3, 10b to 10e)", () => {
+    const toml = path.join(home, 'config.toml');
+    const off = (args: string[]) => args.filter((_, i) => i % 2 === 1).sort();
+    const broken = 'this line is not toml = =\n';
+    const X = ['mcp_servers.dorothy-x.enabled=false'];
+    const BOTH = ['mcp_servers.claude-mgr-telegram.enabled=false', 'mcp_servers.dorothy-x.enabled=false'];
+    const cases: Array<[string, string, string[]]> = [
+      // 10b: under an [mcp_servers] header.
+      ['10b dotted key', `[mcp_servers]\ndorothy-x.command = "node"\n${broken}`, X],
+      ['10b inline table', `[mcp_servers] # the servers\n  claude-mgr-telegram = { command = "node", args = ["a"] }\n  "dorothy-x" = { command = "node" }\n${broken}`, BOTH],
+      ['10b a subtable header', `[mcp_servers.dorothy-x.env]\nKEY = "v"\n${broken}`, X],
+      // 10c: a top-level inline table.
+      ['10c one line', `model = "m"\nmcp_servers = { dorothy-x = { command = "node" }, claude-mgr-telegram.command = "x" }\n${broken}`, BOTH],
+      ['10c several lines', `mcp_servers = {\n  other = { args = ["{", "}"] },\n  'dorothy-x' = { command = "node" },\n}\n${broken}`, X],
+      ['10c dotted at the top', `mcp_servers.dorothy-x = { command = "node" }\n${broken}`, X],
+      // 10d: a single-quoted key.
+      ['10d header', `[mcp_servers.'dorothy-x']\ncommand = "node"\n${broken}`, X],
+      ['10d dotted', `mcp_servers.'claude-mgr-telegram'.command = "x"\n${broken}`, ['mcp_servers.claude-mgr-telegram.enabled=false']],
+      // 10e: what is not a server codex defines.
+      ['10e multi-line basic string', `note = """\n[mcp_servers.dorothy-x]\nmcp_servers.dorothy-x.command = "x"\n"""\n${broken}`, []],
+      ['10e multi-line literal string', `note = '''\n[mcp_servers.dorothy-x]\n'''\n${broken}`, []],
+      ['10e a key of another server', `[mcp_servers.other]\ndorothy-x = "y"\n${broken}`, []],
+      ['10e under another table', `[profiles.p]\nmcp_servers.dorothy-x.command = "x"\n${broken}`, []],
+      ['10e a value, not a key', `mcp_servers = { other = { args = ["dorothy-x"], env = { claude-mgr-telegram = "1" } } }\n${broken}`, []],
+      ['10e a longer name', `[mcp_servers]\ndorothy-xyz = { command = "node" }\n${broken}`, []],
+      ['10e a comment', `[mcp_servers]\n# dorothy-x = { command = "node" }\nmcp = 1 # [mcp_servers.dorothy-x]\n${broken}`, []],
+    ];
+    for (const [label, text, expected] of cases) {
+      fs.writeFileSync(toml, text);
+      expect.soft(off(codexRoleArgs(false, toml)), label).toEqual(expected);
+      expect.soft(codexRoleArgs(true, toml), label).toEqual([]);
     }
   });
 
