@@ -71,7 +71,7 @@ export abstract class OpencodeBuildProvider implements CLIProvider {
    * `config.json` and `opencode.jsonc` there too; Kilo 7.8.27 reads `kilo.json` of its own folder (measured 20/11).
    * Each server is `mcp.<name>`, and a local one is started with the CLI's whole environment, the agent's token in it.
    */
-  protected mcpConfigFile(): string {
+  mcpConfigFile(): string {
     return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), this.config.folder, this.config.mcpFile);
   }
 
