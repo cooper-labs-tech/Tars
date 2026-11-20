@@ -96,21 +96,28 @@ describe('a one-shot probe of a CLI', () => {
     const { probe } = await fresh();
     const s = standIn('child(); hang();');
     try {
+      // Its time long enough for the stand-in and its child to be running when it comes, even under a load of 25 (an
+      // 800 ms one ended a stand-in that had not yet started, and the case held nothing).
       const began = Date.now();
-      await expect(probe.probeCli(s.bin, ['--help'], { timeoutMs: 800 })).rejects.toMatchObject({ reason: 'timeout' });
-      expect(Date.now() - began).toBeLessThan(5_000);
+      const answer = probe.probeCli(s.bin, ['--help'], { timeoutMs: 6_000 }).then(() => null, (err: unknown) => err);
+      await until('the stand-in and its child started', () => s.pids().length === 2, 6_000);
+      expect(await answer).toMatchObject({ reason: 'timeout' });
+      expect(Date.now() - began).toBeLessThan(15_000);
       expect(s.pids().map(p => p.role).sort()).toEqual(['child', 'probe']);
       expect(await allGone(s.pids), 'left running after its give-up').toEqual([]);
     } finally {
       fs.rmSync(s.dir, { recursive: true, force: true });
     }
-  }, 20_000);
+  }, 30_000);
 
   it.skipIf(skipOnWindows(DEAF_REASON))('2. deaf to SIGTERM, it still ends at its give-up', async () => {
     const { probe } = await fresh();
     const s = standIn("process.on('SIGTERM', () => {}); hang();");
     try {
-      await expect(probe.probeCli(s.bin, ['--help'], { timeoutMs: 500 })).rejects.toMatchObject({ reason: 'timeout' });
+      // Running, and deaf, when its time comes: see case 1.
+      const answer = probe.probeCli(s.bin, ['--help'], { timeoutMs: 6_000 }).then(() => null, (err: unknown) => err);
+      await until('the stand-in started', () => s.pids().length === 1, 6_000);
+      expect(await answer).toMatchObject({ reason: 'timeout' });
       expect(await allGone(s.pids), 'a probe deaf to SIGTERM outlived its give-up').toEqual([]);
     } finally {
       fs.rmSync(s.dir, { recursive: true, force: true });
