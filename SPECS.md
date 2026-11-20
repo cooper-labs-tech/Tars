@@ -159,6 +159,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `kimi-code` | Kimi Code | `kimi` | `$KIMI_CODE_HOME`, else `~/.kimi-code` | native, on the model of the user's own `config.toml`, or an inference endpoint (below) |
 | `kilo` | Kilo | `kilo` | `$XDG_CONFIG_HOME/kilo`, else `~/.config/kilo` | native, a build of opencode: its own default (the Kilo Gateway's), or an inference endpoint (below) |
 | `goose` | Goose | `goose` | `$GOOSE_PATH_ROOT/config` (absolute only), else `$XDG_CONFIG_HOME/goose`, else `~/.config/goose`; on Windows `%APPDATA%\Block\goose\config` | native, on the provider and model of the user's own Goose config, or an inference endpoint (below) |
+| `cline` | Cline | `cline` | each agent's own `~/.tars-private/cline/<id>` (`--config`, with `data/` as `--data-dir`); the user's own `~/.cline` read, never written | native, on a copy of the user's own Cline provider, or an inference endpoint (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
@@ -179,9 +180,9 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 
 | Capability | Value per provider |
 |---|---|
-| Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini` and `qwen-code`; `false` for `codex`, `grok`, `opencode`, `kilo`, `goose`, `pi`, `kimi-code` and `amp`. codex's, pi's and Kimi Code's turns are read from their own session log instead, opencode's, Kilo's and Goose's from their own database (`turnsReported`, below) |
-| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi` (with `"exposure": "direct"`: pi 1.5.2 otherwise leaves a server's tools to its code tool, never declared to the model), `kimi-code` (`mcp.json` of its home), `kilo` (`kilo.json` of its own config folder, never opencode's); `goose` writes no file: Tars's servers go on its own line (`--with-extension '<name>:<command> <args>'`), on a fresh launch only |
-| Skills | `true` everywhere except `pi`, which has packages rather than skills, and `goose`, whose skills are its own |
+| Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini`, `qwen-code` and `cline` (its own hooks, which Tars installs in each Cline agent's own folder, `hooks/cline-hook.mjs`); `false` for `codex`, `grok`, `opencode`, `kilo`, `goose`, `pi`, `kimi-code` and `amp`. codex's, pi's and Kimi Code's turns are read from their own session log instead, opencode's, Kilo's and Goose's from their own database (`turnsReported`, below) |
+| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi` (with `"exposure": "direct"`: pi 1.5.2 otherwise leaves a server's tools to its code tool, never declared to the model), `kimi-code` (`mcp.json` of its home), `kilo` (`kilo.json` of its own config folder, never opencode's); `goose` writes no file: Tars's servers go on its own line (`--with-extension '<name>:<command> <args>'`), on a fresh launch only; `cline` writes its servers into each agent's own MCP settings (`<agent>/data/settings/cline_mcp_settings.json`) by its role, never into the user's |
+| Skills | `true` everywhere except `pi`, which has packages rather than skills, and `goose` and `cline`, whose skills are their own |
 | Skill directories | claude family: `~/.claude/skills` + `~/.agents/skills`; `gemini`: `~/.gemini/skills`; `grok`: `~/.grok/skills` + `~/.agents/skills`; `codex`, `opencode`: `~/.agents/skills`; `pi`: `~/.pi/packages` |
 | Memory base path | `<configDir>/projects` for the claude-binary family; `codex`, `gemini`, `grok`, `opencode` and `pi` return `configDir` itself, a placeholder; they have no Claude-like memory tree |
 | Prompt-injected memory | every provider whose `configDir` is not `~/.claude` (see §5) |
@@ -279,9 +280,42 @@ The binary `goose` (block/goose), measured on 1.60.1 in throwaway homes, its TUI
   to a Goose agent waits for the turn's end, `auto` and `note-now` as `queue` (`noteDuringTurn: 'lost'`,
   `core/send-mode.ts`).
 
+### Cline (21/11): `providers/cline-provider.ts`, `providers/cline-cli.ts`, `hooks/cline-hook.mjs`
+
+The binary `cline` (npm `cline`), measured on 3.0.74 in throwaway homes, its TUI (`cline -i`) in a PTY:
+- **A folder of its own per agent**, `~/.tars-private/cline/<agent id>`: its `--config` (Tars's hooks in `hooks/`) and,
+  as `data/`, its `--data-dir` (its provider, its MCP settings, its sessions). Its TUI reads its provider from
+  `<data>/settings/providers.json` and nowhere else: given another file (CLINE_PROVIDER_SETTINGS_PATH) it showed its
+  onboarding and wrote a default `providers.json` into the data folder. So **the user's own `~/.cline` is never written**,
+  and **its rules, skills and hooks are not read for a Tars agent**: a Cline agent's provider is a copy of the user's
+  `providers.json` (read from `CLINE_DATA_DIR`, else `CLINE_DIR/data`, else `<home>/.cline/data`), or, on an endpoint,
+  Tars's proxy. With neither, the launch is refused, saying to run `cline auth` or to choose an endpoint: its
+  onboarding's Enter signs in with Cline (a device code, a page in the browser).
+- **Its turns, from its own hooks**: Cline runs `<Event>.mjs` of the agent's `hooks/` with `node` (its own launcher
+  needs node anyway), its payload on stdin and its environment inherited, the agent's token with it.
+  `hooks/cline-hook.mjs` posts each task's start (a session's first registers it, with its CLI's pid, the hook's
+  parent; every TaskStart opens a turn with its prompt, read from the session's record for the first task and from its
+  messages after, Cline's `<user_input>` tag taken off), its answer and its end (TaskComplete), an Esc (TaskCancel) and
+  an error, under a UUID made from Cline's `<ms>_<5 chars>` id. The CLI pid it registers is the one Cline's
+  `sessions.db` names for the session. No prompt-keyed binding: two agents with the same skills launched together each
+  get their own session (the conformance's step 7). No tokens.
+- **Its modes**: `--auto-approve false` asks in its terminal ("Approve tool call?") for normal; `true` for auto and
+  bypass; its `-p` still ran a command, so plan is refused at creation, an update and a launch.
+- **The task** is typed in once its field (`❯`) and footer (`Auto-approve all enabled|disabled (Shift+Tab)`) are drawn
+  (`upOnScreen`), after bracketed paste turns on, never on its onboarding: a task on its line is ignored on a session
+  resumed with `--id`. A launch's typed task now waits for a provider's `upOnScreen` (`core/typed-task.ts`), Cline's,
+  Kimi Code's and Goose's alike.
+- **Sessions**: resumed after Tars restarts with `--id <id>` (found in the agent's own `sessions.db`, in its folder).
+  There is no fork: a restart starts a fresh session and says so in the agent's output ("Its conversation starts over:
+  Cline cannot fork a session, and a restart cannot continue the one it stops.").
+- **Always**: `CLINE_DISABLE_CLINE_PASS_NOTICE=1` (its first-run notice took an Enter and opened a page in the owner's
+  browser), `CLINE_SESSION_BACKEND_MODE=local`. With its own `--data-dir`, Cline 3.0.74 starts no hub (measured, even with
+  the hub backend asked for), so Tars has none to stop; the conformance checks a decoy hub of the user's survives.
+- A note typed during its turn waits for the turn's end (`after-the-turn`).
+
 ### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
 
-An agent running codex, pi, qwen-code, opencode, kimi-code, kilo or goose can run on an OpenAI-compatible inference endpoint, chosen per
+An agent running codex, pi, qwen-code, opencode, kimi-code, kilo, goose or cline can run on an OpenAI-compatible inference endpoint, chosen per
 agent (`endpointId`, with `model` one of the endpoint's own `/v1/models`).
 
 **The proxy.** Tars writes everything the harness needs, through one adapter per harness (`endpoint-harness.ts`).
@@ -299,6 +333,8 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   `OPENAI_BASE_PATH` (`v1/chat/completions`), and the token in `OPENAI_API_KEY`; nothing written. Measured through the
   proxy by the harness conformance run: delegated, answered after a tool round, read back with its tokens, resumed and
   forked. On a session it resumes, Goose asks the endpoint for a title (no tools offered) before the turn.
+- **cline 3.0.74:** the proxy and the model in the agent's own `providers.json` (`openai-compatible`, no key), the
+  token in `OPENAI_API_KEY`, which it reads (a bearer reached the endpoint; `CLINE_API_KEY` sent none).
 - **kimi-code 2.6.3:** the whole model from its environment, `KIMI_MODEL_NAME`, `KIMI_MODEL_PROVIDER_TYPE=openai`,
   `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written, and no `-m` (it names an alias of the
   user's `config.toml`). Measured through the proxy by the harness conformance run: delegated, answered, read back and
@@ -452,6 +488,7 @@ What is read back, per CLI. Nothing is invented: a value Tars cannot read is abs
 | opencode | `opencode --prompt <task>`, its TUI (never `opencode run`, which exits after the task); a task typed in once its bottom bar is drawn (`upOnScreen`: `<key> commands` at the line's end, on its first screen and on a session it resumed); its session resumed with `--session <id>`, forked with `--fork` (every restart's: the fork is a new session whose messages copy the old one's with their own times, bound by its first prompt and read from the launch on; on a launch on a session, the task is typed once that session's view is drawn, since a forking opencode draws its home view first) | read from its database, `$XDG_DATA_HOME/opencode/opencode.db` (`services/opencode-sessions.ts`, measured on 1.19.6): a user message opens the turn, an assistant message completed with `finish: stop` ends it, an Esc (`MessageAbortedError`) interrupts it, an `APIError` is the agent's error | the turn's text | its assistant messages' tokens, as the turn's usage (`/api/hooks/turn-usage`), priced from the catalogue | completed, error, interrupted |
 | kilo | `kilo --prompt <task>`, its TUI, as opencode; a task typed in once its bottom bar is drawn (`upOnScreen`: `<key> commands` at the line's end, on its first screen and on a session it resumed); its session resumed with `--session <id>`, forked with `--fork` (every restart's: the fork is a new session whose messages copy the old one's with their own times, bound by its first prompt and read from the launch on; on a launch on a session, the task is typed once that session's view is drawn, since a forking opencode draws its home view first) | read from its database, `$XDG_DATA_HOME/kilo/kilo.db` (`services/opencode-sessions.ts`, the same schema, Kilo 7.8.27): a user message opens the turn, an assistant message completed with `finish: stop` ends it, an Esc (`MessageAbortedError`) interrupts it, an `APIError` is the agent's error | the turn's text | its assistant messages' tokens, as the turn's usage (`/api/hooks/turn-usage`), priced from the catalogue | completed, error, interrupted |
 | goose | `goose session`, its TUI; the task typed in once its field line is drawn (`upOnScreen`: `Enter to send`, with bracketed paste on); its session resumed with `--resume --session-id <id>`, forked with `--fork` (every restart's: the fork is a new session whose messages copy the old one's with their own times, bound by its first prompt and read from the launch on); a message to it waits for its turn's end, since one typed during it is lost | read from its database, `sessions.db` (`services/goose-sessions.ts`, Goose 1.60.1): a user message opens the turn, an assistant message with text and no tool request ends it, an `error` item is the agent's error, the next prompt after a turn with no end (a Ctrl+C) says it interrupted | the turn's text | its model calls' tokens (`usage_ledger`), the cache read taken out of the input, as the turn's usage (`/api/hooks/turn-usage`), priced from the catalogue | completed, error, interrupted |
+| cline | `cline -i` on the agent's own folder; the task typed in once its field and footer are drawn (`upOnScreen`); its session resumed with `--id <id>` after Tars restarts; a restart starts fresh (no fork) and says so | its own hooks (`hooks/cline-hook.mjs`): TaskStart opens the turn with its prompt (a session's first registers it), TaskComplete ends it | `turn.outputText` | not read | completed, error, interrupted (an Esc) |
 | amp | `amp`, its TUI, the task typed in once the CLI runs and its screen has had 2 s (`core/typed-task.ts`): amp has no interactive form that takes a prompt, and `amp -x` exits after the task | no hook | not read | not read | `delivered` |
 | codex | `codex <task>` (never `codex exec`) | no hook | not read | not read | `delivered` |
 | grok | `grok <task>` (never `-p/--single`) | no hook | not read | not read | `delivered` |
