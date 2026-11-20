@@ -44,6 +44,8 @@ import Database from 'better-sqlite3';
  *     out. With this project's four skills the skills line alone is 190 characters.
  * 16. A launch whose task pastes another agent's header bound by its identity lines, or ruled out by them: what its
  *     terminal was sent decides (#613's L3).
+ * 18. (The bench's survivor on b932cb304) A launch whose task quotes a brief another unbound agent was also sent, its
+ *     identity line after the skills line unread: the other's text rules the session out, and it is never bound.
  * 17. A session whose created_at carries its time zone (as sqlx writes a DateTime<Utc>) read as no time at all: never
  *     bound.
  */
@@ -309,6 +311,22 @@ describe('two agents launched together with the same skills (15, 16: the Audit\'
     await w.tick();
     expect(Object.fromEntries(posts.map((p) => [p.agentId, p.post.body.session_id])))
       .toEqual({ [AGENT]: gooseUuidOf('20261120_1'), [OTHER]: gooseUuidOf('20261120_2') });
+  });
+});
+
+describe('18: an identity line read after the skills line decides before what another launch was sent', () => {
+  it("binds a launch whose task quotes a brief the other agent was also sent", async () => {
+    const brief = 'Message from agent "Lead": the brief for both of you, the same words, long enough to count';
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    w.noteLaunch(OTHER, project);
+    w.noteTyped(OTHER, brief);
+    const typedA = launchTyped(`${identity(AGENT)}\n${brief}`);
+    w.noteTyped(AGENT, typedA);
+    session('20261120_1', project, LAUNCH + 1_000);
+    prompt('20261120_1', LAUNCH + 2_000, typedA);
+    await w.tick();
+    expect(Object.fromEntries(posts.map((p) => [p.agentId, p.post.body.session_id]))).toEqual({ [AGENT]: gooseUuidOf('20261120_1') });
   });
 });
 
