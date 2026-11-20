@@ -9,7 +9,8 @@ import Database from 'better-sqlite3';
  * (20/11/2026) in throwaway homes:
  * - `goose session` is its TUI. It takes no first prompt on its line: the task is typed in once it is up. It said
  *   `goose is ready` 0.2 to 0.6 s after its start and took a key typed then 54 to 61 ms later, three fresh starts out of
- *   three; it turns bracketed paste on 5 to 68 ms after that line. Its screen names its session (`20261120_1 · <folder>`).
+ *   three; it turns bracketed paste on 5 to 68 ms after that line, in the same write as its field line `> Enter to
+ *   send` (three fresh starts, 0.4 to 0.8 s after the spawn). Its screen names its session (`20261120_1 · <folder>`).
  * - On an endpoint: `--provider openai --model <m>`, with OPENAI_HOST, OPENAI_BASE_PATH and OPENAI_API_KEY; nothing is
  *   written into its config.
  * - MCP servers per run: `--with-extension '<name>:<command> <args>'` names one, and a resumed session brings back the
@@ -27,7 +28,8 @@ import Database from 'better-sqlite3';
  *
  * How it fails, written before the code:
  * 1. Goose's binary read from another path setting, or Goose run as another provider: no Tars provider knows `goose`.
- * 2. A task put on its command line, which `goose session` does not take, or typed before its TUI is up: lost.
+ * 2. A task put on its command line, which `goose session` does not take, or typed before its TUI is up: lost. Up
+ *    on `goose is ready` alone, a paste sent then arrives raw, and its first line break sends a part of it.
  * 3. On an endpoint, the provider or the model left to the user's config: the task leaves for a service the user did
  *    not choose. Or the endpoint's key written into its config.
  * 4. Tars's servers left unnamed (named after their command, `node__...`) or written into the user's Goose config; a
@@ -100,6 +102,7 @@ describe('Goose, an agent of its own (1, 2, 6, 7)', () => {
     expect(goose.typedTask!({ prompt: 'do the task' })).toBe('do the task');
     expect(goose.upOnScreen!(['    __( O)>  ● new session · openai m', '   \\\\____)    20261120_1 · /p', '     L L     goose is ready', '> Enter to send · Ctrl+J newline'])).toBe(true);
     expect(goose.upOnScreen!(['    __( O)>  ● new session · openai m'])).toBe(false);
+    expect(goose.upOnScreen!(['    __( O)>  ● new session · openai m', '   \\\\____)    20261120_1 · /p', '     L L     goose is ready'])).toBe(false);
     expect(goose.upOnScreen!([])).toBe(false);
   });
 });
