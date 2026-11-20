@@ -26,7 +26,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. codex starts: the endpoint gets the task from it, with codex's shell tool;
  * 2. Tars stops the agent 3 s into that call: no request carrying a tool's output reaches the endpoint after the stop,
  *    and no process runs from the sandbox home 10 s after it;
- * 3. once Tars has quit, still none.
+ * 3. once Tars has quit, still none;
+ * 4. the codex home Tars wrote is the sandbox's: its config.toml holds the folder trust Tars writes at the launch, and
+ *    a CODEX_HOME exported in the shell that runs the spec is left byte for byte as it was (the Audit's L2 on #608:
+ *    inherited, it sent the sandboxed Tars to write that home, and codex to run on its login). Witnessed with a decoy
+ *    folder exported as CODEX_HOME, never a real one.
  * The artefact: values.json (the requests in short, the screen, what ran from the home), endpoint-requests.jsonl, the
  * app's log, reproduce.txt.
  */
@@ -127,6 +131,9 @@ test('codex 0.170 starts in a worker\'s terminal, and its turn ends when Tars st
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { codex: bin, additionalPaths: [path.dirname(bin)] },
   }, null, 2));
 
+  // A codex home exported by the shell that runs this spec: never Tars's to write (4).
+  const runnerConfig = process.env.CODEX_HOME?.trim() ? path.join(process.env.CODEX_HOME.trim(), 'config.toml') : undefined;
+  const runnerBefore = runnerConfig && fs.existsSync(runnerConfig) ? fs.readFileSync(runnerConfig, 'utf8') : null;
   const values: Record<string, unknown> = { bin, version: (() => { try { return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000 }).trim(); } catch { return null; } })() };
   const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
   const requests = () => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []) as Logged[];
@@ -177,6 +184,12 @@ test('codex 0.170 starts in a worker\'s terminal, and its turn ends when Tars st
     keep({ leftAfterQuit: left });
     for (const p of left) { try { process.kill(p.pid); } catch { /* gone */ } }
     expect.soft(left, 'what still ran from the sandbox home once Tars had quit').toEqual([]);
+    // 4. Tars's codex home was the sandbox's, and the runner's own was left alone.
+    const sandboxConfig = fs.existsSync(path.join(codexHome, 'config.toml')) ? fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8') : '';
+    const runnerAfter = runnerConfig && fs.existsSync(runnerConfig) ? fs.readFileSync(runnerConfig, 'utf8') : null;
+    keep({ sandboxTrustWritten: sandboxConfig.includes(fs.realpathSync(project)), runnerCodexHome: runnerConfig ?? null, runnerConfigChanged: runnerConfig ? runnerAfter !== runnerBefore : null });
+    expect.soft(sandboxConfig, "the sandbox's config.toml holds the folder trust Tars writes").toContain(fs.realpathSync(project));
+    if (runnerConfig) expect.soft(runnerAfter, `${runnerConfig}, exported as CODEX_HOME, left as it was`).toBe(runnerBefore);
     await standin.close();
     await removeHome(home);
   }
