@@ -155,6 +155,13 @@ export class PiProvider implements CLIProvider {
     // On an inference endpoint: Tars's provider in pi's models.json, on the endpoint proxy (services/endpoint-harness.ts).
     for (const arg of endpointLaunchForAgent(params.agentId, 'pi')?.args ?? []) command += ` '${arg.replace(/'/g, "'\\''")}'`;
 
+    // The agent's own session after a restart (utils/resume-session.ts): `--session <id>` continues it, `--fork <id>`
+    // goes on under a new session, as a restart that applies new settings wants (measured on 1.5.2). A session id and
+    // nothing else, it reaches a command line; before the prompt, which pi reads as text.
+    const session = params.resumeSessionId && /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(params.resumeSessionId)
+      ? params.resumeSessionId : undefined;
+    if (session) command += ` ${params.forkSession ? '--fork' : '--session'} '${session}'`;
+
     // For interactive PTY sessions, launch the TUI (no subcommand).
     if (params.model && params.model !== 'default') {
       if (!/^[a-zA-Z0-9._:\/-]+$/.test(params.model)) {

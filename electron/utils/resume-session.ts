@@ -75,7 +75,7 @@ export function transcriptRoots(...paths: Array<string | undefined>): string[] {
  * session id, or a transcript that is no longer on disk.
  */
 export function resolveResumeSessionId(
-  agent: { provider?: string; resumableSessionId?: string; forkedFromSessionId?: string; projectPath?: string; worktreePath?: string },
+  agent: { id?: string; provider?: string; resumableSessionId?: string; forkedFromSessionId?: string; projectPath?: string; worktreePath?: string },
   homeDir = os.homedir(),
 ): string | null {
   // Qwen Code's transcripts are its own (services/qwen-code.ts, which this cannot import: it is below the providers).
@@ -99,6 +99,20 @@ export function resolveResumeSessionId(
 
     if (agent.provider === 'codex') {
       if (codexRolloutOf(sessionId, codexHome(process.env, homeDir))) return sessionId;
+      continue;
+    }
+
+    // pi: its sessions are in the agent's own folder, ~/.tars/pi/sessions/<agent id>/<time>_<id>.jsonl
+    // (services/pi-sessions.ts piSessionDir, which this cannot import: it is below the services), and
+    // `pi --session <id>` continues one (measured on 1.5.2).
+    if (agent.provider === 'pi') {
+      if (!agent.id || !/^[A-Za-z0-9._-]+$/.test(agent.id) || agent.id === '.' || agent.id === '..') continue;
+      try {
+        const dir = path.join(homeDir, '.tars', 'pi', 'sessions', agent.id);
+        if (fs.readdirSync(dir).some((name) => name.endsWith(`_${sessionId}.jsonl`))) return sessionId;
+      } catch {
+        // No folder: no session to resume.
+      }
       continue;
     }
 
