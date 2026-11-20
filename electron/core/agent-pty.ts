@@ -20,6 +20,8 @@ import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
 import { opencodeWatchFor, opencodeWatches } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
+import { gooseSessionWatch } from '../services/goose-sessions';
+import { gooseLaunchOf } from '../providers/goose-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import { getAllProviders } from '../providers';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
@@ -242,6 +244,8 @@ export function spawnAgentPty(opts: {
   if (agentId && opencodeWatch) {
     opencodeWatch.noteLaunch(agentId, opts.cwd, { ...opencodeLaunchOf(opts.args), terminal: spawned });
   }
+  // Goose's, from its sessions.db, the same way (services/goose-sessions.ts).
+  if (agentId && opts.binaryName === 'goose') gooseSessionWatch.noteLaunch(agentId, opts.cwd, { ...gooseLaunchOf(opts.args), terminal: spawned });
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {
@@ -249,6 +253,7 @@ export function spawnAgentPty(opts: {
     // And the session readers' launch in it, which is no longer read, whichever build of opencode it ran
     // (services/opencode-sessions.ts).
     for (const watch of opencodeWatches) watch.forgetTerminal(spawned);
+    gooseSessionWatch.forgetTerminal(spawned);
     // And what it was spawned as: gone, node-pty on Linux still names the
     // shell it spawned, and a terminal handed a command read as a running CLI.
     spawnedAs.delete(spawned);

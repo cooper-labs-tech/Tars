@@ -24,6 +24,11 @@ export interface PtyLaunch {
    * Undefined when the launch was not told: nothing is switched off then.
    */
   orchestrator?: boolean;
+  /**
+   * The mode the launch runs in, as its line is built with: a CLI that reads it from its environment only (Goose's
+   * GOOSE_MODE) takes it here on Windows, where the line's first word is the binary and nothing else is read.
+   */
+  permissionMode?: AgentPermissionMode;
 }
 
 export interface InteractiveCommandParams {

@@ -15,6 +15,7 @@ import { QwenProvider } from './qwen-provider';
 import { QwenCodeProvider } from './qwen-code-provider';
 import { KimiCodeProvider } from './kimi-code-provider';
 import { KiloProvider } from './kilo-provider';
+import { GooseProvider } from './goose-provider';
 import { ZhipuProvider } from './zhipu-provider';
 import { MiniMaxProvider } from './minimax-provider';
 import { NvidiaProvider } from './nvidia-provider';
@@ -52,6 +53,8 @@ const providers: Record<string, CLIProvider> = {
   'kimi-code': new KimiCodeProvider(),
   // Kilo CLI, the binary kilo: a build of opencode with its own config and database (kilo-provider.ts).
   kilo: new KiloProvider(),
+  // Goose, the binary goose: its servers on its line, its turns from its sessions.db (goose-provider.ts).
+  goose: new GooseProvider(),
   zhipu: new ZhipuProvider(),
   minimax: new MiniMaxProvider(),
   nvidia: new NvidiaProvider(),

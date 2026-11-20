@@ -8,14 +8,19 @@ import Database from 'better-sqlite3';
  * Where Goose keeps its sessions, and how Tars names them: below the providers and the services, so the resume check
  * (utils/resume-session.ts), the provider and the session reader (services/goose-sessions.ts) share it. Measured on
  * Goose 1.60.1 (20/11/2026): one SQLite database, `$XDG_DATA_HOME/goose/sessions/sessions.db`, else
- * `~/.local/share/goose/sessions/sessions.db` (macOS included); a session is a `sessions` row, `YYYYMMDD_N`, with its
- * `working_dir`.
+ * `~/.local/share/goose/sessions/sessions.db` (macOS included), and `$GOOSE_PATH_ROOT/data/sessions/sessions.db` when
+ * that is set, whatever XDG_DATA_HOME says; a session is a `sessions` row, `YYYYMMDD_N`, with its `working_dir`.
  */
+
+/** GOOSE_PATH_ROOT, which moves every folder of Goose's under it (`config`, `data`, `state`), or undefined. */
+export const goosePathRoot = (env: NodeJS.ProcessEnv = process.env): string | undefined => env.GOOSE_PATH_ROOT?.trim() || undefined;
 
 /** A session id as Goose writes it: the only form that reaches a command line. */
 export const GOOSE_SESSION_ID = /^\d{8}_\d{1,6}$/;
 
 export function gooseDbPath(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir()): string {
+  const root = goosePathRoot(env);
+  if (root) return path.join(root, 'data', 'sessions', 'sessions.db');
   const data = env.XDG_DATA_HOME?.trim() || path.join(homeDir, '.local', 'share');
   return path.join(data, 'goose', 'sessions', 'sessions.db');
 }

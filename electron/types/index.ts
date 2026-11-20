@@ -26,6 +26,8 @@ export type AgentProvider =
   | 'kimi-code'
   /** Kilo CLI, the binary `kilo` (Kilo-Org/kilocode), a build of opencode. */
   | 'kilo'
+  /** Goose, the binary `goose` (block/goose). */
+  | 'goose'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -392,6 +394,7 @@ export const CLI_PATH_KEYS = [
   'pi',
   'kimi',
   'kilo',
+  'goose',
   'gws',
   'gcloud',
   'gh',

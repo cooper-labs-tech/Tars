@@ -40,7 +40,7 @@ const DROP_NAME = /^[A-Za-z0-9._-]{1,64}\.key$/;
 const ENDPOINT_ID = /^ep-[0-9a-f]{6}$/;
 
 /** The harnesses an endpoint can run, and how each measured. */
-export const ENDPOINT_HARNESSES = ['codex', 'pi', 'qwen-code', 'opencode', 'kimi-code', 'kilo'] as const;
+export const ENDPOINT_HARNESSES = ['codex', 'pi', 'qwen-code', 'opencode', 'kimi-code', 'kilo', 'goose'] as const;
 export type EndpointHarness = typeof ENDPOINT_HARNESSES[number];
 export type ToolCallSupport = 'works' | 'failed' | 'unmeasured';
 

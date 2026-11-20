@@ -25,6 +25,8 @@ import { markCliLaunch, noteLaunchLine } from './terminal-mirror';
 import { kimiSessionWatch } from '../services/kimi-sessions';
 import { opencodeWatchFor } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
+import { gooseSessionWatch } from '../services/goose-sessions';
+import { gooseLaunchOf } from '../providers/goose-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
@@ -1234,6 +1236,8 @@ export async function launchIntoTerminal(
   // opencode or Kilo typed into a shell already there: noted now, in its build's watch, with the session its line
   // resumes or forks (a restart's) and the prompt it starts on, in this terminal (services/opencode-sessions.ts).
   opencodeWatchFor(getProvider(agent.provider).binaryName)?.noteLaunch(agent.id, start.cwd, { ...opencodeLaunchOf(start.typedLine), terminal: ptyProcess });
+  // Goose the same, in its own watch (services/goose-sessions.ts).
+  if (getProvider(agent.provider).binaryName === 'goose') gooseSessionWatch.noteLaunch(agent.id, start.cwd, { ...gooseLaunchOf(start.typedLine), terminal: ptyProcess });
   // What the terminal shows from its line on is the new CLI's: a box an earlier one left above never reads as this one
   // up (terminal-mirror.ts, rowsSinceLaunch; the Audit's L1 on #601).
   markCliLaunch(ptyProcess, !!getProvider(agent.provider).upOnScreen);
@@ -1353,7 +1357,7 @@ async function spawnShell(agent: AgentStatus): Promise<{ ptyProcess: pty.IPty; c
     agent.projectPath,
     agent.skills,
     savedSettings as unknown as AppSettings,
-    { model: agent.model, effort: agent.effort, orchestrator: hasOrchestratorPowers(agent) },
+    { model: agent.model, effort: agent.effort, orchestrator: hasOrchestratorPowers(agent), permissionMode: agent.permissionMode },
   );
 
   const ptyProcess = spawnAgentPty({

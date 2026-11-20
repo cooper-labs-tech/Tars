@@ -245,7 +245,9 @@ async function spawnAgentSessionInSlot(
 
   // Provider env vars: CLAUDE_* tracking vars + ANTHROPIC_BASE_URL /
   // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, Moonshot...).
-  const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort, orchestrator: isSuperAgentApi });
+  // The mode this session runs in, its line's and its terminal's alike (a CLI that reads it from its environment only).
+  const effectiveMode = opts.permissionMode ?? levelOf(agent);
+  const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort, orchestrator: isSuperAgentApi, permissionMode: effectiveMode });
 
   const keyRefusal = missingKeyRefusal(agent.provider, providerEnvVars);
   if (keyRefusal) {
@@ -304,7 +306,6 @@ async function spawnAgentSessionInSlot(
   // the Agents page back on the old one. A `/model` typed into a terminal
   // lasts for that session; the Agents page is where a model is kept.
   const resolvedModel = opts.model || agent.model;
-  const effectiveMode = opts.permissionMode ?? levelOf(agent);
 
 
   // CLIs without Claude's SessionStart hook get the project's memory in the
