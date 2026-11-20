@@ -35,6 +35,10 @@ import { argvReached, writeArgvPrinter } from './argv-reached';
  *  6. a CLI that takes its task as an argument loses it, or gets it cut.
  *  7. the task typed into amp goes in before its CLI runs (into the shell, which
  *     would run it as a command), or before its screen is up (lost).
+ * 10. (Cline, 21/11; the gap #618 left for Kimi Code and Goose) a CLI that says when it is up from its own screen
+ *     (CLIProvider.upOnScreen) is typed into after a fixed settle anyway: Cline drew its field 2.4 to 3.6 s after its
+ *     start, idle, and on a loaded machine later still, so a task typed at 2 s is lost, or typed into its onboarding.
+ *     With `up`, the task waits for it, and gives up at its bound.
  *  8. a CLI that never comes up, or is gone before its screen is, gets keys
  *     anyway, or the wait never ends.
  *  9. the task is typed more than once.
@@ -136,6 +140,21 @@ describe('a task typed into a CLI once it runs', () => {
     const started = Date.now();
     expect(await typeTaskWhenUp(terminal, TASK, { settleMs: 50, maxMs: 300, stepMs: 20 })).toBe('never-up');
     expect(Date.now() - started).toBeLessThan(2_000);
+    expect(pty.written).toEqual([]);
+  });
+
+  it("waits for the CLI's own word that it is up, when it has one, and gives up at its bound (10)", async () => {
+    pty.running = true;
+    pty.written.length = 0;
+    let up = false;
+    const typed = typeTaskWhenUp(terminal, TASK, { settleMs: 50, maxMs: 5_000, stepMs: 20, up: () => up });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(pty.written, 'typed before its screen said it was up').toEqual([]);
+    up = true;
+    expect(await typed).toBe('written');
+    expect(pty.written).toEqual([TASK]);
+    pty.written.length = 0;
+    expect(await typeTaskWhenUp(terminal, TASK, { settleMs: 50, maxMs: 300, stepMs: 20, up: () => false })).toBe('never-up');
     expect(pty.written).toEqual([]);
   });
 
