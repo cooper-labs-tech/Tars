@@ -297,6 +297,17 @@ test("an agent placed on a remote host runs there in tmux, reports through its t
     keep({ healthWithToken });
     expect(healthWithToken).toBe('{"ok":true}');
 
+    // The connections its token held at once through its host's listener, by the listener's own count: the stand-in's
+    // session (its MCP calls, its hooks) well under the cap, which a measured real Claude Code's peak sets
+    // (api-tunnel-listener.test.ts, 8).
+    const room = await app.evaluate((_e, { dist }) => ({
+      peaks: process.mainModule!.require(`${dist}/services/api-server.js`).tunnelSocketPeaks() as Record<string, number>,
+      cap: process.mainModule!.require(`${dist}/services/api-tunnel.js`).TUNNEL_SOCKETS_PER_AGENT as number,
+    }), { dist });
+    keep({ tunnelPeak: room.peaks[REMOTE], tunnelCap: room.cap });
+    expect(room.peaks[REMOTE]).toBeGreaterThan(0);
+    expect(room.peaks[REMOTE]).toBeLessThanOrEqual(room.cap / 4);
+
     // 4b. The host cannot be removed while Remote One is placed on it.
     const removeRefused = await page.evaluate((h) => (window as unknown as Win).electronAPI.remoteHosts.remove(h), HOST_ID);
     keep({ removeRefused });
