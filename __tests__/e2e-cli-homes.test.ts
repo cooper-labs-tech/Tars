@@ -48,6 +48,14 @@ import { CLI_HOMES, homesOutside, inheritable, launchSandboxed } from '../e2e/fi
  *     GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_CONFIG_GLOBAL and the rest, which git sets for a
  *     run started from a hook. A CLI or a stand-in that runs git in an agent's terminal would then
  *     act on the owner's repository.
+ * 10. The other homes of opencode and Kilo reach the app. Read from their published binaries
+ *     (opencode 1.19.6, Kilo 7.8.27, npm, 20/11; never run: Kilo writes into whatever home it is
+ *     given, even for --version):
+ *     - each one's whole home, OPENCODE_TEST_HOME and KILO_TEST_HOME;
+ *     - TEST_MANAGED_CONFIG_DIR, MODELS_PATH, PLUGIN_META_FILE and ZED_DB, on both;
+ *     - Kilo's LANCEDB_PATH, TEST_DAEMON_LOG_DIR and TEST_DAEMON_STATE_DIR;
+ *     - their sign-in, OPENCODE_AUTH_CONTENT and KILO_AUTH_CONTENT. These are contents, as in 8:
+ *       a runner's would hand the sandboxed app's CLI the runner's account.
  */
 
 const accountHome = os.userInfo().homedir;
@@ -56,8 +64,12 @@ const FAMILY = [
   'CODEX_HOME', 'KIMI_CODE_HOME', 'PI_CODING_AGENT_DIR', 'PI_CODING_AGENT_SESSION_DIR',
   'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ZDOTDIR', 'CLAUDE_CONFIG_DIR',
   'CLAUDE_SECURESTORAGE_CONFIG_DIR', 'OPENCODE_CONFIG', 'OPENCODE_CONFIG_DIR', 'KILO_CONFIG', 'KILO_CONFIG_DIR',
+  // 10.
+  'OPENCODE_TEST_HOME', 'OPENCODE_TEST_MANAGED_CONFIG_DIR', 'OPENCODE_MODELS_PATH', 'OPENCODE_PLUGIN_META_FILE', 'OPENCODE_ZED_DB',
+  'KILO_TEST_HOME', 'KILO_TEST_MANAGED_CONFIG_DIR', 'KILO_MODELS_PATH', 'KILO_PLUGIN_META_FILE', 'KILO_ZED_DB',
+  'KILO_LANCEDB_PATH', 'KILO_TEST_DAEMON_LOG_DIR', 'KILO_TEST_DAEMON_STATE_DIR',
 ];
-const CONTENTS = ['OPENCODE_CONFIG_CONTENT', 'KILO_CONFIG_CONTENT'];
+const CONTENTS = ['OPENCODE_CONFIG_CONTENT', 'KILO_CONFIG_CONTENT', 'OPENCODE_AUTH_CONTENT', 'KILO_AUTH_CONTENT'];
 const GIT = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
 const theOwners = (name: string) => path.join(accountHome, `.${name.toLowerCase()}`);
 
