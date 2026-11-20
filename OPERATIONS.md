@@ -299,7 +299,13 @@ of the code under test ends it by its id in its own teardown: the fake agent's f
 (`__tests__/setup/leftover-processes.ts`). A file starts without what Tars puts in its agents'
 terminals either (`TARS_CLAUDE_ACCOUNT`, `TARS_INSTANCE_ID`, `TARS_CHATS_READ`), where QA and the
 agents run the suite; the suite's own opt-ins (`TARS_STRESS`, `TARS_REAL_CLAUDE`,
-`TARS_HERMES_TREE`, `TARS_HERMES_PYTHON`) are kept (`__tests__/setup/env-isolation.ts`).
+`TARS_HERMES_TREE`, `TARS_HERMES_PYTHON`) are kept (`__tests__/setup/env-isolation.ts`). Nor
+does it start with a CLI home, a CLI's config given as text or a git variable of the runner's
+(`CODEX_HOME`, `XDG_CONFIG_HOME`, `PI_CODING_AGENT_DIR`, `KIMI_CODE_HOME`, `GIT_DIR`...), which
+the code under test reads before HOME: the list is the E2E fixture's, `e2e/cli-homes.mjs`. Every
+test file imports `__tests__/setup/home-guard.ts` first, which stops it, before any of its own
+code runs, unless HOME and each of those homes lie inside the run's temporary folder: a file run
+without the repo's config and setup files stops there instead of writing into the real home.
 
 Coverage (`v8`) is scoped to what is actually worth guarding: `electron/constants`,
 `electron/utils`, `electron/services`, `electron/handlers`, `electron/providers`, plus
