@@ -30,6 +30,12 @@ const shown = vi.hoisted(() => [] as Array<{ message?: string; detail?: string }
 const copied = vi.hoisted(() => [] as string[]);
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
+// hermes:getConnectionInfo asks tailscale for its status, a CLI probe (core/cli-probe.ts): refused here, so the
+// owner's real tailscale is never asked (the Audit's I-3 on #616; __tests__/setup/no-real-cli.ts fails a test that does).
+vi.mock('../../../electron/core/cli-probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../electron/core/cli-probe')>()),
+  probeCli: async () => { throw Object.assign(new Error('not installed'), { code: 'ENOENT' }); },
+}));
 vi.mock('electron-updater', () => ({
   autoUpdater: { autoDownload: false, autoInstallOnAppQuit: true, on: vi.fn(), checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), quitAndInstall: vi.fn() },
 }));

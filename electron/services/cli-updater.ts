@@ -7,6 +7,7 @@ import { dataPath } from '../constants';
 import { getAllProviders, getProvider } from '../providers';
 import { buildFullPath } from '../utils/path-builder';
 import { childEnv, getPath, rmRetryingSync, withPath } from '../platform';
+import { isQuitting } from '../core/quit-state';
 import {
   classifyWindowsInstall, locateOnWindows, npmOnWindows, processesInPackage, unstartableOnWindows,
   windowsGlobalManifest, windowsNativeVersion,
@@ -620,7 +621,10 @@ export function startCliUpdates(
   let first = true;
   let wasOff = false;
   const pass = () => {
-    if (passInFlight) return;
+    // None begins once the quit has (the Audit's I-2 on #616): its claude update or npm would outlive Tars. One already
+    // running is left to finish, not ended with the CLI probes: npm replaces a global package in place, and a run cut
+    // then leaves the CLI missing (the 3 to 31 s window measured above).
+    if (passInFlight || isQuitting()) return;
     const settings = getSettings();
     const ctx: CliUpdateContext = {
       home: os.homedir(),
