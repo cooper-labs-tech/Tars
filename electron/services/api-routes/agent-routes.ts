@@ -21,6 +21,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
+import { sendModeOf } from '../../core/send-mode';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
@@ -1341,8 +1342,8 @@ async function runInTerminal(
  * `auto`, labelled a note either way, and no task: no id, no link to its
  * sender, no end notice.
  */
-type SendMode = 'auto' | 'queue' | 'steer' | 'restart';
-type AskedMode = SendMode | 'note' | 'note-now';
+type SendMode = import('../../core/send-mode').SendMode;
+type AskedMode = import('../../core/send-mode').AskedMode;
 const SEND_MODES: readonly AskedMode[] = ['auto', 'queue', 'steer', 'restart', 'note', 'note-now'];
 
 /** The mark before a message from an asker in a narrower mode than the agent (core/permission-ceiling.ts). */
@@ -2717,7 +2718,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       : !asNote ? asSent
         : noteCaller ? noteFrom(noteCaller.name || noteCaller.id, asSent, noteRole(noteCaller, agent))
           : noteFrom('Tars', asSent, 'the app you run in');
-    const mode: SendMode = workerNote || askedMode === 'note' ? 'queue' : askedMode === 'note-now' ? 'auto' : askedMode;
+    const mode: SendMode = sendModeOf(askedMode, { workerNote: !!workerNote });
     await withReceipt(req, sendJson, {
       route: 'dispatch', agentId: agent.id, payload: { message, model: model ?? null, permissionMode: permissionMode ?? null, mode, ...(note ? { note } : {}) },
     }, async (sendAny) => {
