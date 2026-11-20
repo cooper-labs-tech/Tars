@@ -23,8 +23,8 @@ export type { HookPost };
  *
  * Whose session is whose is decided on evidence, never on the folder alone (the user's own opencode writes the same
  * database), for a session made in the agent's folder since the launch and held by no other launch:
- * - Tars's identity line in its first prompt names this agent: at a line's start or right after opencode's skills line,
- *   where Tars writes it (the last such line: a delivery puts the task first and Tars's section after it);
+ * - Tars's identity lines in its first prompt all name this agent: at a line's start or right after opencode's skills
+ *   line, where Tars writes them (a prompt naming two agents, a header pasted into a task, names nobody by itself);
  * - or, unless it holds a text another unbound launch was sent, it holds a text this terminal was sent (typed into it,
  *   or its launch's own `--prompt`, noted from after the skills line every such agent shares);
  * - or, for a fork, under the same condition, a copy of the forked session's first prompt (the same time and text).
@@ -204,9 +204,11 @@ export class OpencodeSessionWatch {
       const first = this.firstPrompt(db, s.id);
       if (first === null) continue;
       const folded = fold(first.text);
-      // Tars's identity line naming this agent binds it; one naming another agent decides nothing here.
-      const named = [...first.text.matchAll(IDENTITY)].map((m) => m[1]).pop();
-      if (named === agentId) return this.boundFrom(s.id, launch.at, false);
+      // Tars's identity lines, when they all name this agent, bind it. A first prompt naming two agents (a header pasted
+      // into a task, which comes after the identity in a launch's prompt and before it in a delivery) names nobody by
+      // itself: what each terminal was sent decides (the Audit's L3 on #613).
+      const names = [...first.text.matchAll(IDENTITY)].map((m) => m[1]);
+      if (names.length > 0 && names.every((n) => n === agentId)) return this.boundFrom(s.id, launch.at, false);
       // Otherwise, what another unbound launch was sent rules it out: that session may be the other agent's.
       if (others.some((o) => folded.includes(o))) continue;
       const sent = launch.typed.some((t) => folded.includes(t));
