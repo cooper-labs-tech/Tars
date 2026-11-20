@@ -13,7 +13,7 @@ import type {
 } from './cli-provider';
 import { safeEffort } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
-import { OPENCODE_SESSION_ID } from './opencode-cli';
+import { OPENCODE_SESSION_ID, opencodeSkillsLine } from './opencode-cli';
 
 /**
  * Where opencode reads its MCP servers (opencode 1.19.3, read in its compiled
@@ -126,7 +126,7 @@ export class OpenCodeProvider implements CLIProvider {
     // No task, no prompt: the skills line alone was a turn nobody asked for.
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';
     if (finalPrompt && params.skills && params.skills.length > 0 && !params.isSuperAgent) {
-      finalPrompt = `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.] ${params.prompt}`;
+      finalPrompt = `${opencodeSkillsLine(params.skills)} ${params.prompt}`;
     }
     if (finalPrompt) {
       command += ` --prompt '${finalPrompt.replace(/'/g, "'\\''")}'`;

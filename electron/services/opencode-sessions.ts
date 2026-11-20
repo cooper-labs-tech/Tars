@@ -3,7 +3,7 @@ import * as path from 'path';
 import Database from 'better-sqlite3';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
-import { opencodeDbPath, opencodeUuidOf, type OpencodeLaunchFrom } from '../providers/opencode-cli';
+import { OPENCODE_SKILLS_LINE, opencodeDbPath, opencodeUuidOf, type OpencodeLaunchFrom } from '../providers/opencode-cli';
 
 export type { HookPost };
 
@@ -74,8 +74,13 @@ interface Launch {
 }
 type Row = { id: string; time_created: number; data: string };
 
-/** Tars's identity line, at a line's start: where Tars writes it, and never a header quoted inside a line. */
-const IDENTITY = /^\s*\[Tars: you are agent ".*?" \(id ([0-9a-zA-Z-]{4,})\)/gm;
+/**
+ * Tars's identity line, at a line's start or right after opencode's skills line (which a launch's prompt begins with):
+ * where Tars writes it, and never a header quoted inside a line.
+ */
+const IDENTITY = new RegExp(String.raw`^\s*(?:${OPENCODE_SKILLS_LINE}\s*)?\[Tars: you are agent ".*?" \(id ([0-9a-zA-Z-]{4,})\)`, 'gm');
+/** opencode's skills line at a prompt's start: the same for every agent with the same skills, never what tells them apart. */
+const SKILLS_FIRST = new RegExp(String.raw`^\s*${OPENCODE_SKILLS_LINE}\s*`);
 const fold = (text: string): string => text.replace(/\s+/g, ' ').trim();
 const TYPED_HEAD = 200;
 const TYPED_MIN = 16;
@@ -106,7 +111,8 @@ export class OpencodeSessionWatch {
     const note: LaunchNote = typeof from === 'string' ? { resume: from } : from;
     const launch: Launch = { cwd, at: this.deps.now(), resume: note.resume, forkOf: note.forkOf, terminal: note.terminal, typed: [] };
     this.launches.set(agentId, launch);
-    if (note.prompt) this.noteTyped(agentId, note.prompt);
+    // Noted from after the skills line, which would fill the head noted and be every such agent's (the Audit's M2).
+    if (note.prompt) this.noteTyped(agentId, note.prompt.replace(SKILLS_FIRST, ''));
   }
 
   /** Tars typed `text` into the agent's terminal: a session whose first prompt holds it, and no other's, is the agent's. */
@@ -198,12 +204,14 @@ export class OpencodeSessionWatch {
       const first = this.firstPrompt(db, s.id);
       if (first === null) continue;
       const folded = fold(first.text);
-      // What another unbound launch was sent rules it out: that session may be the other agent's.
+      // Tars's identity line naming this agent binds it; one naming another agent decides nothing here.
+      const named = [...first.text.matchAll(IDENTITY)].map((m) => m[1]).pop();
+      if (named === agentId) return this.boundFrom(s.id, launch.at, false);
+      // Otherwise, what another unbound launch was sent rules it out: that session may be the other agent's.
       if (others.some((o) => folded.includes(o))) continue;
       const sent = launch.typed.some((t) => folded.includes(t));
-      const named = [...first.text.matchAll(IDENTITY)].map((m) => m[1]).pop();
       const copied = !!forked && forked.at === first.at && forked.text === first.text;
-      if (sent || named === agentId || copied) return this.boundFrom(s.id, launch.at, false);
+      if (sent || copied) return this.boundFrom(s.id, launch.at, false);
     }
     return undefined;
   }

@@ -11,6 +11,17 @@ import Database from 'better-sqlite3';
  * `~/.local/share/opencode/opencode.db`; a session is a `session` row, `ses_` and base62, with its `directory`.
  */
 
+/**
+ * The line opencode's prompt begins with when the agent has skills (opencode-provider.ts writes it), and its pattern at a
+ * text's start: the same for every agent with the same skills, so the session reader reads past it (services/
+ * opencode-sessions.ts, the Audit's M2 on #613).
+ */
+export function opencodeSkillsLine(skills: readonly string[]): string {
+  return `[IMPORTANT: Use these skills for this session: ${skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.]`;
+}
+export const OPENCODE_SKILLS_LINE = String.raw`\[IMPORTANT: Use these skills for this session: [^\]
+]*\]`;
+
 /** A session id as opencode writes it: the only form that reaches a command line. */
 export const OPENCODE_SESSION_ID = /^ses_[A-Za-z0-9]{8,64}$/;
 
