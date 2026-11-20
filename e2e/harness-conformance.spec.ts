@@ -107,7 +107,10 @@ for (const h of HARNESSES) {
       let mcp: ChildProcessWithoutNullStreams | undefined;
       let keepScreen: (() => Promise<void>) | undefined;
       try {
-        app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' } });
+        app = await launchSandboxed(electron, home, { env: {
+          NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1',
+          CODEX_HOME: path.join(home, '.codex'), KIMI_CODE_HOME: path.join(home, '.kimi-code'), PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
+        } });
         const appLog = test.info().outputPath(`app-${label}.log`);
         app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
         app.process().stderr?.on('data', (d) => fs.appendFileSync(appLog, d));
