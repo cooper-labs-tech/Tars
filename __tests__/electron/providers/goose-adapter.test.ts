@@ -37,7 +37,8 @@ import Database from 'better-sqlite3';
  *    which Goose refuses to start with. Or a command or a path with a space (a Windows user folder) split in two, or
  *    one with a quote let through to break the value.
  * 5. Its session not resumed after a restart of Tars (the UUID Tars knows it by never mapped back), resumed in another
- *    folder, or a forked restart read as a resume.
+ *    folder, or a forked restart read as a resume. Or its database looked for under XDG_DATA_HOME while GOOSE_PATH_ROOT
+ *    moves it (measured: `$GOOSE_PATH_ROOT/data/sessions/sessions.db`, XDG_DATA_HOME set or not): no turn read.
  * 6. A note typed during its turn, and lost: Goose says it loses one (noteDuringTurn 'lost'), so Tars holds it.
  * 7. Its turns taken for unseen: delegate_task then answers `delivered`. Its turns are read (turnsReported).
  * 8. Its permission mode lost: a normal agent run in the user's own mode, an auto one stopped on dialogs nobody
@@ -195,6 +196,14 @@ describe('its sessions (5)', () => {
     sessionIn(project);
     expect(resolveResumeSessionId(agent, root)).toBe(SES);
     expect(gooseUuidOf('not-a-goose-id')).toBeNull();
+  });
+
+  it('under GOOSE_PATH_ROOT when it is set, whatever XDG_DATA_HOME says', () => {
+    vi.stubEnv('GOOSE_PATH_ROOT', path.join(root, 'goose-root'));
+    expect(gooseDbPath()).toBe(path.join(root, 'goose-root', 'data', 'sessions', 'sessions.db'));
+    expect(new GooseProvider().configDir).toBe(path.join(root, 'goose-root', 'config'));
+    vi.stubEnv('GOOSE_PATH_ROOT', '  ');
+    expect(gooseDbPath()).toBe(path.join(root, 'data', 'goose', 'sessions', 'sessions.db'));
   });
 
   it('resumes with --resume --session-id, forks with --fork, its own id only, and the line is read back as such', () => {
