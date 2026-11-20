@@ -154,6 +154,7 @@ const SITES: Site[] = [
   { file: 'electron/providers/amp-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into amp' },
   { file: 'electron/providers/kimi-code-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into Kimi Code' },
   { file: 'electron/providers/goose-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into Goose' },
+  { file: 'electron/providers/cline-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into Cline' },
   { file: 'electron/providers/cli-provider.ts', line: "typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;", is: 'type', why: 'the task a launch types in' },
   { file: 'electron/providers/cli-provider.ts', line: "* Whether the agent has the orchestrator's powers (core/agent-role.ts, hasOrchestratorPowers): a CLI whose servers", is: 'type', why: 'PtyLaunch.orchestrator' },
   { file: 'electron/services/bus-store.ts', line: 'return all.filter(…).map(a => a.id);', is: 'identity', why: 'the global room\'s members: the projects\' orchestrators' },
