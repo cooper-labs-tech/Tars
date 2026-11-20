@@ -390,12 +390,13 @@ describe('a task delegated into the agent\'s own terminal', () => {
 
   it('(D12) a CLI whose turns Tars cannot see: typed in, then said delivered, with what is not read', async () => {
     orchestrator();
-    liveAgent('oc', { provider: 'opencode' });
-    const { data } = await call('POST', '/api/agents/oc/run-task', 'lead', { task: 'a job', answer: 'started' }).answer;
+    // amp: opencode's turns are read from its database since 20/11 (services/opencode-sessions.ts).
+    liveAgent('am', { provider: 'amp' });
+    const { data } = await call('POST', '/api/agents/am/run-task', 'lead', { task: 'a job', answer: 'started' }).answer;
     await until(() => typed.length === 1);
     const task = (await call('GET', `/api/tasks/${data.taskId}?wait=5`, 'lead').answer).data.task as Record<string, unknown>;
     expect(task.outcome).toBe('delivered');
-    expect(String(task.error)).toMatch(/opencode/);
+    expect(String(task.error)).toMatch(/amp/);
     expect(String(task.error)).toMatch(/cannot see when its turn ends/);
   });
 });

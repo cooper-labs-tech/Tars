@@ -14,8 +14,9 @@ import type { AgentStatus } from '../../../../electron/types';
  *    across two chunks is missed.
  * 2. A report from a terminal that is no longer the agent's (an old ptyId after a restart) moves the agent, or is
  *    kept as its record: the session-ownership rule.
- * 3. A report overrules the status of an agent whose CLI Tars follows otherwise (claude's hooks, codex's log).
- * 4. An agent on a CLI Tars cannot follow (grok, amp, opencode) does not follow the reports: working is running,
+ * 3. A report overrules the status of an agent whose CLI Tars follows otherwise (claude's hooks, codex's log, opencode's
+ *    database since 20/11).
+ * 4. An agent on a CLI Tars cannot follow (grok, amp) does not follow the reports: working is running,
  *    blocked is waiting (reason permission, so nothing is typed into it), idle and done are idle, error is error.
  * 5. A blocked report's kind and message are not kept for the window, on any CLI.
  * 6. A report addressed to a sub-record (an id) moves the agent: only the root record is the agent's.
@@ -81,8 +82,8 @@ describe('reports, by who follows the CLI', () => {
     expect(a.status).toBe('idle');
   });
 
-  it('4. drives amp and opencode the same way', () => {
-    for (const p of ['amp', 'opencode']) {
+  it('4. drives amp and grok the same way', () => {
+    for (const p of ['amp', 'grok']) {
       const a = agent(p);
       readProgramStatus(a, 'pty-1', terminal(), osc('state=working'));
       expect(a.status, p).toBe('running');
@@ -90,8 +91,8 @@ describe('reports, by who follows the CLI', () => {
     }
   });
 
-  it('3 and 5. never moves a claude or a codex agent, and keeps the blocked reason for the window', () => {
-    for (const p of ['claude', 'codex']) {
+  it('3 and 5. never moves a claude, a codex or an opencode agent, and keeps the blocked reason for the window', () => {
+    for (const p of ['claude', 'codex', 'opencode']) {
       const a = agent(p, 'running');
       expect(readProgramStatus(a, 'pty-1', terminal(), osc(`state=blocked:kind=auth:msg=${b64('Sign in to continue')}`)), p).toBe(false);
       expect(a.status, p).toBe('running');
