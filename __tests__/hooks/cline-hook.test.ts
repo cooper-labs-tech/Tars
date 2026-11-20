@@ -12,14 +12,17 @@ import { pathToFileURL } from 'node:url';
  * of the agent's `--config` folder's `hooks/` with `node`, its JSON payload on stdin, Cline's whole environment
  * inherited (the agent's id and token with it). The hook tells Tars the turn the way Claude Code's hooks do.
  *
- * Measured on 3.0.74 (20-21/11/2026, its TUI in a PTY against a loopback endpoint): every task of a session fires
- * TaskStart (never UserPromptSubmit), TaskResume on the first task of a session resumed with `--id`, TaskComplete with
- * `turn.outputText` and `turn.status`, TaskCancel on an Esc, SessionShutdown when Cline quits (Ctrl+C quits it). Each
- * payload names the session (`sessionContext.rootSessionId`, `<ms>_<5 chars>`) and the folder (`workspaceRoots`), never
- * the prompt: the first prompt is in the session's record (`<data>/sessions/<id>/<id>.json`, `prompt`) when the first
- * TaskStart runs, every later one is the last user message of `<id>.messages.json` when its TaskStart runs, each
- * wrapped as `<user_input mode="act">…</user_input>`. The hook runs as a child of the Cline process the session's pid
- * names in its sessions.db.
+ * Measured on 3.0.74 (20-21/11/2026, its TUI in a PTY against a loopback endpoint, and read in its build): every task
+ * of a process fires TaskStart, or TaskResume in a process started with `--id` (the CLI sets CLINE_HOOK_AGENT_RESUME),
+ * never UserPromptSubmit (its hook file installed, it never ran); TaskComplete carries `turn.outputText`, TaskCancel
+ * comes on an Esc, SessionShutdown when Cline quits (Ctrl+C quits it). Each payload names the session
+ * (`sessionContext.rootSessionId`, `<ms>_<5 chars>`) and the folder (`workspaceRoots`), never the prompt. The TUI writes
+ * each prompt it is given into its input history (`<data>/cache/user_input_history.jsonl`, rewritten whole, the latest
+ * last, a repeat moved to the end, 20 kept) on the Enter, before the run begins; the session's messages file is written
+ * at the end of each round (iteration_end) and nowhere sooner. A paste of 5 lines or more is in the field, and so in
+ * the history, as Cline's marker (`[<its first 48 characters>... Pasted +N lines]`): Tars pastes the sender line, with
+ * the task's id, on its own, so the id stays whole. Cline runs its hooks detached, each in a process of its own, none
+ * waited for. The hook is a child of the Cline process the session's sessions.db names.
  *
  * How it fails, written before the code:
  * 1. Posted under Cline's own id: the hook routes take a UUID and nothing else. Under the UUID made from it, the same
@@ -27,7 +30,7 @@ import { pathToFileURL } from 'node:url';
  * 2. A session never registered (no SessionStart in Cline), registered without its CLI's pid (refused as another CLI's
  *    session), or registered again at every task (each turn read as a new session's).
  * 3. A turn opened without its prompt: the request id its sender line carries never binds the turn to its asker, and
- *    delegate_task waits out its timeout. Or the prompt left wrapped in Cline's <user_input> tag.
+ *    delegate_task waits out its timeout.
  * 4. A turn's answer lost, its end not said (idle, agent-stopped), or a turn that did not complete said done.
  * 5. A resumed session's first task not registered as a resume.
  * 6. An Esc (TaskCancel) leaving the agent running.
@@ -37,15 +40,28 @@ import { pathToFileURL } from 'node:url';
  * 9. (Found by the conformance on 66214ddc4) The CLI named as the hook's parent: that is the `.cline` binary, a child
  *    of Cline's node launcher, which is the process Tars started (the terminal's own on an exec launch). The hook
  *    routes refused the session as another CLI's. The CLI is the launcher, the hook's grandparent.
+ * 10. (Found by the conformance on bd51c1068) A later task's prompt read from the session's messages file, which Cline
+ *    writes at the end of the task's first round: TaskStart read the earlier task's prompt, the second delegation's turn
+ *    was never bound to its request, and delegate_task waited out its 200 s. A turn's prompt is the input history's
+ *    last line, written before the run begins.
+ * 11. Registration decided by whether the messages file held a user message yet: the same race, a first round that
+ *    ends fast enough makes a first task look like a later one, and its session goes unregistered. Or registering at
+ *    every task. Once per Cline process: the first TaskStart or TaskResume of each process registers it, through a
+ *    marker only one hook can create; a new process of the same session (a resume) registers again.
+ * 12. A turn's end posted before its start: hooks run detached and in parallel, so a fast turn's TaskComplete can reach
+ *    Tars before its TaskStart, and the agent is left running after its turn. An end waits for its turn's opening, a
+ *    bounded while: an opening that never comes holds it 10 s at most.
  */
 
 const HOOK = path.resolve('hooks', 'cline-hook.mjs');
 type Post = { path: string; body: Record<string, unknown> };
 type HookModule = {
   clineUuidOf(id: string): string | null;
-  promptOf(text: string): string;
-  currentPrompt(dataDir: string, sessionId: string): { prompt: string | null; first: boolean };
-  postsFor(event: string, payload: unknown, ctx: { agentId: string; cliPid: number; prompt: string | null; first: boolean }): Post[];
+  typedPrompt(dataDir: string | undefined): string | null;
+  claimRegistration(dataDir: string | undefined, key: string): boolean;
+  markTurn(dataDir: string | undefined, key: string, mark: 'open' | 'end'): void;
+  waitForOpening(dataDir: string | undefined, key: string, opts?: { maxMs?: number; stepMs?: number }): Promise<boolean>;
+  postsFor(event: string, payload: unknown, ctx: { agentId: string; cliPid: number | null; prompt: string | null; first: boolean }): Post[];
 };
 let hook: HookModule;
 const SID = '1795204260136_9ovct';
@@ -59,12 +75,21 @@ beforeEach(async () => {
 afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
 
 const payload = (extra: Record<string, unknown> = {}) => ({ hookName: 'x', taskId: 'conv_1', sessionContext: { rootSessionId: SID }, workspaceRoots: ['/p'], ...extra });
+/** The session's files as Cline leaves them: its record, and its messages as of its last round's end. */
 function session(record: Record<string, unknown> | null, messages: unknown[] | null): void {
   const at = path.join(dir, 'sessions', SID);
   fs.mkdirSync(at, { recursive: true });
   if (record) fs.writeFileSync(path.join(at, `${SID}.json`), JSON.stringify(record));
   if (messages) fs.writeFileSync(path.join(at, `${SID}.messages.json`), JSON.stringify({ version: 1, messages }));
 }
+/** The TUI's input history as Cline 3.0.74 writes it on an Enter: every line rewritten, the latest last, one ts. */
+function typed(...prompts: string[]): void {
+  fs.mkdirSync(path.join(dir, 'cache'), { recursive: true });
+  const ts = Date.now();
+  fs.writeFileSync(path.join(dir, 'cache', 'user_input_history.jsonl'), `${prompts.map((prompt) => JSON.stringify({ prompt, ts })).join('\n')}\n`);
+}
+/** The key the hook files a turn under: Cline's session and the Cline process that runs the hook (its parent). */
+const KEY = `${SID}.${process.pid}`;
 
 describe("Cline's session id (1)", () => {
   it('becomes a UUID, the same every time, and the provider makes the same one', async () => {
@@ -78,21 +103,63 @@ describe("Cline's session id (1)", () => {
   });
 });
 
-describe('the prompt of the task a TaskStart opens (3)', () => {
-  it("the first task's from the session's record, a later one's from its messages, the <user_input> tag taken off", () => {
-    expect(hook.promptOf('<user_input mode="act">Run the probe.\nTwo lines.</user_input>')).toBe('Run the probe.\nTwo lines.');
-    expect(hook.promptOf('<user_input mode="plan">Plan it.</user_input>')).toBe('Plan it.');
-    expect(hook.promptOf('no tag at all')).toBe('no tag at all');
-    session({ prompt: '<user_input mode="act">[Tars: you are agent "W" (id x)] the first task</user_input>' }, []);
-    expect(hook.currentPrompt(dir, SID)).toEqual({ prompt: '[Tars: you are agent "W" (id x)] the first task', first: true });
-    session({ prompt: '<user_input mode="act">the first task</user_input>' }, [
-      { role: 'user', content: [{ type: 'text', text: '<user_input mode="act">the first task</user_input>' }] },
-      { role: 'assistant', content: [{ type: 'text', text: 'done' }] },
+describe('the prompt of the task a TaskStart opens (3, 10)', () => {
+  it("is the input history's last line, while the messages file still holds only the earlier task (10)", () => {
+    // The second delegation of the conformance on bd51c1068, as its TaskStart found the files.
+    session({ prompt: '<user_input mode="act">Message from agent "Lead" ("d1"), task t-11111111:\nthe first</user_input>' }, [
+      { role: 'user', content: [{ type: 'text', text: '<user_input mode="act">Message from agent "Lead" ("d1"), task t-11111111:\nthe first</user_input>' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'PROBE-OK' }] },
       { role: 'user', content: [{ type: 'tool_result', content: 'x' }] },
-      { role: 'user', content: [{ type: 'text', text: '<user_input mode="act">Message from agent "Lead", task t-1a2b3c4d: the second</user_input>' }] },
     ]);
-    expect(hook.currentPrompt(dir, SID)).toEqual({ prompt: 'Message from agent "Lead", task t-1a2b3c4d: the second', first: false });
-    expect(hook.currentPrompt(path.join(dir, 'nowhere'), SID)).toEqual({ prompt: null, first: true });
+    typed('Message from agent "Lead" ("d1"), task t-11111111:\nthe first', 'Message from agent "Lead" ("d1"), task t-22222222:\nthe second');
+    expect(hook.typedPrompt(dir)).toBe('Message from agent "Lead" ("d1"), task t-22222222:\nthe second');
+  });
+
+  it('a prompt typed again is the latest, as Cline moves it last; a pasted body is its marker, the sender line whole', () => {
+    typed('the second', 'the first');
+    expect(hook.typedPrompt(dir)).toBe('the first');
+    typed('Message from agent "Lead" ("d1"), task t-33333333:\n[Do the five things below, in order:... Pasted +6 lines]');
+    expect(hook.typedPrompt(dir)).toBe('Message from agent "Lead" ("d1"), task t-33333333:\n[Do the five things below, in order:... Pasted +6 lines]');
+  });
+
+  it('no history, a line that is not one, or an empty prompt: the last good one, else none', () => {
+    expect(hook.typedPrompt(dir)).toBeNull();
+    expect(hook.typedPrompt(undefined)).toBeNull();
+    fs.mkdirSync(path.join(dir, 'cache'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'cache', 'user_input_history.jsonl'), `${JSON.stringify({ prompt: 'the good one', ts: 1 })}\nnot json\n${JSON.stringify({ prompt: '  ', ts: 1 })}\n${JSON.stringify({ ts: 1 })}\n`);
+    expect(hook.typedPrompt(dir)).toBe('the good one');
+  });
+});
+
+describe('a session registered once per Cline process (11)', () => {
+  it('the first claim of a process wins, a later one of the same process does not, another process (a resume) wins again', () => {
+    expect(hook.claimRegistration(dir, `${SID}.4001`)).toBe(true);
+    expect(hook.claimRegistration(dir, `${SID}.4001`)).toBe(false);
+    expect(hook.claimRegistration(dir, `${SID}.4001`)).toBe(false);
+    expect(hook.claimRegistration(dir, `${SID}.4002`)).toBe(true);
+    expect(hook.claimRegistration(dir, `1795204260137_abcde.4001`)).toBe(true);
+  });
+
+  it('with no data folder to keep the mark in, every task registers rather than none', () => {
+    expect(hook.claimRegistration(undefined, `${SID}.4001`)).toBe(true);
+    expect(hook.claimRegistration(undefined, `${SID}.4001`)).toBe(true);
+  });
+});
+
+describe("a turn's end waits for its start (12)", () => {
+  it('is let through at once when its turn opened, and after the bound when it never did', async () => {
+    hook.markTurn(dir, KEY, 'open');
+    let at = Date.now();
+    expect(await hook.waitForOpening(dir, KEY, { maxMs: 2000, stepMs: 20 })).toBe(true);
+    expect(Date.now() - at).toBeLessThan(500);
+    hook.markTurn(dir, KEY, 'end');
+    at = Date.now();
+    expect(await hook.waitForOpening(dir, KEY, { maxMs: 300, stepMs: 20 })).toBe(false);
+    expect(Date.now() - at).toBeGreaterThanOrEqual(280);
+    // The next turn opens: its end goes.
+    hook.markTurn(dir, KEY, 'open');
+    expect(await hook.waitForOpening(dir, KEY, { maxMs: 2000, stepMs: 20 })).toBe(true);
+    expect(await hook.waitForOpening(undefined, KEY, { maxMs: 2000, stepMs: 20 })).toBe(true);
   });
 });
 
@@ -107,9 +174,12 @@ describe('what each event posts (2 to 6, 8)', () => {
     ]);
   });
 
-  it('a later TaskStart opens its turn only; a TaskResume registers a resume', () => {
+  it("a later TaskStart opens its turn only; a resumed process's first TaskResume registers a resume, its later ones open only (11)", () => {
     expect(hook.postsFor('TaskStart', payload(), { ...ctx, first: false }).map((p) => p.body.source ?? p.body.event)).toEqual(['UserPromptSubmit']);
-    expect(hook.postsFor('TaskResume', payload(), { ...ctx, first: false }).map((p) => [p.body.source ?? p.body.event, p.body.cli_pid ?? null])).toEqual([['resume', 4242], ['UserPromptSubmit', null]]);
+    expect(hook.postsFor('TaskResume', payload(), ctx).map((p) => [p.body.source ?? p.body.event, p.body.cli_pid ?? null])).toEqual([['resume', 4242], ['UserPromptSubmit', null]]);
+    expect(hook.postsFor('TaskResume', payload(), { ...ctx, first: false }).map((p) => p.body.source ?? p.body.event)).toEqual(['UserPromptSubmit']);
+    // A CLI it could not read (Windows) is named nowhere: the routes take the post as before.
+    expect(hook.postsFor('TaskStart', payload(), { ...ctx, cliPid: null })[0].body).not.toHaveProperty('cli_pid');
   });
 
   it("TaskComplete says the answer, then the turn's end; a turn that did not complete is the agent's error", () => {
@@ -164,6 +234,7 @@ describe('the hook as Cline runs it (7)', () => {
 
   it("posts TaskComplete with the agent's token and its CLI's pid, answers {} and exits 0", async () => {
     const tars = await standIn('instance-1');
+    hook.markTurn(dir, KEY, 'open');
     try {
       const r = await runHook('TaskComplete', JSON.stringify(payload({ turn: { outputText: 'PROBE-OK y', status: 'completed' } })), {
         CLAUDE_MGR_API_URL: tars.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-1', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir,
@@ -201,8 +272,45 @@ c.on('close', (code) => process.exit(code ?? 1));`;
     }
   });
 
+  it("opens a turn with the history's last line, registering its session once per process (10, 11)", async () => {
+    const tars = await standIn('instance-3');
+    const env = { CLAUDE_MGR_API_URL: tars.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-3', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir };
+    try {
+      typed('Message from agent "Lead" ("d1"), task t-11111111:\nthe first');
+      expect(await runHook('TaskStart', JSON.stringify(payload()), env)).toEqual({ code: 0, out: '{}\n' });
+      typed('Message from agent "Lead" ("d1"), task t-11111111:\nthe first', 'Message from agent "Lead" ("d1"), task t-22222222:\nthe second');
+      expect(await runHook('TaskStart', JSON.stringify(payload()), env)).toEqual({ code: 0, out: '{}\n' });
+      expect(tars.posts.map((p) => [p.body.source ?? p.body.event, p.body.current_task ?? null])).toEqual([
+        ['startup', null],
+        ['UserPromptSubmit', 'Message from agent "Lead" ("d1"), task t-11111111:\nthe first'],
+        ['UserPromptSubmit', 'Message from agent "Lead" ("d1"), task t-22222222:\nthe second'],
+      ]);
+    } finally {
+      tars.close();
+    }
+  });
+
+  it("holds a turn's end until its start has reached Tars, the order Cline fired them in (12)", async () => {
+    const tars = await standIn('instance-4');
+    const env = { CLAUDE_MGR_API_URL: tars.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-4', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir };
+    try {
+      typed('Message from agent "Lead" ("d1"), task t-11111111:\nthe first');
+      // The end's hook is up first: Cline fired the start first, and its hook is slower to post.
+      const end = runHook('TaskComplete', JSON.stringify(payload({ turn: { outputText: 'PROBE-OK z', status: 'completed' } })), env);
+      await new Promise((r) => setTimeout(r, 1500));
+      const start = runHook('TaskStart', JSON.stringify(payload()), env);
+      expect(await Promise.all([end, start])).toEqual([{ code: 0, out: '{}\n' }, { code: 0, out: '{}\n' }]);
+      expect(tars.posts.map((p) => p.body.source ?? p.body.event ?? `${p.path}:${p.body.status ?? ''}`)).toEqual([
+        'startup', 'UserPromptSubmit', '/api/hooks/output:', '/api/hooks/status:idle', '/api/hooks/agent-stopped:',
+      ]);
+    } finally {
+      tars.close();
+    }
+  });
+
   it('a port that does not prove this Tars gets no token; no Tars at all, or a payload that is not JSON, still answers {} and exits 0', async () => {
     const squatter = await standIn('another-instance');
+    hook.markTurn(dir, KEY, 'open');
     try {
       const r = await runHook('TaskCancel', JSON.stringify(payload()), { CLAUDE_MGR_API_URL: squatter.url, CLAUDE_MGR_API_TOKEN: 'agent-token', TARS_INSTANCE_ID: 'instance-1', CLAUDE_AGENT_ID: AGENT, CLINE_DATA_DIR: dir });
       expect(r).toEqual({ code: 0, out: '{}\n' });
