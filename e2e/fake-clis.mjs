@@ -26,6 +26,10 @@
 //   SEND <agent id> <message>      calls send_message the same way;
 //   ECHO <word>                    answers "echo <word>";
 //   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers.
+//   HOLD <tag>                     keeps its turn going until the file $HOME/release-<tag> exists, then answers
+//                                  "released <tag>": a turn that lasts as long as a spec needs it to.
+// A notice of Tars itself ("[Note for information from "Tars"...", "[Tars] ...") asks nothing: it is answered "ok",
+// whatever it quotes (directiveOf).
 // Every launch, typed line, turn, hook, tool call and answer is one JSON line in FAKE_CLI_LOG, with whether Tars's
 // agent token reached it or the MCP server, never a token or a key.
 import fs from 'node:fs';
@@ -83,6 +87,20 @@ export function writeFakeClis(home, kinds = [...Object.keys(FAKE_KINDS), 'codex'
 const readJson = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return undefined; } };
 const writeJson = (file, value) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(value, null, 2)); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * What a turn's text asks, as a model reads it: its first directive, `{ verb, arg, rest }`, or null when it asks
+ * nothing (__tests__/e2e-fake-cli-directives.test.ts). Tars's own notices ask nothing, whatever they quote: a note for
+ * information (`[Note for information from "Tars" ...] ... delegated a task to ...: HOLD q1.`) and every `[Tars] `
+ * notice (`[Tars] "B" ("x-b") has finished its turn (task t-..., "SEND x-a REPLY...")`). A notice is known by its head:
+ * the text's first line, after the session's header `[Tars: you are agent ...]` and Tars's sender line, if any.
+ */
+export function directiveOf(text) {
+  const body = text.replace(/^\[Tars: [^\n]*\]\n+/, '').replace(/^Message from Tars:[^\n]*\n/, '');
+  if (/^(\[Tars\] |\[Note for information from "Tars")/.test(body)) return null;
+  const found = /\b(DELEGATE|SEND|ECHO|APPROVE|HOLD) (\S+)(?: (.+))?$/ms.exec(text);
+  return found ? { verb: found[1], arg: found[2], rest: found[3] } : null;
+}
 
 /** [mcp_servers.<name>] sections of a config.toml, read as codex and grok write them (strings and string arrays). */
 function tomlServers(file) {
@@ -185,6 +203,8 @@ export async function run() {
       else if (a === '--dangerously-skip-permissions') opts.bypass = true;
       else if (a === '--permission-mode') { opts.bypass = value(i) === 'bypassPermissions'; i++; }
       else if (a === '--resume' || a === '-r') { opts.resume = value(i); i++; }
+      // As Claude Code does: a resumed conversation forked goes on in a session of its own, under a new id.
+      else if (a === '--fork-session') opts.fork = true;
       else if (a === '--session-id') { opts.resume = opts.resume ?? null; opts.sessionId = value(i); i++; }
       else if (a === '--model') { opts.model = value(i); i++; }
       else if (a === '-p' || a === '--print') opts.oneShot = true;
@@ -379,7 +399,7 @@ export async function run() {
 
   // ---- Its session: id, transcript, hooks.
   const cwd = process.cwd();
-  const sid = opts.resume || opts.sessionId || crypto.randomUUID();
+  const sid = (opts.fork ? null : opts.resume) || opts.sessionId || crypto.randomUUID();
   const transcript = kind === 'claude' ? path.join(claudeDir, 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${sid}.jsonl`)
     : kind === 'qwen-code' ? path.join(HOME, '.qwen', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'), 'chats', `${sid}.jsonl`)
       : kind === 'gemini' ? path.join(HOME, '.gemini', 'tmp', crypto.createHash('sha256').update(cwd).digest('hex'), 'chats', `session-${sid}.json`)
@@ -460,15 +480,22 @@ export async function run() {
       hook('StopFailure', { error: 'authentication_failed', error_details: answer });
       return;
     }
-    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
+    // Tars's own notices ask nothing, whatever they quote (directiveOf). Without this, B's orchestrator held its turn on
+    // a release file meant for its worker, and the matrix's claude sent itself the SEND a finished turn's notice quoted.
+    const directive = directiveOf(text);
     if (!directive) answer = 'ok';
-    else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
-    else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
-    else if (directive[1] === 'SEND') {
-      const r = await callTars('send_message', { id: directive[2], message: (directive[3] ?? '').trim() });
+    else if (directive.verb === 'ECHO') answer = `echo ${directive.arg}`;
+    else if (directive.verb === 'HOLD') {
+      const release = path.join(process.env.HOME || '', `release-${directive.arg}`);
+      while (!fs.existsSync(release)) await sleep(200);
+      answer = `released ${directive.arg}`;
+    }
+    else if (directive.verb === 'APPROVE') answer = (opts.bypass || await ask(directive.arg)) ? `ran echo ${directive.arg}` : `did not run echo ${directive.arg}`;
+    else if (directive.verb === 'SEND') {
+      const r = await callTars('send_message', { id: directive.arg, message: (directive.rest ?? '').trim() });
       answer = `send_message ${r.isError ? 'refused' : 'sent'}: ${r.text.split('\n')[0]}`;
     } else {
-      const r = await callTars('delegate_task', { id: directive[2], prompt: (directive[3] ?? '').trim(), timeoutSeconds: Number(process.env.FAKE_DELEGATE_TIMEOUT_S) || 90 });
+      const r = await callTars('delegate_task', { id: directive.arg, prompt: (directive.rest ?? '').trim(), timeoutSeconds: Number(process.env.FAKE_DELEGATE_TIMEOUT_S) || 90 });
       answer = `delegate_task ${r.isError ? 'refused' : 'answered'}: ${r.text}`;
     }
     record('assistant', answer);

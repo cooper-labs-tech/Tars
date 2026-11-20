@@ -63,6 +63,7 @@ import { ptyProcesses, writeProgrammaticInput } from '../../../../electron/core/
 import { spawnAgentPty } from '../../../../electron/core/agent-pty';
 import { RouteApp, RouteContext, RouteRequest, SendJson } from '../../../../electron/services/api-routes/types';
 import { AgentStatus, AppSettings } from '../../../../electron/types';
+import { setGrant, resetGrants } from '../../../../electron/services/cross-project-grants';
 
 // The launch these hold is darwin and linux's: a line typed into the shell, or
 // `bash -l -c`. On a Windows host they read it as linux; the win32 launch (the
@@ -734,7 +735,27 @@ describe('agent-routes', () => {
       expect((pty.spawn as any).mock.calls.length).toBe(spawnCallsBefore);
     });
 
-    it('allows cross-project dispatch with allowCrossProject: true', async () => {
+    it('lets another project\'s orchestrator be handed a task on allowCrossProject alone, as orchestrators talk, and never a restart (2.0.7)', async () => {
+      const lead = makeAgent({ id: 'lead-b', projectPath: '/proj/beta', status: 'idle', role: 'orchestrator' });
+      agents.set('lead-b', lead);
+      const app = makeRouteApp();
+      registerAgentRoutes(app, ctx);
+      const handler = findHandler(app, 'POST', 'dispatch');
+
+      const restart = vi.fn();
+      await handler(reqFromProject('/proj/alpha', { params: { id: 'lead-b' }, body: { message: 'go', mode: 'restart', allowCrossProject: true } }), restart, ctx);
+      expect(restart.mock.calls[0][1]).toBe(403);
+      expect((restart.mock.calls[0][0] as { code: string }).code).toBe('cross_project_not_granted');
+      expect(lead.status).toBe('idle');
+
+      const sendJson = vi.fn();
+      await handler(reqFromProject('/proj/alpha', { params: { id: 'lead-b' }, body: { message: 'go', allowCrossProject: true } }), sendJson, ctx);
+      // Past the guard: what answers is the launch of an orchestrator's session (this file stubs no app path), never the refusal.
+      expect(sendJson.mock.calls[0][1]).not.toBe(403);
+      expect((sendJson.mock.calls[0][0] as { code?: string }).code).not.toBe('cross_project_not_granted');
+    });
+
+    it('refuses cross-project dispatch on allowCrossProject alone, and allows it through the owner\'s grant (2.0.7)', async () => {
       const agent = makeAgent({ id: 'a1', projectPath: '/proj/beta', status: 'idle' });
       agents.set('a1', agent);
 
@@ -742,15 +763,21 @@ describe('agent-routes', () => {
       registerAgentRoutes(app, ctx);
       const handler = findHandler(app, 'POST', 'dispatch');
 
-      const sendJson = vi.fn();
-      await handler(
-        reqFromProject('/proj/alpha', { params: { id: 'a1' }, body: { message: 'go', allowCrossProject: true } }),
-        sendJson,
-        ctx
-      );
+      const refused = vi.fn();
+      await handler(reqFromProject('/proj/alpha', { params: { id: 'a1' }, body: { message: 'go', allowCrossProject: true } }), refused, ctx);
+      expect(refused.mock.calls[0][1]).toBe(403);
+      expect((refused.mock.calls[0][0] as { code: string }).code).toBe('cross_project_not_granted');
+      expect(agent.status).toBe('idle');
 
-      expect(agent.status).toBe('running');
-      expect((sendJson.mock.calls[0][0] as { mode: string }).mode).toBe('start');
+      setGrant({ from: '/proj/alpha', to: '/proj/beta', workers: [] });
+      try {
+        const sendJson = vi.fn();
+        await handler(reqFromProject('/proj/alpha', { params: { id: 'a1' }, body: { message: 'go' } }), sendJson, ctx);
+        expect(agent.status).toBe('running');
+        expect((sendJson.mock.calls[0][0] as { mode: string }).mode).toBe('start');
+      } finally {
+        resetGrants();
+      }
     });
 
     it('a caller that is nobody starts nothing, with no header to give it away', async () => {

@@ -133,6 +133,9 @@ import { migrateWebhookSecretOutOfAgentReach } from './services/hermes-webhook-s
 import { startAgentWatch, watchInterruptedTurns, tellQueuesKept } from './services/agent-watch';
 import { endRequestsAtLaunch, endUnresumed } from './core/task-requests';
 import { keepQueue, keptQueueRefs, restoreQueues } from './services/agent-queues';
+import { loadGrants } from './services/cross-project-grants';
+import { loadChanges } from './services/agent-changes';
+import { resumeQueuedChanges } from './core/agent-retune';
 import { oneTaskQueue } from './core/one-task';
 import { replayQueuedItem } from './services/api-routes/agent-routes';
 import { startTaskWatch, turnInterrupted } from './services/task-watch';
@@ -586,6 +589,12 @@ app.whenReady().then(async () => {
   loadChromeSwitch();
   // Load agents from disk
   loadAgents();
+  // The owner's allowlist across projects, and the change log of agents' settings, read once here
+  // (services/cross-project-grants.ts, services/agent-changes.ts); a change still queued when Tars quit is applied
+  // now, before any agent is launched (core/agent-retune.ts).
+  loadGrants();
+  loadChanges();
+  void resumeQueuedChanges().catch((err) => console.warn('[retune] the changes queued at the last quit were not applied:', err));
   // And the run token folders a delegated run or a crash left behind (services/acp/run-token-file.ts).
   sweepRunTokenFolders();
   // Whether the last run stopped abruptly, and who was working then, read

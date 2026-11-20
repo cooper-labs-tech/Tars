@@ -25,9 +25,17 @@ export const text = (body: string): ToolResult => ({ content: [{ type: "text", t
 /** An answer that reports a failure, in the tool's own words. */
 export const problem = (body: string): ToolResult => ({ content: [{ type: "text", text: body }], isError: true });
 
-/** What a tool that threw answers. */
-export const failed = (what: string, error: unknown): ToolResult =>
-  problem(`Error ${what}: ${error instanceof Error ? error.message : String(error)}`);
+/** The code Tars gave a refusal (`cross_project_not_granted`...), which a caller can match where the words change. */
+export const refusalCode = (error: unknown): string | undefined => {
+  const code = (error as { body?: { code?: unknown } } | null)?.body?.code;
+  return typeof code === "string" ? code : undefined;
+};
+
+/** What a tool that threw answers: "Error <failure> (<code>): <message>", the code when Tars gave one. */
+export const failed = (what: string, error: unknown): ToolResult => {
+  const code = refusalCode(error);
+  return problem(`Error ${what}${code ? ` (${code})` : ""}: ${error instanceof Error ? error.message : String(error)}`);
+};
 
 /** A zod raw shape, seen through what each of its fields parses to. */
 export type Shape = Record<string, { readonly _output: unknown }>;

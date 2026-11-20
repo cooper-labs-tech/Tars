@@ -5,7 +5,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { randomUUID } from "crypto";
 import { z } from "zod";
-import { problem, registerTools, text, tool, type Tool, type ToolResult } from "../../../mcp-shared/src/tools.js";
+import { problem, refusalCode, registerTools, text, tool, type Tool, type ToolResult } from "../../../mcp-shared/src/tools.js";
 import { apiRequest, getCallerIdentity } from "../utils/api.js";
 
 /** What each refusal of POST /api/tasks/:ref/cancel means, for the agent that asked (core/task-cancel.ts). */
@@ -411,8 +411,11 @@ async function runTask(
     try {
       started = (await apiRequest(`/api/agents/${id}/run-task`, "POST", body, (RUN_START_WAIT_SECONDS + 30) * 1000)) as RunAnswer;
     } catch (err) {
-      // Tars answered: that is the answer (refused, never started, an id used for another request).
-      if (answerOf(err)) return problem(`Not delegated: ${(err as Error).message}`);
+      // Tars answered: that is the answer (refused, never started, an id used for another request), with its code.
+      if (answerOf(err)) {
+        const code = refusalCode(err);
+        return problem(`Not delegated${code ? ` (${code})` : ""}: ${(err as Error).message}`);
+      }
       // No answer at all: the task may have been handed over. Ask again, for a while.
       const now = Date.now();
       if (!failingSince) failingSince = now;
@@ -544,12 +547,17 @@ const AGENT_TOOLS: Tool[] = [
   // Scoped to the caller's project by default
   tool({
     name: "list_agents",
-    description: "List the agents of YOUR project and their current status (idle/running/waiting/completed/error). Only these agents can receive your tasks: delegating to another project's agents is rejected. `all: true` adds other projects' agents for visibility ONLY; they remain undelegatable, and you must not present them as agents you have access to.",
+    description: "List the agents of YOUR project with their status (idle/running/waiting/completed/error) and inference settings (provider, model, effort). Only these agents receive your tasks, besides another project's orchestrator (with allowCrossProject) and the projects the owner's grant across projects opens to you (Settings). `project` lists one project's agents: another project's show who they are, their status and their inference settings, which any agent may change with update_agent, and nothing of their tasks; through the owner's grant, all of it. `all: true` adds every project's agents in the same way, for visibility: do not present another project's agents as ones you can hand work to unless a grant opens them to you.",
     schema: {
       all: z.boolean().optional().describe("If true, list agents of ALL projects instead of only your own"),
+      project: z.string().optional().describe("An absolute project path: that project's agents"),
     },
     failure: "listing agents",
-    async run({ all }) {
+    async run({ all, project }) {
+      if (project) {
+        const data = (await apiRequest(`/api/agents?project=${encodeURIComponent(project)}`)) as { agents: unknown[] };
+        return text(`Agents of project ${project}:\n${JSON.stringify(data.agents, null, 2)}`);
+      }
       const data = (await apiRequest(all ? "/api/agents?all=true" : "/api/agents")) as {
         agents: unknown[];
         scopedToProject?: string;
@@ -566,12 +574,13 @@ const AGENT_TOOLS: Tool[] = [
         const reachable = mine ? rows.filter(a => a.projectPath === mine) : rows;
         const others = mine ? rows.filter(a => a.projectPath !== mine) : [];
         const header = mine
-          ? `You can delegate to these ${reachable.length} agent(s) - they are in your project (${mine}):`
+          ? `You can delegate to these ${reachable.length} agent(s): they are in your project (${mine}):`
           : `No caller identity, so nothing here is scoped:`;
         const tail = others.length
           ? `\n\nThe following ${others.length} agent(s) belong to OTHER projects. They are listed ` +
-            `because all:true was requested. You CANNOT delegate to them - delegate_task will ` +
-            `reject it. Do not describe them as available to you:\n` +
+            `because all:true was requested. You cannot hand them work unless the owner's grant across projects ` +
+            `opens their project to you (delegate_task says so when it refuses); any agent may change their ` +
+            `inference settings with update_agent. Do not describe them as available to you:\n` +
             JSON.stringify(others, null, 2)
           : "";
         return text(`${header}\n${JSON.stringify(reachable, null, 2)}${tail}`);
@@ -665,7 +674,7 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "create_agent",
-    description: "Create a new agent, on any provider Tars runs or on a CLI binary of your choosing. Defaults to YOUR project when projectPath is omitted; another project is refused unless allowCrossProject is true. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
+    description: "Create a new agent, on any provider Tars runs or on a CLI binary of your choosing. Defaults to YOUR project when projectPath is omitted; another project takes the owner's grant from your project to that one (Settings, the allowlist across projects). worktree makes it ready in one call: a worktree of its own in its project's .worktrees, on the branch you name, its push off with noPush, the project's .mcp.json carried in; if any part fails, nothing is left made (no agent, no worktree, no new branch), and a branch another worktree holds is refused. The agent will be in 'idle' state until started. By default, agents run with --dangerously-skip-permissions for autonomous operation.",
     schema: {
       projectPath: z.string().optional().describe("Absolute path to the project directory (defaults to your own project)"),
       name: z.string().optional().describe("Name for the agent (e.g., 'Backend Worker', 'Test Runner')"),
@@ -677,7 +686,7 @@ const AGENT_TOOLS: Tool[] = [
         .default(true)
         .describe("If true (default), agent runs with --dangerously-skip-permissions flag for autonomous operation"),
       secondaryProjectPath: z.string().optional().describe("Secondary project path to add as context (--add-dir)"),
-      allowCrossProject: z.boolean().optional().describe("Explicitly allow creating the agent in ANOTHER project than yours (normally rejected)"),
+      allowCrossProject: z.boolean().optional().describe("Since 2.0.7, creating an agent in ANOTHER project takes the owner's grant from your project to that one (Settings, the allowlist across projects), and this flag adds nothing to it"),
       provider: z.string().optional().describe(`${PROVIDERS} Default claude.`),
       model: z.string().optional().describe("The model, as the provider names it (e.g. 'opus' for claude, 'gpt-6-luna' for codex). Omit for the provider's default."),
       effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional().describe("Reasoning effort. Omit for the CLI's own."),
@@ -686,14 +695,19 @@ const AGENT_TOOLS: Tool[] = [
         .optional()
         .describe("plan (Claude Code: reads and plans, edits nothing until approved), normal (asks before acting), auto, or bypass (asks nothing). Omit for auto."),
       cliPath: z.string().optional().describe("Absolute path of the CLI's executable file, run instead of the provider's own (the one set in Tars's Settings, or on the PATH). Refused unless it is an executable file."),
+      worktree: z.object({
+        branch: z.string().max(200).describe("The branch, as you choose it: letters, digits, . _ - and /. New from the default branch, or as it stands when it exists; never one another worktree holds."),
+        noPush: z.boolean().optional().describe("Turn push off for this worktree only: any git push from it fails, naming why."),
+      }).optional().describe("A worktree of its own, made in its project's .worktrees before the agent is"),
     },
     failure: "creating agent",
-    async run({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath, allowCrossProject, provider, model, effort, permissionMode, cliPath }) {
+    async run({ projectPath, name, skills, character, skipPermissions = true, secondaryProjectPath, allowCrossProject, provider, model, effort, permissionMode, cliPath, worktree }) {
       const resolvedProjectPath = projectPath || getCallerIdentity().projectPath;
       if (!resolvedProjectPath) {
         return problem("Error: projectPath is required (no caller project identity available).");
       }
       const data = (await apiRequest("/api/agents", "POST", {
+        ...(worktree ? { worktree } : {}),
         projectPath: resolvedProjectPath,
         name,
         skills,
@@ -713,9 +727,18 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "update_agent",
-    description: "Change an agent of your project after creating it: its name, provider (any CLI or API-key provider), model, effort, permission mode, CLI path, skills, character or secondary project path. Only your project's orchestrator does this, on its project's other agents: a worker is refused (worker_may_not_update), and so is an agent of another project (other_project). The role stays the user's: an agent is made the orchestrator, or stops being it, in the Agents page of Tars, where the orchestrator's own settings are changed too (orchestrator_settings), and so is a move to another project. A running turn is never cut. A change of model, effort or permission mode on the same CLI restarts a claude agent's CLI once its turn ends, on the same conversation; another CLI takes it at its next start. A change of provider or CLI path is refused while a CLI runs in the agent's terminal (cli_running): stop it with stop_agent once its work is done, then change it; its next start runs the new CLI on a new conversation, and the old CLI's model and CLI path are cleared unless you give new ones. The answer says when the change applies and whether the conversation is kept.",
+    description: "Change an agent's settings, or several agents' at once. "
+      + "Its inference settings (provider, the harness: any CLI or API-key provider; model; effort) any agent changes on any agent, of any project, orchestrators included: a worker too, and with no grant. "
+      + "Everything else (name, permission mode, CLI path, skills, character, secondary project path) only the agent's project's orchestrator changes, on its project's other agents: a worker is refused (worker_may_not_update), another project too (other_project), and an orchestrator's own (orchestrator_settings). "
+      + "worktree moves the agent onto one of its project's worktrees (made first with worktree_new, under the project's .worktrees/), or back to its project's folder with null: its project's orchestrator, or an agent the owner's grant across projects opens it to. "
+      + "A chat's runner runs on its orchestrator's settings, taken at each of its launches: change the orchestrator (runs_on_orchestrator). The role and the project stay the user's, in the Agents page of Tars. "
+      + "A running turn is never cut: an agent that is free takes the change now (applied: a claude agent restarts on it, on the same conversation; codex and pi start on it at their next task; a new provider or worktree starts at its next task, on a new conversation), and one mid-turn, asking a permission or holding a delegated task gets it queued, nothing written until its turn ends; opencode, amp and grok take a new model or effort at their next start, and a new provider once their CLI has ended. "
+      + "The answer says applied or queued, the change's id (chg-...) and when it applies; agent_changes reads when a queued one took effect, and revert_agent_change takes a change, a batch or an agent's last change back. "
+      + "ids (a list) or project (a path) change several agents in one call, each applied, queued or refused on its own, under one batch id. Every change is logged, and an agent of another project's change is noted to that project's orchestrator.",
     schema: {
-      id: z.string().describe("The agent ID"),
+      id: z.string().optional().describe("The agent ID (or give ids, or project)"),
+      ids: z.array(z.string()).optional().describe("Several agents' IDs, changed in one call (1 to 100)"),
+      project: z.string().optional().describe("An absolute project path: every agent of that project, changed in one call"),
       name: z.string().min(1).optional().describe("Its new name"),
       provider: z.string().optional().describe(PROVIDERS),
       model: z.string().nullable().optional().describe("The model, as the provider's CLI names it (e.g. 'opus' or 'sonnet' for claude); null for the provider's default."),
@@ -728,21 +751,73 @@ const AGENT_TOOLS: Tool[] = [
       skills: z.array(z.string()).optional().describe("Its skills: the whole list, which replaces the one it has"),
       character: z.enum(CHARACTERS).optional().describe("Visual character for the agent"),
       secondaryProjectPath: z.string().nullable().optional().describe("Secondary project path added as context (--add-dir); null to take it away"),
+      worktree: z.string().max(200).nullable().optional().describe("The branch of one of the agent's project's worktrees to work in (worktree_list names them), or null for the project's own folder"),
     },
     failure: "updating agent",
-    async run({ id, ...fields }) {
+    async run({ id, ids, project, ...fields }) {
       // Only what was named: null clears a setting, so a field nobody named must not reach Tars as one.
       const body = Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined));
+      const targets = [id, ids, project].filter((v) => v !== undefined).length;
+      if (targets !== 1) return problem("Error updating agent: name the agent with id, or several with ids or project (one of the three).");
       try {
+        if (id === undefined) {
+          const data = (await apiRequest("/api/agents/update", "POST", { ...body, ...(ids ? { ids } : { project }) })) as { batchId: string; results: unknown[] };
+          return text(`Batch ${data.batchId}: each agent applied, queued or refused on its own.\n${JSON.stringify(data, null, 2)}`);
+        }
         const data = (await apiRequest(`/api/agents/${encodeURIComponent(id)}/update`, "POST", body)) as {
-          agent: { id: string; name?: string }; changed?: string[]; text?: string;
+          agent: { id: string; name?: string }; changed?: string[]; text?: string; state?: string; changeId?: string;
         };
-        const changed = data.changed?.length ? data.changed.join(", ") : "nothing";
-        return text(`Updated "${data.agent.name || data.agent.id}" (${changed}). ${data.text ?? ""}`.trim());
+        const changed = data.changed?.length ? data.changed.join(", ") : "nothing yet";
+        return text(`Updated "${data.agent.name || data.agent.id}" (${changed}): ${data.state ?? "applied"}. ${data.text ?? ""}`.trim());
       } catch (err) {
         // The refusal's code, which the description names, with its reason.
         const code = (err as { body?: { code?: unknown } }).body?.code;
         if (typeof code === "string") return problem(`Error updating agent (${code}): ${(err as Error).message}`);
+        throw err;
+      }
+    },
+  }),
+
+  tool({
+    name: "agent_changes",
+    description: "The log of agents' settings changes, newest first: who asked (an agent, with its project, or Tars), which agent, its values before and after, when it was asked, whether it was applied or queued (or cancelled, or failed), and when it took effect. Any agent reads it. Filter by agent, project or batch.",
+    schema: {
+      agentId: z.string().optional().describe("One agent's changes"),
+      project: z.string().optional().describe("The changes of one project's agents (an absolute path)"),
+      batchId: z.string().optional().describe("The changes of one batch (b-...)"),
+      limit: z.number().int().min(1).max(500).optional().describe("At most this many, 100 when not given"),
+    },
+    failure: "reading the change log",
+    readOnly: true,
+    async run({ agentId, project, batchId, limit }) {
+      const q = new URLSearchParams();
+      if (agentId) q.set("agentId", agentId);
+      if (project) q.set("project", project);
+      if (batchId) q.set("batchId", batchId);
+      if (limit) q.set("limit", String(limit));
+      const data = (await apiRequest(`/api/agent-changes${q.toString() ? `?${q}` : ""}`)) as { changes: unknown[] };
+      return text(`${data.changes.length} change(s), newest first:\n${JSON.stringify(data.changes, null, 2)}`);
+    },
+  }),
+
+  tool({
+    name: "revert_agent_change",
+    description: "Take a change of agents' settings back, from the change log: one change (changeId), every change of a batch (batchId), or an agent's last change (agentId). A change still queued is cancelled, nothing written; an applied one sets its values before back, applied or queued as any change is, for the settings still at the values it set (one another change moved since is left alone, and named). You may revert what you may change.",
+    schema: {
+      changeId: z.string().optional().describe("The change (chg-...)"),
+      batchId: z.string().optional().describe("Every change of a batch (b-...)"),
+      agentId: z.string().optional().describe("The agent's last change"),
+    },
+    failure: "reverting the change",
+    async run({ changeId, batchId, agentId }) {
+      const named = [changeId, batchId, agentId].filter((v) => v !== undefined).length;
+      if (named !== 1) return problem("Error reverting: name one of changeId, batchId or agentId.");
+      try {
+        const data = await apiRequest("/api/agent-changes/revert", "POST", changeId ? { changeId } : batchId ? { batchId } : { agentId });
+        return text(JSON.stringify(data, null, 2));
+      } catch (err) {
+        const code = (err as { body?: { code?: unknown } }).body?.code;
+        if (typeof code === "string") return problem(`Error reverting (${code}): ${(err as Error).message}`);
         throw err;
       }
     },
@@ -755,7 +830,7 @@ const AGENT_TOOLS: Tool[] = [
       id: z.string().describe("The agent ID"),
       prompt: z.string().describe("The task or instruction for the agent to work on"),
       model: z.string().optional().describe("Optional model for this task only, taken only when Tars starts the agent's session for it; an open session keeps its own, and the answer says so."),
-      allowCrossProject: z.boolean().optional().describe("Explicitly allow acting on an agent of ANOTHER project (normally rejected)"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this request. Calling again with the same id is answered with the first call's task, and nothing is handed over twice. Omitted: one is made for this call."),
     },
     failure: "starting agent",
@@ -771,7 +846,7 @@ const AGENT_TOOLS: Tool[] = [
       id: z.string().describe("The agent ID"),
       reason: z.string().min(1).describe("Why you stop it, in one line (required), e.g. 'frozen for 40 minutes on a file read'"),
       dropQueue: z.boolean().optional().describe("Also drop what waits in its queue, each sender told it never ran. Omitted: the queue is kept, paused, and goes in once you resume it with agent_queue."),
-      allowCrossProject: z.boolean().optional().describe("Explicitly allow acting on an agent of ANOTHER project (normally rejected)"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
     },
     failure: "stopping agent",
     async run({ id, reason, dropQueue, allowCrossProject }) {
@@ -795,7 +870,7 @@ const AGENT_TOOLS: Tool[] = [
       id: z.string().describe("The agent ID, or \"requester\" for whoever asked you for your current task"),
       message: z.string().optional().describe("The message to send to the agent"),
       prompt: z.string().optional().describe("Alias for 'message', use either one"),
-      allowCrossProject: z.boolean().optional().describe("Explicitly allow acting on an agent of ANOTHER project (normally rejected)"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
       mode: z.enum(SEND_MODES).optional().describe("How it goes in. 'auto' (default): typed at once, into a running turn too. 'queue': typed once the agent's current turn ends. 'steer': its turn interrupted first, then typed (claude agents only; refused as not_steerable otherwise). 'restart': the agent stopped and started again with the message. steer and restart are refused while the agent works on a task another agent asked for. 'note': a note for information, typed once its current turn ends; 'note-now': the same, typed at once. A note is no task: no task id, no end notice, and it never starts an agent that has no session open."),
       reason: z.string().optional().describe("With mode 'restart': why, in one line, kept with the stop"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this request. Calling again with the same id is answered with the first call's outcome, and nothing is sent twice. Omitted: one is made for this call."),
@@ -905,10 +980,10 @@ const AGENT_TOOLS: Tool[] = [
 
   tool({
     name: "remove_agent",
-    description: "Permanently remove an agent. This will stop the agent if running and delete it from the system. Only Tars, the user and the project's orchestrator remove an agent, and an agent may remove itself: a worker calling this on another agent is refused, and asks its orchestrator instead.",
+    description: "Permanently remove an agent. This will stop the agent if running and delete it from the system, with its own worktree. Refused, and nothing removed, while that worktree holds uncommitted work (worktree_has_work, naming the files): commit it or move it out first. Only Tars, the user and the project's orchestrator remove an agent, or an agent the owner's grant across projects opens that project to, and an agent may remove itself: a worker calling this on another agent is refused, and asks its orchestrator instead.",
     schema: {
       id: z.string().describe("The agent ID"),
-      allowCrossProject: z.boolean().optional().describe("Explicitly allow acting on an agent of ANOTHER project (normally rejected)"),
+      allowCrossProject: z.boolean().optional().describe("Across projects: without the owner's grant from your project to that one (Settings), this flag lets a note through to any agent, and a message or a task to that project's orchestrator; anything else takes the grant"),
     },
     failure: "removing agent",
     async run({ id, allowCrossProject }) {
@@ -989,7 +1064,7 @@ const AGENT_TOOLS: Tool[] = [
       prompt: z.string().describe("The task, as a spec, a line each. Target: the end state. Change: what to do. Constraints: what must not break. May touch: the files, folders and tools allowed. Proof: the observable check of acceptance."),
       model: z.string().optional().describe("Optional model for this task only; the agent's saved model is not changed. Taken only when Tars starts the agent's session for the task: an open session keeps its own model, and the answer says so. Aliases: 'sonnet', 'opus', 'haiku', 'opusplan', 'sonnet[1m]' (1M context). Omit to use the agent's configured default."),
       timeoutSeconds: z.number().optional().describe("How long this call waits for the answer, in seconds: 3600 (an hour) when omitted. The task itself is not stopped there: it goes on in the agent's terminal, and task_status reads its end."),
-      allowCrossProject: z.boolean().optional().describe("Explicitly allow delegating to an agent of ANOTHER project (normally rejected)"),
+      allowCrossProject: z.boolean().optional().describe("Delegating to ANOTHER project: to its orchestrator, this flag is enough, as projects' orchestrators talk to each other; to its workers it takes the owner's grant from your project to that one (Settings, the allowlist across projects)"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."),
       gate: z.boolean().optional().describe("The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."),
     },

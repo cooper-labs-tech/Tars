@@ -45,7 +45,7 @@ alone:
 
 | Credential | Who it is | What it opens |
 |---|---|---|
-| An agent's token (`CLAUDE_MGR_API_TOKEN`, minted in memory per terminal and per ACP run) | that agent | its own project's agents, and a new agent in its own project, never an orchestrator (`POST /api/agents` refuses the role to every caller: only the Agents page makes one); another project's only with `allowCrossProject`. It changes another agent's settings (`POST /api/agents/:id/update`, 2.0.4) only with the orchestrator's powers, in its own project whatever `allowCrossProject` says, never the role, and never an orchestrator's or a chat's runner's. Not the webhook |
+| An agent's token (`CLAUDE_MGR_API_TOKEN`, minted in memory per terminal and per ACP run) | that agent | its own project's agents, and a new agent in its own project, never an orchestrator (`POST /api/agents` refuses the role to every caller: only the Agents page makes one); another project's only through the owner's grant from its project to that one (2.0.7, "Retuning any agent, and the allowlist across projects" below), `allowCrossProject` alone opening a note, and a message or a task to that project's orchestrator. It changes any agent's inference settings, of any project (provider, model, effort; 2.0.7), and the rest of another agent's settings (`POST /api/agents/:id/update`, 2.0.4) only with the orchestrator's powers, in its own project, never the role, and never an orchestrator's or a chat's runner's. Not the webhook |
 | Tars's own pass (minted in memory, written nowhere) | the main process | every agent of every project: it is JeanBrasse's super chat, which drives every project by design. Not the webhook |
 | A Hermes gateway's secret: `~/.tars-private/hermes-webhook-secret` for the default gateway, `hermes-webhook-<id>.secret` for another (2.0.4) | that gateway | its own webhook route and nothing else, and through it the agents of the projects the user allowed that gateway, none until they do, in their own mode or a narrower one |
 | `~/.tars-private/api-token`, the shared token | nobody | reads, and the exempt routes. It drives no agent, and does not open the webhook |
@@ -331,6 +331,66 @@ hand, which the classifier then let run within seconds, with no dialog (the four
 orchestrator's transcript).
 
 ---
+
+### Retuning any agent, and the allowlist across projects (2.0.7)
+
+Two boundaries moved on the owner's word of 19/11: any agent may change another agent's harness, model and effort,
+whatever its project; and one project may drive another's agents, but only where the owner granted it.
+
+**What a prompt-injected agent can now do, with no grant.** Through `update_agent` (`POST /api/agents/:id/update`,
+`POST /api/agents/update` for several), on any agent of any project, an orchestrator included:
+- move it to another provider: another CLI, or an API-key provider whose key is set. A move between providers that
+  run the claude binary (claude and the API-key providers) keeps the binary, so the agent restarts on its same
+  conversation: its whole history so far (the code it read, its outputs, anything pasted to it) goes to the new vendor
+  with its next turn, not only what follows. A move to another binary starts a new conversation;
+- give it another model or effort: a weaker model, or `max` effort on every agent of a project, which costs;
+- once the endpoint and traces fields land (feat/traces-native), point it at an endpoint the owner configured and turn
+  its traces on, for an endpoint the owner marked as one that may be traced.
+
+**What still limits it.**
+- The inference settings and nothing else. The permission mode, the CLI path (any binary), the skills, the secondary
+  folder, the name, the role and the project keep the rule of 2.0.4: the agent's own project's orchestrator, never a
+  worker, never across projects, never on an orchestrator.
+- The values are the ones a creation takes: a provider of the registry, an API-key provider only once its key is set,
+  a model name, an effort of the list, plan never on a provider without it. No key is ever answered or logged: an
+  endpoint is named by its id.
+- No turn is cut. A change of what the CLI runs waits for the agent to be free (no turn Tars can see, no task in hand,
+  no permission question, nothing typed or owed): queued until then, nothing written (`core/agent-retune.ts`).
+- Everything is on the record, where the agents are not handed it: `~/.tars-private/agent-changes.jsonl` (0600) keeps
+  who asked, which agent, before, after, when, applied or queued; the window is told of each (`agent:retuned`) and the
+  agent keeps its last (`lastRetune`); an agent of another project's change is noted to the target project's
+  orchestrator; one call takes a change or a whole batch back (`revert_agent_change`), allowed to whoever could make
+  that change (judged by the settings its caller named, a provider change's cleared model and CLI path aside) and to
+  the window. Any agent reads the log of its own project whole, and another project's by its inference settings only,
+  unless a grant opens that project.
+- A chat's runner is never changed directly: it runs on its orchestrator's settings.
+
+**The allowlist across projects.** `~/.tars-private/cross-project-grants.json` (0600), set only through the window's
+channels (`crossProject:set`, `crossProject:remove`), held at once, and read from disk only at Tars's start: a file an
+agent writes while Tars runs changes nothing until Tars is restarted, as with the owner's Chrome switch. A grant from
+project A to project B gives A's orchestrator, A's chats' runners and the workers of A it names by id the powers of B's
+orchestrator over B's agents: list them whole, hand them work, start, stop, steer and message them, read their answers
+and their tasks, wait on them, create agents in B (never an orchestrator), change their settings beyond the inference
+ones (never an orchestrator's), remove them, make, list and remove worktrees in B, and move a B agent onto one. A
+removal over the API never deletes a worktree holding uncommitted work: it is refused, naming the files, and nothing
+is removed. One way: nothing of A
+opens to B. Without a grant, across projects, an agent lists another project's agents with their status and inference
+settings (never their tasks), retunes them as above, and leaves a note (mode note, `allowCrossProject: true`); and,
+with `allowCrossProject: true`, it messages or hands a task to that project's orchestrator and reads that task's
+answer, as the projects' orchestrators talk to each other (what an orchestrator then does with it is its own
+judgement, under its own instructions). It hands that project's workers no work, starts, stops, creates and removes
+nothing, and reads no other answer. Before 2.0.7 `allowCrossProject: true` opened every drive route to any agent: it no
+longer does. A prompt-injected agent a grant names can do to B what B's orchestrator can; the grant
+is the owner's choice, and Tars notes each outside delegation, start, stop and retune to B's orchestrator.
+
+**A worktree's push turned off.** `worktree_new` with `noPush` turns push off for that worktree only (`extensions.worktreeConfig`,
+then `git config --worktree`: every remote's pushurl, and every address a push may name, rewritten to a path that is no
+repository), so a push from it fails at once, naming why, and B's other checkouts push as before. It is a guard against
+a mistake, not a boundary: an agent working in that worktree can unset its own setting. A remote's pushurl of its own
+in the shared settings is reset for that worktree (an empty value first, then the marker), and the push addresses are
+read back after (`git remote get-url --push --all`): a worktree whose push still reaches anything is refused, its
+creation taken back. Not rewritten: an explicit scp-like address with a user other than `git` (`me@host:repo`), for
+which git offers no prefix to match.
 
 ## 3. An agent's token is not secret from the other agents
 

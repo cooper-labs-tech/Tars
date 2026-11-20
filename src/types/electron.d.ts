@@ -243,6 +243,41 @@ export type AgentRestartWait =
   | 'turn' | 'permission' | 'note' | 'background' | 'launch'
   | 'draft' | 'typing' | 'queued' | 'writing';
 
+/** One grant of the owner's allowlist across projects (2.0.7). */
+export interface CrossProjectGrant {
+  from: string;
+  to: string;
+  /** Workers of `from`, by agent id. */
+  workers: string[];
+  grantedAt: string;
+}
+
+/** Who changed an agent's settings, as the change log keeps it (2.0.7). */
+export type AgentChangeBy = { kind: 'agent'; id: string; name: string; projectPath: string } | { kind: 'tars' } | { kind: 'window' };
+
+/** An agent's settings changed over the API (2.0.7), as `agent:retuned` pushes it. */
+export interface AgentRetuned {
+  changeId: string;
+  agentId: string;
+  agentName: string;
+  projectPath: string;
+  by: AgentChangeBy;
+  /** Every setting the change touched, with its before and after: a provider change also clears the model and the CLI
+   *  path it was not given. */
+  fields: string[];
+  /** The settings the caller named: what a line about the change shows, the implied resets of `fields` left out. */
+  asked: string[];
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  state: 'applied' | 'queued' | 'cancelled' | 'failed';
+  askedAt: string;
+  effectiveAt?: string;
+  waitingFor?: string;
+  /** A revert (the window's undo, or revert_agent_change): the id of the change it takes back. Absent on any other
+   *  change. */
+  revertOf?: string;
+}
+
 export interface AgentPendingRestart {
   agentId: string;
   /** The settings it applies: `model`, `effort`, `permissionMode`, `orchestrator`, `secondaryProjectPath`, `obsidianVaultPaths`, `localModel`. */
@@ -680,6 +715,9 @@ export interface AgentStatus {
   /** The line the agent last wrote about itself with the MCP tool `checkpoint`, 120 characters at most, with when
    *  (2.0.5, core/agent-checkpoint.ts). For the agent card's line. */
   checkpoint?: { line: string; at: string };
+  /** The last change of its settings asked over the API (2.0.7): who asked, which settings, applied or queued, when
+   *  asked and when it took effect. The whole change is in the change log (GET /api/agent-changes, agent_changes). */
+  lastRetune?: { changeId: string; by: AgentChangeBy; fields: string[]; asked?: string[]; state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string; revertOf?: string };
   /** Set by agent:list and agent:get: the task in hand and the tasks that wait
    *  (design PR #451's banner), as `agent:task` pushes it. */
   taskBanner?: AgentTaskBanner;
@@ -1720,6 +1758,17 @@ export interface ElectronAPI {
       agentId: string;
       pending: Omit<AgentPendingRestart, 'agentId'> | null;
     }) => void) => () => void;
+    /** Pushed when an agent's settings are changed over the API (2.0.7), and again when a queued change is applied,
+     *  cancelled or fails: who asked, the values before and after, its state and when it took effect. The agent's
+     *  record keeps the last (`lastRetune`). Mirror of `agent:retuned` in electron/preload.ts. */
+    onRetuned?: (callback: (event: AgentRetuned) => void) => () => void;
+    /** Undo a retune (2.0.7): one change by its id, or the agent's last, set back as revert_agent_change does, filed
+     *  under the window. A queued change is cancelled (`state: 'cancelled'`); an applied one asks its values before
+     *  back for the settings still at its values after, applied or queued, naming the rest (`leftAlone`). */
+    revertChange?: (sel: { changeId: string } | { agentId: string }) => Promise<
+      | { ok: true; state: 'cancelled' | 'applied' | 'queued'; revertChangeId?: string; leftAlone?: string[] }
+      | { ok: false; error: string }
+    >;
   };
 
   // Skills management
@@ -2067,6 +2116,20 @@ export interface ElectronAPI {
    * appSettings. Taken by each agent at its next start. SECURITY.md, "Claude in Chrome without asking", says what it
    * opens. `set` takes true or false only; `on` is the switch after the call.
    */
+  /**
+   * The owner's allowlist across projects (2.0.7, electron/services/cross-project-grants.ts): a grant from project
+   * `from` to project `to` gives `from`'s orchestrator (and its chats' runners), and the workers of `from` it names by
+   * agent id, `to`'s orchestrator's powers over `to`'s agents: list them whole, delegate to them, start, stop and
+   * message them, read their answers, and make and use worktrees in `to`. One way. Kept in ~/.tars-private, which no
+   * agent is handed, set only here, and effective at once. SECURITY.md, "The allowlist across projects", says what it
+   * opens. `set` replaces the workers of a pair already granted.
+   */
+  crossProject?: {
+    list: () => Promise<CrossProjectGrant[]>;
+    set: (grant: { from: string; to: string; workers?: string[] }) => Promise<{ ok: true; grant: CrossProjectGrant } | { ok: false; error: string }>;
+    remove: (pair: { from: string; to: string }) => Promise<{ ok: true; removed: boolean } | { ok: false; error: string }>;
+  };
+
   chromeWithoutAsking?: {
     get: () => Promise<{ on: boolean }>;
     set: (on: boolean) => Promise<{ success: boolean; on: boolean; error?: string }>;

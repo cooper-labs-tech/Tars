@@ -224,6 +224,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('agent:restart-pending', listener);
       return () => ipcRenderer.removeListener('agent:restart-pending', listener);
     },
+    /**
+     * An agent's settings changed over the API (2.0.7, core/agent-retune.ts): who asked, which agent, its values
+     * before and after, applied or queued, and when it took effect. Pushed when asked, and again when a queued one is
+     * applied, cancelled or fails. The agent's record keeps the last one (`lastRetune`).
+     */
+    onRetuned: (callback: (event: {
+      changeId: string; agentId: string; agentName: string; projectPath: string;
+      by: { kind: 'agent'; id: string; name: string; projectPath: string } | { kind: 'tars' } | { kind: 'window' };
+      /** `fields`: every setting the change touched; `asked`: those the caller named, what a line shows. */
+      fields: string[]; asked: string[]; before: Record<string, unknown>; after: Record<string, unknown>;
+      state: 'applied' | 'queued' | 'cancelled' | 'failed'; askedAt: string; effectiveAt?: string; waitingFor?: string;
+      /** A revert: the id of the change it takes back. */
+      revertOf?: string;
+    }) => void) => {
+      const listener = (_: unknown, data: unknown) => callback(data as Parameters<typeof callback>[0]);
+      ipcRenderer.on('agent:retuned', listener);
+      return () => ipcRenderer.removeListener('agent:retuned', listener);
+    },
+    /**
+     * Undo a retune (2.0.7): one change by its id, or the agent's last, set back as revert_agent_change does and filed
+     * under the window. A queued change is cancelled; an applied one asks its values before back, applied or queued,
+     * for the settings still at its values after, naming the rest (`leftAlone`).
+     */
+    revertChange: (sel: { changeId: string } | { agentId: string }) =>
+      ipcRenderer.invoke('agent:revertChange', sel),
   },
 
   // Skills management
@@ -468,6 +493,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   secrets: {
     set: (field: string, value: string | null) =>
       ipcRenderer.invoke('secrets:set', field, value),
+  },
+
+  // The owner's allowlist across projects (2.0.7, services/cross-project-grants.ts): its own channels, kept in
+  // ~/.tars-private, effective at once. A grant from `from` to `to` gives `from`'s orchestrator, and the workers it
+  // names by id, `to`'s orchestrator's powers over `to`'s agents.
+  crossProject: {
+    list: () =>
+      ipcRenderer.invoke('crossProject:list'),
+    set: (grant: { from: string; to: string; workers?: string[] }) =>
+      ipcRenderer.invoke('crossProject:set', grant),
+    remove: (pair: { from: string; to: string }) =>
+      ipcRenderer.invoke('crossProject:remove', pair),
   },
 
   // The owner's switch, Claude in Chrome acts without asking (2.0.7): its own channel, kept in ~/.tars-private.

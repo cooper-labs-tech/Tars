@@ -832,13 +832,23 @@ describe('an agent keeps exactly the rights it had', () => {
     expect(agents.size, 'the agent was enrolled anyway').toBe(before);
   });
 
-  it('still creates one there when it says so', async () => {
-    const { status, body } = await call('POST', '/api/agents', bearer(alphaToken), {
+  it('creates one there only through the owner\'s grant from its project, allowCrossProject alone no longer (2.0.7)', async () => {
+    const refused = await call('POST', '/api/agents', bearer(alphaToken), {
       projectPath: BETA.projectPath, name: 'deliberate', allowCrossProject: true,
     });
+    expect(refused.status, JSON.stringify(refused.body)).toBe(403);
+    expect(refused.body.code).toBe('cross_project_not_granted');
 
-    expect(status, JSON.stringify(body)).toBe(200);
-    expect(agents.get((body.agent as { id: string }).id)?.projectPath).toBe(BETA.projectPath);
+    // Imported here: its constants are this file's mocked ones, set once its home is.
+    const { setGrant, resetGrants } = await import('../../../electron/services/cross-project-grants');
+    setGrant({ from: ALPHA.projectPath, to: BETA.projectPath, workers: [ALPHA.id] });
+    try {
+      const { status, body } = await call('POST', '/api/agents', bearer(alphaToken), { projectPath: BETA.projectPath, name: 'deliberate' });
+      expect(status, JSON.stringify(body)).toBe(200);
+      expect(agents.get((body.agent as { id: string }).id)?.projectPath).toBe(BETA.projectPath);
+    } finally {
+      resetGrants();
+    }
   });
 });
 

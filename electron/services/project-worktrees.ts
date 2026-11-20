@@ -63,6 +63,25 @@ export interface NewWorktree {
   pruned: string[];
 }
 
+/**
+ * What git is handed instead of every remote's address in a worktree whose push Tars turned off (2.0.7, a
+ * worktree, `noPush`): a path that is no repository, so `git push` from that worktree fails at once, exit 128, and its
+ * error names this, whatever remote or address it was given. Fetching is untouched, and so is every other checkout of
+ * the repository: the settings are the worktree's own (extensions.worktreeConfig, then `git config --worktree`).
+ * Measured with git 2.5x on 19/11 (reports/agents-reconfigure-runs/push-probe.sh): a push by remote name, by an
+ * absolute path, a file:// and an https:// address all fail naming it; the main checkout still pushes.
+ */
+export const NO_PUSH_URL = 'push-turned-off-by-tars-for-this-worktree';
+/**
+ * The addresses rewritten for a push: every scheme git takes, scp-like git@, an absolute path and a relative one, and
+ * on Windows a drive or a share. An scp-like address with another user (`me@host:repo`) is not: git names no prefix
+ * all of those share, and SECURITY.md says so.
+ */
+const PUSH_PREFIXES = [
+  'https://', 'http://', 'ssh://', 'git://', 'git@', 'file://', '/', '.',
+  ...(process.platform === 'win32' ? ['\\\\', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((d) => `${d}:`)] : []),
+];
+
 /** Whether a branch's pull request is merged, as its host says (a squash or rebase merge is no ancestor of main). */
 export type PrMerged = (branch: string) => Promise<boolean>;
 
@@ -410,4 +429,30 @@ export async function newWorktree(
       return { error: `git would not make the worktree: ${refusal(err)}`, code: 'git_refused' as const };
     }
   });
+}
+
+/**
+ * Turn push off for one worktree only: every remote's push address, and every address a push may name, rewritten to
+ * NO_PUSH_URL in the worktree's own settings. Needs extensions.worktreeConfig, set in the repository's shared
+ * settings, which changes nothing for its other checkouts (no setting of theirs moves to config.worktree).
+ */
+export async function turnPushOff(worktreePath: string): Promise<void> {
+  await run(worktreePath, ['config', 'extensions.worktreeConfig', 'true']);
+  const remotes = (await out(worktreePath, ['remote'])).split('\n').map((r) => r.trim()).filter(Boolean);
+  for (const remote of remotes) {
+    // A remote's pushurl is a list, which the worktree's settings add to: a pushurl of its own in the shared settings
+    // was still pushed to (the Audit's L2 on #595). An empty value first resets the list, then the marker alone.
+    await ok(worktreePath, ['config', '--worktree', '--unset-all', `remote.${remote}.pushurl`]);
+    await run(worktreePath, ['config', '--worktree', '--add', `remote.${remote}.pushurl`, '']);
+    await run(worktreePath, ['config', '--worktree', '--add', `remote.${remote}.pushurl`, NO_PUSH_URL]);
+  }
+  await ok(worktreePath, ['config', '--worktree', '--unset-all', `url.${NO_PUSH_URL}/.pushInsteadOf`]);
+  for (const prefix of PUSH_PREFIXES) await run(worktreePath, ['config', '--worktree', '--add', `url.${NO_PUSH_URL}/.pushInsteadOf`, prefix]);
+  // Read back, as git will push: every remote's push addresses must be the marker alone, or it is said.
+  for (const remote of remotes) {
+    const urls = (await out(worktreePath, ['remote', 'get-url', '--push', '--all', remote])).split('\n').map((u) => u.trim()).filter(Boolean);
+    if (urls.length !== 1 || urls[0] !== NO_PUSH_URL) {
+      throw new Error(`the push of remote ${remote} still reaches ${urls.filter((u) => u !== NO_PUSH_URL).join(', ') || 'nothing known'}`);
+    }
+  }
 }

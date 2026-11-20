@@ -39,7 +39,7 @@ import { agentGuideSection, guideForPrompt, guideIndex, guideTopic } from '../ag
 import { ensureProjectFiles } from '../../utils/project-files';
 import { app } from 'electron';
 import { usableHermesConnection } from '../hermes-config';
-import { consumeResumeSessionId, newConversationOnNextStart, nextStartResumes } from '../../utils/resume-session';
+import { consumeResumeSessionId, nextStartResumes } from '../../utils/resume-session';
 import { spendFirstTask, withFirstTask } from '../../core/first-task';
 import { getTasmaniaStatus } from '../tasmania-client';
 import { emitAgentStatus } from '../agent-events';
@@ -63,7 +63,15 @@ import { noteWaitingOn } from '../agent-watch';
 import { lastInterruptAt, pendingBackgroundWork, withSessionTruth } from '../agent-truth';
 import { turnInterruptedAt } from '../task-watch';
 import { noteLaunch, launchSettings, restartForSettings, type RestartOutcome, type RestartWait } from '../../core/agent-restart';
-import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-update';
+import { cliAtWork, type AgentUpdate } from '../../core/agent-update';
+import { randomUUID } from 'crypto';
+import { retune, askedFields, isRetuneOnly, setRetuneDeps, changesToRevert, revertAskOf, cancelQueued, RETUNE_FIELDS, WAITING_TEXT, type RetuneAsk } from '../../core/agent-retune';
+import { listChanges, type ChangeBy } from '../agent-changes';
+import { grantFor } from '../cross-project-grants';
+import { listWorktrees } from '../project-worktrees';
+import { readyWorktree, takeBackWorktree, uncommittedWork as worktreeWork, type ReadyWorktree } from '../agent-worktree';
+import { isValidBranchName, resolveWorktreePath } from '../../utils/worktree-path';
+import { restartRunnersOf } from '../chat-runners';
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
@@ -648,7 +656,13 @@ function withoutCommandLines<T extends Pick<AgentStatus, 'leftRunning' | 'stopPr
 function visibleAgent(req: RouteRequest): AgentStatus | undefined {
   const agent = agents.get(req.params.id);
   const caller = callerProject(req);
-  return agent && (!caller || agent.projectPath === caller) ? agent : undefined;
+  // Or through the owner's grant from the caller's project to the agent's (2.0.7): as that project's orchestrator. Or
+  // another project's orchestrator working on what the caller asked it, which the caller follows (wait_for_agent,
+  // get_agent_output) as the projects' orchestrators do with each other.
+  if (!agent) return undefined;
+  if (!caller || agent.projectPath === caller || grantedLead(req, agent)) return agent;
+  const callerId = resolveCallerId(req);
+  return isProjectLead(agent) && !!callerId && agent.requestedBy?.agentId === callerId ? agent : undefined;
 }
 
 // callerId and callerProject live in ./utils: the bus routes ask the same two
@@ -876,19 +890,28 @@ function resolveDriver(req: RouteRequest, sendJson: SendJson): Driver | undefine
 }
 
 /**
- * Cross-project guard: an agent may only act on agents of its own project.
- * This is what stops an orchestrator from delegating to another project's
- * agents when the LLM picks a wrong ID from a global listing. The project is
- * the one of the agent whose token the call presents, never a header.
+ * Cross-project guard: an agent acts on the agents of its own project, and on another project's only through the
+ * owner's allowlist (services/cross-project-grants.ts, 2.0.7): a grant from its project to that one, which names it
+ * (or it has its project's orchestrator's powers), opens that project's agents to it as to that project's
+ * orchestrator. The project is the one of the agent whose token the call presents, never a header.
  *
- * Between agents it is still a guard against mistakes rather than a boundary:
- * any agent can pass allowCrossProject: true. What changed is that there is no
- * longer a way round it by having no identity at all.
+ * Without a grant, across projects, with allowCrossProject: true, two things go through, as before 2.0.7: a note
+ * (`noteOnly`, mode note or note-now: information that hands no work and starts nothing), to any agent; and, to that
+ * project's orchestrator (`toLead`), a message in any mode but a restart, and a task (delegate_task), as the projects'
+ * orchestrators talk to each other (Tars-Orchestrator's decision of 19/11), whose answers the asker reads. Everything
+ * else across projects, a worker's work, a start, a stop, a creation, a removal, takes the grant. Retuning an agent's
+ * inference settings needs none (mayUpdate).
  */
-function assertMayDriveAgent(req: RouteRequest, agent: AgentStatus, sendJson: SendJson): boolean {
+function assertMayDriveAgent(req: RouteRequest, agent: AgentStatus, sendJson: SendJson, opts: { noteOnly?: boolean; toLead?: boolean } = {}): boolean {
   const driver = resolveDriver(req, sendJson);
   if (!driver) return false;
-  return mayActIn(req, driver, agent.projectPath, `agent "${agent.name || agent.id}" belongs to project ${agent.projectPath}`, sendJson);
+  return mayActIn(req, driver, agent.projectPath, `agent "${agent.name || agent.id}" belongs to project ${agent.projectPath}`, sendJson,
+    { ...opts, toLead: !!opts.toLead && isProjectLead(agent) });
+}
+
+/** Its project's orchestrator: the agent other projects' orchestrators talk to without a grant. */
+function isProjectLead(agent: AgentStatus): boolean {
+  return agent.role === 'orchestrator' && agent.kind !== 'chat';
 }
 
 /**
@@ -896,18 +919,37 @@ function assertMayDriveAgent(req: RouteRequest, agent: AgentStatus, sendJson: Se
  * the drive routes ask it about the agent they act on, and creation about the
  * project the new agent would join. `what` says which, in the refusal.
  */
-function mayActIn(req: RouteRequest, driver: Driver, projectPath: string, what: string, sendJson: SendJson): boolean {
+function mayActIn(req: RouteRequest, driver: Driver, projectPath: string, what: string, sendJson: SendJson, opts: { noteOnly?: boolean; toLead?: boolean } = {}): boolean {
   if (driver.kind === 'tars') return true;
 
   const caller = driver.agent;
   if (projectPath === caller.projectPath) return true;
-  if ((req.body as { allowCrossProject?: boolean } | undefined)?.allowCrossProject === true) return true;
-  // DELETE requests have no parsed body. Accept the override as a query param.
-  if (req.url.searchParams.get('allowCrossProject') === 'true') return true;
+  if (grantFor(caller, projectPath)) return true;
+  const flagged = (req.body as { allowCrossProject?: boolean } | undefined)?.allowCrossProject === true
+    // DELETE requests have no parsed body. Accept the override as a query param.
+    || req.url.searchParams.get('allowCrossProject') === 'true';
+  if (flagged && (opts.noteOnly || opts.toLead)) return true;
   sendJson({
-    error: `Cross-project access denied: ${what}, but you are the orchestrator of ${caller.projectPath}. Use list_agents to see YOUR project's agents, or pass allowCrossProject: true if this is intentional.`,
+    error: `Cross-project access denied: ${what}, and you are of ${caller.projectPath}. Handing work to another project\'s workers, `
+      + 'starting, stopping, creating or removing its agents takes a grant from your project to that one, which only the owner gives, '
+      + 'in Tars\'s window (Settings, the allowlist across projects); none is set for you. Without it, with allowCrossProject: true, '
+      + 'a note reaches any of its agents, and a message or a task reaches its orchestrator; any agent may retune another\'s '
+      + 'inference settings with update_agent. list_agents shows yours.',
+    code: 'cross_project_not_granted',
   }, 403);
   return false;
+}
+
+/** The agent behind the call, when the call names one: what the allowlist is asked about. */
+function callerAgentOf(req: RouteRequest): AgentStatus | undefined {
+  const id = resolveCallerId(req);
+  return id ? agents.get(id) : undefined;
+}
+
+/** A caller of another project acting on `agent` with its project's orchestrator's powers, through the owner's grant. */
+function grantedLead(req: RouteRequest, agent: AgentStatus): AgentStatus | undefined {
+  const caller = callerAgentOf(req);
+  return caller && caller.projectPath !== agent.projectPath && grantFor(caller, agent.projectPath) ? caller : undefined;
 }
 
 /**
@@ -923,6 +965,8 @@ function mayHandWork(req: RouteRequest, agent: AgentStatus, sendJson: SendJson):
   const caller = callerId ? agents.get(callerId) : undefined;
   // assertMayDriveAgent, asked first, has refused a caller with no agent behind it.
   if (!caller) return true;
+  // The owner's grant gives it the agent's project's orchestrator's powers (services/cross-project-grants.ts).
+  if (grantedLead(req, agent)) return true;
   const refusal = workerOrderRefusal({ kind: 'agent', agent: caller }, agent);
   if (!refusal) return true;
   sendJson({ error: refusal, code: 'worker_may_not_order' }, 403);
@@ -940,6 +984,7 @@ function mayStop(req: RouteRequest, agent: AgentStatus, sendJson: SendJson): boo
   const caller = callerId ? agents.get(callerId) : undefined;
   // The cross-project guard, asked first, has refused a caller with no agent behind it.
   if (!caller) return true;
+  if (grantedLead(req, agent)) return true;
   const refusal = workerStopRefusal({ kind: 'agent', agent: caller }, agent);
   if (!refusal) return true;
   sendJson({ error: refusal, code: 'worker_may_not_stop' }, 403);
@@ -1848,52 +1893,224 @@ const MODEL_NAME = /^[a-zA-Z0-9._:\/\[\]-]+$/;
 
 /** What update_agent changes, as POST /api/agents/:id/update takes it. */
 const UPDATE_FIELDS = [
-  'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills', 'secondaryProjectPath',
+  'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills', 'secondaryProjectPath', 'worktree',
 ] as const;
 const CHARACTERS: readonly AgentCharacter[] = ['robot', 'ninja', 'wizard', 'astronaut', 'knight', 'pirate', 'alien', 'viking'];
 const EFFORTS: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const PERMISSION_MODES: readonly AgentPermissionMode[] = ['plan', 'normal', 'auto', 'bypass'];
 
 /**
- * Who changes an agent's settings over the API (update_agent): Tars's own
- * pass, and an agent with the orchestrator's powers in the agent's project
- * (its orchestrator, or one of its chats' runners, as for handing work). A
- * worker never, not even its own: they are its orchestrator's to change, and
- * the user's. Never across projects, allowCrossProject or not: a change of
- * settings outlives the mistake that sent it, which a message does not. And
- * never an agent with the orchestrator's powers, whoever asks: the
- * orchestrator's settings, which its chats run on, and a runner's, which are
- * the orchestrator's, are the window's, as the role is.
+ * Who changes an agent's settings over the API (update_agent), by what the call names (2.0.7, the owner's word of
+ * 19/11: "n'importe quel agent puisse changer le harness d'un autre agent, changer le modèle, le niveau de
+ * difficulté, la clé api pour l'inférence"):
+ * - the inference settings alone (RETUNE_FIELDS: provider, model, localModel, effort, and the endpoint and traces once
+ *   taken): any agent with an identity of its own, worker or orchestrator, of any project, on any agent, an
+ *   orchestrator included, and Tars's own pass. A chat's runner runs on its orchestrator's settings, taken at each of
+ *   its launches: a change asked of it is refused, naming its orchestrator, whose change reaches it;
+ * - a worktree (moving the agent onto one of its project's worktrees, or back): Tars's pass, an agent with the
+ *   orchestrator's powers in the agent's project, or one the owner's allowlist gives them across projects
+ *   (services/cross-project-grants.ts), never onto an orchestrator;
+ * - anything else (name, permission mode, CLI path, skills, character, secondary folder), alone or beside the
+ *   others: the rule before 2.0.7. Tars's pass, and an agent with the orchestrator's powers in the agent's own
+ *   project (its orchestrator, or one of its chats' runners); never a worker, never across projects, and never on an
+ *   agent with the orchestrator's powers, whose settings its chats run on and the window changes.
+ * A call is judged by the strictest of what it names. The shared token names nobody and changes nothing.
  */
-function mayUpdate(req: RouteRequest, agent: AgentStatus, sendJson: SendJson): boolean {
-  const driver = resolveDriver(req, sendJson);
-  if (!driver) return false;
-  if (driver.kind === 'agent' && !hasOrchestratorPowers(driver.agent)) {
-    sendJson({
-      error: 'A worker does not change an agent\'s settings, its own included: only the user\'s window and your project\'s orchestrator do. '
+type UpdateRule = 'retune' | 'worktree' | 'lead';
+
+function ruleOf(fields: readonly string[]): UpdateRule {
+  if (isRetuneOnly(fields)) return 'retune';
+  return fields.every((f) => f === 'worktree' || (RETUNE_FIELDS as readonly string[]).includes(f)) ? 'worktree' : 'lead';
+}
+
+/** Who asked, as the change log keeps it. */
+function changeByOf(driver: Driver): ChangeBy {
+  return driver.kind === 'tars' ? { kind: 'tars' } : { kind: 'agent', id: driver.agent.id, name: driver.agent.name || driver.agent.id, projectPath: driver.agent.projectPath };
+}
+
+/** The refusal of an update by `driver` on `agent`, or null when it may. */
+function updateRefusal(driver: Driver, agent: AgentStatus, fields: readonly string[]): { status: number; error: string; code: string } | null {
+  if (agent.kind === 'chat') {
+    const lead = Array.from(agents.values()).find((a) => a.role === 'orchestrator' && a.projectPath === agent.projectPath);
+    return {
+      status: 403, code: 'runs_on_orchestrator',
+      error: `${envelopeValue(agent.name || agent.id)} runs a chat, on its project's orchestrator's settings, which it takes at each of its launches: `
+        + (lead ? `change ${envelopeValue(lead.name || lead.id)} (${lead.id}) instead, and its chats take it.` : 'its project has no orchestrator now.'),
+    };
+  }
+  const rule = ruleOf(fields);
+  // Whether the agent changed has the orchestrator's powers: then its settings beyond the inference ones are the window's.
+  const targetHasPowers = hasOrchestratorPowers(agent);
+  if (rule === 'retune' || driver.kind === 'tars') {
+    if (driver.kind === 'tars' && rule !== 'retune' && targetHasPowers) {
+      return { status: 403, code: 'orchestrator_settings', error: `${envelopeValue(agent.name || agent.id)} is its project's orchestrator, and its chats run on its settings: those other than its inference ones are changed in the Agents page of Tars.` };
+    }
+    return null;
+  }
+  const caller = driver.agent;
+  const sameProject = caller.projectPath === agent.projectPath;
+  // Whether the caller has the orchestrator's powers (its project's orchestrator, or a chat's runner).
+  const callerHasPowers = hasOrchestratorPowers(caller);
+  const leads = callerHasPowers && sameProject;
+  if (rule === 'worktree') {
+    if (targetHasPowers) {
+      return { status: 403, code: 'orchestrator_settings', error: `${envelopeValue(agent.name || agent.id)} is its project's orchestrator: it is not moved onto a worktree over the API.` };
+    }
+    if (leads || grantFor(caller, agent.projectPath)) return null;
+    return {
+      status: 403, code: sameProject ? 'worker_may_not_update' : 'cross_project_not_granted',
+      error: sameProject
+        ? 'Moving an agent onto a worktree is its project\'s orchestrator\'s: ask yours (send_message to "orchestrator").'
+        : `${envelopeValue(agent.name || agent.id)} belongs to project ${agent.projectPath}: moving it onto a worktree takes the owner's grant from your project to that one (Settings, the allowlist across projects).`,
+    };
+  }
+  const other = fields.filter((f) => f !== 'worktree' && !(RETUNE_FIELDS as readonly string[]).includes(f));
+  // The owner's grant from the caller's project to the agent's gives it that project's orchestrator's powers here too.
+  const granted = !sameProject && !!grantFor(caller, agent.projectPath);
+  if (!callerHasPowers && !granted) {
+    return {
+      status: 403, code: 'worker_may_not_update',
+      error: `A worker changes another agent's inference settings only (${RETUNE_FIELDS.join(', ')}); ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} its orchestrator's and the user's to change. `
         + 'Ask your orchestrator for it (send_message to "orchestrator"), saying what to change and why.',
-      code: 'worker_may_not_update',
-    }, 403);
-    return false;
+    };
   }
-  if (driver.kind === 'agent' && driver.agent.projectPath !== agent.projectPath) {
-    sendJson({
-      error: `${envelopeValue(agent.name || agent.id)} belongs to project ${agent.projectPath}, and you are the orchestrator of ${driver.agent.projectPath}: `
-        + 'an orchestrator changes the agents of its own project only, and allowCrossProject does not change that here. list_agents shows yours.',
-      code: 'other_project',
-    }, 403);
-    return false;
+  if (!sameProject && !granted) {
+    return {
+      status: 403, code: 'other_project',
+      error: `${envelopeValue(agent.name || agent.id)} belongs to project ${agent.projectPath}, and you are the orchestrator of ${caller.projectPath}: `
+        + `across projects only the inference settings (${RETUNE_FIELDS.join(', ')}) change without the owner's grant from your project to that one, and ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} not among them.`,
+    };
   }
-  const withPowers = hasOrchestratorPowers(agent);
-  if (withPowers) {
-    sendJson({
+  if (targetHasPowers) {
+    return {
+      status: 403, code: 'orchestrator_settings',
       error: `${envelopeValue(agent.name || agent.id)} ${agent.kind === 'chat' ? 'runs a chat, on its orchestrator\'s settings' : 'is its project\'s orchestrator, and its chats run on its settings'}: `
-        + 'those are changed in the Agents page of Tars, not over the API.',
-      code: 'orchestrator_settings',
-    }, 403);
-    return false;
+        + `its ${other.join(', ')} ${other.length === 1 ? 'is' : 'are'} changed in the Agents page of Tars, not over the API; its inference settings change here.`,
+    };
   }
-  return true;
+  return null;
+}
+
+/** The settings a body names, `allowCrossProject` left out. */
+function namedFields(body: unknown): string[] {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+  return askedFields(Object.fromEntries(Object.entries(body as Record<string, unknown>).filter(([k]) => k !== 'allowCrossProject')));
+}
+
+function mayUpdate(req: RouteRequest, agent: AgentStatus, sendJson: SendJson): Driver | undefined {
+  const driver = resolveDriver(req, sendJson);
+  if (!driver) return undefined;
+  const refusal = updateRefusal(driver, agent, namedFields(req.body));
+  if (refusal) {
+    sendJson({ error: refusal.error, code: refusal.code }, refusal.status);
+    return undefined;
+  }
+  return driver;
+}
+
+/**
+ * The worktree an update names, as the folder it is: one of the agent's own project's worktrees, under its
+ * .worktrees/ (utils/worktree-path.ts, never relaxed), made before with worktree_new; or null for the project's own
+ * folder. Nothing is made here.
+ */
+async function worktreeNamed(agent: AgentStatus, asked: unknown): Promise<{ worktree: { worktreePath: string; branchName: string } | null } | { status: number; error: string }> {
+  if (asked === null) return { worktree: null };
+  if (typeof asked !== 'string' || !isValidBranchName(asked.trim())) {
+    return { status: 400, error: 'worktree is the branch of one of the agent\'s project\'s worktrees, as worktree_list names it, or null for the project\'s own folder.' };
+  }
+  const branch = asked.trim();
+  let found: { path: string; branch?: string } | undefined;
+  try {
+    found = (await listWorktrees(agent.projectPath)).find((w) => w.branch === branch);
+  } catch (err) {
+    return { status: 400, error: `The worktrees of ${agent.projectPath} could not be read: ${err instanceof Error ? err.message : String(err)}` };
+  }
+  let inside: string | null = null;
+  try {
+    inside = resolveWorktreePath(agent.projectPath, branch) ?? null;
+  } catch {
+    inside = null;
+  }
+  const real = (p: string) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+  if (!found || !inside || real(found.path) !== real(inside)) {
+    return { status: 400, error: `${agent.projectPath} has no worktree of branch ${JSON.stringify(branch)} under its .worktrees/: make it first with worktree_new (project ${JSON.stringify(agent.projectPath)}).` };
+  }
+  return { worktree: { worktreePath: path.resolve(inside), branchName: branch } };
+}
+
+/**
+ * What an agent's own worktree holds that no commit has: changed, staged or untracked files, as `git status` names
+ * them (ignored ones aside, which a removal keeps the worktree for anyway). None when it has no worktree, one another
+ * agent works in too (a removal keeps it), or one gone.
+ */
+async function uncommittedWork(agent: AgentStatus): Promise<string[]> {
+  if (!agent.worktreePath || !agent.branchName || !fs.existsSync(agent.worktreePath)) return [];
+  if (Array.from(agents.values()).some((a) => a.id !== agent.id && a.worktreePath === agent.worktreePath)) return [];
+  try {
+    return await worktreeWork(agent.worktreePath);
+  } catch (err) {
+    return [`its state could not be read (${err instanceof Error ? err.message : String(err)})`];
+  }
+}
+
+/**
+ * One agent's change through the engine (core/agent-retune.ts): its values checked as update_agent checks them, a
+ * worktree named looked up among its project's, then applied or queued, and the answer update_agent gives. `fromLog`:
+ * a revert's ask, its worktree given as the folder the log kept.
+ */
+async function retuneOne(
+  agent: AgentStatus, body: unknown, driver: Driver, opts: { batchId?: string; revertOf?: string; fromLog?: boolean; asked?: string[] }, ctx: RouteContext,
+): Promise<{ status: number; answer: Record<string, unknown> }> {
+  const raw = { ...((body ?? {}) as Record<string, unknown>) };
+  // What the caller named, as the log keeps it for a revert to be judged by (the Audit's M2 on #595).
+  const asked = opts.asked ?? namedFields(raw);
+  const worktreeAsked = raw.worktree;
+  delete raw.worktree;
+  let worktree: { worktreePath: string; branchName: string } | null | undefined;
+  if (worktreeAsked !== undefined) {
+    const branch = opts.fromLog && worktreeAsked && typeof worktreeAsked === 'object' ? (worktreeAsked as { branchName?: unknown }).branchName : worktreeAsked;
+    const named = await worktreeNamed(agent, branch);
+    if ('error' in named) return { status: named.status, answer: { error: named.error } };
+    worktree = named.worktree;
+  }
+  let update: Omit<AgentUpdate, 'id' | 'worktree'> = {};
+  if (namedFields(raw).length > 0) {
+    const checked = updateFrom(raw, agent, ctx);
+    if ('error' in checked) return { status: checked.status, answer: { error: checked.error } };
+    update = { ...checked.update };
+    delete (update as { worktree?: unknown }).worktree;
+  }
+  const binaryBefore = getProvider(agent.provider).binaryName;
+  const cliWasUp = cliAtWork(agent);
+  const ask: RetuneAsk = { ...update, ...(worktree !== undefined ? { worktree } : {}) };
+  const done = await retune(agent.id, ask, changeByOf(driver), { batchId: opts.batchId, revertOf: opts.revertOf, asked });
+  if (done.state === 'refused') return { status: done.status, answer: { error: done.error, ...(done.code ? { code: done.code } : {}) } };
+  // Its answers are not read here: update_agent answers with the record, never with what the agent said.
+  const shown: Record<string, unknown> = { ...projectAgent(agents.get(agent.id) ?? agent) };
+  delete shown.lastCleanOutput;
+  const base = { agent: shown, state: done.state, changeId: done.change.id, ...(done.change.batchId ? { batchId: done.change.batchId } : {}) };
+  if (done.state === 'queued' && !done.updated) {
+    return {
+      status: 200,
+      answer: {
+        ...base, changed: [], waitingFor: done.waitingFor, applies: done.waitingFor === 'its CLI ends' ? 'next-start' : 'when-free',
+        text: `Queued, change ${done.change.id}: nothing is written yet, and it is applied once ${WAITING_TEXT[done.waitingFor ?? ''] ?? done.waitingFor}. A running turn is never cut. agent_changes reads when it took effect; revert_agent_change with this id takes it back while it waits.`,
+      },
+    };
+  }
+  const result = done.updated!;
+  const newCli = result.changed.includes('provider') || result.changed.includes('cliPath') || result.changed.includes('worktreePath');
+  // The engine marked a new binary's next start as a new conversation (core/agent-retune.ts).
+  const newBinary = getProvider(result.agent.provider).binaryName !== binaryBefore;
+  const when = whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart });
+  const head = done.state === 'applied' ? `Applied at ${done.change.effectiveAt}, change ${done.change.id}.` : `Written, change ${done.change.id}, and taken at its next start.`;
+  return {
+    status: 200,
+    answer: {
+      ...base, changed: result.changed, ...(done.change.effectiveAt ? { effectiveAt: done.change.effectiveAt } : {}),
+      ...(done.waitingFor ? { waitingFor: done.waitingFor } : {}), ...when, text: `${head} ${when.text}`,
+    },
+  };
 }
 
 /**
@@ -2083,7 +2300,8 @@ function readsAnswersOf(agent: AgentStatus, req: RouteRequest, asker?: string | 
   if (!callerId) return false;
   if (callerId === agent.id || callerId === asker) return true;
   const caller = agents.get(callerId);
-  return !!caller && hasOrchestratorPowers(caller) && caller.projectPath === agent.projectPath;
+  // Its project's orchestrator, or a caller the owner's grant gives that orchestrator's powers (2.0.7).
+  return !!caller && ((hasOrchestratorPowers(caller) && caller.projectPath === agent.projectPath) || !!grantedLead(req, agent));
 }
 
 /**
@@ -2101,8 +2319,41 @@ function answersFor(agent: AgentStatus, req: RouteRequest):
   return { reads: false, withheld: { ...(last ? { taskId: last.taskId } : {}), reason: ANSWERS_ARE } };
 }
 
+/**
+ * Tars's note to the orchestrator of `agent`'s project (2.0.7, the owner's word through Tars-Orchestrator): when an
+ * agent of another project hands it work, starts, stops or retunes one of its agents, so that it stays informed. A
+ * note in its session, typed once its turn is over; with no session open it is not typed, and the change log and the
+ * task ledger keep what happened.
+ */
+function noteToLead(agent: AgentStatus, text: string, ctx: RouteContext): void {
+  const lead = Array.from(agents.values()).find((a) => a.role === 'orchestrator' && a.kind !== 'chat' && a.projectPath === agent.projectPath);
+  if (!lead) return;
+  performDispatch(lead, {
+    message: noteFrom('Tars', text, 'the app you run in'), from: 'Tars', sender: { kind: 'tars' }, untilRest: true, noteOnly: true,
+  }, ctx, () => {}).catch((err) => console.warn(`[cross-project] the note to ${lead.name || lead.id} was not typed:`, err));
+}
+
+/** What an agent of another project did to one of this project's agents, in Tars's note to its orchestrator. */
+function tellOutside(agent: AgentStatus, req: RouteRequest, what: string, ctx: RouteContext, detail?: string): void {
+  const caller = callerAgentOf(req);
+  if (!caller || caller.projectPath === agent.projectPath) return;
+  // The orchestrator itself gets what was sent to it: no note about it besides (the Audit's I2 on #595).
+  if (isProjectLead(agent)) return;
+  const how = grantFor(caller, agent.projectPath) ? "through the owner's allowlist" : 'with allowCrossProject';
+  const line = detail ? `: ${detail.split('\n')[0].slice(0, 120)}` : '';
+  noteToLead(agent, `${envelopeValue(caller.name || caller.id)} (${caller.id}), of project ${caller.projectPath}, ${what} ${envelopeValue(agent.name || agent.id)} (${agent.id}) ${how}${line}.`, ctx);
+}
+
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   replayContext = ctx;
+  setRetuneDeps({
+    restartRunnersOf,
+    tell: (target, change) => {
+      if (change.by.kind !== 'agent' || change.by.projectPath === target.projectPath) return;
+      const values = change.fields.map((f) => `${f} ${JSON.stringify(change.before[f])} to ${JSON.stringify(change.after[f])}`).join(', ');
+      noteToLead(target, `${envelopeValue(change.by.name)} (${change.by.id}), of project ${change.by.projectPath}, changed ${envelopeValue(target.name || target.id)} (${target.id}): ${values}, ${change.state === 'queued' ? `queued until ${WAITING_TEXT[change.waitingFor ?? ''] ?? change.waitingFor}` : 'applied'} (change ${change.id}).`, ctx);
+    },
+  });
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
     const agent = visibleAgent(req);
@@ -2194,15 +2445,31 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   app_.get('/api/agents', async (req, sendJson) => {
     const caller = callerProject(req);
     const showAll = req.url.searchParams.get('all') === 'true';
+    // One project's agents, by its path (2.0.7: list_agents with project), whoever asks.
+    const projectAsked = req.url.searchParams.get('project');
     // The team: a chat's runner is a conversation with the orchestrator, listed
     // only as the asker of the work it handed out (ORCHESTRATOR-PER-CHAT.md, 4.2).
     let agentValues = Array.from(agents.values()).filter(a => a.kind !== 'chat');
-    if (caller && !showAll) {
+    if (projectAsked) {
+      agentValues = agentValues.filter(a => path.resolve(a.projectPath) === path.resolve(projectAsked));
+    } else if (caller && !showAll) {
       agentValues = agentValues.filter(a => a.projectPath === caller);
     }
-    // Another project's agents, with `all`: who they are and nothing more, no task, figure or asker (the Audit's H1 on
-    // #546, the orchestrator's decision). A caller with no project (the owner's own token) reads everything.
-    const elsewhere = (a: AgentStatus) => !!caller && a.projectPath !== caller;
+    // Another project's agents: who they are, their status and their inference settings (harness, model, effort,
+    // endpoint, traces), which any agent may retune (2.0.7), and nothing of their tasks, figures or askers (the Audit's
+    // H1 on #546, the orchestrator's decision). Through the owner's grant, the whole view, as that project's
+    // orchestrator has it. A caller with no project (the owner's own token) reads everything.
+    const me = callerAgentOf(req);
+    const elsewhere = (a: AgentStatus) => !!caller && a.projectPath !== caller && !(me && grantFor(me, a.projectPath));
+    const inference = (a: AgentStatus) => {
+      const extra = a as AgentStatus & { endpointId?: string; traces?: boolean };
+      return {
+        provider: a.provider || 'claude', model: a.model ?? null, effort: a.effort ?? null,
+        ...(a.localModel ? { localModel: a.localModel } : {}),
+        ...(extra.endpointId !== undefined ? { endpointId: extra.endpointId } : {}),
+        ...(extra.traces !== undefined ? { traces: extra.traces } : {}),
+      };
+    };
     const askerOf = (a: AgentStatus) => {
       const asker = a.requestedBy ? agents.get(a.requestedBy.agentId) : undefined;
       return asker ? { id: asker.id, name: asker.name || asker.id, ...(asker.kind === 'chat' ? { chat: true } : {}) } : undefined;
@@ -2210,12 +2477,13 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // Each agent's memory and since when it is in its status (lot 3 item D): null when it cannot be read.
     const resources = await agentResources().catch(() => new Map());
     const agentList = agentValues.map(withSessionTruth).map(a => (elsewhere(a) ? {
-      id: a.id, name: a.name, status: a.status, projectPath: a.projectPath, role: a.role,
+      id: a.id, name: a.name, status: a.status, projectPath: a.projectPath, role: a.role, ...inference(a),
     } : {
       id: a.id,
       name: a.name,
       status: a.status,
       projectPath: a.projectPath,
+      ...inference(a),
       secondaryProjectPath: a.secondaryProjectPath,
       skills: a.skills,
       currentTask: a.currentTask,
@@ -2238,7 +2506,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // What its ended session left running (#523's records): how many processes and containers, 0 when none.
       outlived: (a.leftRunning?.pids.length ?? 0) + (a.leftRunning?.containers.length ?? 0),
     }));
-    sendJson({ agents: agentList, scopedToProject: caller && !showAll ? caller : undefined });
+    sendJson({ agents: agentList, scopedToProject: projectAsked ? path.resolve(projectAsked) : caller && !showAll ? caller : undefined });
   });
 
   // GET /api/agents/:id
@@ -2396,14 +2664,16 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   });
 
   // POST /api/agents
-  app_.post('/api/agents', (req, sendJson) => {
+  app_.post('/api/agents', async (req, sendJson) => {
     // Adding to the fleet is driving it: a caller that is nobody enrolled an
     // agent in any project it named, and that agent is then started, given
     // tasks and billed. Only the MCP calls this route, always as an agent.
     const driver = resolveDriver(req, sendJson);
     if (!driver) return;
 
-    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath, provider, model, effort, cliPath } = req.body as {
+    const { projectPath, name, skills = [], character, permissionMode, secondaryProjectPath, provider, model, effort, cliPath, worktree: worktreeAsked } = req.body as {
+      /** 2.0.7: a worktree of its own, made in its project on the branch named, its push off on request. */
+      worktree?: { branch?: unknown; noPush?: unknown };
       projectPath: string;
       name?: string;
       skills?: string[];
@@ -2430,6 +2700,24 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // the audit of lot 4; the code was brought to the document, since
     // creating in the wrong project is the mistake this guard exists for.
     if (!mayActIn(req, driver, projectPath, `a new agent would belong to project ${projectPath}`, sendJson)) return;
+    // The endpoint and the traces come with the endpoints' own fields (feat/traces-native): refused until then rather
+    // than dropped, so that an agent is never made without what its call asked.
+    for (const later of ['endpointId', 'traces']) {
+      if ((req.body as Record<string, unknown>)[later] !== undefined) {
+        sendJson({ error: `${later} is not taken yet: it comes with the inference endpoints. Nothing was created.`, code: 'not_taken_yet' }, 400);
+        return;
+      }
+    }
+    let worktreeBranch: string | undefined;
+    if (worktreeAsked !== undefined) {
+      const branch = worktreeAsked && typeof worktreeAsked === 'object' ? worktreeAsked.branch : undefined;
+      if (typeof branch !== 'string' || !isValidBranchName(branch.trim())
+        || (worktreeAsked.noPush !== undefined && typeof worktreeAsked.noPush !== 'boolean')) {
+        sendJson({ error: 'worktree is { branch, noPush? }: a branch name of letters, digits, . _ - and /, and true to turn its push off.' }, 400);
+        return;
+      }
+      worktreeBranch = branch.trim();
+    }
     // The folder it is handed besides its project: never ~/.tars-private (the Audit's L1 on #480), as update_agent.
     if (secondaryProjectPath !== undefined && secondaryProjectPath !== null && secondaryProjectPath !== '') {
       const handed = typeof secondaryProjectPath === 'string'
@@ -2513,6 +2801,19 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       return;
     }
     const resolvedName = name || `Agent ${id.slice(0, 6)}`;
+    // Its worktree, last of the checks and first of what is made (2.0.7): a branch of its own, in its project's
+    // .worktrees/, its push off on request, the project's .mcp.json carried in when git does not. A part that fails
+    // takes back what was made before it: nothing is left half-made.
+    let made: ReadyWorktree | undefined;
+    const protectedPaths = Array.from(agents.values()).flatMap((a) => [a.worktreePath, a.ptyCwd]).filter((p): p is string => !!p);
+    if (worktreeBranch) {
+      const ready = await readyWorktree(projectPath, worktreeBranch, { noPush: (worktreeAsked as { noPush?: boolean }).noPush === true, protectedPaths });
+      if ('error' in ready) {
+        sendJson({ error: `Not created: ${ready.error}`, ...(ready.code ? { code: ready.code } : {}) }, ready.status);
+        return;
+      }
+      made = ready;
+    }
     const agent: AgentStatus = {
       id,
       status: 'idle',
@@ -2528,12 +2829,21 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       model,
       effort,
       cliPath,
+      ...(made ? { worktreePath: made.path, branchName: made.branch } : {}),
     };
     // The role asked for, never the name; an orchestrator takes the role from
     // its project's current one, whoever creates it (core/agent-role.ts).
     const demoted = assignRole(agent, role, agents.values());
     agents.set(id, agent);
-    saveAgents();
+    try {
+      saveAgents();
+    } catch (err) {
+      agents.delete(id);
+      const back = made ? await takeBackWorktree(projectPath, made, protectedPaths) : true;
+      sendJson({ error: `Not created: the agents could not be saved (${err instanceof Error ? err.message : String(err)}); ${back ? 'its worktree was taken back' : `its worktree was kept at ${made?.path}`}.` }, 500);
+      return;
+    }
+    tellOutside(agent, req, 'created', ctx, made ? `on branch ${made.branch}` : undefined);
     // An orchestrator made here: its project's Main follows it (core/chat-identity.ts).
     orchestratorMoved();
     for (const other of demoted) restartForSettings(other.id, ['orchestrator']);
@@ -2541,42 +2851,150 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     sendJson({ agent });
   });
 
-  // POST /api/agents/:id/update: an agent's settings, changed by its
-  // project's orchestrator (update_agent) through the window's own path
-  // (core/agent-update.ts), never ending a CLI at work: a change that needs a
-  // new terminal waits for the agent to be stopped (cli_running). The answer
-  // says when the change applies and whether the conversation is kept.
+  // POST /api/agents/:id/update: an agent's settings, changed over the API (update_agent), applied at once when it is
+  // free, queued behind its turn otherwise, and logged (core/agent-retune.ts). It no longer takes the agent's lock: a
+  // start under way reads busy (`launch`, busyReason), so a change waits for it rather than for the lock. Who may, by what the call names:
+  // mayUpdate. The answer says applied or queued, the change's id, and when it applies and whether the conversation
+  // is kept.
   app_.post(/^\/api\/agents\/([^/]+)\/update$/, async (req, sendJson) => {
     const agent = agents.get(req.params.id);
     if (!agent) {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
-    if (!mayUpdate(req, agent, sendJson)) return;
-    // After a start this agent is already in, or before the next: never in the middle of one.
-    await withAgentLock(agent.id, async () => {
-      const asked = updateFrom(req.body, agent, ctx);
-      if ('error' in asked) {
-        sendJson({ error: asked.error }, asked.status);
+    const driver = mayUpdate(req, agent, sendJson);
+    if (!driver) return;
+    const one = await retuneOne(agent, req.body, driver, {}, ctx);
+    sendJson(one.answer, one.status);
+  });
+
+  // POST /api/agents/update, `{ ids } | { project }` and the settings: one call over several agents (update_agent
+  // with ids or project), each judged, applied or queued on its own, under one batch id that a revert takes.
+  app_.post('/api/agents/update', async (req, sendJson) => {
+    const driver = resolveDriver(req, sendJson);
+    if (!driver) return;
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const { ids, project, ...settings } = body;
+    if ((ids === undefined) === (project === undefined)) {
+      sendJson({ error: 'Name the agents with ids (a list of agent ids) or project (an absolute project path), not both.', code: 'invalid_batch' }, 400);
+      return;
+    }
+    let targets: AgentStatus[];
+    if (ids !== undefined) {
+      if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100 || ids.some((id) => typeof id !== 'string')) {
+        sendJson({ error: 'ids is a list of 1 to 100 agent ids.', code: 'invalid_batch' }, 400);
         return;
       }
-      const cliWasUp = cliAtWork(agent);
-      const binaryBefore = getProvider(agent.provider).binaryName;
-      const result = await updateAgent({ id: agent.id, ...asked.update }, { endsNoCli: true });
-      if (!result.success) {
-        sendJson({ error: result.error, ...(result.code ? { code: result.code } : {}) }, result.code === 'cli_running' ? 409 : 400);
+      targets = [...new Set(ids as string[])].map((id) => agents.get(id) ?? ({ id } as AgentStatus));
+    } else {
+      if (typeof project !== 'string' || !path.isAbsolute(project)) {
+        sendJson({ error: 'project is an absolute project path.', code: 'invalid_batch' }, 400);
         return;
       }
-      const newCli = result.changed.includes('provider') || result.changed.includes('cliPath');
-      const newBinary = getProvider(result.agent.provider).binaryName !== binaryBefore;
-      if (newBinary) newConversationOnNextStart(agent.id);
-      const { lastCleanOutput, ...updated } = projectAgent(result.agent);
-      sendJson({
-        agent: { ...updated, ...(readsAnswersOf(result.agent, req, result.agent.requestedBy?.agentId) && lastCleanOutput !== undefined ? { lastCleanOutput } : {}) },
-        changed: result.changed,
-        ...whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart }),
-      });
+      targets = Array.from(agents.values()).filter((a) => a.kind !== 'chat' && path.resolve(a.projectPath) === path.resolve(project));
+      if (targets.length === 0) {
+        sendJson({ error: `No agent belongs to project ${project}.`, code: 'invalid_batch' }, 404);
+        return;
+      }
+    }
+    const batchId = `b-${randomUUID().replace(/-/g, '').slice(0, 8)}`;
+    const results: Array<Record<string, unknown>> = [];
+    for (const target of targets) {
+      if (!agents.has(target.id)) {
+        results.push({ id: target.id, state: 'refused', error: 'Agent not found' });
+        continue;
+      }
+      const refusal = updateRefusal(driver, target, namedFields(settings));
+      if (refusal) {
+        results.push({ id: target.id, name: target.name || target.id, state: 'refused', error: refusal.error, code: refusal.code });
+        continue;
+      }
+      const one = await retuneOne(target, settings, driver, { batchId }, ctx);
+      const a = one.answer as Record<string, unknown>;
+      results.push(one.status >= 400
+        ? { id: target.id, name: target.name || target.id, state: 'refused', error: a.error, ...(a.code ? { code: a.code } : {}) }
+        : { id: target.id, name: target.name || target.id, state: a.state, changeId: a.changeId, ...(a.effectiveAt ? { effectiveAt: a.effectiveAt } : {}), ...(a.waitingFor ? { waitingFor: a.waitingFor } : {}), text: a.text });
+    }
+    sendJson({ batchId, results });
+  });
+
+  // GET /api/agent-changes?agentId=&project=&batchId=&limit=: the change log (services/agent-changes.ts), newest
+  // first. Settings and references only: no key, no task, no output. The caller's own project's changes whole, and
+  // those of a project the owner's grant opens to it; another project's by their inference settings only, as
+  // list_agents shows that project (the Audit's L3 on #595). A caller with no project (the owner's own token) reads all.
+  app_.get('/api/agent-changes', (req, sendJson) => {
+    const q = req.url.searchParams;
+    const limit = q.get('limit') ? Number(q.get('limit')) : undefined;
+    const all = listChanges({ agentId: q.get('agentId') || undefined, projectPath: q.get('project') || undefined, batchId: q.get('batchId') || undefined, limit });
+    const caller = callerProject(req);
+    const me = callerAgentOf(req);
+    const open = (projectPath: string) => !caller || projectPath === caller || (!!me && !!grantFor(me, projectPath));
+    const inference = (values: Record<string, unknown>) => Object.fromEntries(Object.entries(values).filter(([f]) => (RETUNE_FIELDS as readonly string[]).includes(f)));
+    const changes = all.flatMap((c) => {
+      if (open(c.projectPath)) return [c];
+      const fields = c.fields.filter((f) => (RETUNE_FIELDS as readonly string[]).includes(f));
+      if (fields.length === 0) return [];
+      return [{ ...c, fields, ...(c.asked ? { asked: c.asked.filter((f) => fields.includes(f)) } : {}), before: inference(c.before), after: inference(c.after) }];
     });
+    sendJson({ changes });
+  });
+
+  // POST /api/agent-changes/revert, `{ changeId } | { batchId } | { agentId }`: a change, a batch, or an agent's last
+  // change set back from the log. A change still queued is cancelled; an applied one asks its `before` back, judged
+  // as a change by the same caller would be, for the fields still at its `after` (a field another change moved since
+  // is left alone, and named).
+  app_.post('/api/agent-changes/revert', async (req, sendJson) => {
+    const driver = resolveDriver(req, sendJson);
+    if (!driver) return;
+    const sel = (req.body ?? {}) as { changeId?: unknown; batchId?: unknown; agentId?: unknown };
+    const named = [sel.changeId, sel.batchId, sel.agentId].filter((v) => v !== undefined);
+    if (named.length !== 1 || typeof named[0] !== 'string') {
+      sendJson({ error: 'Name one of changeId, batchId or agentId.', code: 'invalid_revert' }, 400);
+      return;
+    }
+    const found = changesToRevert({ changeId: sel.changeId as string | undefined, batchId: sel.batchId as string | undefined, agentId: sel.agentId as string | undefined });
+    if (found.length === 0) {
+      sendJson({ error: 'No such change to revert.', code: 'unknown_change' }, 404);
+      return;
+    }
+    const revertBatch = found.length > 1 ? `b-${randomUUID().replace(/-/g, '').slice(0, 8)}` : undefined;
+    const results: Array<Record<string, unknown>> = [];
+    for (const change of found) {
+      const agent = agents.get(change.agentId);
+      const plan = revertAskOf(change);
+      if ('nothing' in plan) {
+        results.push({ changeId: change.id, agentId: change.agentId, state: 'nothing', why: plan.nothing });
+        continue;
+      }
+      if (!agent) {
+        results.push({ changeId: change.id, agentId: change.agentId, state: 'nothing', why: 'the agent was removed' });
+        continue;
+      }
+      // Judged as the change was: by what its caller named, not by the model and CLI path a provider change cleared.
+      const named = change.asked ?? change.fields;
+      const refusal = updateRefusal(driver, agent, named);
+      if (refusal) {
+        results.push({ changeId: change.id, agentId: agent.id, state: 'refused', error: refusal.error, code: refusal.code });
+        continue;
+      }
+      if ('cancel' in plan) {
+        cancelQueued(change);
+        results.push({ changeId: change.id, agentId: agent.id, state: 'cancelled' });
+        continue;
+      }
+      if (Object.keys(plan.ask).length === 0) {
+        results.push({ changeId: change.id, agentId: agent.id, state: 'nothing', why: `${plan.movedSince.join(', ')} moved since, by another change` });
+        continue;
+      }
+      const one = await retuneOne(agent, plan.ask, driver, { revertOf: change.id, ...(revertBatch ? { batchId: revertBatch } : {}), fromLog: true, asked: named }, ctx);
+      const a = one.answer as Record<string, unknown>;
+      results.push({
+        changeId: change.id, agentId: agent.id,
+        ...(one.status >= 400 ? { state: 'refused', error: a.error } : { state: a.state, revertChangeId: a.changeId }),
+        ...(plan.movedSince.length ? { leftAlone: plan.movedSince } : {}),
+      });
+    }
+    sendJson({ ...(revertBatch ? { batchId: revertBatch } : {}), results });
   });
 
   // POST /api/agents/:id/checkpoint, `{ line }`: the line an agent writes
@@ -2615,6 +3033,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     }
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayHandWork(req, agent, sendJson)) return;
+    tellOutside(agent, req, 'started', ctx, (req.body as { prompt?: string } | undefined)?.prompt);
 
     const since = new Date().toISOString();
     const { prompt, model, permissionMode: bodyPermissionMode, printMode } = req.body as {
@@ -2670,7 +3089,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
-    if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    // Across projects without the owner's grant (mayActIn): a note, one asked for or a worker's message that goes in as
+    // one (noteSender), to any agent; and to that project's orchestrator anything but a restart, which is a stop.
+    const body = (req.body ?? {}) as { mode?: unknown; intent?: unknown };
+    const noteAsked = body.intent !== 'task' && (['note', 'note-now'].includes(String(body.mode))
+      || (!!noteSender(req, agent) && !['steer', 'restart'].includes(String(body.mode))));
+    if (!assertMayDriveAgent(req, agent, sendJson, { noteOnly: noteAsked, toLead: String(body.mode) !== 'restart' })) return;
 
     const { message: asSent, model, permissionMode, mode: asked, reason, intent } = req.body as {
       message: string; model?: string; permissionMode?: PermissionLevel; mode?: unknown; reason?: unknown; intent?: unknown;
@@ -2701,6 +3125,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     // sends another worker is a note, labelled so and typed in once that
     // agent's turn is over. Its report to whoever leads it is not.
     if (askedMode === 'restart' ? !mayStop(req, agent, sendJson) : (intent === 'task' || askedMode === 'steer') && !mayHandWork(req, agent, sendJson)) return;
+    if (!asNote) tellOutside(agent, req, askedMode === 'restart' ? 'restarted' : askedMode === 'steer' ? 'steered' : intent === 'task' ? 'delegated a task to' : 'sent a message to', ctx, asSent);
     // A note asked for, by whoever may drive the agent, is labelled with who
     // sends it; a worker's note waits for the turn's end whatever it asked.
     const workerNote = noteSender(req, agent);
@@ -2783,8 +3208,9 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
-    if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    if (!assertMayDriveAgent(req, agent, sendJson, { toLead: true })) return;
     if (!mayHandWork(req, agent, sendJson)) return;
+    tellOutside(agent, req, 'delegated a task to', ctx, (req.body as { task?: string } | undefined)?.task);
 
     const { task, model, answer, gate } = req.body as { task?: string; model?: unknown; answer?: unknown; gate?: unknown };
     if (!task?.trim()) {
@@ -2979,6 +3405,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     if (!driver) return;
     if (!mayActIn(req, driver, agent.projectPath, `agent "${agent.name || agent.id}" belongs to project ${agent.projectPath}`, sendJson)) return;
     if (!mayStop(req, agent, sendJson)) return;
+    tellOutside(agent, req, 'stopped', ctx, (req.body as { reason?: string } | undefined)?.reason);
     const reason = stopReasonOf((req.body as { reason?: unknown } | undefined)?.reason);
     if (!reason) {
       sendJson({ error: 'A reason is required: say in one line why this agent is stopped. It is kept with the agent and shown in the window.' }, 400);
@@ -3002,7 +3429,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
-    if (!assertMayDriveAgent(req, agent, sendJson)) return;
+    if (!assertMayDriveAgent(req, agent, sendJson, { toLead: true })) return;
+    tellOutside(agent, req, 'sent a message to', ctx, (req.body as { message?: string } | undefined)?.message);
 
     const { message: asSent, mode } = req.body as { message: string; mode?: unknown };
     if (!asSent) {
@@ -3126,6 +3554,17 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayStop(req, agent, sendJson)) return;
+    // Never a worktree with uncommitted work (2.0.7): over the API the removal is refused, saying which files, and
+    // nothing is removed. The window's removal saves such work on wip/<name> first, the owner's choice of 05/10.
+    const work = await uncommittedWork(agent);
+    if (work.length) {
+      sendJson({
+        error: `${envelopeValue(agent.name || agent.id)} was not removed: its worktree ${agent.worktreePath} holds uncommitted work (${work.slice(0, 10).join(', ')}${work.length > 10 ? ` and ${work.length - 10} more` : ''}). Commit it, or move it out, then remove the agent. Nothing was removed.`,
+        code: 'worktree_has_work', files: work.slice(0, 50),
+      }, 409);
+      return;
+    }
+    tellOutside(agent, req, 'removed', ctx);
     // The window's removal, the one path (core/agent-remove.ts): its runs and questions ended, its terminal's whole
     // tree ended as a stop ends it, its uncommitted work saved, its worktree removed or kept with why, its requesters
     // told (the Audit's L4 on #523: this route sent the hangup alone, and a deaf CLI outlived the agent).

@@ -20,7 +20,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. the orchestrator's list_agents gives w's memory and status since, and get_agent its processes as their program,
  *    pid, memory and CPU, no arguments;
  * 4. (the Audit's H1 on #546) another project's agent c: get_agent refuses it as unknown (404, `Agent not found`), and
- *    list_agents with all names it with nothing more (no task, no figure); its output and its wait are refused alike.
+ *    list_agents with all names it with nothing more (no task, no figure) than its inference settings, which any agent
+ *    may retune since 2.0.7 (provider, model, effort); its output and its wait are refused alike.
  * Red on main dc623b594: there is no resources read.
  * The artefact: values.json (the window's reads before and after the measure, the orchestrator's answers).
  */
@@ -134,7 +135,7 @@ for (const newInterface of [false, true]) {
       expect(asked.other).toEqual({ error: 'Agent not found' });
       expect(asked.otherOutput).toEqual({ error: 'Agent not found' });
       expect(asked.otherWait).toEqual({ error: 'Agent not found' });
-      expect(asked.all.agents.find(a => a.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'idle', projectPath: cove, role: 'worker' });
+      expect(asked.all.agents.find(a => a.id === 'c')).toEqual({ id: 'c', name: 'Cove Worker', status: 'idle', projectPath: cove, role: 'worker', provider: 'claude', model: null, effort: null });
       expect(JSON.stringify(asked)).not.toContain('rotate the cove');
     } finally {
       // The child, by its own pid.

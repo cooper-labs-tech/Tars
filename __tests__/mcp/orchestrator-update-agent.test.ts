@@ -17,10 +17,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *    so a field nobody named would be cleared.
  * 4. null, which clears the model, the effort, the CLI path or the secondary
  *    project path, does not reach the API.
- * 5. Its description does not say who may (the project's orchestrator, never a
+ * 5. Its description does not say who may (2.0.7: the inference settings any
+ *    agent of any project, the rest the project's orchestrator only, never a
  *    worker or another project), that the role stays the user's, that a turn
- *    is never cut, that a change of CLI waits for the agent to be stopped and
- *    starts a new conversation, and that the answer says when it applies.
+ *    is never cut, that a change of CLI is queued behind a turn and starts a
+ *    new conversation, that the answer says applied or queued, and how several
+ *    agents change at once and a change is taken back.
  * 6. An effort or a permission mode outside its values reaches the API.
  * 7. What the orchestrator reads leaves out the route's sentence: when the
  *    change applies and whether the conversation is kept.
@@ -132,10 +134,12 @@ describe('update_agent', () => {
     expect(description).toMatch(/Agents page/);
     expect(description).toMatch(/turn/);
     expect(description).toMatch(/never cut/);
-    expect(description).toMatch(/stop_agent/);
-    expect(description).toMatch(/cli_running/);
+    expect(description).toMatch(/any agent changes on any agent, of any project/);
+    expect(description).toMatch(/queued/);
     expect(description).toMatch(/new conversation/);
-    expect(description).toMatch(/answer says/);
+    expect(description).toMatch(/answer says applied or queued/);
+    expect(description).toMatch(/revert_agent_change/);
+    expect(description).toMatch(/ids \(a list\) or project/);
     expect(description).not.toMatch(/[–—]/);
   });
 
