@@ -127,6 +127,7 @@ import { resetLaunches } from '../../../electron/core/agent-launch';
 import { resetAgentWatch } from '../../../electron/services/agent-watch';
 import { registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import { agentGuideSection } from '../../../electron/services/agent-guide';
+import { readCodexFlags } from '../../../electron/providers/codex-cli';
 import { projectFilesDir } from '../../../electron/utils/project-files';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
@@ -139,6 +140,12 @@ beforeAll(() => {
   if (process.platform === 'win32') Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'linux' });
 });
 afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
+
+// A codex launch first reads the installed codex's flags, a real process (CodexProvider.prepareLaunch, in every mode
+// since --no-daemon): read here once, before beforeEach fakes the clock, as a Tars run has by its second codex launch.
+// Under the fake clock that read ends after `settled` has run the clock past the terminal's half second, and the launch
+// then waits for good. Where no codex is installed nothing is kept, and the launch's own read fails before any spawn.
+beforeAll(async () => { await readCodexFlags('codex'); });
 
 const project = path.join(tmpHome, 'project');
 const SECTION = '## How Tars works';
