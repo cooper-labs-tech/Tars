@@ -187,6 +187,8 @@ export async function run() {
       else if (a === '--dangerously-skip-permissions') opts.bypass = true;
       else if (a === '--permission-mode') { opts.bypass = value(i) === 'bypassPermissions'; i++; }
       else if (a === '--resume' || a === '-r') { opts.resume = value(i); i++; }
+      // As Claude Code does: a resumed conversation forked goes on in a session of its own, under a new id.
+      else if (a === '--fork-session') opts.fork = true;
       else if (a === '--session-id') { opts.resume = opts.resume ?? null; opts.sessionId = value(i); i++; }
       else if (a === '--model') { opts.model = value(i); i++; }
       else if (a === '-p' || a === '--print') opts.oneShot = true;
@@ -381,7 +383,7 @@ export async function run() {
 
   // ---- Its session: id, transcript, hooks.
   const cwd = process.cwd();
-  const sid = opts.resume || opts.sessionId || crypto.randomUUID();
+  const sid = (opts.fork ? null : opts.resume) || opts.sessionId || crypto.randomUUID();
   const transcript = kind === 'claude' ? path.join(claudeDir, 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${sid}.jsonl`)
     : kind === 'qwen-code' ? path.join(HOME, '.qwen', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'), 'chats', `${sid}.jsonl`)
       : kind === 'gemini' ? path.join(HOME, '.gemini', 'tmp', crypto.createHash('sha256').update(cwd).digest('hex'), 'chats', `session-${sid}.json`)
