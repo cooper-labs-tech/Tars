@@ -212,9 +212,9 @@ async function startedFromWindow(prompt: string, fields: Partial<AgentStatus> = 
   const command = commandOf(typedInto(terminal));
   // node-pty names the CLI once it runs in the terminal's foreground.
   terminal.process = agent.provider ?? 'opencode';
-  // pi takes keys once it has drawn its footer, which Tars waits for before it types (PiProvider.upOnScreen): drawn here
-  // as pi draws it, under its field.
-  if (agent.provider === 'pi') for (const [listener] of terminal.onData.mock.calls) (listener as (d: string) => void)('\r\n────────\r\n\r\n────────\r\n0.0%/128k (auto)      stand-in-coder\r\n');
+  // pi takes keys once it has drawn its banner and its footer, which Tars waits for before it types
+  // (PiProvider.upOnScreen): drawn here as pi draws them, its field between.
+  if (agent.provider === 'pi') for (const [listener] of terminal.onData.mock.calls) (listener as (d: string) => void)(' ▀▀█ v1.5.2\r\n █▀ █ escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o more\r\n────────\r\n\r\n────────\r\n0.0%/128k (auto)      stand-in-coder\r\n');
   terminal.write.mockClear();
   return { agent, terminal, command };
 }

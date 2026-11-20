@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 /**
  * A CLI that sends no SessionStart and takes keys only once its TUI has drawn its field. Kimi Code 2.6.3 writes nothing
@@ -25,6 +28,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  *    then takes text but answers Enter with "Startup is still in progress", keeping the task unsent (its
  *    interactive-mode.js, the conformance run's second try). Up only once every download it announced
  *    (`<tool> not found. Downloading...`) has its outcome (`<tool> installed to ...`, or `Failed to download <tool>`).
+ * 8. Pi's first frame holds its footer alone: its banner and its download line come together in the next, 20 to 70 ms
+ *    later (measured three times on fresh starts, 20/11). Read on that first frame, the footer made pi up, the task
+ *    went in, and its Enter met the download (the conformance run's fourth try). Up only once the banner's hint line
+ *    is drawn too (`/ commands` and `! bash`, whatever keys the user bound), or at once when the user's pi starts
+ *    quietly (`quietStartup: true` in its settings.json), which draws no banner at all.
  */
 
 const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined, history: undefined as string[] | undefined }));
@@ -115,7 +123,7 @@ describe('a session up on its screen', () => {
     const p = new PiProvider();
     expect(p.upOnScreen(PI_AT_REST)).toBe(true);
     for (const footer of ['12.3%/200k', '?/200k (auto)', '0.0%/512', '98.1%/1.0M', '7.0%/12M (auto)       claude-x  $0.012']) {
-      expect(p.upOnScreen(['', footer]), footer).toBe(true);
+      expect(p.upOnScreen([...PI_BANNER, '', footer]), footer).toBe(true);
     }
     expect(p.upOnScreen(PI_TYPED_AHEAD)).toBe(false);
     expect(p.upOnScreen(PI_BANNER)).toBe(false);
@@ -133,6 +141,24 @@ describe('a session up on its screen', () => {
     expect(p.upOnScreen([...PI_BANNER, fd, ' fd installed to /h/.pi/agent/bin/fd', ...footer])).toBe(true);
     expect(p.upOnScreen([...PI_BANNER, fd, rg, ' fd installed to /h/.pi/agent/bin/fd', ' Warning: Failed to download ripgrep: fetch failed', ...footer])).toBe(true);
     expect(p.upOnScreen([...PI_BANNER, ' Warning: fd not found. Offline mode enabled, skipping download.', ...footer])).toBe(true);
+  });
+
+  it("8: pi's first frame, its footer alone, is not up; the frame with its banner is, under any keys", () => {
+    const was = process.env.PI_CODING_AGENT_DIR;
+    process.env.PI_CODING_AGENT_DIR = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-pi-agent-'));
+    try {
+      const p = new PiProvider();
+      const footer = ['────────', '', '────────', '~/projects/project-a (main)', '0.0%/128k (auto)      stand-in-coder'];
+      expect(p.upOnScreen(footer)).toBe(false);
+      expect(p.upOnScreen([...PI_BANNER, ...footer])).toBe(true);
+      expect(p.upOnScreen([' ▀▀█ v1.5.2', ' █▀ █ ctrl+x interrupt · ctrl+c/ctrl+q clear/exit · / commands · ! bash · ctrl+o more', ...footer])).toBe(true);
+      // A pi that starts quietly draws no banner: its footer is enough, once nothing it announced is still downloading.
+      fs.writeFileSync(path.join(process.env.PI_CODING_AGENT_DIR, 'settings.json'), JSON.stringify({ quietStartup: true }));
+      expect(p.upOnScreen(footer)).toBe(true);
+      expect(p.upOnScreen([' fd not found. Downloading...', ...footer])).toBe(false);
+    } finally {
+      if (was === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = was;
+    }
   });
 
   it('3: a codex session is up at its exec, whatever its screen', () => {
