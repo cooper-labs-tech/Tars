@@ -129,9 +129,10 @@ export interface CLIProvider {
   /**
    * For a CLI that sends no SessionStart and takes keys only once its TUI has drawn its field: whether the screen's
    * lines (core/terminal-mirror.ts, terminalText) show it so. A session is up then, not at the CLI's exec
-   * (core/agent-launch.ts, sessionUp). Absent: up at its exec.
+   * (core/agent-launch.ts, sessionUp). Absent: up at its exec. `launchLine` is the line the CLI was launched with
+   * (terminal-mirror.ts, launchLineOf), when what it shows once up depends on it.
    */
-  upOnScreen?(lines: readonly string[]): boolean;
+  upOnScreen?(lines: readonly string[], launchLine?: string): boolean;
 
   /**
    * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured

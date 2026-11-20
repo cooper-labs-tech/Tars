@@ -6,7 +6,7 @@ import { managedCliEnv } from '../providers/cli-provider';
 import { mintAgentToken, revokeTerminalToken, tarsInstanceId } from './agent-tokens';
 import { API_PORT } from '../constants';
 import { rememberTerminalOwner, terminalExited } from './pty-manager';
-import { attachTerminalMirror, panelSizeOf } from './terminal-mirror';
+import { attachTerminalMirror, noteLaunchLine, panelSizeOf } from './terminal-mirror';
 import { accountEnvFor, withAccountEnv } from './account-env';
 import { refuseWhileQuitting } from './quit-state';
 import { childEnv, currentFolderLookupsOff, type Env } from '../platform';
@@ -222,6 +222,9 @@ export function spawnAgentPty(opts: {
   // one function that spawns an agent's terminal, and a caller that has to
   // remember is a caller that will not.
   if (agentId) rememberTerminalOwner(spawned, agentId);
+  // The line a CLI this terminal runs was launched with (an exec launch), which a provider's upOnScreen may read; a CLI
+  // typed into its shell later notes its own (agent-manager.ts, launchIntoTerminal).
+  if (agentId) noteLaunchLine(spawned, opts.args);
   // codex reports no turn through a hook: its session log does, and the one
   // this terminal's codex begins is the agent's (services/codex-sessions.ts).
   if (agentId && opts.binaryName === 'codex') codexLaunching(agentId, opts.cwd);

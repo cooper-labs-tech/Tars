@@ -21,7 +21,7 @@ import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
 import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput, type MessageSender } from './pty-manager';
 import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
-import { markCliLaunch } from './terminal-mirror';
+import { markCliLaunch, noteLaunchLine } from './terminal-mirror';
 import { kimiSessionWatch } from '../services/kimi-sessions';
 import { opencodeSessionWatch } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
@@ -1239,6 +1239,8 @@ export async function launchIntoTerminal(
   // What the terminal shows from its line on is the new CLI's: a box an earlier one left above never reads as this one
   // up (terminal-mirror.ts, rowsSinceLaunch; the Audit's L1 on #601).
   markCliLaunch(ptyProcess, !!getProvider(agent.provider).upOnScreen);
+  // And the line it was launched with, which a provider's upOnScreen may read (opencode on a session it forks).
+  noteLaunchLine(ptyProcess, start.typedLine);
   if (opts.delayMs) {
     await new Promise<void>((resolve) => {
       setTimeout(() => {

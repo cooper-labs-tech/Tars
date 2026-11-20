@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, rowsSinceLaunch } from './terminal-mirror';
+import { dialogOnScreen, launchLineOf, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -234,7 +234,7 @@ function sessionUp(agent: StartingAgent, launch: { since: number; withTask: bool
   if (!hasClaudeHooks(agent)) {
     const provider = getProvider(agent.provider);
     // The rows drawn since its launch, at the bottom: never a box left in the history (the Audit's L1 on #601).
-    return provider.upOnScreen ? provider.upOnScreen(rowsSinceLaunch(terminal) ?? []) : true;
+    return provider.upOnScreen ? provider.upOnScreen(rowsSinceLaunch(terminal) ?? [], launchLineOf(terminal)) : true;
   }
   const at = launch.withTask ? agent.lastTurnStartedAt : agent.sessionRegisteredAt;
   return !!at && Date.parse(at) >= launch.since;

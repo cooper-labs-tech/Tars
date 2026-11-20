@@ -55,9 +55,16 @@ export class OpenCodeProvider implements CLIProvider {
    * out of three, and none before). Up on that bar, whose last item is always `<key> commands` after a gap of two
    * spaces or more (as Tars's mirror reads it): `tab agents  ctrl+p commands` on its first screen, `<folder>  132  ctrl+p
    * commands` on a session it resumed, its tokens where `tab agents` was; whatever keys are bound.
+   *
+   * On a launch on a session (`--session`), up only on that session's view: a bar with something before its keys (the
+   * folder), never the bare home view's. Forking a session (`--fork`, every restart's), opencode draws its home view
+   * first, then clears and draws the fork's about 5 s later; a task typed at the home view started a new session
+   * without the history (measured twice, 20/11). A plain resume's first bar is already its session's, the folder
+   * before `tab agents`.
    */
-  upOnScreen(lines: readonly string[]): boolean {
-    return lines.some((line) => /\s{2,}\S+ commands\s*$/.test(line));
+  upOnScreen(lines: readonly string[], launchLine?: string): boolean {
+    const onSession = /--session\b/.test(launchLine ?? '');
+    return lines.some((line) => /\s{2,}\S+ commands\s*$/.test(line) && !(onSession && /^\s*\S+ agents\s{2,}\S+ commands\s*$/.test(line)));
   }
 
   /** Measured on 1.19.6 (20/11): a note typed during a slow tool call went out with that call's result. */
