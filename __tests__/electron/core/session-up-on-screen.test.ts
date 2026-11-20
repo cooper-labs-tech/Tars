@@ -30,9 +30,11 @@ import * as path from 'node:path';
  *    (`<tool> not found. Downloading...`) has its outcome (`<tool> installed to ...`, or `Failed to download <tool>`).
  * 8. Pi's first frame holds its footer alone: its banner and its download line come together in the next, 20 to 70 ms
  *    later (measured three times on fresh starts, 20/11). Read on that first frame, the footer made pi up, the task
- *    went in, and its Enter met the download (the conformance run's fourth try). Up only once the banner's hint line
- *    is drawn too (`/ commands` and `! bash`, whatever keys the user bound), or at once when the user's pi starts
- *    quietly (`quietStartup: true` in its settings.json), which draws no banner at all.
+ *    went in, and its Enter met the download (the conformance run's fourth try). And upOnScreen is given only the
+ *    bottom 8 rows that hold text (terminal-mirror.ts, LAUNCH_ROWS), so pi's banner, at the top, is out of its sight:
+ *    asked for, it kept pi from ever being up (the fifth try). The first frame is the one with nothing above its
+ *    field's top border; pi is up once something is drawn there, or at once when the user's pi starts quietly
+ *    (`quietStartup: true` in its settings.json), which draws nothing above the field until its first message.
  */
 
 const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined, history: undefined as string[] | undefined }));
@@ -143,19 +145,22 @@ describe('a session up on its screen', () => {
     expect(p.upOnScreen([...PI_BANNER, ' Warning: fd not found. Offline mode enabled, skipping download.', ...footer])).toBe(true);
   });
 
-  it("8: pi's first frame, its footer alone, is not up; the frame with its banner is, under any keys", () => {
+  it("8: pi's first frame, nothing above its field, is not up; the next is, read from the bottom 8 rows Tars gives", () => {
     const was = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-pi-agent-'));
     try {
       const p = new PiProvider();
-      const footer = ['────────', '', '────────', '~/projects/project-a (main)', '0.0%/128k (auto)      stand-in-coder'];
-      expect(p.upOnScreen(footer)).toBe(false);
-      expect(p.upOnScreen([...PI_BANNER, ...footer])).toBe(true);
-      expect(p.upOnScreen([' ▀▀█ v1.5.2', ' █▀ █ ctrl+x interrupt · ctrl+c/ctrl+q clear/exit · / commands · ! bash · ctrl+o more', ...footer])).toBe(true);
-      // A pi that starts quietly draws no banner: its footer is enough, once nothing it announced is still downloading.
+      const field = ['────────────────', '────────────────', '~/projects/project-a (main)', '0.0%/128k (auto)      stand-in-coder'];
+      expect(p.upOnScreen(field)).toBe(false);
+      // The bottom 8 rows of the conformance run's screen once pi's startup was over: its banner out of sight above.
+      const settled = [' Pi can explain its own features and look up its docs.', '[Context]', ' /x/.tars/CLAUDE.md', ' fd installed to /x/.pi/agent/bin/fd', ...field];
+      expect(p.upOnScreen(settled)).toBe(true);
+      expect(p.upOnScreen(['[Context]', ' /x/.tars/CLAUDE.md', ' fd not found. Downloading...', ...field])).toBe(false);
+      expect(p.upOnScreen([...PI_BANNER, ...field])).toBe(true);
+      // A pi that starts quietly draws nothing above its field: its footer is enough, once nothing is still downloading.
       fs.writeFileSync(path.join(process.env.PI_CODING_AGENT_DIR, 'settings.json'), JSON.stringify({ quietStartup: true }));
-      expect(p.upOnScreen(footer)).toBe(true);
-      expect(p.upOnScreen([' fd not found. Downloading...', ...footer])).toBe(false);
+      expect(p.upOnScreen(field)).toBe(true);
+      expect(p.upOnScreen([' fd not found. Downloading...', ...field])).toBe(false);
     } finally {
       if (was === undefined) delete process.env.PI_CODING_AGENT_DIR; else process.env.PI_CODING_AGENT_DIR = was;
     }
