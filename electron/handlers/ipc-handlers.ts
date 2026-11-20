@@ -78,11 +78,12 @@ import { getTasmaniaStatus, tasmaniaFetch } from '../services/tasmania-client';
 import { enforcesOrchestratorMode } from '../providers/cli-provider';
 import { withSessionTruth } from '../services/agent-truth';
 import { spawnAgentPty, cliRunningIn, agentShell, agentPtyEnv } from '../core/agent-pty';
-import { resolveShell, shellArgs, childEnv, toLaunch, withPath, resolveCliBinary, cliEnv } from '../platform';
+import { resolveShell, shellArgs, childEnv, toLaunch, withPath } from '../platform';
 import { spawnSkillInstallerOnWindows, startPluginInstallOnWindows } from '../core/installer-pty';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { terminalSnapshot, leftFullscreenIn, rememberPanelSize, resizeTerminalMirror } from '../core/terminal-mirror';
 import { probeVersion } from '../core/version-probe';
+import { probeCli } from '../core/cli-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
@@ -2629,29 +2630,15 @@ function registerTasmaniaHandlers(deps: IpcHandlerDependencies): void {
       // Fallback: also check via claude mcp list if not found
       if (!configured) {
         try {
-          const { exec, execFile } = await import('child_process');
-          await new Promise<void>((resolve) => {
-            const done = (_err: Error | null, stdout: string) => {
-              if (stdout) configured = stdout.includes('tasmania');
-              resolve();
-            };
-            // darwin/linux: the line /bin/sh has always run. win32: the claude
-            // found (a .exe, or an npm claude.cmd read through to node and its
-            // script), by argv, with no cmd.exe.
-            if (process.platform !== 'win32') {
-              exec('claude mcp list', { timeout: 3000 }, done);
-              return;
-            }
-            // Looked up on the PATH an agent gets, as execCli does, and started
-            // with no console window.
-            const env = (cliEnv('win32') ?? process.env) as NodeJS.ProcessEnv;
-            const claude = resolveCliBinary('claude', env, 'win32');
-            if (!claude.ok) {
-              resolve();
-              return;
-            }
-            execFile(claude.file, [...claude.prefixArgs, 'mcp', 'list'], { timeout: 3000, env, windowsHide: true }, done);
-          });
+          // A CLI probe (core/cli-probe.ts): claude's argv on every system,
+          // never a line for /bin/sh; on Windows the claude found (a .exe, or
+          // an npm claude.cmd read through to node and its script), with no
+          // console window; ended with what it started at its time and at the
+          // quit (the Audit's P3 on probe orphans). What it printed counts even
+          // when it exits non-zero, as exec's answer did.
+          const stdout = await probeCli('claude', ['mcp', 'list'], { timeoutMs: 3000 })
+            .then(r => r.stdout, (err: { stdout?: unknown }) => (typeof err?.stdout === 'string' ? err.stdout : ''));
+          if (stdout) configured = stdout.includes('tasmania');
         } catch {
           // claude CLI not available
         }

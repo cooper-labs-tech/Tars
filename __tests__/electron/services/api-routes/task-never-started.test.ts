@@ -15,6 +15,13 @@ import { EventEmitter } from 'events';
  */
 
 const mockPtys: { onData: ReturnType<typeof vi.fn>; onExit: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn> }[] = [];
+// A codex launch reads codex's --help first (CodexProvider.prepareLaunch, #608), a CLI probe (core/cli-probe.ts):
+// answered here as on a machine with no codex, CI's, so the owner's real codex never runs
+// (__tests__/setup/no-real-cli.ts refuses it; the Audit's I-4 on #616).
+vi.mock('../../../../electron/core/cli-probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../../electron/core/cli-probe')>()),
+  probeCli: async () => { throw Object.assign(new Error('not installed'), { code: 'ENOENT' }); },
+}));
 vi.mock('node-pty', () => ({
   spawn: vi.fn(() => {
     const inst = { onData: vi.fn(), onExit: vi.fn(), kill: vi.fn(), write: vi.fn() };

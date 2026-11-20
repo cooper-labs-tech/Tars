@@ -822,8 +822,10 @@ describe('2-6. on win32', () => {
     expect(mcp.configured).toBe(true);
     expect(version).toEqual({ success: true, output: '2.1.301 (Claude Code)' });
     expect(children.calls.filter(c => c.fn === 'exec' || c.fn === 'execSync')).toEqual([]);
+    // `claude mcp list` is a CLI probe too since 20/11 (core/cli-probe.ts): the same resolved claude, by argv.
     expect(children.calls.filter(c => c.fn === 'spawn').map(c => [c.file, c.args, c.options?.shell])).toEqual([
       [CLAUDE_EXE, ['--version'], undefined],
+      [CLAUDE_EXE, ['mcp', 'list'], undefined],
       [X86_CLAUDE, ['--version'], undefined],
     ]);
     // None opens a console window: Tars is a GUI program, claude a console one.

@@ -42,6 +42,13 @@ vi.mock('../../../electron/services/hermes-config', async (importOriginal) => ({
 }));
 
 const spawned = vi.hoisted(() => [] as Array<{ at: number; file: string }>);
+// A codex launch reads codex's --help first (CodexProvider.prepareLaunch, #608), a CLI probe (core/cli-probe.ts):
+// answered here as on a machine with no codex, CI's, so the owner's real codex never runs
+// (__tests__/setup/no-real-cli.ts refuses it; the Audit's I-4 on #616).
+vi.mock('../../../electron/core/cli-probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../electron/core/cli-probe')>()),
+  probeCli: async () => { throw Object.assign(new Error('not installed'), { code: 'ENOENT' }); },
+}));
 vi.mock('node-pty', () => ({
   spawn: vi.fn((file: string) => {
     spawned.push({ at: Date.now(), file });

@@ -36,6 +36,15 @@ vi.mock('child_process', () => ({
   }),
 }));
 
+// The login shell is a CLI probe since 20/11 (core/cli-probe.ts, the Audit's P3 on probe orphans): recorded and
+// answered here as its execFile was, and no shell is started.
+vi.mock('../../../electron/core/cli-probe', () => ({
+  probeCli: vi.fn(async (file: string, args: string[]) => {
+    shellCalls.push({ file, args });
+    return { stdout: '', stderr: '' };
+  }),
+}));
+
 vi.mock('util', async (importOriginal) => {
   const mod = await importOriginal<typeof import('util')>();
   return {

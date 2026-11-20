@@ -491,6 +491,28 @@ describe('the schedule main.ts starts', () => {
     }
   });
 
+  // The Audit's I-2 on #616: an update is left to finish at the quit (npm replaces a global package in place, and a
+  // cut run would leave the CLI missing), but no pass starts once the quit has begun: one started then outlives Tars.
+  it('starts no pass once the quit has begun', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.resetModules();
+      const quit = await import('../../../electron/core/quit-state');
+      const updater = await import('../../../electron/services/cli-updater');
+      let asked = 0;
+      // "Check for updates" off: a pass reads it first and starts nothing, so even a pass that runs touches no CLI.
+      updater.startCliUpdates(() => { asked += 1; return { autoCheckUpdates: false } as AppSettings; }, () => ['claude']);
+      quit.beginQuit();
+      await vi.advanceTimersByTimeAsync(5_000 + 30 * 60 * 1000 + 1_000);
+      expect(asked, 'a pass began during the quit').toBe(0);
+    } finally {
+      vi.useRealTimers();
+      vi.resetModules();
+      // A pass that did begin wrote its "all off" line: not the next case's log.
+      fs.rmSync(CLI_UPDATES_LOG, { force: true });
+    }
+  });
+
   it.skipIf(cannotPlantPosixInstall())('updates the claude a launch would find, 5 s after it starts, into ~/.tars/cli-updates.log', async () => {
     // The suite's own throwaway HOME, which is where the app's paths point
     // here: ~/.local/bin is on the PATH buildFullPath composes, and any real
