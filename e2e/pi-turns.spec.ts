@@ -58,7 +58,9 @@ async function turn(prompt) {
   const word = (prompt.match(/\b(FIRST|SECOND|AFTER)\b/) || [, 'ANY'])[1];
   entry({ role: 'assistant', content: [{ type: 'thinking', thinking: 'hm' }, { type: 'text', text: 'pi answer for ' + word }], stopReason: 'stop' });
 }
-process.stdout.write('pi stand-in ready\n');
+// As pi 1.5.2 draws its first frames, which Tars waits for since #610 (pi-provider.ts, upOnScreen): its field between two
+// rules, its footer under them with the context used over its window, and something above the field's top rule.
+process.stdout.write('pi stand-in ready\n' + '─'.repeat(40) + '\n> \n' + '─'.repeat(40) + '\n0.0%/128k (auto)\n');
 process.stdin.setRawMode(true);
 // As pi-tui 1.3.0 does (terminal.js): bracketed paste on, a paste goes into the editor whole, its newlines
 // included, and only an Enter typed outside it submits. A lone Esc cuts the turn in hand.
