@@ -18,7 +18,26 @@ import * as path from 'path';
  *    is answered 429 and closed; another agent keeps its own room; a socket closed gives its place back.
  * 4. (I-g) A connection with no token is kept open after its 401, for the next request of a flood.
  * 5. (I-g) Connections that send nothing pile up: past TUNNEL_MAX_CONNECTIONS the listener takes no more.
+ *
+ * The short re-read of #600 at f239aa7bd, written before the fixes:
+ * 6. The listener's ceiling is shared by every host: one host's idle connections starve the agents of another. Each
+ *    host must have a listener, and a ceiling, of its own.
+ * 7. With a listener per host, the token of an agent placed on another host is let in: only an agent placed on this
+ *    host passes this host's listener.
+ * 8. The per-token cap sits under what a real Claude Code holds at its peak, and a busy turn of a real agent is
+ *    refused. Measured on 20/11/2026 (reports/remote-agents/sample-real-claude*.txt, sample-hook-curls.txt):
+ *    Claude Code 2.1.329, a worker with Tars's five HTTP MCP servers, held 6 connections to Tars's API, steady through
+ *    bursts of 6 and of 10 MCP calls at once. Its shell hooks, which a host runs (that session ran the state mod
+ *    instead, inside the CLI), open one connection each, and run at most as many at once as tools do:
+ *    `CLAUDE_CODE_MAX_TOOL_USE_CONCURRENCY ?? 10` in that binary; then a turn's own hooks, 2. Twice that peak, under
+ *    one token at once, must all be answered.
  */
+
+/** A real Claude Code's peak under one token on a host, as measured (8 above): its MCP pool, its hooks, its turn's. */
+const MCP_CONNECTIONS_MEASURED = 6;
+const HOOKS_AT_ONCE = 10;
+const TURN_HOOKS = 2;
+const REAL_SESSION_PEAK = MCP_CONNECTIONS_MEASURED + HOOKS_AT_ONCE + TURN_HOOKS;
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-api-tunnel-'));
 let apiPort = 0;
@@ -42,6 +61,7 @@ vi.mock('../../../electron/constants', async (importOriginal) => {
 let api: typeof import('../../../electron/services/api-server');
 let tunnel: typeof import('../../../electron/services/api-tunnel');
 let tunnelPort = 0;
+let otherHostPort = 0;
 const tokens: Record<string, string> = {};
 
 beforeAll(async () => {
@@ -50,8 +70,8 @@ beforeAll(async () => {
   tunnel = await import('../../../electron/services/api-tunnel');
   const { agents } = await import('../../../electron/core/agent-manager');
   const { mintAgentToken } = await import('../../../electron/core/agent-tokens');
-  for (const id of ['r1', 'r2']) {
-    agents.set(id, { id, name: id, status: 'idle', provider: 'claude', projectPath: '/p', skills: [], remote: { hostId: 'h', folder: '/w/p' } } as never);
+  for (const [id, hostId] of [['r1', 'h'], ['r2', 'h'], ['o1', 'h2']]) {
+    agents.set(id, { id, name: id, status: 'idle', provider: 'claude', projectPath: '/p', skills: [], remote: { hostId, folder: '/w/p' } } as never);
     tokens[id] = mintAgentToken(id);
   }
   api.startApiServer(null, {} as never, () => null, null, null, () => {}, () => {}, async () => 'pty', () => ({} as never));
@@ -63,7 +83,8 @@ beforeAll(async () => {
     api.apiServerEmitter.on('state', check);
     check();
   });
-  tunnelPort = await tunnel.tunnelListenerPort();
+  tunnelPort = await tunnel.tunnelListenerPort('h');
+  otherHostPort = await tunnel.tunnelListenerPort('h2');
 }, 60_000);
 
 afterAll(() => {
@@ -167,6 +188,38 @@ describe("the tunnel listener's room", () => {
       expect(idle.filter((s) => !s.destroyed).length).toBe(tunnel.TUNNEL_MAX_CONNECTIONS);
     } finally {
       for (const s of idle) s.destroy();
+    }
+  }, 60_000);
+
+  it("6. one host's idle connections at its ceiling leave another host's listener its own room", async () => {
+    expect(otherHostPort).not.toBe(tunnelPort);
+    const idle = await Promise.all(Array.from({ length: tunnel.TUNNEL_MAX_CONNECTIONS }, () => connect(tunnelPort)));
+    try {
+      await new Promise((r) => setTimeout(r, 300));
+      const other = await connect(otherHostPort);
+      expect(await ask(other, get('/api/health', tokens.o1))).toBe(200);
+      other.destroy();
+    } finally {
+      for (const s of idle) s.destroy();
+    }
+  }, 60_000);
+
+  it('7. a host\'s listener lets in only an agent placed on that host', async () => {
+    const wrongHost = await connect(otherHostPort);
+    expect(await ask(wrongHost, get('/api/health', tokens.r1))).toBe(401);
+    wrongHost.destroy();
+    const rightHost = await connect(tunnelPort);
+    expect(await ask(rightHost, get('/api/health', tokens.r1))).toBe(200);
+    rightHost.destroy();
+  }, 30_000);
+
+  it("8. twice a real Claude Code's measured peak, under one token at once, is all answered", async () => {
+    const at = await Promise.all(Array.from({ length: 2 * REAL_SESSION_PEAK }, () => connect(tunnelPort)));
+    try {
+      const answers = await Promise.all(at.map((s) => ask(s, get('/api/health', tokens.r2))));
+      expect(answers.filter((a) => a !== 200), JSON.stringify(answers)).toEqual([]);
+    } finally {
+      for (const s of at) s.destroy();
     }
   }, 60_000);
 });

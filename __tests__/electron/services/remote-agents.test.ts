@@ -25,7 +25,8 @@ import { remoteHosts } from '../../../electron/services/remote-hosts';
  *    a token that died with that Tars), stays in ~/.tars-private for good: Tars's start must remove them.
  * 6. (the gate's must-fix) The tunnel's listener admits a call with no token, with the shared token, with Tars's own
  *    pass, or with the token of an agent on this computer: on every route, /api/health and /api/local-file included,
- *    only an agent placed on a host passes, by its own token.
+ *    only an agent placed on a host passes, by its own token. (The short re-read at f239aa7bd) And each host has a
+ *    listener of its own: an agent placed on another host does not pass this one.
  */
 
 let bin: string;
@@ -103,12 +104,13 @@ describe("the tunnel's listener", () => {
   const localAgent = { id: 'l1', remote: undefined };
   const agentOf = (id: string) => [remoteAgent, localAgent].find((a) => a.id === id);
 
-  it('6. admits only an agent placed on a host, by its own token', () => {
-    expect(tunnelAdmits({ ok: true, agentId: 'r1', terminal: true }, agentOf)).toBe(true);
-    expect(tunnelAdmits({ ok: true, agentId: 'l1', terminal: true }, agentOf)).toBe(false);
-    expect(tunnelAdmits({ ok: true, agentId: 'gone', terminal: true }, agentOf)).toBe(false);
-    expect(tunnelAdmits({ ok: true }, agentOf)).toBe(false); // the shared token
-    expect(tunnelAdmits({ ok: true, internal: true }, agentOf)).toBe(false); // Tars's own pass
-    expect(tunnelAdmits({ ok: false, status: 401, error: 'Unauthorized' }, agentOf)).toBe(false); // no token
+  it('6. admits only an agent placed on the listener\'s own host, by its own token', () => {
+    expect(tunnelAdmits({ ok: true, agentId: 'r1', terminal: true }, agentOf, 'build-1')).toBe(true);
+    expect(tunnelAdmits({ ok: true, agentId: 'r1', terminal: true }, agentOf, 'build-2')).toBe(false); // another host's listener
+    expect(tunnelAdmits({ ok: true, agentId: 'l1', terminal: true }, agentOf, 'build-1')).toBe(false);
+    expect(tunnelAdmits({ ok: true, agentId: 'gone', terminal: true }, agentOf, 'build-1')).toBe(false);
+    expect(tunnelAdmits({ ok: true }, agentOf, 'build-1')).toBe(false); // the shared token
+    expect(tunnelAdmits({ ok: true, internal: true }, agentOf, 'build-1')).toBe(false); // Tars's own pass
+    expect(tunnelAdmits({ ok: false, status: 401, error: 'Unauthorized' }, agentOf, 'build-1')).toBe(false); // no token
   });
 });
