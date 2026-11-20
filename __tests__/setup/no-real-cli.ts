@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { createRequire, syncBuiltinESMExports } from 'node:module';
+import { promisify } from 'node:util';
 
 /**
  * No unit test starts a real claude or tailscale (the Audit's I-3 on #616). secrets-shown-by-main.test.ts ran the
@@ -56,10 +57,15 @@ function allowedRoots(): string[] {
  */
 export function realBinary(
   file: string, envPath: string | undefined, roots: string[], exists: (p: string) => boolean = isFile, platform: NodeJS.Platform = process.platform,
+  optedIn: string = `${process.env.TARS_TEST_REAL_CLIS ?? ''},${process.env.TARS_REAL_CLAUDE ? 'claude' : ''}`,
 ): string | null {
   const p = platform === 'win32' ? path.win32 : path.posix;
   const name = p.basename(file).replace(/\.(exe|cmd|bat)$/i, '').toLowerCase();
   if (!NAMES.has(name)) return null;
+  // A test that runs a real CLI on purpose (codex's own parser reading a config Tars wrote) runs only when
+  // TARS_TEST_REAL_CLIS names that CLI, and that one alone is let through; TARS_REAL_CLAUDE, the suite's older opt-in
+  // for the tests that start a real claude, lets claude through.
+  if (optedIn.split(/[\s,]+/).some(n => n.toLowerCase() === name)) return null;
   const exts = platform === 'win32' && !/\.(exe|cmd|bat)$/i.test(file) ? ['', '.exe', '.cmd', '.bat'] : [''];
   const candidates = /[\\/]/.test(file)
     ? exts.map(ext => p.resolve(file + ext))
@@ -123,11 +129,22 @@ if (!guard.wrapped) {
   guard.wrapped = true;
   const childProcess = createRequire(import.meta.url)('node:child_process') as Record<string, (...args: unknown[]) => unknown>;
   for (const fn of START) {
-    const original = childProcess[fn];
-    childProcess[fn] = function guarded(this: unknown, first: unknown, ...rest: unknown[]) {
+    const original = childProcess[fn] as ((...args: unknown[]) => unknown) & { [promisify.custom]?: (...args: unknown[]) => unknown };
+    const guarded = function guarded(this: unknown, first: unknown, ...rest: unknown[]) {
       for (const program of startedPrograms(fn, first, rest)) refuse(fn, program, optionsOf(rest));
       return original.call(this, first, ...rest);
     };
+    // execFile and exec carry node's own promisified form, which resolves { stdout, stderr }: kept, and guarded too.
+    const custom = original[promisify.custom];
+    if (custom) {
+      Object.defineProperty(guarded, promisify.custom, {
+        value: function guardedPromise(this: unknown, first: unknown, ...rest: unknown[]) {
+          for (const program of startedPrograms(fn, first, rest)) refuse(fn, program, optionsOf(rest));
+          return custom.call(this, first, ...rest);
+        },
+      });
+    }
+    childProcess[fn] = guarded;
   }
   syncBuiltinESMExports();
 }
