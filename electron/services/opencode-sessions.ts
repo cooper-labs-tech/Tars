@@ -23,11 +23,11 @@ export type { HookPost };
  *
  * Whose session is whose is decided on evidence, never on the folder alone (the user's own opencode writes the same
  * database), for a session made in the agent's folder since the launch and held by no other launch:
- * - its first prompt holds a text this terminal was sent (typed into it, or its launch's own `--prompt`) and none
- *   another unbound launch was sent;
- * - or, with none, Tars's identity line naming this agent, at a line's start where Tars writes it (the last such line:
- *   a delivery puts the task first and Tars's section after it), and no text another unbound launch was sent;
- * - or, for a fork, a copy of the forked session's first prompt (the same time and text).
+ * - Tars's identity line in its first prompt names this agent: at a line's start or right after opencode's skills line,
+ *   where Tars writes it (the last such line: a delivery puts the task first and Tars's section after it);
+ * - or, unless it holds a text another unbound launch was sent, it holds a text this terminal was sent (typed into it,
+ *   or its launch's own `--prompt`, noted from after the skills line every such agent shares);
+ * - or, for a fork, under the same condition, a copy of the forked session's first prompt (the same time and text).
  * A session the launch resumed (`--session <id>`) is bound by its id, read from the launch on, unless another launch
  * holds it. The messages from before the launch are history, never posted. Posted under the UUID made from opencode's
  * id (providers/opencode-cli.ts): the hook routes take nothing else. opencode-sessions.test.ts says each way this
