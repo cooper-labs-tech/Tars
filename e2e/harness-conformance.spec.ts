@@ -288,6 +288,11 @@ for (const h of HARNESSES) {
         const beforeRestart = posts().length;
         await api('agent', 'restart', WORKER);
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
+        // What a person reads in Logs: the agent's kept output, where Tars writes its notices (core/agent-notices.ts).
+        // agent:get serves the terminal's screen instead, which a notice never reaches: read before the next task's
+        // redraws can trim it.
+        const logs = async () => ((await api<{ lines?: string[] } | null>('logs', 'tail', WORKER, 2000))?.lines ?? []).join('\n');
+        const logsAfterRestart = await logs();
         const restarted = await delegate(lead, 3);
         const sessionAfterRestart = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
         const afterRestart = posts().slice(beforeRestart);
@@ -301,8 +306,8 @@ for (const h of HARNESSES) {
         if (h.restartsFresh) {
           // No fork: a fresh session, without the earlier history, and the agent's output says so.
           expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request starts a conversation of its own').not.toContain(standin.marker);
-          const kept = ((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('');
-          expect.soft(kept, 'the agent\'s output says the conversation starts over').toContain('[Tars] Its conversation starts over');
+          keep({ noticeInLogs: logsAfterRestart.split('\n').filter(l => l.includes('[Tars]')), noticeStillInLogsAfterTask: (await logs()).includes('[Tars] Its conversation starts over') });
+          expect.soft(logsAfterRestart, 'the agent\'s output says the conversation starts over').toContain('[Tars] Its conversation starts over');
         } else {
           expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request carries the earlier history').toContain(standin.marker);
         }
