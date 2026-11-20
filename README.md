@@ -231,10 +231,10 @@ is required; Node 18 fails at startup.
 
 The distinction matters. The agent that does the work is the one you see,
 with everything it already knows, and it is still there after the task.
-For claude agents, the API-key providers and Qwen Code the orchestrator learns
-how the task ended and what it cost; for codex, pi and gemini, how it ended
-without the cost; for opencode, amp and grok, which tell Tars nothing of their
-turns, it learns the task was delivered, and Tars says so rather than
+For claude agents, the API-key providers, Qwen Code and opencode the
+orchestrator learns how the task ended and what it cost; for codex, pi, Kimi
+Code and gemini, how it ended without the cost; for amp and grok, which tell
+Tars nothing of their turns, it learns the task was delivered, and Tars says so rather than
 inventing an answer.
 
 ---

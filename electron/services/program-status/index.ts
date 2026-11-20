@@ -16,9 +16,9 @@ import { PROGRAM_STATUS_QUERY_REPLY, type ProgramStatusReport } from './protocol
  * - Only the agent's current terminal counts (the session-ownership rule): a report from a terminal that is no
  *   longer the agent's, after a restart, moves nothing and is not kept.
  * - Only the root record is the agent's; a report addressed to an id is a sub-task's.
- * - A CLI Tars follows otherwise (claude's hooks, codex's and pi's session logs) keeps its status from them: the
+ * - A CLI Tars follows otherwise (claude's hooks, codex's and pi's session logs, opencode's database) keeps its status from them: the
  *   report is only kept, for the window, with the reason of a blocked state.
- * - A CLI Tars cannot follow otherwise (amp, grok, opencode) gets its status from the reports. A blocked report is
+ * - A CLI Tars cannot follow otherwise (amp, grok) gets its status from the reports. A blocked report is
  *   `waiting` with the reason `permission`, which keeps anything from being typed into it, whatever its kind.
  * - A stopped or an asleep agent is never moved: its terminal speaking is not a start.
  */

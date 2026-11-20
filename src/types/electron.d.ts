@@ -621,7 +621,7 @@ export interface AgentStatus {
   stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
   /** What the agent's CLI last said of itself in its terminal over OSC 7501, the Program Status Protocol (2.0.5,
    *  services/program-status): from its current terminal only, gone with a clear, a new shell prompt or a reset.
-   *  It drives `status` only for a CLI Tars follows no other way (amp, grok, opencode); on the others it adds the
+   *  It drives `status` only for a CLI Tars follows no other way (amp, grok); on the others it adds the
    *  reason of a blocked state. On agents:tick too. */
   programStatus?: {
     state: 'idle' | 'working' | 'done' | 'blocked' | 'error';
