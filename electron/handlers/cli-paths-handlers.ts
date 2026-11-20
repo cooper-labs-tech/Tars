@@ -22,7 +22,7 @@ export interface CLIPathsHandlerDependencies {
   saveAppSettings: (settings: AppSettings) => void;
 }
 
-type DetectedPaths = { amp: string; claude: string; codex: string; gemini: string; grok: string; qwencode: string; opencode: string; pi: string; kimi: string; gws: string; gcloud: string; gh: string; node: string; minimax: string };
+type DetectedPaths = { amp: string; claude: string; codex: string; gemini: string; grok: string; qwencode: string; opencode: string; pi: string; kimi: string; kilo: string; gws: string; gcloud: string; gh: string; node: string; minimax: string };
 
 /**
  * Detect CLI paths from the system.
@@ -33,11 +33,11 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<DetectedP
   // extension: its own lookup, in Node, below. darwin/linux: as it always was.
   if (process.platform === 'win32') return detectWindowsCLIPaths(savedPaths, process.env);
   const homeDir = os.homedir();
-  const paths = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
+  const paths = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
 
   // If a user manually set a path in settings, use it if the binary exists
   if (savedPaths) {
-    const cliKeys = ['amp', 'claude', 'codex', 'gemini', 'grok', 'qwencode', 'opencode', 'pi', 'kimi', 'gws', 'gcloud', 'gh', 'node', 'minimax'] as const;
+    const cliKeys = ['amp', 'claude', 'codex', 'gemini', 'grok', 'qwencode', 'opencode', 'pi', 'kimi', 'kilo', 'gws', 'gcloud', 'gh', 'node', 'minimax'] as const;
     for (const key of cliKeys) {
       const savedPath = savedPaths[key];
       if (savedPath && fs.existsSync(savedPath)) {
@@ -210,6 +210,15 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<DetectedP
     const kimiPath = path.join(dir, 'kimi');
     if (fs.existsSync(kimiPath)) {
       paths.kimi = kimiPath;
+      break;
+    }
+  }
+
+  // Kilo CLI, the binary kilo: along the same folders.
+  if (!paths.kilo) for (const dir of commonPaths) {
+    const kiloPath = path.join(dir, 'kilo');
+    if (fs.existsSync(kiloPath)) {
+      paths.kilo = kiloPath;
       break;
     }
   }
@@ -408,7 +417,7 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<DetectedP
 /** The file each key names on disk (Qwen Code installs as `qwen`), in the order the detection above reaches them. */
 const WINDOWS_CLI_NAMES: Array<[keyof DetectedPaths, string]> = [
   ['claude', 'claude'], ['codex', 'codex'], ['gemini', 'gemini'], ['grok', 'grok'], ['opencode', 'opencode'],
-  ['amp', 'amp'], ['pi', 'pi'], ['kimi', 'kimi'], ['gws', 'gws'], ['gcloud', 'gcloud'], ['gh', 'gh'], ['node', 'node'],
+  ['amp', 'amp'], ['pi', 'pi'], ['kimi', 'kimi'], ['kilo', 'kilo'], ['gws', 'gws'], ['gcloud', 'gcloud'], ['gh', 'gh'], ['node', 'node'],
   ['qwencode', 'qwen'], ['minimax', 'minimax'],
 ];
 
@@ -423,7 +432,7 @@ const WINDOWS_CLI_NAMES: Array<[keyof DetectedPaths, string]> = [
  * What was found and could not be used is logged.
  */
 export function detectWindowsCLIPaths(savedPaths: Partial<CLIPaths> | undefined, env: Env, fs: FsProbe = realFs): DetectedPaths {
-  const paths: DetectedPaths = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
+  const paths: DetectedPaths = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
   const lookupFor = (key: keyof DetectedPaths): CliLookup => (key === 'gcloud' ? 'present' : 'startable');
   const installDirs = windowsCliDirs(env);
 
@@ -569,7 +578,7 @@ export function registerCLIPathsHandlers(deps: CLIPathsHandlerDependencies): voi
   // Get CLI paths from app settings
   ipcMain.handle('cliPaths:get', async () => {
     const settings = getAppSettings();
-    return settings.cliPaths || { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '', additionalPaths: [] };
+    return settings.cliPaths || { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', gws: '', gcloud: '', gh: '', node: '', minimax: '', additionalPaths: [] };
   });
 
   // Save CLI paths
@@ -612,6 +621,7 @@ export function getCLIPathsConfig(): CLIPaths & { fullPath: string } {
     opencode: '',
     pi: '',
     kimi: '',
+    kilo: '',
     gws: '',
     gcloud: '',
     gh: '',

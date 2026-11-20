@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import Database from 'better-sqlite3';
 import type { HookPost } from './codex-sessions';
@@ -310,24 +311,40 @@ export class OpencodeSessionWatch {
   }
 }
 
-/** The one watch of this run of Tars: launches are noted from spawnAgentPty, and main.ts starts it. */
-export const opencodeSessionWatch = new OpencodeSessionWatch({
-  dbPath: () => opencodeDbPath(),
-  now: () => Date.now(),
-  post: async () => {},
-});
+/**
+ * The watches of this run of Tars, one per build of opencode, each on its own database: opencode's, and Kilo's
+ * (`$XDG_DATA_HOME/kilo/kilo.db`, the same schema; providers/kilo-provider.ts). Launches are noted from spawnAgentPty,
+ * and main.ts starts them.
+ */
+const watches = {
+  opencode: new OpencodeSessionWatch({ dbPath: () => opencodeDbPath(), now: () => Date.now(), post: async () => {} }),
+  kilo: new OpencodeSessionWatch({ dbPath: () => opencodeDbPath(process.env, os.homedir(), 'kilo'), now: () => Date.now(), post: async () => {} }),
+};
+
+/** opencode's own watch. */
+export const opencodeSessionWatch = watches.opencode;
+
+/** The watch of the build of opencode whose binary is `binaryName` (`opencode`, `kilo`), or undefined for any other CLI. */
+export function opencodeWatchFor(binaryName: string | undefined): OpencodeSessionWatch | undefined {
+  return binaryName === 'opencode' || binaryName === 'kilo' ? watches[binaryName] : undefined;
+}
+
+/** Every build's watch: text typed into a terminal is offered to each, which keeps it only for a launch it noted. */
+export const opencodeWatches: readonly OpencodeSessionWatch[] = Object.values(watches);
 
 let timer: ReturnType<typeof setInterval> | undefined;
 
-/** Reads the opencode agents' sessions every second while one is launched. */
+/** Reads the sessions of each build's agents every second while one is launched. */
 export function startOpencodeSessionWatch(deps: Pick<OpencodeSessionWatchDeps, 'post' | 'interrupted'>): void {
-  opencodeSessionWatch.setDeps(deps);
+  for (const watch of opencodeWatches) watch.setDeps(deps);
   if (timer) return;
-  let busy = false;
+  const busy = new Set<OpencodeSessionWatch>();
   timer = setInterval(() => {
-    if (busy || !opencodeSessionWatch.watching) return;
-    busy = true;
-    opencodeSessionWatch.tick().catch((err) => console.warn('[opencode-sessions]', err instanceof Error ? err.message : err)).finally(() => { busy = false; });
+    for (const watch of opencodeWatches) {
+      if (busy.has(watch) || !watch.watching) continue;
+      busy.add(watch);
+      watch.tick().catch((err) => console.warn('[opencode-sessions]', err instanceof Error ? err.message : err)).finally(() => { busy.delete(watch); });
+    }
   }, 1000);
   timer.unref?.();
 }

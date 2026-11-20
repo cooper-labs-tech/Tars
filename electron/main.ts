@@ -314,6 +314,7 @@ function loadAppSettings(): AppSettings {
       opencode: '',
       pi: '',
       kimi: '',
+      kilo: '',
       gws: '',
       gcloud: '',
       gh: '',

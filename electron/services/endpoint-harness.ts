@@ -64,10 +64,13 @@ export function endpointLaunchFor(harness: string, o: { proxyBase: string; model
         tokenVars: ['KIMI_MODEL_API_KEY'],
       };
     case 'opencode':
+    case 'kilo':
+      // Kilo, a build of opencode, reads an inline config only in its own variable: given opencode's, it ran on its
+      // own Kilo Gateway (7.8.27, measured 20/11).
       return {
         args: [],
         env: {
-          OPENCODE_CONFIG_CONTENT: JSON.stringify({
+          [harness === 'kilo' ? 'KILO_CONFIG_CONTENT' : 'OPENCODE_CONFIG_CONTENT']: JSON.stringify({
             provider: {
               [p]: {
                 npm: '@ai-sdk/openai-compatible',

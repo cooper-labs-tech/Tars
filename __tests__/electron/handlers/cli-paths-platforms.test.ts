@@ -168,7 +168,7 @@ describe('win32 detection', () => {
 
     expect(found).toEqual({
       amp: '', claude: `${LOCAL_BIN}\\claude.exe`, codex: `${NPM}\\codex.cmd`, gemini: '', grok: `${TOOLS}\\grok.exe`,
-      qwencode: '', opencode: '', pi: '', kimi: '', gws: '', gcloud: `${SDK}\\gcloud.cmd`, gh: `${SCOOP}\\gh.exe`,
+      qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', gws: '', gcloud: `${SDK}\\gcloud.cmd`, gh: `${SCOOP}\\gh.exe`,
       node: `${WINGET}\\node.exe`, minimax: '',
     });
     expect(disk.relativeProbes).toEqual([]);
@@ -255,10 +255,12 @@ function oldDetection(home: string, shellPath: string, processPath: string) {
     ['node', 'node', commonPaths, commonPaths], ['qwencode', 'qwen', commonPaths, commonPaths],
     ['minimax', 'minimax', commonPaths, commonPaths],
   ];
-  const result: Record<string, string> = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
-  // Kimi Code's kimi (19/11): looked for along the same folders, and never asked of \`which\`.
+  const result: Record<string, string> = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
+  // Kimi Code's kimi (19/11) and Kilo's kilo (20/11): looked for along the same folders, and never asked of \`which\`.
   const kimiHit = commonPaths.find((d) => fs.existsSync(path.join(d, 'kimi')));
   if (kimiHit) result.kimi = path.join(kimiHit, 'kimi');
+  const kiloHit = commonPaths.find((d) => fs.existsSync(path.join(d, 'kilo')));
+  if (kiloHit) result.kilo = path.join(kiloHit, 'kilo');
   const calls: Array<{ file: string; args: string[]; PATH?: string }> = [{ file: process.env.SHELL!, args: ['-ilc', 'echo $PATH'] }];
   for (const [key, bin, probe, whichDirs] of order) {
     const hit = probe.find((d) => fs.existsSync(path.join(d, bin)));

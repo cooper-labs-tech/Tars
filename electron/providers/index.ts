@@ -14,6 +14,7 @@ import { MoonshotProvider } from './moonshot-provider';
 import { QwenProvider } from './qwen-provider';
 import { QwenCodeProvider } from './qwen-code-provider';
 import { KimiCodeProvider } from './kimi-code-provider';
+import { KiloProvider } from './kilo-provider';
 import { ZhipuProvider } from './zhipu-provider';
 import { MiniMaxProvider } from './minimax-provider';
 import { NvidiaProvider } from './nvidia-provider';
@@ -49,6 +50,8 @@ const providers: Record<string, CLIProvider> = {
   'qwen-code': new QwenCodeProvider(),
   // Kimi Code CLI, the binary kimi: not moonshot above, which runs the claude binary on Moonshot's API.
   'kimi-code': new KimiCodeProvider(),
+  // Kilo CLI, the binary kilo: a build of opencode with its own config and database (kilo-provider.ts).
+  kilo: new KiloProvider(),
   zhipu: new ZhipuProvider(),
   minimax: new MiniMaxProvider(),
   nvidia: new NvidiaProvider(),

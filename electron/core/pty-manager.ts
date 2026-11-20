@@ -19,7 +19,7 @@ import { twoZones } from '../utils/two-zones';
 import { AgentMessageWaiting } from '../types';
 import { handOffFrom, noteHandOff } from '../services/task-ledger';
 import { kimiSessionWatch } from '../services/kimi-sessions';
-import { opencodeSessionWatch } from '../services/opencode-sessions';
+import { opencodeWatches } from '../services/opencode-sessions';
 
 export const ptyProcesses: Map<string, pty.IPty> = new Map();
 export const quickPtyProcesses: Map<string, pty.IPty> = new Map();
@@ -1343,7 +1343,7 @@ export function writeProgrammaticInput(
   const owner = terminalOwner.get(ptyProcess) ?? origin?.agentId;
   if (owner) {
     kimiSessionWatch.noteTyped(owner, data);
-    opencodeSessionWatch.noteTyped(owner, data);
+    for (const watch of opencodeWatches) watch.noteTyped(owner, data);
   }
   if (!bracketPaste) {
     // Plain shell command for a raw bash/zsh prompt: send directly, or through

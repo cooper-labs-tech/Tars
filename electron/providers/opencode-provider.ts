@@ -15,19 +15,7 @@ import { safeEffort } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { OPENCODE_SESSION_ID, opencodeSkillsLine } from './opencode-cli';
 
-/**
- * Where opencode reads its MCP servers (opencode 1.19.3, read in its compiled
- * bundle on 19/10): `opencode.json` of its config folder,
- * `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`, the file its own
- * `opencode mcp add` writes; it merges `config.json` and `opencode.jsonc` there
- * too. Each server is `mcp.<name>`, and a local one is started with opencode's
- * whole environment, the agent's token in it.
- */
-function mcpConfigFile(): string {
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), 'opencode', 'opencode.json');
-}
-
-/** Where Tars wrote them until 2.0.4, which opencode never reads. */
+/** Where Tars wrote opencode's MCP servers until 2.0.4, which opencode never reads. */
 const legacyMcpFile = (): string => path.join(os.homedir(), '.opencode', 'config.json');
 
 type OpencodeConfig = { mcp?: Record<string, unknown>; [key: string]: unknown };
@@ -43,11 +31,32 @@ function dropLegacy(name: string): void {
   });
 }
 
-export class OpenCodeProvider implements CLIProvider {
-  readonly id = 'opencode' as const;
-  readonly displayName = 'OpenCode';
-  readonly binaryName = 'opencode';
-  readonly configDir = path.join(os.homedir(), '.opencode');
+/**
+ * A build of opencode: opencode itself, and Kilo (Kilo-Org/kilocode), which takes the same flags, draws the same TUI,
+ * keeps its sessions in the same schema and reads the same config, each in folders of its own (kilo-provider.ts).
+ * What one build keeps apart from another: its id (its harness on an endpoint, its key, its path setting), its binary,
+ * and its folder under `$XDG_CONFIG_HOME` with the file Tars writes its MCP servers into there.
+ */
+export abstract class OpencodeBuildProvider implements CLIProvider {
+  abstract readonly id: 'opencode' | 'kilo';
+  abstract readonly displayName: string;
+  abstract readonly binaryName: string;
+  abstract readonly configDir: string;
+  /** Its config folder under `$XDG_CONFIG_HOME`, and the file there it reads its MCP servers from. */
+  protected abstract readonly config: { folder: string; mcpFile: string };
+
+  /**
+   * Where this build reads its MCP servers: opencode 1.19.3 (read in its compiled bundle on 19/10) reads `opencode.json`
+   * of `$XDG_CONFIG_HOME/opencode` or `~/.config/opencode`, the file its own `opencode mcp add` writes, and merges
+   * `config.json` and `opencode.jsonc` there too; Kilo 7.8.27 reads `kilo.json` of its own folder (measured 20/11).
+   * Each server is `mcp.<name>`, and a local one is started with the CLI's whole environment, the agent's token in it.
+   */
+  protected mcpConfigFile(): string {
+    return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config'), this.config.folder, this.config.mcpFile);
+  }
+
+  /** A server Tars wrote where this build never read it: taken out (opencode's place until 2.0.4). */
+  protected dropLegacy(_name: string): void {}
 
   /**
    * opencode sends no SessionStart and drops keys typed before its TUI is ready (1.19.6, measured 20/11: its field and
@@ -67,21 +76,10 @@ export class OpenCodeProvider implements CLIProvider {
     return lines.some((line) => /\s{2,}\S+ commands\s*$/.test(line) && !(onSession && /^\s*\S+ agents\s{2,}\S+ commands\s*$/.test(line)));
   }
 
-  /** Measured on 1.19.6 (20/11): a note typed during a slow tool call went out with that call's result. */
-  readonly noteDuringTurn = 'next-tool-round' as const;
-
-  getModels(): ProviderModel[] {
-    return [
-      { id: 'default', name: 'Default', description: 'Use configured default' },
-      { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet', description: 'Anthropic' },
-      { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus', description: 'Anthropic' },
-      { id: 'openai/gpt-4o', name: 'GPT-4o', description: 'OpenAI' },
-      { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Google' },
-    ];
-  }
+  abstract getModels(): ProviderModel[];
 
   resolveBinaryPath(appSettings: AppSettings): string {
-    return appSettings.cliPaths?.opencode || 'opencode';
+    return appSettings.cliPaths?.[this.id] || this.binaryName;
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
@@ -98,7 +96,7 @@ export class OpenCodeProvider implements CLIProvider {
 
     // Model (format: provider/model). On an inference endpoint, Tars's provider on the endpoint proxy, whose
     // definition comes in the terminal's environment (services/endpoint-harness.ts).
-    const model = endpointLaunchForAgent(params.agentId, 'opencode')?.modelArg ?? params.model;
+    const model = endpointLaunchForAgent(params.agentId, this.id)?.modelArg ?? params.model;
     if (model && model !== 'default') {
       if (!/^[a-zA-Z0-9._:\/\-]+$/.test(model)) {
         throw new Error('Invalid model name');
@@ -160,9 +158,9 @@ export class OpenCodeProvider implements CLIProvider {
       CLAUDE_PROJECT_PATH: projectPath,
       CLAUDE_PROVIDER: this.id,
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
-      ...keyEnvFor('opencode', appSettings),
+      ...keyEnvFor(this.id, appSettings),
       // On an inference endpoint: the provider of Tars's, inline; the token is set at spawn (core/agent-pty.ts).
-      ...(endpointLaunchForAgent(agentId, 'opencode')?.env ?? {}),
+      ...(endpointLaunchForAgent(agentId, this.id)?.env ?? {}),
     };
   }
 
@@ -181,11 +179,11 @@ export class OpenCodeProvider implements CLIProvider {
   }
 
   async configureHooks(_hooksDir: string): Promise<void> {
-    console.log('OpenCode: hooks not supported, using exit-code based status detection');
+    console.log(`${this.displayName}: hooks not supported, using exit-code based status detection`);
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
-    const file = mcpConfigFile();
+    const file = this.mcpConfigFile();
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const outcome = updateSharedJsonSync<OpencodeConfig>(file, current => {
       const config: OpencodeConfig = current ?? { $schema: 'https://opencode.ai/config.json' };
@@ -194,25 +192,25 @@ export class OpenCodeProvider implements CLIProvider {
       return config;
     }, { createMode: 0o644 });
     // A file Tars cannot read (opencode takes JSONC, comments and all) is the user's, and left as it is.
-    if (outcome === 'unreadable') console.warn(`[opencode] MCP server ${name} not registered: ${file} is not plain JSON, left untouched`);
-    else if (outcome === 'busy') console.warn(`[opencode] MCP server ${name} not registered: ${file} changed under every attempt, tried again at the next start`);
-    else console.log(`[opencode] Registered MCP server ${name} in ${file}`);
-    dropLegacy(name);
+    if (outcome === 'unreadable') console.warn(`[${this.id}] MCP server ${name} not registered: ${file} is not plain JSON, left untouched`);
+    else if (outcome === 'busy') console.warn(`[${this.id}] MCP server ${name} not registered: ${file} changed under every attempt, tried again at the next start`);
+    else console.log(`[${this.id}] Registered MCP server ${name} in ${file}`);
+    this.dropLegacy(name);
   }
 
   async removeMcpServer(name: string): Promise<void> {
-    updateSharedJsonSync<OpencodeConfig>(mcpConfigFile(), current => {
+    updateSharedJsonSync<OpencodeConfig>(this.mcpConfigFile(), current => {
       const servers = current?.mcp;
       if (!servers || typeof servers !== 'object' || !(name in servers)) return undefined;
       delete servers[name];
       return current;
     });
-    dropLegacy(name);
+    this.dropLegacy(name);
   }
 
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
     try {
-      const config = JSON.parse(fs.readFileSync(mcpConfigFile(), 'utf-8')) as OpencodeConfig;
+      const config = JSON.parse(fs.readFileSync(this.mcpConfigFile(), 'utf-8')) as OpencodeConfig;
       const server = config.mcp && typeof config.mcp === 'object' ? config.mcp[name] : undefined;
       if (!server) return false;
       // The path as JSON writes it too: a Windows path has every backslash
@@ -261,5 +259,30 @@ export class OpenCodeProvider implements CLIProvider {
 
   getAddDirFlag(): string {
     return '--cwd';
+  }
+}
+
+export class OpenCodeProvider extends OpencodeBuildProvider {
+  readonly id = 'opencode' as const;
+  readonly displayName = 'OpenCode';
+  readonly binaryName = 'opencode';
+  readonly configDir = path.join(os.homedir(), '.opencode');
+  protected readonly config = { folder: 'opencode', mcpFile: 'opencode.json' };
+
+  /** Measured on 1.19.6 (20/11): a note typed during a slow tool call went out with that call's result. */
+  readonly noteDuringTurn = 'next-tool-round' as const;
+
+  getModels(): ProviderModel[] {
+    return [
+      { id: 'default', name: 'Default', description: 'Use configured default' },
+      { id: 'anthropic/claude-sonnet-4-20250514', name: 'Claude Sonnet', description: 'Anthropic' },
+      { id: 'anthropic/claude-opus-4-20250514', name: 'Claude Opus', description: 'Anthropic' },
+      { id: 'openai/gpt-4o', name: 'GPT-4o', description: 'OpenAI' },
+      { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Google' },
+    ];
+  }
+
+  protected dropLegacy(name: string): void {
+    dropLegacy(name);
   }
 }

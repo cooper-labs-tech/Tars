@@ -246,6 +246,7 @@ export function legacyPathFiles(home: string, dataDir: string): string[] {
     path.join(home, '.gemini', 'settings.json'),
     path.join(home, '.grok', 'config.toml'), path.join(home, '.grok', 'user-settings.json'),
     path.join(home, '.opencode', 'config.json'), path.join(home, '.config', 'opencode', 'opencode.json'),
+    path.join(home, '.config', 'kilo', 'kilo.json'),
     path.join(home, '.pi', 'mcp.json'), path.join(home, '.pi', 'settings.json'), path.join(home, '.pi', 'agent', 'settings.json'),
     path.join(home, '.config', 'amp', 'settings.json'),
     path.join(home, '.qwen', 'settings.json'),

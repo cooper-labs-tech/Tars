@@ -24,6 +24,8 @@ export type AgentProvider =
   | 'qwen-code'
   /** Kimi Code CLI, the binary `kimi` (MoonshotAI/kimi-code). */
   | 'kimi-code'
+  /** Kilo CLI, the binary `kilo` (Kilo-Org/kilocode), a build of opencode. */
+  | 'kilo'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -389,6 +391,7 @@ export const CLI_PATH_KEYS = [
   'opencode',
   'pi',
   'kimi',
+  'kilo',
   'gws',
   'gcloud',
   'gh',

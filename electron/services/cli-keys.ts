@@ -79,9 +79,9 @@ export const CLI_KEYS: readonly CliKeySpec[] = [
     withoutKey: 'Its own login, `cline auth`, kept in the system keychain. Unmeasured.',
   },
   {
-    id: 'kilo', label: 'Kilo CLI', provider: null, envVar: null, choices: PROVIDER_VARS,
-    measured: 'Not a CLI of Tars\'s yet: its variable is the one you name until its provider is added and measured.',
-    withoutKey: 'Unknown until its provider is added.',
+    id: 'kilo', label: 'Kilo CLI', provider: 'kilo', envVar: null, choices: PROVIDER_VARS,
+    measured: 'A build of opencode (7.8.27): which variable it reads for a model provider\'s key is not measured here, so the key goes under the one you name.',
+    withoutKey: 'Its own Kilo Gateway, on its free models: what Kilo 7.8.27 started on with no config of the user\'s (measured 20/11).',
   },
 ];
 
