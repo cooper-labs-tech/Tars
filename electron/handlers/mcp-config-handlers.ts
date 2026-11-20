@@ -6,6 +6,7 @@ import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { updateSharedTextSync, writeSharedJsonSync } from '../utils/shared-file';
 import { removeTomlTable } from '../utils/toml-tables';
 import { parse as parseToml } from 'smol-toml';
+import { kimiHome } from '../providers/kimi-cli';
 
 // Tars-managed MCP servers, hidden from the Custom MCP UI
 const DOROTHY_MANAGED_MCPS = new Set([
@@ -41,6 +42,9 @@ function getConfigPath(provider: string): string {
       return path.join(os.homedir(), '.opencode', 'mcp.json');
     case 'pi':
       return path.join(os.homedir(), '.pi', 'mcp.json');
+    case 'kimi-code':
+      // Where Kimi Code reads its servers, `mcpServers` of its home's mcp.json (kimi-code-provider.ts).
+      return path.join(kimiHome(), 'mcp.json');
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
@@ -313,7 +317,8 @@ function listServers(provider: string): McpServer[] {
     case 'gemini': return readGeminiMcp();
     case 'grok': return readCodexMcp('grok');
     case 'opencode':
-    case 'pi': return readJsonMcp(provider);
+    case 'pi':
+    case 'kimi-code': return readJsonMcp(provider);
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
@@ -333,7 +338,8 @@ function updateServer(provider: string, server: McpServer): void {
     case 'gemini': writeGeminiMcp('update', server); break;
     case 'grok': writeCodexMcp('update', server, undefined, 'grok'); break;
     case 'opencode':
-    case 'pi': writeJsonMcp(provider, 'update', server); break;
+    case 'pi':
+    case 'kimi-code': writeJsonMcp(provider, 'update', server); break;
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
@@ -352,7 +358,8 @@ function deleteServer(provider: string, name: string): void {
     case 'gemini': writeGeminiMcp('delete', undefined, name); break;
     case 'grok': writeCodexMcp('delete', undefined, name, 'grok'); break;
     case 'opencode':
-    case 'pi': writeJsonMcp(provider, 'delete', undefined, name); break;
+    case 'pi':
+    case 'kimi-code': writeJsonMcp(provider, 'delete', undefined, name); break;
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
