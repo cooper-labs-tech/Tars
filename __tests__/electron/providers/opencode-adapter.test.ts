@@ -17,7 +17,10 @@ import Database from 'better-sqlite3';
  *    tombstone): it forks, `--session <id> --fork`, measured to go on under a new id with the earlier turns.
  * 4. A delegated task typed before opencode takes keys, and lost. opencode draws its field and its bottom bar
  *    (`tab agents`, `ctrl+p commands`) 10 to 26 s after it starts on a loaded machine; it took keys within 50 ms of
- *    that, three times out of three, and none before. Up on that bar, never on its logo or its first frames.
+ *    that, three times out of three, and none before. Up on that bar, never on its logo or its first frames. Resumed
+ *    on a session (`--session`), its bar shows the session's tokens where `tab agents` was (`<folder>  132  ctrl+p
+ *    commands`, the conformance run's resume): what is always there is `<key> commands` at the line's end, after a
+ *    gap. It took keys within 60 ms of that bar on a resumed session too (twice).
  * 5. Its data folder read elsewhere than opencode writes it: `$XDG_DATA_HOME/opencode`, else `~/.local/share/opencode`.
  * 6. Its turns still taken for unseen: delegate_task then answers `delivered` at once, with neither answer nor tokens,
  *    and task_status never reads it completed. Its provider says its turns are reported, as codex's, pi's and kimi's.
@@ -103,6 +106,8 @@ describe('a task typed once opencode takes keys (4)', () => {
   it('up on its bottom bar, never on its logo or an empty screen', () => {
     const oc = new OpenCodeProvider();
     expect(oc.upOnScreen(READY)).toBe(true);
+    // Resumed on a session with tokens used: the count where `tab agents` was.
+    expect(oc.upOnScreen(['  ┃  Build auto · stand-in-coder Tars endpoint', '  ╹▀▀▀▀▀▀▀▀▀▀', '  /x/projects/project-a                              132  ctrl+p commands'])).toBe(true);
     expect(oc.upOnScreen(BOOTING)).toBe(false);
     expect(oc.upOnScreen([])).toBe(false);
     expect(oc.upOnScreen(['  the agents and their commands are listed in the docs'])).toBe(false);
