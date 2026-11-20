@@ -29,17 +29,20 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
- * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI); a harness with none is skipped, and says so.
+ * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE); a harness with none is skipped,
+ * and says so. A harness whose tokens Tars reads (opencode) also has them in its task's ledger entry.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
  * its start and after each task), endpoint-requests.jsonl, the app's logs, the agent's whole
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
  */
 
-type Harness = { id: string; provider: string; pathKey: string; env: string };
+/** `tokens`: a harness whose tokens Tars reads (its task's ledger entry carries them). */
+type Harness = { id: string; provider: string; pathKey: string; env: string; tokens?: boolean };
 const HARNESSES: Harness[] = [
   { id: 'kimi-code', provider: 'kimi-code', pathKey: 'kimi', env: 'TARS_HARNESS_KIMI_CODE' },
   { id: 'codex', provider: 'codex', pathKey: 'codex', env: 'TARS_HARNESS_CODEX' },
   { id: 'pi', provider: 'pi', pathKey: 'pi', env: 'TARS_HARNESS_PI' },
+  { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
 ];
 
 const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
@@ -50,7 +53,7 @@ const TASK = 'Run the shell command that prints the probe marker, then tell me w
 const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** The files Tars writes in a harness's home, for each home the runner may have exported: never Tars's to write here. */
-const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']]];
+const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']], ['XDG_CONFIG_HOME', [path.join('opencode', 'opencode.json')]]];
 const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([name, files]) => {
   const dir = process.env[name]?.trim();
   return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
@@ -110,6 +113,7 @@ for (const h of HARNESSES) {
         app = await launchSandboxed(electron, home, { env: {
           NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1',
           CODEX_HOME: path.join(home, '.codex'), KIMI_CODE_HOME: path.join(home, '.kimi-code'), PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
+          XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
         } });
         const appLog = test.info().outputPath(`app-${label}.log`);
         app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
@@ -177,7 +181,14 @@ for (const h of HARNESSES) {
         // What Tars knows of the agent and its tasks at that moment, for a run that goes wrong.
         const view = (a: Record<string, unknown> | null) => a && Object.fromEntries(['status', 'currentSessionId', 'resumableSessionId', 'lastTurnStartedAt', 'sessionRegisteredAt', 'requestedBy', 'taskQueue', 'currentTask'].map((k) => [k, a[k]]));
         const ledger = async () => ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => t.agentId === WORKER);
-        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask: await ledger() });
+        const ledgerAfterTask = await ledger();
+        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask });
+        // A harness whose tokens Tars reads: the task's ledger entry carries them (the stand-in answers 120 in, 100 cached).
+        // Its usage is posted just after its turn's end: read until it is filed, or 15 s.
+        if (h.tokens) {
+          await expect.poll(async () => JSON.stringify(await ledger()), { timeout: 15_000, message: "the task's tokens, in its ledger entry" }).toMatch(/"input":\s*[1-9]/);
+          keep({ ledgerWithTokens: await ledger() });
+        }
         expect.soft(delegated.text, 'delegate_task returns the harness\'s final answer').toContain(`PROBE-OK ${standin.marker}`);
         expect.soft(posts().some((r, i) => i > 0 && JSON.stringify(r.body ?? '').includes(standin.marker)), 'the tool\'s result reached the endpoint').toBe(true);
 
