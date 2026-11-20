@@ -143,7 +143,7 @@ test('codex 0.170 starts in a worker\'s terminal, and its turn ends when Tars st
 
   let app: ElectronApplication | undefined;
   try {
-    app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31960), DOROTHY_E2E: '1' } });
+    app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31960), DOROTHY_E2E: '1', CODEX_HOME: codexHome } });
     const appLog = test.info().outputPath('app.log');
     app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
     app.process().stderr?.on('data', (d) => fs.appendFileSync(appLog, d));
