@@ -6,23 +6,60 @@ import Database from 'better-sqlite3';
 
 /**
  * Where Goose keeps its sessions, and how Tars names them: below the providers and the services, so the resume check
- * (utils/resume-session.ts), the provider and the session reader (services/goose-sessions.ts) share it. Measured on
- * Goose 1.60.1 (20/11/2026): one SQLite database, `$XDG_DATA_HOME/goose/sessions/sessions.db`, else
- * `~/.local/share/goose/sessions/sessions.db` (macOS included), and `$GOOSE_PATH_ROOT/data/sessions/sessions.db` when
- * that is set, whatever XDG_DATA_HOME says; a session is a `sessions` row, `YYYYMMDD_N`, with its `working_dir`.
+ * (utils/resume-session.ts), the provider and the session reader (services/goose-sessions.ts) share it.
+ *
+ * Its folders (Goose 1.60.1, `crates/goose/src/config/paths.rs`, and the `etcetera` 0.11 crate it chooses them with):
+ * - `$GOOSE_PATH_ROOT/{config,data}` when GOOSE_PATH_ROOT is an absolute path, on every system (a relative one is
+ *   ignored); measured on macOS: `$GOOSE_PATH_ROOT/data/sessions/sessions.db`, XDG_DATA_HOME set or not, and an empty
+ *   GOOSE_PATH_ROOT read as unset;
+ * - else, on macOS and Linux, `$XDG_DATA_HOME/goose` (else `~/.local/share/goose`) and `$XDG_CONFIG_HOME/goose` (else
+ *   `~/.config/goose`), measured on macOS;
+ * - else, on Windows, `%APPDATA%\Block\goose\data` and `...\config` (else the home's `AppData\Roaming`), and no XDG
+ *   variable read: from Goose's and etcetera's source, not measured on Windows.
+ * Its sessions are `<data>/sessions/sessions.db` (SQLite); a session is a `sessions` row, `YYYYMMDD_N`, with its
+ * `working_dir`.
  */
 
-/** GOOSE_PATH_ROOT, which moves every folder of Goose's under it (`config`, `data`, `state`), or undefined. */
-export const goosePathRoot = (env: NodeJS.ProcessEnv = process.env): string | undefined => env.GOOSE_PATH_ROOT?.trim() || undefined;
+type Platform = NodeJS.Platform;
+const pathsOf = (platform: Platform) => (platform === 'win32' ? path.win32 : path.posix);
+
+/** GOOSE_PATH_ROOT, which moves every folder of Goose's under it (`config`, `data`, `state`), when absolute; or undefined. */
+export function goosePathRoot(env: NodeJS.ProcessEnv = process.env, platform: Platform = process.platform): string | undefined {
+  const root = env.GOOSE_PATH_ROOT?.trim();
+  return root && pathsOf(platform).isAbsolute(root) ? root : undefined;
+}
+
+/** Goose's own folder for `kind` on Windows: `%APPDATA%\Block\goose\<kind>`, else under the home's AppData\Roaming. */
+const windowsDir = (env: NodeJS.ProcessEnv, homeDir: string, kind: 'config' | 'data'): string =>
+  path.win32.join(env.APPDATA?.trim() || path.win32.join(homeDir, 'AppData', 'Roaming'), 'Block', 'goose', kind);
+
+/** Where Goose reads its config (its config.yaml). */
+export function gooseConfigDir(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir(), platform: Platform = process.platform): string {
+  const root = goosePathRoot(env, platform);
+  if (root) return pathsOf(platform).join(root, 'config');
+  if (platform === 'win32') return windowsDir(env, homeDir, 'config');
+  return path.posix.join(env.XDG_CONFIG_HOME?.trim() || path.posix.join(homeDir, '.config'), 'goose');
+}
+
+/**
+ * The line a launch types before the task when the agent has skills (goose-provider.ts, typedTask), and its pattern:
+ * the same for every agent with the same skills, so the session reader reads past it (services/goose-sessions.ts, the
+ * Audit's M1 on #618, as #613's M2 for opencode).
+ */
+export function gooseSkillsLine(skills: readonly string[]): string {
+  return `[IMPORTANT: Use these skills for this session: ${skills.join(', ')}. Invoke them when relevant to the task.]`;
+}
+export const GOOSE_SKILLS_LINE = String.raw`\[IMPORTANT: Use these skills for this session: [^\]\n]*\]`;
 
 /** A session id as Goose writes it: the only form that reaches a command line. */
 export const GOOSE_SESSION_ID = /^\d{8}_\d{1,6}$/;
 
-export function gooseDbPath(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir()): string {
-  const root = goosePathRoot(env);
-  if (root) return path.join(root, 'data', 'sessions', 'sessions.db');
-  const data = env.XDG_DATA_HOME?.trim() || path.join(homeDir, '.local', 'share');
-  return path.join(data, 'goose', 'sessions', 'sessions.db');
+export function gooseDbPath(env: NodeJS.ProcessEnv = process.env, homeDir = os.homedir(), platform: Platform = process.platform): string {
+  const root = goosePathRoot(env, platform);
+  if (root) return pathsOf(platform).join(root, 'data', 'sessions', 'sessions.db');
+  if (platform === 'win32') return path.win32.join(windowsDir(env, homeDir, 'data'), 'sessions', 'sessions.db');
+  const data = env.XDG_DATA_HOME?.trim() || path.posix.join(homeDir, '.local', 'share');
+  return path.posix.join(data, 'goose', 'sessions', 'sessions.db');
 }
 
 /**
@@ -77,6 +114,35 @@ export function gooseSessionOf(uuid: string, folders: string[], dbPath = gooseDb
       if (gooseUuidOf(row.id) === uuid && folders.some((f) => sameDir(f, row.working_dir as string))) return row.id;
     }
     return null;
+  } catch {
+    return null;
+  } finally {
+    db?.close();
+  }
+}
+
+/** A stdio server a Goose session was started with, as it saved it. */
+export interface GooseSavedServer { name: string; cmd: string; args: string[] }
+
+/**
+ * The stdio servers the session `sessionId` was started with, which Goose starts again on every resume or fork of it
+ * (`extension_data`, `enabled_extensions.v0`; measured on 1.60.1: nothing switches one off, neither --no-profile nor
+ * Goose's own config). Null when it cannot be read: no database, no such session, or another shape.
+ */
+export function gooseSavedServers(sessionId: string, dbPath = gooseDbPath()): GooseSavedServer[] | null {
+  if (!fs.existsSync(dbPath)) return null;
+  let db: Database.Database | undefined;
+  try {
+    db = new Database(dbPath, { readonly: true, fileMustExist: true });
+    const row = db.prepare('SELECT extension_data FROM sessions WHERE id = ?').get(sessionId) as { extension_data?: unknown } | undefined;
+    if (!row || typeof row.extension_data !== 'string') return null;
+    const extensions = (JSON.parse(row.extension_data) as { 'enabled_extensions.v0'?: { extensions?: unknown } })['enabled_extensions.v0']?.extensions;
+    if (!Array.isArray(extensions)) return null;
+    return extensions.flatMap((e): GooseSavedServer[] => {
+      const x = e as { type?: unknown; name?: unknown; cmd?: unknown; args?: unknown };
+      if (x.type !== 'stdio' || typeof x.name !== 'string' || typeof x.cmd !== 'string') return [];
+      return [{ name: x.name, cmd: x.cmd, args: Array.isArray(x.args) ? x.args.filter((a): a is string => typeof a === 'string') : [] }];
+    });
   } catch {
     return null;
   } finally {

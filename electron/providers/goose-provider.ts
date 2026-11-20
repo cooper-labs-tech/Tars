@@ -1,4 +1,3 @@
-import * as os from 'os';
 import * as path from 'path';
 import type { AppSettings, AgentPermissionMode } from '../types';
 import type {
@@ -10,8 +9,8 @@ import type {
   PtyLaunch,
 } from './cli-provider';
 import { shellQuote } from './cli-provider';
-import { GOOSE_SESSION_ID, goosePathRoot } from './goose-cli';
-import { ORCHESTRATOR_ONLY_MCP } from '../services/mcp-roles';
+import { GOOSE_SESSION_ID, gooseConfigDir, gooseSavedServers, gooseSkillsLine } from './goose-cli';
+import { ORCHESTRATOR_ONLY_MCP, isTarsBundleEntry } from '../services/mcp-roles';
 import { endpointLaunchForAgent } from '../services/traces-runtime';
 
 /**
@@ -50,8 +49,7 @@ export class GooseProvider implements CLIProvider {
   readonly displayName = 'Goose';
   readonly binaryName = 'goose';
   get configDir(): string {
-    const root = goosePathRoot();
-    return root ? path.join(root, 'config') : path.join(process.env.XDG_CONFIG_HOME?.trim() || path.join(os.homedir(), '.config'), 'goose');
+    return gooseConfigDir();
   }
 
   /** Tars's servers, by name, put on each fresh launch's line: Goose's own config is never written. */
@@ -75,13 +73,16 @@ export class GooseProvider implements CLIProvider {
     command += `${shellQuote(params.binaryPath)} session`;
     // On an inference endpoint, Tars's provider and model; the proxy in the environment (getPtyEnvVars).
     for (const arg of endpointLaunchForAgent(params.agentId, 'goose')?.args ?? []) command += ` ${shellQuote(arg)}`;
-    // Goose's own id and nothing else: it reaches a command line. A session resumed or forked brings its servers back.
-    const session = params.resumeSessionId && GOOSE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
-    if (session) return `${command} --resume --session-id ${shellQuote(session)}${params.forkSession ? ' --fork' : ''}`;
     // A worker's Goose starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts).
-    const orchestrator = params.orchestratorMode === true;
-    for (const [name, server] of this.servers) {
-      if (!orchestrator && ORCHESTRATOR_ONLY_MCP.includes(name)) continue;
+    const servers = this.serversFor(params.orchestratorMode === true);
+    // Goose's own id and nothing else: it reaches a command line. A session resumed or forked brings back the servers
+    // it was started with, and nothing switches one off (measured), so it is continued only while those are this
+    // launch's: after a role change, or a move of Tars's bundles, a fresh session (the Audit's L1 on #618).
+    const session = params.resumeSessionId && GOOSE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
+    if (session && !this.serversChangedSince(session, servers)) {
+      return `${command} --resume --session-id ${shellQuote(session)}${params.forkSession ? ' --fork' : ''}`;
+    }
+    for (const [name, server] of servers) {
       const words = [server.command, ...server.args].map(extensionWord);
       if (words.some((w) => w === undefined)) {
         console.warn(`[goose] MCP server ${name} not given: a quote in its command or path, which Goose's extension value cannot carry`);
@@ -90,6 +91,28 @@ export class GooseProvider implements CLIProvider {
       command += ` --with-extension ${shellQuote(`${name}:${words.join(' ')}`)}`;
     }
     return command;
+  }
+
+  /** Tars's servers this launch gets, by its role. */
+  private serversFor(orchestrator: boolean): Map<string, { command: string; args: string[] }> {
+    return new Map([...this.servers].filter(([name]) => orchestrator || !ORCHESTRATOR_ONLY_MCP.includes(name)));
+  }
+
+  /**
+   * Whether the servers of Tars's that `session` was started with (gooseSavedServers) are not `servers`: one more, one
+   * fewer, or one on another command or path. False when that cannot be told: no server registered yet, or the
+   * session not readable, where the resume goes on as before.
+   */
+  private serversChangedSince(session: string, servers: Map<string, { command: string; args: string[] }>): boolean {
+    if (this.servers.size === 0) return false;
+    const saved = gooseSavedServers(session);
+    if (!saved) return false;
+    const tars = saved.filter((s) => this.servers.has(s.name) || isTarsBundleEntry(s.name, { command: s.cmd, args: s.args }));
+    if (tars.length !== servers.size) return true;
+    return tars.some((s) => {
+      const now = servers.get(s.name);
+      return !now || now.command !== s.cmd || JSON.stringify(now.args) !== JSON.stringify(s.args);
+    });
   }
 
   readonly taskTypedAfterLaunch = true;
@@ -109,7 +132,7 @@ export class GooseProvider implements CLIProvider {
   typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {
     if (!params.prompt?.trim()) return '';
     if (params.skills && params.skills.length > 0 && !params.isSuperAgent) {
-      return `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them when relevant to the task.] ${params.prompt}`;
+      return `${gooseSkillsLine(params.skills)} ${params.prompt}`;
     }
     return params.prompt;
   }

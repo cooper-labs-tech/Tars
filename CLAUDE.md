@@ -83,7 +83,7 @@ DOROTHY_E2E_PTY_MAX   # under DOROTHY_E2E only, never in a packaged build (app.i
 DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a stand-in of Sentry); a packaged Tars never reads it (app.isPackaged, services/error-reports/index.ts)
 ELECTRON_BUILD        # '1' switches next.config.ts to output: 'export' for packaging
 PATH SHELL HOME       # read when composing the PTY environment (buildFullPath, cli-paths detection)
-GOOSE_PATH_ROOT       # when set, where Goose keeps every folder of its own: Tars reads its sessions.db there (`data/sessions/sessions.db`), else under XDG_DATA_HOME (`goose/sessions/sessions.db`)
+GOOSE_PATH_ROOT       # when set to an absolute path, where Goose keeps every folder of its own: Tars reads its sessions.db there (`data/sessions/sessions.db`), else under XDG_DATA_HOME (`goose/sessions/sessions.db`), or %APPDATA%\Block\goose\data on Windows
 KIMI_CODE_HOME        # where Kimi Code keeps its config, sessions and login (else ~/.kimi-code): Tars reads its sessions there and writes its MCP servers into its mcp.json
 CODEX_HOME            # where codex keeps its config, sessions and model cache (else ~/.codex): Tars reads its sessions and model list there, writes its MCP servers and the agents' folder trust into its config.toml, and hands it to the codex it starts (in the command line on macOS and Linux, in the terminal's environment on Windows), whatever an rc file sets; the one a login shell sets is read once per run, only to say why a codex agent is not signed in
 APPLE_ID              # notarization; unset → scripts/notarize.js uses the 'Tars' keychain profile

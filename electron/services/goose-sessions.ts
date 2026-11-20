@@ -3,7 +3,7 @@ import * as path from 'path';
 import Database from 'better-sqlite3';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
-import { gooseDbPath, gooseUuidOf, type GooseLaunchFrom } from '../providers/goose-cli';
+import { GOOSE_SKILLS_LINE, gooseDbPath, gooseUuidOf, type GooseLaunchFrom } from '../providers/goose-cli';
 
 export type { HookPost };
 
@@ -26,9 +26,11 @@ export type { HookPost };
  *
  * Whose session is whose is decided on evidence, never on the folder alone (the user's own Goose writes the same
  * database), for a session made in the agent's folder since the launch and held by no other launch, as for opencode:
- * Tars's identity lines in its first prompt all naming this agent; or, unless it holds a text another unbound launch
- * was sent, a text this terminal was sent; or, for a fork, under the same condition, a copy of the forked session's
- * first prompt (the same time and text). A session the launch resumed is bound by its id, read from the launch on,
+ * Tars's identity lines in its first prompt all naming this agent, at a line's start or right after the skills line a
+ * launch types first (a prompt naming two agents names nobody by itself); or, unless it holds a text another unbound
+ * launch was sent, a text this terminal was sent, noted from after that skills line, which is every such agent's
+ * (the Audit's M1 on #618, #613's M2 for opencode); or, for a fork, under the same condition, a copy of the forked
+ * session's first prompt (the same time and text). A session the launch resumed is bound by its id, read from the launch on,
  * unless another launch holds it. Posted under the UUID made from Goose's id (providers/goose-cli.ts): the hook routes
  * take nothing else. goose-sessions.test.ts says each way this goes wrong.
  *
@@ -75,8 +77,13 @@ interface Launch {
 type Row = { id: number; role: string; content_json: string; created_timestamp: number; metadata_json: string | null };
 type Item = Record<string, unknown>;
 
-/** Tars's identity line at a line's start, where Tars writes it: never a header quoted inside a line. */
-const IDENTITY = /^\s*\[Tars: you are agent ".*?" \(id ([0-9a-zA-Z-]{4,})\)/gm;
+/**
+ * Tars's identity line, at a line's start or right after the skills line a launch types first (gooseSkillsLine): where
+ * Tars writes it, and never a header quoted inside a line.
+ */
+const IDENTITY = new RegExp(String.raw`^\s*(?:${GOOSE_SKILLS_LINE}\s*)?\[Tars: you are agent ".*?" \(id ([0-9a-zA-Z-]{4,})\)`, 'gm');
+/** The skills line at a typed text's start: the same for every agent with the same skills, never what tells them apart. */
+const SKILLS_FIRST = new RegExp(String.raw`^\s*${GOOSE_SKILLS_LINE}\s*`);
 const fold = (text: string): string => text.replace(/\s+/g, ' ').trim();
 const TYPED_HEAD = 200;
 const TYPED_MIN = 16;
@@ -101,11 +108,17 @@ const hidden = (metadata: string | null): boolean => {
   try { return (JSON.parse(metadata ?? '{}') as { userVisible?: unknown }).userVisible === false; } catch { return false; }
 };
 const textsOf = (items: Item[]): string[] => items.filter((i) => i.type === 'text' && typeof i.text === 'string' && i.text).map((i) => i.text as string);
-/** `created_at` as Goose writes it, `YYYY-MM-DD HH:MM:SS` in UTC, in whole seconds; NaN for anything else. */
+/**
+ * `created_at` in whole seconds: `YYYY-MM-DD HH:MM:SS` in UTC as SQLite's CURRENT_TIMESTAMP writes it, or with a
+ * fraction and a zone (`...16:31:10.123456789+00:00`, `...Z`) as sqlx writes a DateTime<Utc>; NaN for anything else.
+ */
 const createdSeconds = (v: unknown): number => {
-  if (typeof v === 'number') return v;
+  if (typeof v === 'number') return Math.floor(v);
   if (typeof v !== 'string') return NaN;
-  return Date.parse(`${v.trim().replace(' ', 'T')}Z`) / 1000;
+  const m = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$/.exec(v.trim());
+  if (!m) return NaN;
+  const zone = !m[4] || m[4] === 'Z' ? 'Z' : m[4].length === 5 ? `${m[4].slice(0, 3)}:${m[4].slice(3)}` : m[4];
+  return Math.floor(Date.parse(`${m[1]}T${m[2]}${zone}`) / 1000);
 };
 
 export class GooseSessionWatch {
@@ -122,10 +135,13 @@ export class GooseSessionWatch {
     this.launches.set(agentId, { cwd, at: this.deps.now(), resume: from.resume, forkOf: from.forkOf, terminal: from.terminal, typed: [] });
   }
 
-  /** Tars typed `text` into the agent's terminal: a session whose first prompt holds it, and no other's, is the agent's. */
+  /**
+   * Tars typed `text` into the agent's terminal: a session whose first prompt holds it, and no other's, is the agent's.
+   * Noted from after the skills line, which would fill the head noted and be every such agent's (the Audit's M1 on #618).
+   */
   noteTyped(agentId: string, text: string): void {
     const launch = this.launches.get(agentId);
-    const folded = fold(text).slice(0, TYPED_HEAD);
+    const folded = fold(text.replace(SKILLS_FIRST, '')).slice(0, TYPED_HEAD);
     if (!launch || launch.bound || folded.length < TYPED_MIN) return;
     launch.typed.push(folded);
     if (launch.typed.length > 20) launch.typed.shift();

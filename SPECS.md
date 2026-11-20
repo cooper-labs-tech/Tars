@@ -158,7 +158,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `qwen-code` | Qwen Code | `qwen` | `~/.qwen` | native, on the models of the user's own `~/.qwen/settings.json` (2.0.4, below) |
 | `kimi-code` | Kimi Code | `kimi` | `$KIMI_CODE_HOME`, else `~/.kimi-code` | native, on the model of the user's own `config.toml`, or an inference endpoint (below) |
 | `kilo` | Kilo | `kilo` | `$XDG_CONFIG_HOME/kilo`, else `~/.config/kilo` | native, a build of opencode: its own default (the Kilo Gateway's), or an inference endpoint (below) |
-| `goose` | Goose | `goose` | `$GOOSE_PATH_ROOT/config`, else `$XDG_CONFIG_HOME/goose`, else `~/.config/goose` | native, on the provider and model of the user's own Goose config, or an inference endpoint (below) |
+| `goose` | Goose | `goose` | `$GOOSE_PATH_ROOT/config` (absolute only), else `$XDG_CONFIG_HOME/goose`, else `~/.config/goose`; on Windows `%APPDATA%\Block\goose\config` | native, on the provider and model of the user's own Goose config, or an inference endpoint (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
@@ -257,14 +257,24 @@ The binary `goose` (block/goose), measured on 1.60.1 in throwaway homes, its TUI
 - **MCP**: Tars's servers on a fresh launch's line, each named (`--with-extension '<name>:<command> <args>'`), its words
   single-quoted where they hold a space or a backslash (Goose splits the value into shell words; a backslash inside
   single quotes reached the process as it is); a word holding a single quote is not passed, and said. Each server gets
-  Goose's whole environment, the agent's token in it. A worker gets no X or Telegram. A session resumed or forked starts
-  again the servers it was started with, and Goose refuses to start when one is named again, so a resume names none.
+  Goose's whole environment, the agent's token in it. A worker gets no X or Telegram. Servers go on a fresh launch's
+  line only: a session resumed or forked starts again the servers it was started with, Goose refuses to start when one
+  is named again, and nothing switches one off (measured: `--no-profile` on a resume or a fork, and the server disabled
+  in Goose's own `config.yaml`, all started it). So a session is resumed or forked only while the servers of Tars's it
+  saved are this launch's; after a role change, or a move of Tars's bundles, the launch starts a fresh session with the
+  servers of the agent's role now, and the conversation before it is not continued.
 - **The task**: typed in once its field line is drawn (`upOnScreen`: `Enter to send`), which comes in the same write
-  as bracketed paste turning on; `goose is ready` comes 5 to 68 ms before, when a paste arrives raw.
-- **Turns, answers, tokens and resume**: read from `sessions.db` (`$GOOSE_PATH_ROOT/data/sessions/sessions.db`, else
-  `$XDG_DATA_HOME/goose/sessions/sessions.db`), as opencode's database is. A session is bound on Tars's identity lines,
-  on what its terminal was sent, or, for a fork, on its copy of the forked session's first prompt; posted under a UUID
-  made from Goose's `YYYYMMDD_N`. Its input is counted without the cache read, which Goose counts in it.
+  as bracketed paste turning on; `goose is ready` comes 5 to 68 ms before, when a paste arrives raw. An agent with
+  skills gets the skills line first (`gooseSkillsLine`), on the same line as Tars's identity line.
+- **Turns, answers, tokens and resume**: read from `sessions.db`, `<data>/sessions/sessions.db`, as opencode's
+  database is. `<data>` is `$GOOSE_PATH_ROOT/data` when that is an absolute path; else `$XDG_DATA_HOME/goose` (else
+  `~/.local/share/goose`) on macOS and Linux, measured on macOS; and on Windows `%APPDATA%\Block\goose\data` (else
+  the home's `AppData\Roaming\Block\goose\data`), read from Goose 1.60.1's `config/paths.rs` and the `etcetera` 0.11
+  crate it chooses its folders with, **not measured on Windows**. A session is bound on Tars's identity lines when
+  they all name the agent, read after the skills line too; on what its terminal was sent, noted from after that skills
+  line, which is the same for every agent with the same skills; or, for a fork, on its copy of the forked session's
+  first prompt; posted under a UUID made from Goose's `YYYYMMDD_N`. `created_at` is read with its zone when it has one.
+  Its input is counted without the cache read, which Goose counts in it.
 - **A message typed during its turn is lost**: Goose drops its Enter and leaves the text in its field. So every message
   to a Goose agent waits for the turn's end, `auto` and `note-now` as `queue` (`noteDuringTurn: 'lost'`,
   `core/send-mode.ts`).
