@@ -42,7 +42,13 @@ import { hasPosixModes } from '../../setup/platform-limits';
 let codexHome: string;
 let project: string;
 const config = () => fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
-const codexOnPath = (() => { try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; } })();
+// The installed codex, run on purpose to read the config with codex's own parser: only when TARS_TEST_REAL_CLIS names
+// codex, as __tests__/setup/no-real-cli.ts lets it through then and refuses a real codex otherwise (the Audit's I-4
+// on #616: a unit test runs no real CLI by default). Its home is this file's own folder.
+const codexOnPath = (() => {
+  if (!(process.env.TARS_TEST_REAL_CLIS ?? '').split(/[\s,]+/).some(n => n.toLowerCase() === 'codex')) return '';
+  try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; }
+})();
 /** The MCP servers codex's own parser reads in this home's config.toml: it refuses the whole file when it cannot read it. */
 const listedByCodex = () => (JSON.parse(execFileSync(codexOnPath, ['mcp', 'list', '--json'], {
   encoding: 'utf8', env: { PATH: process.env.PATH, HOME: path.dirname(codexHome), CODEX_HOME: codexHome }, stdio: ['ignore', 'pipe', 'pipe'],

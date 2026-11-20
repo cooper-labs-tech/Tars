@@ -37,7 +37,13 @@ async function codex() {
   return new CodexProvider();
 }
 const configFile = () => path.join(home, '.codex', 'config.toml');
-const codexOnPath = (() => { try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; } })();
+// The installed codex, run on purpose to read the config with codex's own parser: only when TARS_TEST_REAL_CLIS names
+// codex, as __tests__/setup/no-real-cli.ts lets it through then and refuses a real codex otherwise (the Audit's I-4
+// on #616: a unit test runs no real CLI by default). Its home is this file's own folder.
+const codexOnPath = (() => {
+  if (!(process.env.TARS_TEST_REAL_CLIS ?? '').split(/[\s,]+/).some(n => n.toLowerCase() === 'codex')) return '';
+  try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; }
+})();
 
 let saved: string | undefined;
 beforeEach(() => {
