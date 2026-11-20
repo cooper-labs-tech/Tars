@@ -464,6 +464,37 @@ describe.each(['opencode', 'kilo'])('on %s.db', (name) => {
       expect(by(OTHER)).toEqual([opencodeUuidOf('ses_otherbuild0000000000000')]);
     });
 
+    it('two launches with the same four skills and prompts without an identity line: each binds its own by its prompt', async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project, { prompt: `${SKILLS} Review the parser and report what breaks.` });
+      w.noteLaunch(OTHER, project, { prompt: `${SKILLS} Write the changelog entry for the release.` });
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [`${SKILLS} Review the parser and report what breaks.`]);
+      session('ses_otherbuild0000000000000', project, 2_000);
+      message('ses_otherbuild0000000000000', 2_001, user(2_001), [`${SKILLS} Write the changelog entry for the release.`]);
+      await w.tick();
+      const by = (id: string) => [...new Set(posts.filter((p) => p.agentId === id).map((p) => p.post.body.session_id))];
+      expect(by(AGENT)).toEqual([opencodeUuidOf(SES)]);
+      expect(by(OTHER)).toEqual([opencodeUuidOf('ses_otherbuild0000000000000')]);
+    });
+
+    it("a note sent to both as their first message, each carrying its own identity line, binds each its own", async () => {
+      const note = 'Message from agent "Lead": a note for every worker, long enough to count as sent.';
+      const w = watch();
+      w.noteLaunch(AGENT, project);
+      w.noteLaunch(OTHER, project);
+      w.noteTyped(AGENT, note);
+      w.noteTyped(OTHER, note);
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [`${note}\n\nMessage from Tars: \n${identity(AGENT)}`]);
+      session('ses_otherbuild0000000000000', project, 2_000);
+      message('ses_otherbuild0000000000000', 2_001, user(2_001), [`${note}\n\nMessage from Tars: \n${identity(OTHER)}`]);
+      await w.tick();
+      const by = (id: string) => [...new Set(posts.filter((p) => p.agentId === id).map((p) => p.post.body.session_id))];
+      expect(by(AGENT)).toEqual([opencodeUuidOf(SES)]);
+      expect(by(OTHER)).toEqual([opencodeUuidOf('ses_otherbuild0000000000000')]);
+    });
+
     it('the identity line right after the skills line names the session, with no prompt noted', async () => {
       const w = watch();
       w.noteLaunch(AGENT, project);
