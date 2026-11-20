@@ -37,10 +37,25 @@ import Database from 'better-sqlite3';
  * 12. A step that says something as it asks for a tool taken for the turn's end: the answer cut at its first words.
  * 13. A first prompt naming this agent and another bound by one of its identity lines: a header pasted into a task.
  * 14. A text two unbound launches were both sent taken as the first one's evidence: the session may be the other's.
+ * (The Audit's M1 on #618, #613's M2 back in Goose's reader, and its Info on created_at:)
+ * 15. Two agents with the same skills launched together never read: a launch types the skills line before Tars's
+ *     identity line, on the same line, so no identity line is read; and the 200 characters noted of what each was
+ *     sent are the skills line and the identity line's start, the same for both, so each rules the other's session
+ *     out. With this project's four skills the skills line alone is 190 characters.
+ * 16. A launch whose task pastes another agent's header bound by its identity lines, or ruled out by them: what its
+ *     terminal was sent decides (#613's L3).
+ * 17. A session whose created_at carries its time zone (as sqlx writes a DateTime<Utc>) read as no time at all: never
+ *     bound.
  */
 
 import { GooseSessionWatch, type HookPost } from '../../electron/services/goose-sessions';
 import { gooseUuidOf } from '../../electron/providers/goose-cli';
+import { GooseProvider } from '../../electron/providers/goose-provider';
+
+/** This project's four skills (the Audit's measure: their skills line is 190 characters). */
+const FOUR = ['vercel-react-best-practices', 'web-design-guidelines', 'frontend-design', 'supabase-postgres-best-practices'];
+/** What a launch types into Goose for this task, as the provider writes it. */
+const launchTyped = (task: string) => new GooseProvider().typedTask!({ prompt: task, skills: FOUR });
 
 const DDL = `
 CREATE TABLE sessions (id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', working_dir TEXT NOT NULL,
@@ -98,8 +113,8 @@ function open(): Database.Database {
   return db;
 }
 const utc = (ms: number) => new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
-function session(id: string, dir: string, atMs: number): void {
-  open().prepare('INSERT INTO sessions (id, working_dir, created_at, updated_at) VALUES (?, ?, ?, ?)').run(id, dir, utc(atMs), utc(atMs));
+function session(id: string, dir: string, atMs: number, createdAt = utc(atMs)): void {
+  open().prepare('INSERT INTO sessions (id, working_dir, created_at, updated_at) VALUES (?, ?, ?, ?)').run(id, dir, createdAt, utc(atMs));
 }
 function message(sessionId: string, atMs: number, role: string, content: unknown[], meta: Record<string, unknown> = { userVisible: true, agentVisible: true }): void {
   open().prepare('INSERT INTO messages (message_id, session_id, role, content_json, created_timestamp, metadata_json) VALUES (?, ?, ?, ?, ?, ?)')
@@ -257,6 +272,62 @@ describe('whose session it is (1)', () => {
     await w.tick();
     expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
     expect(paths()).toContain('/api/hooks/status:UserPromptSubmit:running');
+  });
+});
+
+describe('two agents launched together with the same skills (15, 16: the Audit\'s M1 on #618)', () => {
+  it('15: each binds its own session', async () => {
+    const typedA = launchTyped(identity(AGENT));
+    const typedB = launchTyped(identity(OTHER));
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    w.noteLaunch(OTHER, project);
+    w.noteTyped(AGENT, typedA);
+    w.noteTyped(OTHER, typedB);
+    session('20261120_1', project, LAUNCH + 1_000);
+    prompt('20261120_1', LAUNCH + 2_000, typedA);
+    session('20261120_2', project, LAUNCH + 1_000);
+    prompt('20261120_2', LAUNCH + 2_000, typedB);
+    await w.tick();
+    expect(Object.fromEntries(posts.map((p) => [p.agentId, p.post.body.session_id])))
+      .toEqual({ [AGENT]: gooseUuidOf('20261120_1'), [OTHER]: gooseUuidOf('20261120_2') });
+  });
+
+  it("16: a task that pastes another agent's header: what each terminal was sent decides", async () => {
+    const typedA = launchTyped(`${identity(AGENT)}\nPass this on, as it is:\n[Tars: you are agent "Other" (id ${OTHER}), worker of project /x.]`);
+    const typedB = launchTyped(`${identity(OTHER)}\nRun the second probe, a task of its own.`);
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    w.noteLaunch(OTHER, project);
+    w.noteTyped(AGENT, typedA);
+    w.noteTyped(OTHER, typedB);
+    // The other's session first: a header pasted into A's names B too, and must not hand A's session to B.
+    session('20261120_2', project, LAUNCH + 1_000);
+    prompt('20261120_2', LAUNCH + 2_000, typedB);
+    session('20261120_1', project, LAUNCH + 1_000);
+    prompt('20261120_1', LAUNCH + 2_000, typedA);
+    await w.tick();
+    expect(Object.fromEntries(posts.map((p) => [p.agentId, p.post.body.session_id])))
+      .toEqual({ [AGENT]: gooseUuidOf('20261120_1'), [OTHER]: gooseUuidOf('20261120_2') });
+  });
+});
+
+describe('a created_at with its time zone (17)', () => {
+  it('is read as the instant it names: since the launch binds, before it does not', async () => {
+    const zoned = (ms: number, offsetHours: number) => {
+      const local = new Date(ms + offsetHours * 3_600_000).toISOString().slice(0, 19).replace('T', ' ');
+      const sign = offsetHours < 0 ? '-' : '+';
+      return `${local}.123456789${sign}${String(Math.abs(offsetHours)).padStart(2, '0')}:00`;
+    };
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    session('20261120_3', project, LAUNCH - 60_000, zoned(LAUNCH - 60_000, 4));
+    prompt('20261120_3', LAUNCH + 2_000, identity(AGENT));
+    session('20261120_4', project, LAUNCH + 1_000, zoned(LAUNCH + 1_000, 4));
+    prompt('20261120_4', LAUNCH + 2_000, identity(AGENT));
+    session('20261120_5', project, LAUNCH + 1_000, `${utc(LAUNCH + 1_000).replace(' ', 'T')}Z`);
+    await w.tick();
+    expect([...new Set(posts.map((p) => p.post.body.session_id))]).toEqual([gooseUuidOf('20261120_4')]);
   });
 });
 

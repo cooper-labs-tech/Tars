@@ -29,6 +29,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. restart: the window restarts the agent (what applying new settings does too), which forks its session: the CLI
  *    goes on under a new session with the earlier turns, and a third delegation is answered from it (the Audit's M1 on
  *    #613: opencode's reader bound the session the fork left, and the task waited out its timeout).
+ * 7. (a harness with `pair`) two agents with the same four skills, both stopped, are delegated to at the same moment:
+ *    each starts on its task, typed with the skills line first, and each answers from a session of its own (the
+ *    Audit's M1 on #618: Goose's reader bound neither, the skills line making what each was sent look the same).
  * A delegation answered "still starting ... Send it again in a moment" (nothing typed, its TUI not drawn yet, past the
  * 20 s a sender waits) is sent again, as an orchestrator does, four times at most: Kilo 7.8.27 drew its bar 13 to 47 s
  * after it started on a loaded machine (20/11).
@@ -46,15 +49,15 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
  */
 
-/** `tokens`: a harness whose tokens Tars reads (its task's ledger entry carries them). */
-type Harness = { id: string; provider: string; pathKey: string; env: string; tokens?: boolean };
+/** `tokens`: a harness whose tokens Tars reads (its task's ledger entry carries them). `pair`: it runs step 7. */
+type Harness = { id: string; provider: string; pathKey: string; env: string; tokens?: boolean; pair?: boolean };
 const HARNESSES: Harness[] = [
   { id: 'kimi-code', provider: 'kimi-code', pathKey: 'kimi', env: 'TARS_HARNESS_KIMI_CODE' },
   { id: 'codex', provider: 'codex', pathKey: 'codex', env: 'TARS_HARNESS_CODEX' },
   { id: 'pi', provider: 'pi', pathKey: 'pi', env: 'TARS_HARNESS_PI' },
   { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
   { id: 'kilo', provider: 'kilo', pathKey: 'kilo', env: 'TARS_HARNESS_KILO', tokens: true },
-  { id: 'goose', provider: 'goose', pathKey: 'goose', env: 'TARS_HARNESS_GOOSE', tokens: true },
+  { id: 'goose', provider: 'goose', pathKey: 'goose', env: 'TARS_HARNESS_GOOSE', tokens: true, pair: true },
 ];
 
 /** For Goose: the runner's own settings of it blanked, and no keychain nor telemetry from the sandbox. */
@@ -65,6 +68,9 @@ const gooseEnv = (): Record<string, string> => ({
 
 const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
 const WORKER = 'eeee5555-0000-4000-8000-0000000000c2';
+/** Step 7's two agents, with this project's four skills: a skills line of 190 characters before each one's identity. */
+const PAIR = ['eeee5555-0000-4000-8000-0000000000c3', 'eeee5555-0000-4000-8000-0000000000c4'];
+const FOUR_SKILLS = ['vercel-react-best-practices', 'web-design-guidelines', 'frontend-design', 'supabase-postgres-best-practices'];
 const EP = 'ep-0c0f01';
 const TASK = 'Run the shell command that prints the probe marker, then tell me what it printed.';
 /** A terminal's text, its escapes taken out: what the artefact keeps of the harness's screen. */
@@ -110,6 +116,7 @@ for (const h of HARNESSES) {
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
       agent(LEAD, 'Lead', { provider: 'claude', role: 'orchestrator' }),
       agent(WORKER, 'Worker', { provider: h.provider, role: 'worker', model: MODEL_ID, endpointId: EP, traces: false, cliPath: bin }),
+      ...(h.pair ? PAIR.map((id, i) => agent(id, `Pair ${i + 1}`, { provider: h.provider, role: 'worker', model: MODEL_ID, endpointId: EP, traces: false, cliPath: bin, skills: FOUR_SKILLS })) : []),
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
@@ -275,6 +282,18 @@ for (const h of HARNESSES) {
         expect.soft(afterRestart.length, 'the restarted session reached the endpoint').toBeGreaterThan(0);
         expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request carries the earlier history').toContain(standin.marker);
         expect.soft(sessionAfterRestart, 'the agent is on the fork, a session of its own').not.toBe(sessionBeforeRestart);
+
+        // 7. Two agents with the same skills, both stopped, delegated to at the same moment.
+        if (h.pair) {
+          const together = await Promise.all(PAIR.map((id, i) =>
+            delegateOnceUp(lead, { id, prompt: TASK, timeoutSeconds: 200, requestId: `e2e-conformance-${h.id}-pair-${i + 1}` })));
+          const sessions = await Promise.all(PAIR.map(async (id) => (await api<{ currentSessionId?: string } | null>('agent', 'get', id))?.currentSessionId));
+          const pairLedger = ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => PAIR.includes(String(t.agentId)));
+          keep({ together, pairSessions: sessions, pairLedger });
+          for (const [i, answer] of together.entries()) expect.soft(answer.text, `step 7: Pair ${i + 1} answers from its own session`).toContain('PROBE-OK');
+          expect.soft(new Set(sessions.filter(Boolean)).size, 'step 7: two sessions, one each').toBe(2);
+          expect.soft(new Set(pairLedger.map((t) => t.agentId)).size, 'step 7: a ledger entry each').toBe(2);
+        }
       });
     } finally {
       // The homes the runner exported were left as they were.

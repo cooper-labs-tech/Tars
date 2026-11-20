@@ -41,6 +41,14 @@ import Database from 'better-sqlite3';
  *    moves it (measured: `$GOOSE_PATH_ROOT/data/sessions/sessions.db`, XDG_DATA_HOME set or not): no turn read.
  * 6. A note typed during its turn, and lost: Goose says it loses one (noteDuringTurn 'lost'), so Tars holds it.
  * 7. Its turns taken for unseen: delegate_task then answers `delivered`. Its turns are read (turnsReported).
+ * 9. (The Audit's L1 on #618) A session resumed or forked after the agent's role changed, or after Tars's bundle
+ *    moved: Goose starts again the servers saved with the session (measured on 1.60.1: a plain resume, a resume or a
+ *    fork with --no-profile, and the server disabled in Goose's own config.yaml all started it), so a demoted
+ *    orchestrator kept Telegram and X. When the saved servers of Tars's are not this launch's, a fresh session.
+ * 10. (The Audit's L2 on #618) Goose's folders on Windows taken for the XDG layout: Goose 1.60.1 (config/paths.rs,
+ *    etcetera 0.11's Windows strategy, read from their source, not measured on Windows) keeps them in
+ *    `%APPDATA%\Block\goose\{config,data}`, else the home's `AppData\Roaming`, and reads no XDG variable there. And
+ *    GOOSE_PATH_ROOT taken when relative, which Goose ignores.
  * 8. Its permission mode lost: a normal agent run in the user's own mode, an auto one stopped on dialogs nobody
  *    answers, or plan run as something else. On macOS and Linux in the line, which no rc file runs after (as codex's
  *    CODEX_HOME); in the terminal's environment for Windows (goose-wiring.test.ts).
@@ -59,7 +67,7 @@ import { getProvider } from '../../../electron/providers';
 import { endpointLaunchFor, ENDPOINT_TOKEN_VAR } from '../../../electron/services/endpoint-harness';
 import { ENDPOINT_HARNESSES } from '../../../electron/services/inference-endpoints';
 import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
-import { gooseDbPath, gooseUuidOf, gooseLaunchOf } from '../../../electron/providers/goose-cli';
+import { gooseDbPath, gooseUuidOf, gooseLaunchOf, gooseConfigDir } from '../../../electron/providers/goose-cli';
 import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 import { sendModeOf } from '../../../electron/core/send-mode';
 import { shellQuote } from '../../../electron/providers/cli-provider';
@@ -220,5 +228,85 @@ describe('its sessions (5)', () => {
     expect(gooseLaunchOf(fork)).toEqual({ forkOf: SES });
     expect(gooseLaunchOf(['session', '--resume', '--session-id', SES, '--fork'])).toEqual({ forkOf: SES });
     expect(gooseLaunchOf("'/opt/goose' session")).toEqual({});
+  });
+});
+
+describe('a resume after its servers changed (9, the Audit\'s L1 on #618)', () => {
+  const ORCH = { name: 'claude-mgr-orchestrator', cmd: '/opt/node', args: ['/res/mcp-orchestrator/dist/bundle.js'] };
+  const X = { name: 'dorothy-x', cmd: '/opt/node', args: ['/res/mcp-x/dist/bundle.js'] };
+  /** A session in Goose's database with the servers it was started with, as 1.60.1 saves them (extension_data). */
+  function savedWith(id: string, servers: Array<{ name: string; cmd: string; args: string[] }>): void {
+    const file = gooseDbPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const db = new Database(file);
+    db.exec('CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, working_dir TEXT NOT NULL, created_at TIMESTAMP, extension_data TEXT)');
+    const extensions = [
+      { type: 'platform', name: 'developer', description: 'dev', bundled: true },
+      ...servers.map((s) => ({ type: 'stdio', name: s.name, description: '', cmd: s.cmd, args: s.args, envs: {}, env_keys: [], timeout: 300, bundled: null, available_tools: [] })),
+    ];
+    db.prepare("INSERT OR REPLACE INTO sessions (id, working_dir, created_at, extension_data) VALUES (?, ?, '2026-11-20 16:31:10', ?)")
+      .run(id, project, JSON.stringify({ 'enabled_extensions.v0': { extensions } }));
+    db.close();
+  }
+  async function registered(...servers: Array<{ name: string; cmd: string; args: string[] }>): Promise<GooseProvider> {
+    const goose = new GooseProvider();
+    for (const s of servers) await goose.registerMcpServer(s.name, s.cmd, s.args);
+    return goose;
+  }
+
+  it("a fresh session, with this launch's servers, when the role moved since the session began", async () => {
+    const goose = await registered(ORCH, X);
+    savedWith(SES, [ORCH, X]);
+    const demoted = goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: SES, forkSession: true, orchestratorMode: false });
+    expect(demoted).not.toContain('--resume');
+    expect(demoted).toContain("--with-extension 'claude-mgr-orchestrator:/opt/node /res/mcp-orchestrator/dist/bundle.js'");
+    expect(demoted).not.toContain('dorothy-x');
+    savedWith(SES, [ORCH]);
+    const promoted = goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: SES, orchestratorMode: true });
+    expect(promoted).not.toContain('--resume');
+    expect(promoted).toContain("--with-extension 'dorothy-x:");
+  });
+
+  it('a fresh session when a server of Tars\'s moved since (another bundle path)', async () => {
+    const goose = await registered({ ...ORCH, args: ['/new/res/mcp-orchestrator/dist/bundle.js'] });
+    savedWith(SES, [ORCH]);
+    expect(goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: SES, orchestratorMode: false })).not.toContain('--resume');
+  });
+
+  it('resumed, or forked, as before when the saved servers are this launch\'s, or when nothing tells', async () => {
+    const goose = await registered(ORCH, X);
+    savedWith(SES, [ORCH, X]);
+    expect(goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: SES, forkSession: true, orchestratorMode: true }))
+      .toContain(`--resume --session-id '${SES}' --fork`);
+    savedWith(SES, [ORCH]);
+    expect(goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: SES, orchestratorMode: false }))
+      .toContain(`--resume --session-id '${SES}'`);
+    // No server registered yet (a launch before Tars's servers are known), or no such session: nothing to compare.
+    expect(new GooseProvider().buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: SES, orchestratorMode: false }))
+      .toContain(`--resume --session-id '${SES}'`);
+    expect(goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', resumeSessionId: '20261120_9', orchestratorMode: false }))
+      .toContain("--resume --session-id '20261120_9'");
+  });
+});
+
+describe('its folders on Windows, and GOOSE_PATH_ROOT (10, the Audit\'s L2 on #618)', () => {
+  const HOME_W = 'C:\\Users\\someone';
+  it('%APPDATA%\\Block\\goose\\data and \\config, else the home\'s AppData\\Roaming; no XDG variable read there', () => {
+    expect(gooseDbPath({ APPDATA: 'D:\\Roam', XDG_DATA_HOME: 'D:\\xdg' }, HOME_W, 'win32')).toBe('D:\\Roam\\Block\\goose\\data\\sessions\\sessions.db');
+    expect(gooseDbPath({}, HOME_W, 'win32')).toBe('C:\\Users\\someone\\AppData\\Roaming\\Block\\goose\\data\\sessions\\sessions.db');
+    expect(gooseConfigDir({ APPDATA: 'D:\\Roam', XDG_CONFIG_HOME: 'D:\\xdg' }, HOME_W, 'win32')).toBe('D:\\Roam\\Block\\goose\\config');
+    expect(gooseDbPath({ GOOSE_PATH_ROOT: 'E:\\goose-root', APPDATA: 'D:\\Roam' }, HOME_W, 'win32')).toBe('E:\\goose-root\\data\\sessions\\sessions.db');
+  });
+
+  it('the XDG layout on macOS and Linux, measured on macOS', () => {
+    expect(gooseDbPath({}, '/home/someone', 'linux')).toBe('/home/someone/.local/share/goose/sessions/sessions.db');
+    expect(gooseDbPath({ XDG_DATA_HOME: '/x' }, '/home/someone', 'darwin')).toBe('/x/goose/sessions/sessions.db');
+    expect(gooseConfigDir({}, '/home/someone', 'darwin')).toBe('/home/someone/.config/goose');
+  });
+
+  it('GOOSE_PATH_ROOT only when absolute, as Goose reads it', () => {
+    expect(gooseDbPath({ GOOSE_PATH_ROOT: 'relative/root', XDG_DATA_HOME: '/x' }, '/home/someone', 'linux')).toBe('/x/goose/sessions/sessions.db');
+    expect(gooseDbPath({ GOOSE_PATH_ROOT: 'relative', APPDATA: 'D:\\Roam' }, HOME_W, 'win32')).toBe('D:\\Roam\\Block\\goose\\data\\sessions\\sessions.db');
+    expect(gooseConfigDir({ GOOSE_PATH_ROOT: '/r' }, '/home/someone', 'linux')).toBe('/r/config');
   });
 });
