@@ -14,6 +14,8 @@ import { describe, it, expect, vi } from 'vitest';
  * codex resumes too since 2.0.4, as codex takes it, measured on 0.163: `codex
  * resume <id>` continues the session in its own rollout, and `codex fork <id>`
  * goes on under a new session (codex-commands.test.ts has the whole argv).
+ * pi too since 20/11, measured on 1.5.2: `pi --session <id>` continues the session,
+ * `pi --fork <id>` goes on under a new one (resume-session.test.ts).
  */
 
 // Read by the providers' modules as they load, so it is set before any import.
@@ -71,7 +73,7 @@ describe('the resume a restart asks for', () => {
 
   it('reaches no other CLI, whose resume flag nobody has verified', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    for (const provider of getAllProviders().filter(p => p.binaryName !== 'claude' && p.binaryName !== 'codex' && p.id !== 'qwen-code')) {
+    for (const provider of getAllProviders().filter(p => p.binaryName !== 'claude' && p.binaryName !== 'codex' && p.binaryName !== 'pi' && p.id !== 'qwen-code')) {
       const command = await commandFor(provider.id, { resumeSessionId: SESSION, forkSession: true });
       expect(command, provider.id).not.toContain(SESSION);
     }

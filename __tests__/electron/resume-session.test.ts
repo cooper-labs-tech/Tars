@@ -43,7 +43,10 @@ import {
  * `pi --session <id>` continues one (measured on 1.5.2: the first request carried the earlier turns). How it fails,
  * written before the code: no resume at all, so a pi agent began anew after every restart of Tars (the conformance
  * run's step 5); an id resumed whose file is gone, or one from another agent's folder; an id of another form reaching
- * the command line; the session after the prompt, where pi reads it as text; a Claude agent resumed on a pi session.
+ * the command line; the session after the prompt, where pi reads it as text; a Claude agent resumed on a pi session;
+ * a restart that applies new settings, which asks for a fork (a new session, the old one tombstoned), continuing the
+ * same session id, whose posts the hook routes then drop as stale. `pi --fork <id>` goes on under a new session id with
+ * the earlier turns (measured on 1.5.2).
  */
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-resume-'));
@@ -368,5 +371,11 @@ describe("a pi agent's session", () => {
     expect(pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: '', resumeSessionId: PI })).toContain(`--session '${PI}'`);
     expect(pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on', resumeSessionId: `${PI}'; rm -rf ~` })).not.toContain('--session');
     expect(pi.buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on' })).not.toContain('--session');
+  });
+
+  it('a fork reaches pi as --fork <id>, never as --session', () => {
+    const line = new PiProvider().buildInteractiveCommand({ binaryPath: '/bin/pi', prompt: 'go on', resumeSessionId: PI, forkSession: true });
+    expect(line).toContain(`--fork '${PI}'`);
+    expect(line).not.toContain('--session');
   });
 });
