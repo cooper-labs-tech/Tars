@@ -33,6 +33,10 @@ import Database from 'better-sqlite3';
  * 9. A fork bound to the session it copies, or its copies posted again as new turns.
  * 10. A row whose content does not parse stops its session.
  * 11. A launch never forgotten: read every second after its terminal is gone.
+ * (Added for the mutation bench's survivors, 20/11:)
+ * 12. A step that says something as it asks for a tool taken for the turn's end: the answer cut at its first words.
+ * 13. A first prompt naming this agent and another bound by one of its identity lines: a header pasted into a task.
+ * 14. A text two unbound launches were both sent taken as the first one's evidence: the session may be the other's.
  */
 
 import { GooseSessionWatch, type HookPost } from '../../electron/services/goose-sessions';
@@ -187,6 +191,22 @@ describe("a Goose agent's turns, from its database", () => {
   });
 });
 
+describe('a step that speaks as it asks for a tool (12)', () => {
+  it('goes on: only text with no tool request ends the turn', async () => {
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    session(SES, project, LAUNCH + 500);
+    prompt(SES, LAUNCH + 2_000, identity(AGENT));
+    message(SES, LAUNCH + 3_000, 'assistant', [text('Let me run that.'), { type: 'toolRequest', id: 'call_1', toolCall: { status: 'success', value: { name: 'shell', arguments: { command: 'echo X' } } } }]);
+    message(SES, LAUNCH + 3_000, 'user', [{ type: 'toolResponse', id: 'call_1', toolResult: { status: 'success', value: { content: [text('X')] } } }]);
+    await w.tick();
+    expect(posts.some((p) => p.post.path === '/api/hooks/output' || p.post.body.status === 'idle')).toBe(false);
+    message(SES, LAUNCH + 4_000, 'assistant', [text('It printed X, as the probe expected.')]);
+    await w.tick();
+    expect(posts.filter((p) => p.post.path === '/api/hooks/output').map((p) => p.post.body.output)).toEqual(['It printed X, as the probe expected.']);
+  });
+});
+
 describe('whose session it is (1)', () => {
   it('another folder, one there before the launch, one naming another agent, one with nothing sent here: never bound', async () => {
     const elsewhere = path.join(root, 'elsewhere');
@@ -201,6 +221,28 @@ describe('whose session it is (1)', () => {
     prompt('20261120_9', LAUNCH + 2_000, identity(OTHER));
     session('20261120_10', project, LAUNCH + 1_000);
     prompt('20261120_10', LAUNCH + 2_000, 'a prompt nobody typed here, long enough to count');
+    await w.tick();
+    expect(posts).toEqual([]);
+  });
+
+  it('13: a first prompt naming this agent and another binds neither by its identity lines', async () => {
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    session(SES, project, LAUNCH + 1_000);
+    prompt(SES, LAUNCH + 2_000, `${identity(AGENT)}\n${identity(OTHER)}`);
+    await w.tick();
+    expect(posts).toEqual([]);
+  });
+
+  it('14: a text two unbound launches were both sent binds neither', async () => {
+    const sent = 'Message from agent "Lead": the same broadcast to both of you, long enough to count';
+    const w = watch();
+    w.noteLaunch(AGENT, project);
+    w.noteLaunch(OTHER, project);
+    w.noteTyped(AGENT, sent);
+    w.noteTyped(OTHER, sent);
+    session(SES, project, LAUNCH + 1_000);
+    prompt(SES, LAUNCH + 2_000, sent);
     await w.tick();
     expect(posts).toEqual([]);
   });
