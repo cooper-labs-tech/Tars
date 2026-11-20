@@ -49,6 +49,11 @@ import { QwenCodeProvider } from '../../../electron/providers/qwen-code-provider
  *     held it every codex worker died at launch and its task was typed into the bare shell. Only the two that
  *     config.toml defines are switched off (under the CODEX_HOME Tars hands codex); none when it defines neither,
  *     when it is missing, or when it is not TOML (codex refuses that file anyway, and Tars says nothing more).
+ * 11. A test of this file writes a CLI's config folder under the real home. On 20/11 a run without the repository's
+ *     setup files (a bench with a vitest config of its own) wrote and then deleted the owner's real
+ *     ~/.codex/config.toml through tests 3 and 10. Each test that writes codex's folder now sets HOME and CODEX_HOME
+ *     to a folder of its own for its whole body, restores them after, and fails before any write when codex's folder
+ *     is the real home's (os.userInfo, which HOME does not move) or anywhere outside its own folder.
  */
 
 let home: string;
@@ -65,21 +70,34 @@ function writeMcpJson(servers: string[]) {
 }
 const serversIn = (file: string) => Object.keys(JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers).sort();
 
+/** The real home's codex folder, from the password database: HOME does not move it. */
+const REAL_CODEX_HOME = path.join(os.userInfo().homedir, '.codex');
+
+/** Throws when `configDir` is the real home's codex folder or under it, or anywhere outside `dir`. Writes nothing. */
+function assertTestCodexHome(configDir: string, dir: string): void {
+  const real = path.resolve(REAL_CODEX_HOME);
+  const at = path.resolve(configDir);
+  if (at === real || at.startsWith(real + path.sep)) throw new Error(`codex home ${at} is the real home's: refused`);
+  if (path.relative(dir, at).startsWith('..') || path.isAbsolute(path.relative(dir, at))) throw new Error(`codex home ${at} is outside ${dir}: refused`);
+}
+
 /**
- * A CodexProvider whose codex home is this test's own folder, set here and not left to the suite's home isolation: a
- * run of this file without the repository's setup files (a bench with a vitest config of its own) wrote and then
- * deleted the owner's real ~/.codex/config.toml on 20/11. The provider takes its home when it is built, and the test
- * refuses to write anywhere else.
+ * Runs `body` with a CodexProvider on a codex folder of this test's own, HOME and CODEX_HOME both set to `dir` for the
+ * whole body and restored after, not left to the suite's home isolation (11). The provider takes its folder when it is
+ * built; the guard runs before the body can write anything.
  */
-function codexIn(dir: string): CodexProvider {
-  const was = process.env.CODEX_HOME;
+function withCodexHome<T>(dir: string, body: (codex: CodexProvider) => T): T {
+  const was = { HOME: process.env.HOME, CODEX_HOME: process.env.CODEX_HOME };
+  process.env.HOME = dir;
   process.env.CODEX_HOME = path.join(dir, '.codex');
   try {
     const codex = new CodexProvider();
-    if (path.relative(dir, codex.configDir).startsWith('..')) throw new Error(`codex home ${codex.configDir} is outside ${dir}`);
-    return codex;
+    assertTestCodexHome(codex.configDir, dir);
+    return body(codex);
   } finally {
-    if (was === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = was;
+    for (const [name, value] of Object.entries(was)) {
+      if (value === undefined) delete process.env[name]; else process.env[name] = value;
+    }
   }
 }
 
@@ -190,8 +208,7 @@ process.stderr.write('not in this stand-in: ' + a.join(' ')); process.exit(2);
 });
 
 describe('the CLIs that read their own config: a switch per run', () => {
-  it('3. codex: a worker runs with the two switched off, an orchestrator with all', () => {
-    const codex = codexIn(home);
+  it('3. codex: a worker runs with the two switched off, an orchestrator with all', () => withCodexHome(home, (codex) => {
     fs.mkdirSync(codex.configDir, { recursive: true });
     fs.writeFileSync(path.join(codex.configDir, 'config.toml'), SEVEN.map(n => `[mcp_servers.${n}]\ncommand = "node"\n`).join('\n'));
     const worker = codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: false, appSettings: {} as never });
@@ -200,7 +217,7 @@ describe('the CLIs that read their own config: a switch per run', () => {
       expect(worker).toContain(`-c 'mcp_servers.${name}.enabled=false'`);
       expect(lead).not.toContain(`mcp_servers.${name}.enabled`);
     }
-  });
+  }));
 
   it('10. codex: only a server its config.toml defines is switched off; none when it defines neither, is missing or is not TOML', () => {
     const toml = path.join(home, 'config.toml');
@@ -218,8 +235,7 @@ describe('the CLIs that read their own config: a switch per run', () => {
     expect(codexRoleArgs(false, toml)).toEqual([]);
   });
 
-  it('10. codex: the line Tars builds reads the config.toml of the home it hands codex', () => {
-    const codex = codexIn(home);
+  it('10. codex: the line Tars builds reads the config.toml of the home it hands codex', () => withCodexHome(home, (codex) => {
     fs.mkdirSync(codex.configDir, { recursive: true });
     fs.writeFileSync(path.join(codex.configDir, 'config.toml'), '[mcp_servers.dorothy-x]\ncommand = "node"\n');
     const worker = codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: false, appSettings: {} as never });
@@ -227,6 +243,20 @@ describe('the CLIs that read their own config: a switch per run', () => {
     expect(worker).not.toContain('claude-mgr-telegram');
     fs.rmSync(path.join(codex.configDir, 'config.toml'));
     expect(codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: false, appSettings: {} as never })).not.toContain('.enabled=false');
+  }));
+
+  it("11. a codex test's folder: the real home's codex folder is refused, and so is any folder outside the test's own", () => {
+    expect(() => assertTestCodexHome(REAL_CODEX_HOME, home)).toThrow(/real home/);
+    expect(() => assertTestCodexHome(path.join(REAL_CODEX_HOME, 'sub'), home)).toThrow(/real home/);
+    expect(() => assertTestCodexHome(path.join(os.tmpdir(), 'elsewhere', '.codex'), home)).toThrow(/outside/);
+    expect(() => assertTestCodexHome(path.join(home, '.codex'), home)).not.toThrow();
+    // HOME and CODEX_HOME are the test's own during its body, and are given back after it.
+    const was = { HOME: process.env.HOME, CODEX_HOME: process.env.CODEX_HOME };
+    withCodexHome(home, (codex) => {
+      expect(process.env.HOME).toBe(home);
+      expect(codex.configDir).toBe(path.join(home, '.codex'));
+    });
+    expect({ HOME: process.env.HOME, CODEX_HOME: process.env.CODEX_HOME }).toEqual(was);
   });
 
   it('4. Qwen Code: a worker runs with the two disabled, an orchestrator with all', () => {
