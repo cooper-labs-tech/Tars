@@ -17,6 +17,11 @@ import Database from 'better-sqlite3';
  *    so a normal agent would run in the user's own mode, or an auto one stop on dialogs nobody answers. In the
  *    terminal's environment for Windows, where the line's first word is the binary and nothing else is read; the line
  *    carries it on macOS and Linux (goose-adapter.test.ts).
+ * 4. (The Audit's L3 on #618) A launch that starts a Goose agent's conversation over, because the servers its session
+ *    saved are not this launch's, says nothing: the window shows a fresh conversation with no reason. It is said where
+ *    a person reads the agent's kept output (Logs), in the window's words, for each cause: its role changed, Tars's
+ *    servers moved, or a server was added or taken away (the Audit's I-4: an update that adds a server starts one
+ *    fresh session per Goose agent). A launch that continues its session says nothing.
  */
 
 const ptys: Array<{ onExit: ReturnType<typeof vi.fn>; env: Record<string, string>; write: ReturnType<typeof vi.fn> }> = [];
@@ -43,6 +48,7 @@ import { moveTestHome } from '../../setup/test-home';
 import { gooseSessionWatch, type HookPost } from '../../../electron/services/goose-sessions';
 import { gooseDbPath, gooseUuidOf } from '../../../electron/providers/goose-cli';
 import { GooseProvider } from '../../../electron/providers/goose-provider';
+import { getProvider } from '../../../electron/providers';
 
 const AGENT = 'a1b2c3d4-0000-4000-8000-00000000000c';
 const S = '20261120_1';
@@ -138,5 +144,62 @@ describe("a Goose agent's permission mode, at its terminal's spawn (3)", () => {
     } finally {
       restoreHome();
     }
+  });
+});
+
+describe('a fresh session said where a person reads it (4, the Audit\'s L3 on #618)', () => {
+  const ORCH = { name: 'claude-mgr-orchestrator', cmd: '/opt/node', args: ['/res/mcp-orchestrator/dist/bundle.js'] };
+  const X = { name: 'dorothy-x', cmd: '/opt/node', args: ['/res/mcp-x/dist/bundle.js'] };
+  const MEMORY = { name: 'tars-memory', cmd: '/opt/node', args: ['/res/mcp-memory/dist/bundle.js'] };
+  const goose = getProvider('goose');
+  afterEach(async () => {
+    for (const name of [ORCH.name, X.name, MEMORY.name]) await goose.removeMcpServer(name);
+    agents.clear();
+  });
+  function savedWith(servers: Array<{ name: string; cmd: string; args: string[] }>): void {
+    const file = gooseDbPath();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const db = new Database(file);
+    db.exec('CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, working_dir TEXT NOT NULL, created_at TIMESTAMP, extension_data TEXT)');
+    const extensions = servers.map((x) => ({ type: 'stdio', name: x.name, cmd: x.cmd, args: x.args, envs: {} }));
+    db.prepare("INSERT OR REPLACE INTO sessions (id, working_dir, created_at, extension_data) VALUES (?, ?, '2026-11-20 16:31:10', ?)")
+      .run(S, project, JSON.stringify({ 'enabled_extensions.v0': { extensions } }));
+    db.close();
+  }
+  async function launch(registered: Array<typeof ORCH>, orchestratorMode: boolean): Promise<string> {
+    for (const x of registered) await goose.registerMcpServer(x.name, x.cmd, x.args);
+    const agent = { id: AGENT, name: 'g', status: 'idle', provider: 'goose', role: orchestratorMode ? 'orchestrator' : 'worker', projectPath: project, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus;
+    agents.set(AGENT, agent);
+    const line = goose.buildInteractiveCommand({ agentId: AGENT, binaryPath: '/opt/goose', prompt: '', resumeSessionId: S, orchestratorMode });
+    expect(line, 'a fresh session').not.toContain('--resume');
+    return agent.output.join('');
+  }
+
+  it('its role changed', async () => {
+    savedWith([ORCH, X]);
+    expect(await launch([ORCH, X], false)).toContain('[Tars] Its conversation starts over: its servers changed with its role');
+  });
+
+  it("Tars's servers moved", async () => {
+    savedWith([ORCH]);
+    expect(await launch([{ ...ORCH, args: ['/new/res/mcp-orchestrator/dist/bundle.js'] }], false)).toContain("[Tars] Its conversation starts over: Tars's servers moved since its session began");
+  });
+
+  it('a server was added (I-4) or taken away', async () => {
+    savedWith([ORCH]);
+    expect(await launch([ORCH, MEMORY], false)).toContain("[Tars] Its conversation starts over: Tars's servers changed since its session began");
+    agents.clear();
+    savedWith([ORCH, MEMORY]);
+    await goose.removeMcpServer(MEMORY.name);
+    expect(await launch([ORCH], false)).toContain("[Tars] Its conversation starts over: Tars's servers changed since its session began");
+  });
+
+  it('a launch that continues its session says nothing', async () => {
+    savedWith([ORCH]);
+    for (const x of [ORCH, X]) await goose.registerMcpServer(x.name, x.cmd, x.args);
+    const agent = { id: AGENT, name: 'g', status: 'idle', provider: 'goose', role: 'worker', projectPath: project, skills: [], output: [], lastActivity: new Date().toISOString() } as AgentStatus;
+    agents.set(AGENT, agent);
+    expect(goose.buildInteractiveCommand({ agentId: AGENT, binaryPath: '/opt/goose', prompt: '', resumeSessionId: S, orchestratorMode: false })).toContain('--resume');
+    expect(agent.output.join('')).not.toContain('[Tars]');
   });
 });
