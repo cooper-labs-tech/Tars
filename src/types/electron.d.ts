@@ -741,6 +741,8 @@ export interface AgentStatus {
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
+  /** 2.0.7: its CLI runs on a remote host of the owner's, over ssh (core/remote-launch.ts): the host's id and the folder there. */
+  remote?: { hostId: string; folder: string };
 }
 
 export interface AgentTemplate {
@@ -1496,6 +1498,16 @@ export interface AgentQueueItem {
 }
 
 /** agentQueue: an agent's queue, and whether nothing goes in (paused, since when, why). */
+/** A remote Linux host of the owner's (2.0.7): an alias of their ssh config (or user@host) and a work root on it. */
+export interface RemoteHost {
+  /** 1 to 40 lowercase letters, digits or dashes. */
+  id: string;
+  name: string;
+  sshTarget: string;
+  /** An absolute path on the host, where the agents' folders are made. */
+  workRoot: string;
+}
+
 export interface AgentQueue {
   agentId: string;
   paused?: { since: string; why: string };
@@ -1655,6 +1667,8 @@ export interface ElectronAPI {
       /** @deprecated Send `role`. Read only when `role` is absent. */
       orchestratorMode?: boolean;
       cliPath?: string | null;
+      /** 2.0.7: a remote host of the owner's and a folder under its work root, or null to run on this computer. */
+      remote?: { hostId: string; folder?: string } | null;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     /** `{ success: false, cliRunning: true }` when a CLI still runs in the agent's terminal: nothing was typed. */
     /** `code: 'no_terminal'` when the machine had no terminal left: `error` says how many of how many and what frees one, and the agent reads 'error' with it (asleep, it stays asleep with it). */
@@ -2985,6 +2999,19 @@ export interface ElectronAPI {
   diagnostic: {
     /** Sends the last 24 hours of health samples (numbers, with the names of Tars's own calls and pages) once; refused with the reason, a sentence shown as is. */
     send: () => Promise<DiagnosticAnswer>;
+  };
+
+  /**
+   * The owner's remote hosts (2.0.7, main's services/remote-hosts.ts): where agents may run their CLI over ssh. Set by
+   * the window only; kept in ~/.tars-private. A host holds no credential: ssh finds the keys in the owner's own config.
+   */
+  remoteHosts: {
+    list: () => Promise<RemoteHost[]>;
+    /** Added, or replaced by its id. Refused with `code`: invalid_host, invalid_id, invalid_name, invalid_target, invalid_work_root, no_credentials_here. */
+    set: (host: RemoteHost) => Promise<{ success: true; host: RemoteHost } | { success: false; error: string; code: string }>;
+    /** Refused with `code: 'host_in_use'` and an error naming them while agents are placed on the host (the Audit's M1 on #600). */
+    remove: (id: string) => Promise<{ success: boolean; error?: string; code?: 'host_in_use' }>;
+    onChanged: (callback: (hosts: RemoteHost[]) => void) => () => void;
   };
 
   keepAwake: {

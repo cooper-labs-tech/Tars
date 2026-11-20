@@ -117,6 +117,50 @@ Every agent terminal also has a mirror, `electron/core/terminal-mirror.ts`: a he
 
 The mirror of a `claude` PTY also watches how it is repainted. Fullscreen Claude Code positions absolutely (`CSI H`) and never moves the cursor up or back; inline, it climbs back over what it drew (`CSI A`, `CSI D`). An alternate screen repainted the second way over a window of 8 chunks is a CLI that left fullscreen without telling its terminal, which Claude Code 2.1.280 did twice among seventeen sessions on 2026-09-22: every panel kept the alternate screen and the mouse request, and the wheel reached nothing. The flag, `leftFullscreen`, rides on `agent:list`, `agent:get` and the tick, and clears when the terminal really leaves the alternate screen, when a program asks for it again, or with the PTY.
 
+### An agent on a remote host (2.0.7): `services/remote-agents.ts`, `core/remote-launch.ts`
+
+A worker can run its CLI on one of the owner's Linux hosts instead of this computer. It stays one terminal of this Tars, with its card, queue, delegation, hooks, token and stop.
+
+- **The hosts.** The owner adds them, in the window only (`remoteHosts.*`, `services/remote-hosts.ts`, `~/.tars-private/remote-hosts.json`). Each one is an alias of the owner's ssh config (or `user@host`) and a work root. It holds no key, no path to a key and no password.
+- **The placement.** The window or the project's orchestrator places an agent on a host (`update_agent` with `remote: { hostId, folder? }`; `null` brings it back).
+  - The folder must sit strictly under the host's work root, and is the project's folder name there by default. Every name of the folder and of the work root is letters, digits and `. _ - + @`, never `.` or `..`: nothing a host's shell reads as more than a path.
+  - A placement is refused while a CLI works in the agent's terminal, from the window as from the API (`cli_running`).
+  - A move away from a host first ends the agent's session there (`tars-remote stop`). The answer says so when the host could not be reached (`formerPlace`), with ssh's words.
+  - A host agents are placed on cannot be removed (`host_in_use`, naming them).
+- **The launch.** It happens in `spawnAgentSession`, through `spawnAgentPty`, and nowhere else. A restart, the window's start and every `launchAgent` hand a remote agent to it (`core/agent-launch.ts`, `startRemoteAgent`); a restart first ends the session on the host. The terminal is `/bin/sh -c` and does two things in order:
+  1. `ssh -T <host> sh -s` reads a file Tars wrote for this launch (`~/.tars-private/remote-launch/`, 0600, removed at once, or when the terminal ends; Tars's start removes any a dead Tars left). Over stdin it installs, under `~/.tars-remote` on the host:
+     - the wrapper (`electron/resources/tars-remote.sh`) and Tars's hook scripts;
+     - the agent's `settings.json` (its hooks, pointing at those copies) and `mcp.tmpl` (Tars's servers through the tunnel, the token by name, the port left to fill);
+     - the agent's folder, marked trusted in the host's `~/.claude.json` (only that key, with jq). Claude Code asks for trust in a new folder, bypass or not, and would take the first task as its answer;
+     - the tunnel's port: the first of the agent's six candidates (41000 to 42999) nothing listens on, asked of the host's loopback. None free ends the launch before anything else is written;
+     - its environment, last, at 0600. It holds no API address.
+
+     It then prints `TARS_PORT=<port>`.
+  2. Only when that went well, `ssh -tt -R 127.0.0.1:<port>:127.0.0.1:<tunnel listener>` runs `tars-remote start <id> <folder> <command> <port>`. That needs tmux 3.0 or newer (an older one runs its arguments through `sh -c`), ends any session of the agent left on the host, and starts the CLI in tmux (`tars-<id>`). The session sources the environment file and deletes it, sets `CLAUDE_MGR_API_URL=http://127.0.0.1:<port>` and `TARS_API_TUNNEL=1` after it, and writes `mcp.json` with the port.
+
+  Each ssh says in the terminal why it failed, in its own words. The one on this computer runs with `BatchMode`, never `-A`, with `ExitOnForwardFailure`, and gets none of the agent's environment but what it needs to find the owner's keys. It also runs with `ControlMaster=no`, `ControlPath=none`, `StrictHostKeyChecking=yes` and `RemoteCommand=none`, whatever the owner's config says: no multiplexed connection keeps the tunnel past the terminal, no unknown host key is trusted, and no RemoteCommand is run.
+- **The tunnel's listener** (`services/api-tunnel.ts`, `api-server.ts`). The tunnel never reaches the API's own port. It reaches a second listener on 127.0.0.1, one per host, opened at the first launch on that host, which serves the same routes behind a gate: only the token of an agent placed on that host passes, on every route, `/api/health` and `/api/local-file` included. A process of the host that reaches the tunnel's end gets a 401 for anything else. The hooks on the host therefore send their token without the port's proof (`TARS_API_TUNNEL=1`, SECURITY.md §5).
+
+  Its bounds, since any user of the host can open connections to it, each a socket of Tars's main process:
+  - a request target that does not parse is answered 400, never thrown (the API's own port answers it the same way);
+  - a 400, 401 or 429 closes the connection;
+  - one agent's token holds at most 64 connections, and is answered 429 beyond. That is over three times a real Claude Code's peak: 6 held for its five HTTP MCP servers (measured on 2.1.329, steady through 10 MCP calls at once), plus up to 10 shell hooks at once (it runs at most 10 tools at once), plus 2 for the turn's own hooks;
+  - each host has a listener of its own, which holds at most 128 connections, so one host's connections never take another's room, and an agent placed on another host does not pass it;
+  - a connection is closed when it has sent no headers in 10 s, or no whole request in 30 s.
+- **The CLI.** Claude Code only, a worker only (an orchestrator and a chat's runner run here), from macOS or Linux only. Anything else is refused before anything is ended, with a code: `remote_cli`, `remote_lead`, `remote_platform`, `remote_host_gone`.
+  - Its command names no path of this computer. It is `claude` found on the host's PATH, with `--settings "$TARS_REMOTE_AGENT_DIR"/settings.json --mcp-config "$TARS_REMOTE_AGENT_DIR"/mcp.json`: no `--add-dir`, no orchestrator instructions, no `--chrome`.
+  - It reaches the API through the tunnel, on the host's loopback only (`CLAUDE_MGR_API_URL=http://127.0.0.1:<port>`).
+  - The Claude accounts' switch leaves it alone: it runs on the host's own sign-in, so its limit blocks none of this computer's accounts and nothing moves it.
+- **Its session.** SessionStart compares the CLI's pid with its terminal's for an agent here (`core/terminal-cli.ts`). For an agent on a host, the pid is the host's, so it is not compared: the token is the proof. A Claude Code started from inside that CLI on the host is therefore not told apart, as it is here.
+- **What ends it.** A stop, a removal and a move end the tmux session over ssh (`tars-remote stop`, 20 s at most). A host the stop cannot reach leaves the session there, and the record's `stopProcesses.kept` says so with ssh's words. Anything that would open a shell of this computer for it (`initAgentPty`) is refused with why.
+- **Not yet:**
+  - re-attaching after a dropped connection, with the token kept and the hooks' posts spooled (a dropped ssh is the terminal's exit today, `error`);
+  - the worktree on the host;
+  - the readers of the CLI's own files there (the status truth, Esc, background work and resume read nothing for it: the Stop hook's `last_assistant_message` is its answer);
+  - the quit (it ends the terminal, not the session on the host);
+  - the window's views.
+- **The proof.** `e2e/remote-agents.spec.ts` runs it against a container on this computer (`e2e/remote-host/Dockerfile`, about 250 MB). The units are in `__tests__/electron/core/remote-launch.test.ts` (the wrapper among them) and `__tests__/electron/services/remote-agents.test.ts`.
+
 ### Renderer
 
 Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `src/app/api` temporarily moved aside). React 19, Tailwind 4, Zustand, xterm 5.3, framer-motion. Served from `app://-/index.html` in production, `http://localhost:3000` in dev. The app:// scheme has the `codeCache` privilege: V8 keeps the compiled bundle in the profile, and a later launch does not compile it again (OPERATIONS.md, "Run the app").

@@ -11,6 +11,9 @@ import { planModeRefusal } from '../providers/plan-mode';
 import { skillsProblem } from '../utils/skill-name';
 import { handedFolderProblem } from '../utils/handed-folder';
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
+import { parseAgentRemote, type AgentRemote } from './remote-launch';
+import { remoteHosts } from '../services/remote-hosts';
+import { endRemoteSession, type RemoteEnd } from '../services/remote-agents';
 
 /**
  * An agent's settings changed: the one way in, for the window (agent:update)
@@ -50,6 +53,8 @@ export interface AgentUpdate {
   /** The toggle's old name, read when `role` is absent. */
   orchestratorMode?: boolean;
   cliPath?: string | null;
+  /** 2.0.7: a remote host of the owner's and a folder under its work root (core/remote-launch.ts), or null for this computer. */
+  remote?: { hostId: string; folder?: string } | null;
 }
 
 export interface AgentUpdateOptions {
@@ -70,6 +75,8 @@ export type AgentUpdateResult =
     changedAtLaunch: string[];
     /** What became of the restart they asked for, when they asked for one. */
     restart?: RestartOutcome;
+    /** A move away from a host: whether its session there was ended (the Audit's M1 on #600), and if not, why. */
+    formerPlace?: RemoteEnd;
   };
 
 /**
@@ -87,7 +94,7 @@ export function cliAtWork(agent: AgentStatus): boolean {
 /** The record's fields an update can change, compared before and after for `changed`. */
 const FIELDS = [
   'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills',
-  'projectPath', 'secondaryProjectPath', 'obsidianVaultPaths', 'savedPrompt', 'worktreePath', 'branchName', 'role',
+  'projectPath', 'secondaryProjectPath', 'obsidianVaultPaths', 'savedPrompt', 'worktreePath', 'branchName', 'role', 'remote',
 ] as const;
 
 export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions = {}): Promise<AgentUpdateResult> {
@@ -131,12 +138,31 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   if (params.secondaryProjectPath && !fs.existsSync(params.secondaryProjectPath)) {
     return { success: false, error: 'Secondary project path does not exist' };
   }
+  // Where its CLI runs (2.0.7): a remote host of the owner's, checked against the hosts the owner added.
+  let remote: AgentRemote | null | undefined;
+  if (params.remote !== undefined) {
+    const asked = parseAgentRemote(params.remote, remoteHosts().list(), params.projectPath ?? agent.projectPath);
+    if (!asked.ok) return { success: false, error: `Not saved: ${asked.error}` };
+    remote = asked.remote;
+  }
+  const placing = remote !== undefined && JSON.stringify(remote ?? undefined) !== JSON.stringify(agent.remote);
   const makesWorktree = !!(params.worktree?.enabled && params.worktree.branchName && (moving || !agent.worktreePath));
+  // A move while a CLI works, whoever asks, the window too (the Audit's M1 on #600): ending the terminal here would
+  // leave a turn on a host going on there, out of every stop's reach.
+  if (placing && !opts.endsNoCli && cliAtWork(agent)) {
+    return {
+      success: false,
+      code: 'cli_running',
+      error: `A CLI works in the terminal of "${agent.name || agent.id}": stop the agent before moving it to another place, `
+        + 'or its turn would go on where it runs now, out of Tars\'s reach. Nothing was changed.',
+    };
+  }
   // Last of the checks, before the one that writes: what would end the terminal, while a CLI is at work in it.
   if (opts.endsNoCli) {
     const ending = [
       ...(params.provider !== undefined && params.provider !== agent.provider ? ['provider'] : []),
       ...(params.cliPath !== undefined && (params.cliPath ?? undefined) !== agent.cliPath ? ['CLI path'] : []),
+      ...(placing ? ['remote host'] : []),
       ...(moving ? ['project'] : []),
       ...(makesWorktree ? ['worktree'] : []),
     ];
@@ -226,6 +252,25 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   if (params.obsidianVaultPaths !== undefined) {
     agent.obsidianVaultPaths = params.obsidianVaultPaths;
   }
+  let formerPlace: RemoteEnd | undefined;
+  if (placing) {
+    // A terminal started here, or on the former host, is not where its CLI must run now: ended, as for a new binary.
+    if (agent.ptyId) {
+      const stale = ptyProcesses.get(agent.ptyId);
+      if (stale) {
+        killPty(stale);
+        ptyProcesses.delete(agent.ptyId);
+      }
+      agent.ptyId = undefined;
+      agent.ptyCwd = undefined;
+      agent.status = 'idle';
+      agent.currentTask = undefined;
+    }
+    // And its session on the former host (the Audit's M1 on #600): once the place changes, no stop reaches it there.
+    const former = agent.remote;
+    agent.remote = remote ?? undefined;
+    if (former) formerPlace = await endRemoteSession(agent, former);
+  }
   if (params.cliPath !== undefined) {
     const newCliPath = params.cliPath === null ? undefined : params.cliPath;
     if (newCliPath !== agent.cliPath && agent.ptyId) {
@@ -273,5 +318,5 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   for (const other of demoted) restartForSettings(other.id, ['orchestrator']);
 
   const changed = FIELDS.filter((field, i) => JSON.stringify(agent[field]) !== before[i]);
-  return { success: true, agent, changed, changedAtLaunch, ...(restart ? { restart } : {}) };
+  return { success: true, agent, changed, changedAtLaunch, ...(restart ? { restart } : {}), ...(formerPlace ? { formerPlace } : {}) };
 }

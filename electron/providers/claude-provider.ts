@@ -17,6 +17,8 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { isTarsBundleEntry } from '../services/mcp-roles';
 import { usesNodeHooks, mergeNodeHooks, legacyShCommand } from '../utils/hook-command';
+import { CLAUDE_HOOK_FILES } from './claude-hook-files';
+import { REMOTE_CLAUDE_FLAGS } from '../core/remote-launch';
 
 export class ClaudeProvider implements CLIProvider {
   readonly id = 'claude' as const;
@@ -41,14 +43,18 @@ export class ClaudeProvider implements CLIProvider {
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // On a remote host (2.0.7, services/remote-agents.ts): its hooks and Tars's MCP servers from the agent's folder of
+    // Tars's files there, and none of this computer's paths below (the MCP file, the instructions, the added folders).
+    const here = !params.remote;
+    if (!here) command += REMOTE_CLAUDE_FLAGS;
 
     // MCP config
-    if (params.mcpConfigPath && fs.existsSync(params.mcpConfigPath)) {
+    if (here && params.mcpConfigPath && fs.existsSync(params.mcpConfigPath)) {
       command += ` --mcp-config '${params.mcpConfigPath.replace(/'/g, "'\\''")}'`;
     }
 
     // System prompt file (Super Agent instructions)
-    if (params.systemPromptFile && fs.existsSync(params.systemPromptFile)) {
+    if (here && params.systemPromptFile && fs.existsSync(params.systemPromptFile)) {
       command += ` --append-system-prompt-file '${params.systemPromptFile.replace(/'/g, "'\\''")}'`;
     }
 
@@ -92,14 +98,14 @@ export class ClaudeProvider implements CLIProvider {
     }
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
-    const secondary = handedSecondaryFolder(params.secondaryProjectPath);
+    const secondary = here ? handedSecondaryFolder(params.secondaryProjectPath) : undefined;
     if (secondary) {
       command += ` --add-dir ${shellQuote(secondary)}`;
     }
 
     // The template's folders: added to what the CLI may reach, with whatever
     // the agent's permission mode allows there, reading and writing alike.
-    if (params.obsidianVaultPaths) {
+    if (here && params.obsidianVaultPaths) {
       for (const vp of params.obsidianVaultPaths) {
         // Read back from agents.json or templates.json, which any agent can write: never ~/.tars-private.
         if (handedSecondaryFolder(vp) && fs.existsSync(vp)) {
@@ -109,7 +115,7 @@ export class ClaudeProvider implements CLIProvider {
     }
 
     // Tars's CLAUDE.md via ~/.tars
-    command += ` --add-dir ${shellQuote(DATA_DIR)}`;
+    if (here) command += ` --add-dir ${shellQuote(DATA_DIR)}`;
 
     // Prompt with skills directive, and no operand at all without a task.
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';
@@ -165,19 +171,8 @@ export class ClaudeProvider implements CLIProvider {
     type HookEntry = { matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> };
     type Settings = { hooks?: Record<string, HookEntry[]>; [key: string]: unknown };
 
-    const hookFiles = [
-      { type: 'PostToolUse', file: 'post-tool-use.sh', matcher: '*' },
-      { type: 'Stop', file: 'on-stop.sh', matcher: undefined },
-      // A turn that ends on an API error fires this instead of Stop, and with no
-      // listener the agent stayed `running` for good. See the script.
-      { type: 'StopFailure', file: 'stop-failure.sh', matcher: undefined },
-      { type: 'SessionStart', file: 'session-start.sh', matcher: '*' },
-      { type: 'SessionEnd', file: 'session-end.sh', matcher: '*' },
-      { type: 'Notification', file: 'notification.sh', matcher: '*' },
-      { type: 'PermissionRequest', file: 'permission-request.sh', matcher: undefined },
-      { type: 'TaskCompleted', file: 'task-completed.sh', matcher: undefined },
-      { type: 'UserPromptSubmit', file: 'user-prompt-submit.sh', matcher: undefined },
-    ];
+    // The one list, read by an agent's launch on a remote host too (services/remote-agents.ts).
+    const hookFiles = CLAUDE_HOOK_FILES;
 
     // Every claude binary reads this file when it starts, and Claude Code
     // writes it too, so it is changed through updateSharedJsonSync: never in

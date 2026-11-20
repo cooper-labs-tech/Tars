@@ -50,6 +50,35 @@ async function getProvider() {
 
 describe('ClaudeProvider', () => {
   describe('buildInteractiveCommand', () => {
+    // 2.0.7, an agent on a remote host (core/remote-launch.ts; failure 11 of remote-launch.test.ts, written before the
+    // code): the command runs there, so it names no path of this computer, and takes its hooks and Tars's MCP servers
+    // from the files Tars put in the agent's folder on the host.
+    it('11. for a CLI on a remote host: its settings and MCP files from its folder there, and no path of this computer', async () => {
+      const provider = await getProvider();
+      const mcpPath = path.join(tmpDir, '.claude', 'mcp.json');
+      fs.mkdirSync(path.dirname(mcpPath), { recursive: true });
+      fs.writeFileSync(mcpPath, '{}');
+      const instructions = path.join(tmpDir, 'orchestrator.md');
+      fs.writeFileSync(instructions, 'x');
+      const secondary = fs.mkdtempSync(path.join(tmpDir, 'second-'));
+      const cmd = provider.buildInteractiveCommand({
+        binaryPath: 'claude', remote: true, mcpConfigPath: mcpPath, systemPromptFile: instructions,
+        secondaryProjectPath: secondary, obsidianVaultPaths: [secondary], prompt: 'ECHO x', permissionMode: 'bypass', model: 'opus',
+      });
+      expect(cmd.startsWith(`'claude' --settings "$TARS_REMOTE_AGENT_DIR"/settings.json --mcp-config "$TARS_REMOTE_AGENT_DIR"/mcp.json `)).toBe(true);
+      expect(cmd).not.toContain(tmpDir);
+      expect(cmd).not.toContain('--add-dir');
+      expect(cmd).not.toContain('--append-system-prompt-file');
+      expect(cmd).toContain('--dangerously-skip-permissions');
+      expect(cmd).toContain("--model 'opus'");
+      expect(cmd).toContain('ECHO x');
+      // On this computer, as before: its own MCP file and ~/.tars.
+      const here = provider.buildInteractiveCommand({ binaryPath: 'claude', mcpConfigPath: mcpPath, prompt: 'ECHO x' });
+      expect(here).toContain(`--mcp-config '${mcpPath}'`);
+      expect(here).toContain('--add-dir');
+      expect(here).not.toContain('TARS_REMOTE_AGENT_DIR');
+    });
+
     it('includes --mcp-config when mcpConfigPath is provided', async () => {
       const provider = await getProvider();
       const mcpPath = path.join(tmpDir, '.claude', 'mcp.json');

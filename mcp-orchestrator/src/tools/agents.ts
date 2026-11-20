@@ -728,6 +728,11 @@ const AGENT_TOOLS: Tool[] = [
       skills: z.array(z.string()).optional().describe("Its skills: the whole list, which replaces the one it has"),
       character: z.enum(CHARACTERS).optional().describe("Visual character for the agent"),
       secondaryProjectPath: z.string().nullable().optional().describe("Secondary project path added as context (--add-dir); null to take it away"),
+      remote: z
+        .object({ hostId: z.string(), folder: z.string().optional() })
+        .nullable()
+        .optional()
+        .describe("Run its CLI on one of the owner's remote Linux hosts, over ssh: the host's id (only the owner adds hosts, in Tars's window) and a folder under that host's work root (its project's folder name there when omitted); null to run it on this computer again. Refused while a CLI runs in its terminal (cli_running)."),
     },
     failure: "updating agent",
     async run({ id, ...fields }) {

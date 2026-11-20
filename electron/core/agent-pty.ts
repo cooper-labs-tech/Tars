@@ -19,6 +19,7 @@ import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
+import { forgetPrepFile, remoteTerminal, type RemoteLaunch } from '../services/remote-agents';
 
 export { setAccountEnvResolver } from './account-env';
 /** Moved to electron/platform/shell.ts; re-exported for the callers that import it from here. */
@@ -125,6 +126,12 @@ export function spawnAgentPty(opts: {
   cols: number;
   rows: number;
   env: Record<string, string | undefined>;
+  /**
+   * The CLI runs on one of the owner's remote hosts (2.0.7, services/remote-agents.ts): the terminal is then ssh's,
+   * and the environment composed here goes to the host, never to the ssh of this computer. `shell` and `args` are not
+   * used.
+   */
+  remote?: { launch: RemoteLaunch; cliCommand: string };
 }): pty.IPty {
   // Once the quit has begun, a terminal spawned here would be in no map the
   // quit ends: every caller (the API, the IPC, the bots, main.ts) is refused,
@@ -154,14 +161,9 @@ export function spawnAgentPty(opts: {
   delete env.CLAUDE_PID;
 
   const spawnedAt = Date.now();
-  const spawned = spawnPty(opts.shell, opts.args, {
-    name: TERMINAL_NAME,
-    cols: size.cols,
-    rows: size.rows,
-    cwd: opts.cwd,
-    // Windows PowerShell, which an agent's terminal waits in there, gets no
-    // PSModulePath (platform/child-env.ts); any other program all of it.
-    env: childEnv(opts.shell, {
+  // Windows PowerShell, which an agent's terminal waits in there, gets no
+  // PSModulePath (platform/child-env.ts); any other program all of it.
+  const composed = childEnv(opts.shell, {
       ...env,
       // Which Tars this CLI answers to: its hooks, its bundled MCP servers and
       // anything else that calls back. It is set here, after the caller's env,
@@ -207,9 +209,17 @@ export function spawnAgentPty(opts: {
       // ~/.tars-private): Claude in Chrome back under bypass, out of the auto mode classifier the server's flag
       // hands it to. After the caller's env, which cannot take it back.
       ...chromeLaunchEnv(opts.binaryName),
-    }) as { [key: string]: string },
+    }) as { [key: string]: string };
+  // On a remote host: ssh prepares it, then starts the CLI there with this environment (services/remote-agents.ts).
+  const remote = opts.remote ? remoteTerminal(opts.remote.launch, opts.remote.cliCommand, composed) : undefined;
+  const spawned = spawnPty(remote?.shell ?? opts.shell, remote?.args ?? opts.args, {
+    name: TERMINAL_NAME,
+    cols: size.cols,
+    rows: size.rows,
+    cwd: opts.cwd,
+    env: remote?.env ?? composed,
   });
-  spawnedAs.set(spawned, { shell: opts.shell, runsCommand: opts.runsCommand, env: opts.env });
+  spawnedAs.set(spawned, { shell: remote?.shell ?? opts.shell, runsCommand: opts.runsCommand, env: opts.env });
   // Whose terminal this is, so a message that has to wait for a draft in it
   // can name the agent whose panel should say so. Here because this is the
   // one function that spawns an agent's terminal, and a caller that has to
@@ -224,6 +234,8 @@ export function spawnAgentPty(opts: {
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {
     terminalExited(spawned);
+    // The file that prepares a host holds the agent's token: gone with a terminal that ended before it removed it.
+    if (remote) forgetPrepFile(remote.prepFile);
     // And what it was spawned as: gone, node-pty on Linux still names the
     // shell it spawned, and a terminal handed a command read as a running CLI.
     spawnedAs.delete(spawned);

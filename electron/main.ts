@@ -123,6 +123,8 @@ import { registerVaultHandlers } from './handlers/vault-handlers';
 import { registerVaultProjectFilesHandlers } from './handlers/vault-project-files-handlers';
 import { registerReviewHandlers } from './handlers/review-handlers';
 import { registerAgentQueueHandlers } from './handlers/agent-queue-handlers';
+import { registerRemoteHostsHandlers } from './handlers/remote-hosts-handlers';
+import { sweepPrepFiles } from './services/remote-agents';
 import { registerTemplateHandlers } from './handlers/template-handlers';
 import { registerTeamTemplateHandlers } from './handlers/team-template-handlers';
 import { registerProjectSetupHandlers } from './handlers/project-setup-handlers';
@@ -722,6 +724,11 @@ app.whenReady().then(async () => {
   // Review: every repository of every project, scanned and searched (services/review-repositories.ts).
   registerReviewHandlers();
   registerAgentQueueHandlers();
+  // The owner's remote hosts, where agents may run their CLI over ssh (services/remote-hosts.ts, 2.0.7).
+  registerRemoteHostsHandlers();
+  // The files that prepare a host, left by a Tars that died mid-launch (each holds a token that died with it).
+  const swept = sweepPrepFiles();
+  if (swept) console.log(`[remote-agents] removed ${swept} file(s) a stopped Tars left to prepare a host`);
 
 
   // The relay to the user's Telegram through their Hermes, following its switch
