@@ -78,6 +78,16 @@ export function ensurePiProjectTrusted(projectPath: string, agentDir: string = p
   }
 }
 
+/** Whether the user's pi starts with no banner: `quietStartup: true` in its global settings.json. */
+function piStartsQuietly(): boolean {
+  try {
+    const settings = JSON.parse(fs.readFileSync(path.join(piAgentDir(), 'settings.json'), 'utf-8')) as { quietStartup?: unknown };
+    return settings?.quietStartup === true;
+  } catch {
+    return false;
+  }
+}
+
 /** Where Tars wrote them until 2.0.4, which pi never reads. */
 const legacyMcpFile = (): string => path.join(os.homedir(), '.pi', 'config.json');
 
@@ -110,8 +120,14 @@ export class PiProvider implements CLIProvider {
     // answers Enter with "Startup is still in progress", the task left unsent (its interactive-mode.js and
     // tools-manager.js). Up once every download it announced has its outcome.
     const text = lines.join('\n');
-    return [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)]
-      .every(([, tool]) => text.includes(`${tool} installed to `) || text.includes(`Failed to download ${tool}`));
+    const downloading = [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)]
+      .some(([, tool]) => !text.includes(`${tool} installed to `) && !text.includes(`Failed to download ${tool}`));
+    if (downloading) return false;
+    // And its first frame holds the footer alone: the banner and the download line come together in the next, 20 to
+    // 70 ms later (measured 20/11). So the banner's hint line too, whatever keys are bound, unless the user's pi starts
+    // quietly and draws none (`quietStartup: true` in its settings.json; a project's own setting is not read, and such
+    // a pi is up when its launch's wait runs out).
+    return /\/ commands\b.*! bash\b/.test(text) || piStartsQuietly();
   }
 
   /** Measured on 1.5.2 (20/11): a note typed during a slow tool call went out with that call's result. */
