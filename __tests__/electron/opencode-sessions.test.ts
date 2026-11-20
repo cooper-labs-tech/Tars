@@ -53,6 +53,14 @@ import Database from 'better-sqlite3';
  *     message after it (opencode gone mid-turn), stops its session for good. Passed over, and what follows read.
  * 16. (I-a) A launch never forgotten: its session read every second for the rest of the run, after its terminal is
  *     gone. Forgotten with its terminal, and only its own: a restart's new launch outlives the old terminal's exit.
+ *
+ * Found by the Audit's re-read of #613 (M2, 20/11), written before the fix:
+ * 17. A launch's prompt noted by its first 200 characters, which opencode begins with the skills line: with four skills
+ *     that line is 209 characters, the same for every agent with those skills. Each session then held what another
+ *     unbound launch was sent and was ruled out, and the identity line after the skills line, on the same line, was not
+ *     at a line's start: two agents launched before either bound ruled each other out, and neither was ever read. The
+ *     prompt is noted from after the skills line; the identity line counts right after it too; and an identity line
+ *     naming this agent binds before what other launches were sent is weighed, which decides only where none does.
  */
 
 import { OpencodeSessionWatch, type HookPost } from '../../electron/services/opencode-sessions';
@@ -436,6 +444,33 @@ describe.each(['opencode', 'kilo'])('on %s.db', (name) => {
       await w.tick();
       expect(posts.length).toBeGreaterThan(0);
       expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
+    });
+  });
+
+  describe('the same skills for two agents (17, the Audit\'s M2)', () => {
+    const SKILLS = '[IMPORTANT: Use these skills for this session: vercel-react-best-practices, web-design-guidelines, frontend-design, supabase-postgres-best-practices. Invoke them with /<skill-name> when relevant to the task.]';
+    const promptOf = (agentId: string) => `${SKILLS} ${identity(agentId)}`;
+    it('two launches with the same four skills, both sessions written before either binds: each binds its own', async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project, { prompt: promptOf(AGENT) });
+      w.noteLaunch(OTHER, project, { prompt: promptOf(OTHER) });
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [promptOf(AGENT)]);
+      session('ses_otherbuild0000000000000', project, 2_000);
+      message('ses_otherbuild0000000000000', 2_001, user(2_001), [promptOf(OTHER)]);
+      await w.tick();
+      const by = (id: string) => [...new Set(posts.filter((p) => p.agentId === id).map((p) => p.post.body.session_id))];
+      expect(by(AGENT)).toEqual([opencodeUuidOf(SES)]);
+      expect(by(OTHER)).toEqual([opencodeUuidOf('ses_otherbuild0000000000000')]);
+    });
+
+    it('the identity line right after the skills line names the session, with no prompt noted', async () => {
+      const w = watch();
+      w.noteLaunch(AGENT, project);
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [promptOf(AGENT)]);
+      await w.tick();
+      expect(posts.map((p) => p.post.body.session_id)[0]).toBe(opencodeUuidOf(SES));
     });
   });
 
