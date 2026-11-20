@@ -52,11 +52,12 @@ export class OpenCodeProvider implements CLIProvider {
   /**
    * opencode sends no SessionStart and drops keys typed before its TUI is ready (1.19.6, measured 20/11: its field and
    * its bottom bar came 10 to 26 s after it started on a loaded machine; it took keys within 50 ms of that, three times
-   * out of three, and none before). Up on that bar, `<key> agents  <key> commands` (two spaces between, as Tars's
-   * mirror reads it), whatever keys are bound.
+   * out of three, and none before). Up on that bar, whose last item is always `<key> commands` after a gap of two
+   * spaces or more (as Tars's mirror reads it): `tab agents  ctrl+p commands` on its first screen, `<folder>  132  ctrl+p
+   * commands` on a session it resumed, its tokens where `tab agents` was; whatever keys are bound.
    */
   upOnScreen(lines: readonly string[]): boolean {
-    return lines.some((line) => /\S+ agents {2,}\S+ commands\s*$/.test(line));
+    return lines.some((line) => /\s{2,}\S+ commands\s*$/.test(line));
   }
 
   /** Measured on 1.19.6 (20/11): a note typed during a slow tool call went out with that call's result. */
