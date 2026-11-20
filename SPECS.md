@@ -157,6 +157,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `amp` | Amp | `amp` | `~/.config/amp` | native |
 | `qwen-code` | Qwen Code | `qwen` | `~/.qwen` | native, on the models of the user's own `~/.qwen/settings.json` (2.0.4, below) |
 | `kimi-code` | Kimi Code | `kimi` | `$KIMI_CODE_HOME`, else `~/.kimi-code` | native, on the model of the user's own `config.toml`, or an inference endpoint (below) |
+| `kilo` | Kilo | `kilo` | `$XDG_CONFIG_HOME/kilo`, else `~/.config/kilo` | native, a build of opencode: its own default (the Kilo Gateway's), or an inference endpoint (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
@@ -177,8 +178,8 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 
 | Capability | Value per provider |
 |---|---|
-| Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini` and `qwen-code`; `false` for `codex`, `grok`, `opencode`, `pi`, `kimi-code` and `amp`. codex's, pi's and Kimi Code's turns are read from their own session log instead (`turnsReported`, below) |
-| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi` (with `"exposure": "direct"`: pi 1.5.2 otherwise leaves a server's tools to its code tool, never declared to the model), `kimi-code` (`mcp.json` of its home) |
+| Native hooks | `true` for `claude` and all thirteen claude-binary providers (they share `~/.claude/settings.json`), `gemini` and `qwen-code`; `false` for `codex`, `grok`, `opencode`, `kilo`, `pi`, `kimi-code` and `amp`. codex's, pi's and Kimi Code's turns are read from their own session log instead, opencode's and Kilo's from their own database (`turnsReported`, below) |
+| MCP strategy | `flag` (`--mcp-config`) for the claude-binary family; `config-file` for `codex`, `gemini`, `grok`, `opencode`, `pi` (with `"exposure": "direct"`: pi 1.5.2 otherwise leaves a server's tools to its code tool, never declared to the model), `kimi-code` (`mcp.json` of its home), `kilo` (`kilo.json` of its own config folder, never opencode's) |
 | Skills | `true` everywhere except `pi`, which has packages rather than skills |
 | Skill directories | claude family: `~/.claude/skills` + `~/.agents/skills`; `gemini`: `~/.gemini/skills`; `grok`: `~/.grok/skills` + `~/.agents/skills`; `codex`, `opencode`: `~/.agents/skills`; `pi`: `~/.pi/packages` |
 | Memory base path | `<configDir>/projects` for the claude-binary family; `codex`, `gemini`, `grok`, `opencode` and `pi` return `configDir` itself, a placeholder; they have no Claude-like memory tree |
@@ -229,9 +230,24 @@ The binary `kimi` (MoonshotAI/kimi-code, MIT), measured on 2.6.3 in a terminal a
 
 - **An approval codex waits on** is read from the screen, by its dialog's title and answers (`codexDialogOnScreen`): in normal mode codex asks before a command it runs outside its sandbox, and before each call of an MCP server's tool, in a form of its own (measured: `Allow the probe MCP server to run tool "ping"?`, then Allow, Allow for this session, Always allow, Cancel). `waiting` on a permission while it is shown, with that title, `running` once it is gone, and no writer types into it: Enter would allow the call. In auto, codex's automatic review answered the same call by itself (measured with Tars's send_message).
 
+### Kilo (20/11): `providers/kilo-provider.ts`, `providers/opencode-provider.ts` (`OpencodeBuildProvider`), `services/opencode-sessions.ts`
+
+The binary `kilo` (Kilo-Org/kilocode), a build of opencode, measured on 7.8.27 in throwaway homes. What it shares with
+opencode lives in `OpencodeBuildProvider`; what is its own:
+- **Its config**: an inline config only in `KILO_CONFIG_CONTENT`. Given opencode's variable it ran on its own Kilo
+  Gateway, so a Kilo agent is never run as an opencode one.
+- **MCP**: Tars's servers in `kilo.json` of `$XDG_CONFIG_HOME/kilo`. `kilo mcp list` read `kilo.json`, `kilo.jsonc`,
+  `opencode.json` and `config.json` there, and nothing in opencode's folder.
+- **Turns, answers, tokens and resume**: opencode's reader, on its own database, `$XDG_DATA_HOME/kilo/kilo.db` (the same
+  schema), by a watch of its own (`opencodeWatchFor('kilo')`).
+- **Keys**: opencode's bottom bar, `tab agents  ctrl+p commands`; a key written the moment it appeared was taken 64 to
+  106 ms later, three fresh starts out of three, whether the terminal answered Kilo's queries or not. The bar came 13
+  to 47 s after the start on a loaded machine.
+- How a note typed mid-turn reaches it is not measured (`noteDuringTurn` absent).
+
 ### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
 
-An agent running codex, pi, qwen-code, opencode or kimi-code can run on an OpenAI-compatible inference endpoint, chosen per
+An agent running codex, pi, qwen-code, opencode, kimi-code or kilo can run on an OpenAI-compatible inference endpoint, chosen per
 agent (`endpointId`, with `model` one of the endpoint's own `/v1/models`).
 
 **The proxy.** Tars writes everything the harness needs, through one adapter per harness (`endpoint-harness.ts`).
@@ -243,6 +259,7 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   `OPENAI_API_KEY`.
 - **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
+- **kilo 7.8.27:** the same provider, in `KILO_CONFIG_CONTENT`, the only one Kilo reads.
 - **kimi-code 2.6.3:** the whole model from its environment, `KIMI_MODEL_NAME`, `KIMI_MODEL_PROVIDER_TYPE=openai`,
   `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written, and no `-m` (it names an alias of the
   user's `config.toml`). Measured through the proxy by the harness conformance run: delegated, answered, read back and
@@ -394,6 +411,7 @@ What is read back, per CLI. Nothing is invented: a value Tars cannot read is abs
 | claude, and the API-key providers that run it | `claude ... -- <task>` | hooks (UserPromptSubmit, Stop, StopFailure) or the state mod | the transcript's last assistant message for the task, in full (1 000 000 characters at most), from `~/.claude/projects` or the Claude account's own folder | from the transcript (`task-cost.ts`), priced from the model catalogue | completed, error (with what the CLI said), stopped, interrupted |
 | gemini | `gemini -i <task>` (a bare query ran one-shot before 0.64) | hooks: BeforeAgent opens the turn with its prompt, AfterAgent ends it `idle` (until 2.0.4 it said `waiting` with no reason, read as a turn still asking, and every later task waited behind it) | the turn's `prompt_response` (gemini 0.64.0's AfterAgent), cut at 4000 bytes as the hooks cut Claude Code's | not read | completed, error, stopped |
 | opencode | `opencode --prompt <task>`, its TUI (never `opencode run`, which exits after the task); a task typed in once its bottom bar is drawn (`upOnScreen`: `<key> commands` at the line's end, on its first screen and on a session it resumed); its session resumed with `--session <id>`, forked with `--fork` (every restart's: the fork is a new session whose messages copy the old one's with their own times, bound by its first prompt and read from the launch on; on a launch on a session, the task is typed once that session's view is drawn, since a forking opencode draws its home view first) | read from its database, `$XDG_DATA_HOME/opencode/opencode.db` (`services/opencode-sessions.ts`, measured on 1.19.6): a user message opens the turn, an assistant message completed with `finish: stop` ends it, an Esc (`MessageAbortedError`) interrupts it, an `APIError` is the agent's error | the turn's text | its assistant messages' tokens, as the turn's usage (`/api/hooks/turn-usage`), priced from the catalogue | completed, error, interrupted |
+| kilo | `kilo --prompt <task>`, its TUI, as opencode; a task typed in once its bottom bar is drawn (`upOnScreen`: `<key> commands` at the line's end, on its first screen and on a session it resumed); its session resumed with `--session <id>`, forked with `--fork` (every restart's: the fork is a new session whose messages copy the old one's with their own times, bound by its first prompt and read from the launch on; on a launch on a session, the task is typed once that session's view is drawn, since a forking opencode draws its home view first) | read from its database, `$XDG_DATA_HOME/kilo/kilo.db` (`services/opencode-sessions.ts`, the same schema, Kilo 7.8.27): a user message opens the turn, an assistant message completed with `finish: stop` ends it, an Esc (`MessageAbortedError`) interrupts it, an `APIError` is the agent's error | the turn's text | its assistant messages' tokens, as the turn's usage (`/api/hooks/turn-usage`), priced from the catalogue | completed, error, interrupted |
 | amp | `amp`, its TUI, the task typed in once the CLI runs and its screen has had 2 s (`core/typed-task.ts`): amp has no interactive form that takes a prompt, and `amp -x` exits after the task | no hook | not read | not read | `delivered` |
 | codex | `codex <task>` (never `codex exec`) | no hook | not read | not read | `delivered` |
 | grok | `grok <task>` (never `-p/--single`) | no hook | not read | not read | `delivered` |
