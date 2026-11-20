@@ -182,15 +182,22 @@ describe('a one-shot probe of a CLI', () => {
 
 describe("codex's probes (P1, P2, and the login shell's CODEX_HOME read)", () => {
   it('8. a codex that never answers --help is read once per launch, not again in the background', async () => {
-    const { codex } = await fresh();
+    const { codex, probe } = await fresh();
     const s = standIn('child(); hang();');
+    const helps = () => s.pids().filter(p => p.role === 'probe' && p.argv[0] === '--help').length;
     try {
-      expect(await codex.readCodexFlags(s.bin, 500)).toBeUndefined();
+      // The launch's own read (prepareLaunch), seen to start, and given no answer.
+      const read = codex.readCodexFlags(s.bin, 30_000);
+      await until("the launch's own --help started", () => helps() === 1);
+      probe.endCliProbes();
+      expect(await read).toBeUndefined();
+      // The line, built with the stable flags: no read of its own.
       const accepts = codex.codexAccepts(s.bin);
       expect(accepts('--no-daemon')).toBe(false);
       expect(accepts('--approve-for-me')).toBe(false);
-      await settle(1_000);
-      expect(s.pids().filter(p => p.role === 'probe' && p.argv[0] === '--help').length, 'a second --help was read').toBe(1);
+      // Long enough for a second read's stand-in to have noted itself, even under load.
+      for (const end = Date.now() + 5_000; Date.now() < end && helps() < 2;) await settle(100);
+      expect(helps(), 'a second --help was read').toBe(1);
       expect(await allGone(s.pids)).toEqual([]);
     } finally {
       fs.rmSync(s.dir, { recursive: true, force: true });
