@@ -19,9 +19,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * with its own identity. Each harness passes the same steps:
  * 1. starts: its CLI runs in the agent's terminal;
  * 2. delegate_task returns the harness's own final answer, `PROBE-OK <marker>`, and the endpoint saw the tool's
- *    result carry the marker: a real tool round on the wire. A harness whose TUI is not drawn yet is answered "still
- *    starting ... Send it again in a moment", nothing typed (SENDER_WAIT_MS, 20 s): sent again, as an orchestrator
- *    does, four times at most (Kilo 7.8.27 drew its bar 13 to 47 s after it started on a loaded machine, 20/11);
+ *    result carry the marker: a real tool round on the wire;
  * 3. task_status reads that task completed, with the same answer;
  * 4. get_agent_output with that taskId gives the same answer;
  * 5. resume: Tars quits and starts again, the agent's first start continues its session (the endpoint's first new
@@ -29,8 +27,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. restart: the window restarts the agent (what applying new settings does too), which forks its session: the CLI
  *    goes on under a new session with the earlier turns, and a third delegation is answered from it (the Audit's M1 on
  *    #613: opencode's reader bound the session the fork left, and the task waited out its timeout).
- * A delegation answered "still starting ... Send it again in a moment" (nothing typed, its TUI not drawn yet) is sent
- * again, as an orchestrator does, four times at most.
+ * A delegation answered "still starting ... Send it again in a moment" (nothing typed, its TUI not drawn yet, past the
+ * 20 s a sender waits) is sent again, as an orchestrator does, four times at most: Kilo 7.8.27 drew its bar 13 to 47 s
+ * after it started on a loaded machine (20/11).
  * Every harness's home is the sandbox's (CODEX_HOME, KIMI_CODE_HOME, PI_CODING_AGENT_DIR handed to Tars here): one
  * exported by the shell that runs the spec was inherited, and the sandboxed Tars wrote that home and its harness ran on
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
