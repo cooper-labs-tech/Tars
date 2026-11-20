@@ -2718,7 +2718,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       : !asNote ? asSent
         : noteCaller ? noteFrom(noteCaller.name || noteCaller.id, asSent, noteRole(noteCaller, agent))
           : noteFrom('Tars', asSent, 'the app you run in');
-    const mode: SendMode = sendModeOf(askedMode, { workerNote: !!workerNote });
+    const mode: SendMode = sendModeOf(askedMode, { workerNote: !!workerNote, noteDuringTurn: getProvider(agent.provider).noteDuringTurn });
     await withReceipt(req, sendJson, {
       route: 'dispatch', agentId: agent.id, payload: { message, model: model ?? null, permissionMode: permissionMode ?? null, mode, ...(note ? { note } : {}) },
     }, async (sendAny) => {
