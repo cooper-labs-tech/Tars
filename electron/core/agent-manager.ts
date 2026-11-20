@@ -26,6 +26,7 @@ import { kimiSessionWatch } from '../services/kimi-sessions';
 import { opencodeWatchFor } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
 import { gooseSessionWatch } from '../services/goose-sessions';
+import { setAgentNoticeSink } from './agent-notices';
 import { gooseLaunchOf } from '../providers/goose-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import type * as pty from 'node-pty';
@@ -418,6 +419,14 @@ export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
   }
   markAgentsDirty();
 }
+
+// A notice from below the agent store (core/agent-notices.ts: a Goose launch that starts a conversation over) goes
+// where a person reads it, the agent's kept output, as a refused session's does (hooks-routes.ts).
+setAgentNoticeSink((agentId, line) => {
+  const agent = agents.get(agentId);
+  if (agent) appendAgentOutput(agent, `\r\n[Tars] ${line}\r\n`);
+  else console.log(`[notice] ${agentId}: ${line}`);
+});
 
 interface AgentsFile {
   version: number;

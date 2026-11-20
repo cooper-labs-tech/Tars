@@ -12,6 +12,7 @@ import { shellQuote } from './cli-provider';
 import { GOOSE_SESSION_ID, gooseConfigDir, gooseSavedServers, gooseSkillsLine } from './goose-cli';
 import { ORCHESTRATOR_ONLY_MCP, isTarsBundleEntry } from '../services/mcp-roles';
 import { endpointLaunchForAgent } from '../services/traces-runtime';
+import { agentNotice } from '../core/agent-notices';
 
 /**
  * Goose, the binary `goose` (block/goose, Apache-2.0), measured on 1.60.1 (20/11/2026) in throwaway homes, its TUI in a
@@ -77,11 +78,12 @@ export class GooseProvider implements CLIProvider {
     const servers = this.serversFor(params.orchestratorMode === true);
     // Goose's own id and nothing else: it reaches a command line. A session resumed or forked brings back the servers
     // it was started with, and nothing switches one off (measured), so it is continued only while those are this
-    // launch's: after a role change, or a move of Tars's bundles, a fresh session (the Audit's L1 on #618).
+    // launch's: after a role change, or a move of Tars's bundles, a fresh session (the Audit's L1 on #618), said where a
+    // person reads the agent's output (the Audit's L3).
     const session = params.resumeSessionId && GOOSE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
-    if (session && !this.serversChangedSince(session, servers)) {
-      return `${command} --resume --session-id ${shellQuote(session)}${params.forkSession ? ' --fork' : ''}`;
-    }
+    const cause = session ? this.freshSessionCause(session, servers) : undefined;
+    if (session && !cause) return `${command} --resume --session-id ${shellQuote(session)}${params.forkSession ? ' --fork' : ''}`;
+    if (cause && params.agentId) agentNotice(params.agentId, `Its conversation starts over: ${cause}, and a Goose session keeps the servers it began with.`);
     for (const [name, server] of servers) {
       const words = [server.command, ...server.args].map(extensionWord);
       if (words.some((w) => w === undefined)) {
@@ -99,20 +101,26 @@ export class GooseProvider implements CLIProvider {
   }
 
   /**
-   * Whether the servers of Tars's that `session` was started with (gooseSavedServers) are not `servers`: one more, one
-   * fewer, or one on another command or path. False when that cannot be told: no server registered yet, or the
-   * session not readable, where the resume goes on as before.
+   * Why the servers of Tars's that `session` was started with (gooseSavedServers) are not `servers`, in the window's
+   * words: one on another command or path (Tars's servers moved), only the orchestrator's own ones more or fewer (its
+   * role changed), or any other one more or fewer (a server added or taken away). Undefined when they are the same, or
+   * when that cannot be told: no server registered yet, or the session not readable, where the resume goes on as before.
    */
-  private serversChangedSince(session: string, servers: Map<string, { command: string; args: string[] }>): boolean {
-    if (this.servers.size === 0) return false;
+  private freshSessionCause(session: string, servers: Map<string, { command: string; args: string[] }>): string | undefined {
+    if (this.servers.size === 0) return undefined;
     const saved = gooseSavedServers(session);
-    if (!saved) return false;
+    if (!saved) return undefined;
     const tars = saved.filter((s) => this.servers.has(s.name) || isTarsBundleEntry(s.name, { command: s.cmd, args: s.args }));
-    if (tars.length !== servers.size) return true;
-    return tars.some((s) => {
+    const savedNames = new Set(tars.map((s) => s.name));
+    const moved = tars.some((s) => {
       const now = servers.get(s.name);
-      return !now || now.command !== s.cmd || JSON.stringify(now.args) !== JSON.stringify(s.args);
+      return !!now && (now.command !== s.cmd || JSON.stringify(now.args) !== JSON.stringify(s.args));
     });
+    const differ = [...[...savedNames].filter((n) => !servers.has(n)), ...[...servers.keys()].filter((n) => !savedNames.has(n))];
+    if (moved) return "Tars's servers moved since its session began";
+    if (differ.length === 0 && tars.length === servers.size) return undefined;
+    if (differ.length > 0 && differ.every((n) => ORCHESTRATOR_ONLY_MCP.includes(n))) return 'its servers changed with its role';
+    return "Tars's servers changed since its session began";
   }
 
   readonly taskTypedAfterLaunch = true;
