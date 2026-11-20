@@ -1,4 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 /**
  * A restart continues the conversation on every provider it restarts.
@@ -28,10 +30,22 @@ vi.mock('os', async (importOriginal) => {
 
 const SESSION = '4ab31f00-ce51-4676-ab80-4023cf6e3f4e';
 
+beforeAll(() => {
+  fs.mkdirSync(tmpDir, { recursive: true });
+  // A user's own Cline provider, which a Cline launch copies into the agent's folder (providers/cline-provider.ts).
+  fs.mkdirSync(path.join(tmpDir, 'cline-data', 'settings'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'cline-data', 'settings', 'providers.json'), '{"version":1,"providers":{}}');
+  process.env.CLINE_DATA_DIR = path.join(tmpDir, 'cline-data');
+});
+afterAll(() => {
+  delete process.env.CLINE_DATA_DIR;
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+});
+
 async function commandFor(providerId: string, resume: { resumeSessionId?: string; forkSession?: boolean }): Promise<string> {
   const { getProvider } = await import('../../../electron/providers');
   return getProvider(providerId as never).buildInteractiveCommand({
-    binaryPath: '/usr/local/bin/cli', prompt: '', model: 'some-model', ...resume,
+    binaryPath: '/usr/local/bin/cli', prompt: '', model: 'some-model', agentId: 'resume-flags-agent', ...resume,
   });
 }
 

@@ -34,9 +34,14 @@ beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'tars-exec-cli-'));
   fakeCli = path.join(tmpDir, 'fake cli');
   fs.writeFileSync(fakeCli, '#!/bin/bash\necho "PPID=$PPID"\n', { mode: 0o755 });
+  // A user's own Cline provider, which a Cline launch copies into the agent's folder (providers/cline-provider.ts).
+  fs.mkdirSync(path.join(tmpDir, 'cline-data', 'settings'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'cline-data', 'settings', 'providers.json'), '{"version":1,"providers":{}}');
+  process.env.CLINE_DATA_DIR = path.join(tmpDir, 'cline-data');
 });
 
 afterAll(() => {
+  delete process.env.CLINE_DATA_DIR;
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
@@ -44,6 +49,8 @@ async function commandOf(providerId: string): Promise<string> {
   const { getProvider } = await import('../../../electron/providers');
   return getProvider(providerId as never).buildInteractiveCommand({
     binaryPath: fakeCli,
+    // Cline runs on a folder of the agent's own.
+    agentId: 'exec-into-cli-agent',
     prompt: "Rebase onto main, and say what fell; don't stop at the first failure",
     model: 'some-model',
     verbose: true,

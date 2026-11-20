@@ -118,6 +118,8 @@ function interactiveParams(homeDir: string) {
   fs.writeFileSync(systemPromptFile, 'be brief');
   return {
     binaryPath: 'tars_argv',
+    // Cline runs on a folder of the agent's own, under the home.
+    agentId: 'add-dir-agent',
     prompt: "Rebase onto main; don't stop at the first failure",
     model: 'some-model',
     verbose: true,
@@ -143,9 +145,14 @@ beforeAll(() => {
   fs.mkdirSync(hostileHome, { recursive: true });
   // constants.ts reads the home at module load, the escape's module included.
   home = plainHome;
+  // A user's own Cline provider, which a Cline launch copies into the agent's folder (providers/cline-provider.ts).
+  fs.mkdirSync(path.join(root, 'cline-data', 'settings'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'cline-data', 'settings', 'providers.json'), '{"version":1,"providers":{}}');
+  process.env.CLINE_DATA_DIR = path.join(root, 'cline-data');
 });
 
 afterAll(() => {
+  delete process.env.CLINE_DATA_DIR;
   fs.rmSync(root, { recursive: true, force: true });
 });
 
