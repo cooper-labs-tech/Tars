@@ -286,7 +286,9 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
 - **kilo 7.8.27:** the same provider, in `KILO_CONFIG_CONTENT`, the only one Kilo reads. Measured through the proxy by
   the harness conformance run: delegated, answered after a tool round, read back with its tokens, and resumed.
 - **goose 1.60.1:** `--provider openai --model <model>` on its line, the proxy in `OPENAI_HOST` (its origin) and
-  `OPENAI_BASE_PATH` (`v1/chat/completions`), and the token in `OPENAI_API_KEY`; nothing written.
+  `OPENAI_BASE_PATH` (`v1/chat/completions`), and the token in `OPENAI_API_KEY`; nothing written. Measured through the
+  proxy by the harness conformance run: delegated, answered after a tool round, read back with its tokens, resumed and
+  forked. On a session it resumes, Goose asks the endpoint for a title (no tools offered) before the turn.
 - **kimi-code 2.6.3:** the whole model from its environment, `KIMI_MODEL_NAME`, `KIMI_MODEL_PROVIDER_TYPE=openai`,
   `KIMI_MODEL_BASE_URL`, and the token in `KIMI_MODEL_API_KEY`; nothing written, and no `-m` (it names an alias of the
   user's `config.toml`). Measured through the proxy by the harness conformance run: delegated, answered, read back and

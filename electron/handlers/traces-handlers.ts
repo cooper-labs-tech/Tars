@@ -35,6 +35,7 @@ export const HARNESS_SUPPORT: Array<{ harness: string; toolCalls: ToolCallSuppor
   { harness: 'pi', toolCalls: 'works', api: 'chat', measuredOn: '1.5.2' },
   { harness: 'opencode', toolCalls: 'works', api: 'chat', measuredOn: '1.19.6' },
   { harness: 'kilo', toolCalls: 'works', api: 'chat', measuredOn: '7.8.27', note: 'A build of opencode, its provider in KILO_CONFIG_CONTENT: a tool call through Tars\'s proxy (e2e/harness-conformance.spec.ts, 20/11).' },
+  { harness: 'goose', toolCalls: 'works', api: 'chat', measuredOn: '1.60.1', note: 'Its openai provider on the proxy (OPENAI_HOST, OPENAI_BASE_PATH): a tool call through Tars\'s proxy, then resumed and forked (e2e/harness-conformance.spec.ts, 20/11).' },
   { harness: 'kimi-code', toolCalls: 'works', api: 'chat', measuredOn: '2.6.3', note: 'A tool call through Tars\'s proxy on its KIMI_MODEL_* variables (e2e/harness-conformance.spec.ts, 19/11).' },
 ];
 
