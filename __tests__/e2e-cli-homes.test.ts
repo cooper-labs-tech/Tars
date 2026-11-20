@@ -56,6 +56,9 @@ import { CLI_HOMES, homesOutside, inheritable, launchSandboxed } from '../e2e/fi
  *     - Kilo's LANCEDB_PATH, TEST_DAEMON_LOG_DIR and TEST_DAEMON_STATE_DIR;
  *     - their sign-in, OPENCODE_AUTH_CONTENT and KILO_AUTH_CONTENT. These are contents, as in 8:
  *       a runner's would hand the sandboxed app's CLI the runner's account.
+ * 11. Goose's whole home reaches the app: GOOSE_PATH_ROOT. With it absolute, Goose keeps its config, data and state
+ *     under it (#618, goose-cli.ts, Goose 1.60.1 measured); else the XDG homes of 2, and on Windows APPDATA, which
+ *     the fixture already moves into the sandbox.
  */
 
 const accountHome = os.userInfo().homedir;
@@ -68,6 +71,8 @@ const FAMILY = [
   'OPENCODE_TEST_HOME', 'OPENCODE_TEST_MANAGED_CONFIG_DIR', 'OPENCODE_MODELS_PATH', 'OPENCODE_PLUGIN_META_FILE', 'OPENCODE_ZED_DB',
   'KILO_TEST_HOME', 'KILO_TEST_MANAGED_CONFIG_DIR', 'KILO_MODELS_PATH', 'KILO_PLUGIN_META_FILE', 'KILO_ZED_DB',
   'KILO_LANCEDB_PATH', 'KILO_TEST_DAEMON_LOG_DIR', 'KILO_TEST_DAEMON_STATE_DIR',
+  // 11.
+  'GOOSE_PATH_ROOT',
 ];
 const CONTENTS = ['OPENCODE_CONFIG_CONTENT', 'KILO_CONFIG_CONTENT', 'OPENCODE_AUTH_CONTENT', 'KILO_AUTH_CONTENT'];
 const GIT = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
