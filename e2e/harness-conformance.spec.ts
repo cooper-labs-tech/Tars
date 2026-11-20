@@ -24,7 +24,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. task_status reads that task completed, with the same answer;
  * 4. get_agent_output with that taskId gives the same answer;
  * 5. resume: Tars quits and starts again, the agent's first start continues its session (the endpoint's first new
- *    request already carries the marker of step 2 in its history), and a second delegation is answered.
+ *    request of its turn, the first that offers tools, already carries the marker of step 2 in its history), and a
+ *    second delegation is answered.
  * 6. restart: the window restarts the agent (what applying new settings does too), which forks its session: the CLI
  *    goes on under a new session with the earlier turns, and a third delegation is answered from it (the Audit's M1 on
  *    #613: opencode's reader bound the session the fork left, and the task waited out its timeout).
@@ -75,6 +76,13 @@ const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([nam
   const dir = process.env[name]?.trim();
   return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
 }));
+/**
+ * The first request of the harness's own turn among `rs`: the one that offers the model its tools. A request the
+ * harness makes on the side offers none: Goose 1.60.1 asks for a title first, on a new session and on one it resumed
+ * (measured 20/11, `Generate a short title`, no tools), before the turn that carries the history.
+ */
+const turnRequest = <R extends { body?: unknown }>(rs: R[]): R | undefined =>
+  rs.find((r) => ((r.body as { tools?: unknown[] } | undefined)?.tools?.length ?? 0) > 0);
 type Reply = { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 
@@ -247,7 +255,7 @@ for (const h of HARNESSES) {
         const after = posts().slice(before);
         keep({ again, resumedRequests: after.map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) })) });
         expect.soft(after.length, 'the resumed session reached the endpoint').toBeGreaterThan(0);
-        expect.soft(JSON.stringify(after[0]?.body ?? ''), 'its first request carries the first task\'s history').toContain(standin.marker);
+        expect.soft(JSON.stringify(turnRequest(after)?.body ?? ''), 'its first turn request carries the first task\'s history').toContain(standin.marker);
         expect.soft(again.text, 'the second delegation is answered').toContain('PROBE-OK');
 
         // 6. The window restarts the agent, which forks its session: answered from the fork, with the earlier history.
@@ -265,7 +273,7 @@ for (const h of HARNESSES) {
         });
         expect.soft(restarted.text, 'after a restart, the third delegation is answered').toContain('PROBE-OK');
         expect.soft(afterRestart.length, 'the restarted session reached the endpoint').toBeGreaterThan(0);
-        expect.soft(JSON.stringify(afterRestart[0]?.body ?? ''), 'its first request carries the earlier history').toContain(standin.marker);
+        expect.soft(JSON.stringify(turnRequest(afterRestart)?.body ?? ''), 'its first turn request carries the earlier history').toContain(standin.marker);
         expect.soft(sessionAfterRestart, 'the agent is on the fork, a session of its own').not.toBe(sessionBeforeRestart);
       });
     } finally {
