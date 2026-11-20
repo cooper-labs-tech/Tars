@@ -19,6 +19,11 @@ import Database from 'better-sqlite3';
  *   the earlier messages copied. Session ids are `YYYYMMDD_N`.
  * - A message typed during its turn is lost: its Enter is dropped and the text waits in the field after the turn.
  * - It reports its state in OSC 7501 (`state=idle:app=goose`, `state=error`).
+ * - Its permission mode is read from GOOSE_MODE only (no flag): `auto` ran the shell tool unasked; `approve` drew
+ *   "Goose would like to call the above tool, do you allow?" in its terminal; `chat` drew the same dialog, so nothing
+ *   measured is a plan mode.
+ * - An extension's command is split into shell words: a path with a space, single- or double-quoted, started; a
+ *   backslash inside single quotes reached the process as it is; a backslash-escaped space did not start.
  *
  * How it fails, written before the code:
  * 1. Goose's binary read from another path setting, or Goose run as another provider: no Tars provider knows `goose`.
@@ -27,11 +32,15 @@ import Database from 'better-sqlite3';
  *    not choose. Or the endpoint's key written into its config.
  * 4. Tars's servers left unnamed (named after their command, `node__...`) or written into the user's Goose config; a
  *    worker given X and Telegram against the owner's rule of 28/10; or a resumed session given its servers again,
- *    which Goose refuses to start with.
+ *    which Goose refuses to start with. Or a command or a path with a space (a Windows user folder) split in two, or
+ *    one with a quote let through to break the value.
  * 5. Its session not resumed after a restart of Tars (the UUID Tars knows it by never mapped back), resumed in another
  *    folder, or a forked restart read as a resume.
  * 6. A note typed during its turn, and lost: Goose says it loses one (noteDuringTurn 'lost'), so Tars holds it.
  * 7. Its turns taken for unseen: delegate_task then answers `delivered`. Its turns are read (turnsReported).
+ * 8. Its permission mode lost: a normal agent run in the user's own mode, an auto one stopped on dialogs nobody
+ *    answers, or plan run as something else. On macOS and Linux in the line, which no rc file runs after (as codex's
+ *    CODEX_HOME); in the terminal's environment for Windows (goose-wiring.test.ts).
  */
 
 vi.mock('../../../electron/services/traces-runtime', async () => {
@@ -50,6 +59,10 @@ import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
 import { gooseDbPath, gooseUuidOf, gooseLaunchOf } from '../../../electron/providers/goose-cli';
 import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 import { sendModeOf } from '../../../electron/core/send-mode';
+import { shellQuote } from '../../../electron/providers/cli-provider';
+
+/** The line's start before the binary: the mode, on macOS and Linux. */
+const modeWord = (mode: string) => (process.platform === 'win32' ? '' : `env GOOSE_MODE='${mode}' `);
 
 const SES = '20261120_1';
 let root: string;
@@ -81,7 +94,7 @@ describe('Goose, an agent of its own (1, 2, 6, 7)', () => {
   it('2: starts its TUI with no task on the line, and types the task once it says it is ready', () => {
     const goose = new GooseProvider();
     const line = goose.buildInteractiveCommand({ binaryPath: '/opt/goose', prompt: 'do the task' });
-    expect(line.startsWith("'/opt/goose' session")).toBe(true);
+    expect(line.startsWith(`${modeWord('approve')}'/opt/goose' session`)).toBe(true);
     expect(line).not.toContain('do the task');
     expect(goose.taskTypedAfterLaunch).toBe(true);
     expect(goose.typedTask!({ prompt: 'do the task' })).toBe('do the task');
@@ -99,7 +112,7 @@ describe('on an inference endpoint (3)', () => {
     expect(launch.env).toEqual({ OPENAI_HOST: 'http://127.0.0.1:31417', OPENAI_BASE_PATH: 'v1/chat/completions' });
     expect(launch.tokenVars).toEqual(['OPENAI_API_KEY']);
     const goose = new GooseProvider();
-    expect(goose.buildInteractiveCommand({ agentId: 'on-ep', binaryPath: 'goose', prompt: '' })).toContain("--provider 'openai' --model 'org/Model-1'");
+    expect(goose.buildInteractiveCommand({ agentId: 'on-ep', binaryPath: 'goose', prompt: '' })).toContain("'--provider' 'openai' '--model' 'org/Model-1'");
     expect(goose.getPtyEnvVars('on-ep', project, [])).toMatchObject({ OPENAI_HOST: 'http://127.0.0.1:31417', OPENAI_BASE_PATH: 'v1/chat/completions' });
     expect(goose.getPtyEnvVars('not-on-ep', project, []).OPENAI_HOST).toBeUndefined();
     expect(fs.existsSync(path.join(root, 'config', 'goose'))).toBe(false);
@@ -126,6 +139,31 @@ describe("Tars's servers (4)", () => {
     expect(fs.existsSync(path.join(root, 'config', 'goose'))).toBe(false);
     await goose.removeMcpServer('dorothy-x');
     expect(goose.isMcpServerRegistered('dorothy-x', '/res/mcp-x/dist/bundle.js')).toBe(false);
+  });
+
+  it('a command or a path with a space or a backslash is quoted inside the value; one with a quote is not passed', async () => {
+    const goose = new GooseProvider();
+    await goose.registerMcpServer('claude-mgr-vault', 'C:\\Users\\First Last\\Tars\\node.exe', ['C:\\Users\\First Last\\res\\mcp-vault\\dist\\bundle.js']);
+    await goose.registerMcpServer('tars-memory', "/home/o'brien/node", ['/res/mcp-memory/dist/bundle.js']);
+    const line = goose.buildInteractiveCommand({ binaryPath: 'goose', prompt: '', orchestratorMode: true });
+    expect(line).toContain(` --with-extension ${shellQuote("claude-mgr-vault:'C:\\Users\\First Last\\Tars\\node.exe' 'C:\\Users\\First Last\\res\\mcp-vault\\dist\\bundle.js'")}`);
+    expect(line).not.toContain('tars-memory');
+  });
+});
+
+describe('its permission mode (8)', () => {
+  it('normal asks, auto and bypass never do, plan is refused; on the line and in the environment', () => {
+    const goose = new GooseProvider();
+    const line = (permissionMode?: 'normal' | 'auto' | 'bypass' | 'plan') => goose.buildInteractiveCommand({ binaryPath: '/opt/goose', prompt: '', permissionMode });
+    expect(line('normal').startsWith(`${modeWord('approve')}'/opt/goose' session`)).toBe(true);
+    expect(line(undefined).startsWith(`${modeWord('approve')}'/opt/goose'`)).toBe(true);
+    expect(line('auto').startsWith(`${modeWord('auto')}'/opt/goose'`)).toBe(true);
+    expect(line('bypass').startsWith(`${modeWord('auto')}'/opt/goose'`)).toBe(true);
+    expect(() => line('plan')).toThrow(/no plan mode/);
+    expect(goose.getPtyEnvVars('g1', project, [], undefined, { permissionMode: 'normal' }).GOOSE_MODE).toBe('approve');
+    expect(goose.getPtyEnvVars('g1', project, [], undefined, { permissionMode: 'bypass' }).GOOSE_MODE).toBe('auto');
+    expect(goose.getPtyEnvVars('g1', project, [], undefined, { permissionMode: 'auto' }).GOOSE_MODE).toBe('auto');
+    expect(goose.getPtyEnvVars('g1', project, []).GOOSE_MODE).toBe('approve');
   });
 });
 
