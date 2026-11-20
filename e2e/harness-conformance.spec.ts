@@ -36,8 +36,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
- * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE, TARS_HARNESS_KILO); a harness with
- * none is skipped, and says so. A harness whose tokens Tars reads (opencode, Kilo) also has them in its task's ledger entry.
+ * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE, TARS_HARNESS_KILO,
+ * TARS_HARNESS_GOOSE); a harness with none is skipped, and says so. A harness whose tokens Tars reads (opencode, Kilo,
+ * Goose) also has them in its task's ledger entry. Goose runs with every GOOSE_* of the runner's blanked (an empty one
+ * reads as unset, measured: GOOSE_PATH_ROOT would move its folders out of the sandbox), its keyring and telemetry off.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
  * its start and after each task), endpoint-requests.jsonl, the app's logs, the agent's whole
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
@@ -51,7 +53,14 @@ const HARNESSES: Harness[] = [
   { id: 'pi', provider: 'pi', pathKey: 'pi', env: 'TARS_HARNESS_PI' },
   { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
   { id: 'kilo', provider: 'kilo', pathKey: 'kilo', env: 'TARS_HARNESS_KILO', tokens: true },
+  { id: 'goose', provider: 'goose', pathKey: 'goose', env: 'TARS_HARNESS_GOOSE', tokens: true },
 ];
+
+/** For Goose: the runner's own settings of it blanked, and no keychain nor telemetry from the sandbox. */
+const gooseEnv = (): Record<string, string> => ({
+  ...Object.fromEntries(Object.keys(process.env).filter((name) => name.startsWith('GOOSE_')).map((name) => [name, ''])),
+  GOOSE_DISABLE_KEYRING: '1', GOOSE_TELEMETRY_ENABLED: 'false',
+});
 
 const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
 const WORKER = 'eeee5555-0000-4000-8000-0000000000c2';
@@ -134,6 +143,7 @@ for (const h of HARNESSES) {
       try {
         app = await launchSandboxed(electron, home, { env: {
           NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', ...harnessHomes,
+          ...(h.id === 'goose' ? gooseEnv() : {}),
         } });
         const appLog = test.info().outputPath(`app-${label}.log`);
         app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
