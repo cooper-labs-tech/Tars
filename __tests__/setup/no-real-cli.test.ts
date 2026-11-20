@@ -33,6 +33,9 @@ import { realBinary, programOfLine, startedPrograms, narrowRootsForTest, takeVio
  *     own promisified form, and resolve with stdout alone instead of { stdout, stderr } (scope-checks.test.ts failed).
  * G10. A test that runs a real CLI on purpose (codex's own parser reading a config Tars wrote) has no way to: it runs
  *     only when TARS_TEST_REAL_CLIS names that CLI, and the guard then lets that one through, and only that one.
+ * G11. (the Audit's I-5 on #616) Any value opts in: TARS_REAL_CLAUDE=0, `false` or an empty one count as asked. Only
+ *     `1` or an absolute path to the binary opt in, for TARS_REAL_CLAUDE and for each name of TARS_TEST_REAL_CLIS
+ *     (`codex`, `codex=1`, `codex=/path/to/codex`); a path lets that binary through, and no other of its name.
  */
 
 const files = (...present: string[]) => (p: string) => present.includes(p);
@@ -107,11 +110,32 @@ describe('in the suite', () => {
   it('G10. only the CLIs TARS_TEST_REAL_CLIS names are let through, and only when it names them', () => {
     const roots = ['/tmp/run'];
     const real = '/home/me/.local/bin/codex';
-    expect(realBinary(real, undefined, roots, files(real), 'linux', 'codex')).toBeNull();
-    expect(realBinary(real, undefined, roots, files(real), 'linux', 'Codex, gemini')).toBeNull();
-    expect(realBinary(real, undefined, roots, files(real), 'linux', 'gemini')).toBe(real);
-    expect(realBinary('/home/me/.local/bin/claude', undefined, roots, files('/home/me/.local/bin/claude'), 'linux', 'codex')).toBe('/home/me/.local/bin/claude');
-    expect(realBinary(real, undefined, roots, files(real), 'linux', '')).toBe(real);
+    expect(realBinary(real, undefined, roots, files(real), 'linux', { TARS_TEST_REAL_CLIS: 'codex' })).toBeNull();
+    expect(realBinary(real, undefined, roots, files(real), 'linux', { TARS_TEST_REAL_CLIS: 'Codex, gemini' })).toBeNull();
+    expect(realBinary(real, undefined, roots, files(real), 'linux', { TARS_TEST_REAL_CLIS: 'gemini' })).toBe(real);
+    expect(realBinary('/home/me/.local/bin/claude', undefined, roots, files('/home/me/.local/bin/claude'), 'linux', { TARS_TEST_REAL_CLIS: 'codex' })).toBe('/home/me/.local/bin/claude');
+    expect(realBinary(real, undefined, roots, files(real), 'linux', {})).toBe(real);
+  });
+
+  it('G11. only 1 or an absolute path opts in, for TARS_REAL_CLAUDE and for each name of TARS_TEST_REAL_CLIS', () => {
+    const roots = ['/tmp/run'];
+    const codex = '/home/me/.local/bin/codex';
+    const claude = '/home/me/.local/bin/claude';
+    const other = '/opt/other/codex';
+    const has = files(codex, claude, other);
+    for (const no of ['0', 'false', '']) {
+      expect(realBinary(claude, undefined, roots, has, 'linux', { TARS_REAL_CLAUDE: no }), `TARS_REAL_CLAUDE=${no}`).toBe(claude);
+      expect(realBinary(codex, undefined, roots, has, 'linux', { TARS_TEST_REAL_CLIS: `codex=${no}` }), `codex=${no}`).toBe(codex);
+      expect(realBinary(codex, undefined, roots, has, 'linux', { TARS_TEST_REAL_CLIS: no }), `TARS_TEST_REAL_CLIS=${no}`).toBe(codex);
+    }
+    expect(realBinary(claude, undefined, roots, has, 'linux', { TARS_REAL_CLAUDE: 'relative/claude' }), 'a path that is not absolute').toBe(claude);
+    expect(realBinary(claude, undefined, roots, has, 'linux', { TARS_REAL_CLAUDE: '1' })).toBeNull();
+    expect(realBinary(claude, undefined, roots, has, 'linux', { TARS_REAL_CLAUDE: claude })).toBeNull();
+    expect(realBinary(codex, undefined, roots, has, 'linux', { TARS_TEST_REAL_CLIS: 'codex=1' })).toBeNull();
+    expect(realBinary(codex, undefined, roots, has, 'linux', { TARS_TEST_REAL_CLIS: `codex=${codex}` })).toBeNull();
+    // A path names that binary, and no other of the name.
+    expect(realBinary(other, undefined, roots, has, 'linux', { TARS_TEST_REAL_CLIS: `codex=${codex}` }), 'another codex than the one named').toBe(other);
+    expect(realBinary(other, undefined, roots, has, 'linux', { TARS_REAL_CLAUDE: claude, TARS_TEST_REAL_CLIS: 'gemini' })).toBe(other);
   });
 
   it('G5. a real one is refused, not started, through child_process and through the product\'s probe', async () => {
