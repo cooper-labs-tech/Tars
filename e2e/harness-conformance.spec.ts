@@ -34,8 +34,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
- * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE); a harness with none is skipped,
- * and says so. A harness whose tokens Tars reads (opencode) also has them in its task's ledger entry.
+ * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE, TARS_HARNESS_KILO); a harness with
+ * none is skipped, and says so. A harness whose tokens Tars reads (opencode, Kilo) also has them in its task's ledger entry.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
  * its start and after each task), endpoint-requests.jsonl, the app's logs, the agent's whole
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
@@ -48,6 +48,7 @@ const HARNESSES: Harness[] = [
   { id: 'codex', provider: 'codex', pathKey: 'codex', env: 'TARS_HARNESS_CODEX' },
   { id: 'pi', provider: 'pi', pathKey: 'pi', env: 'TARS_HARNESS_PI' },
   { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
+  { id: 'kilo', provider: 'kilo', pathKey: 'kilo', env: 'TARS_HARNESS_KILO', tokens: true },
 ];
 
 const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
@@ -58,7 +59,7 @@ const TASK = 'Run the shell command that prints the probe marker, then tell me w
 const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** The files Tars writes in a harness's home, for each home the runner may have exported: never Tars's to write here. */
-const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']], ['XDG_CONFIG_HOME', [path.join('opencode', 'opencode.json')]]];
+const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']], ['XDG_CONFIG_HOME', [path.join('opencode', 'opencode.json'), path.join('kilo', 'kilo.json')]]];
 const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([name, files]) => {
   const dir = process.env[name]?.trim();
   return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
@@ -104,8 +105,8 @@ for (const h of HARNESSES) {
     const port = apiPort(31950);
     const dist = path.resolve('electron', 'dist');
     // The harnesses' homes, the sandbox's: given to the sandboxed Tars, and to the version read below, since a harness
-    // may write its folders at any start (opencode 1.19.6 makes ~/.config/opencode, ~/.local/share/opencode,
-    // ~/.local/state/opencode and ~/.cache/opencode for a bare --version, measured 20/11).
+    // may write its folders at any start (for a bare --version, measured 20/11: opencode 1.19.6 makes ~/.config/opencode,
+    // ~/.local/share/opencode, ~/.local/state/opencode and ~/.cache/opencode, Kilo 7.8.27 the same four of its own).
     const harnessHomes = {
       CODEX_HOME: path.join(home, '.codex'), KIMI_CODE_HOME: path.join(home, '.kimi-code'), PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
       XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
