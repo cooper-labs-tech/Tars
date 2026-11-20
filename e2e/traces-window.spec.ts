@@ -26,9 +26,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. Upload: an address taken without showing what leaves the computer and asking the consent; the preview is not
  *    the scrubbed document (it holds the endpoint's key, a secret the session carried, the sandbox's home, the
  *    endpoint's name or address); a new address keeps the old consent.
+ *    5b. (QA's M7, 20/11) the address typed while the view still reads its settings is lost: the field took typing
+ *    before them, its Enter was dropped, and the read that came in then wiped it. The spec slows that read by 3 s, as a
+ *    loaded machine does, and types only once the field is enabled.
  * 6. Never record closed models is not on in a Tars that never set it, or it says nothing of the providers' terms.
  * 7. An uncaught error in the page.
  * Red on #596's head (caefc8874), which has no window: 6 and 1 find no Inference endpoints in Settings.
+ * Red on #599 at edd6070bb (the view before M7's fix): 5b, every run (its field is never off, the address is wiped).
  * The artefact: values.json (each step's views, the stand-ins' request logs as seen), step screenshots, the app's log.
  */
 
@@ -199,14 +203,27 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     keep({ sent, done });
 
     // 5. Upload: an address, what leaves the computer, a session previewed scrubbed, the consent; a new address asks again.
+    // 5b: the view's read of its settings slowed by 3 s, as on a loaded machine (main's own handler, wrapped, then put back).
+    await app.evaluate(({ ipcMain }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers;
+      const read = handlers.get('traces:settings');
+      if (!read) throw new Error('no traces:settings handler to slow');
+      (globalThis as Record<string, unknown>).__tarsQaTracesSettings = read;
+      handlers.set('traces:settings', async (...args: unknown[]) => { await new Promise(r => setTimeout(r, 3_000)); return read(...args); });
+    });
     await page.goto(`${DEV_URL}/traces?view=upload`, { waitUntil: 'domcontentloaded' });
     const address = page.getByLabel('Back-office address');
     await expect(address).toBeVisible({ timeout: 60_000 });
     await expect(page.getByText('no address: nothing leaves this computer', { exact: true })).toBeVisible();
+    await expect(address, 'the address field takes typing only once its settings are read').toBeEnabled({ timeout: 30_000 });
     await address.fill('http://127.0.0.1:9/traces');
     await address.press('Enter');
     const notice = page.getByRole('dialog').filter({ has: page.getByRole('button', { name: 'Upload what I opt in', exact: true }) });
-    await expect(notice).toBeVisible({ timeout: 15_000 });
+    await expect(notice, 'the address typed is kept and saved, and its consent asked').toBeVisible({ timeout: 15_000 });
+    await app.evaluate(({ ipcMain }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, unknown> })._invokeHandlers;
+      handlers.set('traces:settings', (globalThis as Record<string, unknown>).__tarsQaTracesSettings);
+    });
     const beforeConsent = await api<{ uploadConsentAt?: string }>('traces', 'settings');
     await stepShot(page, '5-what-leaves');
     await notice.getByRole('button', { name: 'Preview a session', exact: true }).click();
