@@ -19,11 +19,14 @@ import Database from 'better-sqlite3';
  *    (`tab agents`, `ctrl+p commands`) 10 to 26 s after it starts on a loaded machine; it took keys within 50 ms of
  *    that, three times out of three, and none before. Up on that bar, never on its logo or its first frames.
  * 5. Its data folder read elsewhere than opencode writes it: `$XDG_DATA_HOME/opencode`, else `~/.local/share/opencode`.
+ * 6. Its turns still taken for unseen: delegate_task then answers `delivered` at once, with neither answer nor tokens,
+ *    and task_status never reads it completed. Its provider says its turns are reported, as codex's, pi's and kimi's.
  */
 
 import { OpenCodeProvider } from '../../../electron/providers/opencode-provider';
 import { opencodeDbPath, opencodeUuidOf, opencodeSessionOfCommand } from '../../../electron/providers/opencode-cli';
 import { resolveResumeSessionId } from '../../../electron/utils/resume-session';
+import { hasEndOfTurn } from '../../../electron/core/end-of-turn';
 
 const SES = 'ses_e0a2b2f04ffeyXxkOfD77KQMP5';
 let root: string;
@@ -45,7 +48,7 @@ function sessionIn(directory: string, id = SES): void {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new Database(file);
   db.exec("CREATE TABLE IF NOT EXISTS session (id text PRIMARY KEY, directory text NOT NULL, time_created integer NOT NULL)");
-  db.prepare('INSERT INTO session (id, directory, time_created) VALUES (?, ?, 1)').run(id, directory);
+  db.prepare('INSERT OR REPLACE INTO session (id, directory, time_created) VALUES (?, ?, 1)').run(id, directory);
   db.close();
 }
 
@@ -103,5 +106,11 @@ describe('a task typed once opencode takes keys (4)', () => {
     expect(oc.upOnScreen(BOOTING)).toBe(false);
     expect(oc.upOnScreen([])).toBe(false);
     expect(oc.upOnScreen(['  the agents and their commands are listed in the docs'])).toBe(false);
+  });
+});
+
+describe('its turns are heard (6)', () => {
+  it('an opencode agent reads as one whose turn end Tars sees, so delegate_task waits for its answer', () => {
+    expect(hasEndOfTurn({ provider: 'opencode' })).toBe(true);
   });
 });
