@@ -35,11 +35,11 @@ const opts = { id: 'worker', prompt: 'the task', timeoutSeconds: 200, requestId:
 describe("the version read's environment (1)", () => {
   it("is the sandbox's homes over what a sandboxed process may inherit, never the runner's CLI settings", () => {
     const runner = {
-      PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', HOME: '/Users/someone', TMPDIR: '/var/tmp/someone',
-      KILO_CONFIG: '/Users/someone/kilo.json', KILO_CONFIG_DIR: '/Users/someone/.kilo', KILO_CONFIG_CONTENT: '{}',
-      OPENCODE_CONFIG: '/Users/someone/oc.json', OPENCODE_CONFIG_DIR: '/Users/someone/.oc', OPENCODE_CONFIG_CONTENT: '{}',
-      PI_CODING_AGENT_SESSION_DIR: '/Users/someone/.pi/sessions', ZDOTDIR: '/Users/someone/.zsh', CLAUDE_CONFIG_DIR: '/Users/someone/.claude',
-      GIT_DIR: '/Users/someone/repo/.git', GIT_CONFIG_GLOBAL: '/Users/someone/.gitconfig',
+      PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', HOME: '/home/runner', TMPDIR: '/var/tmp/someone',
+      KILO_CONFIG: '/home/runner/kilo.json', KILO_CONFIG_DIR: '/home/runner/.kilo', KILO_CONFIG_CONTENT: '{}',
+      OPENCODE_CONFIG: '/home/runner/oc.json', OPENCODE_CONFIG_DIR: '/home/runner/.oc', OPENCODE_CONFIG_CONTENT: '{}',
+      PI_CODING_AGENT_SESSION_DIR: '/home/runner/.pi/sessions', ZDOTDIR: '/home/runner/.zsh', CLAUDE_CONFIG_DIR: '/home/runner/.claude',
+      GIT_DIR: '/home/runner/repo/.git', GIT_CONFIG_GLOBAL: '/home/runner/.gitconfig',
       CLAUDE_MGR_API_TOKEN: 'a-token', DOROTHY_API_PORT: '31415', TARS_AGENT: 'x', ANTHROPIC_API_KEY: 'sk-x',
     };
     const harnessHomes = { XDG_CONFIG_HOME: '/sandbox/.config', XDG_DATA_HOME: '/sandbox/.local/share', CODEX_HOME: '/sandbox/.codex' };
