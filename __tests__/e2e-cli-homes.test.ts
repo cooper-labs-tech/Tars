@@ -34,6 +34,19 @@ import { CLI_HOMES, homesOutside, inheritable, launchSandboxed } from '../e2e/fi
  *    - a variable outside the family, such as PATH or LANG.
  * 7. The refusal comes after the app has started, so a CLI has already run in the wrong
  *    home, or the error does not say which variable is wrong and where it points.
+ *
+ * Added on 2026-11-20 from #609's Audit (reports/audit-609.md), before the fixes:
+ * 5b. (L1) A `..` after a link inside the sandbox reads as inside, though the kernel lands
+ *     outside: `<sandbox>/link/..` resolves `link` first, then `..` from where it leads.
+ * 8.  (L2) opencode's own config, exported in the runner, reaches the app's opencode: OPENCODE_CONFIG
+ *     (a file), OPENCODE_CONFIG_DIR (a folder), OPENCODE_CONFIG_CONTENT (the config itself), and
+ *     Kilo's, an opencode fork (KILO_CONFIG_CONTENT measured, harnesses-measured.md;
+ *     KILO_CONFIG and KILO_CONFIG_DIR by the fork's naming). A content variable is never judged
+ *     as a path: a spec that hands one in must not be refused for it.
+ * 9.  (L3) git's own variables reach the app: GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE,
+ *     GIT_COMMON_DIR, GIT_OBJECT_DIRECTORY, GIT_CONFIG_GLOBAL and the rest, which git sets for a
+ *     run started from a hook. A CLI or a stand-in that runs git in an agent's terminal would then
+ *     act on the owner's repository.
  */
 
 const accountHome = os.userInfo().homedir;
@@ -41,7 +54,10 @@ const sandbox = () => fs.mkdtempSync(path.join(os.tmpdir(), 'cli-homes-'));
 const FAMILY = [
   'CODEX_HOME', 'KIMI_CODE_HOME', 'PI_CODING_AGENT_DIR', 'PI_CODING_AGENT_SESSION_DIR',
   'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'ZDOTDIR', 'CLAUDE_CONFIG_DIR',
+  'CLAUDE_SECURESTORAGE_CONFIG_DIR', 'OPENCODE_CONFIG', 'OPENCODE_CONFIG_DIR', 'KILO_CONFIG', 'KILO_CONFIG_DIR',
 ];
+const CONTENTS = ['OPENCODE_CONFIG_CONTENT', 'KILO_CONFIG_CONTENT'];
+const GIT = ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_INDEX_FILE', 'GIT_COMMON_DIR', 'GIT_OBJECT_DIRECTORY', 'GIT_CONFIG_GLOBAL', 'GIT_CONFIG_SYSTEM', 'GIT_CONFIG_PARAMETERS', 'GIT_CONFIG_COUNT'];
 const theOwners = (name: string) => path.join(accountHome, `.${name.toLowerCase()}`);
 
 describe('the CLI homes an E2E sandbox hands the app', () => {
@@ -74,6 +90,29 @@ describe('the CLI homes an E2E sandbox hands the app', () => {
     const elsewhere = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-homes-elsewhere-'));
     fs.symlinkSync(elsewhere, path.join(home, '.codex'));
     expect(homesOutside({ CODEX_HOME: path.join(home, '.codex') }, home)).toEqual([['CODEX_HOME', path.join(home, '.codex')]]);
+  });
+
+  it.skipIf(process.platform === 'win32')('5b. reads a `..` after a link from where the link leads, as the kernel does', () => {
+    const home = sandbox();
+    const owner = fs.mkdtempSync(path.join(os.tmpdir(), 'cli-homes-owner-'));
+    fs.mkdirSync(path.join(owner, '.codex', 'sub'), { recursive: true });
+    fs.symlinkSync(path.join(owner, '.codex', 'sub'), path.join(home, 'link'));
+    // Written out: path.join would drop `link/..` as text, which is the fault itself.
+    const up = [home, 'link', '..'].join(path.sep);
+    const upAndOn = [home, 'link', '..', 'x'].join(path.sep);
+    expect(homesOutside({ CODEX_HOME: up, KIMI_CODE_HOME: upAndOn }, home)).toEqual([['CODEX_HOME', up], ['KIMI_CODE_HOME', upAndOn]]);
+  });
+
+  it('8. leaves out opencode\'s and Kilo\'s config, judges their files and folders, and never their content', () => {
+    const home = sandbox();
+    const content = JSON.stringify({ provider: { tars: { options: { baseURL: 'http://127.0.0.1:9/v1' } } } });
+    expect(inheritable({ PATH: '/usr/bin', ...Object.fromEntries(CONTENTS.map(name => [name, content])), OPENCODE_CONFIG: theOwners('opencode/opencode.json') })).toEqual({ PATH: '/usr/bin' });
+    expect(homesOutside(Object.fromEntries(CONTENTS.map(name => [name, content])), home)).toEqual([]);
+    expect(homesOutside({ OPENCODE_CONFIG: path.join(home, '.config', 'opencode', 'opencode.json') }, home)).toEqual([]);
+  });
+
+  it('9. leaves out git\'s own variables', () => {
+    expect(inheritable({ PATH: '/usr/bin', ...Object.fromEntries(GIT.map(name => [name, path.join(accountHome, 'repo', '.git')])) })).toEqual({ PATH: '/usr/bin' });
   });
 
   it('6. takes an empty value, a folder still to be made in the sandbox, and leaves other variables alone', () => {

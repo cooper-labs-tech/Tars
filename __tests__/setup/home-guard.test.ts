@@ -24,8 +24,9 @@ import { guardedFirst, homeWrites, hoistedHomeWrites } from './home-writers';
  *     recorded at all (no setup ran).
  * G2. It lets a throwaway HOME outside the run's folder pass (HOME=/tmp/x with no setup).
  * G3. It lets a HOME pass that only reads as inside: the run folder itself, a sibling whose name
- *     starts like it (tars-vitest-run-ab, tars-vitest-run-abc), a `..` that climbs out, or a
- *     link inside the run folder that leads out.
+ *     starts like it (tars-vitest-run-ab, tars-vitest-run-abc), a `..` that climbs out, a
+ *     link inside the run folder that leads out, or a `..` after such a link (added from #609's
+ *     Audit, L1: the kernel resolves the link first).
  * G4. It refuses the HOME the repo's setup makes, which breaks npm test. On macOS it must also
  *     take the run folder named through /var or through /private/var.
  * G5. It refuses a folder that is not a run folder of the repo's (a TMPDIR of the agent's own),
@@ -67,6 +68,13 @@ describe('the home guard', () => {
     fs.mkdirSync(sibling);
     const out = fs.mkdtempSync(path.join(os.tmpdir(), 'out-'));
     fs.symlinkSync(out, path.join(r, 'linked-home'));
+    // #609's Audit, L1: a `..` after a link lands where the link leads, then one up. Written out:
+    // path.join would drop `link/..` as text.
+    // One folder down, so that as text it stays inside (`<run>/home`), while the kernel lands in `out`.
+    fs.mkdirSync(path.join(out, 'sub'));
+    fs.mkdirSync(path.join(r, 'home'));
+    fs.symlinkSync(path.join(out, 'sub'), path.join(r, 'home', 'up-link'));
+    expect(homeOutsideRun([r, 'home', 'up-link', '..'].join(path.sep), r)).not.toBeNull();
     expect(homeOutsideRun(r, r)).not.toBeNull();
     expect(homeOutsideRun(path.join(sibling, 'home'), r)).not.toBeNull();
     expect(homeOutsideRun([r, 'home', '..', '..', 'home'].join(path.sep), r)).not.toBeNull();
