@@ -913896,6 +913896,16 @@
                   ],
                   "children": [
                     {
+                      "type": "text",
+                      "id": "bhIJS",
+                      "fill": "$text-muted",
+                      "content": "DELETION CLEARED",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
                       "type": "frame",
                       "id": "CFJmb",
                       "name": "state",
@@ -913958,6 +913968,134 @@
                             {
                               "type": "text",
                               "id": "R3Xfw",
+                              "fill": "$text-primary",
+                              "content": "OK",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Z5WCTv",
+                  "name": "cleared · OK failed",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "H44UYH",
+                      "fill": "$text-muted",
+                      "content": "DELETION CLEARED",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DHls6",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "k5eZC",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "tjjYv",
+                          "fill": "$status-waiting",
+                          "content": "the deletion that waited for confirmation was cleared: this install's record is gone on the back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "M8UI3",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Sharing may start again; what was recorded before the deletion is still never sent.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JUbSc",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "cSJKL",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "H79hZ",
+                          "fill": "$status-error",
+                          "content": "not acknowledged: the settings could not be written. OK tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xsNT3",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "gxCRQ",
+                          "name": "b OK",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ka3fR",
                               "fill": "$text-primary",
                               "content": "OK",
                               "lineHeight": 1.4,
@@ -915587,6 +915725,16 @@
                   ],
                   "children": [
                     {
+                      "type": "text",
+                      "id": "VX0hj",
+                      "fill": "$text-muted",
+                      "content": "DELETION CLEARED",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
                       "type": "frame",
                       "id": "ekIo6",
                       "name": "state",
@@ -915649,6 +915797,134 @@
                             {
                               "type": "text",
                               "id": "IsKFx",
+                              "fill": "$text-primary",
+                              "content": "OK",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "d8N39",
+                  "name": "cleared · OK failed",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "F5xzX",
+                      "fill": "$text-muted",
+                      "content": "DELETION CLEARED",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZhFNl",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Nqaji",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "QYhq2",
+                          "fill": "$status-waiting",
+                          "content": "the deletion that waited for confirmation was cleared: this install's record is gone on the back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "LUmXz",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 600,
+                      "content": "Sharing may start again; what was recorded before the deletion is still never sent.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "erPmM",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "sjRxB",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "BDyOV",
+                          "fill": "$status-error",
+                          "content": "not acknowledged: the settings could not be written. OK tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "X9K8PG",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "m8cvhu",
+                          "name": "b OK",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "M1BMII",
                               "fill": "$text-primary",
                               "content": "OK",
                               "lineHeight": 1.4,
