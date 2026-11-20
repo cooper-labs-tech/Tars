@@ -123,11 +123,13 @@ export class PiProvider implements CLIProvider {
     const downloading = [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)]
       .some(([, tool]) => !text.includes(`${tool} installed to `) && !text.includes(`Failed to download ${tool}`));
     if (downloading) return false;
-    // And its first frame holds the footer alone: the banner and the download line come together in the next, 20 to
-    // 70 ms later (measured 20/11). So the banner's hint line too, whatever keys are bound, unless the user's pi starts
-    // quietly and draws none (`quietStartup: true` in its settings.json; a project's own setting is not read, and such
-    // a pi is up when its launch's wait runs out).
-    return /\/ commands\b.*! bash\b/.test(text) || piStartsQuietly();
+    // And its first frame holds its field and footer alone: its banner and its download line come in the next, 20 to
+    // 70 ms later (measured 20/11). These rows are the bottom ones only (terminal-mirror.ts, LAUNCH_ROWS), the banner
+    // out of their sight: the first frame is the one with nothing above its field's top border. Up once something is
+    // drawn there, or at once when the user's pi starts quietly and draws nothing there (`quietStartup: true` in its
+    // settings.json; a project's own setting is not read, and such a pi is up when its launch's wait runs out).
+    const rows = lines.filter((line) => line.trim());
+    return rows.findIndex((line) => /^─{8,}/.test(line.trim())) > 0 || piStartsQuietly();
   }
 
   /** Measured on 1.5.2 (20/11): a note typed during a slow tool call went out with that call's result. */

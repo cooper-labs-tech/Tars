@@ -125,7 +125,7 @@ describe('a session up on its screen', () => {
     const p = new PiProvider();
     expect(p.upOnScreen(PI_AT_REST)).toBe(true);
     for (const footer of ['12.3%/200k', '?/200k (auto)', '0.0%/512', '98.1%/1.0M', '7.0%/12M (auto)       claude-x  $0.012']) {
-      expect(p.upOnScreen([...PI_BANNER, '', footer]), footer).toBe(true);
+      expect(p.upOnScreen([...PI_BANNER, '────────────────', '────────────────', footer]), footer).toBe(true);
     }
     expect(p.upOnScreen(PI_TYPED_AHEAD)).toBe(false);
     expect(p.upOnScreen(PI_BANNER)).toBe(false);
