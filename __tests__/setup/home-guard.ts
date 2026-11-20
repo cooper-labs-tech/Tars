@@ -41,7 +41,9 @@ export function homeOutsideRun(home: string, run: string | undefined): string | 
   if (!run) return `HOME is ${home}, and no run folder is recorded: the repo's setup files did not run. ${HOW}`;
   if (!path.basename(run).startsWith(RUN_PREFIX)) return `the temporary folder ${run} is not a run folder of the repo's (${RUN_PREFIX}*). ${HOW}`;
   const root = landing(run);
-  const where = landing(path.resolve(home));
+  // On the value as given: path.resolve would drop `link/..` as text before the link is followed
+  // (#609's Audit, L1, the same fault as the fixture's).
+  const where = landing(path.isAbsolute(home) ? home : path.resolve(home));
   if (!where.startsWith(root + path.sep)) return `HOME is ${home}, which is not inside the run's temporary folder ${run}. ${HOW}`;
   return null;
 }

@@ -712,23 +712,41 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  *   others keep their data, state and caches.
  * - ZDOTDIR makes the login shells of the agents' terminals, and the one Tars asks for codex's
  *   CODEX_HOME, read the rc files it names, and whatever they export.
+ * - opencode reads its own config from OPENCODE_CONFIG (a file) and OPENCODE_CONFIG_DIR (a
+ *   folder). Kilo, an opencode fork, does the same from KILO_CONFIG and KILO_CONFIG_DIR: only
+ *   KILO_CONFIG_CONTENT was measured (reports/harnesses-measured.md), and the other two follow the
+ *   fork's naming (#609's Audit, L2).
  * With one of them exported in the runner, a sandboxed Tars wrote into the owner's real
  * folder, and the CLIs it started ran on the owner's login (#608's Audit, L2). On 2026-11-20 a
  * test that reached the real ~/.codex the same way deleted the owner's config.toml. So the
  * caller's are never handed on, and a spec may name one only inside its sandbox (homesOutside).
  * Tests: __tests__/e2e-cli-homes.test.ts.
  */
-export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR)$/;
-const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}`);
+export const CLI_HOMES = /^(CODEX_HOME|KIMI_CODE_HOME|PI_CODING_AGENT_DIR|PI_CODING_AGENT_SESSION_DIR|XDG_(CONFIG|DATA|STATE|CACHE)_HOME|ZDOTDIR|CLAUDE_CONFIG_DIR|CLAUDE_SECURESTORAGE_CONFIG_DIR|OPENCODE_CONFIG|OPENCODE_CONFIG_DIR|KILO_CONFIG|KILO_CONFIG_DIR)$/;
+/**
+ * A CLI's whole config handed as text, not as a path: the caller's is dropped, as its homes are,
+ * and a spec's is never judged as a folder. opencode reads OPENCODE_CONFIG_CONTENT, and Tars
+ * itself hands one to an opencode agent on an endpoint; Kilo reads KILO_CONFIG_CONTENT.
+ */
+const CLI_CONFIG_CONTENT = /^(OPENCODE|KILO)_CONFIG_CONTENT$/;
+/**
+ * git's own variables (GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE, GIT_COMMON_DIR,
+ * GIT_OBJECT_DIRECTORY, GIT_CONFIG_*...). git sets some of them for a run started from a hook. Tars's
+ * own git calls strip them (safe-git.ts), but a CLI or a stand-in that runs git in an agent's
+ * terminal would inherit them and act on the owner's repository (#609's Audit, L3).
+ */
+const GIT_OWN = /^GIT_/;
+const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}`);
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
 }
 
 /**
  * The CLI homes of `env` that land outside `sandboxHome`, as [name, value]. The comparison
- * uses where a path lands, after its links and its `..` are resolved. A relative path is
- * outside, because a CLI resolves it against whatever folder it runs in. An empty value means
- * none and is not outside.
+ * uses where a path lands, its links and its `..` resolved as the kernel does: on the value as
+ * given, never through path.resolve, which drops `link/..` as text before the link is followed
+ * (#609's Audit, L1). A relative path is outside, because a CLI resolves it against whatever
+ * folder it runs in. An empty value means none and is not outside.
  */
 export function homesOutside(env, sandboxHome) {
   const root = landing(sandboxHome);
@@ -736,7 +754,7 @@ export function homesOutside(env, sandboxHome) {
     .filter(([name, value]) => CLI_HOMES.test(name) && typeof value === 'string' && value.trim() !== '')
     .filter(([, value]) => {
       if (!path.isAbsolute(value)) return true;
-      const where = landing(path.resolve(value));
+      const where = landing(value);
       return !(where === root || where.startsWith(root + path.sep));
     });
 }
