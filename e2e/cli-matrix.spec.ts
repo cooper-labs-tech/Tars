@@ -5,6 +5,7 @@ import * as path from 'path';
 import { launchSandboxed, recordValues, removeHome, stepShot } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { writeFakeClis } from './fake-clis.mjs';
+import { lineInA } from './matrix-wait.mjs';
 
 /**
  * Every CLI talks to every other (2.0.4, the maintainer's request of 2026-10-18: "every CLI can talk to every other
@@ -198,28 +199,45 @@ for (const newInterface of [false, true]) {
             continue;
           }
           const tag = `${A.provider}-${B.provider}`.toUpperCase().replace(/[^A-Z0-9]+/g, '');
+          // B at rest first: its turns from the pairs before (a reply, Tars's note that an agent finished) end before
+          // this pair starts, or `turn` reads their running as this one's (codex to claude, right after claude's own
+          // pairs: red on 2.0.6's final runs and on #611's first full run, 20/11). 20 s at most, then `turn` says so;
+          // not for a B whose turns Tars never shows ending (the table's CLIs without hooks).
+          if (!expectedRed({ from: A.provider, to: B.provider, step: 'turn', result: 'red', detail: '' })) {
+            for (const end = Date.now() + 20_000; Date.now() < end && (await get(B.id))?.status === 'running';) await page.waitForTimeout(200);
+          }
           // delegate_task, and B's turn as the window reads it.
           let sinceA = recs(A).length;
           let sinceB = recs(B).length;
           const before = (await get(B.id))?.status ?? '';
-          await type(A.id, `DELEGATE ${B.id} ECHO ANSWER${tag}\r`);
+          const line = `DELEGATE ${B.id} ECHO ANSWER${tag}`;
+          await type(A.id, `${line}\r`);
           const seen = new Set<string>();
           let result: Rec | undefined;
-          const until = Date.now() + 45_000;
-          // A turn of A's that ended without the call (not logged in, the line lost to a question) ends the wait.
+          // 45 s for the delegation itself, counted from A's turn on the line: the line may wait behind A's turns of the
+          // pair before (B's reply, Tars's note that B finished), as a typed line waits in a real CLI. Only that turn,
+          // ended without the call (not logged in), or the line taken by a question, ends the wait sooner (e2e/matrix-wait.mjs;
+          // QA's I5 of 20/11: any answer of A ended it, and cells read "no answer within 45 s" after 2 s).
+          const typedAt = Date.now();
+          let from = typedAt;
+          let ended: string | null = null;
           let quiet = 0;
-          while (Date.now() < until && !(result = toolResult(A, 'delegate_task', sinceA, B.id))) {
+          while (Date.now() < from + 45_000 && !(result = toolResult(A, 'delegate_task', sinceA, B.id))) {
             seen.add((await get(B.id))?.status ?? '');
-            if (!called(A, 'delegate_task', sinceA, B.id) && recs(A).slice(sinceA).some((r) => r.answer !== undefined || r.answered || r.lost) && (quiet += 1) > 20) break;
+            const own = lineInA(recs(A).slice(sinceA), line, { tool: 'delegate_task', to: B.id });
+            if (own.turnStartedAt !== null) from = Math.max(typedAt, own.turnStartedAt);
+            if ((ended = own.endedWithoutCall) !== null && (quiet += 1) > 20) break;
             await page.waitForTimeout(100);
           }
+          const waited = `${Math.round((Date.now() - from) / 1000)} s${from > typedAt ? ` from its turn on the line, ${Math.round((from - typedAt) / 1000)} s after it was typed` : ''}`;
           await page.waitForTimeout(1_500);
           const after = (await get(B.id))?.status ?? '';
           const sender = `Message from agent "${A.name}" ("${A.id}")`;
           const reached = typedInto(B, sinceB).find((t) => t.includes(`ANSWER${tag}`));
-          cell(A.provider, B.provider, 'delegate.reaches', !!reached && reached.includes(sender), reached ? reached.slice(0, 200) : result ? `A's call: ${String(result.text).split('\n')[0]}` : called(A, 'delegate_task', sinceA, B.id) ? 'A called delegate_task: no answer and nothing typed within 45 s' : 'A never called delegate_task');
+          const noCall = ended !== null ? `A's turn on the line ended without calling delegate_task: ${ended}` : `A never called delegate_task within ${waited}`;
+          cell(A.provider, B.provider, 'delegate.reaches', !!reached && reached.includes(sender), reached ? reached.slice(0, 200) : result ? `A's call: ${String(result.text).split('\n')[0]}` : called(A, 'delegate_task', sinceA, B.id) ? `A called delegate_task: no answer and nothing typed within ${waited}` : noCall);
           const text = String(result?.text ?? '');
-          cell(A.provider, B.provider, 'delegate.answer', !!result && !result.isError && text.includes(`echo ANSWER${tag}`), result ? text.split('\n').slice(0, 2).join(' ') : called(A, 'delegate_task', sinceA, B.id) ? 'A called delegate_task: no answer within 45 s' : 'A never called delegate_task');
+          cell(A.provider, B.provider, 'delegate.answer', !!result && !result.isError && text.includes(`echo ANSWER${tag}`), result ? text.split('\n').slice(0, 2).join(' ') : called(A, 'delegate_task', sinceA, B.id) ? `A called delegate_task: no answer within ${waited}` : noCall);
           cell(A.provider, B.provider, 'turn', !!reached && before !== 'running' && seen.has('running') && after !== 'running', `${reached ? '' : 'no task reached B; '}before ${before}, during ${[...seen].filter(Boolean).join('/')}, after ${after}`);
 
           // send_message A to B, and B's send_message back to A.
