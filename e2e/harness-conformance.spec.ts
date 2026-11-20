@@ -24,6 +24,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. get_agent_output with that taskId gives the same answer;
  * 5. resume: Tars quits and starts again, the agent's first start continues its session (the endpoint's first new
  *    request already carries the marker of step 2 in its history), and a second delegation is answered.
+ * Every harness's home is the sandbox's (CODEX_HOME, KIMI_CODE_HOME, PI_CODING_AGENT_DIR handed to Tars here): one
+ * exported by the shell that runs the spec was inherited, and the sandboxed Tars wrote that home and its harness ran on
+ * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
  * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI); a harness with none is skipped, and says so.
@@ -46,6 +49,12 @@ const TASK = 'Run the shell command that prints the probe marker, then tell me w
 /** A terminal's text, its escapes taken out: what the artefact keeps of the harness's screen. */
 const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+/** The files Tars writes in a harness's home, for each home the runner may have exported: never Tars's to write here. */
+const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']]];
+const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([name, files]) => {
+  const dir = process.env[name]?.trim();
+  return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
+}));
 type Reply = { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 
@@ -143,6 +152,7 @@ for (const h of HARNESSES) {
       }
     };
 
+    const runnerBefore = runnerHomeFiles();
     try {
       await withTars('first', async (lead, api) => {
         fs.writeFileSync(path.join(drop, 'stand-in.key'), `${key}\n`);
@@ -192,6 +202,10 @@ for (const h of HARNESSES) {
         expect.soft(again.text, 'the second delegation is answered').toContain('PROBE-OK');
       });
     } finally {
+      // The homes the runner exported were left as they were.
+      const runnerAfter = runnerHomeFiles();
+      keep({ runnerHomes: Object.keys(runnerBefore), runnerHomesChanged: Object.keys(runnerBefore).filter((f) => runnerAfter[f] !== runnerBefore[f]) });
+      for (const file of Object.keys(runnerBefore)) expect.soft(runnerAfter[file], `${file}, in a home the runner exported, left as it was`).toBe(runnerBefore[file]);
       await standin.close();
       await removeHome(home);
     }
