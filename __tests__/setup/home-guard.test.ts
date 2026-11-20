@@ -31,6 +31,9 @@ import { guardedFirst, homeWrites, hoistedHomeWrites } from './home-writers';
  * G5. It refuses a folder that is not a run folder of the repo's (a TMPDIR of the agent's own),
  *     or its message does not say how to run the file instead.
  * G6. It runs after the file's other imports, or after a vi.hoisted block, which run first.
+ * G7. It reads a home a test file mocks (vi.mock('os') with a homedir set after the imports), and
+ *     the file stops before it starts. Found by QA's suite run of 20/11 04:15, in two files.
+ *     Tested in home-guard-mocked-os.test.ts, which has the same shape.
  *
  * How the sweep can fail:
  * D1. It misses a write whose path names the home: rmSync(path.join(os.homedir(), dir)).
