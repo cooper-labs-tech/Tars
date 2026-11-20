@@ -32,6 +32,8 @@ export interface CLIPaths {
   gemini: string;
   grok: string;
   qwencode: string;
+  /** Kilo's binary, kilo (2.0.7). */
+  kilo: string;
   opencode: string;
   amp: string;
   pi: string;

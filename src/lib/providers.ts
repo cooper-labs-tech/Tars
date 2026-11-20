@@ -142,6 +142,18 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     defaultModel: 'default',
   },
   {
+    // Kilo, the CLI `kilo` (2.0.7, #614), a build of opencode. On its own account it runs the model set in its own
+    // config, so Default passes none; on an inference endpoint the window offers the endpoint's models instead. A
+    // generic mark, the letters KL: Kilo's own logo is a trademark, which its code's licence does not cover.
+    id: 'kilo',
+    label: 'Kilo',
+    icon: { type: 'text', content: 'KL' },
+    accent: 'primary',
+    requiresCli: true,
+    models: [{ id: 'default', name: 'Default', description: 'The model set in Kilo' }],
+    defaultModel: 'default',
+  },
+  {
     id: 'amp',
     label: 'Amp',
     // No vector mark in the tree, so the same lettered badge OpenCode and
@@ -405,6 +417,8 @@ export function computeProviderAvailability(
     opencode: !!paths?.opencode,
     amp: !!paths?.amp,
     pi: !!paths?.pi,
+    // Kilo's binary is kilo, found as the other CLIs are.
+    kilo: !!paths?.kilo,
     local: true,
     openrouter: viaOpenRouter,
     deepseek: keyed(settings?.deepSeekEnabled, 'deepSeekApiKey') || viaOpenRouter,
