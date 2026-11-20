@@ -133,5 +133,9 @@ describe("a launch line, read back (7)", () => {
     expect(opencodeLaunchOf(resume)).toEqual({ resume: SES });
     expect(opencodeLaunchOf("'/bin/opencode' --auto")).toEqual({});
     expect(opencodeLaunchOf(undefined)).toEqual({});
+    // An exec launch: a shell's -c holding the line (macOS, Linux), or the CLI's own words (Windows).
+    expect(opencodeLaunchOf(['-l', '-c', `cd '/p' && exec ${fork}`])).toEqual({ forkOf: SES, prompt: "it's the task" });
+    expect(opencodeLaunchOf(['--auto', '--session', SES, '--fork', '--prompt', "it's the task"])).toEqual({ forkOf: SES, prompt: "it's the task" });
+    expect(opencodeLaunchOf(['--session', SES])).toEqual({ resume: SES });
   });
 });

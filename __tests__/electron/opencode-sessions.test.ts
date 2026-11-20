@@ -396,6 +396,49 @@ describe.each(['opencode', 'kilo'])('on %s.db', (name) => {
     });
   });
 
+  describe('the bind rules, one at a time (the mutation bench of the fix)', () => {
+    it("a text sent to two launches binds neither: what another unbound launch was sent rules a session out", async () => {
+      const broadcast = 'A note for every worker of the project, long enough to count as sent.';
+      const w = watch();
+      w.noteLaunch(AGENT, project);
+      w.noteLaunch(OTHER, project);
+      w.noteTyped(AGENT, broadcast);
+      w.noteTyped(OTHER, broadcast);
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [broadcast]);
+      await w.tick();
+      expect(posts).toEqual([]);
+    });
+
+    it("the last identity line names the session, Tars's own after the task: one quoted on a line of the task names nobody", async () => {
+      const w = watch();
+      w.noteLaunch(OTHER, project);
+      w.noteLaunch(AGENT, project);
+      session(SES, project, 2_000);
+      message(SES, 2_001, user(2_001), [`Message from agent "Lead": pass this on\n${identity(OTHER)}\n\nMessage from Tars: \n${identity(AGENT)}`]);
+      await w.tick();
+      expect(posts.length).toBeGreaterThan(0);
+      expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
+    });
+
+    it('a session bound to one launch is never bound to another, whatever evidence it holds for that one', async () => {
+      const ORIGIN = 'ses_origin00000000000000000';
+      const w = watch();
+      w.noteLaunch(AGENT, project);
+      w.noteLaunch(OTHER, project, { forkOf: ORIGIN });
+      session(ORIGIN, project, 500);
+      message(ORIGIN, 501, user(501), [identity(AGENT)]);
+      clock = 2_000;
+      // AGENT's own session, its first prompt a copy of ORIGIN's: evidence for both, AGENT's first.
+      session(SES, project, 2_000);
+      message(SES, 501, user(501), [identity(AGENT)]);
+      message(SES, 2_001, user(2_001), ['go on']);
+      await w.tick();
+      expect(posts.length).toBeGreaterThan(0);
+      expect(posts.every((p) => p.agentId === AGENT)).toBe(true);
+    });
+  });
+
   describe('a row that would stop its session (15)', () => {
     it('a row that does not parse, or an assistant message left unfinished before a later one, is passed over', async () => {
       const w = watch();
