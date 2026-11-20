@@ -88,16 +88,37 @@ export function mcpConfigPathFor(
  * codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too), each only where
  * `configFile`, the config.toml codex reads, defines it: an override of a server it does not define makes an entry
  * with nothing to run, and codex refuses to start on it ("invalid transport", exit 1, measured on 0.163.0 and 0.170.0,
- * 20/11). Nothing when the file is missing or is not TOML.
+ * 20/11). Nothing when the file is missing. A file smol-toml cannot parse is read as text (definedInText): codex may
+ * still read it, and a worker must not get X from it.
  */
 export function codexRoleArgs(orchestrator: boolean, configFile: string): string[] {
   if (orchestrator) return [];
-  let servers: unknown;
-  try { servers = parseToml(fs.readFileSync(configFile, 'utf-8')).mcp_servers; } catch { return []; }
-  const defined = servers && typeof servers === 'object' ? servers : {};
-  return ORCHESTRATOR_ONLY_MCP
-    .filter(name => Object.prototype.hasOwnProperty.call(defined, name))
-    .flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
+  let text: string;
+  try { text = fs.readFileSync(configFile, 'utf-8'); } catch { return []; }
+  let isDefined: (name: string) => boolean;
+  try {
+    const servers = parseToml(text).mcp_servers;
+    const defined = servers && typeof servers === 'object' ? servers : {};
+    isDefined = name => Object.prototype.hasOwnProperty.call(defined, name);
+  } catch {
+    // Not TOML to smol-toml, which codex, whose parser takes more, may still read and start X in a worker (the Audit's
+    // L1 on #608): the server is then looked for as text, a table header or a dotted key at a line's start.
+    isDefined = name => definedInText(text, name);
+  }
+  return ORCHESTRATOR_ONLY_MCP.filter(isDefined).flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
+}
+
+/**
+ * Whether `text`, a config.toml that does not parse, defines the server `name`: a line starting with its table header,
+ * `[mcp_servers.<name>]` (the name quoted or not, spaces allowed), or with a dotted key `mcp_servers.<name>.`. Never a
+ * comment, a string, or a longer name that begins with it.
+ */
+function definedInText(text: string, name: string): boolean {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const key = `(?:${escaped}|"${escaped}")`;
+  const header = new RegExp(`^\\s*\\[\\s*mcp_servers\\s*\\.\\s*${key}\\s*\\]`, 'm');
+  const dotted = new RegExp(`^\\s*mcp_servers\\s*\\.\\s*${key}\\s*\\.`, 'm');
+  return header.test(text) || dotted.test(text);
 }
 
 /** Qwen Code: the two disabled for a worker, for this invocation (0.25.2). */
