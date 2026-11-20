@@ -105,6 +105,18 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     defaultModel: '',
   },
   {
+    // Kimi Code, the CLI `kimi` (2.0.7, #601). On its own account it runs the model set in its own settings, so
+    // Default passes none; on an inference endpoint the window offers the endpoint's models instead. A generic mark,
+    // the letters KC: Kimi's own logo is a trademark, which the code's MIT licence does not cover.
+    id: 'kimi-code',
+    label: 'Kimi Code',
+    icon: { type: 'text', content: 'KC' },
+    accent: 'primary',
+    requiresCli: true,
+    models: [{ id: 'default', name: 'Default', description: 'The model set in Kimi Code' }],
+    defaultModel: 'default',
+  },
+  {
     id: 'gemini',
     label: 'Gemini',
     icon: { type: 'svg-gemini' },
@@ -405,6 +417,8 @@ export function computeProviderAvailability(
     opencode: !!paths?.opencode,
     amp: !!paths?.amp,
     pi: !!paths?.pi,
+    // Kimi Code's binary is kimi, found as the other CLIs are.
+    'kimi-code': !!paths?.kimi,
     local: true,
     openrouter: viaOpenRouter,
     deepseek: keyed(settings?.deepSeekEnabled, 'deepSeekApiKey') || viaOpenRouter,
@@ -428,7 +442,7 @@ export function getProviderDef(id: string): ProviderDef | undefined {
 }
 
 /** Ids that are not a word a reader knows, and the words their cards write instead. */
-const PROVIDER_WORDS: Record<string, string> = { 'qwen-code': 'Qwen Code' };
+const PROVIDER_WORDS: Record<string, string> = { 'qwen-code': 'Qwen Code', 'kimi-code': 'Kimi Code' };
 
 /**
  * The word an agent's card, its detail panel and its window's header write for its provider: the provider's own id,
