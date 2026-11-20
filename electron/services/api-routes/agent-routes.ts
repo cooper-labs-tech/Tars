@@ -21,7 +21,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot, launchHeldBy } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -1511,12 +1511,17 @@ export async function performDispatch(
 /**
  * The answer to a sender that waited SENDER_WAIT_MS on a launch still on its
  * way: its CLI runs but has not started its session or task, and a message
- * typed now would be lost. Nothing was typed; the caller may try again.
+ * typed now would be lost. Nothing was typed; the caller may try again, once
+ * what holds the launch is gone when its screen names it (launchHeldBy).
  */
 function stillStarting(agent: AgentStatus): Record<string, unknown> {
+  const name = agent.name || agent.id;
+  const heldBy = launchHeldBy(agent);
   return {
-    error: `${agent.name || agent.id}'s CLI is still starting (it has not taken keys after ${SENDER_WAIT_MS / 1000} s, `
-      + 'as happens on a loaded machine): nothing was typed. Send it again in a moment.',
+    error: heldBy
+      ? `${name}'s CLI has not taken keys after ${SENDER_WAIT_MS / 1000} s: ${heldBy}. Nothing was typed. Send it again once that is done.`
+      : `${name}'s CLI is still starting (it has not taken keys after ${SENDER_WAIT_MS / 1000} s, `
+        + 'as happens on a loaded machine): nothing was typed. Send it again in a moment.',
     starting: true,
     agent: { id: agent.id, name: agent.name, status: agent.status },
   };

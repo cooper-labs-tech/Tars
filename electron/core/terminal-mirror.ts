@@ -312,6 +312,7 @@ export function terminalSnapshot(pty: IPty | undefined): string | undefined {
  * Only ever a reason to hold a message (the PermissionRequest hook came 3 to
  * 648 ms after the dialog was drawn, in this PR's in-app proof), never a
  * reason to type: a dialog the hook reported stays one whatever this says.
+ * So are codex's approval dialogs and pi's trust question, read below.
  */
 export function dialogOnScreen(pty: IPty | undefined): boolean {
   const mirror = pty && mirrors.get(pty);
@@ -322,7 +323,54 @@ export function dialogOnScreen(pty: IPty | undefined): boolean {
     const text = buffer.getLine(y)?.translateToString(true).trim() ?? '';
     if (text) rows.push(text);
   }
-  return rows.some(row => /\bEsc\s+to\s+cancel\b/.test(row)) || codexDialogOnScreen(pty) !== undefined;
+  return rows.some(row => /\bEsc\s+to\s+cancel\b/.test(row))
+    || codexDialogOnScreen(pty) !== undefined
+    || piTrustQuestionOnScreen(pty) !== undefined;
+}
+
+/**
+ * The rows `pty`'s screen shows, trimmed, or undefined when it has no mirror. A row the terminal wrapped onto the next
+ * is read with it, as textOf does: in a terminal narrower than a dialog (a worker's column in the orchestrator layout,
+ * about 52), its title or what it asks about runs over two rows (train 2b).
+ */
+function viewportRows(pty: IPty | undefined): string[] | undefined {
+  const mirror = pty && mirrors.get(pty);
+  if (!mirror) return undefined;
+  const buffer = mirror.term.buffer.active;
+  const lines: string[] = [];
+  for (let y = buffer.viewportY; y < buffer.viewportY + mirror.term.rows; y++) {
+    const line = buffer.getLine(y);
+    const text = line?.translateToString(false) ?? '';
+    if (line?.isWrapped && lines.length > 0) lines[lines.length - 1] += text;
+    else lines.push(text);
+  }
+  return lines.map(line => line.trim());
+}
+
+/** pi's question whether to trust the project folder (pi 1.5.2's own strings), and its answers: each a row of its own. */
+const PI_TRUST_TITLE = /^Trust project folder\?$/;
+const PI_TRUST_ANSWER = /^(?:→\s*)?(?:Trust|Trust parent folder \(.*\)|Trust \(this session only\)|Do not trust|Do not trust \(this session only\))$/;
+
+/**
+ * pi's question whether to trust the project folder, on the screen of `pty`, as one line (its title and the folder),
+ * or undefined. pi asks it at its start when nothing says whether the folder is trusted: Tars trusts the agent's own
+ * folder in pi's trust.json, but keeps the user's own `false` and never trusts the home folder or `/`. pi takes no
+ * task until it is answered, and shows Trust selected (1.5.2, the conformance run of 20/11): an Enter typed there
+ * trusts the folder, so nothing is (dialogOnScreen), and a sender is told what holds the launch (agent-launch.ts).
+ */
+export function piTrustQuestionOnScreen(pty: IPty | undefined): string | undefined {
+  const rows = viewportRows(pty);
+  if (!rows) return undefined;
+  // The lowest title with an answer under it: a title quoted in the conversation is not the question.
+  for (let at = rows.length - 1; at >= 0; at--) {
+    if (!PI_TRUST_TITLE.test(rows[at])) continue;
+    const below = rows.slice(at + 1);
+    if (!below.some(row => PI_TRUST_ANSWER.test(row))) continue;
+    // The folder is the row under the title, before its explanation and its answers.
+    const folder = below.find(row => row);
+    return folder && !PI_TRUST_ANSWER.test(folder) ? `Trust project folder? ${folder}` : 'Trust project folder?';
+  }
+  return undefined;
 }
 
 /**
@@ -349,19 +397,8 @@ const CODEX_DIALOG_OPTION = /^(?:[›>]\s*)?\d+\.\s/;
  * type, since an Enter answers it (dialogOnScreen).
  */
 export function codexDialogOnScreen(pty: IPty | undefined): string | undefined {
-  const mirror = pty && mirrors.get(pty);
-  if (!mirror) return undefined;
-  const buffer = mirror.term.buffer.active;
-  // A row the terminal wrapped onto the next is read with it, as textOf does: in a terminal narrower than the
-  // dialog (a worker's column in the orchestrator layout, about 52), its title runs over two rows (train 2b).
-  const lines: string[] = [];
-  for (let y = buffer.viewportY; y < buffer.viewportY + mirror.term.rows; y++) {
-    const line = buffer.getLine(y);
-    const text = line?.translateToString(false) ?? '';
-    if (line?.isWrapped && lines.length > 0) lines[lines.length - 1] += text;
-    else lines.push(text);
-  }
-  const rows = lines.map(line => line.trim());
+  const rows = viewportRows(pty);
+  if (!rows) return undefined;
   // A title codex laid out itself over the next rows (up to three), ending on the row it is read to.
   const titleAt = (at: number): { title: string; end: number } | undefined => {
     let title = '';

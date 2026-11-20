@@ -103,6 +103,13 @@ function dropServer(file: string, name: string): void {
   });
 }
 
+/** The tools pi announced it downloads (`<tool> not found. Downloading...`) with no outcome yet on `lines`. */
+function downloadsUnderWay(lines: readonly string[]): string[] {
+  const text = lines.join('\n');
+  const announced = [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)].map(([, tool]) => tool);
+  return [...new Set(announced)].filter((tool) => !text.includes(`${tool} installed to `) && !text.includes(`Failed to download ${tool}`));
+}
+
 export class PiProvider implements CLIProvider {
   readonly id = 'pi' as const;
   readonly displayName = 'Pi Terminal';
@@ -119,10 +126,7 @@ export class PiProvider implements CLIProvider {
     // Its footer comes before its startup ends: pi first fetches fd and ripgrep when they are missing, and until then
     // answers Enter with "Startup is still in progress", the task left unsent (its interactive-mode.js and
     // tools-manager.js). Up once every download it announced has its outcome.
-    const text = lines.join('\n');
-    const downloading = [...text.matchAll(/(?:^|\s)(fd|ripgrep) not found\. Downloading\.\.\./g)]
-      .some(([, tool]) => !text.includes(`${tool} installed to `) && !text.includes(`Failed to download ${tool}`));
-    if (downloading) return false;
+    if (downloadsUnderWay(lines).length > 0) return false;
     // And its first frame holds its field and footer alone: its banner and its download line come in the next, 20 to
     // 70 ms later (measured 20/11). These rows are the bottom ones only (terminal-mirror.ts, LAUNCH_ROWS), the banner
     // out of their sight: the first frame is the one with nothing above its field's top border. Up once something is
@@ -130,6 +134,12 @@ export class PiProvider implements CLIProvider {
     // settings.json; a project's own setting is not read, and such a pi is up when its launch's wait runs out).
     const rows = lines.filter((line) => line.trim());
     return rows.findIndex((line) => /^─{8,}/.test(line.trim())) > 0 || piStartsQuietly();
+  }
+
+  /** A download pi announced at its start and has not ended: until it does, pi takes no task (upOnScreen). */
+  whyNotUp(lines: readonly string[]): string | undefined {
+    const tools = downloadsUnderWay(lines);
+    return tools.length > 0 ? `pi is still downloading ${tools.join(' and ')}, which it fetches at its first start when missing` : undefined;
   }
 
   /** Measured on 1.5.2 (20/11): a note typed during a slow tool call went out with that call's result. */
