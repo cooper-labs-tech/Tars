@@ -70,10 +70,10 @@ describe('the four lists this replaced', () => {
     },
   );
 
-  it('is a strict superset: every old key survives, two are added, and Kimi Code\'s kimi (19/11) and Kilo\'s kilo (20/11) since', () => {
+  it('is a strict superset: every old key survives, two are added, and Kimi Code\'s kimi (19/11), Kilo\'s kilo and Goose\'s goose (20/11) since', () => {
     for (const key of EVERY_OLD_KEY) expect(CLI_PATH_KEYS).toContain(key);
     expect([...CLI_PATH_KEYS].filter(k => !EVERY_OLD_KEY.includes(k)).sort())
-      .toEqual(['gcloud', 'kilo', 'kimi', 'minimax']);
+      .toEqual(['gcloud', 'goose', 'kilo', 'kimi', 'minimax']);
   });
 });
 
