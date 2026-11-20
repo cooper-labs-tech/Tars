@@ -54,6 +54,11 @@ import { QwenCodeProvider } from '../../../electron/providers/qwen-code-provider
  *     ~/.codex/config.toml through tests 3 and 10. Each test that writes codex's folder now sets HOME and CODEX_HOME
  *     to a folder of its own for its whole body, restores them after, and fails before any write when codex's folder
  *     is the real home's (os.userInfo, which HOME does not move) or anywhere outside its own folder.
+ * 12. (The Audit's L1 on #608) A config.toml smol-toml cannot parse switches nothing off, while codex, whose parser
+ *     takes more, may still read it and start an orchestrator-only server (X) in a worker: against the owner's rule of
+ *     28/10, failing open. When the file does not parse, the two are looked for as text: a table header
+ *     `[mcp_servers.<name>]` (quoted or not, spaces allowed) or a dotted key `mcp_servers.<name>.` at a line's start,
+ *     and what is found is switched off. Never a name in a comment, in a string, or a longer name that starts with it.
  */
 
 let home: string;
@@ -233,6 +238,26 @@ describe('the CLIs that read their own config: a switch per run', () => {
     expect(codexRoleArgs(false, path.join(home, 'missing.toml'))).toEqual([]);
     fs.writeFileSync(toml, '[mcp_servers.dorothy-x\ncommand = ');
     expect(codexRoleArgs(false, toml)).toEqual([]);
+  });
+
+  it("12. codex: a config.toml smol-toml cannot parse still switches off what its text defines, and nothing else", () => {
+    const toml = path.join(home, 'config.toml');
+    const off = (args: string[]) => args.filter((_, i) => i % 2 === 1).sort();
+    const broken = 'this line is not toml = =\n';
+    const cases: Array<[string, string[]]> = [
+      [`[mcp_servers.dorothy-x]\ncommand = "node"\n\n${broken}`, ['mcp_servers.dorothy-x.enabled=false']],
+      [`[mcp_servers."claude-mgr-telegram"]\ncommand = "x"\n${broken}`, ['mcp_servers.claude-mgr-telegram.enabled=false']],
+      [`[ mcp_servers . dorothy-x ]\ncommand = "node"\n${broken}`, ['mcp_servers.dorothy-x.enabled=false']],
+      [`mcp_servers.dorothy-x.command = "node"\n${broken}`, ['mcp_servers.dorothy-x.enabled=false']],
+      [`[mcp_servers.dorothy-x]\n[mcp_servers.claude-mgr-telegram]\n${broken}`, ['mcp_servers.claude-mgr-telegram.enabled=false', 'mcp_servers.dorothy-x.enabled=false']],
+      [`# [mcp_servers.dorothy-x]\nnote = "[mcp_servers.dorothy-x]"\n[mcp_servers.dorothy-xyz]\n${broken}`, []],
+      ['[mcp_servers.dorothy-x\ncommand = ', []],
+    ];
+    for (const [text, expected] of cases) {
+      fs.writeFileSync(toml, text);
+      expect(off(codexRoleArgs(false, toml)), text).toEqual(expected);
+      expect(codexRoleArgs(true, toml), text).toEqual([]);
+    }
   });
 
   it('10. codex: the line Tars builds reads the config.toml of the home it hands codex', () => withCodexHome(home, (codex) => {
