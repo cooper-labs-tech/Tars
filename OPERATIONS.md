@@ -396,7 +396,9 @@ get_agent_output behave on it as on the others. A real binary of the harness run
 the stand-in endpoint of `e2e/stand-in-openai-endpoint.mjs` through Tars's endpoint proxy: loopback, a dummy key, a
 scripted tool call, no network and no token spent. The steps: it starts; `delegate_task` returns its own final answer
 after a real tool round on the wire; `task_status` and `get_agent_output` give the same answer; Tars quits and starts
-again and the agent's first start continues its session, then answers a second task.
+again and the agent's first start continues its session, then answers a second task; the window restarts the agent,
+which forks its session, and the fork answers a third task with the earlier history. A delegation answered "still
+starting" (the TUI not drawn yet, nothing typed) is sent again, as an orchestrator does.
 
 ```bash
 npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
