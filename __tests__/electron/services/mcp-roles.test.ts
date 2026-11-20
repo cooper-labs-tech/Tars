@@ -292,7 +292,7 @@ describe('the CLIs that read their own config: a switch per run', () => {
       ['10e multi-line literal string', `note = '''\n[mcp_servers.dorothy-x]\n'''\n${broken}`, []],
       ['10e a key of another server', `[mcp_servers.other]\ndorothy-x = "y"\n${broken}`, []],
       ['10e under another table', `[profiles.p]\nmcp_servers.dorothy-x.command = "x"\n${broken}`, []],
-      ['10e a value, not a key', `mcp_servers = { other = { args = ["dorothy-x"], env = { claude-mgr-telegram = "1" } } }\n${broken}`, []],
+      ['10e a value, not a key', `mcp_servers = { other = { args = ["a", "dorothy-x"], env = { A = "1", claude-mgr-telegram = "1" } } }\n${broken}`, []],
       ['10e a longer name', `[mcp_servers]\ndorothy-xyz = { command = "node" }\n${broken}`, []],
       ['10e a comment', `[mcp_servers]\n# dorothy-x = { command = "node" }\nmcp = 1 # [mcp_servers.dorothy-x]\n${broken}`, []],
     ];
