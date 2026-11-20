@@ -717,6 +717,16 @@ Before it, as always: the version bumped in `package.json`, its entry at the top
 `src/data/changelog.ts`, merged into `main`, and the gate passed (`npm test`, both `tsc`, lint,
 the final e2e and the CLI matrix, `npm run e2e:matrix`).
 
+The gate also runs the real codex, which no unit test or default spec does
+(`__tests__/setup/no-real-cli.ts`): codex's own parser on the config Tars writes, and the real-codex
+conformance run (`e2e/harness-conformance.spec.ts`, from #601). Each alone, as an opt-in counts for
+its whole run:
+
+```bash
+TARS_TEST_REAL_CLIS=codex npx vitest run __tests__/electron/providers/codex-trust.test.ts __tests__/electron/providers/codex-mcp-env.test.ts
+TARS_HARNESS_CODEX=/path/to/codex npx playwright test e2e/harness-conformance.spec.ts -g codex
+```
+
 ```bash
 npm run release -- --dry-run   # the checks, the artifacts of this version if built, the notes; nothing else
 npm run release                # the release
