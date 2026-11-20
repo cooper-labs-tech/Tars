@@ -32,10 +32,44 @@ export function opencodeUuidOf(sessionId: string): string | null {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
-/** The session a launch line resumes (`--session '<id>'`), or undefined. */
-export function opencodeSessionOfCommand(line: string | undefined): string | undefined {
-  const m = /--session '?(ses_[A-Za-z0-9]+)'?/.exec(line ?? '');
-  return m && OPENCODE_SESSION_ID.test(m[1]) ? m[1] : undefined;
+/**
+ * What a launch says of its session: the one it resumes (`--session '<id>'`), or the one it forks (`--session '<id>'
+ * --fork`: a restart's, which opencode 1.19.6 goes on with under a new id, measured), and the prompt it starts on
+ * (`--prompt '<text>'`), unquoted as the shell would. From the line typed into a terminal (quoted words), or the
+ * arguments a terminal runs (an exec launch, every terminal on Windows), each its own word.
+ */
+export interface OpencodeLaunchFrom { resume?: string; forkOf?: string; prompt?: string }
+
+export function opencodeLaunchOf(line: string | readonly string[] | undefined): OpencodeLaunchFrom {
+  const out: OpencodeLaunchFrom = {};
+  let session: string | undefined;
+  let fork = false;
+  // A shell's `-c '<line>'` holds the whole line in one word: read as a line.
+  if (Array.isArray(line) && !['--session', '--fork', '--prompt'].some((flag) => line.includes(flag))) return opencodeLaunchOf(line.join(' '));
+  if (Array.isArray(line)) {
+    const at = line.indexOf('--session');
+    session = at >= 0 ? line[at + 1] : undefined;
+    fork = line.includes('--fork');
+    const p = line.indexOf('--prompt');
+    if (p >= 0 && typeof line[p + 1] === 'string') out.prompt = line[p + 1];
+  } else {
+    const text = typeof line === 'string' ? line : '';
+    const m = /--session '?(ses_[A-Za-z0-9]+)'?( --fork)?/.exec(text);
+    session = m?.[1];
+    fork = !!m?.[2];
+    const p = /--prompt '((?:[^']|'\\'')*)'/.exec(text);
+    if (p) out.prompt = p[1].replace(/'\\''/g, "'");
+  }
+  if (session && OPENCODE_SESSION_ID.test(session)) {
+    if (fork) out.forkOf = session;
+    else out.resume = session;
+  }
+  return out;
+}
+
+/** The session a launch line resumes (`--session '<id>'` without `--fork`), or undefined. */
+export function opencodeSessionOfCommand(line: string | readonly string[] | undefined): string | undefined {
+  return opencodeLaunchOf(line).resume;
 }
 
 const realOf = (p: string): string => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };

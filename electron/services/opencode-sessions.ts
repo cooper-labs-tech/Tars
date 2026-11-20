@@ -3,7 +3,7 @@ import * as path from 'path';
 import Database from 'better-sqlite3';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
-import { opencodeDbPath, opencodeUuidOf } from '../providers/opencode-cli';
+import { opencodeDbPath, opencodeUuidOf, type OpencodeLaunchFrom } from '../providers/opencode-cli';
 
 export type { HookPost };
 
@@ -18,14 +18,23 @@ export type { HookPost };
  * `time.completed`; an assistant's `finish` (`tool-calls` for a step that asked for a tool, `stop` at the turn's end),
  * its `tokens` (input without the cache, output, reasoning, cache read and write) and `modelID`, or an `error`
  * (`MessageAbortedError` after an Esc, `APIError` with its message when the endpoint failed). The texts are `part` rows
- * of `type: 'text'`.
+ * of `type: 'text'`. A fork (`--session <id> --fork`, every restart's) is a new `session` row made at the launch, with
+ * no `parent_id`, and every message of the session it forks copied under a new id with its own `time_created`.
  *
  * Whose session is whose is decided on evidence, never on the folder alone (the user's own opencode writes the same
- * database): a session made in the agent's folder since the launch whose first prompt carries the agent's identity
- * line ("[Tars: you are agent ... (id <agent id>)"), or, with none, a text Tars typed into this agent's terminal and
- * into no other's; a session the launch resumed (`--session <id>`) by its id, read from the launch on. Posted under the
- * UUID made from opencode's id (providers/opencode-cli.ts): the hook routes take nothing else.
- * opencode-sessions.test.ts says each way this goes wrong.
+ * database), for a session made in the agent's folder since the launch and held by no other launch:
+ * - its first prompt holds a text this terminal was sent (typed into it, or its launch's own `--prompt`) and none
+ *   another unbound launch was sent;
+ * - or, with none, Tars's identity line naming this agent, at a line's start where Tars writes it (the last such line:
+ *   a delivery puts the task first and Tars's section after it), and no text another unbound launch was sent;
+ * - or, for a fork, a copy of the forked session's first prompt (the same time and text).
+ * A session the launch resumed (`--session <id>`) is bound by its id, read from the launch on, unless another launch
+ * holds it. The messages from before the launch are history, never posted. Posted under the UUID made from opencode's
+ * id (providers/opencode-cli.ts): the hook routes take nothing else. opencode-sessions.test.ts says each way this
+ * goes wrong.
+ *
+ * What reading costs: a tick runs every second while a launch is noted (forgotten with its terminal), on the main
+ * thread. For a bound session it reads the messages from the first one not yet done on, not the whole session.
  */
 
 export interface OpencodeSessionWatchDeps {
@@ -38,26 +47,35 @@ export interface OpencodeSessionWatchDeps {
   interrupted?: (agentId: string, sessionId: string) => void;
 }
 
+/** What a launch said of its session (opencodeLaunchOf), and the terminal it runs in, which forgets it at its exit. */
+export interface LaunchNote extends OpencodeLaunchFrom { terminal?: object }
+
 interface Turn { texts: string[]; usage?: { model: string; input: number; output: number; cacheRead: number; cacheWrite: number } }
 interface Bound {
   sessionId: string;
-  resumed: boolean;
+  /** Registered at its first new message (a resumed session) rather than at once. */
+  registerLater: boolean;
   registered: boolean;
-  /** Messages already read: those before the launch for a resumed session, and each one once posted. */
+  /** The messages done, by id, from `since` on: each read once. */
   done: Set<string>;
+  /** Every message before this time is done (from the launch's on): the next read starts there. */
+  since: number;
   turn?: Turn;
 }
 interface Launch {
   cwd: string;
   at: number;
   resume?: string;
-  /** What Tars typed into the agent's terminal since the launch, whitespace folded, for a session's first prompt. */
+  forkOf?: string;
+  terminal?: object;
+  /** What this terminal was sent since the launch (its prompt, what Tars typed), whitespace folded, for a first prompt. */
   typed: string[];
   bound?: Bound;
 }
 type Row = { id: string; time_created: number; data: string };
 
-const IDENTITY = /\[Tars: you are agent ".*?" \(id ([0-9a-zA-Z-]{4,})\)/;
+/** Tars's identity line, at a line's start: where Tars writes it, and never a header quoted inside a line. */
+const IDENTITY = /^\s*\[Tars: you are agent ".*?" \(id ([0-9a-zA-Z-]{4,})\)/gm;
 const fold = (text: string): string => text.replace(/\s+/g, ' ').trim();
 const TYPED_HEAD = 200;
 const TYPED_MIN = 16;
@@ -69,6 +87,7 @@ const sameDir = (a: string, b: string): boolean => {
   const rb = realOf(b);
   return process.platform === 'win32' || process.platform === 'darwin' ? ra.toLowerCase() === rb.toLowerCase() : ra === rb;
 };
+const parse = (data: string): Record<string, unknown> | undefined => { try { return asObj(JSON.parse(data)); } catch { return undefined; } };
 
 export class OpencodeSessionWatch {
   private launches = new Map<string, Launch>();
@@ -79,9 +98,15 @@ export class OpencodeSessionWatch {
     Object.assign(this.deps, deps);
   }
 
-  /** An opencode terminal was spawned for the agent in `cwd`, resuming opencode's session `resume` when given. */
-  noteLaunch(agentId: string, cwd: string, resume?: string): void {
-    this.launches.set(agentId, { cwd, at: this.deps.now(), resume, typed: [] });
+  /**
+   * An opencode terminal was spawned for the agent in `cwd`, or opencode typed into one: `from` is what its line says
+   * (opencodeLaunchOf; a string is the session it resumes), and the terminal it runs in.
+   */
+  noteLaunch(agentId: string, cwd: string, from: string | LaunchNote = {}): void {
+    const note: LaunchNote = typeof from === 'string' ? { resume: from } : from;
+    const launch: Launch = { cwd, at: this.deps.now(), resume: note.resume, forkOf: note.forkOf, terminal: note.terminal, typed: [] };
+    this.launches.set(agentId, launch);
+    if (note.prompt) this.noteTyped(agentId, note.prompt);
   }
 
   /** Tars typed `text` into the agent's terminal: a session whose first prompt holds it, and no other's, is the agent's. */
@@ -91,6 +116,13 @@ export class OpencodeSessionWatch {
     if (!launch || launch.bound || folded.length < TYPED_MIN) return;
     launch.typed.push(folded);
     if (launch.typed.length > 20) launch.typed.shift();
+  }
+
+  /** The terminal exited: its launch is no longer read. A newer launch of the same agent, in another terminal, stays. */
+  forgetTerminal(terminal: object): void {
+    for (const [agentId, launch] of this.launches) {
+      if (launch.terminal === terminal) this.launches.delete(agentId);
+    }
   }
 
   get watching(): boolean {
@@ -125,44 +157,53 @@ export class OpencodeSessionWatch {
     const rows = db.prepare('SELECT data FROM part WHERE message_id = ? ORDER BY time_created, id').all(messageId) as Array<{ data: string }>;
     const out: string[] = [];
     for (const r of rows) {
-      let p: Record<string, unknown> | undefined;
-      try { p = asObj(JSON.parse(r.data)); } catch { continue; }
+      const p = parse(r.data);
       if (p?.type === 'text' && typeof p.text === 'string') out.push(p.text);
     }
     return out;
   }
 
-  /** The first prompt of a session, once its text is written; null before. */
-  private firstPrompt(db: Database.Database, sessionId: string): string | null {
+  /** The first prompt of a session and its time, once its text is written; null before. */
+  private firstPrompt(db: Database.Database, sessionId: string): { text: string; at: number } | null {
     const rows = db.prepare('SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id').all(sessionId) as Row[];
     for (const row of rows) {
-      let data: Record<string, unknown> | undefined;
-      try { data = asObj(JSON.parse(row.data)); } catch { continue; }
-      if (data?.role !== 'user') continue;
+      if (parse(row.data)?.role !== 'user') continue;
       const text = this.texts(db, row.id).join('\n');
-      return text || null;
+      return text ? { text, at: row.time_created } : null;
     }
     return null;
+  }
+
+  /**
+   * A session bound to a launch, read from the launch's time on: every message before it is history (a resumed
+   * session's turns, a fork's copies, which keep their own times), never read, whenever it is written.
+   */
+  private boundFrom(sessionId: string, at: number, registerLater: boolean): Bound {
+    return { sessionId, registerLater, registered: false, done: new Set(), since: at };
   }
 
   private bind(db: Database.Database, agentId: string, launch: Launch, taken: Set<string>): Bound | undefined {
     const sessions = db.prepare('SELECT id, directory, time_created FROM session').all() as Array<{ id: string; directory: string; time_created: number }>;
     if (launch.resume) {
+      // Held by another live launch: two agents would each get the other's turns (the Audit's L1 on #613).
+      if (taken.has(launch.resume)) return undefined;
       const s = sessions.find((x) => x.id === launch.resume);
-      if (!s) return undefined;
-      const before = db.prepare('SELECT id FROM message WHERE session_id = ? AND time_created < ?').all(s.id, launch.at) as Array<{ id: string }>;
-      return { sessionId: s.id, resumed: true, registered: false, done: new Set(before.map((r) => r.id)) };
+      return s ? this.boundFrom(s.id, launch.at, true) : undefined;
     }
     const others = [...this.launches].filter(([id, l]) => id !== agentId && !l.bound).flatMap(([, l]) => l.typed);
+    const forked = launch.forkOf ? this.firstPrompt(db, launch.forkOf) : null;
     for (const s of sessions) {
+      // Made since the launch: never the session a fork copies, which is older.
       if (taken.has(s.id) || typeof s.directory !== 'string' || !(s.time_created >= launch.at) || !sameDir(s.directory, launch.cwd)) continue;
       const first = this.firstPrompt(db, s.id);
       if (first === null) continue;
-      const named = IDENTITY.exec(first)?.[1];
-      const ours = named
-        ? named === agentId
-        : launch.typed.some((t) => fold(first).includes(t) && !others.some((o) => fold(first).includes(o)));
-      if (ours) return { sessionId: s.id, resumed: false, registered: false, done: new Set() };
+      const folded = fold(first.text);
+      // What another unbound launch was sent rules it out: that session may be the other agent's.
+      if (others.some((o) => folded.includes(o))) continue;
+      const sent = launch.typed.some((t) => folded.includes(t));
+      const named = [...first.text.matchAll(IDENTITY)].map((m) => m[1]).pop();
+      const copied = !!forked && forked.at === first.at && forked.text === first.text;
+      if (sent || named === agentId || copied) return this.boundFrom(s.id, launch.at, false);
     }
     return undefined;
   }
@@ -173,16 +214,20 @@ export class OpencodeSessionWatch {
 
   private async follow(db: Database.Database, agentId: string, launch: Launch): Promise<void> {
     const b = launch.bound!;
-    if (!b.registered && !b.resumed) {
+    if (!b.registered && !b.registerLater) {
       b.registered = true;
-      await this.post(agentId, b, '/api/hooks/status', { status: 'running', source: 'startup' });
+      // A fork goes on with an earlier conversation, under its own id.
+      await this.post(agentId, b, '/api/hooks/status', { status: 'running', source: launch.forkOf ? 'resume' : 'startup' });
     }
-    const rows = db.prepare('SELECT id, time_created, data FROM message WHERE session_id = ? ORDER BY time_created, id').all(b.sessionId) as Row[];
-    for (const row of rows) {
+    // From the first message not yet done on: a long session is not read whole every second (the Audit's I-b).
+    const rows = db.prepare('SELECT id, time_created, data FROM message WHERE session_id = ? AND time_created >= ? ORDER BY time_created, id').all(b.sessionId, b.since) as Row[];
+    let waiting: number | undefined;
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
       if (b.done.has(row.id)) continue;
-      let data: Record<string, unknown> | undefined;
-      try { data = asObj(JSON.parse(row.data)); } catch { return; }
-      if (!data) return;
+      const data = parse(row.data);
+      // A row that does not parse is passed over: it must not stop its session (the Audit's I-c).
+      if (!data) { b.done.add(row.id); continue; }
       if (!b.registered) {
         b.registered = true;
         await this.post(agentId, b, '/api/hooks/status', { status: 'running', source: 'resume' });
@@ -190,7 +235,7 @@ export class OpencodeSessionWatch {
       if (data.role === 'user') {
         // Its text is written in its parts, a moment after the row: read again at the next tick until it is there.
         const text = this.texts(db, row.id).join('\n');
-        if (!text) return;
+        if (!text) { waiting = row.time_created; break; }
         b.done.add(row.id);
         b.turn = { texts: [] };
         await this.post(agentId, b, '/api/hooks/status', { status: 'running', event: 'UserPromptSubmit', current_task: text });
@@ -199,7 +244,13 @@ export class OpencodeSessionWatch {
       if (data.role !== 'assistant') { b.done.add(row.id); continue; }
       const error = asObj(data.error);
       const completed = num(asObj(data.time)?.completed) > 0;
-      if (!error && !completed) return;
+      if (!error && !completed) {
+        // Still being written, unless opencode went on to another assistant message after it: then it was cut short
+        // (an opencode gone mid-turn), and is passed over (the Audit's I-c).
+        if (rows.slice(i + 1).some((r) => parse(r.data)?.role === 'assistant')) { b.done.add(row.id); continue; }
+        waiting = row.time_created;
+        break;
+      }
       b.done.add(row.id);
       const turn = b.turn ?? (b.turn = { texts: [] });
       if (error) {
@@ -237,6 +288,14 @@ export class OpencodeSessionWatch {
           usage: { model: u.model, input_tokens: u.input, output_tokens: u.output, cache_read_input_tokens: u.cacheRead, cache_creation_input_tokens: u.cacheWrite },
         });
       }
+    }
+    // The next read starts at the first message not done (the one waited on), or at the last one read; the done
+    // ids before it are no longer needed.
+    const next = waiting ?? (rows.length > 0 ? rows[rows.length - 1].time_created : b.since);
+    if (next > b.since) {
+      b.since = next;
+      const kept = new Set(rows.filter((r) => r.time_created >= next && b.done.has(r.id)).map((r) => r.id));
+      b.done = kept;
     }
   }
 }
