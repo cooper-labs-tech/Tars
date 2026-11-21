@@ -1,7 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import type { AppSettings } from '../types';
-import { kimiHome, kimiIdOf } from './kimi-cli';
+import { kimiHome, kimiIdOf, kimiUuidOf } from './kimi-cli';
+import { execCli } from './cli-exec';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import type {
@@ -76,8 +77,8 @@ export class KimiCodeProvider implements CLIProvider {
       command += ` -m ${shellQuote(params.model)}`;
     }
     // A resume continues the session under its own id. A restart that forks would resume the session it just stopped,
-    // whose id is the stop's tombstone (hooks-routes.ts refuses its posts): it starts a new session instead, until
-    // `kimi fork` is measured.
+    // whose id is the stop's tombstone (hooks-routes.ts refuses its posts): forked ahead by `kimi fork` (forkAhead), the
+    // launch resumes the fork instead; when that fork could not be made, a new session.
     // Tars knows the session by its UUID (kimi-cli.ts): kimi takes its own name for it.
     const session = params.forkSession ? null : kimiIdOf(params.resumeSessionId);
     if (session) command += ` --session ${shellQuote(session)}`;
@@ -87,6 +88,28 @@ export class KimiCodeProvider implements CLIProvider {
       if (handedSecondaryFolder(vp) && fs.existsSync(vp)) command += ` --add-dir ${shellQuote(vp)}`;
     }
     return command;
+  }
+
+  /**
+   * A restart's fork, ahead of its line: `kimi fork -y <id>` (2.6.3, measured 21/11) makes a new session holding the
+   * conversation's turns in about 1.4 s, with no terminal, prints `Forked to session_<uuid> (...)` and exits; `--session`
+   * then resumes it under that id, never the stopped session's, the stop's tombstone. Run as codex's `--help` is (cli-
+   * exec.ts), off the main thread, in Tars's environment, which the agent's terminal inherits, KIMI_CODE_HOME with it,
+   * and in the agent's folder (the Audit's L3 on #601: a fork from `/` still kept the session's own folder, measured,
+   * and from the agent's folder there is nothing to measure). Null when kimi fails, hangs past 20 s, prints no
+   * session, or the session is not of kimi's form.
+   */
+  async forkAhead(binaryPath: string, sessionId: string, cwd: string): Promise<string | null> {
+    const id = kimiIdOf(sessionId);
+    if (!id) return null;
+    try {
+      const { stdout } = await execCli(binaryPath, ['fork', '-y', id], { encoding: 'utf-8', timeout: 20_000, maxBuffer: 1024 * 1024, cwd });
+      const forked = /Forked to (session_[0-9a-f-]{36})\b/.exec(stdout)?.[1];
+      return forked ? kimiUuidOf(forked) : null;
+    } catch (err) {
+      console.warn(`[kimi-code] could not fork ${id}, a new session instead:`, err instanceof Error ? err.message : err);
+      return null;
+    }
   }
 
   readonly taskTypedAfterLaunch = true;

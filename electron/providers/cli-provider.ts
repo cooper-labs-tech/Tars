@@ -125,6 +125,14 @@ export interface CLIProvider {
    */
   prepareLaunch?(binaryPath: string, permissionMode?: string): Promise<void>;
 
+  /**
+   * For a CLI whose own fork is a command of its own that makes the new session and exits (Kimi Code's `kimi fork -y
+   * <id>`): the session a launch that forks `sessionId` goes on in, made off the main thread, in the agent's folder
+   * `cwd`, before the line is built, which then resumes it plainly (resumeOfLaunch, core/agent-launch.ts). Null when it
+   * could not be made. Absent: the line forks, or not, by itself.
+   */
+  forkAhead?(binaryPath: string, sessionId: string, cwd: string): Promise<string | null>;
+
   /** Build command string for interactive PTY sessions */
   buildInteractiveCommand(params: InteractiveCommandParams): string;
 
