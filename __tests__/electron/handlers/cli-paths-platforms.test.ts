@@ -168,7 +168,7 @@ describe('win32 detection', () => {
 
     expect(found).toEqual({
       amp: '', claude: `${LOCAL_BIN}\\claude.exe`, codex: `${NPM}\\codex.cmd`, gemini: '', grok: `${TOOLS}\\grok.exe`,
-      qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', goose: '', gws: '', gcloud: `${SDK}\\gcloud.cmd`, gh: `${SCOOP}\\gh.exe`,
+      qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', goose: '', cline: '', gws: '', gcloud: `${SDK}\\gcloud.cmd`, gh: `${SCOOP}\\gh.exe`,
       node: `${WINGET}\\node.exe`, minimax: '',
     });
     expect(disk.relativeProbes).toEqual([]);
@@ -255,14 +255,16 @@ function oldDetection(home: string, shellPath: string, processPath: string) {
     ['node', 'node', commonPaths, commonPaths], ['qwencode', 'qwen', commonPaths, commonPaths],
     ['minimax', 'minimax', commonPaths, commonPaths],
   ];
-  const result: Record<string, string> = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', goose: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
-  // Kimi Code's kimi (19/11), Kilo's kilo and Goose's goose (20/11): looked for along the same folders, and never asked of \`which\`.
+  const result: Record<string, string> = { amp: '', claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '', pi: '', kimi: '', kilo: '', goose: '', cline: '', gws: '', gcloud: '', gh: '', node: '', minimax: '' };
+  // Kimi Code's kimi (19/11), Kilo's kilo, Goose's goose (20/11) and Cline's cline (21/11): looked for along the same folders, and never asked of \`which\`.
   const kimiHit = commonPaths.find((d) => fs.existsSync(path.join(d, 'kimi')));
   if (kimiHit) result.kimi = path.join(kimiHit, 'kimi');
   const kiloHit = commonPaths.find((d) => fs.existsSync(path.join(d, 'kilo')));
   if (kiloHit) result.kilo = path.join(kiloHit, 'kilo');
   const gooseHit = commonPaths.find((d) => fs.existsSync(path.join(d, 'goose')));
   if (gooseHit) result.goose = path.join(gooseHit, 'goose');
+  const clineHit = commonPaths.find((d) => fs.existsSync(path.join(d, 'cline')));
+  if (clineHit) result.cline = path.join(clineHit, 'cline');
   const calls: Array<{ file: string; args: string[]; PATH?: string }> = [{ file: process.env.SHELL!, args: ['-ilc', 'echo $PATH'] }];
   for (const [key, bin, probe, whichDirs] of order) {
     const hit = probe.find((d) => fs.existsSync(path.join(d, bin)));

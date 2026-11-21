@@ -420,11 +420,15 @@ export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
   markAgentsDirty();
 }
 
-// A notice from below the agent store (core/agent-notices.ts: a Goose launch that starts a conversation over) goes
-// where a person reads it, the agent's kept output, as a refused session's does (hooks-routes.ts).
+// A notice from below the agent store (core/agent-notices.ts: a launch that starts a conversation over) goes into the
+// agent's kept output, as a refused session's does (hooks-routes.ts): what /api/agents/:id/output serves, and what Logs
+// replays once the agent's terminal is gone (while it has one, Logs reads that terminal's screen, which a notice never
+// reaches). On the normal screen: a restart's notice followed a TUI killed on its alternate screen, and the next TUI's
+// switch wiped it from that replay (the Cline conformance on 187508db4). ?1047l rather than ?1049l, which restores a
+// saved cursor and would print it over earlier lines of a stream already on the normal screen.
 setAgentNoticeSink((agentId, line) => {
   const agent = agents.get(agentId);
-  if (agent) appendAgentOutput(agent, `\r\n[Tars] ${line}\r\n`);
+  if (agent) appendAgentOutput(agent, `\x1b[?1047l\r\n[Tars] ${line}\r\n`);
   else console.log(`[notice] ${agentId}: ${line}`);
 });
 

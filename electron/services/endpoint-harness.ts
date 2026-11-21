@@ -23,6 +23,8 @@ export interface EndpointLaunch {
   tokenVars: string[];
   modelArg?: string;
   files?: string[];
+  /** The proxy's base, for a harness whose provider its own provider class writes into a file of the agent's (Cline). */
+  baseUrl?: string;
 }
 
 /** A model id safe in a TOML string, a JSON string and a shell word alike: letters, digits and . _ : / - only. */
@@ -84,6 +86,10 @@ export function endpointLaunchFor(harness: string, o: { proxyBase: string; model
         tokenVars: [ENDPOINT_TOKEN_VAR],
         modelArg: `${p}/${o.model}`,
       };
+    case 'cline':
+      // Cline's TUI reads its provider from the agent's own providers.json (providers/cline-provider.ts writes it, the
+      // proxy and the model, no key) and the key from OPENAI_API_KEY (3.0.74, measured 21/11: a bearer reached the endpoint).
+      return { args: [], env: {}, tokenVars: ['OPENAI_API_KEY'], modelArg: o.model, baseUrl: o.proxyBase };
     case 'goose': {
       // Goose's openai provider, named on its line, and the proxy from its environment, nothing written (1.60.1,
       // measured 20/11 with a tool call): OPENAI_HOST the origin, OPENAI_BASE_PATH the path from there, no slash first.

@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+// A Cline agent's folder is in Tars's userData (providers/cline-cli.ts): this run's own temporary folder here.
+vi.mock('electron', async () => {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  return { app: { getPath: () => path.join(os.tmpdir(), 'tars-userdata') } };
+});
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -46,8 +52,12 @@ beforeAll(() => {
   tmpDir = fs.mkdtempSync(path.join(fs.realpathSync(process.env.HOME!), 'tars posix words (x86) '));
   fs.writeFileSync(path.join(tmpDir, 'mcp.json'), '{}');
   fs.writeFileSync(path.join(tmpDir, 'instructions.md'), '');
+  // A user's own Cline provider, which a Cline launch copies into the agent's folder (providers/cline-provider.ts).
+  fs.mkdirSync(path.join(tmpDir, 'cline-data', 'settings'), { recursive: true });
+  fs.writeFileSync(path.join(tmpDir, 'cline-data', 'settings', 'providers.json'), '{"version":1,"providers":{}}');
+  process.env.CLINE_DATA_DIR = path.join(tmpDir, 'cline-data');
 });
-afterAll(() => { if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true }); });
+afterAll(() => { delete process.env.CLINE_DATA_DIR; if (tmpDir) fs.rmSync(tmpDir, { recursive: true, force: true }); });
 
 /** The reference quoting every provider uses for a value. */
 const q = (s: string) => `'${s.replace(/'/g, "'\\''")}'`;
@@ -179,6 +189,8 @@ function bashWords(command: string): string[] {
 async function commandOf(providerId: string, prompt: string, binaryPath: string): Promise<string> {
   const { getProvider } = await import('../../../electron/providers');
   return getProvider(providerId as never).buildInteractiveCommand({
+    // Named: Cline runs only on an agent's own folder (providers/cline-provider.ts), the others take it as no endpoint.
+    agentId: 'posix-words-agent',
     binaryPath,
     prompt,
     model: 'some-model',
@@ -200,9 +212,9 @@ async function commandOf(providerId: string, prompt: string, binaryPath: string)
 }
 
 describe('9. every provider round-trips', () => {
-  it('covers the 24 providers', async () => {
+  it('covers the 25 providers', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    expect(getAllProviders()).toHaveLength(24);
+    expect(getAllProviders()).toHaveLength(25);
   });
 
   it('first word the binary, last word the prompt, the rest from the grammar, for every adversarial prompt', async () => {

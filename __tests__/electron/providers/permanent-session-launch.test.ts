@@ -35,6 +35,11 @@ import { argvReached, writeArgvPrinter } from './argv-reached';
  *  6. a CLI that takes its task as an argument loses it, or gets it cut.
  *  7. the task typed into amp goes in before its CLI runs (into the shell, which
  *     would run it as a command), or before its screen is up (lost).
+ * 10. (Cline, 21/11; the gap #618 left for Kimi Code and Goose) a CLI that says when it is up from its own screen
+ *     (CLIProvider.upOnScreen) is typed into after a fixed settle anyway: Cline drew its field 2.4 to 3.6 s after its
+ *     start, idle, and on a loaded machine later still, so a task typed at 2 s is lost, or typed into its onboarding.
+ *     With `up`, the task waits for it, and gives up at its bound. And a launch's task (typeLaunchTask) not handed its
+ *     provider's upOnScreen: typed at the settle anyway (the mutation bench's survivor on bd51c1068).
  *  8. a CLI that never comes up, or is gone before its screen is, gets keys
  *     anyway, or the wait never ends.
  *  9. the task is typed more than once.
@@ -59,7 +64,7 @@ vi.mock('../../../electron/core/pty-manager', async (original) => ({
 }));
 
 import { getProvider } from '../../../electron/providers';
-import { typeTaskWhenUp } from '../../../electron/core/typed-task';
+import { typeLaunchTask, typeTaskWhenUp } from '../../../electron/core/typed-task';
 import type { AgentProvider } from '../../../electron/types';
 
 const TASK = 'Review the release notes, then say what is missing';
@@ -138,6 +143,40 @@ describe('a task typed into a CLI once it runs', () => {
     expect(Date.now() - started).toBeLessThan(2_000);
     expect(pty.written).toEqual([]);
   });
+
+  it("waits for the CLI's own word that it is up, when it has one, and gives up at its bound (10)", async () => {
+    pty.running = true;
+    pty.written.length = 0;
+    let up = false;
+    const typed = typeTaskWhenUp(terminal, TASK, { settleMs: 50, maxMs: 5_000, stepMs: 20, up: () => up });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(pty.written, 'typed before its screen said it was up').toEqual([]);
+    up = true;
+    expect(await typed).toBe('written');
+    expect(pty.written).toEqual([TASK]);
+    pty.written.length = 0;
+    expect(await typeTaskWhenUp(terminal, TASK, { settleMs: 50, maxMs: 300, stepMs: 20, up: () => false })).toBe('never-up');
+    expect(pty.written).toEqual([]);
+  });
+
+  it("types a launch's task once its provider's screen says it is up, not at the settle (10)", async () => {
+    pty.running = true;
+    pty.written.length = 0;
+    let up = false;
+    const asked: unknown[] = [];
+    const provider = {
+      id: 'cline' as const, taskTypedAfterLaunch: true, typedTask: () => TASK,
+      upOnScreen: (lines: string[]) => { asked.push(lines); return up; },
+    };
+    typeLaunchTask(provider, terminal, { prompt: TASK, skills: [] });
+    // Past the 2 s settle a CLI with no word of its own is typed into after.
+    await new Promise((r) => setTimeout(r, 2_700));
+    expect(pty.written, "typed before the provider's screen said it was up").toEqual([]);
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked.every((lines) => Array.isArray(lines))).toBe(true);
+    up = true;
+    await expect.poll(() => pty.written, { timeout: 5_000 }).toEqual([TASK]);
+  }, 15_000);
 
   it('types nothing to a CLI gone before its screen was up (8)', async () => {
     pty.running = true;

@@ -37,6 +37,7 @@ export const HARNESS_SUPPORT: Array<{ harness: string; toolCalls: ToolCallSuppor
   { harness: 'kilo', toolCalls: 'works', api: 'chat', measuredOn: '7.8.27', note: 'A build of opencode, its provider in KILO_CONFIG_CONTENT: a tool call through Tars\'s proxy (e2e/harness-conformance.spec.ts, 20/11).' },
   { harness: 'goose', toolCalls: 'works', api: 'chat', measuredOn: '1.60.1', note: 'Its openai provider on the proxy (OPENAI_HOST, OPENAI_BASE_PATH): a tool call through Tars\'s proxy, then resumed and forked (e2e/harness-conformance.spec.ts, 20/11).' },
   { harness: 'kimi-code', toolCalls: 'works', api: 'chat', measuredOn: '2.6.3', note: 'A tool call through Tars\'s proxy on its KIMI_MODEL_* variables (e2e/harness-conformance.spec.ts, 19/11).' },
+  { harness: 'cline', toolCalls: 'works', api: 'chat', measuredOn: '3.0.74', note: 'Its openai-compatible provider in the agent\'s own providers.json, on the proxy, the token in OPENAI_API_KEY: a tool call through Tars\'s proxy, resumed, restarted fresh, two agents at once (e2e/harness-conformance.spec.ts, 21/11).' },
 ];
 
 export const harnessSupportMap = (): Record<string, ToolCallSupport> =>

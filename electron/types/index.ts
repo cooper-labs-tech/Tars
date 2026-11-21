@@ -28,6 +28,8 @@ export type AgentProvider =
   | 'kilo'
   /** Goose, the binary `goose` (block/goose). */
   | 'goose'
+  /** Cline CLI, the binary `cline` (npm `cline`). */
+  | 'cline'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -395,6 +397,7 @@ export const CLI_PATH_KEYS = [
   'kimi',
   'kilo',
   'goose',
+  'cline',
   'gws',
   'gcloud',
   'gh',
@@ -410,7 +413,9 @@ export type CLIPaths = Record<CLIPathKey, string> & {
 };
 
 /** The CLIs that take an API key of their own from Tars (2.0.4), those of Tars's and those to come. */
-export type CliKeyId = 'codex' | 'qwen-code' | 'gemini' | 'opencode' | 'pi' | 'grok' | 'amp' | 'omp' | 'cline' | 'kilo';
+// Not Cline nor Goose: neither takes a key from Tars. A Cline agent reads its provider from its own providers.json, a
+// copy of `cline auth`'s or Tars's proxy (providers/cline-provider.ts; the Audit's M1 on #622).
+export type CliKeyId = 'codex' | 'qwen-code' | 'gemini' | 'opencode' | 'pi' | 'grok' | 'amp' | 'omp' | 'kilo';
 
 export interface CliApiKey {
   /** The key; '' when only the variable is set. */

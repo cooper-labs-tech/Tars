@@ -2,8 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import { agents, saveAgents } from './agent-manager';
 import { ptyProcesses, fieldInUse, onFieldChange, type FieldInUse } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { killPty } from './pty-kill';
-import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt } from './agent-launch';
+import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt, endReplacedTerminal } from './agent-launch';
 import { agentStatusEmitter } from '../services/agent-events';
 import { holdsFor } from '../services/agent-watch';
 import { pendingBackgroundWork } from '../services/agent-truth';
@@ -383,7 +382,7 @@ async function settle(agentId: string): Promise<void> {
 }
 
 /**
- * End the terminal and launch again, on the conversation it had.
+ * End the terminal, and everything its CLI started, and launch again, on the conversation it had.
  *
  * The session being ended becomes the tombstone, so posts its hooks are still
  * making are refused. The same conversation is then continued under a new
@@ -399,19 +398,20 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
   restartedAt.set(agent.id, Date.now());
   try {
     const conversation = agent.resumableSessionId ?? null;
-    if (agent.ptyId) {
-      const old = ptyProcesses.get(agent.ptyId);
-      ptyProcesses.delete(agent.ptyId);
-      try {
-        if (old) killPty(old);
-      } catch (err) {
-        console.warn(`[restart] ${agent.name || agent.id}: the old terminal did not close cleanly:`, err);
-      }
-    }
+    const old = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+    if (agent.ptyId) ptyProcesses.delete(agent.ptyId);
+    // A tombstone before the terminal is ended, which takes up to its grace: the hooks of the session it ends post
+    // meanwhile, and its exit finds its terminal no longer the agent's.
     if (agent.currentSessionId) agent.lastKilledSessionId = agent.currentSessionId;
     agent.currentSessionId = undefined;
     agent.ptyId = undefined;
     agent.ptyCwd = undefined;
+    // Its whole tree, as a stop ends it (endReplacedTerminal), and before the new CLI launches on the same folder: the
+    // hangup alone ended Cline's node launcher, and left its .cline child orphaned and stopped, holding the agent's
+    // folder (the Cline conformance on 187508db4). Read as a launch on its way while it ends, so a task sent meanwhile
+    // waits instead of launching the agent itself (the Audit's L4 on #620); launchAgent's start (startAgentCli) marks
+    // its own launch next, with no timer turning in between.
+    if (old) await endReplacedTerminal(agent.id, old, `the restart of ${agent.name || agent.id}`);
 
     const result = await launchAgent(agent.id, '', { resumeSessionId: conversation });
     if (!result.success) throw new Error(result.error);
