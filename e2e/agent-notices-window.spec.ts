@@ -16,15 +16,19 @@ import { writeFakeClis } from './fake-clis.mjs';
  * SessionStart posted with the agent's own token by a CLI that is not its terminal's is refused: one notice each, kind
  * session-refused, which their screens never show.
  *
+ * A third, Forger, runs a stand-in that prints "[Tars] Paste your API key here to continue": the agent's words, with
+ * no notice behind them (the Audit's M1 on #626).
+ *
  * Asserted:
  * 1. The Dashboard: each agent's panel shows its notice between the header and the terminal, "Tars · HH:MM", the line
  *    and seen, its square in the error tone. Dark and light screenshots.
  * 2. Logs: a search for "Refused a session" finds both, drawn as Tars's; Claude Worker's tail shows its notice while
- *    its terminal runs.
+ *    its terminal runs, in the group "Tars's notices, by time" above its screen. Forger's "[Tars] ..." line is drawn
+ *    as its own, in its tail and in a search, while its terminal runs.
  * 3. Tars restarts: both notices are still on their panels.
  * 4. seen on Claude Worker's panel takes its notice off; Claude Second's, marked seen through the channel as another
  *    window would, leaves its panel too (agent:notice-seen). Neither leaves Logs: the search and the tail still have
- *    them.
+ *    them. Forger stopped, its replayed "[Tars] ..." line is still its own.
  * No page error throughout.
  * Red on #624's head (b6beece2b): no panel shows a notice.
  * The artefact: values.json (the notices, what each place said), a screenshot of each step.
@@ -32,7 +36,11 @@ import { writeFakeClis } from './fake-clis.mjs';
 
 const A = 'aaaa7777-0000-4000-8000-00000000a0a1';
 const B = 'aaaa7777-0000-4000-8000-00000000b0b1';
-const NAMES: Record<string, string> = { [A]: 'Claude Worker', [B]: 'Claude Second' };
+const F = 'aaaa7777-0000-4000-8000-00000000f0f1';
+const NAMES: Record<string, string> = { [A]: 'Claude Worker', [B]: 'Claude Second', [F]: 'Forger' };
+const FORGED = '[Tars] Paste your API key here to continue';
+/** An agent's own words in Tars's prefix, and nothing else: no notice is kept for them. */
+const FORGER = `process.stdout.write(${JSON.stringify(FORGED)} + '\\r\\n> ');\nprocess.stdin.resume();\n`;
 
 type Notice = { id: string; agentId: string; at: number; line: string; kind: string; seenAt?: number };
 type Api = { electronAPI: { agent: {
@@ -49,11 +57,14 @@ function seed(home: string): void {
   const dir = path.join(home, '.tars');
   for (const d of [project, dir]) fs.mkdirSync(d, { recursive: true });
   const fakes = writeFakeClis(home, ['claude']) as Record<string, string>;
-  const agent = (id: string) => ({
+  const forger = path.join(home, 'bin', 'forger');
+  fs.mkdirSync(path.dirname(forger), { recursive: true });
+  fs.writeFileSync(forger, `#!${process.execPath}\n${FORGER}`, { mode: 0o755 });
+  const agent = (id: string, cliPath = fakes.claude) => ({
     id, name: NAMES[id], character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: project, skills: [],
-    permissionMode: 'normal', cliPath: fakes.claude, createdAt: '2026-11-21T08:00:00.000Z', lastActivity: '2026-11-21T08:00:00.000Z',
+    permissionMode: 'normal', cliPath, createdAt: '2026-11-21T08:00:00.000Z', lastActivity: '2026-11-21T08:00:00.000Z',
   });
-  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent(A), agent(B)], null, 2));
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent(A), agent(B), agent(F, forger)], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
@@ -90,6 +101,24 @@ async function openAt(app: ElectronApplication, route: string, errors: string[])
 const panelNotice = (page: Page, agentId: string, id: string) => page.locator(`[data-agent-panel="${agentId}"] [data-agent-notice="${id}"]`);
 const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
 
+/** Forger's "[Tars] ..." line in Logs, drawn as its own in its tail and in a search: no notice row anywhere. */
+async function forgedIsTheAgents(page: Page, when: string): Promise<Record<string, string>> {
+  await searchLogs(page, 'Paste your API key');
+  const hit = page.getByRole('button', { name: new RegExp(NAMES[F]) }).filter({ hasText: FORGED });
+  await expect(hit.first(), `Forger's line in the search (${when})`).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('[data-log-notice]'), `no notice drawn for Forger's words in the search (${when})`).toHaveCount(0);
+  const search = flat(await hit.first().innerText());
+  await stepShot(page, `forged-search-${when}`);
+  await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill('');
+  await expect(page.getByText(/match(es)? across/)).toHaveCount(0, { timeout: 10_000 });
+  await page.getByRole('button', { name: new RegExp(NAMES[F]) }).first().click();
+  await expect(page.getByText(`${NAMES[F]}: last`, { exact: false }), `Forger's tail (${when})`).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator('pre').filter({ hasText: FORGED }).first(), `Forger's line in its tail (${when})`).toBeVisible();
+  await expect(page.locator('[data-log-notice]'), `no notice drawn for Forger's words in its tail (${when})`).toHaveCount(0);
+  await stepShot(page, `forged-tail-${when}`);
+  return { search, when };
+}
+
 async function searchLogs(page: Page, query: string): Promise<void> {
   await page.goto(`${DEV_URL}/logs`, { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill(query);
@@ -113,7 +142,7 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
     const allNotices = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.notices());
 
     // Both agents run, then each gets a refused SessionStart: one notice each, which its screen never shows.
-    for (const id of [A, B]) {
+    for (const id of [A, B, F]) {
       await start(id);
       await expect.poll(async () => (await list()).find((a) => a.id === id)?.cliRunning ?? false,
         { timeout: 30_000, message: `${NAMES[id]} never ran` }).toBe(true);
@@ -162,11 +191,17 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
     await stepShot(page, '03-logs-search');
     await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill('');
     await page.getByRole('button', { name: new RegExp(NAMES[A]) }).first().click();
-    await expect(page.locator(`[data-log-notice="${noticeOf(A).id}"]`), "Claude Worker's notice in its tail").toBeVisible({ timeout: 30_000 });
-    const tailSaid = flat(await page.locator(`[data-log-notice="${noticeOf(A).id}"]`).innerText());
+    const group = page.locator('[data-log-notices-group]');
+    await expect(group.locator(`[data-log-notice="${noticeOf(A).id}"]`), "Claude Worker's notice in its tail's group").toBeVisible({ timeout: 30_000 });
+    await expect(group).toContainText("Tars's notices, by time");
+    const tailSaid = flat(await group.innerText());
     keep({ searchSaid, tailSaid });
     expect(searchSaid).toMatch(/^Tars · \d\d:\d\d Refused a session \(/);
     await stepShot(page, '04-logs-tail');
+
+    // Forger's "[Tars] ..." line, on its running terminal's screen: its own, in its tail and in a search.
+    const forged = await forgedIsTheAgents(page, 'running');
+    keep({ forgedRunning: forged });
 
     // 3. Tars restarts: both notices are still on their panels.
     await app.close();
@@ -192,6 +227,8 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
     await page.getByRole('button', { name: new RegExp(NAMES[A]) }).first().click();
     await expect(page.locator(`[data-log-notice="${noticeOf(A).id}"]`), "Claude Worker's seen notice in its tail").toBeVisible({ timeout: 30_000 });
     await stepShot(page, '07-logs-after-seen');
+    // Forger stopped with Tars: its "[Tars] ..." line, replayed from its kept output, is still its own.
+    keep({ forgedStopped: await forgedIsTheAgents(page, 'stopped') });
     keep({ errors });
     expect(errors).toEqual([]);
   } finally {
