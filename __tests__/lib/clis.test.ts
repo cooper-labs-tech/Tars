@@ -11,22 +11,24 @@ import { PROVIDER_REGISTRY } from '../../src/lib/providers';
  * 2. A CLI is listed under the wrong command: Qwen Code showed as `qwen-code`, its command is `qwen`.
  * 3. A CLI the provider registry drives (New agent's list) is not in this one, or this one names a provider the
  *    registry does not have.
- * 4. A CLI listed as to come (oh-my-pi, Cline CLI, Kilo CLI) claims a provider, so New agent offers what Tars
- *    cannot drive yet.
+ * 4. A CLI listed as to come (oh-my-pi, Cline CLI; Kilo was one until 2.0.7) claims a provider, so New agent offers
+ *    what Tars cannot drive yet.
  * 5. Two CLIs share an id, a command or a key, so a key set for one reaches the other's agents.
  * 6. Looking a CLI up by its provider finds the wrong one, or one for a provider that is not a CLI.
  */
 
 describe('one list of CLIs (1, 2, 3)', () => {
-  it('names the eight CLIs Tars drives or will, then the three to come, each under its own command', () => {
+  // 2.0.7 (#614, #615): Kilo, the CLI `kilo`, a build of opencode, is driven, under one name: "Kilo".
+  it('names the nine CLIs Tars drives or will, then the two to come, each under its own command', () => {
     expect(CLIS.map((c) => [c.name, c.command, !!c.soon])).toEqual([
       ['Claude Code', 'claude', false], ['Codex', 'codex', false], ['Qwen Code', 'qwen', false], ['Gemini CLI', 'gemini', false],
       ['Grok CLI', 'grok', false], ['OpenCode', 'opencode', false], ['Pi', 'pi', false], ['Amp', 'amp', false],
-      ['oh-my-pi', 'omp', true], ['Cline CLI', 'cline', true], ['Kilo CLI', 'kilo', true],
+      ['Kilo', 'kilo', false],
+      ['oh-my-pi', 'omp', true], ['Cline CLI', 'cline', true],
     ]);
   });
   it('holds every CLI the provider registry drives, and names no provider the registry lacks', () => {
-    const driven = PROVIDER_REGISTRY.filter((p) => p.requiresCli && ['claude', 'codex', 'qwen-code', 'gemini', 'grok', 'opencode', 'pi', 'amp'].includes(p.id)).map((p) => p.id).sort();
+    const driven = PROVIDER_REGISTRY.filter((p) => p.requiresCli && ['claude', 'codex', 'qwen-code', 'gemini', 'grok', 'opencode', 'pi', 'amp', 'kilo'].includes(p.id)).map((p) => p.id).sort();
     expect(CLIS.filter((c) => c.provider).map((c) => c.provider).sort()).toEqual(driven);
     for (const c of CLIS) if (c.provider) expect(PROVIDER_REGISTRY.some((p) => p.id === c.provider)).toBe(true);
   });
@@ -52,6 +54,8 @@ describe('lookups (6)', () => {
   it('finds a CLI by its id and by its provider, and nothing for a provider that is not a CLI', () => {
     expect(cliById('qwen-code')?.command).toBe('qwen');
     expect(cliForProvider('grok')?.name).toBe('Grok CLI');
+    // Kilo's path is its own setting (CLIPaths.kilo, #614), never opencode's.
+    expect(cliForProvider('kilo')).toMatchObject({ id: 'kilo', name: 'Kilo', command: 'kilo', provider: 'kilo', pathKey: 'kilo' });
     expect(cliForProvider('openrouter')).toBeUndefined();
     expect(cliById('nope')).toBeUndefined();
   });
