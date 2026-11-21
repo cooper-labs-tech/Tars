@@ -79,7 +79,7 @@ export class ClineProvider implements CLIProvider {
     // stop made a tombstone (hooks-routes.ts refuses its posts), starts a fresh one, and says so.
     const session = params.resumeSessionId && CLINE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
     if (session && params.forkSession) {
-      agentNotice(params.agentId, 'Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.');
+      agentNotice(params.agentId, 'Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.', 'conversation-restart');
     } else if (session) {
       command += ` --id ${shellQuote(session)}`;
     }

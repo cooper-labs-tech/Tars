@@ -83,7 +83,7 @@ export class GooseProvider implements CLIProvider {
     const session = params.resumeSessionId && GOOSE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
     const cause = session ? this.freshSessionCause(session, servers) : undefined;
     if (session && !cause) return `${command} --resume --session-id ${shellQuote(session)}${params.forkSession ? ' --fork' : ''}`;
-    if (cause && params.agentId) agentNotice(params.agentId, `Its conversation starts over: ${cause}, and a Goose session keeps the servers it began with.`);
+    if (cause && params.agentId) agentNotice(params.agentId, `Its conversation starts over: ${cause}, and a Goose session keeps the servers it began with.`, 'conversation-restart');
     for (const [name, server] of servers) {
       const words = [server.command, ...server.args].map(extensionWord);
       if (words.some((w) => w === undefined)) {

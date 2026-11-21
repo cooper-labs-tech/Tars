@@ -210,6 +210,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     restart: (id: string) =>
       ipcRenderer.invoke('agent:restart', id),
     /**
+     * Tars's notices about an agent (2.0.7, services/agent-notice-log.ts): a conversation that starts over, a session
+     * refused. That agent's, or every agent's with no id; newest first; kept across a restart, 50 per agent.
+     */
+    notices: (agentId?: string) =>
+      ipcRenderer.invoke('agent:notices', agentId),
+    /** Pushed as a notice is written (`agent:notice`). Returns its unsubscriber. */
+    onNotice: (callback: (notice: unknown) => void) => {
+      const listener = (_: unknown, notice: unknown) => callback(notice);
+      ipcRenderer.on('agent:notice', listener);
+      return () => ipcRenderer.removeListener('agent:notice', listener);
+    },
+    /** Mark an agent's notices seen: those ids, or all of them not seen yet. Every window is told (`agent:notice-seen`). */
+    markNoticesSeen: (agentId: string, ids?: string[]) =>
+      ipcRenderer.invoke('agent:notices-seen', agentId, ids),
+    /** Pushed when a window marked notices seen: { agentId, ids, seenAt }. Returns its unsubscriber. */
+    onNoticeSeen: (callback: (event: unknown) => void) => {
+      const listener = (_: unknown, event: unknown) => callback(event);
+      ipcRenderer.on('agent:notice-seen', listener);
+      return () => ipcRenderer.removeListener('agent:notice-seen', listener);
+    },
+    /**
      * The restarts waiting to apply a changed launch setting, for a window that
      * has just opened. An agent absent from the list has none waiting.
      */
