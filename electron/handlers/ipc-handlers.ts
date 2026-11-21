@@ -963,7 +963,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
    */
   const startAgentCli: AgentLauncher = async (id, prompt, options) => {
     // One launch at a time per agent: a second one, while the first makes its terminal ready (a restart's fork, an API
-    // start's), typed a second line into the first one's terminal (the Audit's L1 on #601). Refused, and nothing typed.
+    // start's), typed a second line into the first one's terminal (the Audit's L1 on #601), and one while a restart's
+    // old tree still ends opened a terminal beside it (the Audit's L8 on #620). Refused, and nothing typed.
     if (launchPreparing(id)) {
       return { success: false, error: `${agents.get(id)?.name || id} is already starting: its CLI is on its way. Nothing was typed. Give it the task once it is up.` };
     }

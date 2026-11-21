@@ -333,11 +333,14 @@ export async function endReplacedTerminal(agentId: string, terminal: IPty, who: 
 }
 
 /**
- * Whether a launch of this agent is still making its terminal ready (whilePreparing): another start is refused then.
- * Once its line is typed, the guards on a running CLI answer, as before.
+ * Whether a launch of this agent is still making its terminal ready (whilePreparing), or a restart is still ending the
+ * terminal it replaces (endReplacedTerminal): another start is refused then, and a restart ends nothing. A start in a
+ * replacement opened a terminal beside the tree being ended, and a restart in a preparation ended that launch's
+ * terminal, then had its own launch refused, the agent left in error with none (the Audit's L8 on #620). A restart's own
+ * launch comes after its replacement has ended. Once a line is typed, the guards on a running CLI answer, as before.
  */
 export function launchPreparing(agentId: string): boolean {
-  return preparing.has(agentId);
+  return preparing.has(agentId) || replacing.has(agentId);
 }
 
 /**
