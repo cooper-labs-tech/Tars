@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, listenForErrors, recordValues, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { writeFakeClis } from './fake-clis.mjs';
 
@@ -35,6 +35,7 @@ const CLAUDE = 'aaaa7777-0000-4000-8000-0000000000a1';
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type Notice = { id: string; agentId: string; at: number; line: string; kind: string; seenAt?: number };
+type Seen = { agentId: string; ids: string[]; seenAt: number };
 type Api = { electronAPI: { agent: {
   start(p: { id: string; prompt: string }): Promise<unknown>;
   restart(id: string): Promise<{ success: boolean; error?: string }>;
@@ -42,9 +43,10 @@ type Api = { electronAPI: { agent: {
   notices(agentId?: string): Promise<Notice[]>;
   onNotice(cb: (n: Notice) => void): () => void;
   markNoticesSeen(agentId: string, ids?: string[]): Promise<void>;
-  onNoticeSeen(cb: (e: { agentId: string; ids: string[]; seenAt: number }) => void): () => void;
+  onNoticeSeen(cb: (e: Seen) => void): () => void;
 } } };
-type Heard = { notices: Notice[]; seen: Array<{ agentId: string; ids: string[]; seenAt: number }> };
+/** What the window heard, kept on the page. */
+type Heard = { heard: { notices: Notice[]; seen: Seen[] } };
 
 /** Cline's shape: a launcher whose field and footer show once up, as Tars reads its TUI (ClineProvider.upOnScreen). */
 const CLINE_STAND_IN = String.raw`
@@ -80,12 +82,11 @@ function seed(home: string): { project: string } {
 
 async function openWindow(app: ElectronApplication, errors: string[]): Promise<Page> {
   const page = await app.firstWindow();
-  listenForErrors(page, errors);
+  page.on('pageerror', (e) => errors.push(String(e)));
   await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-  // What the window hears, kept on the page.
   await page.evaluate(() => {
-    const w = window as unknown as Api & { heard: Heard };
+    const w = window as unknown as Api & Heard;
     w.heard = { notices: [], seen: [] };
     w.electronAPI.agent.onNotice((n) => { w.heard.notices.push(n); });
     w.electronAPI.agent.onNoticeSeen((e) => { w.heard.seen.push(e); });
@@ -120,15 +121,19 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
   let app = await launchSandboxed(electron, home, { env });
   try {
     let page = await openWindow(app, errors);
-    const api = <T>(fn: (w: Api & { heard: Heard }, arg: string | undefined) => Promise<T> | T, arg?: string) =>
-      page.evaluate(fn as never, arg) as Promise<T>;
-    const heard = () => api((w) => w.heard);
-    const running = (id: string) => expect.poll(async () => (await api((w) => w.electronAPI.agent.list())).find((a) => a.id === id)?.cliRunning ?? false, { timeout: 30_000 }).toBe(true);
+    const heard = () => page.evaluate(() => (window as unknown as Heard).heard);
+    const notices = (id?: string) => page.evaluate((id) => (window as unknown as Api).electronAPI.agent.notices(id), id);
+    const markSeen = (id: string) => page.evaluate((id) => (window as unknown as Api).electronAPI.agent.markNoticesSeen(id), id);
+    const start = (id: string) => page.evaluate((id) => (window as unknown as Api).electronAPI.agent.start({ id, prompt: '' }), id);
+    const running = (id: string) => expect.poll(async () => {
+      const agents = await page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
+      return agents.find((a) => a.id === id)?.cliRunning ?? false;
+    }, { timeout: 30_000, message: `${id} never ran` }).toBe(true);
 
     // 1a. Cline Worker's restart: its conversation starts over, as Cline cannot fork. A session of its own to continue
     // first, as Cline keeps one in its folder's sessions.db (providers/cline-cli.ts, clineSessionOf): written from the
     // app's own process, whose better-sqlite3 is built for it, and named on the agent as its hooks would have.
-    await api((w, id) => w.electronAPI.agent.start({ id: id!, prompt: '' }), CLINE);
+    await start(CLINE);
     await running(CLINE);
     const clineSession = await app.evaluate((_e, { dist, id, project }) => {
       const req = process.mainModule!.require;
@@ -147,18 +152,18 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
       return { sessionId, uuid: agent.resumableSessionId as string };
     }, { dist, id: CLINE, project });
     keep({ clineSession });
-    const restarted = await api((w, id) => w.electronAPI.agent.restart(id!), CLINE);
+    const restarted = await page.evaluate((id) => (window as unknown as Api).electronAPI.agent.restart(id), CLINE);
     keep({ restarted });
     expect(restarted).toMatchObject({ success: true });
     await expect.poll(async () => (await heard()).notices.filter((n) => n.agentId === CLINE).length, { timeout: 30_000 }).toBe(1);
 
     // 1b. A SessionStart for Claude Worker, with its token, from a CLI that is not its terminal's: refused.
-    await api((w, id) => w.electronAPI.agent.start({ id: id!, prompt: '' }), CLAUDE);
+    await start(CLAUDE);
     await running(CLAUDE);
     await sleep(1_500);
     const token = await app.evaluate((_e, { dist, id }) => process.mainModule!.require(`${dist}/core/agent-tokens.js`).mintAgentToken(id) as string, { dist, id: CLAUDE });
     const refused = await post(port, '/api/hooks/status', token, {
-      agent_id: CLAUDE, session_id: crypto.randomUUID(), status: 'idle', source: 'startup', hook: 'SessionStart', cli_pid: String(process.pid),
+      agent_id: CLAUDE, session_id: crypto.randomUUID(), status: 'idle', source: 'startup', cli_pid: String(process.pid),
     });
     keep({ refused });
     expect(JSON.parse(refused.body)).toMatchObject({ success: false, foreign: true });
@@ -176,8 +181,8 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
     }
 
     // 2. Listed newest first, with the events' ids; one agent's alone.
-    const listed = await api((w) => w.electronAPI.agent.notices());
-    const clineOnly = await api((w, id) => w.electronAPI.agent.notices(id), CLINE);
+    const listed = await notices();
+    const clineOnly = await notices(CLINE);
     keep({ listed, clineOnly });
     expect(listed).toEqual([refusal, restart]);
     expect(clineOnly).toEqual([restart]);
@@ -186,20 +191,20 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
     await app.close();
     app = await launchSandboxed(electron, home, { env });
     page = await openWindow(app, errors);
-    const afterRestart = await api((w) => w.electronAPI.agent.notices());
+    const afterRestart = await notices();
     keep({ afterRestart });
     expect(afterRestart).toEqual([refusal, restart]);
 
     // 4. Marked seen: told, read seen, the other agent's not; a second mark tells nothing.
-    await api((w, id) => w.electronAPI.agent.markNoticesSeen(id!), CLAUDE);
+    await markSeen(CLAUDE);
     await expect.poll(async () => (await heard()).seen.length, { timeout: 10_000 }).toBe(1);
     const seen = (await heard()).seen[0];
-    const afterSeen = await api((w) => w.electronAPI.agent.notices());
+    const afterSeen = await notices();
     keep({ seen, afterSeen });
     expect(seen).toMatchObject({ agentId: CLAUDE, ids: [refusal.id] });
     expect(afterSeen.find((n) => n.id === refusal.id)?.seenAt).toBe(seen.seenAt);
     expect(afterSeen.find((n) => n.id === restart.id)?.seenAt).toBeUndefined();
-    await api((w, id) => w.electronAPI.agent.markNoticesSeen(id!), CLAUDE);
+    await markSeen(CLAUDE);
     await sleep(500);
     expect((await heard()).seen).toHaveLength(1);
     keep({ errors });
