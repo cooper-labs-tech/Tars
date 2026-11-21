@@ -124,11 +124,15 @@ for (const newInterface of [false, true]) {
       const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
       const panel = page.locator('[data-agent-panel="worker"]');
       const actions = /^(start|stop|wake)\b/;
-      const menu = async (step: string) => {
+      // The menu, open, once its first item is the one the step expects. The window learns of a start, a stop or a
+      // sleep a moment after main does: read once, right after main said the CLI runs, it still offered "start
+      // claude" (QA, #627's gate, 21/11: main answered at 0.9 s, before the window). The open menu follows the
+      // window's state, so its first item is awaited, 10 s at most: a menu that never offers it still fails the step.
+      const menu = async (step: string, first: string) => {
         await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
-        const items = await panel.locator('[aria-label="Panel actions"] + div button').allInnerTexts();
-        seen[`menu-${step}`] = items;
-        return items;
+        const items = panel.locator('[aria-label="Panel actions"] + div button');
+        await expect(items.first(), `the ${step} menu leads with "${first}"`).toHaveText(first, { timeout: 10_000 });
+        seen[`menu-${step}`] = await items.allInnerTexts();
       };
       const pick = (name: string | RegExp) => panel.getByRole('button', { name, exact: typeof name === 'string' }).click();
 
@@ -164,25 +168,25 @@ for (const newInterface of [false, true]) {
       await stepShot(page, `${tag}-01-header`);
 
       // Start, from the menu.
-      expect((await menu('idle'))[0]).toBe('start claude');
+      await menu('idle', 'start claude');
       await stepShot(page, `${tag}-02-menu-start`);
       await pick('start claude');
       await expect.poll(async () => { const a = await get('worker'); return !!(a.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
       const firstSid = lines(launchesFile).find((l) => l.id === 'worker')!.sid as string;
 
       // Stop, from the menu.
-      expect((await menu('running'))[0]).toBe('stop');
+      await menu('running', 'stop');
       await pick('stop');
       await expect.poll(async () => (await get('worker')).cliRunning === true, { timeout: 30_000 }).toBe(false);
       seen.afterStop = await get('worker');
 
       // Start again, then asleep: wake, from the menu, on its own conversation.
-      expect((await menu('stopped'))[0]).toBe('start claude');
+      await menu('stopped', 'start claude');
       await pick('start claude');
       await expect.poll(async () => { const a = await get('worker'); return !!(a.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
       await sleepWorker();
       await expect(panel.getByRole('button', { name: actions }), 'asleep, still no button in the header').toHaveCount(0);
-      expect((await menu('asleep'))[0]).toBe('wake');
+      await menu('asleep', 'wake');
       await stepShot(page, `${tag}-03-menu-wake`);
       const launches = lines(launchesFile).filter((l) => l.id === 'worker').length;
       await pick('wake');
