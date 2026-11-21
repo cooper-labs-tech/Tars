@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
+import { envValue } from '../platform/path-env';
 
 /**
  * What the live processes of this account use, read for the agents' temporary folders (agent-tmp.ts): every path a
@@ -49,12 +50,14 @@ export function parseLsofNames(out: string): string[] {
 /**
  * Whether a process uses one of `targets` (a unit, under each of its spellings): a path it holds is the target or
  * under it, or a command line names it, followed by its end, a separator, a quote or a space; never a longer name
- * that begins the same (`/a/tool` is not `/a/tool-old`). On Windows, whatever the case and the slashes.
+ * that begins the same (`/a/tool` is not `/a/tool-old`). On Windows, whatever the case and the slashes; on macOS,
+ * whatever the case, its APFS being case-insensitive by default (measured 21/11), which on a case-sensitive volume can
+ * only keep more.
  */
 export function usesPath(inUse: InUse, targets: string[], platform: NodeJS.Platform = process.platform): boolean {
   const win = platform === 'win32';
   const sep = win ? '\\' : '/';
-  const norm = (s: string) => (win ? s.replace(/\//g, '\\').toLowerCase() : s);
+  const norm = (s: string) => (win ? s.replace(/\//g, '\\').toLowerCase() : platform === 'darwin' ? s.toLowerCase() : s);
   for (const raw of targets) {
     const target = norm(raw).replace(/[\\/]+$/, '');
     if (!target) continue;
@@ -87,7 +90,9 @@ function run(cmd: string, args: string[], timeoutMs: number): Promise<string | u
 async function readMac(opts: ReadOptions, timeoutMs: number): Promise<InUse | undefined> {
   const uid = process.getuid?.();
   const [listed, lines] = await Promise.all([
-    run(opts.lsof ?? '/usr/sbin/lsof', ['-w', '-n', '-P', '-Fn', ...(uid !== undefined ? ['-u', String(uid)] : [])], timeoutMs),
+    // -b: none of the kernel calls that block on a network mount gone dead (the Audit's I-1 on #627): measured 21/11,
+    // the same paths as without it.
+    run(opts.lsof ?? '/usr/sbin/lsof', ['-b', '-w', '-n', '-P', '-Fn', ...(uid !== undefined ? ['-u', String(uid)] : [])], timeoutMs),
     run(opts.ps ?? '/bin/ps', ['-axww', '-o', 'args='], timeoutMs),
   ]);
   if (listed === undefined || lines === undefined) return undefined;
@@ -129,7 +134,9 @@ async function readLinux(opts: ReadOptions, timeoutMs: number): Promise<InUse | 
 
 async function readWindows(opts: ReadOptions, timeoutMs: number): Promise<InUse | undefined> {
   const script = "Get-CimInstance Win32_Process | ForEach-Object { 'E ' + $_.ExecutablePath; 'C ' + $_.CommandLine }";
-  const out = await run(opts.powershell ?? 'powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], timeoutMs);
+  // By its full path, as kill-tree.ts names taskkill (the Audit's I-3 on #627): never a powershell.exe found on the PATH.
+  const powershell = opts.powershell ?? path.win32.join(envValue(process.env, 'SystemRoot', 'win32') || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const out = await run(powershell, ['-NoProfile', '-NonInteractive', '-Command', script], timeoutMs);
   if (out === undefined) return undefined;
   const paths: string[] = [];
   const commands: string[] = [];
