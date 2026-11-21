@@ -101,7 +101,7 @@ import { ptyProcesses, resetTerminalInput } from '../../../electron/core/pty-man
 import { spawnAgentPty } from '../../../electron/core/agent-pty';
 import { resetResumeTracking, encodeProjectDirName } from '../../../electron/utils/resume-session';
 import { resetAgentRestarts, restartAgent } from '../../../electron/core/agent-restart';
-import { resetLaunches, CLI_BOOT_MS, launchBegins, sessionStarting, resumeOfLaunch } from '../../../electron/core/agent-launch';
+import { resetLaunches, CLI_BOOT_MS, sessionStarting, resumeOfLaunch, whilePreparing } from '../../../electron/core/agent-launch';
 import { registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import { EventEmitter } from 'node:events';
 import { resetAgentWatch, startAgentWatch, stopAgentWatch, queueBusMessage } from '../../../electron/services/agent-watch';
@@ -761,7 +761,9 @@ describe('QA #158: every sender answered in time, and the link a refusal leaves'
  * the first kimi's input, or started over the first launch. How it fails, written before the code:
  * 1. A start from a window, while a restart waits on its fork, types its own kimi line into the restart's terminal.
  * 2. A start from a window, while an API start waits on its fork, types into the terminal that API start then ends.
- * 3. An API start, while a window's launch is under way, starts a session over it.
+ * 3. An API start, while a window's launch is still making its terminal ready, starts a session over it. (Once a
+ *    launch's line is typed, the guards on a running CLI answer, as before: a stop then a start, or two restarts in a
+ *    row, start again.)
  * 4. A fork longer than CLI_BOOT_MS reads as no launch on its way, and the window opens again.
  * And (the Audit's L3) the fork runs in the agent's folder. Here `kimi` is a stand-in that forks only once the test
  * lets it, so the second start lands inside the wait.
@@ -882,12 +884,15 @@ const t = setInterval(() => {
     expect(JSON.stringify(vi.mocked(pty.spawn).mock.calls.at(-1))).toContain(`session_${FORKED}`);
   });
 
-  it('3: answers an API start still starting while a window\'s launch is under way, and spawns nothing', async () => {
+  it('3: answers an API start still starting while a window\'s launch makes its terminal ready, and spawns nothing', async () => {
     orchestrator();
     const { agent, terminal } = kimiAgent('bash');
-    launchBegins(agent.id);
+    let ready!: () => void;
+    const windowLaunch = whilePreparing(agent.id, () => new Promise<void>((resolve) => { ready = resolve; }));
     const before = spawned.length;
     const answer = await apiStart(agent.id, 'Run the probe');
+    ready();
+    await windowLaunch;
     expect(answer.status, JSON.stringify(answer.body)).toBe(409);
     expect(spawned.length, 'a session was started over the launch').toBe(before);
     expect(terminal.kill).not.toHaveBeenCalled();
