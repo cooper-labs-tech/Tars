@@ -39,6 +39,9 @@ import Database from 'better-sqlite3';
  *     it disabled), and an entry for a server kilo.json does not define is ignored, with no error. So a worker's
  *     inline config switches the two off, merged with an endpoint's provider; an orchestrator, or an agent whose role
  *     the launch was not told, keeps all seven. opencode's own switch is not measured: its workers are as before.
+ * 13. (#613's M4, merged into #614 on 21/11) Its bottom bar wrapped over two rows by a long folder or a narrow pane,
+ *     read as never up: Kilo takes opencode's rule whole (OpencodeBuildProvider), the wrapped bar included, after a
+ *     resume and a restart's fork alike, and still never the bare home view on a launch on a session.
  */
 
 // The fleet's endpoint choice, as traces-runtime resolves it: agent 'on-ep' runs on an endpoint, no other.
@@ -222,6 +225,24 @@ describe("a Kilo launch's own line (9, 10)", () => {
     expect(kilo.upOnScreen(HOME, fork)).toBe(false);
     expect(kilo.upOnScreen(SESSION_VIEW, fork)).toBe(true);
     expect(kilo.upOnScreen(HOME, kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: '' }))).toBe(true);
+  });
+});
+
+describe("a Kilo bar wrapped over two rows (13)", () => {
+  /** The rows of QA's gate (gatestack613), opencode's bar at 120 columns: Kilo draws the same one. */
+  const WRAPPED = [
+    '  ╹' + '▀'.repeat(115),
+    '   /private/var/folders/yp/j2nr6k4915z_bnf3tjv22t940000gn/T/dorothy-e2e-conformance-kilo-GRATOx/ 132 ctrl+p         ',
+    '   projects/project-a                                                                                    commands       ',
+  ];
+  const HOME_NARROW = ['  ╹▀▀▀▀▀▀▀▀▀▀', '  tab agents ctrl+p', '            commands'];
+  it("is up on its session's view wrapped, resumed or forked; never on the home view wrapped on a launch on a session", () => {
+    const kilo = new KiloProvider();
+    const fork = kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: '', resumeSessionId: SES, forkSession: true });
+    const resume = kilo.buildInteractiveCommand({ binaryPath: '/opt/kilo', prompt: '', resumeSessionId: SES });
+    expect(kilo.upOnScreen(WRAPPED, fork)).toBe(true);
+    expect(kilo.upOnScreen(WRAPPED, resume)).toBe(true);
+    expect(kilo.upOnScreen(HOME_NARROW, fork)).toBe(false);
   });
 });
 

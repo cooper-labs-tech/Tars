@@ -90,10 +90,17 @@ export abstract class OpencodeBuildProvider implements CLIProvider {
    * first, then clears and draws the fork's about 5 s later; a task typed at the home view started a new session
    * without the history (measured twice, 20/11). A plain resume's first bar is already its session's, the folder
    * before `tab agents`.
+   *
+   * The bar wraps when the folder and its keys outgrow the pane (a long folder, a narrow pane: QA's sandbox under
+   * /private/var/folders/..., 21/11): `<folder>/ 132 ctrl+p` ends one row and `commands` stands alone at the end of the
+   * next. That is its bar too, on the same rules, and never two rows of the conversation's frame (`┃`).
    */
   upOnScreen(lines: readonly string[], launchLine?: string): boolean {
     const onSession = /--session\b/.test(launchLine ?? '');
-    return lines.some((line) => /\s{2,}\S+ commands\s*$/.test(line) && !(onSession && /^\s*\S+ agents\s{2,}\S+ commands\s*$/.test(line)));
+    const oneRow = (line: string) => /\s{2,}\S+ commands\s*$/.test(line) && !(onSession && /^\s*\S+ agents\s{2,}\S+ commands\s*$/.test(line));
+    const wrapped = (top: string, bottom: string) => /\s{2,}commands\s*$/.test(bottom) && /\s\S+\s*$/.test(top) && !/[┃╹]/.test(top + bottom)
+      && !(onSession && /^\s*\S+ agents\s+\S+\s*$/.test(top));
+    return lines.some((line, i) => oneRow(line) || (i > 0 && wrapped(lines[i - 1], line)));
   }
 
   abstract getModels(): ProviderModel[];
