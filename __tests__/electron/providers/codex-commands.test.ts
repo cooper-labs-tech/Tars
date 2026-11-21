@@ -40,6 +40,14 @@ import * as path from 'node:path';
  *    ended the turn and left no process. So: `--no-daemon` in every mode, resumed and forked alike, on a codex whose
  *    --help lists it; never on one that does not (an unknown flag is exit 2, as in 4); never in `codex exec`, whose
  *    --help does not list it.
+ * 10. (QA's gate of the #601 stack, measured on 0.170.0, 21/11) codex's update prompt at its start ("1. Update now
+ *    (runs `npm install -g @openai/codex`)  2. Skip  3. Skip until next version", enter to continue), drawn from the
+ *    version.json an earlier start wrote, takes the Enter of a task Tars types into its terminal (codex has no screen
+ *    of its own Tars waits for): codex installed itself globally with npm, said to restart it, and exited 0. The task
+ *    was lost, and the user's machine got a global codex nobody asked for. Every interactive line, started, resumed or
+ *    forked, in any mode, on any codex, switches that check off for its own run (`-c check_for_update_on_startup=false`,
+ *    after the subcommand, before the session, once), never in the user's own config.
+ * 11. The same line on Windows, which starts with codex itself (8), without the switch.
  */
 
 import { CodexProvider } from '../../../electron/providers/codex-provider';
@@ -171,6 +179,43 @@ describe("codex's shared background server", () => {
     const { bin } = fakeCodex(HELP_0170);
     await provider.prepareLaunch(bin, 'bypass');
     expect(words(provider.buildOneShotCommand({ binaryPath: bin, prompt: PROMPT }))).not.toContain('--no-daemon');
+  });
+});
+
+describe("codex's update prompt (10, 11)", () => {
+  const ID = '01a14fb7-9e95-7c81-8980-2b82c8316805';
+  const OFF = 'check_for_update_on_startup=false';
+  const offAt = (argv: string[]) => argv.findIndex((a, i) => a === '-c' && argv[i + 1] === OFF);
+
+  it('10. is switched off on every interactive line, started in any mode, resumed or forked, whatever codex it is', async () => {
+    const { bin } = fakeCodex(HELP_0170);
+    await provider.prepareLaunch(bin, 'bypass');
+    for (const binary of [bin, codex016, nowhere]) {
+      for (const mode of ['normal', 'auto', 'bypass', undefined]) {
+        const argv = argvOf(provider.buildInteractiveCommand({ binaryPath: binary, prompt: PROMPT, permissionMode: mode }));
+        expect(offAt(argv), `started in ${mode ?? 'no mode'}`).toBeGreaterThan(0);
+        expect(argv[argv.length - 1], 'the prompt stays last').toBe(PROMPT);
+      }
+    }
+    const resumed = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: PROMPT, permissionMode: 'bypass', resumeSessionId: ID }));
+    expect(offAt(resumed)).toBeGreaterThan(resumed.indexOf('resume'));
+    expect(offAt(resumed)).toBeLessThan(resumed.indexOf(ID));
+    const forked = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: '', resumeSessionId: ID, forkSession: true }));
+    expect(offAt(forked)).toBeGreaterThan(forked.indexOf('fork'));
+    expect(offAt(forked)).toBeLessThan(forked.indexOf(ID));
+    expect(forked.filter((a) => a === OFF)).toHaveLength(1);
+  });
+
+  it('11. is switched off on Windows too, where the line starts with codex itself', () => {
+    const was = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    try {
+      const argv = words(provider.buildInteractiveCommand({ binaryPath: codex016, prompt: PROMPT, permissionMode: 'auto' }));
+      expect(argv[0]).toBe(codex016);
+      expect(offAt(argv)).toBeGreaterThan(0);
+    } finally {
+      Object.defineProperty(process, 'platform', was);
+    }
   });
 });
 
