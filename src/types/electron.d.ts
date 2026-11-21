@@ -1536,7 +1536,8 @@ export interface ChatLimit {
 }
 
 /** The CLIs that take an API key of their own from Tars (2.0.4). */
-export type CliKeyId = 'codex' | 'qwen-code' | 'gemini' | 'opencode' | 'pi' | 'grok' | 'amp' | 'omp' | 'cline' | 'kilo';
+// The main process's CliKeyId (electron/types/index.ts): not Cline nor Goose, neither takes a key from Tars.
+export type CliKeyId = 'codex' | 'qwen-code' | 'gemini' | 'opencode' | 'pi' | 'grok' | 'amp' | 'omp' | 'kilo';
 
 /** A CLI's key as the window may know it: never the key (electron/types CliKeyState). */
 export interface CliKeyState {

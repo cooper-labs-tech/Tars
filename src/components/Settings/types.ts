@@ -32,6 +32,8 @@ export interface CLIPaths {
   gemini: string;
   grok: string;
   qwencode: string;
+  /** Cline's binary, cline (2.0.7). */
+  cline: string;
   opencode: string;
   amp: string;
   pi: string;
