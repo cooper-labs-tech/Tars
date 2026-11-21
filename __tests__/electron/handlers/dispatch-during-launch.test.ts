@@ -100,8 +100,10 @@ import { agents, initAgentPty } from '../../../electron/core/agent-manager';
 import { ptyProcesses, resetTerminalInput } from '../../../electron/core/pty-manager';
 import { spawnAgentPty } from '../../../electron/core/agent-pty';
 import { resetResumeTracking, encodeProjectDirName } from '../../../electron/utils/resume-session';
-import { resetAgentRestarts, restartAgent } from '../../../electron/core/agent-restart';
-import { resetLaunches, CLI_BOOT_MS, sessionStarting, resumeOfLaunch, whilePreparing } from '../../../electron/core/agent-launch';
+import { resetAgentRestarts, restartAgent, restartForSettings } from '../../../electron/core/agent-restart';
+import { resetLaunches, CLI_BOOT_MS, sessionStarting, resumeOfLaunch, whilePreparing, endReplacedTerminal } from '../../../electron/core/agent-launch';
+import { spawn as spawnProcess } from 'node:child_process';
+import type { IPty } from 'node-pty';
 import { registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import { EventEmitter } from 'node:events';
 import { resetAgentWatch, startAgentWatch, stopAgentWatch, queueBusMessage } from '../../../electron/services/agent-watch';
@@ -767,6 +769,16 @@ describe('QA #158: every sender answered in time, and the link a refusal leaves'
  * 4. A fork longer than CLI_BOOT_MS reads as no launch on its way, and the window opens again.
  * And (the Audit's L3) the fork runs in the agent's folder. Here `kimi` is a stand-in that forks only once the test
  * lets it, so the second start lands inside the wait.
+ *
+ * Where #620's whole-tree restart meets it (the Audit's L8 on #620, 22/11), written before the code:
+ * 5. A restart asked while another launch makes the terminal ready ends that launch's terminal, then its own launch is
+ *    refused (one start at a time), and the agent is left in error with no terminal: what restartNow's own guard says
+ *    must not happen. It is refused, as a restart asked while one runs is, and ends nothing.
+ * 6. A restart for changed settings in that time does the same. It waits for the launch, as it waits for a restart
+ *    under way, and ends nothing.
+ * 7. A start from a window while a restart's old terminal is still ending (endReplacedTerminal, up to its grace for a
+ *    CLI deaf to the hangup) opens a terminal and launches beside the tree being ended: only a preparation refused it.
+ * 8. An API start in that time starts a session beside it, the same way.
  */
 describe("a second start while a Kimi Code launch forks its session (the Audit's L1 on #601)", () => {
   const KIMI = 'feabbac1-fc87-4756-8076-0c6adc57127b';
@@ -909,6 +921,85 @@ const t = setInterval(() => {
     release(FORKED);
     expect(await launching).toEqual({ resumeSessionId: FORKED, forkSession: false });
     expect(sessionStarting(agent)).toBe(false);
+  });
+
+  it('5: refuses a restart asked while a launch makes the terminal ready, and ends nothing', async () => {
+    const { agent, terminal } = agentWithTerminal({ foreground: 'bash' });
+    let ready!: () => void;
+    const launch = whilePreparing(agent.id, () => new Promise<void>((resolve) => { ready = resolve; }));
+    const before = spawned.length;
+    const restarted = await restartAgent(agent.id);
+    ready();
+    await launch;
+    expect(terminal.kill, 'the restart ended the terminal the launch makes ready').not.toHaveBeenCalled();
+    expect(agent.ptyId, 'the agent was left with no terminal').toBe('pty-a');
+    expect(agent.status, agent.error).not.toBe('error');
+    expect(restarted.success).toBe(false);
+    expect(restarted.error).toMatch(/already starting/);
+    expect(spawned.length).toBe(before);
+  });
+
+  it('6: makes a restart for changed settings wait while a launch makes the terminal ready, and ends nothing', async () => {
+    const { agent, terminal } = agentWithTerminal({ foreground: '2.1.300' });
+    let ready!: () => void;
+    const launch = whilePreparing(agent.id, () => new Promise<void>((resolve) => { ready = resolve; }));
+    const outcome = restartForSettings(agent.id, ['model']);
+    ready();
+    await launch;
+    expect(outcome).toEqual({ action: 'waiting', for: 'launch' });
+    expect(terminal.kill, 'the restart ended the terminal under the launch').not.toHaveBeenCalled();
+    expect(agent.status, agent.error).not.toBe('error');
+  });
+
+  /** A terminal of Tars's own whose CLI is deaf to the hangup: its end takes the grace, as a Cline's did (#620). */
+  const deafTerminal = (): { terminal: IPty; end: () => void } => {
+    const leader = spawnProcess('/bin/bash', ['-c', 'trap "" HUP TERM; sleep 30 & wait'], { detached: true, stdio: 'ignore' });
+    const terminal = {
+      pid: leader.pid!,
+      kill: (signal?: string) => { process.kill(leader.pid!, (signal ?? 'SIGHUP') as NodeJS.Signals); },
+      onExit: () => ({ dispose() {} }),
+      write: () => {},
+    } as unknown as IPty;
+    return { terminal, end: () => { try { process.kill(-leader.pid!, 'SIGKILL'); } catch { /* gone */ } } };
+  };
+  /** What restartNow does before it ends the old tree: the terminal taken off the agent, then ended whole. */
+  const restartEnding = (agent: AgentStatus) => {
+    ptyProcesses.delete(agent.ptyId!);
+    agent.ptyId = undefined;
+    const old = deafTerminal();
+    return { ending: endReplacedTerminal(agent.id, old.terminal, `the restart of ${agent.name}`), end: old.end };
+  };
+  // A process group read through ps, as restart-ends-tree.test.ts's.
+  const posix = it.skipIf(hostPlatform.value === 'win32');
+
+  posix('7: refuses a window start while a restart\'s old terminal is still ending, and opens nothing beside it', async () => {
+    const { agent } = agentWithTerminal({ foreground: 'bash' });
+    const restart = restartEnding(agent);
+    const before = spawned.length;
+    try {
+      const second = await start(agent.id);
+      expect(second.success, 'a window start went through while the old tree ended').toBe(false);
+      expect(second.error).toMatch(/already starting/);
+      expect(spawned.length, 'a terminal was opened beside the tree being ended').toBe(before);
+    } finally {
+      await restart.ending;
+      restart.end();
+    }
+  });
+
+  posix('8: answers an API start still starting while a restart\'s old terminal is still ending, and spawns nothing', async () => {
+    orchestrator();
+    const { agent } = agentWithTerminal({ foreground: 'bash' });
+    const restart = restartEnding(agent);
+    const before = spawned.length;
+    try {
+      const answer = await apiStart(agent.id, 'Run the probe');
+      expect(answer.status, JSON.stringify(answer.body)).toBe(409);
+      expect(spawned.length, 'a session was started beside the tree being ended').toBe(before);
+    } finally {
+      await restart.ending;
+      restart.end();
+    }
   });
 });
 
