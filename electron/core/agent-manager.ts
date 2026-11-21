@@ -27,7 +27,7 @@ import { opencodeWatchFor } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
 import { gooseSessionWatch } from '../services/goose-sessions';
 import { setAgentNoticeSink } from './agent-notices';
-import { noticeLog } from '../services/agent-notice-log';
+import { noticeLog, setNoticeFleet } from '../services/agent-notice-log';
 import { gooseLaunchOf } from '../providers/goose-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import type * as pty from 'node-pty';
@@ -438,6 +438,8 @@ setAgentNoticeSink((agentId, line, kind) => {
   appendAgentOutput(agent, `\x1b[?1047l\r\n[Tars] ${line}\r\n`);
   noticeLog().record(agentId, line, kind);
 });
+// The notices read back from their file are the fleet's agents' only (the Audit's L1 on #624).
+setNoticeFleet((agentId) => agents.has(agentId));
 
 interface AgentsFile {
   version: number;

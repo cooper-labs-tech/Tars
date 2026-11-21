@@ -1,8 +1,7 @@
 import * as crypto from 'crypto';
 import * as fs from 'fs';
-import * as path from 'path';
-import { DATA_DIR } from '../constants';
-import { writeAtomicSync } from '../utils/secret-file';
+import { privatePath } from '../constants';
+import { writeSecretFileSync } from '../utils/secret-file';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENT_NOTICE_KINDS, type AgentNotice, type AgentNoticeKind } from '../core/agent-notices';
 
@@ -12,19 +11,25 @@ import { AGENT_NOTICE_KINDS, type AgentNotice, type AgentNoticeKind } from '../c
  * is kept here with its kind and told to every window as it is written (agent:notice): while the agent has a terminal,
  * Logs and its panel read that terminal's screen, which those lines never reach.
  *
- * - Kept across a restart of Tars, in ~/.tars/agent-notices.json, written whole (a new file renamed over the old one).
- *   Not a secret: a sentence about an agent, its session's id at most. ~/.tars is every agent's folder, so the file is
- *   read as an agent may have written it: an entry of another shape or of an unknown kind is left out, a line is cut to
- *   one line of at most NOTICE_LINE_MAX characters, and no file that does not parse is read as notices.
+ * - Kept across a restart of Tars in ~/.tars-private/agent-notices.json, Tars's own file, which no agent is handed
+ *   (the Audit's L1 on #624), written whole at each change (a new file renamed over the old one), at 0600. An agent
+ *   running as the same user could still edit it, so it is read as such a file: only the fleet's agents' notices, an
+ *   entry of another shape or of an unknown kind left out, a line cut to one line of at most NOTICE_LINE_MAX
+ *   characters, and nothing from a file that does not parse or is over NOTICE_FILE_MAX bytes. Tars's own writes keep
+ *   it under that bound, the oldest notices (every agent's) dropped first.
  * - At most NOTICE_CAP_PER_AGENT per agent, the oldest dropped; removed with the agent (core/agent-remove.ts).
+ * - At most one session-refused notice per agent every REFUSED_NOTICE_EVERY_MS: anything holding the agent's token can
+ *   post a refused registration as often as it likes (the Audit's M1 on #624); the kept output still says each.
  * - Marked seen by a window (markSeen), which every window is told (agent:notice-seen), so another one updates.
  */
 
 export const NOTICE_CAP_PER_AGENT = 50;
 export const NOTICE_LINE_MAX = 1_000;
+export const NOTICE_FILE_MAX = 1024 * 1024;
+export const REFUSED_NOTICE_EVERY_MS = 60_000;
 const VERSION = 1;
 
-export const AGENT_NOTICES_FILE = (): string => path.join(DATA_DIR, 'agent-notices.json');
+export const AGENT_NOTICES_FILE = (): string => privatePath('agent-notices.json');
 
 /** A line as a notice keeps it: one line, no control character, at most NOTICE_LINE_MAX characters. */
 function oneLine(line: string): string {
@@ -59,17 +64,49 @@ function capped(notices: AgentNotice[]): AgentNotice[] {
   return kept.reverse();
 }
 
-function read(file: string): AgentNotice[] {
-  let raw: string;
+const fileOf = (notices: AgentNotice[]) => `${JSON.stringify({ version: VERSION, notices })}\n`;
+
+/** The newest notices whose file fits in `max` bytes: the oldest, every agent's, dropped first. */
+function fitted(notices: AgentNotice[], max: number): AgentNotice[] {
+  const sizes = notices.map((n) => Buffer.byteLength(JSON.stringify(n)) + 1);
+  let total = Buffer.byteLength(fileOf([])) + sizes.reduce((a, b) => a + b, 0);
+  let from = 0;
+  while (total > max && from < notices.length) total -= sizes[from++];
+  return from ? notices.slice(from) : notices;
+}
+
+/** At most `max` bytes of `file`, or undefined when it holds more: an agent's file is never parsed whole. */
+function readBounded(file: string, max: number): string | undefined {
+  const fd = fs.openSync(file, 'r');
   try {
-    raw = fs.readFileSync(file, 'utf8');
+    const buf = Buffer.alloc(max + 1);
+    let read = 0;
+    let got: number;
+    do {
+      got = fs.readSync(fd, buf, read, buf.length - read, null);
+      read += got;
+    } while (got > 0 && read < buf.length);
+    return read > max ? undefined : buf.subarray(0, read).toString('utf8');
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function read(file: string, isAgent: (id: string) => boolean, max: number): AgentNotice[] {
+  let raw: string | undefined;
+  try {
+    raw = readBounded(file, max);
   } catch {
+    return [];
+  }
+  if (raw === undefined) {
+    console.warn(`[agent-notices] ${file} is larger than ${Math.round(max / 1024 / 1024)} MB, the most Tars writes: none read from it`);
     return [];
   }
   try {
     const parsed = JSON.parse(raw) as { version?: unknown; notices?: unknown };
     if (!parsed || parsed.version !== VERSION || !Array.isArray(parsed.notices)) throw new Error('not a version 1 file');
-    const notices = parsed.notices.map(noticeFrom).filter((n): n is AgentNotice => !!n);
+    const notices = parsed.notices.map(noticeFrom).filter((n): n is AgentNotice => !!n && isAgent(n.agentId));
     // In the order they were written; a file edited by hand by their time, the order kept between equal times.
     return capped(notices.map((n, i) => ({ n, i })).sort((a, b) => a.n.at - b.n.at || a.i - b.i).map(({ n }) => n));
   } catch (err) {
@@ -79,8 +116,11 @@ function read(file: string): AgentNotice[] {
 }
 
 export interface NoticeLog {
-  /** Keep a notice of `agentId` and tell every window (agent:notice). */
-  record(agentId: string, line: string, kind: AgentNoticeKind): AgentNotice;
+  /**
+   * Keep a notice of `agentId` and tell every window (agent:notice). Undefined for a refusal within
+   * REFUSED_NOTICE_EVERY_MS of that agent's last one: neither kept nor told.
+   */
+  record(agentId: string, line: string, kind: AgentNoticeKind): AgentNotice | undefined;
   /** Newest first: `agentId`'s, or every agent's. */
   list(agentId?: string): AgentNotice[];
   /** Mark `agentId`'s notices seen (all of them not seen yet, with no `ids`), told once (agent:notice-seen). The ids marked. */
@@ -89,19 +129,39 @@ export interface NoticeLog {
   forget(agentId: string): number;
 }
 
-export function createNoticeLog(o: { file: string; emit: (channel: string, payload: unknown) => void; now?: () => number }): NoticeLog {
+export function createNoticeLog(o: {
+  file: string;
+  emit: (channel: string, payload: unknown) => void;
+  /** Whether the fleet holds this agent: a notice of any other read back from the file is left out. */
+  isAgent: (agentId: string) => boolean;
+  now?: () => number;
+  maxFileBytes?: number;
+}): NoticeLog {
   const now = o.now ?? (() => Date.now());
-  let notices = read(o.file);
+  const max = o.maxFileBytes ?? NOTICE_FILE_MAX;
+  let notices = read(o.file, o.isAgent, max);
   const save = () => {
+    notices = fitted(notices, max);
     try {
-      writeAtomicSync(o.file, `${JSON.stringify({ version: VERSION, notices }, null, 2)}\n`);
+      writeSecretFileSync(o.file, fileOf(notices));
     } catch (err) {
       console.warn(`[agent-notices] could not write ${o.file}:`, err instanceof Error ? err.message : err);
     }
   };
+  const lastRefusalAt = (agentId: string): number | undefined => {
+    for (let i = notices.length - 1; i >= 0; i--) {
+      if (notices[i].agentId === agentId && notices[i].kind === 'session-refused') return notices[i].at;
+    }
+    return undefined;
+  };
   return {
     record(agentId, line, kind) {
-      const notice: AgentNotice = { id: crypto.randomUUID(), agentId, at: now(), line: oneLine(line), kind };
+      const at = now();
+      if (kind === 'session-refused') {
+        const last = lastRefusalAt(agentId);
+        if (last !== undefined && at - last < REFUSED_NOTICE_EVERY_MS) return undefined;
+      }
+      const notice: AgentNotice = { id: crypto.randomUUID(), agentId, at, line: oneLine(line), kind };
       notices = capped([...notices, notice]);
       save();
       o.emit('agent:notice', { ...notice });
@@ -134,9 +194,18 @@ export function createNoticeLog(o: { file: string; emit: (channel: string, paylo
   };
 }
 
+/** The fleet, as core/agent-manager.ts holds it: set there, since this module is below it. */
+let fleetHolds: (agentId: string) => boolean = () => true;
+export function setNoticeFleet(isAgent: (agentId: string) => boolean): void {
+  fleetHolds = isAgent;
+}
+
 let current: NoticeLog | undefined;
-/** The one for the process: made at the first call, from ~/.tars/agent-notices.json, telling every window. */
+/**
+ * The one for the process: made at the first call, from ~/.tars-private/agent-notices.json, telling every window. main
+ * loads the fleet before anything can call it (the window, the IPC handlers and the API server start after loadAgents).
+ */
 export function noticeLog(): NoticeLog {
-  current ??= createNoticeLog({ file: AGENT_NOTICES_FILE(), emit: broadcastToAllWindows });
+  current ??= createNoticeLog({ file: AGENT_NOTICES_FILE(), emit: broadcastToAllWindows, isAgent: (id) => fleetHolds(id) });
   return current;
 }

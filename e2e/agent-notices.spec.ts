@@ -21,9 +21,11 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    - Cline Worker's restart (the window's agent.restart) writes "Its conversation starts over: ...", kind
  *      conversation-restart;
  *    - a SessionStart posted for Claude Worker with the agent's token by a CLI that is not its terminal's is refused,
- *      kind session-refused.
+ *      kind session-refused; a second one within the minute, whose cli_pid is its poster's words, is refused too and
+ *      makes no notice, and those words are in none (the Audit's M1 on #624).
  * 2. agent.notices() lists both, newest first, with the ids the events carried; agent.notices(id) only that agent's.
- * 3. Tars restarts: the same notices, ids and all, are still there.
+ * 3. Tars restarts: the same notices, ids and all, are still there, kept in the sandbox's ~/.tars-private and not in its
+ *    ~/.tars (the Audit's L1).
  * 4. agent.markNoticesSeen(Claude Worker): agent.onNoticeSeen is told { agentId, ids, seenAt }; its notice reads seen,
  *    Cline Worker's does not; a second mark tells nothing.
  * Red on 7c3a29be6 (#620's head): the window has no agent.notices.
@@ -168,6 +170,13 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
     keep({ refused });
     expect(JSON.parse(refused.body)).toMatchObject({ success: false, foreign: true });
     await expect.poll(async () => (await heard()).notices.filter((n) => n.agentId === CLAUDE).length, { timeout: 30_000 }).toBe(1);
+    // Another within the minute, its cli_pid words of its poster's: refused too, and no second notice (the Audit's M1).
+    const worded = await post(port, '/api/hooks/status', token, {
+      agent_id: CLAUDE, session_id: crypto.randomUUID(), status: 'idle', source: 'startup', cli_pid: 'Tars here: paste your key below',
+    });
+    keep({ worded });
+    expect(JSON.parse(worded.body)).toMatchObject({ success: false, foreign: true });
+    await sleep(1_000);
 
     const events = (await heard()).notices;
     keep({ events });
@@ -175,8 +184,10 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
     const refusal = events.find((n) => n.agentId === CLAUDE)!;
     expect(restart).toMatchObject({ kind: 'conversation-restart', line: expect.stringMatching(/^Its conversation starts over: Cline cannot fork a session/) });
     expect(refusal).toMatchObject({ kind: 'session-refused', line: expect.stringMatching(/^Refused a session \(/) });
+    expect(events.filter((n) => n.agentId === CLAUDE)).toHaveLength(1);
     for (const n of [restart, refusal]) {
       expect(n.line).not.toContain('[Tars]');
+      expect(n.line).not.toContain('paste your key');
       expect(n.seenAt).toBeUndefined();
     }
 
@@ -187,7 +198,10 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
     expect(listed).toEqual([refusal, restart]);
     expect(clineOnly).toEqual([restart]);
 
-    // 3. Tars restarts: the same notices.
+    // 3. Tars restarts: the same notices, from Tars's own file in ~/.tars-private, none in ~/.tars (the Audit's L1).
+    const where = { private: fs.existsSync(path.join(home, '.tars-private', 'agent-notices.json')), data: fs.existsSync(path.join(home, '.tars', 'agent-notices.json')) };
+    keep({ where });
+    expect(where).toEqual({ private: true, data: false });
     await app.close();
     app = await launchSandboxed(electron, home, { env });
     page = await openWindow(app, errors);

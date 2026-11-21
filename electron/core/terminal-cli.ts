@@ -59,7 +59,8 @@ export function ownCliAtOnce(terminalPid: number | undefined, cliPid: unknown, p
 /** The largest pid any of the platforms Tars runs on hands out (Linux's pid_max ceiling, 2^22). */
 const MAX_PID = 4_194_304;
 
-function asPid(value: unknown): number | undefined {
+/** A pid as a hook posts it (a number, or its digits), or undefined for anything else. */
+export function asPid(value: unknown): number | undefined {
   const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value : '';
   if (!/^[1-9][0-9]{0,6}$/.test(text)) return undefined;
   const pid = Number(text);

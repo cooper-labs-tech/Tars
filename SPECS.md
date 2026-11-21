@@ -670,8 +670,10 @@ While the agent has a terminal, its panel and Logs read that terminal's screen, 
 - **Told as it is written** to every window: `agent:notice`, `agent.onNotice`.
 - **Listed newest first** by `agent.notices(agentId?)`: that agent's, or every agent's. Logs reads them all; the agent's panel reads the ones not seen yet.
 - **Marked seen** by `agent.markNoticesSeen(agentId, ids?)`: those ids, or all of the agent's not seen yet. Every window is told once, `agent:notice-seen` `{ agentId, ids, seenAt }`, so another window updates. A mark that changes nothing tells nothing.
-- **Kept** in `~/.tars/agent-notices.json` across a restart of Tars, written whole at each change, at most 50 per agent with the oldest dropped. Removed with the agent (`core/agent-remove.ts`).
-- **Read back with care.** `~/.tars` is every agent's folder, so the file is read as an agent may have written it: an entry of another shape or of an unknown kind is left out, and a line is cut to one line of at most 1,000 characters with no control character.
+- **Kept** in `~/.tars-private/agent-notices.json`, Tars's own file, which no agent is handed: written whole at each change, `0600`, across a restart of Tars. At most 50 per agent with the oldest dropped, and the file under 1 MB, the oldest notices of every agent dropped first. Removed with the agent (`core/agent-remove.ts`).
+- **Read back with care.** An agent running as the same user could still edit the file, so it is read as such a file: only the fleet's agents' notices, an entry of another shape or of an unknown kind left out, a line cut to one line of at most 1,000 characters with no control character, and nothing from a file over 1 MB (the log says so).
+- **A refusal says only what Tars checked:** the session's id, a UUID by then, and the pid as a number, else "a CLI that named no pid". Its poster's own words never reach a notice, which the window draws as Tars's.
+- **At most one refusal notice per agent per minute.** Anything holding the agent's token can post refused registrations as often as it likes. The kept output still says each one; another agent's notices, and another kind, are not held back.
 - **The proof:** `__tests__/electron/core/agent-notice-channel.test.ts`, and `e2e/agent-notices.spec.ts` in the real app (a Cline restart and a refused session, read live, across a restart of Tars, and marked seen).
 
 ### The state mod
