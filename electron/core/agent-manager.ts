@@ -21,8 +21,10 @@ import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
 import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput, type MessageSender } from './pty-manager';
 import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
-import { markCliLaunch } from './terminal-mirror';
+import { markCliLaunch, noteLaunchLine } from './terminal-mirror';
 import { kimiSessionWatch } from '../services/kimi-sessions';
+import { opencodeSessionWatch } from '../services/opencode-sessions';
+import { opencodeLaunchOf } from '../providers/opencode-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
@@ -1229,9 +1231,16 @@ export async function launchIntoTerminal(
   // Kimi Code typed into a shell already there, a restart's included: noted now, with the session its line resumes,
   // so that the session an earlier launch left counts only as that one (services/kimi-sessions.ts, the Audit's M1).
   if (getProvider(agent.provider).binaryName === 'kimi') kimiSessionWatch.noteLaunch(agent.id, start.cwd, kimiSessionOfCommand(start.typedLine));
+  // opencode typed into a shell already there: noted now, with the session its line resumes or forks (a restart's) and
+  // the prompt it starts on, in this terminal (services/opencode-sessions.ts).
+  if (getProvider(agent.provider).binaryName === 'opencode') {
+    opencodeSessionWatch.noteLaunch(agent.id, start.cwd, { ...opencodeLaunchOf(start.typedLine), terminal: ptyProcess });
+  }
   // What the terminal shows from its line on is the new CLI's: a box an earlier one left above never reads as this one
   // up (terminal-mirror.ts, rowsSinceLaunch; the Audit's L1 on #601).
   markCliLaunch(ptyProcess, !!getProvider(agent.provider).upOnScreen);
+  // And the line it was launched with, which a provider's upOnScreen may read (opencode on a session it forks).
+  noteLaunchLine(ptyProcess, start.typedLine);
   if (opts.delayMs) {
     await new Promise<void>((resolve) => {
       setTimeout(() => {

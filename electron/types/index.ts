@@ -331,7 +331,7 @@ export interface AgentStatus {
   stopProcesses?: { ended: string[]; kept: string[]; containers: string[] };
   /** What the agent's CLI last said of itself in its terminal, over OSC 7501 (the Program Status Protocol,
    *  services/program-status): its root record, from its current terminal only, gone with a clear, a new shell
-   *  prompt or a reset. It drives `status` only for a CLI Tars follows no other way (amp, grok, opencode); on
+   *  prompt or a reset. It drives `status` only for a CLI Tars follows no other way (amp, grok); on
    *  the others the hooks or the session log win, and this adds the reason of a blocked state. Not saved. */
   programStatus?: {
     state: 'idle' | 'working' | 'done' | 'blocked' | 'error';
@@ -779,8 +779,8 @@ export interface BusMessage {
  *
  * `queued` waits for the target to leave `running`, `delivered` was written
  * into its session, `dropped` will never be sent and says why. `not_sent` is
- * the fourth state and the one that needs saying: amp, grok, opencode
- * and pi never leave `running` in an interactive session, so nothing can be
+ * the fourth state and the one that needs saying: amp and grok never
+ * leave `running` in an interactive session, so nothing can be
  * delivered to them at rest. A message aimed at one of those is neither queued
  * nor delivered on its own: it is kept, shown as NOT SENT with its reason, and
  * moves only on an explicit human action. Never inferred from silence, which
@@ -799,8 +799,9 @@ export type BusDeliveryState = 'queued' | 'held' | 'not_sent' | 'delivered' | 'd
  * wording change silently turns a visible state invisible. The sentence stays
  * beside it for a human to read.
  *
- * `no_end_of_turn` is the one that names the four: amp, grok, opencode
- * and pi never leave `running` in an interactive session. `session_replaced`
+ * `no_end_of_turn` is the one that names them: amp and grok never leave
+ * `running` in an interactive session (codex, pi, Kimi Code and opencode are
+ * read from their own session records). `session_replaced`
  * is a message queued for a session that was killed before it drained: it
  * belongs to that session and is not handed to whatever took its place.
  */

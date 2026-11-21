@@ -24,22 +24,30 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. get_agent_output with that taskId gives the same answer;
  * 5. resume: Tars quits and starts again, the agent's first start continues its session (the endpoint's first new
  *    request already carries the marker of step 2 in its history), and a second delegation is answered.
+ * 6. restart: the window restarts the agent (what applying new settings does too), which forks its session: the CLI
+ *    goes on under a new session with the earlier turns, and a third delegation is answered from it (the Audit's M1 on
+ *    #613: opencode's reader bound the session the fork left, and the task waited out its timeout).
+ * A delegation answered "still starting ... Send it again in a moment" (nothing typed, its TUI not drawn yet) is sent
+ * again, as an orchestrator does, four times at most.
  * Every harness's home is the sandbox's (CODEX_HOME, KIMI_CODE_HOME, PI_CODING_AGENT_DIR handed to Tars here): one
  * exported by the shell that runs the spec was inherited, and the sandboxed Tars wrote that home and its harness ran on
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
- * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI); a harness with none is skipped, and says so.
+ * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE); a harness with none is skipped,
+ * and says so. A harness whose tokens Tars reads (opencode) also has them in its task's ledger entry.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
  * its start and after each task), endpoint-requests.jsonl, the app's logs, the agent's whole
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
  */
 
-type Harness = { id: string; provider: string; pathKey: string; env: string };
+/** `tokens`: a harness whose tokens Tars reads (its task's ledger entry carries them). */
+type Harness = { id: string; provider: string; pathKey: string; env: string; tokens?: boolean };
 const HARNESSES: Harness[] = [
   { id: 'kimi-code', provider: 'kimi-code', pathKey: 'kimi', env: 'TARS_HARNESS_KIMI_CODE' },
   { id: 'codex', provider: 'codex', pathKey: 'codex', env: 'TARS_HARNESS_CODEX' },
   { id: 'pi', provider: 'pi', pathKey: 'pi', env: 'TARS_HARNESS_PI' },
+  { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
 ];
 
 const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
@@ -50,7 +58,7 @@ const TASK = 'Run the shell command that prints the probe marker, then tell me w
 const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** The files Tars writes in a harness's home, for each home the runner may have exported: never Tars's to write here. */
-const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']]];
+const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']], ['XDG_CONFIG_HOME', [path.join('opencode', 'opencode.json')]]];
 const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([name, files]) => {
   const dir = process.env[name]?.trim();
   return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
@@ -95,7 +103,21 @@ for (const h of HARNESSES) {
 
     const port = apiPort(31950);
     const dist = path.resolve('electron', 'dist');
-    const values: Record<string, unknown> = { harness: h.id, bin, version: (() => { try { return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000 }).trim(); } catch { return null; } })() };
+    // The harnesses' homes, the sandbox's: given to the sandboxed Tars, and to the version read below, since a harness
+    // may write its folders at any start (opencode 1.19.6 makes ~/.config/opencode, ~/.local/share/opencode,
+    // ~/.local/state/opencode and ~/.cache/opencode for a bare --version, measured 20/11).
+    const harnessHomes = {
+      CODEX_HOME: path.join(home, '.codex'), KIMI_CODE_HOME: path.join(home, '.kimi-code'), PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
+      XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
+      XDG_STATE_HOME: path.join(home, '.local', 'state'), XDG_CACHE_HOME: path.join(home, '.cache'),
+    };
+    const version = (() => {
+      try {
+        fs.mkdirSync(path.join(home, 'tmp'), { recursive: true });
+        return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000, cwd: project, env: { ...process.env, HOME: home, TMPDIR: path.join(home, 'tmp'), ...harnessHomes } }).trim();
+      } catch { return null; }
+    })();
+    const values: Record<string, unknown> = { harness: h.id, bin, version };
     const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
     const requests = () => (fs.existsSync(standinLog) ? fs.readFileSync(standinLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []) as Array<{ url?: string; method?: string; body?: unknown }>;
     const posts = () => requests().filter(r => r.method === 'POST');
@@ -108,8 +130,7 @@ for (const h of HARNESSES) {
       let keepScreen: (() => Promise<void>) | undefined;
       try {
         app = await launchSandboxed(electron, home, { env: {
-          NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1',
-          CODEX_HOME: path.join(home, '.codex'), KIMI_CODE_HOME: path.join(home, '.kimi-code'), PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
+          NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', ...harnessHomes,
         } });
         const appLog = test.info().outputPath(`app-${label}.log`);
         app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
@@ -155,6 +176,20 @@ for (const h of HARNESSES) {
       }
     };
 
+    // delegate_task, sent again while Tars answers that the CLI is still starting (step 2), each time with an id of
+    // its own; the answers that said so are kept with the last one.
+    type Lead = (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
+    const delegateOnceUp = async (lead: Lead, step: number) => {
+      const stillStarting: string[] = [];
+      for (let attempt = 1; ; attempt++) {
+        const reply = await lead('delegate_task', {
+          id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-${step}${attempt > 1 ? `-${attempt}` : ''}`,
+        });
+        if (!(reply.isError && /still starting/.test(reply.text)) || attempt === 5) return { ...reply, stillStarting };
+        stillStarting.push(reply.text);
+      }
+    };
+
     const runnerBefore = runnerHomeFiles();
     try {
       await withTars('first', async (lead, api) => {
@@ -170,14 +205,21 @@ for (const h of HARNESSES) {
         const screenOf = async () => plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000);
         keep({ screenAtStart: await screenOf() });
         // 2. Delegated to, answered with its own final answer, after a real tool round.
-        const delegated = await lead('delegate_task', { id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-1` });
+        const delegated = await delegateOnceUp(lead, 1);
         // The ledger's task, as delegate_task names it at the end of its answer (`task <id>`): a UUID once its turn ran,
         // the request's `t-xxxxxxxx` while it waits.
         const taskId = /\btask ((?:t-[0-9a-f]{8})|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/.exec(delegated.text)?.[1];
         // What Tars knows of the agent and its tasks at that moment, for a run that goes wrong.
         const view = (a: Record<string, unknown> | null) => a && Object.fromEntries(['status', 'currentSessionId', 'resumableSessionId', 'lastTurnStartedAt', 'sessionRegisteredAt', 'requestedBy', 'taskQueue', 'currentTask'].map((k) => [k, a[k]]));
         const ledger = async () => ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => t.agentId === WORKER);
-        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask: await ledger() });
+        const ledgerAfterTask = await ledger();
+        keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask });
+        // A harness whose tokens Tars reads: the task's ledger entry carries them (the stand-in answers 120 in, 100 cached).
+        // Its usage is posted just after its turn's end: read until it is filed, or 15 s.
+        if (h.tokens) {
+          await expect.poll(async () => JSON.stringify(await ledger()), { timeout: 15_000, message: "the task's tokens, in its ledger entry" }).toMatch(/"input":\s*[1-9]/);
+          keep({ ledgerWithTokens: await ledger() });
+        }
         expect.soft(delegated.text, 'delegate_task returns the harness\'s final answer').toContain(`PROBE-OK ${standin.marker}`);
         expect.soft(posts().some((r, i) => i > 0 && JSON.stringify(r.body ?? '').includes(standin.marker)), 'the tool\'s result reached the endpoint').toBe(true);
 
@@ -196,13 +238,31 @@ for (const h of HARNESSES) {
       await withTars('second', async (lead, api) => {
         await api('agent', 'start', { id: WORKER, prompt: '' });
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
-        const again = await lead('delegate_task', { id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-2` });
+        const again = await delegateOnceUp(lead, 2);
         keep({ screenAfterResume: plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000) });
         const after = posts().slice(before);
         keep({ again, resumedRequests: after.map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) })) });
         expect.soft(after.length, 'the resumed session reached the endpoint').toBeGreaterThan(0);
         expect.soft(JSON.stringify(after[0]?.body ?? ''), 'its first request carries the first task\'s history').toContain(standin.marker);
         expect.soft(again.text, 'the second delegation is answered').toContain('PROBE-OK');
+
+        // 6. The window restarts the agent, which forks its session: answered from the fork, with the earlier history.
+        const sessionBeforeRestart = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
+        const beforeRestart = posts().length;
+        await api('agent', 'restart', WORKER);
+        await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
+        const restarted = await delegateOnceUp(lead, 3);
+        const sessionAfterRestart = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
+        const afterRestart = posts().slice(beforeRestart);
+        keep({
+          restarted, sessionBeforeRestart, sessionAfterRestart,
+          screenAfterRestart: plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000),
+          restartRequests: afterRestart.map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) })),
+        });
+        expect.soft(restarted.text, 'after a restart, the third delegation is answered').toContain('PROBE-OK');
+        expect.soft(afterRestart.length, 'the restarted session reached the endpoint').toBeGreaterThan(0);
+        expect.soft(JSON.stringify(afterRestart[0]?.body ?? ''), 'its first request carries the earlier history').toContain(standin.marker);
+        expect.soft(sessionAfterRestart, 'the agent is on the fork, a session of its own').not.toBe(sessionBeforeRestart);
       });
     } finally {
       // The homes the runner exported were left as they were.

@@ -4,6 +4,7 @@ import * as path from 'path';
 import { transcriptProjectDirName } from '../platform/claude-project-dir';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
 import { kimiHome, kimiSessionDir } from '../providers/kimi-cli';
+import { opencodeDbPath, opencodeSessionOf } from '../providers/opencode-cli';
 
 /**
  * Whether an agent's last session can actually be resumed.
@@ -99,6 +100,15 @@ export function resolveResumeSessionId(
 
     if (agent.provider === 'codex') {
       if (codexRolloutOf(sessionId, codexHome(process.env, homeDir))) return sessionId;
+      continue;
+    }
+
+    // opencode: Tars knows its session by a UUID made from opencode's id (providers/opencode-cli.ts), and opencode
+    // resumes by its own: given back as opencode's id, when its database still has it in the agent's folder.
+    if (agent.provider === 'opencode') {
+      const folders = [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p);
+      const own = opencodeSessionOf(sessionId, folders, opencodeDbPath(process.env, homeDir));
+      if (own) return own;
       continue;
     }
 

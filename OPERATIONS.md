@@ -396,7 +396,9 @@ get_agent_output behave on it as on the others. A real binary of the harness run
 the stand-in endpoint of `e2e/stand-in-openai-endpoint.mjs` through Tars's endpoint proxy: loopback, a dummy key, a
 scripted tool call, no network and no token spent. The steps: it starts; `delegate_task` returns its own final answer
 after a real tool round on the wire; `task_status` and `get_agent_output` give the same answer; Tars quits and starts
-again and the agent's first start continues its session, then answers a second task.
+again and the agent's first start continues its session, then answers a second task; the window restarts the agent,
+which forks its session, and the fork answers a third task with the earlier history. A delegation answered "still
+starting" (the TUI not drawn yet, nothing typed) is sent again, as an orchestrator does.
 
 ```bash
 npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
@@ -1982,7 +1984,7 @@ orchestrator a whole turn to read what it has been handed. Every other way it is
 | a codex agent in auto starts with `--ask-for-approval never --sandbox workspace-write`, not `--approve-for-me` | that codex has no `--approve-for-me` (`codex --help \| grep approve-for-me`), or it did not answer `--help` within 10 s at that launch, on a loaded machine. The answer is read beside the window before each launch's line is built, kept per binary and version, and a codex that did not answer is asked again at the next launch: restart the agent |
 | a codex agent exits as it starts, `Error: invalid transport in mcp_servers.<name>` on its screen, and its task lands in the shell | codex was told to switch off a server its config.toml does not define, which it refuses. Tars switches off only the servers that file defines (`services/mcp-roles.ts`); a line typed by hand with such a `-c mcp_servers.<name>.enabled=false` fails the same way |
 | a codex agent's commands go on after it was stopped, or `codex app-server` processes outlive Tars | that codex was started without `--no-daemon`: its turn ran in codex's shared background server, not in the terminal Tars ended. Tars passes it where `codex --help` lists it, read before the launch; a codex that did not answer `--help` in time was started without it. `ps -axo pid,command \| grep 'codex app-server'` shows the daemon: stop it by its pid |
-| `delegate_task` says a task was delivered, with no answer | the agent's CLI gives Tars no prompt hook (gemini, opencode, amp, pi, grok; codex, the row above): the task went into its terminal and Tars cannot see its turn end. Read the terminal (`get_agent_output`), or have it report with `send_message` to "requester" |
+| `delegate_task` says a task was delivered, with no answer | the agent's CLI gives Tars no prompt hook (gemini, amp, pi, grok; codex, the row above; opencode's turns are read from its database since 20/11, `services/opencode-sessions.ts`): the task went into its terminal and Tars cannot see its turn end. Read the terminal (`get_agent_output`), or have it report with `send_message` to "requester" |
 | a delegated task's answer stops at 4000 characters | the transcript was not found, and the hooks' copy was returned: an API-key provider whose CLI keeps its transcripts outside `~/.claude` and the Claude account folders. `GET /api/tasks/<id>` shows what was read |
 | a delegated task never started: "its turn did not begin within 15 minutes" | the task was typed into the terminal but no UserPromptSubmit came: a field or a dialog held it, or the CLI's hooks are not installed. The queue moved on |
 | an orchestrator never hears that its agent finished | the link and the queue. `jq '.agents[] \| select(.id=="<child>") \| {requestedBy, taskQueue}' ~/.tars/agents.json`: `requestedBy` absent means spent, a `ptyId` that is not the agent's current one is inert by design, and `taskQueue` lists the requests still out, `queued` (not typed yet) or `delivered` (waiting for their turn) |

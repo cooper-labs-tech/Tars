@@ -1130,8 +1130,9 @@ function followTask(workerId: string, askerId: string): () => void {
  * whose hooks say both, or whose turns Tars reads and posts as those hooks
  * would (core/end-of-turn.ts): claude, the providers that run it, Qwen Code (Claude Code's hooks), gemini
  * (BeforeAgent and AfterAgent, hooks/gemini/, since 2.0.4), and codex, from
- * its session log (services/codex-sessions.ts). opencode, amp, pi and grok
- * have no such hook.
+ * its session log (services/codex-sessions.ts), and the CLIs read the same
+ * way: pi and Kimi Code from their session log, opencode from its database
+ * (services/opencode-sessions.ts). amp and grok have no such hook.
  */
 function turnsHeard(agent: AgentStatus): boolean {
   return hasEndOfTurn(agent);

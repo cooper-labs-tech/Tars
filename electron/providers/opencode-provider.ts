@@ -13,6 +13,7 @@ import type {
 } from './cli-provider';
 import { safeEffort } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
+import { OPENCODE_SESSION_ID, opencodeSkillsLine } from './opencode-cli';
 
 /**
  * Where opencode reads its MCP servers (opencode 1.19.3, read in its compiled
@@ -47,6 +48,34 @@ export class OpenCodeProvider implements CLIProvider {
   readonly displayName = 'OpenCode';
   readonly binaryName = 'opencode';
   readonly configDir = path.join(os.homedir(), '.opencode');
+
+  /**
+   * opencode sends no SessionStart and drops keys typed before its TUI is ready (1.19.6, measured 20/11: its field and
+   * its bottom bar came 10 to 26 s after it started on a loaded machine; it took keys within 50 ms of that, three times
+   * out of three, and none before). Up on that bar, whose last item is always `<key> commands` after a gap of two
+   * spaces or more (as Tars's mirror reads it): `tab agents  ctrl+p commands` on its first screen, `<folder>  132  ctrl+p
+   * commands` on a session it resumed, its tokens where `tab agents` was; whatever keys are bound.
+   *
+   * On a launch on a session (`--session`), up only on that session's view: a bar with something before its keys (the
+   * folder), never the bare home view's. Forking a session (`--fork`, every restart's), opencode draws its home view
+   * first, then clears and draws the fork's about 5 s later; a task typed at the home view started a new session
+   * without the history (measured twice, 20/11). A plain resume's first bar is already its session's, the folder
+   * before `tab agents`.
+   *
+   * The bar wraps when the folder and its keys outgrow the pane (a long folder, a narrow pane: QA's sandbox under
+   * /private/var/folders/..., 21/11): `<folder>/ 132 ctrl+p` ends one row and `commands` stands alone at the end of the
+   * next. That is its bar too, on the same rules, and never two rows of the conversation's frame (`┃`).
+   */
+  upOnScreen(lines: readonly string[], launchLine?: string): boolean {
+    const onSession = /--session\b/.test(launchLine ?? '');
+    const oneRow = (line: string) => /\s{2,}\S+ commands\s*$/.test(line) && !(onSession && /^\s*\S+ agents\s{2,}\S+ commands\s*$/.test(line));
+    const wrapped = (top: string, bottom: string) => /\s{2,}commands\s*$/.test(bottom) && /\s\S+\s*$/.test(top) && !/[┃╹]/.test(top + bottom)
+      && !(onSession && /^\s*\S+ agents\s+\S+\s*$/.test(top));
+    return lines.some((line, i) => oneRow(line) || (i > 0 && wrapped(lines[i - 1], line)));
+  }
+
+  /** Measured on 1.19.6 (20/11): a note typed during a slow tool call went out with that call's result. */
+  readonly noteDuringTurn = 'next-tool-round' as const;
 
   getModels(): ProviderModel[] {
     return [
@@ -93,12 +122,18 @@ export class OpenCodeProvider implements CLIProvider {
       command += ' --auto';
     }
 
+    // The agent's own session after a restart (utils/resume-session.ts gives opencode's id back from the UUID Tars
+    // knows it by): `--session <id>` continues it, `--fork` with it goes on under a new id, as a restart that applies
+    // new settings wants (1.19.6 --help). opencode's id and nothing else: it reaches a command line.
+    const session = params.resumeSessionId && OPENCODE_SESSION_ID.test(params.resumeSessionId) ? params.resumeSessionId : undefined;
+    if (session) command += ` --session '${session}'${params.forkSession ? ' --fork' : ''}`;
+
     // A delegated task arrives as params.prompt. Dropping it launched a bare
     // TUI and reported success while the task went nowhere.
     // No task, no prompt: the skills line alone was a turn nobody asked for.
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';
     if (finalPrompt && params.skills && params.skills.length > 0 && !params.isSuperAgent) {
-      finalPrompt = `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.] ${params.prompt}`;
+      finalPrompt = `${opencodeSkillsLine(params.skills)} ${params.prompt}`;
     }
     if (finalPrompt) {
       command += ` --prompt '${finalPrompt.replace(/'/g, "'\\''")}'`;
@@ -145,6 +180,8 @@ export class OpenCodeProvider implements CLIProvider {
   getHookConfig(): HookConfig {
     return {
       supportsNativeHooks: false,
+      // Its turns reach Tars from its database (services/opencode-sessions.ts), as codex's from its session log.
+      turnsReported: true,
       configDir: this.configDir,
       settingsFile: path.join(this.configDir, 'config.json'),
     };

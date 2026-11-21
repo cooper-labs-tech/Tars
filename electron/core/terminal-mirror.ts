@@ -434,6 +434,24 @@ export function markCliLaunch(pty: IPty | undefined, log: boolean): void {
   else dropLaunchLog(mirror);
 }
 
+/**
+ * The line each terminal's CLI was launched with (the command typed into it, or the one it runs): what a provider's
+ * upOnScreen is given with the rows, since what a CLI shows once it takes keys can depend on how it was launched
+ * (opencode on a session it forks draws its home view first, core/agent-launch.ts, sessionUp).
+ */
+const launchLines = new WeakMap<object, string>();
+
+export function noteLaunchLine(pty: object | undefined, line: string | readonly string[] | undefined): void {
+  if (!pty) return;
+  const text = Array.isArray(line) ? line.join(' ') : typeof line === 'string' ? line : '';
+  if (text) launchLines.set(pty, text);
+  else launchLines.delete(pty);
+}
+
+export function launchLineOf(pty: object | undefined): string | undefined {
+  return pty ? launchLines.get(pty) : undefined;
+}
+
 /** How many of the bottom rows a provider's upOnScreen is given: a TUI's field and its footer, never the answer above. */
 const LAUNCH_ROWS = 8;
 

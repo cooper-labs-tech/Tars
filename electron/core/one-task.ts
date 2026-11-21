@@ -19,9 +19,9 @@ import type { AgentProvider } from '../types';
  *    session does, while a run holds the agent or tasks wait before it; a
  *    note, or Tars's own word, waits for the run's end instead, and is no
  *    task (holdsMessages). A turn in the terminal counts only where Tars can
- *    see it end (terminalTurnOf): amp, grok, opencode and pi tell Tars
- *    nothing of their turns, so only their runs hold them (codex's turns are
- *    read from its session log, services/codex-sessions.ts).
+ *    see it end (terminalTurnOf): amp and grok tell Tars nothing of their
+ *    turns, so only their runs hold them (codex's, pi's and Kimi Code's turns
+ *    are read from their session log, opencode's from its database).
  * 2. Only Tars, the user's window, an agent with an orchestrator's powers
  *    (the project's orchestrator, a chat's runner) or the agent itself hand an
  *    agent work. A worker is refused, and told to ask its orchestrator; what

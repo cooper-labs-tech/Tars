@@ -6,7 +6,7 @@ import { managedCliEnv } from '../providers/cli-provider';
 import { mintAgentToken, revokeTerminalToken, tarsInstanceId } from './agent-tokens';
 import { API_PORT } from '../constants';
 import { rememberTerminalOwner, terminalExited } from './pty-manager';
-import { attachTerminalMirror, panelSizeOf } from './terminal-mirror';
+import { attachTerminalMirror, noteLaunchLine, panelSizeOf } from './terminal-mirror';
 import { accountEnvFor, withAccountEnv } from './account-env';
 import { refuseWhileQuitting } from './quit-state';
 import { childEnv, currentFolderLookupsOff, type Env } from '../platform';
@@ -18,6 +18,8 @@ import { cliLaunchExit, reportHandledError } from '../services/error-reports/han
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
+import { opencodeSessionWatch } from '../services/opencode-sessions';
+import { opencodeLaunchOf } from '../providers/opencode-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import { getAllProviders } from '../providers';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
@@ -220,6 +222,9 @@ export function spawnAgentPty(opts: {
   // one function that spawns an agent's terminal, and a caller that has to
   // remember is a caller that will not.
   if (agentId) rememberTerminalOwner(spawned, agentId);
+  // The line a CLI this terminal runs was launched with (an exec launch), which a provider's upOnScreen may read; a CLI
+  // typed into its shell later notes its own (agent-manager.ts, launchIntoTerminal).
+  if (agentId) noteLaunchLine(spawned, opts.args);
   // codex reports no turn through a hook: its session log does, and the one
   // this terminal's codex begins is the agent's (services/codex-sessions.ts).
   if (agentId && opts.binaryName === 'codex') codexLaunching(agentId, opts.cwd);
@@ -231,10 +236,17 @@ export function spawnAgentPty(opts: {
   if (agentId && opts.binaryName === 'kimi') {
     kimiSessionWatch.noteLaunch(agentId, opts.cwd, kimiSessionOfCommand(Array.isArray(opts.args) ? opts.args.join(' ') : opts.args));
   }
+  // opencode's, from its database; with the session its line resumes or forks (a restart's) and the prompt it starts
+  // on, in this terminal, as for kimi (services/opencode-sessions.ts).
+  if (agentId && opts.binaryName === 'opencode') {
+    opencodeSessionWatch.noteLaunch(agentId, opts.cwd, { ...opencodeLaunchOf(opts.args), terminal: spawned });
+  }
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {
     terminalExited(spawned);
+    // And the session reader's launch in it, which is no longer read (services/opencode-sessions.ts).
+    opencodeSessionWatch.forgetTerminal(spawned);
     // And what it was spawned as: gone, node-pty on Linux still names the
     // shell it spawned, and a terminal handed a command read as a running CLI.
     spawnedAs.delete(spawned);

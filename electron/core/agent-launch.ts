@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, rowsSinceLaunch } from './terminal-mirror';
+import { dialogOnScreen, launchLineOf, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -262,7 +262,7 @@ function sessionUp(agent: StartingAgent, launch: Launch): boolean {
   if (!hasClaudeHooks(agent)) {
     const provider = getProvider(agent.provider);
     // The rows drawn since its launch, at the bottom: never a box left in the history (the Audit's L1 on #601).
-    if (provider.upOnScreen) return provider.upOnScreen(rowsSinceLaunch(terminal) ?? []);
+    if (provider.upOnScreen) return provider.upOnScreen(rowsSinceLaunch(terminal) ?? [], launchLineOf(terminal));
     // At its exec once it has held the terminal, never at a step of its launch line (CLI_SETTLED_MS).
     launch.runningSince ??= Date.now();
     return Date.now() - launch.runningSince >= CLI_SETTLED_MS;

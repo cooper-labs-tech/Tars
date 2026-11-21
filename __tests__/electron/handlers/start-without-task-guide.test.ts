@@ -205,6 +205,14 @@ const commandOf = (typed: string) => {
 const count = (text: string, what = SECTION) => text.split(what).length - 1;
 
 /** The agent started from the window, its CLI then up in its terminal. */
+/**
+ * opencode takes keys once it has drawn its bottom bar, which Tars waits for before it types (OpenCodeProvider.upOnScreen),
+ * counting only what was drawn since the launch: drawn here as opencode draws it.
+ */
+function drawOpencodeBar(terminal: FakePty): void {
+  for (const [listener] of terminal.onData.mock.calls) (listener as (d: string) => void)('\r\n  Build · stand-in-coder\r\n                tab agents  ctrl+p commands\r\n  ~/project        1.19.6\r\n');
+}
+
 async function startedFromWindow(prompt: string, fields: Partial<AgentStatus> = {}): Promise<{ agent: AgentStatus; terminal: FakePty; command: string }> {
   const agent = agentAtRest(fields);
   expect(await settled(start(agent.id, prompt))).toMatchObject({ success: true });
@@ -212,6 +220,7 @@ async function startedFromWindow(prompt: string, fields: Partial<AgentStatus> = 
   const command = commandOf(typedInto(terminal));
   // node-pty names the CLI once it runs in the terminal's foreground.
   terminal.process = agent.provider ?? 'opencode';
+  if ((agent.provider ?? 'opencode') === 'opencode') drawOpencodeBar(terminal);
   terminal.write.mockClear();
   return { agent, terminal, command };
 }
@@ -370,6 +379,7 @@ describe('a CLI launched again into a terminal that still owes the section', () 
     if (relaunch.platform !== 'win32') {
       await launchIntoTerminal(agent, terminal as never, relaunch, { ptyProcesses, initAgentPty });
       terminal.process = 'opencode';
+      drawOpencodeBar(terminal);
       terminal.write.mockClear();
 
       expect(await dispatch(agent.id, 'NEXT>> and push it')).toMatchObject({ success: true, mode: 'message' });
