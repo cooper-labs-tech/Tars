@@ -20,7 +20,9 @@ import type { ReactElement, ReactNode } from 'react';
  *   }));
  *
  * Only the hooks those components call are served: useState, useRef, useMemo,
- * useCallback, useEffect, useLayoutEffect. The others throw, so a component
+ * useCallback, useEffect, useLayoutEffect, useSyncExternalStore (Logs and the
+ * Dashboard's panels read Tars's notices about an agent through it, #626;
+ * hook-runtime-store.test.ts says how it may fail). The others throw, so a component
  * that starts depending on one fails loudly instead of reading a wrong value.
  * This module must not import from 'react' at run time: under that mock it
  * would import itself while the mock is still being built. Elements are
@@ -38,7 +40,8 @@ type Slot =
   | { kind: 'state'; value: unknown; set: (next: unknown) => void }
   | { kind: 'ref'; ref: { current: unknown } }
   | { kind: 'memo'; deps: Deps; value: unknown }
-  | { kind: 'effect'; deps: Deps; cleanup: Cleanup; ran: boolean };
+  | { kind: 'effect'; deps: Deps; cleanup: Cleanup; ran: boolean }
+  | { kind: 'store'; subscribe: unknown; getSnapshot: () => unknown; value: unknown; unsubscribe: Cleanup };
 
 let active: Mounted<unknown> | null = null;
 let cursor = 0;
@@ -99,6 +102,7 @@ class Mounted<R> {
   unmount(): void {
     for (const s of this.slots) {
       if (s.kind === 'effect' && typeof s.cleanup === 'function') s.cleanup();
+      if (s.kind === 'store' && typeof s.unsubscribe === 'function') s.unsubscribe();
     }
     this.unmounted = true;
   }
@@ -164,6 +168,35 @@ function useEffect(effect: () => Cleanup, deps?: Deps): void {
   });
 }
 
+/**
+ * React's contract, as the components rely on it: every render reads the snapshot; the store is subscribed to after
+ * the render, again whenever `subscribe` changes, and no longer after unmount; an announcement renders only when the
+ * snapshot changed (Object.is); a change made between a render and its subscription is caught when it subscribes.
+ * A getSnapshot returning a new value at every call throws, read twice as React reads it: React would loop on it.
+ */
+function useSyncExternalStore<T>(subscribe: (onChange: () => void) => () => void, getSnapshot: () => T): T {
+  const owner = current('useSyncExternalStore');
+  const s = owner.slot('store', () => ({ kind: 'store', subscribe: undefined, getSnapshot, value: undefined, unsubscribe: undefined }));
+  const value = getSnapshot();
+  if (!Object.is(value, getSnapshot())) {
+    throw new Error('useSyncExternalStore: getSnapshot returned a new value at its second call, and React would loop on it: cache the snapshot');
+  }
+  s.getSnapshot = getSnapshot;
+  s.value = value;
+  if (s.subscribe !== subscribe) {
+    s.subscribe = subscribe;
+    owner.pendingEffects.push(() => {
+      if (typeof s.unsubscribe === 'function') s.unsubscribe();
+      const onChange = () => {
+        if (!owner.unmounted && !Object.is(s.getSnapshot(), s.value)) owner.render();
+      };
+      s.unsubscribe = subscribe(onChange);
+      onChange();
+    });
+  }
+  return s.value as T;
+}
+
 const unsupported = (name: string) => () => {
   throw new Error(`${name} is not served by the hook runtime: add it there before testing a component that calls it`);
 };
@@ -177,7 +210,7 @@ export const hooks = {
   useLayoutEffect: useEffect,
   useContext: unsupported('useContext'),
   useReducer: unsupported('useReducer'),
-  useSyncExternalStore: unsupported('useSyncExternalStore'),
+  useSyncExternalStore,
   useTransition: unsupported('useTransition'),
   useDeferredValue: unsupported('useDeferredValue'),
   useId: unsupported('useId'),
