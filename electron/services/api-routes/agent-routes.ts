@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
 import { markNoTerminal } from '../../core/no-terminal';
-import { endTerminalTree, launchPrompt, noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
+import { launchPrompt, noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
 import { removeAgent } from '../../core/agent-remove';
 import { hasEndOfTurn } from '../../core/end-of-turn';
@@ -19,7 +19,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot, endReplacedTerminal } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -456,18 +456,15 @@ async function spawnAgentSessionInSlot(
   // after a /start typed its message into a claude not yet reading, and it was
   // lost 4 times in 5 while the caller heard 200 (the Audit, gate of #134).
   const launch = launchBegins(agent.id, { withTask: !!prompt.trim() });
-  // The old terminal, with its whole tree (endTerminalTree, as a stop ends it), before the new one opens on the same
-  // folder: the hangup alone ended a CLI's launcher and left what it started, Cline's .cline behind its node (#620).
-  // The agent names neither it nor its session meanwhile: its exit, up to a grace later, is not this session's.
+  // The old terminal, with its whole tree (endReplacedTerminal, as a stop ends it), before the new one opens on the
+  // same folder: the hangup alone ended a CLI's launcher and left what it started, Cline's .cline behind its node
+  // (#620). The agent names neither it nor its session meanwhile: its exit, up to a grace later, is not this
+  // session's.
   if (existingPty) {
     agent.ptyId = undefined;
     agent.ptyCwd = undefined;
     agent.currentSessionId = undefined;
-    try {
-      await endTerminalTree(existingPty);
-    } catch (err) {
-      console.warn(`[spawn] ${agent.name || agent.id}: its old terminal did not close cleanly:`, err);
-    }
+    await endReplacedTerminal(agent.id, existingPty, `the old terminal of ${agent.name || agent.id}`);
   }
   let ptyProcess: ReturnType<typeof spawnAgentPty>;
   try {

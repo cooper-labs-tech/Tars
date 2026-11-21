@@ -35,6 +35,12 @@ import * as path from 'node:path';
  * 7. A platform left out. Windows has neither process groups nor ps: there the tree goes by taskkill /T while the
  *    shell still runs, then the console is closed (endTerminalTree's own path, endTreeBeforeConsole in
  *    pty-manager.ts). So every site calls endTerminalTree on every system, and none keeps the hangup alone.
+ * 8. Nothing tells the senders a replacement is under way (the Audit's L4 on #620, the same gap on these paths): for
+ *    up to the grace the agent has no terminal and no launch, and a task delegated or a message sent then (the
+ *    orchestrator's update_agent, then a task at once) launches the agent beside the tree being ended. Every sender
+ *    asks sessionStarting before it launches or types (/dispatch and /run-task through performDispatch, /message,
+ *    the bots, the chat runners, the writer): the replacement must read as a launch on its way until its tree is
+ *    gone (endReplacedTerminal, core/agent-launch.ts), and stop reading so once it is, failed or not.
  *
  * The "terminal" is a real process group where node-pty's shell would be, as in restart-ends-tree.test.ts (#620),
  * in Cline's shape: a bash leader that relays the hangup to its job, as an interactive shell does; the job, a
@@ -82,6 +88,7 @@ vi.setConfig({ testTimeout: 20_000 });
 
 import { agents, killStalePty, initAgentPty, startCliInTerminal } from '../../../electron/core/agent-manager';
 import { updateAgent } from '../../../electron/core/agent-update';
+import { sessionStarting, sessionStarted } from '../../../electron/core/agent-launch';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { toLaunch, type DirectLaunch } from '../../../electron/platform/launch';
 import type { FsProbe } from '../../../electron/platform/fs-probe';
@@ -258,6 +265,35 @@ describe('an end that fails (5)', () => {
 
     const said = warn.mock.calls.map((c) => c.map(String).join(' '));
     expect(said.filter((line) => /ps: command not found/.test(line)), said.join('\n')).toHaveLength(2);
+    expect(sessionStarting(updated) || sessionStarting(stale), 'a failed end held the senders for good (8)').toBe(false);
+  });
+});
+
+describe('a task sent while the old tree ends (8)', () => {
+  // What /dispatch, /run-task (performDispatch), /message, the bots and the chat runners do before they launch the
+  // agent or type into it: wait while its session is starting.
+  posixGroups('after a provider change: it waits for the old tree to be gone, then goes ahead', async () => {
+    const t = await launcherTerminal();
+    const agent = agentIn(t.pty);
+
+    const answer = updateAgent({ id: 'a1', provider: 'codex' });
+    expect(sessionStarting(agent), 'the task would launch the agent beside the tree being ended').toBe(true);
+    expect(await sessionStarted(agent, 10_000), 'the task waited past the end').toBe(true);
+    expect(gone(t), 'the task went ahead while the old tree still ran').toEqual(GONE);
+    expect((await answer).success).toBe(true);
+    expect(sessionStarting(agent)).toBe(false);
+  });
+
+  posixGroups('after a stale terminal is ended (killStalePty): the same', async () => {
+    const t = await launcherTerminal();
+    const agent = agentIn(t.pty, { ptyCwd: elsewhere });
+
+    const ended = killStalePty(agent);
+    expect(sessionStarting(agent)).toBe(true);
+    expect(await sessionStarted(agent, 10_000)).toBe(true);
+    expect(gone(t)).toEqual(GONE);
+    expect(await ended).toBe(true);
+    expect(sessionStarting(agent)).toBe(false);
   });
 });
 
@@ -295,6 +331,11 @@ describe('every place that replaces an agent terminal', () => {
   it('ends it with its tree (endTerminalTree), never with the hangup alone (1, 7)', () => {
     for (const f of ['core/agent-update.ts', 'core/agent-manager.ts', 'services/api-routes/agent-routes.ts', 'services/bot-core.ts']) {
       expect(source(f), `${f} ends an agent terminal with the hangup alone`).not.toMatch(/\bkillPty\(/);
+    }
+    // And through endReplacedTerminal, which the senders see (8): a bare endTerminalTree there is a replacement
+    // nobody waits for.
+    for (const f of ['core/agent-update.ts', 'core/agent-manager.ts', 'services/api-routes/agent-routes.ts', 'handlers/ipc-handlers.ts']) {
+      expect(source(f), `${f} ends a replaced terminal out of the senders' sight`).not.toMatch(/\bendTerminalTree\(/);
     }
     // ipc-handlers.ts gives the hangup alone to the terminals that are no agent's, as a terminal app does: the
     // window's own shells (pty:create, the quick terminals) and an install it cancels. Its agent terminals end

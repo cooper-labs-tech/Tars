@@ -46,7 +46,7 @@ import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
 import { withoutRetiredSettings } from '../services/telegram-retired';
-import { endTerminalTree, messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
+import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
 import { agentStatusOnExit, refuseWhileQuitting } from '../core/quit-state';
 import { killStalePty, notePtyKeys, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch, launchIntoTerminal, cliStartRefusal } from '../core/agent-manager';
@@ -65,7 +65,7 @@ import { tasksReport } from '../services/task-watch';
 import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
-import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
+import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, endReplacedTerminal, type AgentLauncher } from '../core/agent-launch';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
@@ -637,20 +637,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
       if (!(await apiListening())) throw new Error(NOT_LISTENING);
       refuseWhileQuitting('agent terminal');
-      // With its whole tree, before the new one opens (endTerminalTree, as a stop ends it), the agent naming none
+      // With its whole tree, before the new one opens (endReplacedTerminal, as a stop ends it), the agent naming none
       // meanwhile: its exit, up to a grace later, is not the agent's. What ran under it, a job its shell holds,
       // a CLI typed by hand on Windows that cliStartRefusal cannot see, outlived the hangup alone (#620).
       const oldPty = ptyProcesses.get(agent.ptyId!);
       ptyProcesses.delete(agent.ptyId!);
       agent.ptyId = undefined;
       agent.ptyCwd = undefined;
-      if (oldPty) {
-        try {
-          await endTerminalTree(oldPty);
-        } catch (err) {
-          console.warn(`[start] ${agent.name || agent.id}: its terminal did not close cleanly before the local provider's:`, err);
-        }
-      }
+      if (oldPty) await endReplacedTerminal(agent.id, oldPty, `the terminal of ${agent.name || agent.id}, for the local provider's`);
 
       const currentSettings = getAppSettings();
       const fullPathForLocal = buildFullPath(cliPathDirs(currentSettings.cliPaths));

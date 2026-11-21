@@ -18,9 +18,9 @@ import { quoted } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
 import { holdsMessages } from './one-task';
 import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
-import { endTerminalTree, oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput, type MessageSender } from './pty-manager';
+import { oweToFirstMessage, ptyProcesses, setDialogProbe, setCliProbe, setTurnProbe, setTurnInProgressProbe, writeProgrammaticInput, type MessageSender } from './pty-manager';
 import { keptSender } from '../services/agent-queues';
-import { dialogOpen, dialogShown } from './agent-launch';
+import { dialogOpen, dialogShown, endReplacedTerminal } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
@@ -194,12 +194,13 @@ export let agentsLoaded = false;
  * current logical working directory (worktreePath ?? projectPath). Returns
  * true if the PTY was killed (caller should respawn before writing to it).
  *
- * Its whole tree, as a stop ends it (endTerminalTree), and resolved once it is
- * gone, which takes up to its grace: every caller awaits it before it opens the
- * next terminal. The hangup alone ended a CLI's launcher and left what the
- * launcher started, Cline's .cline behind its node, orphaned and holding the
- * folder (#620). The agent names no terminal from the call on, so the old
- * one's exit, a grace later, is not the agent's.
+ * Its whole tree, as a stop ends it (endReplacedTerminal), and resolved once it
+ * is gone, which takes up to its grace: every caller awaits it before it opens
+ * the next terminal, and every sender waits for it meanwhile. The hangup alone
+ * ended a CLI's launcher and left what the launcher started, Cline's .cline
+ * behind its node, orphaned and holding the folder (#620). The agent names no
+ * terminal from the call on, so the old one's exit, a grace later, is not the
+ * agent's.
  *
  * This prevents the BUG 4 scenario where an agent has a worktree added
  * after its PTY was created: the running PTY keeps its old cwd, so
@@ -232,13 +233,7 @@ export async function killStalePty(agent: AgentStatus): Promise<boolean> {
     : `Killed stale PTY for agent ${agent.id}: ptyCwd=${agent.ptyCwd} expected=${expectedCwd}`);
   agent.ptyId = undefined;
   agent.ptyCwd = undefined;
-  if (existing) {
-    try {
-      await endTerminalTree(existing);
-    } catch (err) {
-      console.warn(`Failed to kill stale PTY for agent ${agent.id}:`, err);
-    }
-  }
+  if (existing) await endReplacedTerminal(agent.id, existing, `the stale terminal of ${agent.name || agent.id}`);
   return true;
 }
 
@@ -1185,15 +1180,9 @@ export async function startCliInTerminal(
   const shell = shellId ? deps.ptyProcesses.get(shellId) : undefined;
   if (shellId) deps.ptyProcesses.delete(shellId);
   agent.ptyId = undefined;
-  // With its tree, by taskkill /T while it runs (endTerminalTree): a CLI typed into it by hand that registered no
-  // session, which cliStartRefusal cannot see, went with the shell, and what it had started outlived it.
-  if (shell) {
-    try {
-      await endTerminalTree(shell);
-    } catch (err) {
-      console.warn(`[start] ${agent.name || agent.id}: the shell its CLI replaces did not close cleanly:`, err);
-    }
-  }
+  // With its tree, by taskkill /T while it runs (endReplacedTerminal): a CLI typed into it by hand that registered
+  // no session, which cliStartRefusal cannot see, went with the shell, and what it had started outlived it.
+  if (shell) await endReplacedTerminal(agent.id, shell, `the shell ${agent.name || agent.id}'s CLI replaces`);
 
   cliToStart.set(agent, launch);
   let opened: string;

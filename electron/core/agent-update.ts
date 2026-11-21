@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import { agents, saveAgents, killStalePty } from './agent-manager';
-import { ptyProcesses, endTerminalTree } from './pty-manager';
+import { ptyProcesses } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { sessionStarting } from './agent-launch';
+import { sessionStarting, endReplacedTerminal } from './agent-launch';
 import { orchestratorMoved } from './chat-identity';
 import { launchSettings, changedLaunchSettings, restartForSettings, type RestartOutcome } from './agent-restart';
 import { assignRole, requestedRole } from './agent-role';
@@ -165,13 +165,11 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   const before = FIELDS.map(field => JSON.stringify(agent[field]));
 
   // Then the save, which nothing refuses any more. A terminal it replaces is taken off the agent here, and its whole
-  // tree ended (endTerminalTree, as a stop ends it) before the answer: the hangup alone ended a CLI's launcher and
-  // left what it started, Cline's .cline behind its node, orphaned on the agent's folder (#620), and a start sent
-  // once this answers opens the next terminal beside nothing.
+  // tree ended (endReplacedTerminal, as a stop ends it, every sender waiting meanwhile) before the answer: the hangup
+  // alone ended a CLI's launcher and left what it started, Cline's .cline behind its node, orphaned on the agent's
+  // folder (#620), and a start sent once this answers opens the next terminal beside nothing.
   const terminalsEnding: Promise<unknown>[] = [];
-  const endTree = (terminal: IPty) => terminalsEnding.push(endTerminalTree(terminal).catch((err) => {
-    console.warn(`[update] ${agent.name || agent.id}: the terminal it replaces did not close cleanly:`, err);
-  }));
+  const endTree = (terminal: IPty) => terminalsEnding.push(endReplacedTerminal(agent.id, terminal, `the terminal of ${agent.name || agent.id}`));
   if (moving) {
     agent.projectPath = params.projectPath!;
     agent.pathMissing = false;
