@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { DATA_DIR } from '../constants';
+import { usesPath, type InUse } from './paths-in-use';
 
 /**
  * A durable temporary folder per agent (RD-REDEMARRAGE.md, 2.1, approved by
@@ -111,6 +112,11 @@ export interface RetentionDeps {
   freeBytes?: () => number | null;
   capBytes?: number;
   log?: (line: string) => void;
+  /**
+   * What the live processes use (paths-in-use.ts), read once a unit is about to go: a unit one of them uses is kept,
+   * whatever its date. Undefined from it: they could not be read, and nothing is deleted that pass.
+   */
+  inUse?: () => Promise<InUse | undefined>;
 }
 
 /** One thing the retention keeps or deletes whole. */
@@ -148,7 +154,10 @@ async function measure(p: string): Promise<{ bytes: number; newest: number; live
     return null;
   }
   let bytes = st.isDirectory() ? 0 : (typeof st.blocks === 'number' ? st.blocks * 512 : st.size);
-  let newest = st.mtimeMs;
+  // An executable's run is a use: running it changes no date but its access time (measured on APFS 21/11; Linux's
+  // relatime too). A data file's access time is not read: a read does not move it on APFS, and an indexer's daily
+  // reads would keep everything on Linux. Folders' neither: this walk reads them.
+  let newest = st.isFile() && (st.mode & 0o111) !== 0 ? Math.max(st.mtimeMs, st.atimeMs) : st.mtimeMs;
   let live = st.isSocket() || st.isFIFO();
   if (st.isDirectory()) {
     let names: string[];
@@ -295,6 +304,18 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
   // long pass is spared too.
   const live = new Set(deps.liveAgentIds());
   let swapped = false;
+  // What the live processes use, read before the first deletion of the pass, once (QA's gate of #601's stack: the
+  // gate's codex and Kimi went while it ran them). Compared under both spellings of a unit, the root's and the real
+  // one (macOS's /tmp is /private/tmp), which is the one lsof and /proc give.
+  let inUseRead: Promise<InUse | undefined> | undefined;
+  let unreadSaid = false;
+  const usedBy = async (resolved: string): Promise<'used' | 'unknown' | 'free'> => {
+    if (!deps.inUse) return 'free';
+    inUseRead ??= deps.inUse().catch(() => undefined);
+    const inUse = await inUseRead;
+    if (!inUse) return 'unknown';
+    return usesPath(inUse, [resolved, rootReal + resolved.slice(root.length)]) ? 'used' : 'free';
+  };
   const remove = async (unit: Unit, reason: string): Promise<boolean> => {
     const resolved = path.resolve(unit.path);
     if (swapped || !resolved.startsWith(root + path.sep)) return false;
@@ -313,10 +334,29 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
     } catch {
       return false;
     }
+    const use = await usedBy(resolved);
+    if (use === 'unknown') {
+      if (!unreadSaid) log('[agent-tmp] the processes could not be read: nothing is deleted this pass, in case one of them uses it');
+      unreadSaid = true;
+      return false;
+    }
+    if (use === 'used') {
+      log(`[agent-tmp] ${resolved} is in use by a live process (its executable, its current folder, a file it holds open, or its command line): kept`);
+      return false;
+    }
+    // Moved aside in one step, then deleted: Windows refuses the move while a process holds the unit (a running image,
+    // its current folder), where a recursive removal would have deleted what it could around it.
+    const aside = `${resolved}.tars-removing-${process.pid}-${now.toString(36)}`;
     try {
-      await fs.promises.rm(resolved, { recursive: true, force: true });
+      await fs.promises.rename(resolved, aside);
     } catch (err) {
-      log(`[agent-tmp] ${resolved} could not be deleted (${(err as Error).message}): kept`);
+      log(`[agent-tmp] ${resolved} could not be moved aside to be deleted (${(err as NodeJS.ErrnoException).code ?? (err as Error).message}): kept whole, a process may hold it`);
+      return false;
+    }
+    try {
+      await fs.promises.rm(aside, { recursive: true, force: true });
+    } catch (err) {
+      log(`[agent-tmp] ${aside} could not be deleted (${(err as Error).message}): left, and weighed again at the next pass`);
       return false;
     }
     measures.delete(unit.path);

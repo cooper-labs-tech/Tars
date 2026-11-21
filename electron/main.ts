@@ -171,6 +171,7 @@ import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
 import { createKeepAwake } from './services/keep-awake';
 import { endAcpRunsOnQuit, agentsRunningOverAcp } from './services/acp/delegate';
 import { retentionLog, startTmpRetention } from './services/agent-tmp';
+import { readPathsInUse } from './services/paths-in-use';
 import { sweepRunTokenFolders } from './services/acp/run-token-file';
 import { describeSecretFileError, ensureSecretFileMode, narrowDataDir, closeSecretsToOtherAccounts } from './utils/secret-file';
 import { HERMES_CONNECTION_FILE, configuredHermesConnection } from './services/hermes-config';
@@ -941,6 +942,8 @@ app.whenReady().then(async () => {
       }
     },
     log: retentionLog,
+    // What the live processes use stays, whatever its date (paths-in-use.ts): read once a unit is about to go.
+    inUse: () => readPathsInUse(),
   }, { firstMs: firstRetentionMs });
   // A message held behind a slash command typed by hand goes in once the
   // command's record says the field emptied (core/pty-manager.ts).
