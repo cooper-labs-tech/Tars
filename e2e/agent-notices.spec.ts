@@ -67,6 +67,11 @@ function seed(home: string): { project: string } {
   for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
   const cline = path.join(bin, 'cline');
   fs.writeFileSync(cline, `#!${process.execPath}\n${CLINE_STAND_IN}`, { mode: 0o755 });
+  // The user's own Cline provider, which each launch copies into the agent's folder (ClineProvider.writeAgentFolder):
+  // without it a Cline agent does not start.
+  const usersSettings = path.join(home, '.cline', 'data', 'settings');
+  fs.mkdirSync(usersSettings, { recursive: true });
+  fs.writeFileSync(path.join(usersSettings, 'providers.json'), JSON.stringify({ version: 1, lastUsedProvider: 'anthropic', providers: { anthropic: { settings: { provider: 'anthropic', apiKey: 'sk-e2e-users-own' } } } }));
   const fakes = writeFakeClis(home, ['claude']) as Record<string, string>;
   const agent = (id: string, name: string, provider: string, cliPath: string) => ({
     id, name, character: 'robot', provider, status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'normal',
