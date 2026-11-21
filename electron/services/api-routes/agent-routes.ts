@@ -24,6 +24,7 @@ import type { AgentWakeVia } from '../../types';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
+import { resumeOfLaunch } from '../../providers/cli-provider';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
 // refused is only what could not start, on the platform Tars runs on (2.0.2).
 import { cliPathProblem } from '../../platform/cli-path';
@@ -346,12 +347,14 @@ async function spawnAgentSessionInSlot(
   // once what its line needs is read from the CLI (codex's flags), off the
   // main thread.
   await cliProvider.prepareLaunch?.(binaryPath, effectiveMode);
+  // A CLI that forks ahead (Kimi Code's `kimi fork`): its fork made now, off the main thread, and then resumed.
+  const launchResume = await resumeOfLaunch(cliProvider, binaryPath, { resumeSessionId, forkSession });
   let cliCommand: string;
   try {
     cliCommand = cliProvider.buildInteractiveCommand({
       agentId: agent.id,
-      resumeSessionId,
-      forkSession,
+      resumeSessionId: launchResume.resumeSessionId,
+      forkSession: launchResume.forkSession,
       binaryPath,
       prompt: taskPrompt,
       model: resolvedModel && resolvedModel !== 'default' ? resolvedModel : undefined,

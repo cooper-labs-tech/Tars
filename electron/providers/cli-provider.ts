@@ -114,6 +114,14 @@ export interface CLIProvider {
    */
   prepareLaunch?(binaryPath: string, permissionMode?: string): Promise<void>;
 
+  /**
+   * For a CLI whose own fork is a command of its own that makes the new session and exits (Kimi Code's `kimi fork -y
+   * <id>`): the session a launch that forks `sessionId` goes on in, made off the main thread before the line is built,
+   * which then resumes it plainly (resumeOfLaunch). Null when it could not be made. Absent: the line forks, or not, by
+   * itself.
+   */
+  forkAhead?(binaryPath: string, sessionId: string): Promise<string | null>;
+
   /** Build command string for interactive PTY sessions */
   buildInteractiveCommand(params: InteractiveCommandParams): string;
 
@@ -275,6 +283,20 @@ export function promptOperand(prompt: string | undefined): string {
  * a home such as `/Users/o'neil` closed the quote early and the command did
  * not run, and a name built to close it could add arguments of its own.
  */
+/**
+ * The session a launch resumes, and whether it forks it, once a CLI that forks ahead (CLIProvider.forkAhead) has made
+ * the fork: its new session, resumed plainly. Unchanged for a launch that does not fork, for a CLI that forks on its own
+ * line, and when the fork could not be made (the line is then built for a fork, as before). Every launch path awaits it
+ * once it knows what it resumes, before it builds the line.
+ */
+export async function resumeOfLaunch(
+  provider: Pick<CLIProvider, 'forkAhead'>, binaryPath: string, resume: { resumeSessionId?: string; forkSession: boolean },
+): Promise<{ resumeSessionId?: string; forkSession: boolean }> {
+  if (!resume.forkSession || !resume.resumeSessionId || !provider.forkAhead) return resume;
+  const forked = await provider.forkAhead(binaryPath, resume.resumeSessionId);
+  return forked ? { resumeSessionId: forked, forkSession: false } : resume;
+}
+
 export function shellQuote(value: string): string {
   return `'${value.replace(/'/g, "'\\''")}'`;
 }

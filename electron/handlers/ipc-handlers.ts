@@ -78,7 +78,7 @@ import type { ClaudeSettings, ClaudeStats, ClaudeProject, ClaudePlugin, ClaudeSk
 import * as crypto from 'crypto';
 import * as https from 'https';
 import { getTasmaniaStatus, tasmaniaFetch } from '../services/tasmania-client';
-import { enforcesOrchestratorMode } from '../providers/cli-provider';
+import { enforcesOrchestratorMode, resumeOfLaunch } from '../providers/cli-provider';
 import { withSessionTruth } from '../services/agent-truth';
 import { spawnAgentPty, cliRunningIn, agentShell, agentPtyEnv } from '../core/agent-pty';
 import { resolveShell, shellArgs, childEnv, toLaunch, withPath, resolveCliBinary, cliEnv } from '../platform';
@@ -844,6 +844,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // A fork writes no transcript before its first turn: until it does, the
     // conversation to resume is still this one. See forkedFromSessionId.
     agent.forkedFromSessionId = forkSession ? resumeSessionId ?? undefined : undefined;
+    // A CLI that forks ahead (Kimi Code's `kimi fork`): its fork made now, off the main thread, and then resumed.
+    const launchResume = await resumeOfLaunch(cliProvider, binaryPath, { resumeSessionId: resumeSessionId ?? undefined, forkSession });
 
     // What this launch passes, read with the command it builds: the shell wait
     // below leaves half a second for a change to land that the command does
@@ -851,8 +853,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const launched = launchSettings(agent);
     const command = cliProvider.buildInteractiveCommand({
       agentId: agent.id,
-      resumeSessionId: resumeSessionId ?? undefined,
-      forkSession,
+      resumeSessionId: launchResume.resumeSessionId,
+      forkSession: launchResume.forkSession,
       binaryPath,
       prompt: promptWithMemory,
       model: resolvedModel,
