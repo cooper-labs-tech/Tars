@@ -123,6 +123,14 @@ export const SENDER_WAIT_MS = 20_000;
 const launchesUnderWay = new Map<string, { since: number; withTask: boolean }>();
 
 /**
+ * Agents whose launch is still being made ready before its line: an API start from its first wait, a session its CLI
+ * forks ahead (CLIProvider.forkAhead: `kimi fork`, 1.4 s measured, 20 s at most). A launch on its way too
+ * (sessionStarting), however long that takes: a second start in that time typed a second line into the first one's
+ * terminal, or started over it (the Audit's L1 on #601). How many each, for preparations that overlap.
+ */
+const preparing = new Map<string, number>();
+
+/**
  * Told when a launch begins or is abandoned, so the page can say `starting`
  * (AgentStatus.launching) without a status change to carry it: a restart keeps
  * `idle`. agents-tick listens, and watches the window until it closes by
@@ -174,6 +182,8 @@ export function launchAbandoned(agentId: string, launch: object): void {
  * error while its CLI answered.
  */
 export function sessionStarting(agent: StartingAgent): boolean {
+  // Still being made ready, its terminal not touched yet: a launch on its way, whatever the clock says.
+  if (preparing.has(agent.id)) return true;
   const launch = launchesUnderWay.get(agent.id);
   if (!launch) return false;
   const elapsed = Date.now() - launch.since;
@@ -269,9 +279,56 @@ export async function sessionStarted(agent: StartingAgent, maxWaitMs = Infinity)
   return true;
 }
 
+/**
+ * Whether a launch of this agent is still making its terminal ready (whilePreparing): another start is refused then.
+ * Once its line is typed, the guards on a running CLI answer, as before.
+ */
+export function launchPreparing(agentId: string): boolean {
+  return preparing.has(agentId);
+}
+
+/**
+ * A launch's preparation, for as long as `run` takes: the agent reads as a launch on its way meanwhile (sessionStarting),
+ * so every sender waits and every other start is refused (launchPreparing), then stops reading as one, whatever `run`
+ * did.
+ */
+export async function whilePreparing<T>(agentId: string, run: () => Promise<T>): Promise<T> {
+  preparing.set(agentId, (preparing.get(agentId) ?? 0) + 1);
+  launchListener?.();
+  try {
+    return await run();
+  } finally {
+    const left = (preparing.get(agentId) ?? 1) - 1;
+    if (left > 0) preparing.set(agentId, left);
+    else preparing.delete(agentId);
+    launchListener?.();
+  }
+}
+
+/**
+ * The session a launch resumes, and whether it forks it, once a CLI that forks ahead (CLIProvider.forkAhead) has made
+ * the fork, in the agent's folder: its new session, resumed plainly. Unchanged for a launch that does not fork, for a
+ * CLI that forks on its own line, and when the fork could not be made (the line is then built for a fork, as before).
+ * The agent reads as a launch on its way while the fork is made. Every launch path awaits it once it knows what it
+ * resumes, before it builds the line.
+ */
+export async function resumeOfLaunch(
+  provider: { forkAhead?: (binaryPath: string, sessionId: string, cwd: string) => Promise<string | null> },
+  binaryPath: string,
+  resume: { resumeSessionId?: string; forkSession: boolean },
+  at: { agentId: string; cwd: string },
+): Promise<{ resumeSessionId?: string; forkSession: boolean }> {
+  const forkAhead = provider.forkAhead?.bind(provider);
+  const sessionId = resume.resumeSessionId;
+  if (!resume.forkSession || !sessionId || !forkAhead) return resume;
+  const forked = await whilePreparing(at.agentId, () => forkAhead(binaryPath, sessionId, at.cwd));
+  return forked ? { resumeSessionId: forked, forkSession: false } : resume;
+}
+
 /** Test seam. */
 export function resetLaunches(): void {
   launchesUnderWay.clear();
+  preparing.clear();
 }
 
 /**

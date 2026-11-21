@@ -94,14 +94,16 @@ export class KimiCodeProvider implements CLIProvider {
    * A restart's fork, ahead of its line: `kimi fork -y <id>` (2.6.3, measured 21/11) makes a new session holding the
    * conversation's turns in about 1.4 s, with no terminal, prints `Forked to session_<uuid> (...)` and exits; `--session`
    * then resumes it under that id, never the stopped session's, the stop's tombstone. Run as codex's `--help` is (cli-
-   * exec.ts), off the main thread, in Tars's environment, which the agent's terminal inherits, KIMI_CODE_HOME with it.
-   * Null when kimi fails, hangs past 20 s, prints no session, or the session is not of kimi's form.
+   * exec.ts), off the main thread, in Tars's environment, which the agent's terminal inherits, KIMI_CODE_HOME with it,
+   * and in the agent's folder (the Audit's L3 on #601: a fork from `/` still kept the session's own folder, measured,
+   * and from the agent's folder there is nothing to measure). Null when kimi fails, hangs past 20 s, prints no
+   * session, or the session is not of kimi's form.
    */
-  async forkAhead(binaryPath: string, sessionId: string): Promise<string | null> {
+  async forkAhead(binaryPath: string, sessionId: string, cwd: string): Promise<string | null> {
     const id = kimiIdOf(sessionId);
     if (!id) return null;
     try {
-      const { stdout } = await execCli(binaryPath, ['fork', '-y', id], { encoding: 'utf-8', timeout: 20_000, maxBuffer: 1024 * 1024 });
+      const { stdout } = await execCli(binaryPath, ['fork', '-y', id], { encoding: 'utf-8', timeout: 20_000, maxBuffer: 1024 * 1024, cwd });
       const forked = /Forked to (session_[0-9a-f-]{36})\b/.exec(stdout)?.[1];
       return forked ? kimiUuidOf(forked) : null;
     } catch (err) {

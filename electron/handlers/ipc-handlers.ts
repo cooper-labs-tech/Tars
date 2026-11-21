@@ -68,7 +68,7 @@ import { tasksReport } from '../services/task-watch';
 import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
-import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
+import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, resumeOfLaunch, launchPreparing, whilePreparing, type AgentLauncher } from '../core/agent-launch';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
@@ -78,7 +78,7 @@ import type { ClaudeSettings, ClaudeStats, ClaudeProject, ClaudePlugin, ClaudeSk
 import * as crypto from 'crypto';
 import * as https from 'https';
 import { getTasmaniaStatus, tasmaniaFetch } from '../services/tasmania-client';
-import { enforcesOrchestratorMode, resumeOfLaunch } from '../providers/cli-provider';
+import { enforcesOrchestratorMode } from '../providers/cli-provider';
 import { withSessionTruth } from '../services/agent-truth';
 import { spawnAgentPty, cliRunningIn, agentShell, agentPtyEnv } from '../core/agent-pty';
 import { resolveShell, shellArgs, childEnv, toLaunch, withPath, resolveCliBinary, cliEnv } from '../platform';
@@ -845,7 +845,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // conversation to resume is still this one. See forkedFromSessionId.
     agent.forkedFromSessionId = forkSession ? resumeSessionId ?? undefined : undefined;
     // A CLI that forks ahead (Kimi Code's `kimi fork`): its fork made now, off the main thread, and then resumed.
-    const launchResume = await resumeOfLaunch(cliProvider, binaryPath, { resumeSessionId: resumeSessionId ?? undefined, forkSession });
+    const launchResume = await resumeOfLaunch(cliProvider, binaryPath, { resumeSessionId: resumeSessionId ?? undefined, forkSession }, { agentId: agent.id, cwd: agent.worktreePath || agent.projectPath });
 
     // What this launch passes, read with the command it builds: the shell wait
     // below leaves half a second for a change to land that the command does
@@ -962,9 +962,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
    * session over it and lose the conversation.
    */
   const startAgentCli: AgentLauncher = async (id, prompt, options) => {
+    // One launch at a time per agent: a second one, while the first makes its terminal ready (a restart's fork, an API
+    // start's), typed a second line into the first one's terminal (the Audit's L1 on #601). Refused, and nothing typed.
+    if (launchPreparing(id)) {
+      return { success: false, error: `${agents.get(id)?.name || id} is already starting: its CLI is on its way. Nothing was typed. Give it the task once it is up.` };
+    }
     const launch = launchBegins(id, { withTask: !!prompt?.trim() });
     try {
-      const result = await launchInTerminal(id, prompt, options);
+      // Making its terminal ready, until its line is typed: no other start meanwhile.
+      const result = await whilePreparing(id, () => launchInTerminal(id, prompt, options));
       if (!result.success) launchAbandoned(id, launch);
       return result;
     } catch (err) {
