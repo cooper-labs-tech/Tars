@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import { agents, saveAgents } from './agent-manager';
 import { ptyProcesses, fieldInUse, onFieldChange, type FieldInUse } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt, endReplacedTerminal } from './agent-launch';
+import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt, endReplacedTerminal, launchPreparing } from './agent-launch';
 import { agentStatusEmitter } from '../services/agent-events';
 import { holdsFor } from '../services/agent-watch';
 import { pendingBackgroundWork } from '../services/agent-truth';
@@ -302,7 +302,9 @@ function decide(agentId: string): RestartOutcome {
     lookAgain(agentId, 1000);
     return waitingOn(agentId, entry, 'launch');
   }
-  if (restarting.has(agentId)) {
+  // A restart under way, or another launch still making the terminal ready (launchPreparing): wait for it, never end
+  // its terminal (the Audit's L8 on #620).
+  if (restarting.has(agentId) || launchPreparing(agentId)) {
     lookAgain(agentId, 1000);
     return waitingOn(agentId, entry, 'launch');
   }
@@ -394,6 +396,12 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
   // Decided before the terminal is killed: a launch refused after it would leave the agent with none (the Audit's L3).
   const noPlan = launchPlanRefusal(agent.provider, agent.permissionMode);
   if (noPlan) return { success: false, error: noPlan };
+  // So is another launch still making the terminal ready, or a replacement still ending one: the terminal is that
+  // launch's, and the launch after it would be refused (one start at a time), the agent left in error with no
+  // terminal (the Audit's L8 on #620). Refused, as a restart asked while one runs is; one for settings waits (decide).
+  if (launchPreparing(agent.id)) {
+    return { success: false, error: `${agent.name || agent.id} is already starting: its CLI is on its way. Nothing was ended. Restart it once it is up.` };
+  }
   restarting.add(agent.id);
   restartedAt.set(agent.id, Date.now());
   try {
