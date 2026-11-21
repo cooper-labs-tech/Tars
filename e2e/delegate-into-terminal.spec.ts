@@ -15,8 +15,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * agent whose CLI is a stand-in named `claude` that does what Claude Code does around a turn: it runs Tars's own
  * hook scripts (SessionStart, UserPromptSubmit, Stop) and writes its replies, with their usage, in the transcript
  * where Claude Code keeps it. Its answer to a task is longer than the 4000 bytes the hooks keep. Agent `oc` is an
- * opencode agent and `ap` an amp agent, whose CLIs are stand-ins with no hook at all, which log how they were launched
- * and what is typed into them.
+ * opencode agent, whose stand-in writes each turn in opencode's database as 1.19.6 does, and `ap` an amp agent, whose
+ * stand-in has no hook at all. Both log how they were launched and what is typed into them.
  *
  * Asserted, once with the classic shell and once with the new interface:
  * 1. a delegation to `dev` goes into the terminal its card shows: the stand-in started from the window gets it,
@@ -26,11 +26,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. a second delegation given while the first works is queued, the window's banner shows the task in hand (who
  *    gave it, its first line) and the one waiting, and the second returns its own answer once the first is done;
  * 4. the agent's one conversation then holds both tasks, in order, under one session;
- * 5. a delegation to `oc`, whose CLI gives Tars no hook, starts its permanent session with the task and is said
- *    delivered, with what Tars does not read (no answer, tokens or cost invented); its session is the TUI with the
- *    task as `--prompt`, never `opencode run`, which exits after the task;
- * 5b. a delegation to `ap` (amp, no interactive form that takes a prompt) starts its TUI with no `-x`, which exits
- *    after the task, and the task is typed into it once it runs;
+ * 5. a delegation to `oc` starts its permanent session with the task: the TUI with the task as `--prompt`, never
+ *    `opencode run`, which exits after the task. Since #613 Tars reads opencode's turns from its database, which the
+ *    stand-in writes as opencode 1.19.6 does (e2e/opencode-db.cjs): the answer returned is the one written there;
+ * 5b. a delegation to `ap` (amp, no interactive form that takes a prompt, and no hook) starts its TUI with no `-x`,
+ *    which exits after the task, and the task is typed into it once it runs; it is said delivered, with what Tars does
+ *    not read (no answer, tokens or cost invented);
  * 6. start_agent, the deprecated alias, answers at once with a task id, and the task goes into the same terminal;
  * 7. (the Audit's M2 on #461) an Esc cuts a task's turn: Claude Code 2.1.302 puts the cut prompt back into an empty
  *    field (auto_restore_cancel), and the stand-in does too. The task ends interrupted, and the next one goes in
@@ -118,6 +119,43 @@ process.stdin.on('data', (data) => {
 process.stdin.resume();
 `;
 
+/**
+ * opencode's stand-in: it logs how it was launched and what is typed into it, draws opencode 1.19.6's bar (its folder
+ * by its name, then its keys: Tars types nothing into opencode before it, since #613), and records each turn, the one
+ * its `--prompt` starts and each message typed in, in opencode's database (e2e/opencode-db.cjs).
+ */
+const OPENCODE_CLI = (db: string) => String.raw`
+const fs = require('fs'), path = require('path');
+const { beginTurn, endTurn } = require(${JSON.stringify(db)});
+const log = (entry) => fs.appendFileSync(path.join(process.env.HOME, 'opencode.jsonl'), JSON.stringify({ at: new Date().toISOString(), pid: process.pid, ...entry }) + '\n');
+const argv = process.argv.slice(2);
+log({ launched: argv });
+process.stdout.write('opencode stand-in ready\n  ' + path.basename(process.cwd()) + '  tab agents  ctrl+p commands\n');
+let queue = Promise.resolve();
+const turn = (prompt) => { queue = queue.then(() => new Promise((done) => {
+  const last = prompt.split('\n').map((l) => l.trim()).filter(Boolean).pop() || '';
+  beginTurn(prompt);
+  log({ turn: last });
+  setTimeout(() => { endTurn('done: ' + last); done(); }, 600);
+})); };
+const at = argv.indexOf('--prompt');
+if (at !== -1 && argv[at + 1]) turn(argv[at + 1]);
+let buffer = '', pasting = false;
+if (process.stdin.isTTY) process.stdin.setRawMode(true);
+process.stdin.on('data', (d) => {
+  log({ typed: d.toString() });
+  for (const piece of d.toString().split(/(\x1b\[20[01]~)/)) {
+    if (piece === '\x1b[200~') { pasting = true; continue; }
+    if (piece === '\x1b[201~') { pasting = false; continue; }
+    for (const ch of piece) {
+      if (ch === '\r' && !pasting) { const line = buffer; buffer = ''; if (line.trim()) turn(line); }
+      else buffer += ch;
+    }
+  }
+});
+process.stdin.resume();
+`;
+
 /** A CLI with no hook: it logs how it was launched and what is typed into it, and says nothing to Tars. */
 const NO_HOOK_CLI = String.raw`
 const fs = require('fs'), path = require('path');
@@ -149,7 +187,7 @@ for (const newInterface of [false, true]) {
     const claude = path.join(bin, 'claude');
     fs.writeFileSync(claude, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\nconst LONG = ${JSON.stringify(LONG)};\n${STAND_IN}`, { mode: 0o755 });
     const opencode = path.join(bin, 'opencode');
-    fs.writeFileSync(opencode, `#!${process.execPath}\n${NO_HOOK_CLI}`, { mode: 0o755 });
+    fs.writeFileSync(opencode, `#!${process.execPath}\n${OPENCODE_CLI(path.resolve('e2e', 'opencode-db.cjs'))}`, { mode: 0o755 });
     const amp = path.join(bin, 'amp');
     fs.writeFileSync(amp, `#!${process.execPath}\n${NO_HOOK_CLI}`, { mode: 0o755 });
     const agent = (id: string, name: string, role: string, provider: string, cliPath: string) => ({
@@ -240,7 +278,7 @@ for (const newInterface of [false, true]) {
       }, { timeout: 15_000, message: 'the banner shows the second task waiting' }).toBe(1);
       const [one, two] = await Promise.all([first, second]);
 
-      // 5. A CLI with no hook: its session is started with the task, and the task said delivered.
+      // 5. opencode: its session is started with the task, and the answer it writes in its database read back.
       const toOc = await tool('delegate_task', { id: 'oc', prompt: 'NOHOOK look at the logs', timeoutSeconds: 60 });
       // Its CLI writes its first line a moment after Tars answered: read once it has.
       await expect.poll(() => lines(path.join(home, 'opencode.jsonl')).filter((e) => e.launched).length, { timeout: 30_000 }).toBeGreaterThanOrEqual(1);
@@ -264,12 +302,12 @@ for (const newInterface of [false, true]) {
       expect.soft(afterTurns.map((e) => e.turn).join('\n'), 'the cut task sent again with the next').not.toContain('HALT-ME');
 
       const standIn = lines(path.join(home, 'stand-in.jsonl'));
-      const noHook = lines(path.join(home, 'opencode.jsonl'));
+      const ocLog = lines(path.join(home, 'opencode.jsonl'));
       const ampLog = lines(path.join(home, 'amp.jsonl'));
       // Filed under the physical path the CLI runs in (/private/var on macOS), as Claude Code files it.
       const transcript = fs.readFileSync(path.join(home, '.claude', 'projects', fs.realpathSync(project).replace(/[^a-zA-Z0-9]/g, '-'), `${devSession}.jsonl`), 'utf8');
       const report = await page.evaluate(() => (window as unknown as Api).electronAPI.usage.tasks({ sinceDays: 1 }));
-      keep({ one, two, toOc, toAmp, ampLog, started, banner, devSession, standIn, noHook, tasks: report.tasks, transcriptLines: transcript.trim().split('\n').length });
+      keep({ one, two, toOc, toAmp, ampLog, started, banner, devSession, standIn, ocLog, tasks: report.tasks, transcriptLines: transcript.trim().split('\n').length });
       await page.goto(`${DEV_URL}/usage`, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(1500);
       await stepShot(page, newInterface ? 'usage-new-interface' : 'usage');
@@ -299,17 +337,16 @@ for (const newInterface of [false, true]) {
       const devTasks = report.tasks.filter((t) => t.agentId === 'dev' && t.requesterAgentId === 'lead');
       expect.soft(devTasks.length, 'dev\'s tasks from lead in the ledger').toBeGreaterThanOrEqual(2);
       expect.soft(devTasks.every((t) => t.sessionIds.every((s) => s === devSession))).toBe(true);
-      // 5. No hook: started with the task, delivered, nothing invented.
-      expect.soft(noHook.filter((e) => e.launched).length, 'launches of oc\'s CLI').toBe(1);
-      expect.soft(JSON.stringify(noHook)).toContain('NOHOOK look at the logs');
-      const ocArgv = (noHook.find((e) => e.launched)?.launched ?? []) as string[];
+      // 5. opencode: started with the task as --prompt, and its answer read back from its database.
+      expect.soft(ocLog.filter((e) => e.launched).length, 'launches of oc\'s CLI').toBe(1);
+      expect.soft(JSON.stringify(ocLog)).toContain('NOHOOK look at the logs');
+      const ocArgv = (ocLog.find((e) => e.launched)?.launched ?? []) as string[];
       expect.soft(ocArgv, 'opencode started as its TUI, with the task as --prompt').toContain('--prompt');
       expect.soft(ocArgv[ocArgv.indexOf('--prompt') + 1] ?? '').toContain('NOHOOK look at the logs');
       expect.soft(ocArgv, 'opencode run exits after the task').not.toContain('run');
       expect.soft(toOc.isError).toBe(false);
-      expect.soft(toOc.text).toMatch(/^Task t-[0-9a-f]{8}: The task went into Review Agent's terminal\./);
-      expect.soft(toOc.text).toMatch(/cannot see when its turn ends/);
-      expect.soft(toOc.text).not.toMatch(/\d tokens|\$\d/);
+      expect.soft(toOc.text, 'the answer opencode wrote in its database').toContain('done: NOHOOK look at the logs');
+      expect.soft(toOc.text, 'not said delivered: Tars reads opencode').not.toMatch(/cannot see when its turn ends/);
       // 5b. amp: one launch, no -x, the task typed in, said delivered.
       const ampLaunches = ampLog.filter((e) => e.launched);
       expect.soft(ampLaunches.length, 'launches of ap\'s CLI').toBe(1);
@@ -318,6 +355,8 @@ for (const newInterface of [false, true]) {
       expect.soft(ampLog.filter((e) => typeof e.typed === 'string' && e.typed.includes('AMPTASK')).length, 'the task typed into amp').toBeGreaterThanOrEqual(1);
       expect.soft(toAmp.isError).toBe(false);
       expect.soft(toAmp.text).toMatch(/Amp Agent's terminal/);
+      expect.soft(toAmp.text, 'amp gives Tars no hook').toMatch(/cannot see when its turn ends/);
+      expect.soft(toAmp.text, 'nothing invented').not.toMatch(/\d tokens|\$\d/);
       // 6. The alias.
       expect.soft(started.isError).toBe(false);
       expect.soft(started.text).toMatch(/Task t-[0-9a-f]{8}/);
