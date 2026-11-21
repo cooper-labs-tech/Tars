@@ -227,6 +227,9 @@ describe('the CLI a hook names: its parent and the wrappers of Cline\'s above it
   it("a shell that only mentions cline is no wrapper: `bash -c \"cline ...\"` is the tool's, not Cline's", () => {
     const t = table({ 300: [200, [`${PKG}/.cline`]], 200: [100, ['/bin/bash', '-c', 'cline -i']], 100: TARS });
     expect(hook.cliOf(300, t)).toBe(300);
+    // As macOS's ps gives it, the command split into words: still the tool's shell, its -c never skipped.
+    const split = table({ 300: [200, [`${PKG}/.cline`]], 200: [100, ['/bin/bash', '-c', 'cline', '-i']], 100: TARS });
+    expect(hook.cliOf(300, split)).toBe(300);
   });
 
   it('commands that cannot be read keep the grandparent, as before; no parent to read names none', () => {
