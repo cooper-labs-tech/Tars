@@ -963,6 +963,7 @@ work.
 |---|---|---|
 | `~/.tars/agents.json` | `electron/core/agent-manager.ts` | the fleet: schema `version: 2`, `savedAt`, `agents[]` |
 | `~/.tars/agents.backup.json` | same | last good copy, taken from content just parsed successfully |
+| `~/.tars/agent-notices.json` | `electron/services/agent-notice-log.ts` | Tars's notices about each agent (2.0.7): `version: 1`, `notices[]` of `{ id, agentId, at, line, kind, seenAt? }`, at most 50 per agent, the oldest dropped; an agent's go with it. Written whole at each change; an entry of another shape or kind is left out when read |
 | `~/.tars/app-settings.json` | `electron/main.ts` (`saveAppSettingsToFile`) | every setting but the secrets: Slack/X/Jira switches, CLI paths, memory backends' addresses. At each launch, before it is read, `electron/services/telegram-retired.ts` takes out the six fields of Tars's own Telegram bot (gone since 2.0.5) and, if the bot had been set up, writes `telegramBotRetired: { at, hadToken }` once |
 | `~/.tars-private/settings-secrets.json` | `electron/services/settings-secrets.ts` (`saveSettingsSplit`) | every secret of the settings: the bots' tokens, provider and CLI keys, SocialData's, X's, Jira's, Hermes's gateway token, gbrain's and Honcho's, mode `0600` (in `app-settings.json` until 2.0.4, moved at the first start with every copy of it erased) |
 | `~/.tars-private/api-token` | `electron/services/api-server.ts` | 32 random bytes hex, mode `0600` (in `~/.dorothy` until 2.0.4) |
