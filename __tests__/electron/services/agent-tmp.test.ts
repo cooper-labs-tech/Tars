@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as net from 'node:net';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { TMP_ROOT, agentTmpEnv, enforceTmpRetention, shortIdOf } from '../../../electron/services/agent-tmp';
 import { DATA_DIR } from '../../../electron/constants';
 import { hasPosixModes } from '../../setup/platform-limits';
@@ -52,6 +52,24 @@ import { cannotSymlink } from '../../setup/symlink-privilege';
  *     reused only while it says the unit is young.
  * 16. (L3) A unit written between its measure and its deletion (a pass can take 100 s) goes anyway: its top's date is
  *     read again just before it is deleted.
+ * From QA's gate of #601's stack (agent-tmp.log, 21/11 02:18 UTC), written before the code:
+ * 17. What a live process uses goes on its dates alone: running a binary changes no date, and QA's `t/codex-0170`
+ *     (380 MB) and `t/kimi-2.6.3` went while the gate ran them, the conformance skipping codex and Kimi. A unit that a
+ *     live process uses (its executable, its current folder, a file it holds open, or a path its command line names)
+ *     is kept, by every rule (a day, 7 days, the cap), whoever's process it is.
+ * 18. The processes cannot be read (no lsof, a read that never ends): the pass deletes on dates alone. It deletes
+ *     nothing that pass, and says so.
+ * 19. A path in use is spelled another way than the unit (macOS's /tmp is /private/tmp, a home reached through a
+ *     link): both spellings of the unit are compared.
+ * 20. A prefix is taken for a folder: `t/tool` in use keeps `t/tool-old`, or a path outside the root keeps something.
+ * 21. A tool run within the day and ended goes: running an executable moves its access time (measured on APFS 21/11;
+ *     Linux's relatime too), so an executable's access time counts as a use. A data file's does not: reading it does
+ *     not move it on APFS (unless older than its change), and a daily indexer's reads would keep everything on Linux.
+ * 22. (Windows) A unit in use is half deleted: a recursive removal deletes what it can, then fails on what Windows
+ *     holds (a running image, a process's current folder), and the processes' own paths are not all read there. The
+ *     unit is moved aside first, in one step, which Windows refuses while it is used: kept whole. (On macOS and Linux
+ *     a move is never refused for use, and the processes' paths are read: 17.)
+ * 23. A pass that deletes nothing reads the processes: they are read once a unit is about to go, once per pass.
  */
 
 const DAY = 86_400_000;
@@ -428,5 +446,140 @@ describe('a root swapped for a link while the pass runs', () => {
     expect(fs.existsSync(path.join(outside, gone, 't', 'precious.txt'))).toBe(true);
     expect(result.removed).toEqual([]);
     expect(logs.join('\n')).toMatch(/link|moved|changed/);
+  });
+});
+
+describe('what a live process uses (17 to 23)', () => {
+  const W = () => shortIdOf('worker');
+  const L = () => shortIdOf('lead');
+  const real = (rel: string) => fs.realpathSync(path.join(root, rel));
+  const using = (paths: string[], commands: string[] = []) => async () => ({ paths, commands });
+
+  it('17. keeps a unit a live process runs, works in, holds open or names, by the day rule, and deletes the stale one beside it', async () => {
+    for (const rel of ['codex-0170/bin/codex', 'workdir/notes.txt', 'held/log.txt', 'cli-tool/cli.js', 'stale/old.txt']) put(`${W()}/t/${rel}`, 10, 2);
+    const inUse = using(
+      [real(`${W()}/t/codex-0170/bin/codex`), real(`${W()}/t/workdir`), real(`${W()}/t/held/log.txt`)],
+      [`node ${real(`${W()}/t/cli-tool/cli.js`)} --serve`],
+    );
+
+    const result = await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse }));
+
+    for (const kept of ['codex-0170', 'workdir', 'held', 'cli-tool']) expect(exists(`${W()}/t/${kept}`), kept).toBe(true);
+    expect(exists(`${W()}/t/stale`)).toBe(false);
+    expect(result.removed.map((r) => path.basename(r.path))).toEqual(['stale']);
+    expect(logs.join('\n')).toMatch(/codex-0170[^\n]*in use/);
+  });
+
+  it('17. keeps it by the 7-day rule and by the cap as well', async () => {
+    put(`${L()}/t/old-tool/bin/tool`, 10, 9);
+    put(`${L()}/t/old-junk/a.bin`, 10, 9);
+    put(`${L()}/t/used-tool/bin/tool`, 10, 3);
+    put(`${L()}/t/junk/a.bin`, 10, 2);
+    const inUse = using([real(`${L()}/t/old-tool/bin/tool`), real(`${L()}/t/used-tool`)]);
+
+    await enforceTmpRetention(deps({ inUse, capBytes: 1 }));
+
+    expect(exists(`${L()}/t/old-tool`)).toBe(true);
+    expect(exists(`${L()}/t/old-junk`)).toBe(false);
+    // Over the cap, the oldest first: the two in use stay, the one nothing uses goes.
+    expect(exists(`${L()}/t/used-tool`)).toBe(true);
+    expect(exists(`${L()}/t/junk`)).toBe(false);
+  });
+
+  it('18. deletes nothing when the processes cannot be read, and says so', async () => {
+    put(`${W()}/t/stale/old.txt`, 10, 2);
+    put(`${L()}/t/old/a.txt`, 10, 9);
+
+    const result = await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse: async () => undefined }));
+
+    expect(result.removed).toEqual([]);
+    expect(exists(`${W()}/t/stale/old.txt`) && exists(`${L()}/t/old/a.txt`)).toBe(true);
+    expect(logs.join('\n')).toMatch(/processes could not be read/);
+  });
+
+  it.skipIf(cannotSymlink())('19. compares the unit as the root spells it and as it really is', async () => {
+    // A root reached through a link above it, as macOS's /tmp is /private/tmp.
+    const realParent = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-agent-tmp-real-'));
+    const linkParent = `${realParent}-link`;
+    fs.symlinkSync(realParent, linkParent);
+    try {
+      const linked = path.join(linkParent, 'tmp');
+      const two = new Date(NOW - 2 * DAY);
+      for (const name of ['by-real', 'by-link', 'stale']) {
+        const file = path.join(linked, W(), 't', name, 'a.txt');
+        fs.mkdirSync(path.dirname(file), { recursive: true });
+        fs.writeFileSync(file, 'x');
+        for (const p of [file, path.dirname(file)]) fs.utimesSync(p, two, two);
+      }
+      const inUse = using(
+        [path.join(fs.realpathSync(linked), W(), 't', 'by-real', 'a.txt')],
+        [`tail -f ${path.join(linked, W(), 't', 'by-link', 'a.txt')}`],
+      );
+
+      await enforceTmpRetention(deps({ root: linked, liveAgentIds: () => ['worker'], inUse }));
+
+      expect(fs.existsSync(path.join(linked, W(), 't', 'by-real'))).toBe(true);
+      expect(fs.existsSync(path.join(linked, W(), 't', 'by-link'))).toBe(true);
+      expect(fs.existsSync(path.join(linked, W(), 't', 'stale'))).toBe(false);
+    } finally {
+      fs.rmSync(linkParent, { force: true });
+      fs.rmSync(realParent, { recursive: true, force: true });
+    }
+  });
+
+  it('20. a prefix is not a folder, and a path outside the root keeps nothing', async () => {
+    put(`${W()}/t/tool/bin/x`, 10, 2);
+    put(`${W()}/t/tool-old/bin/x`, 10, 2);
+    put(`${W()}/t/outside-twin/a.txt`, 10, 2);
+    const inUse = using([real(`${W()}/t/tool`), path.join(outside, 'outside-twin')], [`ls ${real(`${W()}/t/tool`)}`]);
+
+    await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse }));
+
+    expect(exists(`${W()}/t/tool`)).toBe(true);
+    expect(exists(`${W()}/t/tool-old`)).toBe(false);
+    expect(exists(`${W()}/t/outside-twin`)).toBe(false);
+  });
+
+  it.skipIf(!hasPosixModes())('21. keeps a tool run within the day, not a data file read within it', async () => {
+    const tool = put(`${W()}/t/ran-tool/bin/tool`, 10, 2);
+    const data = put(`${W()}/t/read-data/a.txt`, 10, 2);
+    fs.chmodSync(tool, 0o755);
+    const twoDays = new Date(NOW - 2 * DAY);
+    const anHourAgo = new Date(NOW - 3_600_000);
+    // The access time a run moved (or a read), the change time two days old.
+    fs.utimesSync(tool, anHourAgo, twoDays);
+    fs.utimesSync(data, anHourAgo, twoDays);
+
+    await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse: using([]) }));
+
+    expect(exists(`${W()}/t/ran-tool/bin/tool`)).toBe(true);
+    expect(exists(`${W()}/t/read-data`)).toBe(false);
+  });
+
+  it.runIf(process.platform === 'win32')('22. on Windows, a unit a process has for its current folder is kept whole', async () => {
+    put(`${L()}/t/cwd/a.txt`, 10, 9);
+    put(`${L()}/t/cwd/b.txt`, 10, 9);
+    const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1e9)'], { cwd: path.join(root, L(), 't', 'cwd'), stdio: 'ignore' });
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      await enforceTmpRetention(deps({ inUse: using([]) }));
+      expect(exists(`${L()}/t/cwd/a.txt`) && exists(`${L()}/t/cwd/b.txt`)).toBe(true);
+    } finally {
+      child.kill();
+    }
+  });
+
+  it('23. reads the processes only when a unit is about to go, once per pass', async () => {
+    let asked = 0;
+    const inUse = async () => { asked += 1; return { paths: [] as string[], commands: [] as string[] }; };
+    put(`${W()}/t/young/a.txt`, 10, 0);
+    await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse }));
+    expect(asked).toBe(0);
+
+    put(`${W()}/t/stale-1/a.txt`, 10, 2);
+    put(`${W()}/t/stale-2/a.txt`, 10, 2);
+    await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse }));
+    expect(asked).toBe(1);
+    expect(exists(`${W()}/t/stale-1`) || exists(`${W()}/t/stale-2`)).toBe(false);
   });
 });
