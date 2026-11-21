@@ -70,6 +70,11 @@ import { cannotSymlink } from '../../setup/symlink-privilege';
  *     unit is moved aside first, in one step, which Windows refuses while it is used: kept whole. (On macOS and Linux
  *     a move is never refused for use, and the processes' paths are read: 17.)
  * 23. A pass that deletes nothing reads the processes: they are read once a unit is about to go, once per pass.
+ * From the Audit's L1 on #627 (816c06672):
+ * 24. The cap deletes what the pass before 17 kept: a unit kept for its use still counted toward the cap, so the cap
+ *     went on to the next oldest idle unit (A in use, the oldest; B idle; the cap met once A goes: B went), and a unit
+ *     of a running agent kept by the day rule pushed the total over the cap, taking an idle unit of an agent at rest.
+ *     A unit a process uses does not count toward the cap: the pass deletes what it deleted before, less what is used.
  */
 
 const DAY = 86_400_000;
@@ -581,5 +586,41 @@ describe('what a live process uses (17 to 23)', () => {
     await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse }));
     expect(asked).toBe(1);
     expect(exists(`${W()}/t/stale-1`) || exists(`${W()}/t/stale-2`)).toBe(false);
+  });
+
+  // Sizes in whole 4 KB blocks, so a unit weighs what it holds on APFS and ext4 alike.
+  it("24. the cap: the oldest unit in use kept, the idle one before 17 kept stays (the Audit's example)", async () => {
+    put(`${L()}/t/a-tool/bin/tool`, 40960, 5);
+    put(`${L()}/t/b-idle/a.bin`, 8192, 3);
+
+    const result = await enforceTmpRetention(deps({ inUse: using([real(`${L()}/t/a-tool`)]), capBytes: 36864 }));
+
+    // Before 17, A went and the total was under the cap: B stayed. A stays now, and B with it.
+    expect(exists(`${L()}/t/a-tool`) && exists(`${L()}/t/b-idle`)).toBe(true);
+    expect(result.removed).toEqual([]);
+  });
+
+  it('24. the cap goes on as it did, less what is used: what it deleted after a unit in use, and no more', async () => {
+    put(`${L()}/t/a-used/bin/tool`, 4096, 6);
+    put(`${L()}/t/b-idle/a.bin`, 8192, 5);
+    put(`${L()}/t/c-idle/a.bin`, 8192, 2);
+
+    await enforceTmpRetention(deps({ inUse: using([real(`${L()}/t/a-used`)]), capBytes: 8192 }));
+
+    // Before 17: A, then B, and the total met the cap with C. Now: B alone.
+    expect(exists(`${L()}/t/a-used`)).toBe(true);
+    expect(exists(`${L()}/t/b-idle`)).toBe(false);
+    expect(exists(`${L()}/t/c-idle`)).toBe(true);
+  });
+
+  it("24. a running agent's unit kept by the day rule for its use does not push an agent at rest's unit over the cap", async () => {
+    put(`${W()}/t/used-tool/bin/tool`, 40960, 2);
+    put(`${L()}/t/idle/a.bin`, 8192, 3);
+
+    await enforceTmpRetention(deps({ liveAgentIds: () => ['worker'], inUse: using([real(`${W()}/t/used-tool`)]), capBytes: 36864 }));
+
+    expect(exists(`${W()}/t/used-tool`)).toBe(true);
+    expect(exists(`${L()}/t/idle`)).toBe(true);
+    expect(logs.join('\n')).not.toMatch(/removed [^\n]*idle/);
   });
 });

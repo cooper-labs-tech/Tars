@@ -23,6 +23,9 @@ import { parseLsofNames, readPathsInUse, usesPath } from '../../../electron/serv
  *     cut, the ` (deleted)` mark kept.
  * P7. A path or a command compared by prefix: `/a/tool` in use keeps `/a/tool-old`; on Windows, case or slashes
  *     telling the same path apart.
+ * P8. (the Audit's I-4 on #627) macOS's APFS is case-insensitive by default (measured here 21/11: `MixedCase.txt` is
+ *     found as `mixedcase.txt`): a command line spelling a unit with other capitals names it, and was compared case
+ *     by case. On macOS case is not compared; on a case-sensitive volume that can only keep more.
  */
 
 const children: ChildProcess[] = [];
@@ -56,6 +59,14 @@ describe('a path in use, under a folder (P7)', () => {
     expect(usesPath(inUse, ['/a/t/end'])).toBe(true);
     expect(usesPath({ paths: ['/a/t/tool-old/x'], commands: ['cat /a/t/tool-old/x'] }, ['/a/t/tool'])).toBe(false);
     expect(usesPath({ paths: [], commands: [] }, ['/a/t/tool'])).toBe(false);
+  });
+
+  it('P8. on macOS, whatever the case; on Linux, case by case', () => {
+    const inUse = { paths: ['/Users/Demo/.tars/tmp/ab/t/Tool/bin/x'], commands: ['node /users/demo/.tars/tmp/ab/t/CLI/run.js'] };
+    expect(usesPath(inUse, ['/Users/Demo/.tars/tmp/ab/t/tool'], 'darwin')).toBe(true);
+    expect(usesPath(inUse, ['/Users/Demo/.tars/tmp/ab/t/cli'], 'darwin')).toBe(true);
+    expect(usesPath(inUse, ['/Users/Demo/.tars/tmp/ab/t/tool'], 'linux')).toBe(false);
+    expect(usesPath(inUse, ['/Users/Demo/.tars/tmp/ab/t/to'], 'darwin')).toBe(false);
   });
 
   it('on Windows, whatever the case or the slashes', () => {
