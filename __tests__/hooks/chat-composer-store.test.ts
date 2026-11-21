@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { composerOf, forgetSentOutcome, sendComposer, subscribeComposers, writeComposer } from '../../src/hooks/useChatComposer';
 

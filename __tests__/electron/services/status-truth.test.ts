@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { checkStatuses, statusFix, turnOnRecord, type StatusFacts, type TurnRecord } from '../../../electron/services/status-truth';
 import { agents } from '../../../electron/core/agent-manager';

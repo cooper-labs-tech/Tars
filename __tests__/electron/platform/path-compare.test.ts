@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { samePath, isUnder, isInsideWorktreesDir, isFilesystemRoot } from '../../../electron/platform';
 import { POSIX_CORPUS } from './posix-corpus';

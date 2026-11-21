@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { restartPendingLine } from '../../src/components/TerminalsView/components/RestartPendingNotice';
 import type { AgentRestartWait } from '../../src/types/electron';

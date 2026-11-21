@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { getProvider, getAllProviders } from '../../electron/providers';
 

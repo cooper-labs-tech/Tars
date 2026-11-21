@@ -208,8 +208,14 @@ or a mock:
    `seedSandbox` writes; a spec that needs its own CLI writes one through `cliPath`, as
    `terminal-replay-modes.spec.ts` does. `launchSandboxed` refuses to hand the app the caller's
    `CLAUDE_*`, `DOROTHY_*`, `ANTHROPIC_*` or `TARS_*`: a variable of that family the app needs is
-   set in the spec's `env`. Check which hook scripts the sandbox's `~/.claude/settings.json` names
-   before a CLI starts: they must post to the sandbox's port.
+   set in the spec's `env`. It hands on none of the caller's CLI homes either (`CODEX_HOME`,
+   `KIMI_CODE_HOME`, `PI_CODING_AGENT_DIR`, `PI_CODING_AGENT_SESSION_DIR`, the four `XDG_*_HOME`,
+   `ZDOTDIR`, opencode's and Kilo's `*_CONFIG`, `*_CONFIG_DIR` and `*_CONFIG_CONTENT`), nor git's
+   own `GIT_*`, and it fails the launch, before the app starts, when the spec's `env` names one
+   of those homes outside the sandbox, judged where the kernel lands (`homesOutside`). Without
+   that, an exported `CODEX_HOME` let a sandboxed Tars write into the owner's real codex folder.
+   Check which hook scripts the sandbox's `~/.claude/settings.json` names before a CLI starts:
+   they must post to the sandbox's port.
    The app finds no CLI of the machine: the PATH it is handed keeps no folder of the account's
    home (`~/.local/bin`, nvm, npm, pnpm), and begins with the sandbox's own `sandbox-clis/`, where
    stand-ins of claude, codex, qwen and amp answer `--version` and `claude auth status` as the real
@@ -293,7 +299,13 @@ of the code under test ends it by its id in its own teardown: the fake agent's f
 (`__tests__/setup/leftover-processes.ts`). A file starts without what Tars puts in its agents'
 terminals either (`TARS_CLAUDE_ACCOUNT`, `TARS_INSTANCE_ID`, `TARS_CHATS_READ`), where QA and the
 agents run the suite; the suite's own opt-ins (`TARS_STRESS`, `TARS_REAL_CLAUDE`,
-`TARS_HERMES_TREE`, `TARS_HERMES_PYTHON`) are kept (`__tests__/setup/env-isolation.ts`).
+`TARS_HERMES_TREE`, `TARS_HERMES_PYTHON`) are kept (`__tests__/setup/env-isolation.ts`). Nor
+does it start with a CLI home, a CLI's config given as text or a git variable of the runner's
+(`CODEX_HOME`, `XDG_CONFIG_HOME`, `PI_CODING_AGENT_DIR`, `KIMI_CODE_HOME`, `GIT_DIR`...), which
+the code under test reads before HOME: the list is the E2E fixture's, `e2e/cli-homes.mjs`. Every
+test file imports `__tests__/setup/home-guard.ts` first, which stops it, before any of its own
+code runs, unless HOME and each of those homes lie inside the run's temporary folder: a file run
+without the repo's config and setup files stops there instead of writing into the real home.
 
 Coverage (`v8`) is scoped to what is actually worth guarding: `electron/constants`,
 `electron/utils`, `electron/services`, `electron/handlers`, `electron/providers`, plus

@@ -20,6 +20,7 @@
  * 7. An id that is not a task's, or names none, finds one; or a non-owner
  *    learns whether a task is still queued before being refused.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { cancelVerdict, type CancelFleetMember } from '../../../electron/core/task-cancel';
 

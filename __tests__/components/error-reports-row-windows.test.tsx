@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mount, ofType, settle, type Mount } from './hook-runtime';
 import { GeneralSection } from '../../src/components/Settings/GeneralSection';

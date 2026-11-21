@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, afterEach } from 'vitest';
 import { execFile } from 'node:child_process';
 import * as fs from 'node:fs';

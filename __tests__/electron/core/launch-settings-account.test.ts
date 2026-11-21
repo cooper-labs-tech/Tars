@@ -9,6 +9,7 @@
  * - an agent that never had a pin seen as changed: every agent would restart
  *   once the option exists.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import * as os from 'node:os';
 

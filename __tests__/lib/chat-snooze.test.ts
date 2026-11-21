@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { snoozeUntil, snoozeLabel } from '../../src/lib/chat-snooze';
 

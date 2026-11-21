@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { stallOf, toolAtWork, cliProcess, parseProcesses, signOfLife, startStallWatch, stopStallWatch, STALL_AFTER_MS, MOD_SILENCE_MS, type Proc } from '../../../electron/services/stall-watch';
 

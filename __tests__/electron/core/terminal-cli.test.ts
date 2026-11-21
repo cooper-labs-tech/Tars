@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
 import { isTerminalsOwnCli, parentPid, parentPidFromProcStat } from '../../../electron/core/terminal-cli';

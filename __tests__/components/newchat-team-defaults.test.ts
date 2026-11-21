@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { blankMember, branchSlug } from '@/components/NewChatModal/team-defaults';
 

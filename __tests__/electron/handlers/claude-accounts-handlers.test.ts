@@ -50,6 +50,7 @@
  * - with the option off, the window coming to the front runs `claude auth
  *   status` all the same, though no row shows an address.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 

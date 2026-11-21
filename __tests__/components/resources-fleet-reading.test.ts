@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, settle, deferred } from './hook-runtime';
 import { useFleetResources, FLEET_READ_EVERY_MS } from '../../src/components/Resources/hooks';

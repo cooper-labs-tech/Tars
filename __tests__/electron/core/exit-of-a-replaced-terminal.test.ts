@@ -26,6 +26,7 @@
  * 4. The terminal a stop ended sends agent:complete: it is no longer the
  *    agent's, and the window takes it for the agent's task done.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

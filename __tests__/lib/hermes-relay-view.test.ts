@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { relayView, RELAY_OFF_LINE } from '../../src/lib/hermes-relay';
 import type { HermesRelayStatus } from '../../src/types/electron';

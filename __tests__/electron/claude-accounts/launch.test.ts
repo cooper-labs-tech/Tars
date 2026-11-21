@@ -27,6 +27,7 @@
  *   over a pin set since, or onto an account that can no longer run; or made
  *   without saying from where, so the card and the move event cannot tell.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 import * as fs from 'fs';

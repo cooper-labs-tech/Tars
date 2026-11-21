@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { SECTION_GROUPS } from '../../src/components/Settings/constants';
 import { offeredSettingsGroups, settingsSectionOffered } from '../../src/lib/claude-accounts-offered';

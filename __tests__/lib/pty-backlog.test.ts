@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { openPtyHeard, ptyBacklog } from '../../src/lib/pty-backlog';
 

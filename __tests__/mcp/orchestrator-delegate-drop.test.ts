@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';

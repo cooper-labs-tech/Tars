@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { canSave, openedFile, openSequence } from '../../src/components/Memory/AgentKnowledgeGraph';
 

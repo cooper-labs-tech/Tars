@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock electron before importing utils

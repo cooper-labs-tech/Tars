@@ -12,6 +12,7 @@
  * - the resolver told another folder than the one the CLI starts in (the trust
  *   and approvals it copies are that folder's).
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as os from 'node:os';
 

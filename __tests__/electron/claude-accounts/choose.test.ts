@@ -20,6 +20,7 @@
  * - nothing chosen when every account is at its limit: the one that comes back
  *   first, so its CLI waits for that reset and not a later one.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { chooseAccount, STALE_AFTER_MS, type ChooseInput } from '../../../electron/services/claude-accounts/choose';
 

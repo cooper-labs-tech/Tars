@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { toReport, reportFingerprint, keepErrorsOnly, healthEvent, type ReportFacts } from '../../../electron/services/error-reports/report';
 import type { HealthSample } from '../../../electron/services/health/samples';

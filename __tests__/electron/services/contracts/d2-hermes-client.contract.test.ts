@@ -1,3 +1,4 @@
+import '../../../setup/home-guard';
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import * as http from 'node:http';
 import * as fs from 'node:fs';

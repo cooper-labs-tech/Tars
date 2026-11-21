@@ -11,6 +11,7 @@
  * - the end of a turn (Stop, `idle`) not handed over: no move at rest;
  * - a stale session's post handed over: an old CLI's limit moving the new one.
  */
+import '../../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 

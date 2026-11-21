@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { chatSections, chatStateWord } from '../../src/lib/chat-sections';
 import type { ChatView } from '../../src/types/electron';

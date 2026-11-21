@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import { NoTerminalLeft } from '../../../electron/core/pty-pool';
 import { clearNoTerminal, markNoTerminal, noTerminalAnswer } from '../../../electron/core/no-terminal';

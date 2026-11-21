@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 
 import { toLaunch, LaunchError, type DirectLaunch, type PosixLaunch } from '../../../electron/platform/launch';

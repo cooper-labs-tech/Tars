@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 
 import { pathEntries, joinPathEntries, getPath, withPath, envValue } from '../../../electron/platform/path-env';

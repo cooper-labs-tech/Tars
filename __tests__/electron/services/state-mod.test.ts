@@ -25,6 +25,7 @@
  *    one Settings names comes first, then the launch's PATH, and a link is
  *    followed to the native installer's versions/<x.y.z>.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

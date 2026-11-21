@@ -12,6 +12,7 @@
  *   window): a window whose reset has passed shows as nothing;
  * - seconds read as milliseconds or the other way round.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

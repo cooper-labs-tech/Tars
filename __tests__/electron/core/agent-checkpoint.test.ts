@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { checkpointProblem, writeCheckpoint, checkpointOfTask, CHECKPOINT_MAX } from '../../../electron/core/agent-checkpoint';
 import type { AgentStatus } from '../../../electron/types';

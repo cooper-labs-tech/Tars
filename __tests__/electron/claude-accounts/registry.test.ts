@@ -29,6 +29,7 @@
  *   Tars while their folders stay signed in (the Audit's gate of #263). No
  *   write while it does not parse.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 import * as fs from 'fs';

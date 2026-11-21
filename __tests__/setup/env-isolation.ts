@@ -1,4 +1,5 @@
 import { afterAll } from 'vitest';
+import { cliEnvironment } from '../../e2e/cli-homes.mjs';
 
 /**
  * The ambient environment does not reach the suite.
@@ -95,7 +96,11 @@ const keptWereSet = Object.keys(KEPT).filter(key => process.env[key] !== undefin
 
 for (const key of Object.keys(process.env)) {
   if (key in KEPT) continue;
-  if (!PRODUCT_PREFIXES.some(prefix => key.startsWith(prefix))) continue;
+  // A CLI home, a CLI's config as text or git's own variable of the runner's: the code under test reads a CLI home
+  // before HOME, so home-isolation.ts moving HOME did not move codex's, opencode's or pi's folder (#609's re-audit,
+  // M1). The list is the E2E fixture's own (e2e/cli-homes.mjs); without one, each CLI falls back under the throwaway
+  // HOME.
+  if (!PRODUCT_PREFIXES.some(prefix => key.startsWith(prefix)) && !cliEnvironment(key)) continue;
   removed[key] = process.env[key] as string;
   delete process.env[key];
 }

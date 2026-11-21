@@ -102,6 +102,7 @@
  * 47. (2.0.6, option d, written before the code) The note a chat left asleep at a launch opens with says the time
  *     of that launch in the machine's zone alone, where every other notice says UTC first, then the machine's own.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

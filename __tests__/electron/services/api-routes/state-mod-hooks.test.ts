@@ -26,6 +26,7 @@
  * 7. It is refused when it arrives after the Stop that ended its task: it
  *    always does (measured: 8 to 14 ms after).
  */
+import '../../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
 
