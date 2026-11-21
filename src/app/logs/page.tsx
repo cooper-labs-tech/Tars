@@ -10,17 +10,23 @@ import { useAllAgentNotices } from '@/hooks/useAgentNotices';
 import { logMatcher, noticeTone, noticeWho, resultsWithNotices, tailWithNotices } from '@/lib/agent-notices';
 
 /**
- * One of Tars's notices among an agent's lines: who wrote it and when, its tone, the line. Frame: `Agent notices
- * (2.0.7) · in its panel and in Logs`. A `[Tars] ` line no kept notice matches reads "Tars", in the plain tone.
+ * One of Tars's notices among an agent's lines: who wrote it and when, its tone, the line, as text. Frame: `Agent
+ * notices (2.0.7) · in its panel and in Logs`. Only a notice Tars kept is drawn so (lib/agent-notices.ts).
  */
-function NoticeLine({ notice, text }: { notice: AgentNotice | undefined; text: string }) {
+function NoticeLine({ notice }: { notice: AgentNotice }) {
   return (
-    <span data-log-notice={notice?.id ?? ''} className="flex items-center gap-2.5 px-2 py-1 bg-secondary">
-      <StatusSquare tone={notice ? noticeTone(notice.kind) : 'idle'} />
+    <span data-log-notice={notice.id} className="flex items-center gap-2.5 px-2 py-1 bg-secondary">
+      <StatusSquare tone={noticeTone(notice.kind)} />
       <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{noticeWho(notice)}</span>
-      <span className="min-w-0 text-[11.5px] text-foreground break-words">{text}</span>
+      <span className="min-w-0 text-[11.5px] text-foreground break-words">{notice.line}</span>
     </span>
   );
+}
+
+/** The agents main reads from a running terminal's screen, as it reads them now: those with a terminal. */
+async function screenAgents(): Promise<ReadonlySet<string>> {
+  const list = await window.electronAPI?.agent?.list?.().catch(() => undefined);
+  return new Set((list ?? []).filter(a => !!a.ptyId).map(a => a.id));
 }
 
 /**
@@ -47,12 +53,14 @@ export default function LogsPage() {
   const [results, setResults] = useState<LogLine[] | null>(null);
   // The query those results answer: the notices are matched by it, not by what is typed since.
   const [searched, setSearched] = useState('');
+  // The agents whose hits came from a screen, read with them: none of their lines is Tars's.
+  const [screens, setScreens] = useState<ReadonlySet<string>>(() => new Set());
   const notices = useAllAgentNotices();
   const [scanned, setScanned] = useState(0);
   const [truncated, setTruncated] = useState(false);
   const [searching, setSearching] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
-  const [tail, setTail] = useState<{ lines: string[]; agentName: string } | null>(null);
+  const [tail, setTail] = useState<{ lines: string[]; agentName: string; screen: boolean } | null>(null);
   const debounce = useRef<NodeJS.Timeout | null>(null);
   // Bumped on every search kicked off; a resolving search whose id no longer
   // matches is stale and must not overwrite a newer one's results.
@@ -95,10 +103,11 @@ export default function LogsPage() {
     }
     setSearching(true);
     try {
-      const res = await window.electronAPI?.logs?.search(q, { limit: 300 });
+      const [res, onScreen] = await Promise.all([window.electronAPI?.logs?.search(q, { limit: 300 }), screenAgents()]);
       if (seq !== searchSeq.current) return; // a newer search or an agent click superseded this one
       setResults(res?.lines ?? []);
       setSearched(q);
+      setScreens(onScreen);
       setScanned(res?.scannedAgents ?? 0);
       setTruncated(!!res?.truncated);
     } finally {
@@ -120,18 +129,18 @@ export default function LogsPage() {
     setSearching(false);
     setResults(null);
     setFocused(agentId);
-    const res = await window.electronAPI?.logs?.tail(agentId, 300);
-    setTail(res ?? null);
+    const [res, onScreen] = await Promise.all([window.electronAPI?.logs?.tail(agentId, 300), screenAgents()]);
+    setTail(res ? { ...res, screen: onScreen.has(agentId) } : null);
   }, []);
 
-  // Tars's notices among the hits and the tail: a stopped agent's `[Tars] ` lines as the notices they are, and those
-  // a running agent's screen never shows before its lines (lib/agent-notices.ts).
+  // Tars's notices among the hits and the tail: a replayed `[Tars] ` line that claims a kept notice as that notice,
+  // every other line as the agent's, and the notices no line holds as a group of their own (lib/agent-notices.ts).
   const rows = useMemo(
-    () => (results === null ? null : resultsWithNotices(results, notices, fleet, logMatcher(searched))),
-    [results, notices, fleet, searched],
+    () => (results === null ? null : resultsWithNotices(results, notices, fleet, logMatcher(searched), screens)),
+    [results, notices, fleet, searched, screens],
   );
   const tailRows = useMemo(
-    () => (tail ? tailWithNotices(tail.lines, notices.filter(n => n.agentId === focused)) : null),
+    () => (tail ? tailWithNotices(tail.lines, notices.filter(n => n.agentId === focused), tail.screen) : null),
     [tail, notices, focused],
   );
 
@@ -231,7 +240,7 @@ export default function LogsPage() {
                       </span>
                     </span>
                     {line.tars ? (
-                      <NoticeLine notice={line.tars.notice} text={line.line} />
+                      <NoticeLine notice={line.tars.notice} />
                     ) : (
                       <span className="block text-[11px] font-mono text-foreground break-all">{line.line}</span>
                     )}
@@ -246,9 +255,17 @@ export default function LogsPage() {
             ) : tail && tailRows ? (
               <>
                 <p className="text-xs font-mono text-foreground mb-2">{tail.agentName}: last {tail.lines.length} lines</p>
-                {tailRows.map((row, i) =>
+                {/* The notices no line holds: a group of their own, by time, above the lines, which carry no time.
+                    Frame: `Agent notices (2.0.7)`, a running agent's tail. */}
+                {tailRows.group.length > 0 && (
+                  <div data-log-notices-group className="mb-2 pb-2 border-b border-border">
+                    <p className="font-mono text-[10px] text-muted-foreground pb-1">Tars&apos;s notices, by time</p>
+                    {tailRows.group.map(n => <NoticeLine key={n.id} notice={n} />)}
+                  </div>
+                )}
+                {tailRows.rows.map((row, i) =>
                   row.kind === 'notice' ? (
-                    <NoticeLine key={row.notice?.id ?? `tars-${i}`} notice={row.notice} text={row.text} />
+                    <NoticeLine key={row.notice.id} notice={row.notice} />
                   ) : (
                     <pre key={i} className="text-[11px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all">
                       {row.line}
