@@ -59,6 +59,12 @@ import { CLI_HOMES, homesOutside, inheritable, launchSandboxed } from '../e2e/fi
  * 11. Goose's whole home reaches the app: GOOSE_PATH_ROOT. With it absolute, Goose keeps its config, data and state
  *     under it (#618, goose-cli.ts, Goose 1.60.1 measured); else the XDG homes of 2, and on Windows APPDATA, which
  *     the fixture already moves into the sandbox.
+ *
+ * Added on 2026-11-22 from #609's Audit (I-5), before the fix:
+ * 12. Goose's keyring is the system's keychain, outside every home a sandbox can move: a real goose started by a
+ *     sandboxed app writes its keys into the owner's keychain. The conformance sets GOOSE_DISABLE_KEYRING=1, and
+ *     launchSandboxed does not, so a future spec that starts a real goose would reach it. The launch must hand
+ *     GOOSE_DISABLE_KEYRING=1 down by default, whatever the caller's own value, and a spec may still name another.
  */
 
 const accountHome = os.userInfo().homedir;
@@ -157,5 +163,33 @@ describe('the CLI homes an E2E sandbox hands the app', () => {
 
     expect(launched).toBe(0);
     expect(refusal?.message).toContain(`CODEX_HOME: ${theOwners('CODEX_HOME')}`);
+  });
+});
+
+describe('the keychain an E2E sandbox keeps the app\'s CLIs out of', () => {
+  /** The environment launchSandboxed hands Electron, read at the launch, which then stops. */
+  const handed = async (specEnv: Record<string, string>, callerEnv: Record<string, string> = {}) => {
+    let env: Record<string, string> | undefined;
+    const electron = { launch: async (options: { env: Record<string, string> }) => { env = options.env; throw new Error('stopped at the launch'); } };
+    const was = Object.fromEntries(Object.keys(callerEnv).map((name) => [name, process.env[name]]));
+    Object.assign(process.env, callerEnv);
+    try {
+      await launchSandboxed(electron, sandbox(), { env: specEnv }).catch(() => {});
+    } finally {
+      for (const [name, value] of Object.entries(was)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+    return env;
+  };
+
+  it('12. hands GOOSE_DISABLE_KEYRING=1 down by default, so a real goose never writes the owner\'s keychain', async () => {
+    expect((await handed({}))?.GOOSE_DISABLE_KEYRING).toBe('1');
+  });
+
+  it('12. keeps it whatever the caller exported, and lets a spec name its own', async () => {
+    expect((await handed({}, { GOOSE_DISABLE_KEYRING: '0' }))?.GOOSE_DISABLE_KEYRING).toBe('1');
+    expect((await handed({ GOOSE_DISABLE_KEYRING: '0' }))?.GOOSE_DISABLE_KEYRING).toBe('0');
   });
 });
