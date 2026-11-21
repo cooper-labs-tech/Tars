@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { spawn } from 'node:child_process';
 
-import { killTree, KillTreeError } from '../../../electron/platform/kill-tree';
+import { killTree, KillTreeError, TASKKILL_TIMEOUT_MS } from '../../../electron/platform/kill-tree';
 
 /**
  * Ending a process and every process under it on win32.
@@ -18,6 +18,10 @@ import { killTree, KillTreeError } from '../../../electron/platform/kill-tree';
  * 6. darwin/linux: anything runs. The callers keep their process-group
  *    kill there (acp/client.ts `process.kill(-pid)`), untouched here.
  * 7. For real: a child of the process survives.
+ * 8. A taskkill that never returns holds its caller for good (the Audit's L1 on #621): a replaced terminal's end
+ *    (endReplacedTerminal) then reads as a launch on its way forever, so a bot waits on it with no bound, /dispatch
+ *    and the chat runners time out, and the window's save never answers. It is said as a failure within
+ *    TASKKILL_TIMEOUT_MS (the caller closes the console all the same), its timer cleared when taskkill answers.
  */
 
 type Call = { file: string; args: string[] };
@@ -42,6 +46,24 @@ describe('killTree', () => {
     const b = recorder();
     await killTree(7, 'win32', { execFile: b.execFile, env: {} });
     expect([a.calls[0].file, b.calls[0].file]).toEqual(['E:\\W\\System32\\taskkill.exe', 'C:\\Windows\\System32\\taskkill.exe']);
+  });
+
+  it('8. a taskkill that never returns is a failure within the bound, said, and holds nothing', async () => {
+    const calls: string[][] = [];
+    const hung = { execFile: (_file: string, args: string[]) => { calls.push(args); return new Promise<void>(() => {}); }, env: {}, timeoutMs: 50 };
+    const began = Date.now();
+    const p = killTree(4242, 'win32', hung);
+    await expect(p).rejects.toMatchObject({ code: 'taskkill-failed', message: expect.stringMatching(/did not end within/) });
+    expect(Date.now() - began).toBeLessThan(2_000);
+    expect(calls).toHaveLength(1);
+    expect(TASKKILL_TIMEOUT_MS).toBeGreaterThanOrEqual(5_000);
+    expect(TASKKILL_TIMEOUT_MS).toBeLessThanOrEqual(15_000);
+  });
+
+  it('8. one that answers in time leaves no timer behind', async () => {
+    const before = process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length;
+    await expect(killTree(4242, 'win32', { execFile: async () => {}, env: {}, timeoutMs: 60_000 })).resolves.toEqual({ outcome: 'killed' });
+    expect(process.getActiveResourcesInfo().filter((r) => r === 'Timeout').length).toBe(before);
   });
 
   it('3. exit 128 is already-gone', async () => {

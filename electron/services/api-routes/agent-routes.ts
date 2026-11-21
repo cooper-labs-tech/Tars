@@ -12,7 +12,6 @@ import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutp
 import { markNoTerminal } from '../../core/no-terminal';
 import { launchPrompt, noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
-import { killPty } from '../../core/pty-kill';
 import { removeAgent } from '../../core/agent-remove';
 import { hasEndOfTurn } from '../../core/end-of-turn';
 import { agentStatusOnExit, isQuitting } from '../../core/quit-state';
@@ -20,7 +19,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot, endReplacedTerminal } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -429,13 +428,10 @@ async function spawnAgentSessionInSlot(
   // Agents started via the API use one-shot PTYs that stay alive (the claude
   // process waits at a prompt after each task). Without this, every dispatch
   // orphans the previous PTY+claude process, eventually exhausting resources.
-  if (agent.ptyId) {
-    const existingPty = ptyProcesses.get(agent.ptyId);
-    if (existingPty) {
-      killPty(existingPty);
-      ptyProcesses.delete(agent.ptyId);
-    }
-  }
+  // Taken off the map here, and ended with its tree once the launch is marked
+  // below.
+  const existingPty = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+  if (agent.ptyId) ptyProcesses.delete(agent.ptyId);
   // Tombstone the killed session: its hook scripts (separate processes that
   // survive the PTY kill) may still POST status/output for several seconds.
   // Without this, the session-adoption fallback in hooks-routes would adopt
@@ -460,6 +456,16 @@ async function spawnAgentSessionInSlot(
   // after a /start typed its message into a claude not yet reading, and it was
   // lost 4 times in 5 while the caller heard 200 (the Audit, gate of #134).
   const launch = launchBegins(agent.id, { withTask: !!prompt.trim() });
+  // The old terminal, with its whole tree (endReplacedTerminal, as a stop ends it), before the new one opens on the
+  // same folder: the hangup alone ended a CLI's launcher and left what it started, Cline's .cline behind its node
+  // (#620). The agent names neither it nor its session meanwhile: its exit, up to a grace later, is not this
+  // session's.
+  if (existingPty) {
+    agent.ptyId = undefined;
+    agent.ptyCwd = undefined;
+    agent.currentSessionId = undefined;
+    await endReplacedTerminal(agent.id, existingPty, `the old terminal of ${agent.name || agent.id}`);
+  }
   let ptyProcess: ReturnType<typeof spawnAgentPty>;
   try {
     ptyProcess = spawnAgentPty({
@@ -1540,7 +1546,7 @@ async function performDispatchLocked(
 
   // BUG 4 guard: kill the PTY if its cwd no longer matches the agent's
   // worktree so the spawn path below restarts it in the right directory.
-  killStalePty(agent);
+  await killStalePty(agent);
 
   const previousStatus = agent.status;
   const livePty = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
@@ -2999,7 +3005,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // BUG 4 guard: if the agent's worktreePath changed after the PTY was
       // spawned, the existing PTY is stuck in the wrong cwd. Kill it so the
       // reconnect path below spawns fresh with the correct working directory.
-      killStalePty(agent);
+      await killStalePty(agent);
 
       // A dialog holds the message in the terminal's writer, as in /dispatch.
       const noCli = !cliRunningIn(agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined);

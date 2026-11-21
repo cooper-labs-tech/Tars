@@ -1362,9 +1362,9 @@ Override with `allowCrossProject: true` in the body, or `?allowCrossProject=true
 `performDispatch()` is shared by `POST /api/agents/:id/dispatch` and the Hermes webhook, so
 both behave identically. It:
 
-1. calls `killStalePty(agent)`: if the PTY's recorded `ptyCwd` no longer matches
-   `worktreePath || projectPath`, the PTY is killed so the spawn path restarts it in the right
-   directory;
+1. awaits `killStalePty(agent)`: if the PTY's recorded `ptyCwd` no longer matches
+   `worktreePath || projectPath`, the PTY's whole tree is ended, as a stop ends it, so the spawn
+   path restarts it in the right directory with nothing of the old CLI left;
 2. while the agent is `waiting` on a permission dialog, hands the message to the terminal's
    writer, which holds it while the dialog is up (a typed `\r` would *answer* the dialog) and types
    it once the dialog closes, as for every other writer (the bus, delegation notes, "send held",
@@ -2502,7 +2502,7 @@ up. An orchestrator is never put to sleep. SPECS.md, "An agent asleep", has the 
 ### Agent stuck in the wrong directory
 
 `killStalePty()` compares the PTY's recorded `ptyCwd` against `worktreePath || projectPath` and
-kills it on mismatch, so the next dispatch respawns in the right place. It runs on every
+ends it with its whole tree on mismatch, so the next dispatch respawns in the right place. It runs on every
 dispatch. To force it:
 
 ```bash
