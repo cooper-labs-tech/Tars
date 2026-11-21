@@ -107,6 +107,20 @@ describe('a registration refused', () => {
     expect(a.currentSessionId).toBe(sid('own'));
     expect(a.output.join('')).toMatch(/\[Tars\].*refused.*not this terminal's/i);
   });
+
+  it('2. is also a notice the window reads, of kind session-refused, told as it is written (agent-notice-channel.test.ts)', async () => {
+    agent({ currentSessionId: sid('own'), resumableSessionId: sid('own') });
+    const routes = app(); registerHooksRoutes(routes, ctx);
+    const { noticeLog } = await import('../../../../electron/services/agent-notice-log');
+    const { broadcastToAllWindows } = await import('../../../../electron/utils/broadcast');
+    post(routes, { agent_id: 'a1', session_id: sid('nested-2'), status: 'idle', source: 'startup', cli_pid: String(NESTED) });
+    await settle();
+    const [notice] = noticeLog().list('a1');
+    expect(notice).toMatchObject({ agentId: 'a1', kind: 'session-refused' });
+    expect(notice.line).toMatch(new RegExp(`^Refused a session \\(${sid('nested-2')}\\)`));
+    expect(notice.line).not.toMatch(/\[Tars\]/);
+    expect(vi.mocked(broadcastToAllWindows)).toHaveBeenCalledWith('agent:notice', notice);
+  });
 });
 
 describe('a post from a CLI that is not the terminal\'s, for an agent nobody owns', () => {

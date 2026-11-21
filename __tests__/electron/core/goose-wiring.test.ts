@@ -178,6 +178,9 @@ describe('a fresh session said where a person reads it (4, the Audit\'s L3 on #6
   it('its role changed', async () => {
     savedWith([ORCH, X]);
     expect(await launch([ORCH, X], false)).toContain('[Tars] Its conversation starts over: its servers changed with its role');
+    // Kept as a notice the window reads, of its writer's kind (agent-notice-channel.test.ts, 6).
+    const { noticeLog } = await import('../../../electron/services/agent-notice-log');
+    expect(noticeLog().list(AGENT)[0]).toMatchObject({ agentId: AGENT, kind: 'conversation-restart', line: expect.stringMatching(/^Its conversation starts over: its servers changed with its role/) });
   });
 
   it("Tars's servers moved", async () => {
