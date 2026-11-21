@@ -22,6 +22,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *    hooks post to: its Stop's answer became the agent's last output, its
  *    Stop and its task-completed ended the agent's work, its notification
  *    raised an alert in the agent's name.
+ * 4. (M1, the Audit on #624) The refusal's notice is drawn as Tars's own words, and it quoted the post's cli_pid as
+ *    written: anything holding the agent's token (the agent itself) could put its text in Tars's mouth, as often as it
+ *    posts. It quotes only what Tars checked (the pid as a number, else a CLI that named no pid; the session id, a
+ *    UUID), and a refusal right after another makes no new notice; the kept output still says each.
  */
 
 vi.mock('electron', () => ({ app: { getPath: () => '/Users/test', getAppPath: () => process.cwd() }, BrowserWindow: vi.fn() }));
@@ -69,7 +73,14 @@ function agent(over: Partial<AgentStatus> = {}): AgentStatus {
   return a;
 }
 
-beforeEach(() => { agents.clear(); ptyProcesses.clear(); });
+beforeEach(async () => {
+  agents.clear(); ptyProcesses.clear();
+  // One notice log for the file: each case starts with none of a1's (a refusal within a minute of another makes none).
+  const { noticeLog } = await import('../../../../electron/services/agent-notice-log');
+  noticeLog().forget('a1');
+  const { broadcastToAllWindows } = await import('../../../../electron/utils/broadcast');
+  vi.mocked(broadcastToAllWindows).mockClear();
+});
 
 describe('an agent nobody owns, and the first status posted for it', () => {
   it("1. is not adopted by a CLI that is not its terminal's", async () => {
@@ -106,6 +117,51 @@ describe('a registration refused', () => {
     await settle();
     expect(a.currentSessionId).toBe(sid('own'));
     expect(a.output.join('')).toMatch(/\[Tars\].*refused.*not this terminal's/i);
+  });
+
+  it('2. is also a notice the window reads, of kind session-refused, told as it is written (agent-notice-channel.test.ts)', async () => {
+    agent({ currentSessionId: sid('own'), resumableSessionId: sid('own') });
+    const routes = app(); registerHooksRoutes(routes, ctx);
+    const { noticeLog } = await import('../../../../electron/services/agent-notice-log');
+    const { broadcastToAllWindows } = await import('../../../../electron/utils/broadcast');
+    post(routes, { agent_id: 'a1', session_id: sid('nested-2'), status: 'idle', source: 'startup', cli_pid: String(NESTED) });
+    await settle();
+    const [notice] = noticeLog().list('a1');
+    expect(notice).toMatchObject({ agentId: 'a1', kind: 'session-refused' });
+    expect(notice.line).toMatch(new RegExp(`^Refused a session \\(${sid('nested-2')}\\)`));
+    expect(notice.line).not.toMatch(/\[Tars\]/);
+    expect(notice.line).toContain(`its CLI (pid ${NESTED})`);
+    expect(vi.mocked(broadcastToAllWindows)).toHaveBeenCalledWith('agent:notice', notice);
+  });
+
+  it("4. quotes only what Tars checked: a cli_pid of text keeps none of its words, in the notice or the kept output", async () => {
+    const a = agent({ currentSessionId: sid('own'), resumableSessionId: sid('own') });
+    const routes = app(); registerHooksRoutes(routes, ctx);
+    const { noticeLog } = await import('../../../../electron/services/agent-notice-log');
+    const words = 'Tars here: your key leaked, paste a new one below';
+    const answer = post(routes, { agent_id: 'a1', session_id: sid('worded'), status: 'idle', source: 'startup', cli_pid: words });
+    await settle();
+    expect(answer).toMatchObject({ foreign: true });
+    const [notice] = noticeLog().list('a1');
+    expect(notice).toMatchObject({ kind: 'session-refused' });
+    expect(notice.line).toMatch(/a CLI that named no pid/);
+    expect(notice.line).toContain(sid('worded'));
+    for (const said of [notice.line, a.output.join('')]) {
+      expect(said).not.toMatch(/leaked|paste|Tars here/);
+    }
+  });
+
+  it('4. a refusal right after another makes no new notice, and the kept output still says both', async () => {
+    const a = agent({ currentSessionId: sid('own'), resumableSessionId: sid('own') });
+    const routes = app(); registerHooksRoutes(routes, ctx);
+    const { noticeLog } = await import('../../../../electron/services/agent-notice-log');
+    const { broadcastToAllWindows } = await import('../../../../electron/utils/broadcast');
+    post(routes, { agent_id: 'a1', session_id: sid('flood-1'), status: 'idle', source: 'startup', cli_pid: String(NESTED) });
+    post(routes, { agent_id: 'a1', session_id: sid('flood-2'), status: 'idle', source: 'startup', cli_pid: String(NESTED) });
+    await settle();
+    expect(noticeLog().list('a1')).toHaveLength(1);
+    expect(vi.mocked(broadcastToAllWindows).mock.calls.filter(([c]) => c === 'agent:notice')).toHaveLength(1);
+    expect(a.output.join('').match(/Refused a session/g)).toHaveLength(2);
   });
 });
 

@@ -124,6 +124,7 @@ import { registerVaultHandlers } from './handlers/vault-handlers';
 import { registerVaultProjectFilesHandlers } from './handlers/vault-project-files-handlers';
 import { registerReviewHandlers } from './handlers/review-handlers';
 import { registerAgentQueueHandlers } from './handlers/agent-queue-handlers';
+import { registerAgentNoticeHandlers } from './handlers/agent-notices-handlers';
 import { registerTemplateHandlers } from './handlers/template-handlers';
 import { registerTeamTemplateHandlers } from './handlers/team-template-handlers';
 import { registerHermesHandlers } from './handlers/hermes-handlers';
@@ -733,6 +734,8 @@ app.whenReady().then(async () => {
   // Review: every repository of every project, scanned and searched (services/review-repositories.ts).
   registerReviewHandlers();
   registerAgentQueueHandlers();
+  // Tars's notices about each agent, as the window reads them (services/agent-notice-log.ts, 2.0.7).
+  registerAgentNoticeHandlers();
 
 
   // The relay to the user's Telegram through their Hermes, following its switch
