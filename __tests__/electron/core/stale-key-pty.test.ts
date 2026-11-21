@@ -54,34 +54,34 @@ beforeEach(() => {
 });
 
 describe('a reused shell and the keys it was spawned with', () => {
-  it('S1. a key set since the shell was spawned: the shell goes, and the start opens one with it', () => {
+  it('S1. a key set since the shell was spawned: the shell goes, and the start opens one with it', async () => {
     const agent = agentWithShell('cx', 'codex', {});
     saveSettings(withKey({}, 'codex', 'k-new'));
-    expect(killStalePty(agent)).toBe(true);
+    expect(await killStalePty(agent)).toBe(true);
     expect(agent.ptyId).toBeUndefined();
     expect(killed).toHaveLength(1);
   });
 
-  it('S2. a key cleared or changed since: the shell goes', () => {
+  it('S2. a key cleared or changed since: the shell goes', async () => {
     const spawned = withKey({}, 'codex', 'k-old');
     const cleared = agentWithShell('cx', 'codex', spawned);
     saveSettings({});
-    expect(killStalePty(cleared)).toBe(true);
+    expect(await killStalePty(cleared)).toBe(true);
     const changed = agentWithShell('gm', 'gemini', withKey({}, 'gemini', 'g-old'));
     saveSettings(withKey({}, 'gemini', 'g-new'));
-    expect(killStalePty(changed)).toBe(true);
+    expect(await killStalePty(changed)).toBe(true);
   });
 
-  it('S3. a shell whose keys match stays, and so does a claude agent\'s, whatever the keys of the other CLIs', () => {
+  it('S3. a shell whose keys match stays, and so does a claude agent\'s, whatever the keys of the other CLIs', async () => {
     const same = withKey({}, 'codex', 'k-1');
     const cx = agentWithShell('cx', 'codex', same);
     saveSettings(same);
-    expect(killStalePty(cx)).toBe(false);
+    expect(await killStalePty(cx)).toBe(false);
     const cl = agentWithShell('cl', 'claude', {});
     saveSettings(withKey(same, 'gemini', 'g-1'));
-    expect(killStalePty(cl)).toBe(false);
+    expect(await killStalePty(cl)).toBe(false);
     // A gemini key changing leaves codex's shell alone too.
-    expect(killStalePty(cx)).toBe(false);
+    expect(await killStalePty(cx)).toBe(false);
     expect(killed).toHaveLength(0);
   });
 });

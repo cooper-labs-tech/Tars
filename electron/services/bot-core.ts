@@ -238,7 +238,7 @@ async function terminalOf(fleet: BotFleet, agent: AgentStatus): Promise<pty.IPty
  * fails to open gives the launch up.
  */
 async function claimLaunch(agent: AgentStatus): Promise<object | null> {
-  killStalePty(agent);
+  await killStalePty(agent);
   await sessionStarted(agent);
   // No CLI up there: this is a launch from now on, for every other sender.
   return launchUnlessRunning(agent);

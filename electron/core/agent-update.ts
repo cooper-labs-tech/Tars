@@ -1,7 +1,6 @@
 import * as fs from 'fs';
 import { agents, saveAgents, killStalePty } from './agent-manager';
-import { ptyProcesses } from './pty-manager';
-import { killPty } from './pty-kill';
+import { ptyProcesses, endTerminalTree } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
 import { sessionStarting } from './agent-launch';
 import { orchestratorMoved } from './chat-identity';
@@ -10,6 +9,7 @@ import { assignRole, requestedRole } from './agent-role';
 import { planModeRefusal } from '../providers/plan-mode';
 import { skillsProblem } from '../utils/skill-name';
 import { handedFolderProblem } from '../utils/handed-folder';
+import type { IPty } from 'node-pty';
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
 
 /**
@@ -164,7 +164,14 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   const launchBefore = launchSettings(agent);
   const before = FIELDS.map(field => JSON.stringify(agent[field]));
 
-  // Then the save, which nothing refuses any more.
+  // Then the save, which nothing refuses any more. A terminal it replaces is taken off the agent here, and its whole
+  // tree ended (endTerminalTree, as a stop ends it) before the answer: the hangup alone ended a CLI's launcher and
+  // left what it started, Cline's .cline behind its node, orphaned on the agent's folder (#620), and a start sent
+  // once this answers opens the next terminal beside nothing.
+  const terminalsEnding: Promise<unknown>[] = [];
+  const endTree = (terminal: IPty) => terminalsEnding.push(endTerminalTree(terminal).catch((err) => {
+    console.warn(`[update] ${agent.name || agent.id}: the terminal it replaces did not close cleanly:`, err);
+  }));
   if (moving) {
     agent.projectPath = params.projectPath!;
     agent.pathMissing = false;
@@ -174,7 +181,7 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
     agent.worktreePath = undefined;
     agent.branchName = undefined;
     // BUG 4: any live PTY still has the old repo as cwd.
-    killStalePty(agent);
+    terminalsEnding.push(killStalePty(agent));
     agent.status = 'idle';
     agent.currentTask = undefined;
   }
@@ -207,8 +214,8 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
       // the next start/dispatch respawns with the new provider's env.
       const staleProviderPty = ptyProcesses.get(agent.ptyId);
       if (staleProviderPty) {
-        killPty(staleProviderPty);
         ptyProcesses.delete(agent.ptyId);
+        endTree(staleProviderPty);
       }
       agent.ptyId = undefined;
       agent.ptyCwd = undefined;
@@ -233,8 +240,8 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
       // with the old binary.
       const staleCliPty = ptyProcesses.get(agent.ptyId);
       if (staleCliPty) {
-        killPty(staleCliPty);
         ptyProcesses.delete(agent.ptyId);
+        endTree(staleCliPty);
       }
       agent.ptyId = undefined;
       agent.ptyCwd = undefined;
@@ -249,7 +256,7 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
     // BUG 4: the running PTY (if any) was spawned with cwd=projectPath.
     // It must be killed so the next agent:start respawns in the new
     // worktree directory. Otherwise writes leak into the main workspace.
-    killStalePty(agent);
+    terminalsEnding.push(killStalePty(agent));
     agent.status = 'idle';
     agent.currentTask = undefined;
   }
@@ -262,6 +269,7 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   saveAgents();
   // The role moved: its project's Main follows the orchestrator (core/chat-identity.ts).
   orchestratorMoved();
+  await Promise.all(terminalsEnding);
 
   // A model, an effort or another flag the CLI only reads when it starts is
   // applied by restarting it, at a moment that cuts nothing: see

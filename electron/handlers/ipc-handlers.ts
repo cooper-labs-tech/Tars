@@ -46,7 +46,7 @@ import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
 import { withoutRetiredSettings } from '../services/telegram-retired';
-import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
+import { endTerminalTree, messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
 import { agentStatusOnExit, refuseWhileQuitting } from '../core/quit-state';
 import { killStalePty, notePtyKeys, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch, launchIntoTerminal, cliStartRefusal } from '../core/agent-manager';
@@ -585,7 +585,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // If the agent's worktreePath changed after the PTY was spawned, the
     // existing PTY is stuck in the wrong cwd. Kill it so initAgentPty below
     // respawns with the correct working directory.
-    killStalePty(agent);
+    await killStalePty(agent);
 
     // A CLI still running in the PTY gets nothing typed into it. The status
     // cannot say so: a turn that fails leaves claude alive at its prompt, and
@@ -637,10 +637,19 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       // Not before this Tars listens on its port: the CLI's MCP calls carry its token unproven (core/api-listening.ts).
       if (!(await apiListening())) throw new Error(NOT_LISTENING);
       refuseWhileQuitting('agent terminal');
+      // With its whole tree, before the new one opens (endTerminalTree, as a stop ends it), the agent naming none
+      // meanwhile: its exit, up to a grace later, is not the agent's. What ran under it, a job its shell holds,
+      // a CLI typed by hand on Windows that cliStartRefusal cannot see, outlived the hangup alone (#620).
       const oldPty = ptyProcesses.get(agent.ptyId!);
+      ptyProcesses.delete(agent.ptyId!);
+      agent.ptyId = undefined;
+      agent.ptyCwd = undefined;
       if (oldPty) {
-        killPty(oldPty);
-        ptyProcesses.delete(agent.ptyId!);
+        try {
+          await endTerminalTree(oldPty);
+        } catch (err) {
+          console.warn(`[start] ${agent.name || agent.id}: its terminal did not close cleanly before the local provider's:`, err);
+        }
       }
 
       const currentSettings = getAppSettings();
