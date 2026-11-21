@@ -32,6 +32,8 @@ export interface CLIPaths {
   gemini: string;
   grok: string;
   qwencode: string;
+  /** Goose's binary, goose (2.0.7). */
+  goose: string;
   opencode: string;
   amp: string;
   pi: string;
