@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { DATA_DIR } from '../constants';
+import { usesPath, type InUse } from './paths-in-use';
 
 /**
  * A durable temporary folder per agent (RD-REDEMARRAGE.md, 2.1, approved by
@@ -111,6 +112,11 @@ export interface RetentionDeps {
   freeBytes?: () => number | null;
   capBytes?: number;
   log?: (line: string) => void;
+  /**
+   * What the live processes use (paths-in-use.ts), read once a unit is about to go: a unit one of them uses is kept,
+   * whatever its date. Undefined from it: they could not be read, and nothing is deleted that pass.
+   */
+  inUse?: () => Promise<InUse | undefined>;
 }
 
 /** One thing the retention keeps or deletes whole. */
@@ -118,8 +124,10 @@ interface Unit {
   path: string;
   owner: string;
   bytes: number;
-  /** Its newest modification, itself and everything under it. */
+  /** Its newest modification or run (an executable's access time), itself and everything under it: its age. */
   newest: number;
+  /** Its newest modification alone, as the pass weighed units before an access time counted: the cap's order. */
+  changed: number;
   /**
    * It holds a socket or a FIFO, itself or under it: what a running server
    * listens on (claude's messaging socket in `c/cc-socks`, a tmux, an editor),
@@ -137,10 +145,10 @@ export interface RetentionResult {
 }
 
 /** Each unit's last measure, and when it was taken, kept between passes. */
-const measures = new Map<string, { bytes: number; newest: number; live: boolean; at: number }>();
+const measures = new Map<string, { bytes: number; newest: number; changed: number; live: boolean; at: number }>();
 
 /** Size and newest date of what is under `p`, never through a link; null when it cannot be read. */
-async function measure(p: string): Promise<{ bytes: number; newest: number; live: boolean } | null> {
+async function measure(p: string): Promise<{ bytes: number; newest: number; changed: number; live: boolean } | null> {
   let st: fs.Stats;
   try {
     st = await fs.promises.lstat(p);
@@ -148,7 +156,11 @@ async function measure(p: string): Promise<{ bytes: number; newest: number; live
     return null;
   }
   let bytes = st.isDirectory() ? 0 : (typeof st.blocks === 'number' ? st.blocks * 512 : st.size);
-  let newest = st.mtimeMs;
+  // An executable's run is a use: running it changes no date but its access time (measured on APFS 21/11; Linux's
+  // relatime too). A data file's access time is not read: a read does not move it on APFS, and an indexer's daily
+  // reads would keep everything on Linux. Folders' neither: this walk reads them.
+  let newest = st.isFile() && (st.mode & 0o111) !== 0 ? Math.max(st.mtimeMs, st.atimeMs) : st.mtimeMs;
+  let changed = st.mtimeMs;
   let live = st.isSocket() || st.isFIFO();
   if (st.isDirectory()) {
     let names: string[];
@@ -162,10 +174,11 @@ async function measure(p: string): Promise<{ bytes: number; newest: number; live
       if (!inner) return null;
       bytes += inner.bytes;
       newest = Math.max(newest, inner.newest);
+      changed = Math.max(changed, inner.changed);
       live = live || inner.live;
     }
   }
-  return { bytes, newest, live };
+  return { bytes, newest, changed, live };
 }
 
 async function childrenOf(dir: string): Promise<string[]> {
@@ -276,7 +289,7 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
     // Weighed from the last pass while it cannot be deletable yet: touched
     // within the shortest limit, so not old enough for any rule before then.
     if (last && last.newest > now - TMP_LIVE_IDLE_MS && now - last.at < TMP_REMEASURE_MS) {
-      units.push({ path: p, owner, bytes: last.bytes, newest: last.newest, live: last.live });
+      units.push({ path: p, owner, bytes: last.bytes, newest: last.newest, changed: last.changed, live: last.live });
       continue;
     }
     const m = await measure(p);
@@ -295,6 +308,20 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
   // long pass is spared too.
   const live = new Set(deps.liveAgentIds());
   let swapped = false;
+  // What the live processes use, read before the first deletion of the pass, once (QA's gate of #601's stack: the
+  // gate's codex and Kimi went while it ran them). Compared under both spellings of a unit, the root's and the real
+  // one (macOS's /tmp is /private/tmp), which is the one lsof and /proc give.
+  let inUseRead: Promise<InUse | undefined> | undefined;
+  let unreadSaid = false;
+  /** Units kept for a live process's use (the Audit's L1 on #627): weighed out of the cap, as the pass before took them. */
+  const inUseKept = new Set<string>();
+  const usedBy = async (resolved: string): Promise<'used' | 'unknown' | 'free'> => {
+    if (!deps.inUse) return 'free';
+    inUseRead ??= deps.inUse().catch(() => undefined);
+    const inUse = await inUseRead;
+    if (!inUse) return 'unknown';
+    return usesPath(inUse, [resolved, rootReal + resolved.slice(root.length)]) ? 'used' : 'free';
+  };
   const remove = async (unit: Unit, reason: string): Promise<boolean> => {
     const resolved = path.resolve(unit.path);
     if (swapped || !resolved.startsWith(root + path.sep)) return false;
@@ -306,17 +333,37 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
     // Its top's date, read again: a pass can take a minute and more between
     // its measures and its deletions, and a unit written meanwhile stays (L3).
     try {
-      if ((await fs.promises.lstat(resolved)).mtimeMs > unit.newest) {
+      if ((await fs.promises.lstat(resolved)).mtimeMs > unit.changed) {
         log(`[agent-tmp] ${resolved} changed since it was weighed: kept`);
         return false;
       }
     } catch {
       return false;
     }
+    const use = await usedBy(resolved);
+    if (use === 'unknown') {
+      if (!unreadSaid) log('[agent-tmp] the processes could not be read: nothing is deleted this pass, in case one of them uses it');
+      unreadSaid = true;
+      return false;
+    }
+    if (use === 'used') {
+      inUseKept.add(unit.path);
+      log(`[agent-tmp] ${resolved} is in use by a live process (its executable, its current folder, a file it holds open, or its command line): kept`);
+      return false;
+    }
+    // Moved aside in one step, then deleted: Windows refuses the move while a process holds the unit (a running image,
+    // its current folder), where a recursive removal would have deleted what it could around it.
+    const aside = `${resolved}.tars-removing-${process.pid}-${now.toString(36)}`;
     try {
-      await fs.promises.rm(resolved, { recursive: true, force: true });
+      await fs.promises.rename(resolved, aside);
     } catch (err) {
-      log(`[agent-tmp] ${resolved} could not be deleted (${(err as Error).message}): kept`);
+      log(`[agent-tmp] ${resolved} could not be moved aside to be deleted (${(err as NodeJS.ErrnoException).code ?? (err as Error).message}): kept whole, a process may hold it`);
+      return false;
+    }
+    try {
+      await fs.promises.rm(aside, { recursive: true, force: true });
+    } catch (err) {
+      log(`[agent-tmp] ${aside} could not be deleted (${(err as Error).message}): left, and weighed again at the next pass`);
       return false;
     }
     measures.delete(unit.path);
@@ -355,16 +402,27 @@ export async function enforceTmpRetention(deps: RetentionDeps): Promise<Retentio
     kept.push(unit);
   }
 
-  let total = kept.reduce((sum, u) => sum + u.bytes, 0);
-  const oldestFirst = kept.filter((u) => !(u.owner && live.has(u.owner))).sort((a, b) => a.newest - b.newest);
+  // The cap deletes what it deleted before 17, less what is used (the Audit's L1 on #627): units in the order of their
+  // changes, as before; what a live process uses, or what was run since its last change (an executable's access
+  // time), is weighed out and never cut, as the pass before took it and went on. So it deletes no unit the pass before
+  // kept, and what is used can stay over the cap without bound (said below).
+  const usedOrRun = (u: Unit) => inUseKept.has(u.path) || u.newest > u.changed;
+  let total = kept.reduce((sum, u) => sum + (usedOrRun(u) ? 0 : u.bytes), 0);
+  const oldestFirst = kept.filter((u) => !(u.owner && live.has(u.owner))).sort((a, b) => a.changed - b.changed);
   for (const unit of oldestFirst) {
     if (total <= capBytes) break;
+    if (usedOrRun(unit)) continue;
     if (await remove(unit, `over ${(capBytes / GB).toFixed(0)} GB in all, the oldest first`)) total -= unit.bytes;
+    else if (inUseKept.has(unit.path)) total -= unit.bytes;
   }
+  const usedBytes = kept.reduce((sum, u) => sum + (usedOrRun(u) ? u.bytes : 0), 0);
   if (total > capBytes) {
     log(`[agent-tmp] still ${total} bytes over a cap of ${capBytes}: what is left belongs to agents whose CLI runs`);
   }
-  result.totalBytes = total;
+  if (usedBytes > 0 && total + usedBytes > capBytes) {
+    log(`[agent-tmp] ${usedBytes} bytes in use by live processes or run since their last change are kept, never cut to the cap`);
+  }
+  result.totalBytes = total + usedBytes;
   return result;
 }
 
