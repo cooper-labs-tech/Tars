@@ -75,6 +75,8 @@ import { cannotSymlink } from '../../setup/symlink-privilege';
  *     went on to the next oldest idle unit (A in use, the oldest; B idle; the cap met once A goes: B went), and a unit
  *     of a running agent kept by the day rule pushed the total over the cap, taking an idle unit of an agent at rest.
  *     A unit a process uses does not count toward the cap: the pass deletes what it deleted before, less what is used.
+ *     The same for a tool run recently (21): the cap orders units by their changes, as before, a run never moving an
+ *     idle unit ahead of it, and what was run counts out of the cap.
  */
 
 const DAY = 86_400_000;
@@ -611,6 +613,18 @@ describe('what a live process uses (17 to 23)', () => {
     expect(exists(`${L()}/t/a-used`)).toBe(true);
     expect(exists(`${L()}/t/b-idle`)).toBe(false);
     expect(exists(`${L()}/t/c-idle`)).toBe(true);
+  });
+
+  it.skipIf(!hasPosixModes())('24. a tool run recently does not move the cap onto an idle unit kept before', async () => {
+    const tool = put(`${L()}/t/a-ran/bin/tool`, 40960, 5);
+    put(`${L()}/t/b-idle/a.bin`, 8192, 3);
+    fs.chmodSync(tool, 0o755);
+    fs.utimesSync(tool, new Date(NOW - 3_600_000), new Date(NOW - 5 * DAY));
+
+    await enforceTmpRetention(deps({ inUse: using([]), capBytes: 36864 }));
+
+    // Before 17: A, the oldest change, went, and B stayed under the cap. A was run an hour ago: it stays, and B too.
+    expect(exists(`${L()}/t/a-ran`) && exists(`${L()}/t/b-idle`)).toBe(true);
   });
 
   it("24. a running agent's unit kept by the day rule for its use does not push an agent at rest's unit over the cap", async () => {
