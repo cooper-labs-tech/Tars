@@ -91,7 +91,7 @@ afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
  * about it. It now fails naming the provider and asking the question that
  * decides: does this CLI run the claude binary?
  */
-const FOREIGN_BINARIES = ['amp', 'codex', 'gemini', 'grok', 'kimi', 'opencode', 'pi', 'qwen'];
+const FOREIGN_BINARIES = ['amp', 'codex', 'gemini', 'grok', 'kilo', 'kimi', 'opencode', 'pi', 'qwen'];
 
 /**
  * What a CLI running the claude binary is given, written out rather than read

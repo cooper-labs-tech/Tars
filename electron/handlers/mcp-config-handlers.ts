@@ -3,7 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
-import { updateSharedTextSync, writeSharedJsonSync } from '../utils/shared-file';
+import { updateSharedJsonSync, updateSharedTextSync, writeSharedJsonSync } from '../utils/shared-file';
+import { KiloProvider } from '../providers/kilo-provider';
 import { removeTomlTable } from '../utils/toml-tables';
 import { parse as parseToml } from 'smol-toml';
 
@@ -41,6 +42,9 @@ function getConfigPath(provider: string): string {
       return path.join(os.homedir(), '.opencode', 'mcp.json');
     case 'pi':
       return path.join(os.homedir(), '.pi', 'mcp.json');
+    case 'kilo':
+      // Where Kilo reads its servers, the file its provider writes (kilo-provider.ts): opencode's schema, `mcp`.
+      return new KiloProvider().mcpConfigFile();
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
@@ -183,6 +187,57 @@ function writeJsonMcp(provider: string, action: 'update' | 'delete', server?: Mc
   }
 }
 
+// ── Kilo: opencode's schema, `mcp.<name>` ───────────────────────────
+
+type OpencodeMcpFile = { mcp?: Record<string, unknown>; [key: string]: unknown };
+
+/** The user's own servers of a file in opencode's schema: `{type: 'local', command: [program, ...args], environment}`. */
+function readOpencodeMcp(provider: string): McpServer[] {
+  const configPath = getConfigPath(provider);
+  if (!fs.existsSync(configPath)) return [];
+  try {
+    const data = JSON.parse(fs.readFileSync(configPath, 'utf-8')) as OpencodeMcpFile;
+    const servers = data.mcp && typeof data.mcp === 'object' ? data.mcp : {};
+    return Object.entries(servers)
+      .filter(([name]) => !DOROTHY_MANAGED_MCPS.has(name))
+      .map(([name, raw]) => {
+        const cfg = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+        const command = Array.isArray(cfg.command) ? cfg.command.filter((c): c is string => typeof c === 'string') : [];
+        return {
+          name,
+          command: command[0] ?? '',
+          args: command.slice(1),
+          env: (cfg.environment && typeof cfg.environment === 'object') ? cfg.environment as Record<string, string> : {},
+        };
+      });
+  } catch (err) {
+    console.error(`Failed to read ${provider} MCP config:`, err);
+    return [];
+  }
+}
+
+/** One server added, replaced or taken out of a file in opencode's schema, the rest of it left as it is. */
+function writeOpencodeMcp(provider: string, action: 'update' | 'delete', server?: McpServer, deleteName?: string): void {
+  const configPath = getConfigPath(provider);
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  const outcome = updateSharedJsonSync<OpencodeMcpFile>(configPath, current => {
+    const config: OpencodeMcpFile = current ?? {};
+    const servers = config.mcp && typeof config.mcp === 'object' ? { ...config.mcp } : {};
+    if (action === 'update' && server) {
+      servers[server.name] = {
+        type: 'local', command: [server.command, ...server.args],
+        ...(Object.keys(server.env).length > 0 ? { environment: server.env } : {}), enabled: true,
+      };
+    } else if (action === 'delete' && deleteName) {
+      if (!(deleteName in servers)) return undefined;
+      delete servers[deleteName];
+    }
+    return { ...config, mcp: servers };
+  }, { createMode: 0o644 });
+  if (outcome === 'unreadable') throw new Error(`${configPath} is not plain JSON: left as it was`);
+  if (outcome === 'busy') throw new Error(`${configPath} kept changing while saving: nothing written`);
+}
+
 // ── Codex: TOML [mcp_servers.name] sections ─────────────────────────
 
 // Codex and Grok share the same TOML schema (config.toml with
@@ -314,6 +369,7 @@ function listServers(provider: string): McpServer[] {
     case 'grok': return readCodexMcp('grok');
     case 'opencode':
     case 'pi': return readJsonMcp(provider);
+    case 'kilo': return readOpencodeMcp(provider);
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
@@ -334,6 +390,7 @@ function updateServer(provider: string, server: McpServer): void {
     case 'grok': writeCodexMcp('update', server, undefined, 'grok'); break;
     case 'opencode':
     case 'pi': writeJsonMcp(provider, 'update', server); break;
+    case 'kilo': writeOpencodeMcp(provider, 'update', server); break;
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':
@@ -353,6 +410,7 @@ function deleteServer(provider: string, name: string): void {
     case 'grok': writeCodexMcp('delete', undefined, name, 'grok'); break;
     case 'opencode':
     case 'pi': writeJsonMcp(provider, 'delete', undefined, name); break;
+    case 'kilo': writeOpencodeMcp(provider, 'delete', undefined, name); break;
     case 'minimax':
     case 'nvidia':
     case 'nous-portal':

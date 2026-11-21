@@ -5,6 +5,7 @@ import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
+import { delegateOnceUp, versionEnv } from './conformance-helpers.mjs';
 import { startStandIn, MODEL_ID } from './stand-in-openai-endpoint.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
@@ -27,15 +28,16 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. restart: the window restarts the agent (what applying new settings does too), which forks its session: the CLI
  *    goes on under a new session with the earlier turns, and a third delegation is answered from it (the Audit's M1 on
  *    #613: opencode's reader bound the session the fork left, and the task waited out its timeout).
- * A delegation answered "still starting ... Send it again in a moment" (nothing typed, its TUI not drawn yet) is sent
- * again, as an orchestrator does, four times at most.
+ * A delegation answered "still starting ... Send it again in a moment" (nothing typed, its TUI not drawn yet, past the
+ * 20 s a sender waits) is sent again, as an orchestrator does, four times at most: Kilo 7.8.27 drew its bar 13 to 47 s
+ * after it started on a loaded machine (20/11).
  * Every harness's home is the sandbox's (CODEX_HOME, KIMI_CODE_HOME, PI_CODING_AGENT_DIR handed to Tars here): one
  * exported by the shell that runs the spec was inherited, and the sandboxed Tars wrote that home and its harness ran on
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
  *
  * Opt-in, as the live CLI matrix is: TARS_HARNESS_<ID>=<binary> names the binary of each harness to run
- * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE); a harness with none is skipped,
- * and says so. A harness whose tokens Tars reads (opencode) also has them in its task's ledger entry.
+ * (TARS_HARNESS_KIMI_CODE, TARS_HARNESS_CODEX, TARS_HARNESS_PI, TARS_HARNESS_OPENCODE, TARS_HARNESS_KILO); a harness with
+ * none is skipped, and says so. A harness whose tokens Tars reads (opencode, Kilo) also has them in its task's ledger entry.
  * The artefact, per harness: values.json (each step's answer, the endpoint's requests in short, the harness's screen at
  * its start and after each task), endpoint-requests.jsonl, the app's logs, the agent's whole
  * screen of each run of Tars (screen-<run>.txt: why a harness that exits at once exited), reproduce.txt.
@@ -48,6 +50,7 @@ const HARNESSES: Harness[] = [
   { id: 'codex', provider: 'codex', pathKey: 'codex', env: 'TARS_HARNESS_CODEX' },
   { id: 'pi', provider: 'pi', pathKey: 'pi', env: 'TARS_HARNESS_PI' },
   { id: 'opencode', provider: 'opencode', pathKey: 'opencode', env: 'TARS_HARNESS_OPENCODE', tokens: true },
+  { id: 'kilo', provider: 'kilo', pathKey: 'kilo', env: 'TARS_HARNESS_KILO', tokens: true },
 ];
 
 const LEAD = 'dddd4444-0000-4000-8000-0000000000c1';
@@ -58,7 +61,7 @@ const TASK = 'Run the shell command that prints the probe marker, then tell me w
 const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** The files Tars writes in a harness's home, for each home the runner may have exported: never Tars's to write here. */
-const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']], ['XDG_CONFIG_HOME', [path.join('opencode', 'opencode.json')]]];
+const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']], ['XDG_CONFIG_HOME', [path.join('opencode', 'opencode.json'), path.join('kilo', 'kilo.json')]]];
 const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([name, files]) => {
   const dir = process.env[name]?.trim();
   return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
@@ -104,8 +107,8 @@ for (const h of HARNESSES) {
     const port = apiPort(31950);
     const dist = path.resolve('electron', 'dist');
     // The harnesses' homes, the sandbox's: given to the sandboxed Tars, and to the version read below, since a harness
-    // may write its folders at any start (opencode 1.19.6 makes ~/.config/opencode, ~/.local/share/opencode,
-    // ~/.local/state/opencode and ~/.cache/opencode for a bare --version, measured 20/11).
+    // may write its folders at any start (for a bare --version, measured 20/11: opencode 1.19.6 makes ~/.config/opencode,
+    // ~/.local/share/opencode, ~/.local/state/opencode and ~/.cache/opencode, Kilo 7.8.27 the same four of its own).
     const harnessHomes = {
       CODEX_HOME: path.join(home, '.codex'), KIMI_CODE_HOME: path.join(home, '.kimi-code'), PI_CODING_AGENT_DIR: path.join(home, '.pi', 'agent'),
       XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
@@ -114,7 +117,7 @@ for (const h of HARNESSES) {
     const version = (() => {
       try {
         fs.mkdirSync(path.join(home, 'tmp'), { recursive: true });
-        return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000, cwd: project, env: { ...process.env, HOME: home, TMPDIR: path.join(home, 'tmp'), ...harnessHomes } }).trim();
+        return execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 20_000, cwd: project, env: versionEnv(process.env, { home, tmp: path.join(home, 'tmp'), harnessHomes }) }).trim();
       } catch { return null; }
     })();
     const values: Record<string, unknown> = { harness: h.id, bin, version };
@@ -176,19 +179,10 @@ for (const h of HARNESSES) {
       }
     };
 
-    // delegate_task, sent again while Tars answers that the CLI is still starting (step 2), each time with an id of
-    // its own; the answers that said so are kept with the last one.
+    // delegate_task, sent again while Tars answers that the CLI is still starting (conformance-helpers.mjs).
     type Lead = (tool: string, args: Record<string, unknown>) => Promise<{ text: string; isError: boolean }>;
-    const delegateOnceUp = async (lead: Lead, step: number) => {
-      const stillStarting: string[] = [];
-      for (let attempt = 1; ; attempt++) {
-        const reply = await lead('delegate_task', {
-          id: WORKER, prompt: TASK, timeoutSeconds: 200, clientRequestId: `e2e-conformance-${h.id}-${step}${attempt > 1 ? `-${attempt}` : ''}`,
-        });
-        if (!(reply.isError && /still starting/.test(reply.text)) || attempt === 5) return { ...reply, stillStarting };
-        stillStarting.push(reply.text);
-      }
-    };
+    const delegate = (lead: Lead, step: number) =>
+      delegateOnceUp(lead, { id: WORKER, prompt: TASK, timeoutSeconds: 200, requestId: `e2e-conformance-${h.id}-${step}` });
 
     const runnerBefore = runnerHomeFiles();
     try {
@@ -205,7 +199,7 @@ for (const h of HARNESSES) {
         const screenOf = async () => plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000);
         keep({ screenAtStart: await screenOf() });
         // 2. Delegated to, answered with its own final answer, after a real tool round.
-        const delegated = await delegateOnceUp(lead, 1);
+        const delegated = await delegate(lead, 1);
         // The ledger's task, as delegate_task names it at the end of its answer (`task <id>`): a UUID once its turn ran,
         // the request's `t-xxxxxxxx` while it waits.
         const taskId = /\btask ((?:t-[0-9a-f]{8})|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/.exec(delegated.text)?.[1];
@@ -238,7 +232,7 @@ for (const h of HARNESSES) {
       await withTars('second', async (lead, api) => {
         await api('agent', 'start', { id: WORKER, prompt: '' });
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
-        const again = await delegateOnceUp(lead, 2);
+        const again = await delegate(lead, 2);
         keep({ screenAfterResume: plain(((await api<{ output?: string[] } | null>('agent', 'get', WORKER))?.output ?? []).join('')).slice(-4000) });
         const after = posts().slice(before);
         keep({ again, resumedRequests: after.map(r => ({ url: r.url, carriesMarker: JSON.stringify(r.body ?? '').includes(standin.marker) })) });
@@ -251,7 +245,7 @@ for (const h of HARNESSES) {
         const beforeRestart = posts().length;
         await api('agent', 'restart', WORKER);
         await expect.poll(async () => !!(await api<{ cliRunning?: boolean } | null>('agent', 'get', WORKER))?.cliRunning, { timeout: 60_000 }).toBe(true);
-        const restarted = await delegateOnceUp(lead, 3);
+        const restarted = await delegate(lead, 3);
         const sessionAfterRestart = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
         const afterRestart = posts().slice(beforeRestart);
         keep({

@@ -104,10 +104,11 @@ export function resolveResumeSessionId(
     }
 
     // opencode: Tars knows its session by a UUID made from opencode's id (providers/opencode-cli.ts), and opencode
-    // resumes by its own: given back as opencode's id, when its database still has it in the agent's folder.
-    if (agent.provider === 'opencode') {
+    // resumes by its own: given back as opencode's id, when its database still has it in the agent's folder. Kilo, a
+    // build of opencode, the same from its own database.
+    if (agent.provider === 'opencode' || agent.provider === 'kilo') {
       const folders = [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p);
-      const own = opencodeSessionOf(sessionId, folders, opencodeDbPath(process.env, homeDir));
+      const own = opencodeSessionOf(sessionId, folders, opencodeDbPath(process.env, homeDir, agent.provider));
       if (own) return own;
       continue;
     }

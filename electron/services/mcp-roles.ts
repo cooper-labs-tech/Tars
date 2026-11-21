@@ -20,8 +20,10 @@ import { writeAtomicSync } from '../utils/secret-file';
  * - codex: `-c mcp_servers.<name>.enabled=false` (0.163), Qwen Code: `--disable-mcp-server <name>` (0.25.2),
  *   gemini: `--allowed-mcp-server-names`, its other servers (codex-provider.ts, qwen-code-provider.ts,
  *   gemini-provider.ts).
+ * - Kilo: `{"mcp": {"<name>": {"enabled": false}}}` in its inline config, KILO_CONFIG_CONTENT, for the run (7.8.27,
+ *   measured 20/11; kilo-provider.ts, roleSwitchVar), merged with an endpoint's provider.
  * - opencode, amp, grok and pi read their servers from their own config with no per-run switch Tars could
- *   verify (none is installed where this was written): a worker of theirs keeps all seven.
+ *   verify (opencode's inline config, the same as Kilo's, is not measured): a worker of theirs keeps all seven.
  */
 
 export const ORCHESTRATOR_ONLY_MCP: readonly string[] = ['claude-mgr-telegram', 'dorothy-x'];

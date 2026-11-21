@@ -18,6 +18,12 @@ export function readAppSettingsFromDisk(): Partial<AppSettings> {
 export interface PtyLaunch {
   model?: string;
   effort?: string;
+  /**
+   * Whether the agent has the orchestrator's powers (core/agent-role.ts, hasOrchestratorPowers): a CLI whose servers
+   * are switched per run by its environment gives a worker no orchestrator-only server (services/mcp-roles.ts).
+   * Undefined when the launch was not told: nothing is switched off then.
+   */
+  orchestrator?: boolean;
 }
 
 export interface InteractiveCommandParams {

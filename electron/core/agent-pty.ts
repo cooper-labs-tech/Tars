@@ -18,7 +18,7 @@ import { cliLaunchExit, reportHandledError } from '../services/error-reports/han
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
 import { kimiSessionWatch } from '../services/kimi-sessions';
-import { opencodeSessionWatch } from '../services/opencode-sessions';
+import { opencodeWatchFor, opencodeWatches } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import { getAllProviders } from '../providers';
@@ -236,17 +236,19 @@ export function spawnAgentPty(opts: {
   if (agentId && opts.binaryName === 'kimi') {
     kimiSessionWatch.noteLaunch(agentId, opts.cwd, kimiSessionOfCommand(Array.isArray(opts.args) ? opts.args.join(' ') : opts.args));
   }
-  // opencode's, from its database; with the session its line resumes or forks (a restart's) and the prompt it starts
-  // on, in this terminal, as for kimi (services/opencode-sessions.ts).
-  if (agentId && opts.binaryName === 'opencode') {
-    opencodeSessionWatch.noteLaunch(agentId, opts.cwd, { ...opencodeLaunchOf(opts.args), terminal: spawned });
+  // opencode's and Kilo's, each from its own database; with the session its line resumes or forks (a restart's) and
+  // the prompt it starts on, in this terminal, as for kimi (services/opencode-sessions.ts).
+  const opencodeWatch = opencodeWatchFor(opts.binaryName);
+  if (agentId && opencodeWatch) {
+    opencodeWatch.noteLaunch(agentId, opts.cwd, { ...opencodeLaunchOf(opts.args), terminal: spawned });
   }
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {
     terminalExited(spawned);
-    // And the session reader's launch in it, which is no longer read (services/opencode-sessions.ts).
-    opencodeSessionWatch.forgetTerminal(spawned);
+    // And the session readers' launch in it, which is no longer read, whichever build of opencode it ran
+    // (services/opencode-sessions.ts).
+    for (const watch of opencodeWatches) watch.forgetTerminal(spawned);
     // And what it was spawned as: gone, node-pty on Linux still names the
     // shell it spawned, and a terminal handed a command read as a running CLI.
     spawnedAs.delete(spawned);

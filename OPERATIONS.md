@@ -403,6 +403,7 @@ starting" (the TUI not drawn yet, nothing typed) is sent again, as an orchestrat
 ```bash
 npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
 TARS_HARNESS_KIMI_CODE=/path/to/kimi npx playwright test e2e/harness-conformance.spec.ts -g kimi-code
+TARS_HARNESS_OPENCODE=/path/to/opencode TARS_HARNESS_KILO=/path/to/kilo npx playwright test e2e/harness-conformance.spec.ts
 TARS_HARNESS_CODEX=/path/to/codex TARS_HARNESS_PI=/path/to/pi npx playwright test e2e/harness-conformance.spec.ts
 ```
 
