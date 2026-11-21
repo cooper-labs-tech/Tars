@@ -826096,7 +826096,7 @@
     },
     {
       "type": "frame",
-      "id": "vsK0K",
+      "id": "K2zY6o",
       "x": 0,
       "y": 199000,
       "name": "Agent notices (2.0.7) · in its panel and in Logs",
@@ -826111,7 +826111,7 @@
       "children": [
         {
           "type": "text",
-          "id": "Z984qn",
+          "id": "Iwhp6",
           "fill": "$text-primary",
           "content": "Agent notices (2.0.7) · what Tars says about a running agent: in its panel, above its terminal, and in Logs",
           "lineHeight": 1.4,
@@ -826121,7 +826121,7 @@
         },
         {
           "type": "text",
-          "id": "hlwlN",
+          "id": "Pc89E",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
@@ -826133,14 +826133,14 @@
         },
         {
           "type": "frame",
-          "id": "X8t5mk",
+          "id": "hi34b",
           "name": "panel one",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "KoLJO",
+              "id": "J4a6l2",
               "name": "panel",
               "width": 760,
               "layout": "vertical",
@@ -826148,7 +826148,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "wIB9t",
+                  "id": "hhrqs",
                   "fill": "$text-muted",
                   "content": "an agent's panel, its terminal live: Tars's notice above the screen, never in it",
                   "lineHeight": 1.4,
@@ -826158,7 +826158,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Hsb2E",
+                  "id": "nPc7i",
                   "name": "panel Cline Coder",
                   "width": 760,
                   "fill": "$surface",
@@ -826168,7 +826168,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "q4B0r",
+                      "id": "rdfjE",
                       "name": "head",
                       "width": "fill_container",
                       "stroke": "$border",
@@ -826184,7 +826184,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "eXQo5",
+                          "id": "fkGYr",
                           "name": "d",
                           "fill": "$status-running",
                           "width": 6,
@@ -826192,7 +826192,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "z5bZro",
+                          "id": "L8JPL",
                           "fill": "$text-primary",
                           "content": "Cline Coder",
                           "lineHeight": 1.4,
@@ -826202,7 +826202,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "D1uquS",
+                          "id": "Dac3u",
                           "fill": "$text-muted",
                           "content": "feat/cli-window",
                           "lineHeight": 1.4,
@@ -826212,14 +826212,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "KUcGd",
+                          "id": "Yga1n",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "text",
-                          "id": "HYhAY",
+                          "id": "EUxoH",
                           "fill": "$status-running",
                           "content": "running",
                           "lineHeight": 1.4,
@@ -826231,7 +826231,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "PyP7A",
+                      "id": "w4noLS",
                       "name": "notice 14:02",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -826248,7 +826248,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "D73pH",
+                          "id": "B7Fnv",
                           "name": "d",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -826256,7 +826256,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "eexDz",
+                          "id": "nknsv",
                           "fill": "$text-muted",
                           "content": "Tars · 14:02",
                           "lineHeight": 1.4,
@@ -826266,7 +826266,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "P6pM4Y",
+                          "id": "FANmn",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 460,
@@ -826278,17 +826278,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "J818Og",
+                          "id": "wezFX",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "Wb1jo",
+                          "id": "I6Ht7",
                           "name": "b seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -826298,7 +826297,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "CzGMP",
+                              "id": "pM9RR",
                               "fill": "$text-muted",
                               "content": "seen",
                               "lineHeight": 1.4,
@@ -826312,7 +826311,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "qT7Vk",
+                      "id": "GviCx",
                       "name": "terminal",
                       "width": "fill_container",
                       "fill": "$bg",
@@ -826325,7 +826324,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "unhOh",
+                          "id": "nHfyy",
                           "fill": "$text-secondary",
                           "content": "● I'll pick up the task from its description, the earlier turns are gone.",
                           "lineHeight": 1.4,
@@ -826335,7 +826334,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "Fcdwp",
+                          "id": "t5aLVk",
                           "fill": "$text-secondary",
                           "content": "● Read(src/lib/clis.ts)",
                           "lineHeight": 1.4,
@@ -826345,7 +826344,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "eRVLK",
+                          "id": "XJ2vO",
                           "fill": "$text-muted",
                           "content": "  └ Read 52 lines",
                           "lineHeight": 1.4,
@@ -826355,7 +826354,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "tPFjL",
+                          "id": "gmZjb",
                           "fill": "$text-secondary",
                           "content": "> ▊",
                           "lineHeight": 1.4,
@@ -826371,7 +826370,7 @@
             },
             {
               "type": "frame",
-              "id": "c9yL5",
+              "id": "FNS3n",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -826379,7 +826378,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "REnIH",
+                  "id": "th07c",
                   "fill": "$text-muted",
                   "content": "Tars's words, not the CLI's",
                   "lineHeight": 1.4,
@@ -826389,7 +826388,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "RjMAL",
+                  "id": "n1xqI7",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -826405,14 +826404,14 @@
         },
         {
           "type": "frame",
-          "id": "S4AojG",
+          "id": "P4IwV",
           "name": "panel several",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "SBgdC",
+              "id": "s79Piy",
               "name": "panel",
               "width": 760,
               "layout": "vertical",
@@ -826420,7 +826419,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "OOlBR",
+                  "id": "bkBxP",
                   "fill": "$text-muted",
                   "content": "several notices: the newest first, at most three, then how many more",
                   "lineHeight": 1.4,
@@ -826430,7 +826429,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "uhXL9",
+                  "id": "oZRTR",
                   "name": "panel Goose Runner",
                   "width": 760,
                   "fill": "$surface",
@@ -826440,7 +826439,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "N3Q2W",
+                      "id": "Uljqc",
                       "name": "head",
                       "width": "fill_container",
                       "stroke": "$border",
@@ -826456,7 +826455,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "Uukl9",
+                          "id": "Yd5Ao",
                           "name": "d",
                           "fill": "$status-running",
                           "width": 6,
@@ -826464,7 +826463,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "dmCOk",
+                          "id": "mei0a",
                           "fill": "$text-primary",
                           "content": "Goose Runner",
                           "lineHeight": 1.4,
@@ -826474,7 +826473,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "KWR4Y",
+                          "id": "PjdAv",
                           "fill": "$text-muted",
                           "content": "feat/ops",
                           "lineHeight": 1.4,
@@ -826484,14 +826483,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "u8eK2A",
+                          "id": "HxCdC",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "text",
-                          "id": "WwQPJ",
+                          "id": "Zt44f",
                           "fill": "$status-running",
                           "content": "running",
                           "lineHeight": 1.4,
@@ -826503,7 +826502,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "aY6FS",
+                      "id": "ekJMO",
                       "name": "notice 15:40",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -826520,7 +826519,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "uYa9i",
+                          "id": "h77SpE",
                           "name": "d",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -826528,7 +826527,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "r3nfz",
+                          "id": "rb2DR",
                           "fill": "$text-muted",
                           "content": "Tars · 15:40",
                           "lineHeight": 1.4,
@@ -826538,7 +826537,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "OcGeJ",
+                          "id": "caIbm",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 460,
@@ -826550,17 +826549,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "CWzc6",
+                          "id": "m3GLO",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "tljw3",
+                          "id": "zm5KH",
                           "name": "b seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -826570,7 +826568,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "Uwql7",
+                              "id": "ie7LW",
                               "fill": "$text-muted",
                               "content": "seen",
                               "lineHeight": 1.4,
@@ -826584,7 +826582,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "p9bNDR",
+                      "id": "NMvH6",
                       "name": "notice 15:12",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -826601,7 +826599,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "xJXFw",
+                          "id": "GkMdr",
                           "name": "d",
                           "fill": "$status-error",
                           "width": 6,
@@ -826609,7 +826607,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "vpEsD",
+                          "id": "UmrYm",
                           "fill": "$text-muted",
                           "content": "Tars · 15:12",
                           "lineHeight": 1.4,
@@ -826619,7 +826617,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "S05lbB",
+                          "id": "ptLOz",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 460,
@@ -826631,17 +826629,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "Lypxo",
+                          "id": "R7wM1",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "RfZmE",
+                          "id": "En96D",
                           "name": "b seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -826651,7 +826648,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "Wdu0L",
+                              "id": "YegTe",
                               "fill": "$text-muted",
                               "content": "seen",
                               "lineHeight": 1.4,
@@ -826665,7 +826662,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "HffVW",
+                      "id": "xXhAi",
                       "name": "more",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -826682,7 +826679,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "a4iiP",
+                          "id": "dPfsX",
                           "fill": "$text-muted",
                           "content": "2 earlier notices, in Logs",
                           "lineHeight": 1.4,
@@ -826692,17 +826689,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "F5WHD",
+                          "id": "CMsYI",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "n316G",
+                          "id": "Vjtsr",
                           "name": "b mark all seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -826712,7 +826708,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "f9fsUX",
+                              "id": "FVpcr",
                               "fill": "$text-muted",
                               "content": "mark all seen",
                               "lineHeight": 1.4,
@@ -826726,7 +826722,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "iYDBH",
+                      "id": "XmBxQ",
                       "name": "terminal",
                       "width": "fill_container",
                       "fill": "$bg",
@@ -826739,7 +826735,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "Ypnr6",
+                          "id": "ZNOZr",
                           "fill": "$text-secondary",
                           "content": "( goose ) ready",
                           "lineHeight": 1.4,
@@ -826749,7 +826745,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "JimsI",
+                          "id": "jjTch",
                           "fill": "$text-secondary",
                           "content": "> ▊",
                           "lineHeight": 1.4,
@@ -826765,7 +826761,7 @@
             },
             {
               "type": "frame",
-              "id": "uqLYQ",
+              "id": "QgQ6E",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -826773,7 +826769,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "tUGbc",
+                  "id": "JiSg7",
                   "fill": "$text-muted",
                   "content": "a refused session is an error",
                   "lineHeight": 1.4,
@@ -826783,7 +826779,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "CHxxt",
+                  "id": "O40lp",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -826799,14 +826795,14 @@
         },
         {
           "type": "frame",
-          "id": "dAEVR",
+          "id": "aBTPG",
           "name": "logs",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "SwdfK",
+              "id": "yC9iy",
               "name": "logs",
               "width": 760,
               "layout": "vertical",
@@ -826814,7 +826810,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "nRDAm",
+                  "id": "g2ekbk",
                   "fill": "$text-muted",
                   "content": "Logs, a search across agents: Tars's lines among the agent's own, marked as Tars's",
                   "lineHeight": 1.4,
@@ -826824,7 +826820,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "jnvwc",
+                  "id": "cLCgO",
                   "name": "logs Cline Coder",
                   "width": 760,
                   "fill": "$surface",
@@ -826840,7 +826836,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "f91KeS",
+                      "id": "YJ5ZN",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 8,
@@ -826852,7 +826848,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "Sxksa",
+                          "id": "eQRPV",
                           "fill": "$text-primary",
                           "content": "Cline Coder",
                           "lineHeight": 1.4,
@@ -826862,7 +826858,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "K3gHJ",
+                          "id": "syazO",
                           "fill": "$text-muted",
                           "content": "feat/cli-window",
                           "lineHeight": 1.4,
@@ -826874,7 +826870,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "s3t3N6",
+                      "id": "ehKrf",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 10,
@@ -826885,7 +826881,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "t67wZf",
+                          "id": "sz5mj",
                           "fill": "$text-secondary",
                           "content": "❯ npm test",
                           "lineHeight": 1.4,
@@ -826897,7 +826893,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "IN8xA",
+                      "id": "jQsMD",
                       "name": "line tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -826910,7 +826906,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "P9yZ7",
+                          "id": "pHZZW",
                           "name": "d",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -826918,7 +826914,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "h58ft",
+                          "id": "UfFzx",
                           "fill": "$text-muted",
                           "content": "Tars · 14:02",
                           "lineHeight": 1.4,
@@ -826928,7 +826924,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "HhVHe",
+                          "id": "T5SIUf",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
@@ -826942,7 +826938,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "vz2Fu",
+                      "id": "Gh8QE",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 10,
@@ -826953,7 +826949,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "tM3nU",
+                          "id": "qcdM3",
                           "fill": "$text-secondary",
                           "content": "● I'll pick up the task from its description, the earlier turns are gone.",
                           "lineHeight": 1.4,
@@ -826967,7 +826963,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "l0Jlf",
+                  "id": "CXFYl",
                   "name": "logs Goose Runner",
                   "width": 760,
                   "fill": "$surface",
@@ -826983,7 +826979,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "jf2rQ",
+                      "id": "CEpca",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 8,
@@ -826995,7 +826991,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "oi4vl",
+                          "id": "sIzQ9",
                           "fill": "$text-primary",
                           "content": "Goose Runner",
                           "lineHeight": 1.4,
@@ -827005,7 +827001,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "dHkce",
+                          "id": "GnAK7",
                           "fill": "$text-muted",
                           "content": "feat/ops",
                           "lineHeight": 1.4,
@@ -827017,7 +827013,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "Y5rzuL",
+                      "id": "NK37a",
                       "name": "line tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -827030,7 +827026,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "TDo7A",
+                          "id": "JcYtM",
                           "name": "d",
                           "fill": "$status-error",
                           "width": 6,
@@ -827038,7 +827034,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "b2qtKM",
+                          "id": "KjSPm",
                           "fill": "$text-muted",
                           "content": "Tars · 15:12",
                           "lineHeight": 1.4,
@@ -827048,7 +827044,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "JNySF",
+                          "id": "Lnk7h",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
@@ -827062,7 +827058,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "VWYbi",
+                      "id": "pKqBv",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 10,
@@ -827073,7 +827069,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "kQ8sE",
+                          "id": "QRsGg",
                           "fill": "$text-secondary",
                           "content": "( goose ) ready",
                           "lineHeight": 1.4,
@@ -827089,7 +827085,7 @@
             },
             {
               "type": "frame",
-              "id": "q6dHr",
+              "id": "E1t8U",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -827097,7 +827093,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "Y9hAA",
+                  "id": "utINW",
                   "fill": "$text-muted",
                   "content": "found like any line",
                   "lineHeight": 1.4,
@@ -827107,7 +827103,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "QwNa1",
+                  "id": "PhieZ",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -827123,24 +827119,24 @@
         },
         {
           "type": "frame",
-          "id": "jCCVZ",
-          "name": "none",
+          "id": "qqqpn",
+          "name": "logs running",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "gQugd",
-              "name": "panel",
+              "id": "Pu2h8",
+              "name": "logs",
               "width": 760,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "NTgYp",
+                  "id": "Z0uRL",
                   "fill": "$text-muted",
-                  "content": "no notice, or all seen: the panel as it was",
+                  "content": "Logs, a running agent's tail: Tars's notices as a group, by time, then its screen",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -827148,23 +827144,25 @@
                 },
                 {
                   "type": "frame",
-                  "id": "kI9jA",
-                  "name": "panel Cline Coder",
+                  "id": "SiC03",
+                  "name": "logs Goose Runner: last 4 lines",
                   "width": 760,
                   "fill": "$surface",
                   "stroke": "$border",
                   "strokeWidth": 1,
                   "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
                   "children": [
                     {
                       "type": "frame",
-                      "id": "gIITA",
+                      "id": "ciCec",
                       "name": "head",
                       "width": "fill_container",
-                      "stroke": "$border",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
                       "gap": 8,
                       "padding": [
                         10,
@@ -827173,18 +827171,10 @@
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "rectangle",
-                          "id": "Zn3GQ",
-                          "name": "d",
-                          "fill": "$status-running",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
                           "type": "text",
-                          "id": "JYRvK",
+                          "id": "e389H",
                           "fill": "$text-primary",
-                          "content": "Cline Coder",
+                          "content": "Goose Runner: last 4 lines",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 13,
@@ -827192,26 +827182,9 @@
                         },
                         {
                           "type": "text",
-                          "id": "WYzjt",
+                          "id": "MKPTY",
                           "fill": "$text-muted",
-                          "content": "feat/cli-window",
-                          "lineHeight": 1.4,
-                          "fontFamily": "$font-mono",
-                          "fontSize": 10.5,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "K5Op7r",
-                          "name": "sp",
-                          "width": "fill_container",
-                          "height": 1
-                        },
-                        {
-                          "type": "text",
-                          "id": "gdn9r",
-                          "fill": "$status-running",
-                          "content": "running",
+                          "content": "feat/ops",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -827221,30 +827194,200 @@
                     },
                     {
                       "type": "frame",
-                      "id": "erlFD",
-                      "name": "terminal",
+                      "id": "OA562",
+                      "name": "group",
                       "width": "fill_container",
-                      "fill": "$bg",
-                      "layout": "vertical",
-                      "gap": 3,
                       "padding": [
-                        10,
+                        6,
+                        14,
+                        2,
                         14
                       ],
                       "children": [
                         {
                           "type": "text",
-                          "id": "J7UnQL",
-                          "fill": "$text-secondary",
-                          "content": "● Read(src/lib/clis.ts)",
+                          "id": "q46a1m",
+                          "fill": "$text-muted",
+                          "content": "Tars's notices, by time",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
-                          "fontSize": 11,
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZUe85",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "AnVYY",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "W4SuI",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
                           "fontWeight": "normal"
                         },
                         {
                           "type": "text",
-                          "id": "M63tP4",
+                          "id": "JInWn",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LV47N",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "T8v5YJ",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "RlEkY",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:40",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "b3A1zB",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its conversation starts over: Tars's servers moved, and a Goose session keeps the servers it began with.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "reEXM",
+                      "name": "sep",
+                      "width": "fill_container",
+                      "padding": [
+                        6,
+                        0,
+                        4,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "CTi6g",
+                          "name": "rule",
+                          "fill": "$border",
+                          "width": "fill_container",
+                          "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rXLnX",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PUbhJ",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Avjmy",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "XTSnv",
+                          "fill": "$text-secondary",
+                          "content": "[Tars] Paste your API key here to continue",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hGKsf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "V64Fle",
                           "fill": "$text-secondary",
                           "content": "> ▊",
                           "lineHeight": 1.4,
@@ -827260,7 +827403,7 @@
             },
             {
               "type": "frame",
-              "id": "YiGle",
+              "id": "lYTkg",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -827268,7 +827411,178 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "OYOxt",
+                  "id": "Dr7c6",
+                  "fill": "$text-muted",
+                  "content": "the screen holds no time, and no line of Tars's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "BTmY5",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A running agent's screen never shows Tars's lines and says nothing of when its own were written, so its notices are a group of their own, oldest first, above the screen, not its first lines. A line the agent prints with [Tars] in front stays the agent's: Tars's style is only for a notice Tars kept.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "iqkZy",
+          "name": "none",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "tTxED",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "BBByM",
+                  "fill": "$text-muted",
+                  "content": "no notice, or all seen: the panel as it was",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ndNkr",
+                  "name": "panel Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "bXlOH",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "jr3KC",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "t8s1II",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pFcxA",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "c6JS13",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "upxSQ",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Y6bMVO",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MIhu7",
+                          "fill": "$text-secondary",
+                          "content": "● Read(src/lib/clis.ts)",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "X97I8L",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fQAeW",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "qvRPv",
                   "fill": "$text-muted",
                   "content": "nothing added",
                   "lineHeight": 1.4,
@@ -827278,7 +827592,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "o9Qey",
+                  "id": "aZMXN",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -827296,7 +827610,7 @@
     },
     {
       "type": "frame",
-      "id": "Iobfo",
+      "id": "DlpZI",
       "x": 1540,
       "y": 199000,
       "name": "Agent notices (2.0.7) · in its panel and in Logs · light",
@@ -827311,7 +827625,7 @@
       "children": [
         {
           "type": "text",
-          "id": "lfGU1",
+          "id": "CYQ5B",
           "fill": "$text-primary",
           "content": "Agent notices (2.0.7) · what Tars says about a running agent: in its panel, above its terminal, and in Logs",
           "lineHeight": 1.4,
@@ -827321,7 +827635,7 @@
         },
         {
           "type": "text",
-          "id": "a4S0uz",
+          "id": "Zakx9",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1100,
@@ -827333,14 +827647,14 @@
         },
         {
           "type": "frame",
-          "id": "dxcFy",
+          "id": "a81lUu",
           "name": "panel one",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "D56DI",
+              "id": "D33xX",
               "name": "panel",
               "width": 760,
               "layout": "vertical",
@@ -827348,7 +827662,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "FFvTo",
+                  "id": "KQVmW",
                   "fill": "$text-muted",
                   "content": "an agent's panel, its terminal live: Tars's notice above the screen, never in it",
                   "lineHeight": 1.4,
@@ -827358,7 +827672,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Xt9P1",
+                  "id": "i8gcFb",
                   "name": "panel Cline Coder",
                   "width": 760,
                   "fill": "$surface",
@@ -827368,7 +827682,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "p7M9mg",
+                      "id": "wg6nG",
                       "name": "head",
                       "width": "fill_container",
                       "stroke": "$border",
@@ -827384,7 +827698,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "fq3ck",
+                          "id": "ywI8I",
                           "name": "d",
                           "fill": "$status-running",
                           "width": 6,
@@ -827392,7 +827706,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "oK4D6",
+                          "id": "Byyfu",
                           "fill": "$text-primary",
                           "content": "Cline Coder",
                           "lineHeight": 1.4,
@@ -827402,7 +827716,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "OYMSK",
+                          "id": "ZgsSY",
                           "fill": "$text-muted",
                           "content": "feat/cli-window",
                           "lineHeight": 1.4,
@@ -827412,14 +827726,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "T5cEy",
+                          "id": "PJaWL",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "text",
-                          "id": "he1lw",
+                          "id": "UepvL",
                           "fill": "$status-running",
                           "content": "running",
                           "lineHeight": 1.4,
@@ -827431,7 +827745,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "x9PBFs",
+                      "id": "Tl7H0",
                       "name": "notice 14:02",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -827448,7 +827762,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "l10o4a",
+                          "id": "t4KwVU",
                           "name": "d",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -827456,7 +827770,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "iGofr",
+                          "id": "zg0Um",
                           "fill": "$text-muted",
                           "content": "Tars · 14:02",
                           "lineHeight": 1.4,
@@ -827466,7 +827780,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "l0Aj1m",
+                          "id": "PVCkS",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 460,
@@ -827478,17 +827792,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "S8rdY",
+                          "id": "yVPSB",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "sO8V4",
+                          "id": "UNawp",
                           "name": "b seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -827498,7 +827811,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "KMdNv",
+                              "id": "s3kEnr",
                               "fill": "$text-muted",
                               "content": "seen",
                               "lineHeight": 1.4,
@@ -827512,7 +827825,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "W0oOj",
+                      "id": "DxnBJ",
                       "name": "terminal",
                       "width": "fill_container",
                       "fill": "$bg",
@@ -827525,7 +827838,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "t96Y3f",
+                          "id": "B2BdsB",
                           "fill": "$text-secondary",
                           "content": "● I'll pick up the task from its description, the earlier turns are gone.",
                           "lineHeight": 1.4,
@@ -827535,7 +827848,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "wQzpy",
+                          "id": "SwM7G",
                           "fill": "$text-secondary",
                           "content": "● Read(src/lib/clis.ts)",
                           "lineHeight": 1.4,
@@ -827545,7 +827858,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "oiNJi",
+                          "id": "KAf0p",
                           "fill": "$text-muted",
                           "content": "  └ Read 52 lines",
                           "lineHeight": 1.4,
@@ -827555,7 +827868,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "UoK6W",
+                          "id": "MvOf7",
                           "fill": "$text-secondary",
                           "content": "> ▊",
                           "lineHeight": 1.4,
@@ -827571,7 +827884,7 @@
             },
             {
               "type": "frame",
-              "id": "TT4Gf",
+              "id": "wEePk",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -827579,7 +827892,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "aLuTq",
+                  "id": "vy8eQ",
                   "fill": "$text-muted",
                   "content": "Tars's words, not the CLI's",
                   "lineHeight": 1.4,
@@ -827589,7 +827902,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "Zgn4W",
+                  "id": "d3P8W",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -827605,14 +827918,14 @@
         },
         {
           "type": "frame",
-          "id": "UzREY",
+          "id": "Q0OSvL",
           "name": "panel several",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "QWhfY",
+              "id": "IH8rB",
               "name": "panel",
               "width": 760,
               "layout": "vertical",
@@ -827620,7 +827933,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "tZguB",
+                  "id": "GUzP8",
                   "fill": "$text-muted",
                   "content": "several notices: the newest first, at most three, then how many more",
                   "lineHeight": 1.4,
@@ -827630,7 +827943,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "GvImE",
+                  "id": "HrMo5",
                   "name": "panel Goose Runner",
                   "width": 760,
                   "fill": "$surface",
@@ -827640,7 +827953,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "aI3LE",
+                      "id": "jz1EP",
                       "name": "head",
                       "width": "fill_container",
                       "stroke": "$border",
@@ -827656,7 +827969,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "IXPxL",
+                          "id": "r8tXH",
                           "name": "d",
                           "fill": "$status-running",
                           "width": 6,
@@ -827664,7 +827977,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "U2Ns3B",
+                          "id": "Hownh",
                           "fill": "$text-primary",
                           "content": "Goose Runner",
                           "lineHeight": 1.4,
@@ -827674,7 +827987,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "EG26y",
+                          "id": "Kxiyt",
                           "fill": "$text-muted",
                           "content": "feat/ops",
                           "lineHeight": 1.4,
@@ -827684,14 +827997,14 @@
                         },
                         {
                           "type": "frame",
-                          "id": "AVg95",
+                          "id": "RENl3",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "text",
-                          "id": "K8S7X",
+                          "id": "TKAxB",
                           "fill": "$status-running",
                           "content": "running",
                           "lineHeight": 1.4,
@@ -827703,7 +828016,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "AnADI",
+                      "id": "wU1sP",
                       "name": "notice 15:40",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -827720,7 +828033,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "junfs",
+                          "id": "kLKF2",
                           "name": "d",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -827728,7 +828041,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "nopuv",
+                          "id": "b5143k",
                           "fill": "$text-muted",
                           "content": "Tars · 15:40",
                           "lineHeight": 1.4,
@@ -827738,7 +828051,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "U0XIH",
+                          "id": "xk08N",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 460,
@@ -827750,17 +828063,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "KccIM",
+                          "id": "wgtXk",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "FYyLa",
+                          "id": "i4cUM",
                           "name": "b seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -827770,7 +828082,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "M9syYe",
+                              "id": "pOyWA",
                               "fill": "$text-muted",
                               "content": "seen",
                               "lineHeight": 1.4,
@@ -827784,7 +828096,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "zFY3R",
+                      "id": "mPfco",
                       "name": "notice 15:12",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -827801,7 +828113,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "dyyEz",
+                          "id": "RrHfy",
                           "name": "d",
                           "fill": "$status-error",
                           "width": 6,
@@ -827809,7 +828121,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "W13NKj",
+                          "id": "KTUIP",
                           "fill": "$text-muted",
                           "content": "Tars · 15:12",
                           "lineHeight": 1.4,
@@ -827819,7 +828131,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "HEvYG",
+                          "id": "f4YB4N",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 460,
@@ -827831,17 +828143,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "RThhu",
+                          "id": "zIdtA",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "DdaVv",
+                          "id": "oX8Cf",
                           "name": "b seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -827851,7 +828162,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "Z23qx0",
+                              "id": "GMNWZ",
                               "fill": "$text-muted",
                               "content": "seen",
                               "lineHeight": 1.4,
@@ -827865,7 +828176,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "bSiWe",
+                      "id": "PsAgU",
                       "name": "more",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -827882,7 +828193,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "XtMS5",
+                          "id": "hJnjv",
                           "fill": "$text-muted",
                           "content": "2 earlier notices, in Logs",
                           "lineHeight": 1.4,
@@ -827892,17 +828203,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "eqpgx",
+                          "id": "suCER",
                           "name": "sp",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "frame",
-                          "id": "dW8Dt",
+                          "id": "xyN6z",
                           "name": "b mark all seen",
                           "height": 26,
-                          "stroke": "$border",
                           "padding": [
                             0,
                             11
@@ -827912,7 +828222,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "AEULu",
+                              "id": "riKH8",
                               "fill": "$text-muted",
                               "content": "mark all seen",
                               "lineHeight": 1.4,
@@ -827926,7 +828236,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "A0B9gK",
+                      "id": "A8CNQM",
                       "name": "terminal",
                       "width": "fill_container",
                       "fill": "$bg",
@@ -827939,7 +828249,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "rMbD0",
+                          "id": "C8MyRa",
                           "fill": "$text-secondary",
                           "content": "( goose ) ready",
                           "lineHeight": 1.4,
@@ -827949,7 +828259,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "dgu2E",
+                          "id": "XTeiC",
                           "fill": "$text-secondary",
                           "content": "> ▊",
                           "lineHeight": 1.4,
@@ -827965,7 +828275,7 @@
             },
             {
               "type": "frame",
-              "id": "TLP01",
+              "id": "nR98a",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -827973,7 +828283,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "T2Zob",
+                  "id": "Z8Iq2X",
                   "fill": "$text-muted",
                   "content": "a refused session is an error",
                   "lineHeight": 1.4,
@@ -827983,7 +828293,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "Ev6yj",
+                  "id": "ZkDEi",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -827999,14 +828309,14 @@
         },
         {
           "type": "frame",
-          "id": "vStD7",
+          "id": "Qzku7",
           "name": "logs",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "PEjD0",
+              "id": "bEPiF",
               "name": "logs",
               "width": 760,
               "layout": "vertical",
@@ -828014,7 +828324,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "RQ6nm",
+                  "id": "VgdqU",
                   "fill": "$text-muted",
                   "content": "Logs, a search across agents: Tars's lines among the agent's own, marked as Tars's",
                   "lineHeight": 1.4,
@@ -828024,7 +828334,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "XnDcA",
+                  "id": "tNu5k",
                   "name": "logs Cline Coder",
                   "width": 760,
                   "fill": "$surface",
@@ -828040,7 +828350,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "c4mwvR",
+                      "id": "VyDdg",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 8,
@@ -828052,7 +828362,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "nRNv9",
+                          "id": "DqORK",
                           "fill": "$text-primary",
                           "content": "Cline Coder",
                           "lineHeight": 1.4,
@@ -828062,7 +828372,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "u57gX",
+                          "id": "A9nqh",
                           "fill": "$text-muted",
                           "content": "feat/cli-window",
                           "lineHeight": 1.4,
@@ -828074,7 +828384,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "r6EYZX",
+                      "id": "Si4OC",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 10,
@@ -828085,7 +828395,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "OkiXF",
+                          "id": "X33A0",
                           "fill": "$text-secondary",
                           "content": "❯ npm test",
                           "lineHeight": 1.4,
@@ -828097,7 +828407,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "d3eof",
+                      "id": "jLzOp",
                       "name": "line tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -828110,7 +828420,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "bNu8j",
+                          "id": "lv1a3",
                           "name": "d",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -828118,7 +828428,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "P8EVKS",
+                          "id": "LQ0w6",
                           "fill": "$text-muted",
                           "content": "Tars · 14:02",
                           "lineHeight": 1.4,
@@ -828128,7 +828438,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "aMSLX",
+                          "id": "UKoyj",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
@@ -828142,7 +828452,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "s5qCm",
+                      "id": "a1R3Qs",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 10,
@@ -828153,7 +828463,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "ES4xo",
+                          "id": "CP93w",
                           "fill": "$text-secondary",
                           "content": "● I'll pick up the task from its description, the earlier turns are gone.",
                           "lineHeight": 1.4,
@@ -828167,7 +828477,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "r0CeE",
+                  "id": "ekOfe",
                   "name": "logs Goose Runner",
                   "width": 760,
                   "fill": "$surface",
@@ -828183,7 +828493,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "L7WWTU",
+                      "id": "iqTrZ",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 8,
@@ -828195,7 +828505,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "X845go",
+                          "id": "BBBx4",
                           "fill": "$text-primary",
                           "content": "Goose Runner",
                           "lineHeight": 1.4,
@@ -828205,7 +828515,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "GeSFv",
+                          "id": "x23Gd",
                           "fill": "$text-muted",
                           "content": "feat/ops",
                           "lineHeight": 1.4,
@@ -828217,7 +828527,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "Fx1Tq",
+                      "id": "mmRk6",
                       "name": "line tars",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -828230,7 +828540,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "aBhh4",
+                          "id": "mf1FF",
                           "name": "d",
                           "fill": "$status-error",
                           "width": 6,
@@ -828238,7 +828548,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "u8FUy",
+                          "id": "srE6v",
                           "fill": "$text-muted",
                           "content": "Tars · 15:12",
                           "lineHeight": 1.4,
@@ -828248,7 +828558,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "vg0Q1",
+                          "id": "Y2KXO",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
                           "width": 560,
@@ -828262,7 +828572,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "Hpnpw",
+                      "id": "FJTKp",
                       "name": "line",
                       "width": "fill_container",
                       "gap": 10,
@@ -828273,7 +828583,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "O6qDv",
+                          "id": "D44Ly",
                           "fill": "$text-secondary",
                           "content": "( goose ) ready",
                           "lineHeight": 1.4,
@@ -828289,7 +828599,7 @@
             },
             {
               "type": "frame",
-              "id": "J3GEn3",
+              "id": "pTYD7",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -828297,7 +828607,7 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "juR1h",
+                  "id": "S50aoe",
                   "fill": "$text-muted",
                   "content": "found like any line",
                   "lineHeight": 1.4,
@@ -828307,7 +828617,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "Yoyd1",
+                  "id": "oIBZ9",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
@@ -828323,24 +828633,24 @@
         },
         {
           "type": "frame",
-          "id": "qKaXv",
-          "name": "none",
+          "id": "MmZft",
+          "name": "logs running",
           "width": "fill_container",
           "gap": 24,
           "children": [
             {
               "type": "frame",
-              "id": "FIgf3",
-              "name": "panel",
+              "id": "XJLyN",
+              "name": "logs",
               "width": 760,
               "layout": "vertical",
               "gap": 8,
               "children": [
                 {
                   "type": "text",
-                  "id": "PyDvB",
+                  "id": "Cnx6J",
                   "fill": "$text-muted",
-                  "content": "no notice, or all seen: the panel as it was",
+                  "content": "Logs, a running agent's tail: Tars's notices as a group, by time, then its screen",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -828348,23 +828658,25 @@
                 },
                 {
                   "type": "frame",
-                  "id": "Qjx60",
-                  "name": "panel Cline Coder",
+                  "id": "Z7Mw7g",
+                  "name": "logs Goose Runner: last 4 lines",
                   "width": 760,
                   "fill": "$surface",
                   "stroke": "$border",
                   "strokeWidth": 1,
                   "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
                   "children": [
                     {
                       "type": "frame",
-                      "id": "XHdm1",
+                      "id": "Sj4lB",
                       "name": "head",
                       "width": "fill_container",
-                      "stroke": "$border",
-                      "strokeWidth": {
-                        "bottom": 1
-                      },
                       "gap": 8,
                       "padding": [
                         10,
@@ -828373,18 +828685,10 @@
                       "alignItems": "center",
                       "children": [
                         {
-                          "type": "rectangle",
-                          "id": "o9CMx",
-                          "name": "d",
-                          "fill": "$status-running",
-                          "width": 6,
-                          "height": 6
-                        },
-                        {
                           "type": "text",
-                          "id": "DXEBj",
+                          "id": "zlhmD",
                           "fill": "$text-primary",
-                          "content": "Cline Coder",
+                          "content": "Goose Runner: last 4 lines",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 13,
@@ -828392,26 +828696,9 @@
                         },
                         {
                           "type": "text",
-                          "id": "I7Kr5",
+                          "id": "WLjEz",
                           "fill": "$text-muted",
-                          "content": "feat/cli-window",
-                          "lineHeight": 1.4,
-                          "fontFamily": "$font-mono",
-                          "fontSize": 10.5,
-                          "fontWeight": "normal"
-                        },
-                        {
-                          "type": "frame",
-                          "id": "n6S5j",
-                          "name": "sp",
-                          "width": "fill_container",
-                          "height": 1
-                        },
-                        {
-                          "type": "text",
-                          "id": "RwY2E",
-                          "fill": "$status-running",
-                          "content": "running",
+                          "content": "feat/ops",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -828421,30 +828708,200 @@
                     },
                     {
                       "type": "frame",
-                      "id": "teA1m",
-                      "name": "terminal",
+                      "id": "BViQv",
+                      "name": "group",
                       "width": "fill_container",
-                      "fill": "$bg",
-                      "layout": "vertical",
-                      "gap": 3,
                       "padding": [
-                        10,
+                        6,
+                        14,
+                        2,
                         14
                       ],
                       "children": [
                         {
                           "type": "text",
-                          "id": "HO5Mb",
-                          "fill": "$text-secondary",
-                          "content": "● Read(src/lib/clis.ts)",
+                          "id": "vkSWY",
+                          "fill": "$text-muted",
+                          "content": "Tars's notices, by time",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
-                          "fontSize": 11,
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EgPuM",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "hhE6s",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "wKruk",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
                           "fontWeight": "normal"
                         },
                         {
                           "type": "text",
-                          "id": "Z3ql62",
+                          "id": "M9vqP",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "q4tURv",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "p03CHR",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "vXBHj",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:40",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "vBPri",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its conversation starts over: Tars's servers moved, and a Goose session keeps the servers it began with.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "a7Wh0",
+                      "name": "sep",
+                      "width": "fill_container",
+                      "padding": [
+                        6,
+                        0,
+                        4,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "rigEM",
+                          "name": "rule",
+                          "fill": "$border",
+                          "width": "fill_container",
+                          "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lKtMV",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "E1Cv6I",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CB4jT",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xdJ0V",
+                          "fill": "$text-secondary",
+                          "content": "[Tars] Paste your API key here to continue",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QInnu",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "kCOsQ",
                           "fill": "$text-secondary",
                           "content": "> ▊",
                           "lineHeight": 1.4,
@@ -828460,7 +828917,7 @@
             },
             {
               "type": "frame",
-              "id": "n0dvT",
+              "id": "K5gs2",
               "name": "what it is",
               "width": "fill_container",
               "layout": "vertical",
@@ -828468,7 +828925,178 @@
               "children": [
                 {
                   "type": "text",
-                  "id": "oYDg5",
+                  "id": "RomdG",
+                  "fill": "$text-muted",
+                  "content": "the screen holds no time, and no line of Tars's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "oQepH",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A running agent's screen never shows Tars's lines and says nothing of when its own were written, so its notices are a group of their own, oldest first, above the screen, not its first lines. A line the agent prints with [Tars] in front stays the agent's: Tars's style is only for a notice Tars kept.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "bY01U",
+          "name": "none",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "xKETm",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "mjpIW",
+                  "fill": "$text-muted",
+                  "content": "no notice, or all seen: the panel as it was",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "x7WmN9",
+                  "name": "panel Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "v24ul",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "dW1SU",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "EAYzN",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "GY9Ww",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Y9RU3E",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "ldFJe",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NQa0o",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ndC5F",
+                          "fill": "$text-secondary",
+                          "content": "● Read(src/lib/clis.ts)",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "W3ofGA",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Z03GK",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n0kN5",
                   "fill": "$text-muted",
                   "content": "nothing added",
                   "lineHeight": 1.4,
@@ -828478,7 +829106,7 @@
                 },
                 {
                   "type": "text",
-                  "id": "V6VZG",
+                  "id": "PQiya",
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
