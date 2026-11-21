@@ -3,9 +3,31 @@
 import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import { lastPathPart, pathName } from '@/lib/display-path';
 import { Search } from 'lucide-react';
-import { PageHeader, Panel, PanelCaption, BrandSpinner, LoadingState } from '@/components/ui';
+import { PageHeader, Panel, PanelCaption, BrandSpinner, LoadingState, StatusSquare } from '@/components/ui';
 import { SquareGrid } from '@/components/Splash';
-import type { FleetEntry, LogLine } from '@/types/electron';
+import type { AgentNotice, FleetEntry, LogLine } from '@/types/electron';
+import { useAllAgentNotices } from '@/hooks/useAgentNotices';
+import { logMatcher, noticeTone, noticeWho, resultsWithNotices, tailWithNotices } from '@/lib/agent-notices';
+
+/**
+ * One of Tars's notices among an agent's lines: who wrote it and when, its tone, the line, as text. Frame: `Agent
+ * notices (2.0.7) · in its panel and in Logs`. Only a notice Tars kept is drawn so (lib/agent-notices.ts).
+ */
+function NoticeLine({ notice }: { notice: AgentNotice }) {
+  return (
+    <span data-log-notice={notice.id} className="flex items-center gap-2.5 px-2 py-1 bg-secondary">
+      <StatusSquare tone={noticeTone(notice.kind)} />
+      <span className="shrink-0 font-mono text-[10.5px] text-muted-foreground">{noticeWho(notice)}</span>
+      <span className="min-w-0 text-[11.5px] text-foreground break-words">{notice.line}</span>
+    </span>
+  );
+}
+
+/** The agents main reads from a running terminal's screen, as it reads them now: those with a terminal. */
+async function screenAgents(): Promise<ReadonlySet<string>> {
+  const list = await window.electronAPI?.agent?.list?.().catch(() => undefined);
+  return new Set((list ?? []).filter(a => !!a.ptyId).map(a => a.id));
+}
 
 /**
  * One search box for the whole fleet.
@@ -29,11 +51,16 @@ export default function LogsPage() {
   // to have produced nothing.
   const [fleetLoaded, setFleetLoaded] = useState(false);
   const [results, setResults] = useState<LogLine[] | null>(null);
+  // The query those results answer: the notices are matched by it, not by what is typed since.
+  const [searched, setSearched] = useState('');
+  // The agents whose hits came from a screen, read with them: none of their lines is Tars's.
+  const [screens, setScreens] = useState<ReadonlySet<string>>(() => new Set());
+  const notices = useAllAgentNotices();
   const [scanned, setScanned] = useState(0);
   const [truncated, setTruncated] = useState(false);
   const [searching, setSearching] = useState(false);
   const [focused, setFocused] = useState<string | null>(null);
-  const [tail, setTail] = useState<{ lines: string[]; agentName: string } | null>(null);
+  const [tail, setTail] = useState<{ lines: string[]; agentName: string; screen: boolean } | null>(null);
   const debounce = useRef<NodeJS.Timeout | null>(null);
   // Bumped on every search kicked off; a resolving search whose id no longer
   // matches is stale and must not overwrite a newer one's results.
@@ -76,9 +103,11 @@ export default function LogsPage() {
     }
     setSearching(true);
     try {
-      const res = await window.electronAPI?.logs?.search(q, { limit: 300 });
+      const [res, onScreen] = await Promise.all([window.electronAPI?.logs?.search(q, { limit: 300 }), screenAgents()]);
       if (seq !== searchSeq.current) return; // a newer search or an agent click superseded this one
       setResults(res?.lines ?? []);
+      setSearched(q);
+      setScreens(onScreen);
       setScanned(res?.scannedAgents ?? 0);
       setTruncated(!!res?.truncated);
     } finally {
@@ -100,9 +129,20 @@ export default function LogsPage() {
     setSearching(false);
     setResults(null);
     setFocused(agentId);
-    const res = await window.electronAPI?.logs?.tail(agentId, 300);
-    setTail(res ?? null);
+    const [res, onScreen] = await Promise.all([window.electronAPI?.logs?.tail(agentId, 300), screenAgents()]);
+    setTail(res ? { ...res, screen: onScreen.has(agentId) } : null);
   }, []);
+
+  // Tars's notices among the hits and the tail: a replayed `[Tars] ` line that claims a kept notice as that notice,
+  // every other line as the agent's, and the notices no line holds as a group of their own (lib/agent-notices.ts).
+  const rows = useMemo(
+    () => (results === null ? null : resultsWithNotices(results, notices, fleet, logMatcher(searched), screens)),
+    [results, notices, fleet, searched, screens],
+  );
+  const tailRows = useMemo(
+    () => (tail ? tailWithNotices(tail.lines, notices.filter(n => n.agentId === focused), tail.screen) : null),
+    [tail, notices, focused],
+  );
 
   return (
     <div className="h-[calc(100vh-7rem)] lg:h-[calc(100vh-44px)] flex flex-col">
@@ -123,9 +163,9 @@ export default function LogsPage() {
         />
         <span className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-2">
           {searching && <BrandSpinner size={14} label="Searching" />}
-          {results !== null && (
+          {rows !== null && (
             <span className="text-[11px] text-muted-foreground truncate">
-              {results.length} match{results.length === 1 ? '' : 'es'} across {scanned} agent
+              {rows.length} match{rows.length === 1 ? '' : 'es'} across {scanned} agent
               {scanned === 1 ? '' : 's'}
               {truncated ? ' (showing the first 300)' : ''}
             </span>
@@ -185,11 +225,11 @@ export default function LogsPage() {
         {/* Results or tail */}
         <Panel fill padded={false} className="flex-1 min-w-0">
           <div className="flex-1 min-h-0 overflow-auto p-4">
-            {results !== null ? (
+            {rows !== null ? (
               <div className="space-y-1">
-                {results.map((line, i) => (
+                {rows.map(line => (
                   <button
-                    key={`${line.agentId}-${line.position}-${i}`}
+                    key={line.key}
                     onClick={() => openAgent(line.agentId)}
                     className="w-full text-left px-2 py-1 hover:bg-secondary/60 transition-colors"
                   >
@@ -199,21 +239,39 @@ export default function LogsPage() {
                         {line.branch || lastPathPart(line.projectPath)}
                       </span>
                     </span>
-                    <span className="block text-[11px] font-mono text-foreground break-all">{line.line}</span>
+                    {line.tars ? (
+                      <NoticeLine notice={line.tars.notice} />
+                    ) : (
+                      <span className="block text-[11px] font-mono text-foreground break-all">{line.line}</span>
+                    )}
                   </button>
                 ))}
-                {results.length === 0 && (
+                {rows.length === 0 && (
                   <p className="text-xs text-muted-foreground">
                     Nothing matched. Only what agents have produced this session is searchable.
                   </p>
                 )}
               </div>
-            ) : tail ? (
+            ) : tail && tailRows ? (
               <>
                 <p className="text-xs font-mono text-foreground mb-2">{tail.agentName}: last {tail.lines.length} lines</p>
-                <pre className="text-[11px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all">
-                  {tail.lines.join('\n')}
-                </pre>
+                {/* The notices no line holds: a group of their own, by time, above the lines, which carry no time.
+                    Frame: `Agent notices (2.0.7)`, a running agent's tail. */}
+                {tailRows.group.length > 0 && (
+                  <div data-log-notices-group className="mb-2 pb-2 border-b border-border">
+                    <p className="font-mono text-[10px] text-muted-foreground pb-1">Tars&apos;s notices, by time</p>
+                    {tailRows.group.map(n => <NoticeLine key={n.id} notice={n} />)}
+                  </div>
+                )}
+                {tailRows.rows.map((row, i) =>
+                  row.kind === 'notice' ? (
+                    <NoticeLine key={row.notice.id} notice={row.notice} />
+                  ) : (
+                    <pre key={i} className="text-[11px] font-mono text-muted-foreground leading-relaxed whitespace-pre-wrap break-all">
+                      {row.line}
+                    </pre>
+                  ),
+                )}
               </>
             ) : (
               <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
