@@ -5,6 +5,7 @@ import { transcriptProjectDirName } from '../platform/claude-project-dir';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
 import { kimiHome, kimiSessionDir } from '../providers/kimi-cli';
 import { opencodeDbPath, opencodeSessionOf } from '../providers/opencode-cli';
+import { gooseDbPath, gooseSessionOf } from '../providers/goose-cli';
 
 /**
  * Whether an agent's last session can actually be resumed.
@@ -109,6 +110,14 @@ export function resolveResumeSessionId(
     if (agent.provider === 'opencode' || agent.provider === 'kilo') {
       const folders = [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p);
       const own = opencodeSessionOf(sessionId, folders, opencodeDbPath(process.env, homeDir, agent.provider));
+      if (own) return own;
+      continue;
+    }
+
+    // Goose: the same, its id given back from the UUID made from it (providers/goose-cli.ts), from its sessions.db.
+    if (agent.provider === 'goose') {
+      const folders = [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p);
+      const own = gooseSessionOf(sessionId, folders, gooseDbPath(process.env, homeDir));
       if (own) return own;
       continue;
     }

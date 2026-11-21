@@ -24,6 +24,11 @@ export interface PtyLaunch {
    * Undefined when the launch was not told: nothing is switched off then.
    */
   orchestrator?: boolean;
+  /**
+   * The mode the launch runs in, as its line is built with: a CLI that reads it from its environment only (Goose's
+   * GOOSE_MODE) takes it here on Windows, where the line's first word is the binary and nothing else is read.
+   */
+  permissionMode?: AgentPermissionMode;
 }
 
 export interface InteractiveCommandParams {
@@ -151,10 +156,11 @@ export interface CLIProvider {
   /**
    * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured
    * on the CLI itself: `next-tool-round`, it reaches the model at the turn's next tool round (Claude Code);
-   * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3).
-   * Absent: not measured.
+   * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3);
+   * `lost`, the CLI drops the Enter and leaves the text in its field (Goose 1.60.1), so Tars holds the message until
+   * the turn ends (core/send-mode.ts). Absent: not measured.
    */
-  readonly noteDuringTurn?: 'next-tool-round' | 'after-the-turn';
+  readonly noteDuringTurn?: 'next-tool-round' | 'after-the-turn' | 'lost';
 
   /** Build command string for quick one-shot prompts */
   buildOneShotCommand(params: OneShotCommandParams): string;

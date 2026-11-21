@@ -200,9 +200,9 @@ async function commandOf(providerId: string, prompt: string, binaryPath: string)
 }
 
 describe('9. every provider round-trips', () => {
-  it('covers the 23 providers', async () => {
+  it('covers the 24 providers', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    expect(getAllProviders()).toHaveLength(23);
+    expect(getAllProviders()).toHaveLength(24);
   });
 
   it('first word the binary, last word the prompt, the rest from the grammar, for every adversarial prompt', async () => {
@@ -211,8 +211,9 @@ describe('9. every provider round-trips', () => {
     for (const provider of getAllProviders()) {
       for (const [label, prompt] of ADVERSARIAL) {
         const all = posixWords(await commandOf(provider.id, prompt, bin));
-        // codex's line hands it Tars's home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4 on #465).
-        const words = all[0] === 'env' && all[1]?.startsWith('CODEX_HOME=') ? all.slice(2) : all;
+        // codex's line hands it Tars's home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4 on #465),
+        // and goose's its permission mode (`env GOOSE_MODE=<mode>`, which it reads from its environment only).
+        const words = all[0] === 'env' && /^(CODEX_HOME|GOOSE_MODE)=/.test(all[1] ?? '') ? all.slice(2) : all;
         if (provider.taskTypedAfterLaunch) {
           // Amp's line never carries the task: it is typed in once its TUI runs (core/typed-task.ts, 2.0.4).
           expect([provider.id, label, words[0], words.includes(prompt)]).toEqual([provider.id, label, bin, false]);

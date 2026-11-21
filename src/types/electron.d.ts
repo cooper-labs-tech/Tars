@@ -484,6 +484,8 @@ export type AgentProvider =
   | 'kimi-code'
   /** Kilo CLI, the binary `kilo`, a build of opencode. */
   | 'kilo'
+  /** Goose, the binary `goose`. */
+  | 'goose'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -2105,6 +2107,7 @@ export interface ElectronAPI {
         pi: string;
         kimi: string;
         kilo: string;
+        goose: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -2191,6 +2194,7 @@ export interface ElectronAPI {
         /** Optional on the way in: settings written before Kimi Code; main reads a missing key as none. */
         kimi?: string;
         kilo?: string;
+        goose?: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -2374,6 +2378,7 @@ export interface ElectronAPI {
       pi: string;
       kimi: string;
       kilo: string;
+      goose: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2391,6 +2396,7 @@ export interface ElectronAPI {
       pi: string;
       kimi: string;
       kilo: string;
+      goose: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2410,6 +2416,7 @@ export interface ElectronAPI {
       /** Optional on the way in: paths saved before Kimi Code; main reads a missing key as none. */
       kimi?: string;
       kilo?: string;
+      goose?: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2962,7 +2969,7 @@ export interface ElectronAPI {
   platform: string;
 }
 
-export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode' | 'kimi-code' | 'kilo';
+export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode' | 'kimi-code' | 'kilo' | 'goose';
 
 export interface EndpointHealth { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string }
 

@@ -145,6 +145,7 @@ import { startCodexSessionWatch, type HookPost } from './services/codex-sessions
 import { startPiSessionWatch, piSessionDir } from './services/pi-sessions';
 import { startKimiSessionWatch } from './services/kimi-sessions';
 import { startOpencodeSessionWatch } from './services/opencode-sessions';
+import { startGooseSessionWatch } from './services/goose-sessions';
 import { codexHome, codexSignInGap, loginShellCodexHome } from './providers/codex-cli';
 import { codexKeyConfig } from './services/cli-keys';
 import { getProvider } from './providers';
@@ -315,6 +316,7 @@ function loadAppSettings(): AppSettings {
       pi: '',
       kimi: '',
       kilo: '',
+      goose: '',
       gws: '',
       gcloud: '',
       gh: '',
@@ -888,6 +890,11 @@ app.whenReady().then(async () => {
   // opencode's turns, answers and tokens, read from its database (services/opencode-sessions.ts).
   startOpencodeSessionWatch({
     post: postAsTerminal('opencode-sessions'),
+    interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
+  });
+  // Goose's, from its sessions.db (services/goose-sessions.ts).
+  startGooseSessionWatch({
+    post: postAsTerminal('goose-sessions'),
     interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
   });
   startCodexSessionWatch({

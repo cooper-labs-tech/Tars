@@ -21,6 +21,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
+import { sendModeOf } from '../../core/send-mode';
 import { sessionStarted, launchPreparing, whilePreparing, resumeOfLaunch, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
@@ -258,7 +259,9 @@ async function spawnAgentSessionInSlot(
 
   // Provider env vars: CLAUDE_* tracking vars + ANTHROPIC_BASE_URL /
   // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, Moonshot...).
-  const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort, orchestrator: isSuperAgentApi });
+  // The mode this session runs in, its line's and its terminal's alike (a CLI that reads it from its environment only).
+  const effectiveMode = opts.permissionMode ?? levelOf(agent);
+  const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort, orchestrator: isSuperAgentApi, permissionMode: effectiveMode });
 
   const keyRefusal = missingKeyRefusal(agent.provider, providerEnvVars);
   if (keyRefusal) {
@@ -317,7 +320,6 @@ async function spawnAgentSessionInSlot(
   // the Agents page back on the old one. A `/model` typed into a terminal
   // lasts for that session; the Agents page is where a model is kept.
   const resolvedModel = opts.model || agent.model;
-  const effectiveMode = opts.permissionMode ?? levelOf(agent);
 
 
   // CLIs without Claude's SessionStart hook get the project's memory in the
@@ -1357,8 +1359,8 @@ async function runInTerminal(
  * `auto`, labelled a note either way, and no task: no id, no link to its
  * sender, no end notice.
  */
-type SendMode = 'auto' | 'queue' | 'steer' | 'restart';
-type AskedMode = SendMode | 'note' | 'note-now';
+type SendMode = import('../../core/send-mode').SendMode;
+type AskedMode = import('../../core/send-mode').AskedMode;
 const SEND_MODES: readonly AskedMode[] = ['auto', 'queue', 'steer', 'restart', 'note', 'note-now'];
 
 /** The mark before a message from an asker in a narrower mode than the agent (core/permission-ceiling.ts). */
@@ -2733,7 +2735,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       : !asNote ? asSent
         : noteCaller ? noteFrom(noteCaller.name || noteCaller.id, asSent, noteRole(noteCaller, agent))
           : noteFrom('Tars', asSent, 'the app you run in');
-    const mode: SendMode = workerNote || askedMode === 'note' ? 'queue' : askedMode === 'note-now' ? 'auto' : askedMode;
+    const mode: SendMode = sendModeOf(askedMode, { workerNote: !!workerNote, noteDuringTurn: getProvider(agent.provider).noteDuringTurn });
     await withReceipt(req, sendJson, {
       route: 'dispatch', agentId: agent.id, payload: { message, model: model ?? null, permissionMode: permissionMode ?? null, mode, ...(note ? { note } : {}) },
     }, async (sendAny) => {

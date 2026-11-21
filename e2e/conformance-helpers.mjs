@@ -10,7 +10,7 @@ import { inheritable } from './fixture.mjs';
  * config (the *_CONFIG_CONTENT variables). The harnesses' homes are set again from the sandbox's (the #614 Audit's L1).
  * The fixture drops Tars's and Claude Code's own (inheritable).
  */
-const CLI_SETTINGS = /^(KILO_|OPENCODE_|PI_CODING_AGENT_|CODEX_|KIMI_|GIT_|XDG_)|^ZDOTDIR$/;
+const CLI_SETTINGS = /^(KILO_|OPENCODE_|PI_CODING_AGENT_|CODEX_|KIMI_|GOOSE_|GIT_|XDG_)|^ZDOTDIR$/;
 
 /**
  * The environment a harness's `--version` is read with: what the fixture lets a sandboxed process inherit, without the

@@ -84,6 +84,16 @@ export function endpointLaunchFor(harness: string, o: { proxyBase: string; model
         tokenVars: [ENDPOINT_TOKEN_VAR],
         modelArg: `${p}/${o.model}`,
       };
+    case 'goose': {
+      // Goose's openai provider, named on its line, and the proxy from its environment, nothing written (1.60.1,
+      // measured 20/11 with a tool call): OPENAI_HOST the origin, OPENAI_BASE_PATH the path from there, no slash first.
+      const proxy = new URL(o.proxyBase);
+      return {
+        args: ['--provider', 'openai', '--model', o.model],
+        env: { OPENAI_HOST: proxy.origin, OPENAI_BASE_PATH: `${proxy.pathname.replace(/^\/+|\/+$/g, '')}/chat/completions` },
+        tokenVars: ['OPENAI_API_KEY'],
+      };
+    }
     default:
       return null;
   }
