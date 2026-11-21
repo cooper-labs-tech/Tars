@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 
 // The specs run from the repository's root, as the others do (path.resolve('hooks')); Playwright loads this file
 // through its CommonJS transform, where import.meta does not exist.
@@ -69,6 +70,8 @@ export function writeFakeClis(home, kinds = [...Object.keys(FAKE_KINDS), 'codex'
       `#!${process.execPath}`,
       `process.env.FAKE_CLI_KIND = ${JSON.stringify(kind)};`,
       `process.env.FAKE_CLI_LOG = ${JSON.stringify(path.join(home, 'fake-cli.jsonl'))};`,
+      // Where opencode's fake finds e2e/opencode-db.cjs: it runs in the agent's folder, and import.meta is not here.
+      ...(kind === 'opencode' ? [`process.env.FAKE_OPENCODE_DB = ${JSON.stringify(path.join(HERE, 'opencode-db.cjs'))};`] : []),
       ...(delegateTimeoutS ? [`process.env.FAKE_DELEGATE_TIMEOUT_S = '${delegateTimeoutS}';`] : []),
       `import(${JSON.stringify(path.join(HERE, 'fake-clis.mjs'))}).then((m) => m.run());`,
       '',
@@ -389,7 +392,15 @@ export async function run() {
           : null;
   if (transcript) fs.mkdirSync(path.dirname(transcript), { recursive: true });
   let n = 0;
+  // opencode's turns go into its database, where Tars reads them since #613 (e2e/opencode-db.cjs, as 1.19.6 writes it).
+  // Loaded for opencode only: no other stand-in needs node:sqlite.
+  let opencodeDb;
   const record = (type, text, usage) => {
+    if (kind === 'opencode') {
+      opencodeDb ??= createRequire(process.env.FAKE_OPENCODE_DB)(process.env.FAKE_OPENCODE_DB);
+      if (type === 'user') opencodeDb.beginTurn(text, { cwd }); else opencodeDb.endTurn(text);
+      return;
+    }
     if (!transcript || kind === 'gemini') return;
     n += 1;
     const at = new Date().toISOString();
@@ -550,6 +561,9 @@ export async function run() {
   if (question === 'trust') out('\nDo you trust the files in this folder?\n> 1. Yes, proceed\n  2. No, exit\n');
   else if (question === 'api-key') out('\nDetected a custom API key in your environment\nDo you want to use this API key?\n  1. Yes\n> 2. No (recommended)\n');
   else out(`${kind} stand-in ready\n> `);
+  // opencode's bar, as 1.19.6 draws it, which Tars waits for since #613 before it types into opencode
+  // (opencode-provider.ts, upOnScreen): its folder, by its name (a full path wraps in a 120-column terminal), then its keys.
+  if (kind === 'opencode' && !question) out(`\n  ${path.basename(cwd)}  tab agents  ctrl+p commands\n`);
   if (opts.prompt && !question) queue(opts.prompt);
   else if (opts.prompt) log({ lost: 'the first prompt went to the question', question });
 

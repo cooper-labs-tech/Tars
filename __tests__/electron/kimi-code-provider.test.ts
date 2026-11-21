@@ -31,8 +31,16 @@ import { ENDPOINT_HARNESSES } from '../../electron/services/inference-endpoints'
  *     endpoint's model is no such alias, so kimi says "Model ... is not configured in config.toml" and starts no
  *     session (the conformance run, 19/11). The model is KIMI_MODEL_NAME's alone there.
  * 10. A restart that applies new settings (forkSession) resumes the session it just stopped under its own id: that id
- *     is the stop's tombstone, and every post of it would be refused as stale. Until `kimi fork` is measured, such a
- *     restart starts kimi on a new session.
+ *     is the stop's tombstone, and every post of it would be refused as stale. Built for a fork, the line starts kimi
+ *     on a new session.
+ * 14. (#613's restart step, QA's gate of the stack, 21/11) That new session has none of the conversation's turns: a
+ *     settings change, or the window's restart, loses them. `kimi fork -y <id>` (2.6.3, measured 21/11: 1.4 s, no
+ *     terminal, it prints `Forked to session_<uuid> (...)`) makes a new session holding them, which `--session` then
+ *     resumes under its new id. Run off the main thread, before the line is built (forkAhead): a kimi that fails, prints
+ *     no session, or a session not of kimi's form, gives none, and the line starts a new session as before. A launch
+ *     that does not fork never asks kimi to (core/agent-launch.ts, resumeOfLaunch, launch-under-way.test.ts).
+ * 15. (The Audit's L3 on #601) kimi fork run in Tars's own working folder (`/` in a packaged app) rather than the
+ *     agent's, whose folder its index keeps for each session: run in the agent's folder.
  * 9. On an endpoint, the launch's own variables (KIMI_MODEL_NAME, _PROVIDER_TYPE, _BASE_URL) never reach the terminal:
  *    the endpoint session fills only the token's variable (services/traces-runtime.ts openEndpointSession), so the
  *    provider must add the rest, and only for the agent on an endpoint (Tars-Backend's note, 19/11).
@@ -48,6 +56,27 @@ vi.mock('../../electron/services/traces-runtime', async () => {
 });
 
 const BASE = 'http://127.0.0.1:31417/v1';
+
+/**
+ * A stand-in of kimi 2.6.3's `fork` in the test's home: it records the arguments it was given, and forks (printing
+ * kimi's own line, as measured), fails, or prints nothing.
+ */
+function standInKimi(mode: 'forks' | 'fails' | 'silent'): { bin: string; asked: () => string[] | null; cwd: () => string | null } {
+  const bin = path.join(home, `kimi-${mode}`);
+  const asked = path.join(home, `kimi-${mode}.asked`);
+  const cwdFile = path.join(home, `kimi-${mode}.cwd`);
+  const out = {
+    forks: `process.stdout.write('Forked to session_9a5cf0db-b84c-499c-b67c-a5179db5e1d5 ("Fork: Run the probe") in 1416ms\\n');`,
+    fails: `process.stderr.write('Error: session not found\\n'); process.exit(1);`,
+    silent: '',
+  }[mode];
+  fs.writeFileSync(bin, `#!${process.execPath}\nrequire('fs').writeFileSync(${JSON.stringify(asked)}, JSON.stringify(process.argv.slice(2)));\nrequire('fs').writeFileSync(${JSON.stringify(cwdFile)}, process.cwd());\n${out}\n`, { mode: 0o755 });
+  return {
+    bin,
+    asked: () => (fs.existsSync(asked) ? JSON.parse(fs.readFileSync(asked, 'utf8')) as string[] : null),
+    cwd: () => (fs.existsSync(cwdFile) ? fs.readFileSync(cwdFile, 'utf8') : null),
+  };
+}
 let home: string;
 let saved: string | undefined;
 
@@ -104,6 +133,24 @@ describe('KimiCodeProvider', () => {
   it('10: a restart that forks starts a new session, never the tombstone under its own id', () => {
     const sid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: sid, forkSession: true })).toBe("'kimi'");
+  });
+
+  it('14, 15: a restart forks the session with kimi fork -y in the agent\'s folder, and resumes the fork under its new id', async () => {
+    const sid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
+    const kimi = standInKimi('forks');
+    const folder = fs.mkdtempSync(path.join(home, 'project-'));
+    expect(await p.forkAhead!(kimi.bin, sid, folder)).toBe('9a5cf0db-b84c-499c-b67c-a5179db5e1d5');
+    expect(kimi.asked()).toEqual(['fork', '-y', `session_${sid}`]);
+    expect(kimi.cwd()).toBe(fs.realpathSync(folder));
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: '9a5cf0db-b84c-499c-b67c-a5179db5e1d5' })).toBe("'kimi' --session 'session_9a5cf0db-b84c-499c-b67c-a5179db5e1d5'");
+  });
+
+  it('14: a fork that fails or prints no session gives none; a session not of kimi\'s form never reaches kimi', async () => {
+    const sid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
+    for (const mode of ['fails', 'silent'] as const) expect(await p.forkAhead!(standInKimi(mode).bin, sid, home)).toBeNull();
+    const kimi = standInKimi('forks');
+    expect(await p.forkAhead!(kimi.bin, 'session_x; rm -rf /', home)).toBeNull();
+    expect(kimi.asked()).toBeNull();
   });
 
   it('4: the folder is trusted through the environment', () => {

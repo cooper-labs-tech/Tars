@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 /**
  * A CLI that sends no SessionStart and takes keys only once its TUI has drawn its field. Kimi Code 2.6.3 writes nothing
@@ -9,7 +9,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  * How it fails, written before the code (19/11):
  * 1. Such a CLI's session reads up the moment its process runs, and a task is typed into a TUI not yet taking keys.
  * 2. It never reads up although its field is drawn: every message would then wait out the launch (CLI_UP_MS).
- * 3. A CLI that says nothing of its screen (codex, pi) now waits for one: it must stay up at its exec, as before.
+ * 3. A CLI that says nothing of its screen (codex, pi) now waits for one: it must stay up at its exec (once its exec
+ *    has held the terminal, failure 7), whatever its screen.
  * 4. The provider takes another screen for its field: the folder trust question, or the banner drawn before the box.
  * 5. The screen is read from the terminal's whole history (terminalText): a box an earlier CLI left there reads as up
  *    at once, and the task is typed before kimi takes keys (the Audit's L1 on #601). Only the rows drawn since the
@@ -21,6 +22,19 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
  *    session's, about 5 s later; a task typed at the home view started a new session without the history (measured on
  *    real opencode, twice), and the reader, bound to the fork, never saw its turn. The launch's line reaches the
  *    provider (terminal-mirror.ts, launchLineOf), so opencode waits for its session's view on such a launch.
+ *
+ * And at its exec, written before the code (21/11, QA's gate of the stack under #613: codex's restart step red):
+ * 7. The launch line reaches the CLI through steps, and one of them can bear the shell's own name: `env CODEX_HOME=...
+ *    codex fork ...`, then `#!/usr/bin/env node` finds a `#!/bin/sh` relay for node (the e2e sandbox's, an asdf or
+ *    nodenv shim in bash), then node, then codex. Read at `env`, the session reads up; a message sent in that moment
+ *    reads the relay's `bash` in the foreground 8 ms later, takes it for the agent's shell (cliRunningIn goes by the
+ *    name), and starts a new session over the launch, without the conversation (traced in the app: up at +513 ms on
+ *    `env`, the dispatch at +521 ms on `bash`). A CLI with no SessionStart reads up once it has held the terminal for
+ *    CLI_SETTLED_MS, not at the first read that is not the shell.
+ * 8. A read of the shell inside that time does not start it again, and the session reads up while the line is still
+ *    on its way through a shim of a few hundred milliseconds.
+ * 9. The window never closes, or a CLI with a surer sign waits on it too: claude (its SessionStart), kimi (its field
+ *    drawn, case 1).
  */
 
 const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined, history: undefined as string[] | undefined, line: undefined as string | undefined }));
@@ -36,7 +50,7 @@ vi.mock('../../../electron/core/terminal-mirror', () => ({
 }));
 vi.mock('../../../electron/services/agent-truth', () => ({ lastInterruptAt: () => undefined }));
 
-import { launchBegins, sessionStarting, resetLaunches } from '../../../electron/core/agent-launch';
+import { launchBegins, sessionStarting, resetLaunches, CLI_SETTLED_MS } from '../../../electron/core/agent-launch';
 import { KimiCodeProvider } from '../../../electron/providers/kimi-code-provider';
 
 // Kimi Code 2.6.3's screen at rest in --auto, as the mirror reads it (19/11), and before its box is drawn.
@@ -78,10 +92,72 @@ describe('a session up on its screen', () => {
   });
 
   it('3: a codex session is up at its exec, whatever its screen', () => {
-    const agent = { id: 'c', ptyId: 'p1', provider: 'codex' as const };
-    launchBegins('c');
-    state.screen = BOOTING;
-    expect(sessionStarting(agent)).toBe(false);
+    vi.useFakeTimers({ now: new Date('2026-11-21T10:00:00.000Z') });
+    try {
+      const agent = { id: 'c', ptyId: 'p1', provider: 'codex' as const };
+      launchBegins('c');
+      state.screen = BOOTING;
+      sessionStarting(agent);
+      vi.advanceTimersByTime(CLI_SETTLED_MS);
+      expect(sessionStarting(agent)).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  describe('read at a step of its launch line (7 to 9)', () => {
+    beforeEach(() => { vi.useFakeTimers({ now: new Date('2026-11-21T10:00:00.000Z') }); });
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('7: a codex restart read at `env` is still starting through the relay\'s `bash`, and up once codex has held the terminal', () => {
+      const agent = { id: 'c6', ptyId: 'p1', provider: 'codex' as const };
+      launchBegins('c6');
+      vi.advanceTimersByTime(513);
+      state.running = true; // env
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(8);
+      state.running = false; // the #!/bin/sh relay, exec'd into bash: the shell's name
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(40);
+      state.running = true; // node, then codex
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(CLI_SETTLED_MS - 1);
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(sessionStarting(agent)).toBe(false);
+    });
+
+    it('8: a read of the shell inside the window starts it again, through a shim of a few hundred milliseconds', () => {
+      const agent = { id: 'c7', ptyId: 'p1', provider: 'codex' as const };
+      launchBegins('c7');
+      state.running = true; // env
+      expect(sessionStarting(agent)).toBe(true);
+      for (let i = 0; i < 4; i++) {
+        vi.advanceTimersByTime(100);
+        state.running = false; // an asdf shim in bash, 400 ms
+        expect(sessionStarting(agent)).toBe(true);
+      }
+      vi.advanceTimersByTime(100);
+      state.running = true; // node
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(CLI_SETTLED_MS - 1);
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(1);
+      expect(sessionStarting(agent)).toBe(false);
+    });
+
+    it('9: the window closes by itself, read or not in between, and claude waits on its SessionStart alone', () => {
+      const codex = { id: 'c8', ptyId: 'p1', provider: 'codex' as const };
+      launchBegins('c8');
+      expect(sessionStarting(codex)).toBe(true);
+      vi.advanceTimersByTime(CLI_SETTLED_MS);
+      expect(sessionStarting(codex)).toBe(false);
+
+      launchBegins('cl');
+      vi.advanceTimersByTime(5);
+      const claude = { id: 'cl', ptyId: 'p1', provider: 'claude' as const, sessionRegisteredAt: new Date().toISOString() };
+      expect(sessionStarting(claude)).toBe(false);
+    });
   });
 
   it('4: kimi reads its field, never the trust question or the banner', () => {

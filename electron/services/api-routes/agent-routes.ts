@@ -22,7 +22,7 @@ import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
 import { sendModeOf } from '../../core/send-mode';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, launchPreparing, whilePreparing, resumeOfLaunch, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -205,17 +205,31 @@ async function spawnAgentSession(
     sendJson({ error: 'Tars is quitting: no new session is started.', quitting: true }, 503);
     return false;
   }
-  // A chat's runner starts within the RAM's limit, whoever starts it (core/agent-launch.ts).
-  const slot = await takeSlot(agent.id);
-  if (!slot.ok) {
-    sendJson({ error: slot.error, chatLimit: true }, 409);
+  // One launch at a time per agent: a session started over a launch still making its terminal ready (a restart, a start
+  // from a window, another session) ended or typed over it (the Audit's L1 on #601). Refused, nothing spawned.
+  if (launchPreparing(agent.id)) {
+    sendJson({
+      error: `${agent.name || agent.id} is already starting: its CLI is on its way, and no session was started over it. Send it again in a moment.`,
+      starting: true,
+      agent: { id: agent.id, name: agent.name, status: agent.status },
+    }, 409);
     return false;
   }
-  try {
-    return await spawnAgentSessionInSlot(agent, prompt, opts, ctx, sendJson);
-  } finally {
-    slot.release();
-  }
+  // A launch on its way from here, through every wait before its terminal is touched (the digest, the CLI's own
+  // reads, a fork made ahead), until launchBegins marks it in the slot.
+  return whilePreparing(agent.id, async () => {
+    // A chat's runner starts within the RAM's limit, whoever starts it (core/agent-launch.ts).
+    const slot = await takeSlot(agent.id);
+    if (!slot.ok) {
+      sendJson({ error: slot.error, chatLimit: true }, 409);
+      return false;
+    }
+    try {
+      return await spawnAgentSessionInSlot(agent, prompt, opts, ctx, sendJson);
+    } finally {
+      slot.release();
+    }
+  });
 }
 
 async function spawnAgentSessionInSlot(
@@ -348,12 +362,14 @@ async function spawnAgentSessionInSlot(
   // once what its line needs is read from the CLI (codex's flags), off the
   // main thread.
   await cliProvider.prepareLaunch?.(binaryPath, effectiveMode);
+  // A CLI that forks ahead (Kimi Code's `kimi fork`): its fork made now, off the main thread, and then resumed.
+  const launchResume = await resumeOfLaunch(cliProvider, binaryPath, { resumeSessionId, forkSession }, { agentId: agent.id, cwd: rawWorkingDir });
   let cliCommand: string;
   try {
     cliCommand = cliProvider.buildInteractiveCommand({
       agentId: agent.id,
-      resumeSessionId,
-      forkSession,
+      resumeSessionId: launchResume.resumeSessionId,
+      forkSession: launchResume.forkSession,
       binaryPath,
       prompt: taskPrompt,
       model: resolvedModel && resolvedModel !== 'default' ? resolvedModel : undefined,
