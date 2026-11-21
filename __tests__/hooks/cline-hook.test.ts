@@ -51,6 +51,16 @@ import { pathToFileURL } from 'node:url';
  * 12. A turn's end posted before its start: hooks run detached and in parallel, so a fast turn's TaskComplete can reach
  *    Tars before its TaskStart, and the agent is left running after its turn. An end waits for its turn's opening, a
  *    bounded while: an opening that never comes holds it 10 s at most.
+ * 13. (The Audit's L1 on #620) An end without its opening (one that timed out still marks `end`; two ends for one
+ *    turn, a TaskError then a TaskCancel) leaves the process's count below zero for good: every later end of that
+ *    process then waits the whole 10 s. The count never goes below zero.
+ * 14. (The Audit's L3 on #620) A layout other than npm's launcher refused for good: the CLI path set to Cline's binary
+ *    itself (`bin/.cline`, `@cline/cli-<os>-<arch>/bin/cline`), whose grandparent is Tars; or a shim that runs the
+ *    launcher without exec, the terminal's own process one level above it. The CLI named is the topmost of the hook's
+ *    parent and the wrappers of Cline's above it (an interpreter running a script named cline: its launcher, a shim);
+ *    with none, the parent when its own command is Cline's binary. And never above a Cline: a Cline run by another
+ *    Cline's tool (through a shell kept or exec'd) names its own, which the hook routes refuse as not the terminal's.
+ *    A command that cannot be read (Windows; a path with spaces through macOS's ps) keeps the grandparent, as before.
  */
 
 const HOOK = path.resolve('hooks', 'cline-hook.mjs');
@@ -61,6 +71,7 @@ type HookModule = {
   claimRegistration(dataDir: string | undefined, key: string): boolean;
   markTurn(dataDir: string | undefined, key: string, mark: 'open' | 'end'): void;
   waitForOpening(dataDir: string | undefined, key: string, opts?: { maxMs?: number; stepMs?: number }): Promise<boolean>;
+  cliOf(parent: number, look?: { parentOf(pid: number): number | null; commandOf(pid: number): string[] | null }): number | null;
   postsFor(event: string, payload: unknown, ctx: { agentId: string; cliPid: number | null; prompt: string | null; first: boolean }): Post[];
 };
 let hook: HookModule;
@@ -160,6 +171,68 @@ describe("a turn's end waits for its start (12)", () => {
     hook.markTurn(dir, KEY, 'open');
     expect(await hook.waitForOpening(dir, KEY, { maxMs: 2000, stepMs: 20 })).toBe(true);
     expect(await hook.waitForOpening(undefined, KEY, { maxMs: 2000, stepMs: 20 })).toBe(true);
+  });
+
+  it('13. an end without its opening, or two ends for one turn, never holds the next turn\'s end', async () => {
+    // A timed-out end that still marked, then a turn ended twice (a TaskError, then a TaskCancel).
+    hook.markTurn(dir, KEY, 'end');
+    hook.markTurn(dir, KEY, 'open');
+    hook.markTurn(dir, KEY, 'end');
+    hook.markTurn(dir, KEY, 'end');
+    // The next turn opens: its end goes at once, not after the whole bound.
+    hook.markTurn(dir, KEY, 'open');
+    const at = Date.now();
+    expect(await hook.waitForOpening(dir, KEY, { maxMs: 1500, stepMs: 20 })).toBe(true);
+    expect(Date.now() - at).toBeLessThan(500);
+  });
+});
+
+describe('the CLI a hook names: its parent and the wrappers of Cline\'s above it (14)', () => {
+  /** A process table: pid to its parent and its argv, null for a command that cannot be read. */
+  const table = (rows: Record<number, [number, string[] | null]>) => ({
+    parentOf: (pid: number) => rows[pid]?.[0] ?? null,
+    commandOf: (pid: number) => rows[pid]?.[1] ?? null,
+  });
+  const TARS = [1, ['/Applications/Tars.app/Contents/MacOS/Tars']] as [number, string[]];
+  const NODE = '/opt/node/bin/node';
+  const PKG = '/u/.npm/lib/node_modules/cline/bin';
+
+  it("npm's layout: Cline's binary under its node launcher names the launcher, the terminal's process", () => {
+    const t = table({ 300: [200, [`${PKG}/.cline`, '-i']], 200: [100, [NODE, `${PKG}/cline`, '-i']], 100: TARS });
+    expect(hook.cliOf(300, t)).toBe(200);
+  });
+
+  it('the CLI path set to the binary itself names the binary', () => {
+    const t = table({ 300: [100, ['/u/.npm/lib/node_modules/@cline/cli-darwin-arm64/bin/cline', '-i']], 100: TARS });
+    expect(hook.cliOf(300, t)).toBe(300);
+    const dot = table({ 300: [100, [`${PKG}/.cline`, '-i']], 100: TARS });
+    expect(hook.cliOf(300, dot)).toBe(300);
+  });
+
+  it('a shim that runs the launcher without exec names the shim; node options before the launcher are no obstacle', () => {
+    const t = table({ 300: [200, [`${PKG}/.cline`]], 200: [150, [NODE, '--no-warnings', `${PKG}/cline`]], 150: [100, ['/bin/bash', '/u/.asdf/shims/cline', '-i']], 100: TARS });
+    expect(hook.cliOf(300, t)).toBe(150);
+  });
+
+  it("a Cline its tool started names its own, whether the tool's shell stayed or exec'd it", () => {
+    const outer = { 200: [100, [NODE, `${PKG}/cline`, '-i']], 210: [200, [`${PKG}/.cline`, '-i']], 100: TARS } as Record<number, [number, string[] | null]>;
+    const kept = table({ ...outer, 230: [220, [NODE, `${PKG}/cline`, '-p', 'x']], 220: [210, ['/bin/zsh', '-c', 'cline -p x']], 240: [230, [`${PKG}/.cline`]] });
+    expect(hook.cliOf(240, kept)).toBe(230);
+    const execd = table({ ...outer, 230: [210, [NODE, `${PKG}/cline`, '-p', 'x']], 240: [230, [`${PKG}/.cline`]] });
+    expect(hook.cliOf(240, execd)).toBe(230);
+    const binary = table({ ...outer, 240: [210, [`${PKG}/.cline`, '-p', 'x']] });
+    expect(hook.cliOf(240, binary)).toBe(240);
+  });
+
+  it("a shell that only mentions cline is no wrapper: `bash -c \"cline ...\"` is the tool's, not Cline's", () => {
+    const t = table({ 300: [200, [`${PKG}/.cline`]], 200: [100, ['/bin/bash', '-c', 'cline -i']], 100: TARS });
+    expect(hook.cliOf(300, t)).toBe(300);
+  });
+
+  it('commands that cannot be read keep the grandparent, as before; no parent to read names none', () => {
+    expect(hook.cliOf(300, table({ 300: [200, null], 200: [100, null], 100: [1, null] }))).toBe(200);
+    expect(hook.cliOf(300, table({ 300: [200, ['/Users/Sam', 'Lee/.npm/bin/.cline']], 200: [100, ['/Users/Sam', 'Lee/node', '/Users/Sam', 'Lee/cline']], 100: TARS }))).toBe(200);
+    expect(hook.cliOf(300, table({}))).toBeNull();
   });
 });
 
