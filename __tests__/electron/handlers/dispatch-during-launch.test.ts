@@ -100,8 +100,8 @@ import { agents, initAgentPty } from '../../../electron/core/agent-manager';
 import { ptyProcesses, resetTerminalInput } from '../../../electron/core/pty-manager';
 import { spawnAgentPty } from '../../../electron/core/agent-pty';
 import { resetResumeTracking, encodeProjectDirName } from '../../../electron/utils/resume-session';
-import { resetAgentRestarts } from '../../../electron/core/agent-restart';
-import { resetLaunches, CLI_BOOT_MS } from '../../../electron/core/agent-launch';
+import { resetAgentRestarts, restartAgent } from '../../../electron/core/agent-restart';
+import { resetLaunches, CLI_BOOT_MS, launchBegins, sessionStarting, resumeOfLaunch } from '../../../electron/core/agent-launch';
 import { registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import { EventEmitter } from 'node:events';
 import { resetAgentWatch, startAgentWatch, stopAgentWatch, queueBusMessage } from '../../../electron/services/agent-watch';
@@ -753,3 +753,157 @@ describe('QA #158: every sender answered in time, and the link a refusal leaves'
     expect(agent.taskQueue?.map(r => [r.requesterAgentId, r.state])).toContainEqual(['qa', 'delivered']);
   });
 });
+
+/**
+ * Two starts of one agent, the second while the first is under way (the Audit's L1 on #601). A launch that forks a
+ * Kimi Code session waits on `kimi fork` before its line: 1.4 s measured, 20 s at most. agent:start has its shell open
+ * then, and spawnAgentSession had not yet marked its launch: a second start in that time typed a second kimi line into
+ * the first kimi's input, or started over the first launch. How it fails, written before the code:
+ * 1. A start from a window, while a restart waits on its fork, types its own kimi line into the restart's terminal.
+ * 2. A start from a window, while an API start waits on its fork, types into the terminal that API start then ends.
+ * 3. An API start, while a window's launch is under way, starts a session over it.
+ * 4. A fork longer than CLI_BOOT_MS reads as no launch on its way, and the window opens again.
+ * And (the Audit's L3) the fork runs in the agent's folder. Here `kimi` is a stand-in that forks only once the test
+ * lets it, so the second start lands inside the wait.
+ */
+describe("a second start while a Kimi Code launch forks its session (the Audit's L1 on #601)", () => {
+  const KIMI = 'feabbac1-fc87-4756-8076-0c6adc57127b';
+  const FORKED = '9a5cf0db-b84c-499c-b67c-a5179db5e1d5';
+  const savedKimiHome = process.env.KIMI_CODE_HOME;
+  let bin = '';
+  let go = '';
+  let asked = '';
+  const until = async (ok: () => boolean, ms = 10_000) => {
+    const end = Date.now() + ms;
+    while (!ok()) {
+      if (Date.now() > end) throw new Error('timed out');
+      await new Promise((r) => setTimeout(r, 20));
+    }
+  };
+
+  beforeEach(() => {
+    vi.useRealTimers();
+    // The session to fork, as kimi 2.6.3 lists it in its home.
+    const home = path.join(tmpHome, '.kimi-code');
+    process.env.KIMI_CODE_HOME = home;
+    const dir = path.join(home, 'sessions', 'wd_project', `session_${KIMI}`);
+    fs.mkdirSync(path.join(dir, 'agents', 'main'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'agents', 'main', 'wire.jsonl'), '');
+    fs.writeFileSync(path.join(home, 'session_index.jsonl'), `${JSON.stringify({ sessionId: `session_${KIMI}`, sessionDir: dir, workDir: project })}\n`);
+    bin = path.join(tmpHome, 'kimi');
+    go = path.join(tmpHome, 'kimi.go');
+    asked = path.join(tmpHome, 'kimi.asked');
+    // kimi fork, held until the test lets it go (and never past 30 s).
+    fs.writeFileSync(bin, `#!${process.execPath}
+const fs = require('fs');
+fs.writeFileSync(${JSON.stringify(asked)}, JSON.stringify({ argv: process.argv.slice(2), cwd: process.cwd() }));
+setTimeout(() => process.exit(1), 30000).unref();
+const t = setInterval(() => {
+  if (!fs.existsSync(${JSON.stringify(go)})) return;
+  clearInterval(t);
+  process.stdout.write('Forked to session_${FORKED} ("Fork: the task") in 1416ms\\n');
+}, 20);
+`, { mode: 0o755 });
+  });
+  afterEach(() => {
+    // The stand-in ends now if a case stopped before letting it.
+    fs.writeFileSync(go, '');
+    if (savedKimiHome === undefined) delete process.env.KIMI_CODE_HOME; else process.env.KIMI_CODE_HOME = savedKimiHome;
+    vi.useFakeTimers();
+  });
+
+  const kimiAgent = (foreground: string) => agentWithTerminal({
+    foreground, provider: 'kimi-code', cliPath: bin, model: 'default',
+    currentSessionId: KIMI, resumableSessionId: KIMI, sessionPtyId: 'pty-a',
+  });
+
+  /** POST /api/agents/:id/start through the real route, from the project's orchestrator. */
+  function apiStart(id: string, prompt: string): Promise<{ status: number; body: Record<string, unknown> }> {
+    const app: RouteApp = {
+      routes: [],
+      add(method, pattern, handler) { this.routes.push({ method, pattern, handler }); },
+      get(pattern, handler) { this.add('GET', pattern, handler); },
+      post(pattern, handler) { this.add('POST', pattern, handler); },
+      put(pattern, handler) { this.add('PUT', pattern, handler); },
+      delete(pattern, handler) { this.add('DELETE', pattern, handler); },
+    };
+    registerAgentRoutes(app, {
+      mainWindow: null, appSettings: {} as AppSettings, getAppSettings: () => ({} as AppSettings),
+      getTelegramBot: () => null, getSlackApp: () => null, slackResponseChannel: null, slackResponseThreadTs: null,
+      handleStatusChangeNotificationCallback: vi.fn(), sendNotificationCallback: vi.fn(),
+      initAgentPtyCallback: vi.fn(async () => 'unused'), agentStatusEmitter: new EventEmitter(),
+    } as unknown as RouteContext);
+    const pathname = `/api/agents/${id}/start`;
+    const route = app.routes.find(r => r.method === 'POST' && typeof r.pattern !== 'string' && r.pattern.test(pathname))!;
+    let answer = { status: 200, body: {} as Record<string, unknown> };
+    return Promise.resolve(route.handler({
+      method: 'POST', pathname, url: new URL(`http://localhost${pathname}`), body: { prompt },
+      raw: { headers: {}, on: () => {} }, res: {}, params: { id }, callerAgentId: 'orch',
+    } as unknown as RouteRequest, (json, status = 200) => { answer = { status, body: json as Record<string, unknown> }; }, {} as RouteContext))
+      .then(() => answer);
+  }
+  const orchestrator = () => agents.set('orch', {
+    id: 'orch', role: 'orchestrator', name: 'Orchestrator', status: 'running', provider: 'claude', projectPath: project,
+    skills: [], output: [], lastActivity: new Date().toISOString(),
+  } as AgentStatus);
+  const start = (id: string) => handlers.get('agent:start')!({}, { id, prompt: '' }) as Promise<{ success: boolean; error?: string }>;
+
+  it('1: refuses a window start while a restart waits on kimi fork, and the restart types one kimi line, on the fork, from the agent\'s folder', async () => {
+    const { agent } = kimiAgent('kimi');
+    const before = spawned.length;
+    const restarting = restartAgent(agent.id);
+    await until(() => fs.existsSync(asked));
+    const second = await start(agent.id);
+    expect(second.success, 'a second start went through during the fork').toBe(false);
+    expect(second.error).toMatch(/already starting/);
+    fs.writeFileSync(go, '');
+    expect(await restarting).toEqual({ success: true });
+    expect(spawned.length).toBe(before + 1);
+    const typed = typedInto(newTerminal(before));
+    expect(typed.split(`'${bin}'`).length - 1, 'kimi lines typed into the restart\'s terminal').toBe(1);
+    expect(typed).toContain(`--session 'session_${FORKED}'`);
+    expect(JSON.parse(fs.readFileSync(asked, 'utf8'))).toEqual({ argv: ['fork', '-y', `session_${KIMI}`], cwd: fs.realpathSync(project) });
+  });
+
+  it('2: refuses a window start while an API start waits on kimi fork; the API start then starts its session on the fork', async () => {
+    orchestrator();
+    const { agent, terminal } = kimiAgent('bash');
+    const before = spawned.length;
+    const started = apiStart(agent.id, 'Run the probe');
+    await until(() => fs.existsSync(asked));
+    const second = await start(agent.id);
+    expect(second.success, 'a window start went through during the API start\'s fork').toBe(false);
+    expect(typedInto(terminal), 'typed into the terminal the API start ends').toBe('');
+    fs.writeFileSync(go, '');
+    const answer = await started;
+    expect(answer.status, JSON.stringify(answer.body)).toBe(200);
+    expect(spawned.length).toBe(before + 1);
+    const pty = await import('node-pty');
+    expect(JSON.stringify(vi.mocked(pty.spawn).mock.calls.at(-1))).toContain(`session_${FORKED}`);
+  });
+
+  it('3: answers an API start still starting while a window\'s launch is under way, and spawns nothing', async () => {
+    orchestrator();
+    const { agent, terminal } = kimiAgent('bash');
+    launchBegins(agent.id);
+    const before = spawned.length;
+    const answer = await apiStart(agent.id, 'Run the probe');
+    expect(answer.status, JSON.stringify(answer.body)).toBe(409);
+    expect(spawned.length, 'a session was started over the launch').toBe(before);
+    expect(terminal.kill).not.toHaveBeenCalled();
+  });
+
+  it('4: reads the agent as starting while its CLI forks ahead, past CLI_BOOT_MS too, and not once the fork is made', async () => {
+    vi.useFakeTimers();
+    const { agent } = agentWithTerminal({ foreground: 'bash' });
+    let release!: (id: string | null) => void;
+    const provider = { forkAhead: () => new Promise<string | null>((resolve) => { release = resolve; }) };
+    const launching = resumeOfLaunch(provider, '/bin/kimi', { resumeSessionId: KIMI, forkSession: true }, { agentId: agent.id, cwd: project });
+    await vi.advanceTimersByTimeAsync(CLI_BOOT_MS + 5_000);
+    expect(sessionStarting(agent), 'a fork past CLI_BOOT_MS read as no launch').toBe(true);
+    release(FORKED);
+    expect(await launching).toEqual({ resumeSessionId: FORKED, forkSession: false });
+    expect(sessionStarting(agent)).toBe(false);
+  });
+});
+
