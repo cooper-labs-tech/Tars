@@ -14,7 +14,7 @@
 // Cline process whose pid the session's sessions.db row names, itself a child of Cline's node launcher: the process
 // Tars started, the terminal's own on an exec launch. So the CLI the hook names to the hook routes, which check it
 // against the agent's terminal, is its grandparent (the conformance on 66214ddc4: named as its parent, the session was
-// refused as another CLI's).
+// refused as another CLI's), or, for another layout (the binary itself, a shim), the one cliOf finds.
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -85,7 +85,12 @@ export function markTurn(dataDir, key, mark) {
   }
 }
 
-/** Whether a turn of this Cline process opened that has not ended: more openings than ends. */
+/**
+ * Whether a turn of this Cline process opened that has not ended: more openings than ends, counted in order and never
+ * below zero. An end without its opening (one that timed out still marks; a TaskError then a TaskCancel end one turn
+ * twice) took the count below zero for good, and every later end of that process waited the whole bound (the Audit's
+ * L1 on #620).
+ */
 function openTurn(dataDir, key) {
   let marks;
   try {
@@ -94,7 +99,7 @@ function openTurn(dataDir, key) {
     return false;
   }
   let open = 0;
-  for (const m of marks) open += m === 'open' ? 1 : m === 'end' ? -1 : 0;
+  for (const m of marks) open = Math.max(0, open + (m === 'open' ? 1 : m === 'end' ? -1 : 0));
   return open > 0;
 }
 
@@ -131,6 +136,70 @@ export function parentOf(pid) {
   } catch {
     return null;
   }
+}
+
+/**
+ * A live process's command line, as its words: exact from /proc/<pid>/cmdline on Linux, else `ps -o args=` split on
+ * spaces (macOS: a path holding a space comes apart, and is then read as no Cline's); null on Windows or when it
+ * cannot be read.
+ */
+export function commandOf(pid) {
+  try {
+    const words = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').filter((w) => w !== '');
+    if (words.length > 0) return words;
+  } catch {
+    // Not Linux, or gone.
+  }
+  if (process.platform === 'win32') return null;
+  try {
+    const words = execFileSync('ps', ['-o', 'args=', '-p', String(pid)], { encoding: 'utf8', timeout: 2000 }).trim().split(/\s+/).filter(Boolean);
+    return words.length > 0 ? words : null;
+  } catch {
+    return null;
+  }
+}
+
+const baseOf = (word) => word.split(/[\\/]/).pop() ?? '';
+const CLINE_NAMES = new Set(['cline', '.cline', 'cline.exe', 'cline.cmd']);
+const INTERPRETERS = new Set(['node', 'nodejs', 'node.exe', 'sh', 'bash', 'zsh', 'dash', 'ksh']);
+
+/** Cline's binary run as itself: a program named cline, not an interpreter running a script of that name. */
+const isClineBinary = (words) => !!words && CLINE_NAMES.has(baseOf(words[0])) && !INTERPRETERS.has(baseOf(words[0]));
+
+/**
+ * A wrapper of Cline's: an interpreter running a script named cline (its npm launcher, `node .../bin/cline`; a shim,
+ * `bash .../shims/cline`). node's options may come before the script; a shell's may not, so `bash -c "cline ..."`,
+ * a tool's shell that names cline in a command, is none.
+ */
+function wrapsCline(words) {
+  if (!words || words.length < 2) return false;
+  const interpreter = baseOf(words[0]);
+  if (!INTERPRETERS.has(interpreter)) return false;
+  let i = 1;
+  if (interpreter.startsWith('node')) while (i < words.length && words[i].startsWith('-')) i += 1;
+  const script = words[i];
+  return !!script && !script.startsWith('-') && CLINE_NAMES.has(baseOf(script));
+}
+
+/**
+ * The CLI Tars started, which the hook routes check against the agent's terminal: from the hook's parent (Cline's
+ * binary) up through the wrappers of Cline's above it, the topmost (npm's launcher; a shim that runs it without exec,
+ * the terminal's own process then). With none, the parent itself when its command is Cline's binary (a CLI path set to
+ * `bin/.cline`, the terminal's process then); and when no command could be read, the grandparent, as measured with
+ * npm's launcher (the conformance on 66214ddc4). Never above another Cline: a Cline that a Cline's tool started names
+ * its own launcher or binary, which the routes refuse as not the terminal's. Null when no parent can be read (Windows).
+ */
+export function cliOf(parent, look = { parentOf, commandOf }) {
+  const above = look.parentOf(parent);
+  let named = parent;
+  let next = above;
+  while (next && wrapsCline(look.commandOf(next))) {
+    named = next;
+    next = look.parentOf(next);
+  }
+  if (named !== parent) return named;
+  if (isClineBinary(look.commandOf(parent))) return parent;
+  return above;
 }
 
 /** The posts an event of Cline's makes, in order: none for an event Tars does not read, or a payload naming no session. */
@@ -190,8 +259,8 @@ export async function run(event) {
       const key = `${String(payload.sessionContext?.rootSessionId)}.${process.ppid}`;
       const opens = event === 'TaskStart' || event === 'TaskResume';
       const ends = event === 'TaskComplete' || event === 'TaskCancel' || event === 'TaskError';
-      // The CLI Tars started: Cline's launcher, this hook's grandparent (the .cline binary is its parent).
-      const cliPid = parentOf(process.ppid);
+      // The CLI Tars started: Cline's launcher above its .cline binary, this hook's parent, or another layout (cliOf).
+      const cliPid = cliOf(process.ppid);
       const valid = clineUuidOf(payload.sessionContext?.rootSessionId) !== null;
       const prompt = opens && valid ? typedPrompt(dataDir) : null;
       const first = opens && valid ? claimRegistration(dataDir, key) : false;

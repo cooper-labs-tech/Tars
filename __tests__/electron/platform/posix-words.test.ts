@@ -1,4 +1,10 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+// A Cline agent's folder is in Tars's userData (providers/cline-cli.ts): this run's own temporary folder here.
+vi.mock('electron', async () => {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  return { app: { getPath: () => path.join(os.tmpdir(), 'tars-userdata') } };
+});
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';

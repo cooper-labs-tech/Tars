@@ -159,7 +159,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `kimi-code` | Kimi Code | `kimi` | `$KIMI_CODE_HOME`, else `~/.kimi-code` | native, on the model of the user's own `config.toml`, or an inference endpoint (below) |
 | `kilo` | Kilo | `kilo` | `$XDG_CONFIG_HOME/kilo`, else `~/.config/kilo` | native, a build of opencode: its own default (the Kilo Gateway's), or an inference endpoint (below) |
 | `goose` | Goose | `goose` | `$GOOSE_PATH_ROOT/config` (absolute only), else `$XDG_CONFIG_HOME/goose`, else `~/.config/goose`; on Windows `%APPDATA%\Block\goose\config` | native, on the provider and model of the user's own Goose config, or an inference endpoint (below) |
-| `cline` | Cline | `cline` | each agent's own `~/.tars-private/cline/<id>` (`--config`, with `data/` as `--data-dir`); the user's own `~/.cline` read, never written | native, on a copy of the user's own Cline provider, or an inference endpoint (below) |
+| `cline` | Cline | `cline` | each agent's own folder in Tars's userData, `<userData>/cline/<id>` (`--config`, with `data/` as `--data-dir`), removed with the agent; the user's own `~/.cline` read, never written | native, on a copy of the user's own Cline provider, or an inference endpoint (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
@@ -282,8 +282,11 @@ The binary `goose` (block/goose), measured on 1.60.1 in throwaway homes, its TUI
 
 ### Cline (21/11): `providers/cline-provider.ts`, `providers/cline-cli.ts`, `hooks/cline-hook.mjs`
 
-The binary `cline` (npm `cline`), measured on 3.0.74 in throwaway homes, its TUI (`cline -i`) in a PTY:
-- **A folder of its own per agent**, `~/.tars-private/cline/<agent id>`: its `--config` (Tars's hooks in `hooks/`) and,
+The binary `cline` (npm `cline`), measured on macOS with 3.0.74 in throwaway homes, its TUI (`cline -i`) in a PTY; on
+Linux and Windows read from Cline's source and its launcher, not measured:
+- **A folder of its own per agent**, in Tars's own userData, `<userData>/cline/<agent id>` (as the state mod's copy is:
+  neither `~/.tars`, which every agent is handed, nor `~/.tars-private`, which no CLI is; removed with the agent, its
+  copy of the user's provider file and its sessions with it): its `--config` (Tars's hooks in `hooks/`) and,
   as `data/`, its `--data-dir` (its provider, its MCP settings, its sessions). Its TUI reads its provider from
   `<data>/settings/providers.json` and nowhere else: given another file (CLINE_PROVIDER_SETTINGS_PATH) it showed its
   onboarding and wrote a default `providers.json` into the data folder. So **the user's own `~/.cline` is never written**,
@@ -299,10 +302,14 @@ The binary `cline` (npm `cline`), measured on 3.0.74 in throwaway homes, its TUI
   the session's messages are written only at the end of each round. A paste of 5 lines or more is in that history as
   Cline's marker (`[<its first 48 characters>... Pasted +N lines]`); the sender line, with the task's id, is a paste of
   its own and stays whole, so a turn's text may show the marker for a long body and its binding does not change. The
-  first TaskStart or TaskResume of each Cline process registers the session, with its CLI's pid (Cline's launcher, the
-  hook's grandparent, the one Tars started). Cline runs its hooks detached, in parallel: a turn's end waits, 10 s at
-  most, for its start to have reached Tars, through marks the hooks keep in the agent's own data folder
-  (`tars-hooks/`). No prompt-keyed binding: two agents with the same skills launched together each get their own
+  first TaskStart or TaskResume of each Cline process registers the session, with its CLI's pid: the one Tars started,
+  the topmost of the hook's parent (Cline's binary) and the wrappers of Cline's above it (an interpreter running a
+  script named `cline`: npm's launcher, the hook's grandparent; a shim that runs it without exec), else the binary
+  itself when the CLI path names it, never above another Cline (`cliOf`); a command that cannot be read keeps the
+  grandparent. Cline runs its hooks detached, in parallel: a turn's end waits, 10 s at most, for its start to have
+  reached Tars, through marks the hooks keep in the agent's own data folder (`tars-hooks/`), counted never below zero,
+  so an end without its opening does not hold the later ones. An opening later than those 10 s is not caught: the
+  agent then reads `running` until its next turn (status-truth has no Cline). No prompt-keyed binding: two agents with the same skills launched together each get their own
   session (the conformance's step 7). No tokens.
 - **Its modes**: `--auto-approve false` asks in its terminal ("Approve tool call?") for normal; `true` for auto and
   bypass; its `-p` still ran a command, so plan is refused at creation, an update and a launch.
