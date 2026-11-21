@@ -364,8 +364,15 @@ for (const h of HARNESSES) {
         // After Tars quit: the decoy hub of the user's still runs, nothing of the agent's Cline folder does, no page was
         // opened, and the user's ~/.cline was never made.
         const ps = process.platform === 'win32' ? '' : execFileSync('ps', ['-o', 'pid=,command=', '-U', String(process.getuid?.() ?? '')], { encoding: 'utf8' });
-        const agentFolder = path.join(home, '.tars-private', 'cline');
+        // Its agents' Cline folders are in Tars's userData, the sandbox's profile: neither ~/.tars, which every agent
+        // is handed, nor ~/.tars-private, which no CLI is (the Audit's M1 on #620).
+        const agentFolder = path.join(home, 'electron-profile', 'cline');
         const left = ps.split('\n').filter((l) => l.includes(agentFolder)).map((l) => l.trim().slice(0, 200));
+        const where = { inUserData: fs.existsSync(path.join(agentFolder, WORKER)), underPrivate: fs.existsSync(path.join(home, '.tars-private', 'cline')), underTars: fs.existsSync(path.join(home, '.tars', 'cline')) };
+        keep({ clineFolder: where });
+        expect.soft(where.inUserData, 'the agent\'s Cline folder is in Tars\'s userData').toBe(true);
+        expect.soft(where.underPrivate, 'nothing of Cline\'s under ~/.tars-private, which no CLI is handed').toBe(false);
+        expect.soft(where.underTars, 'nothing of Cline\'s under ~/.tars, which every agent is handed').toBe(false);
         const opened = fs.existsSync(path.join(shim, 'opened.log')) ? fs.readFileSync(path.join(shim, 'opened.log'), 'utf8') : '';
         keep({ clineLeftRunning: left, decoyHubAlive: decoy?.exitCode === null, pagesOpened: opened, usersClineMade: fs.existsSync(path.join(home, '.cline')) });
         expect.soft(left, 'nothing of the agent\'s Cline folder outlives Tars').toEqual([]);

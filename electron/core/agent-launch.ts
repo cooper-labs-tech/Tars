@@ -1,10 +1,11 @@
 import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
-import { ptyProcesses, type MessageSender } from './pty-manager';
+import { endTerminalTree, ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
 import { dialogOnScreen, launchLineOf, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
+import type { IPty } from 'node-pty';
 
 /**
  * The launch of an agent's CLI in its terminal, reachable without a renderer.
@@ -122,6 +123,9 @@ export const SENDER_WAIT_MS = 20_000;
  */
 const launchesUnderWay = new Map<string, { since: number; withTask: boolean }>();
 
+/** Agents whose replaced terminal is still ending, with how many ends each (endReplacedTerminal). */
+const replacing = new Map<string, number>();
+
 /**
  * Told when a launch begins or is abandoned, so the page can say `starting`
  * (AgentStatus.launching) without a status change to carry it: a restart keeps
@@ -174,6 +178,8 @@ export function launchAbandoned(agentId: string, launch: object): void {
  * error while its CLI answered.
  */
 export function sessionStarting(agent: StartingAgent): boolean {
+  // Its old terminal still ending, the next not open: a launch on its way too (endReplacedTerminal).
+  if (replacing.has(agent.id)) return true;
   const launch = launchesUnderWay.get(agent.id);
   if (!launch) return false;
   const elapsed = Date.now() - launch.since;
@@ -269,9 +275,36 @@ export async function sessionStarted(agent: StartingAgent, maxWaitMs = Infinity)
   return true;
 }
 
+/**
+ * An agent terminal replaced, for a new provider, CLI, folder or keys, or by a start that opens another, ended with
+ * its whole tree as a stop ends it (endTerminalTree: taskkill /T on Windows), the caller having taken it off the
+ * agent first. The hangup alone ended a CLI's launcher and left what it started: Cline's .cline, behind its node,
+ * orphaned and holding the agent's folder (#620).
+ *
+ * Until that tree is gone, which takes up to its grace, the replacement reads as a launch on its way
+ * (sessionStarting): the agent has no terminal then, and a task delegated or a message sent meanwhile launched it
+ * beside the tree being ended (the Audit's L4 on #620). Every sender waits for it instead. An end that fails is
+ * said, never thrown, and stops reading as one all the same.
+ */
+export async function endReplacedTerminal(agentId: string, terminal: IPty, who: string): Promise<void> {
+  replacing.set(agentId, (replacing.get(agentId) ?? 0) + 1);
+  launchListener?.();
+  try {
+    await endTerminalTree(terminal);
+  } catch (err) {
+    console.warn(`[replace] ${who}: the terminal it replaces did not close cleanly:`, err);
+  } finally {
+    const left = (replacing.get(agentId) ?? 1) - 1;
+    if (left > 0) replacing.set(agentId, left);
+    else replacing.delete(agentId);
+    launchListener?.();
+  }
+}
+
 /** Test seam. */
 export function resetLaunches(): void {
   launchesUnderWay.clear();
+  replacing.clear();
 }
 
 /**

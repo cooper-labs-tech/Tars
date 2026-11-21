@@ -16,6 +16,11 @@ import * as os from 'node:os';
  * 1. A CLI deaf to the hangup, or one its launcher does not pass it on to, and what it started, outlive the restart.
  * 2. The new CLI starts while the old one still runs on the same folder: two Clines on one data folder.
  * 3. A restart that ends the tree launches nothing, or more than once, or keeps the old terminal in the map.
+ * 4. (The Audit's L4 on #620) While the old tree ends, nothing tells the senders a restart is under way: the agent has
+ *    no terminal, `restarting` is private, and a task delegated or a message sent then (update_agent, then a task at
+ *    once) launches the agent itself; the restart's own launch then finds a CLI running and fails, and the agent is
+ *    set in error while it works. The end reads as a launch on its way (endReplacedTerminal, sessionStarting) until
+ *    the tree is gone, and the launch that follows marks itself with no timer turning in between (startAgentCli).
  *
  * The "terminal" is a real process group where node-pty's shell would be, as in agent-stop.test.ts: a bash leader
  * that relays the hangup to its job, a job deaf to SIGHUP and SIGTERM, and the job's child, which inherits both.
@@ -43,6 +48,8 @@ vi.mock('../../../electron/core/agent-launch', async (importOriginal) => ({
 vi.setConfig({ testTimeout: 20_000 });
 
 import { restartAgent, resetAgentRestarts } from '../../../electron/core/agent-restart';
+import { updateAgent } from '../../../electron/core/agent-update';
+import { sessionStarting, sessionStarted } from '../../../electron/core/agent-launch';
 import { agents } from '../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import type { IPty } from 'node-pty';
@@ -119,5 +126,27 @@ describe('a restart', () => {
     expect(h.launches, 'one launch, once the old tree was gone').toEqual([{ agentId: 'cline-1', oldAlive: false }]);
     expect(ptyProcesses.has('pty-old')).toBe(false);
     expect(agent.lastKilledSessionId).toBe('sess-1');
+  });
+
+  posixGroups('update_agent, then a task at once: the task waits for the old tree to be gone, and the restart launches once (4)', async () => {
+    const t = await deafTerminal();
+    expect(alive(t.job) && alive(t.child), 'the fixture did not start').toBe(true);
+    h.watch.push(t.job, t.child);
+    ptyProcesses.set('pty-old', t.pty);
+    const agent = {
+      id: 'claude-4', name: 'Worker', status: 'idle', provider: 'claude', permissionMode: 'normal', projectPath: '/p',
+      skills: [], output: [], lastActivity: '', ptyId: 'pty-old', currentSessionId: 'sess-4', resumableSessionId: 'sess-4',
+    } as unknown as AgentStatus;
+    agents.set(agent.id, agent);
+
+    const updated = await updateAgent({ id: agent.id, permissionMode: 'auto' });
+    expect(updated.success).toBe(true);
+    // The task: what /dispatch, /run-task and /message do before they launch the agent or type into it.
+    expect(sessionStarting(agent), 'the task would launch the agent beside the restart').toBe(true);
+    expect(await sessionStarted(agent, 10_000)).toBe(true);
+    expect(alive(t.job) || alive(t.child), 'the task went ahead while the old tree still ran').toBe(false);
+    await vi.waitFor(() => expect(h.launches).toHaveLength(1), { timeout: 5_000 });
+    expect(h.launches[0]).toEqual({ agentId: agent.id, oldAlive: false });
+    expect(agent.status).not.toBe('error');
   });
 });

@@ -1,8 +1,8 @@
 import { hasClaudeHooks } from './end-of-turn';
 import { agents, saveAgents } from './agent-manager';
-import { ptyProcesses, fieldInUse, onFieldChange, endTerminalTree, type FieldInUse } from './pty-manager';
+import { ptyProcesses, fieldInUse, onFieldChange, type FieldInUse } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt } from './agent-launch';
+import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt, endReplacedTerminal } from './agent-launch';
 import { agentStatusEmitter } from '../services/agent-events';
 import { holdsFor } from '../services/agent-watch';
 import { pendingBackgroundWork } from '../services/agent-truth';
@@ -406,16 +406,12 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
     agent.currentSessionId = undefined;
     agent.ptyId = undefined;
     agent.ptyCwd = undefined;
-    // Its whole tree, as a stop ends it (endTerminalTree), and before the new CLI launches on the same folder: the
+    // Its whole tree, as a stop ends it (endReplacedTerminal), and before the new CLI launches on the same folder: the
     // hangup alone ended Cline's node launcher, and left its .cline child orphaned and stopped, holding the agent's
-    // folder (the Cline conformance on 187508db4).
-    if (old) {
-      try {
-        await endTerminalTree(old);
-      } catch (err) {
-        console.warn(`[restart] ${agent.name || agent.id}: the old terminal did not close cleanly:`, err);
-      }
-    }
+    // folder (the Cline conformance on 187508db4). Read as a launch on its way while it ends, so a task sent meanwhile
+    // waits instead of launching the agent itself (the Audit's L4 on #620); launchAgent's start (startAgentCli) marks
+    // its own launch next, with no timer turning in between.
+    if (old) await endReplacedTerminal(agent.id, old, `the restart of ${agent.name || agent.id}`);
 
     const result = await launchAgent(agent.id, '', { resumeSessionId: conversation });
     if (!result.success) throw new Error(result.error);

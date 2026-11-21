@@ -11,6 +11,7 @@ import { dropPermissionAsks } from '../services/permission-asks';
 import { ignoredNotCaches, saveUncommittedWork, submodulesWithWork } from '../services/save-worktree-work';
 import { gitRefusal } from './chat-slots';
 import { endBornOf } from './agent-stop';
+import { removeClineAgentDir } from '../providers/cline-cli';
 
 export interface RemovedAgent {
   success: true;
@@ -59,6 +60,9 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
   // What it started outside its terminal, as a stop ends it: once it has left the fleet, nothing would ever
   // name it again (the Audit's Info 2 on #523; Tars's own e2e left 20 `my-cli` orphans that way).
   const processes = agent ? await endBornOf(agent) : undefined;
+  // Its own Cline folder, once nothing of its runs: a copy of the user's provider file and its sessions (the Audit's
+  // M1 on #620). Whatever its provider is now, an agent once on Cline keeps one.
+  removeClineAgentDir(id);
 
   let savedTo: string | undefined;
   let worktreeKept: string | undefined;

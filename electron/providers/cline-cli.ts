@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import Database from 'better-sqlite3';
-import { PRIVATE_DIR } from '../constants';
+import { app } from 'electron';
 
 /**
  * Where a Cline agent keeps its own folders, where the user's Cline keeps theirs, and how Tars names Cline's sessions:
@@ -13,8 +13,10 @@ import { PRIVATE_DIR } from '../constants';
  * `<home>/.cline`, home being HOME, else USERPROFILE, else HOMEDRIVE+HOMEPATH (the same on macOS, Linux and Windows);
  * its data `--data-dir`, else CLINE_DATA_DIR, else `<root>/data`, with `settings/providers.json` (the provider its TUI
  * reads, from there only), `settings/cline_mcp_settings.json`, `sessions/<id>/` and `db/sessions.db`. A Tars agent
- * runs Cline on a folder of its own for both, under ~/.tars-private (its provider may hold the user's key), so the
- * user's own ~/.cline is never written.
+ * runs Cline on a folder of its own for both, so the user's own ~/.cline is never written: in Tars's own userData
+ * (`<userData>/cline/<id>`, as the state mod's copy is), since its provider may hold the user's key. Not ~/.tars,
+ * which every agent is handed, and not ~/.tars-private, which no CLI is ever handed (the Audit's M1 on #620: it was
+ * there, and Cline's tools read what its folder holds).
  */
 
 /** A Cline session id, `<ms>_<5 chars>`: the only form that reaches a command line. */
@@ -28,10 +30,33 @@ export function clineUuidOf(sessionId: string): string | null {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-8${h.slice(13, 16)}-${variant}${h.slice(17, 20)}-${h.slice(20, 32)}`;
 }
 
+const AGENT_ID = /^[A-Za-z0-9-]{1,64}$/;
+
+/** Where every Cline agent's own folder is: Tars's userData, neither ~/.tars nor ~/.tars-private. */
+export function clineAgentsRoot(): string {
+  return path.join(app.getPath('userData'), 'cline');
+}
+
 /** The agent's own Cline folder: its --config (hooks) and, under `data`, its --data-dir. */
-export function clineAgentDir(agentId: string, privateDir = PRIVATE_DIR): string {
-  if (!/^[A-Za-z0-9-]{1,64}$/.test(agentId)) throw new Error(`Not an agent id for a Cline folder: ${JSON.stringify(agentId)}`);
-  return path.join(privateDir, 'cline', agentId);
+export function clineAgentDir(agentId: string, root = clineAgentsRoot()): string {
+  if (!AGENT_ID.test(agentId)) throw new Error(`Not an agent id for a Cline folder: ${JSON.stringify(agentId)}`);
+  return path.join(root, agentId);
+}
+
+/**
+ * A removed agent's Cline folder, gone with it (core/agent-remove.ts): its copy of the user's provider file and its
+ * sessions stayed behind (the Audit's M1 on #620). That folder alone, for an id that is an agent id. Never thrown:
+ * a folder that cannot be removed is said, and the agent goes all the same.
+ */
+export function removeClineAgentDir(agentId: string, root?: string): void {
+  if (!AGENT_ID.test(agentId)) return;
+  let dir = agentId;
+  try {
+    dir = clineAgentDir(agentId, root ?? clineAgentsRoot());
+    fs.rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    console.warn(`[agent:remove] ${agentId}: its Cline folder ${dir} could not be removed:`, err);
+  }
 }
 
 /** The user's own Cline data folder, as Cline finds it: read, never written. */
@@ -56,8 +81,8 @@ const sameDir = (a: string, b: string): boolean => {
  * Cline's id of the session Tars knows by `uuid`, when the agent's own sessions.db still has it in one of `folders`;
  * null otherwise, and when the database cannot be read. Opened read only: Cline may be writing it.
  */
-export function clineSessionOf(uuid: string, folders: string[], agentId: string, privateDir = PRIVATE_DIR): string | null {
-  const file = path.join(clineAgentDir(agentId, privateDir), 'data', 'db', 'sessions.db');
+export function clineSessionOf(uuid: string, folders: string[], agentId: string, root = clineAgentsRoot()): string | null {
+  const file = path.join(clineAgentDir(agentId, root), 'data', 'db', 'sessions.db');
   if (!fs.existsSync(file)) return null;
   let db: Database.Database | undefined;
   try {

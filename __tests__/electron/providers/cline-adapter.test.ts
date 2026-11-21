@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+// A Cline agent's folder is in Tars's userData (providers/cline-cli.ts): this run's own temporary folder here.
+vi.mock('electron', async () => {
+  const os = await import('node:os');
+  const path = await import('node:path');
+  return { app: { getPath: () => path.join(os.tmpdir(), 'tars-userdata') } };
+});
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -134,7 +140,8 @@ describe("the agent's own folder, never the user's (2, 3, 4, 6)", () => {
     const dir = clineAgentDir(AGENT);
     const line = cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: '/opt/cline', prompt: 'do the task', orchestratorMode: false, permissionMode: 'bypass' });
     expect(line).toBe(`'/opt/cline' -i --config '${dir}' --data-dir '${path.join(dir, 'data')}' --auto-approve 'true'`);
-    expect(dir.startsWith(path.join(os.homedir(), '.tars-private'))).toBe(true);
+    // In Tars's userData, neither ~/.tars nor ~/.tars-private (the Audit's M1 on #620; cline-agent-folder.test.ts).
+    expect(dir).toBe(path.join(os.tmpdir(), 'tars-userdata', 'cline', AGENT));
     expect(readJson(path.join(dir, 'data', 'settings', 'providers.json'))).toEqual(USER_PROVIDERS);
     const servers = readJson(path.join(dir, 'data', 'settings', 'cline_mcp_settings.json')).mcpServers;
     expect(Object.keys(servers)).toEqual(['claude-mgr-orchestrator']);
