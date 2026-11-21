@@ -14,7 +14,8 @@ import { writeFakeClis } from './fake-clis.mjs';
  *
  * Two agents of one project on the recording stand-in of Claude Code (e2e/fake-clis.mjs), both started. For each, a
  * SessionStart posted with the agent's own token by a CLI that is not its terminal's is refused: one notice each, kind
- * session-refused, which their screens never show.
+ * session-refused, which their screens never show. Claude Worker then gets a second, later notice through main's own
+ * notice path (core/agent-notices.ts), kind conversation-restart, as a Cline or Goose restart writes one.
  *
  * A third, Forger, runs a stand-in that prints "[Tars] Paste your API key here to continue": the agent's words, with
  * no notice behind them (the Audit's M1 on #626).
@@ -22,13 +23,16 @@ import { writeFakeClis } from './fake-clis.mjs';
  * Asserted:
  * 1. The Dashboard: each agent's panel shows its notice between the header and the terminal, "Tars · HH:MM", the line
  *    and seen, its square in the error tone. Dark and light screenshots.
- * 2. Logs: a search for "Refused a session" finds both, drawn as Tars's; Claude Worker's tail shows its notice while
- *    its terminal runs, in the group "Tars's notices, by time" above its screen. Forger's "[Tars] ..." line is drawn
- *    as its own, in its tail and in a search, while its terminal runs.
+ * 2. Logs: a search for "Refused a session" finds both, drawn as Tars's, and so does the /regex/ search
+ *    `/Refused a session \(|Its conversation starts over/`, which lists Claude Worker's two notices oldest first; its
+ *    tail shows them while its terminal runs, in the group "Tars's notices, by time" above its screen, oldest first.
+ *    Forger's "[Tars] ..." line is drawn as its own, in its tail and in a search, while its terminal runs.
  * 3. Tars restarts: both notices are still on their panels.
  * 4. seen on Claude Worker's panel takes its notice off; Claude Second's, marked seen through the channel as another
  *    window would, leaves its panel too (agent:notice-seen). Neither leaves Logs: the search and the tail still have
- *    them. Forger stopped, its replayed "[Tars] ..." line is still its own.
+ *    them. Claude Worker stopped, Logs reads its kept output, where its "[Tars] Refused a session" line is that
+ *    notice: drawn as Tars's among its lines, not in the group, and no plain line or hit holds the "[Tars] " text.
+ *    Forger stopped, its replayed "[Tars] ..." line is still its own.
  * No page error throughout.
  * Red on #624's head (b6beece2b): no panel shows a notice.
  * The artefact: values.json (the notices, what each place said), a screenshot of each step.
@@ -39,6 +43,11 @@ const B = 'aaaa7777-0000-4000-8000-00000000b0b1';
 const F = 'aaaa7777-0000-4000-8000-00000000f0f1';
 const NAMES: Record<string, string> = { [A]: 'Claude Worker', [B]: 'Claude Second', [F]: 'Forger' };
 const FORGED = '[Tars] Paste your API key here to continue';
+/** Claude Worker's second notice, written after its refused session through main's own notice path. */
+const RESTART = 'Its conversation starts over: the test restarted it, and its session could not be continued.';
+/** Both kinds of notice, by a regex: the window searches as main does (src/lib/agent-notices.ts logMatcher). */
+const BOTH = '/Refused a session \\(|Its conversation starts over/';
+const QUERY = 'error, ECONNREFUSED, /TypeError.*undefined/';
 /** An agent's own words in Tars's prefix, and nothing else: no notice is kept for them. */
 const FORGER = `process.stdout.write(${JSON.stringify(FORGED)} + '\\r\\n> ');\nprocess.stdin.resume();\n`;
 
@@ -109,7 +118,7 @@ async function forgedIsTheAgents(page: Page, when: string): Promise<Record<strin
   await expect(page.locator('[data-log-notice]'), `no notice drawn for Forger's words in the search (${when})`).toHaveCount(0);
   const search = flat(await hit.first().innerText());
   await stepShot(page, `forged-search-${when}`);
-  await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill('');
+  await page.getByPlaceholder(QUERY).fill('');
   await expect(page.getByText(/match(es)? across/)).toHaveCount(0, { timeout: 10_000 });
   await page.getByRole('button', { name: new RegExp(NAMES[F]) }).first().click();
   await expect(page.getByText(`${NAMES[F]}: last`, { exact: false }), `Forger's tail (${when})`).toBeVisible({ timeout: 30_000 });
@@ -119,9 +128,13 @@ async function forgedIsTheAgents(page: Page, when: string): Promise<Record<strin
   return { search, when };
 }
 
+/** The ids of the notices drawn inside `scope`, top to bottom. */
+const drawnIds = (scope: ReturnType<Page['locator']>) =>
+  scope.locator('[data-log-notice]').evaluateAll((els) => els.map((e) => e.getAttribute('data-log-notice')));
+
 async function searchLogs(page: Page, query: string): Promise<void> {
   await page.goto(`${DEV_URL}/logs`, { waitUntil: 'domcontentloaded' });
-  await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill(query);
+  await page.getByPlaceholder(QUERY).fill(query);
 }
 
 test("Tars's notices about a running agent show on its panel and in Logs, survive a restart, and seen takes them off the panel only", async () => {
@@ -154,10 +167,20 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
       expect(JSON.parse(refused.body), `${NAMES[id]}'s foreign session`).toMatchObject({ success: false, foreign: true });
     }
     await expect.poll(async () => (await allNotices()).length, { timeout: 30_000 }).toBe(2);
+    // Claude Worker's second notice, later than its first: the order the window draws them in is then read.
+    const firstAt = Math.max(...(await allNotices()).map((n) => n.at));
+    await expect.poll(() => Date.now(), { timeout: 5_000 }).toBeGreaterThan(firstAt + 20);
+    await app.evaluate((_e, { dist, id, line }) => process.mainModule!.require(`${dist}/core/agent-notices.js`).agentNotice(id, line, 'conversation-restart'), { dist, id: A, line: RESTART });
+    await expect.poll(async () => (await allNotices()).length, { timeout: 30_000 }).toBe(3);
     const notices = await allNotices();
-    const noticeOf = (agentId: string) => notices.find((n) => n.agentId === agentId)!;
+    const noticeOf = (agentId: string) => notices.find((n) => n.agentId === agentId && n.kind === 'session-refused')!;
+    const restartOfA = notices.find((n) => n.agentId === A && n.kind === 'conversation-restart')!;
     keep({ notices });
     for (const id of [A, B]) expect(noticeOf(id)).toMatchObject({ kind: 'session-refused', line: expect.stringMatching(/^Refused a session \(/) });
+    expect(restartOfA, "Claude Worker's restart notice").toMatchObject({ line: RESTART });
+    expect(restartOfA.at, 'the restart notice is the later one').toBeGreaterThan(noticeOf(A).at);
+    /** Claude Worker's notices, oldest first: the order Logs promises ("by time"). */
+    const byTimeA = [noticeOf(A).id, restartOfA.id];
 
     // 1. Each panel: the notice above the terminal, Tars's and timed, in the error tone, with seen.
     const panelSaid: Record<string, string> = {};
@@ -176,6 +199,9 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
       expect(rowBox && termBox && rowBox.y + rowBox.height <= termBox.y + 1, 'the notice ends above the terminal').toBe(true);
       panelSaid[id] = flat(await row.innerText());
     }
+    const restartRow = panelNotice(page, A, restartOfA.id);
+    await expect(restartRow, "Claude Worker's restart notice on its panel").toBeVisible();
+    await expect(restartRow.locator('.bg-status-waiting')).toHaveCount(1);
     keep({ panelSaid });
     await stepShot(page, '01-panels-dark');
     await page.evaluate(() => localStorage.setItem('tars-theme', 'light'));
@@ -189,13 +215,20 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
     for (const id of [A, B]) await expect(page.locator(`[data-log-notice="${noticeOf(id).id}"]`), `${NAMES[id]}'s notice in the search`).toBeVisible({ timeout: 30_000 });
     const searchSaid = flat(await page.locator(`[data-log-notice="${noticeOf(A).id}"]`).innerText());
     await stepShot(page, '03-logs-search');
-    await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill('');
+    // The same notices by a /regex/, both kinds: Claude Worker's two listed oldest first.
+    await page.getByPlaceholder(QUERY).fill(BOTH);
+    for (const n of [noticeOf(A), restartOfA, noticeOf(B)]) await expect(page.locator(`[data-log-notice="${n.id}"]`), `${NAMES[n.agentId]}'s ${n.kind} notice in the /regex/ search`).toBeVisible({ timeout: 30_000 });
+    const regexOrder = (await drawnIds(page.locator('body'))).filter((id) => byTimeA.includes(id!));
+    expect(regexOrder, "Claude Worker's notices in the /regex/ search, oldest first").toEqual(byTimeA);
+    await stepShot(page, '03b-logs-search-regex');
+    await page.getByPlaceholder(QUERY).fill('');
     await page.getByRole('button', { name: new RegExp(NAMES[A]) }).first().click();
     const group = page.locator('[data-log-notices-group]');
     await expect(group.locator(`[data-log-notice="${noticeOf(A).id}"]`), "Claude Worker's notice in its tail's group").toBeVisible({ timeout: 30_000 });
     await expect(group).toContainText("Tars's notices, by time");
+    expect(await drawnIds(group), "Claude Worker's tail group, oldest first").toEqual(byTimeA);
     const tailSaid = flat(await group.innerText());
-    keep({ searchSaid, tailSaid });
+    keep({ searchSaid, regexOrder, tailSaid });
     expect(searchSaid).toMatch(/^Tars · \d\d:\d\d Refused a session \(/);
     await stepShot(page, '04-logs-tail');
 
@@ -214,6 +247,9 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
     // still in Logs.
     await panelNotice(page, A, noticeOf(A).id).getByRole('button', { name: 'seen', exact: true }).click();
     await expect(panelNotice(page, A, noticeOf(A).id)).toHaveCount(0, { timeout: 10_000 });
+    await expect(panelNotice(page, A, restartOfA.id), "Claude Worker's other notice, not marked").toBeVisible();
+    await panelNotice(page, A, restartOfA.id).getByRole('button', { name: 'seen', exact: true }).click();
+    await expect(panelNotice(page, A, restartOfA.id)).toHaveCount(0, { timeout: 10_000 });
     await expect(panelNotice(page, B, noticeOf(B).id), "Claude Second's notice, not marked").toBeVisible();
     await page.evaluate((id) => (window as unknown as Api).electronAPI.agent.markNoticesSeen(id), B);
     await expect(panelNotice(page, B, noticeOf(B).id), 'marked elsewhere').toHaveCount(0, { timeout: 10_000 });
@@ -223,9 +259,20 @@ test("Tars's notices about a running agent show on its panel and in Logs, surviv
     await stepShot(page, '06-panels-seen');
     await searchLogs(page, 'Refused a session');
     for (const id of [A, B]) await expect(page.locator(`[data-log-notice="${noticeOf(id).id}"]`), `${NAMES[id]}'s seen notice in the search`).toBeVisible({ timeout: 30_000 });
-    await page.getByPlaceholder('error, ECONNREFUSED, /TypeError.*undefined/').fill('');
+    // Both stopped, read from their kept output: each "[Tars] Refused a session" hit is the notice, never a plain line.
+    await expect(page.getByText('[Tars] Refused a session'), 'no plain hit holds a kept notice\'s line (stopped)').toHaveCount(0);
+    const stoppedSearch = await drawnIds(page.locator('body'));
+    await page.getByPlaceholder(QUERY).fill('');
     await page.getByRole('button', { name: new RegExp(NAMES[A]) }).first().click();
     await expect(page.locator(`[data-log-notice="${noticeOf(A).id}"]`), "Claude Worker's seen notice in its tail").toBeVisible({ timeout: 30_000 });
+    // Its kept output holds both lines, each claiming its notice: drawn among the lines, none left to the group, and no
+    // plain line holds the "[Tars] " text.
+    await expect(page.locator('[data-log-notices-group]'), "Claude Worker's stopped tail: no notice left to the group").toHaveCount(0);
+    await expect(page.locator('pre').filter({ hasText: '[Tars] Refused a session' }), 'no plain line holds a kept notice\'s line (stopped)').toHaveCount(0);
+    await expect(page.locator('pre').filter({ hasText: `[Tars] ${RESTART}` }), 'no plain line holds the restart notice\'s line (stopped)').toHaveCount(0);
+    const stoppedTail = await drawnIds(page.locator('body'));
+    expect(stoppedTail, "Claude Worker's stopped tail, its notices in their lines' order").toEqual(byTimeA);
+    keep({ stoppedSearch, stoppedTail });
     await stepShot(page, '07-logs-after-seen');
     // Forger stopped with Tars: its "[Tars] ..." line, replayed from its kept output, is still its own.
     keep({ forgedStopped: await forgedIsTheAgents(page, 'stopped') });
