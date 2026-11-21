@@ -66,6 +66,7 @@ export function AgentOptionsBody(props: {
         { key: 'amp', label: 'Amp' },
         { key: 'pi', label: 'Pi' },
         { key: 'qwencode', label: 'Qwen Code' },
+        { key: 'goose', label: 'Goose' },
         { key: 'minimax', label: 'MiniMax' },
       ];
       const detected: DetectedCli[] = [];

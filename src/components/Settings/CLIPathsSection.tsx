@@ -34,7 +34,7 @@ const BINARIES: { key: BinaryKey; label: string }[] = [
 const pathListSeparator = () => (typeof window !== 'undefined' && window.electronAPI?.platform === 'win32' ? ';' : ':');
 
 const EMPTY_CLI_PATHS: CLIPaths = {
-  claude: '', codex: '', gemini: '', grok: '', qwencode: '', opencode: '',
+  claude: '', codex: '', gemini: '', grok: '', qwencode: '', goose: '', opencode: '',
   amp: '', pi: '', gws: '', gcloud: '', gh: '', node: '', minimax: '', additionalPaths: [],
 };
 

@@ -31,6 +31,8 @@ export const CLIS: readonly CliDef[] = [
   { id: 'opencode', name: 'OpenCode', command: 'opencode', provider: 'opencode', keyId: 'opencode', pathKey: 'opencode' },
   { id: 'pi', name: 'Pi', command: 'pi', provider: 'pi', keyId: 'pi', pathKey: 'pi' },
   { id: 'amp', name: 'Amp', command: 'amp', provider: 'amp', keyId: 'amp', pathKey: 'amp' },
+  // 2.0.7 (#618): Goose, one name everywhere (main's displayName). No key in Settings: its provider is set in its config.
+  { id: 'goose', name: 'Goose', command: 'goose', provider: 'goose', keyId: null, pathKey: 'goose' },
   { id: 'omp', name: 'oh-my-pi', command: 'omp', provider: null, keyId: 'omp', pathKey: null, soon: true },
   { id: 'cline', name: 'Cline CLI', command: 'cline', provider: null, keyId: 'cline', pathKey: null, soon: true },
   { id: 'kilo', name: 'Kilo CLI', command: 'kilo', provider: null, keyId: 'kilo', pathKey: null, soon: true },
