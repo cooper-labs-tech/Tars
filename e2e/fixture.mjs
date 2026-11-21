@@ -620,6 +620,10 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * own (sandboxPath): its four stand-in CLIs, and nothing of the account's home,
  * unless the spec's env names another.
  *
+ * GOOSE_DISABLE_KEYRING is 1, whatever the caller exported, unless the spec's env
+ * names another: goose keeps its keys in the system's keychain, outside every home
+ * a sandbox moves (#609's Audit, I-5; e2e-cli-homes.test.ts, case 12).
+ *
  * `profile` names the profile folder in the sandbox, `electron-profile` unless
  * given: Tars is one instance per profile (core/desktop-lifecycle.ts), so a
  * spec that runs two Tars on one home gives the second a profile of its own.
@@ -637,7 +641,7 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
     args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
-    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
+    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), GOOSE_DISABLE_KEYRING: '1', ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run
   // started by an agent inside Tars carries that agent's CLAUDE_MGR_API_URL
