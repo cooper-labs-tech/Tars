@@ -40,7 +40,10 @@ import * as path from 'node:path';
  *    orchestrator's update_agent, then a task at once) launches the agent beside the tree being ended. Every sender
  *    asks sessionStarting before it launches or types (/dispatch and /run-task through performDispatch, /message,
  *    the bots, the chat runners, the writer): the replacement must read as a launch on its way until its tree is
- *    gone (endReplacedTerminal, core/agent-launch.ts), and stop reading so once it is, failed or not.
+ *    gone (endReplacedTerminal, core/agent-launch.ts), and stop reading so once it is, failed or not. And a start
+ *    that replaces a stale terminal must read so from its first line to its CLI, not only during the end: between
+ *    the end and the launch's own mark a sender would find a bare shell and start the agent beside it (the Audit's
+ *    M1 on #621). startAgentCli marks its launch first, then runs launchInTerminal, whose first step is that end.
  *
  * The "terminal" is a real process group where node-pty's shell would be, as in restart-ends-tree.test.ts (#620),
  * in Cline's shape: a bash leader that relays the hangup to its job, as an interactive shell does; the job, a
@@ -88,7 +91,7 @@ vi.setConfig({ testTimeout: 20_000 });
 
 import { agents, killStalePty, initAgentPty, startCliInTerminal } from '../../../electron/core/agent-manager';
 import { updateAgent } from '../../../electron/core/agent-update';
-import { sessionStarting, sessionStarted } from '../../../electron/core/agent-launch';
+import { sessionStarting, sessionStarted, launchBegins, launchAbandoned } from '../../../electron/core/agent-launch';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { toLaunch, type DirectLaunch } from '../../../electron/platform/launch';
 import type { FsProbe } from '../../../electron/platform/fs-probe';
@@ -284,6 +287,20 @@ describe('a task sent while the old tree ends (8)', () => {
     expect(sessionStarting(agent)).toBe(false);
   });
 
+  posixGroups('during a start that replaces a stale terminal: marked before the end, it still waits once the tree is gone', async () => {
+    const t = await launcherTerminal();
+    const agent = agentIn(t.pty, { ptyCwd: elsewhere });
+    // In startAgentCli's order (ipc-handlers.ts): its launch, then launchInTerminal, whose first step is this end.
+    const launch = launchBegins(agent.id, { withTask: true });
+    const ended = killStalePty(agent);
+    expect(sessionStarting(agent)).toBe(true);
+    expect(await ended).toBe(true);
+    expect(gone(t)).toEqual(GONE);
+    expect(sessionStarting(agent), 'a sender released between the end and the CLI would start the agent beside the start').toBe(true);
+    launchAbandoned(agent.id, launch);
+    expect(sessionStarting(agent)).toBe(false);
+  });
+
   posixGroups('after a stale terminal is ended (killStalePty): the same', async () => {
     const t = await launcherTerminal();
     const agent = agentIn(t.pty, { ptyCwd: elsewhere });
@@ -344,6 +361,18 @@ describe('every place that replaces an agent terminal', () => {
     const handlerAt = (index: number) => [...ipc.slice(0, index).matchAll(/ipcMain\.handle\('([^']+)'/g)].pop()?.[1];
     const sites = [...ipc.matchAll(/\bkillPty\(/g)].map((m) => handlerAt(m.index!)).sort();
     expect(sites).toEqual(['plugin:install-kill', 'pty:kill', 'shell:killPty', 'skill:install-kill']);
+  });
+
+  it("the window's start is marked before anything it replaces is ended (8)", () => {
+    const ipc = source('handlers/ipc-handlers.ts');
+    const start = ipc.slice(ipc.indexOf('const startAgentCli'));
+    const marked = start.indexOf('launchBegins(');
+    const runs = start.indexOf('launchInTerminal(');
+    expect(marked, 'startAgentCli marks no launch').toBeGreaterThan(-1);
+    expect(marked, 'the start runs launchInTerminal (its stale end, its shell) before it marks its launch').toBeLessThan(runs);
+    // And launchInTerminal is reached through startAgentCli alone, which every start goes through (registerAgentLauncher).
+    expect([...ipc.matchAll(/\blaunchInTerminal\(/g)]).toHaveLength(1);
+    expect(ipc).toMatch(/registerAgentLauncher\(startAgentCli\)/);
   });
 
   it('waits for the end of a stale one before it goes on (6)', () => {

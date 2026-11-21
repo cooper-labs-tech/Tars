@@ -25,8 +25,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    off it, while its old tree is still ending (/dispatch, the delivery delegate_task and /run-task go through,
  *    with the orchestrator's own token): the task must wait for that end, then start the agent's new CLI with
  *    nothing of the old one running, the agent not in error (the Audit's L4 on #620, on this path).
+ * 4. the fourth's terminal goes stale (another gemini key), the window starts it again, and the orchestrator hands it
+ *    a task the moment its old terminal is off it (the Audit's M1 on #621): the task must wait for that start, then go
+ *    into the CLI it started (`message`), and no second CLI may be started beside it.
  * Red on main 58f2863b4: the launcher dies, its child runs on, adopted by launchd. Scenario 3 is red on 5db1c2dc1
  * too, the tree ended but out of the senders' sight: the task's CLI started while the old child still ran.
+ * Scenario 4 holds on 7646c3db6 (startAgentCli marks its launch before launchInTerminal ends anything), and is red on
+ * a mutant that marks it after.
  *
  * The artefact: values.json (every launch's record, the answers, when each old tree was gone), the Agents page once
  * both are done (agents.png), and with E2E_TRACE=on the app's trace.
@@ -84,7 +89,7 @@ test('a provider change and a start that replaces a stale terminal end what its 
   });
   // The lead is the project's orchestrator: only Tars, the window and an orchestrator hand another agent work (#449).
   const lead = { ...agent('o1', 'Project Lead'), role: 'orchestrator' };
-  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('p1', 'Provider Change'), agent('s1', 'Stale Start'), agent('d1', 'Task Meanwhile'), lead], null, 2));
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('p1', 'Provider Change'), agent('s1', 'Stale Start'), agent('d1', 'Task Meanwhile'), agent('k1', 'Task During Start'), lead], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
@@ -176,6 +181,32 @@ test('a provider change and a start that replaces a stale terminal end what its 
     const d1Seen = (await list()).find((a) => a.id === 'd1');
     keep({ d1Updated, offAgentMs, d1AliveAtTask, dispatched, dispatchMs, d1Launches: launches('d1'), d1GoneMs, d1Seen });
 
+    // 4. A start that replaces a stale terminal, and a task handed over while its old tree is still ending.
+    await start('k1');
+    await running('k1', 1);
+    const k1Old = pidsOf(launches('k1')[0]);
+    const keyAgain = await page.evaluate(() => (window as unknown as Api).electronAPI.cliKeys.set('gemini', { key: 'e2e-gemini-key-replaced-terminal-abcdefghij' }));
+    const k1At = Date.now();
+    await page.evaluate(() => {
+      const w = window as unknown as Api & { pendingStart?: Promise<unknown> };
+      w.pendingStart = w.electronAPI.agent.start({ id: 'k1', prompt: '' });
+    });
+    await expect.poll(async () => (await list()).find((a) => a.id === 'k1')?.cliRunning, { timeout: 10_000, intervals: [20] }).toBe(false);
+    const k1AliveAtTask = k1Old.filter(alive);
+    const k1Dispatched = await fetch(`http://127.0.0.1:${port}/api/agents/k1/dispatch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'X-Tars-Caller-Id': 'o1' },
+      body: JSON.stringify({ message: 'Carry on with the review of the lexer.' }),
+      signal: AbortSignal.timeout(30_000),
+    }).then(async (r) => ({ status: r.status, body: await r.json() as Record<string, unknown> }));
+    const k1DispatchMs = Date.now() - k1At;
+    const k1Started = await page.evaluate(() => (window as unknown as { pendingStart: Promise<unknown> }).pendingStart);
+    await expect.poll(() => launches('k1').length, { timeout: 30_000, message: 'the start launched nothing' }).toBeGreaterThanOrEqual(2);
+    // Time for a second CLI to show up, were one started beside the start's.
+    await new Promise((r) => setTimeout(r, 3_000));
+    const k1Seen = (await list()).find((a) => a.id === 'k1');
+    keep({ keyAgain, k1Started, k1AliveAtTask, k1Dispatched, k1DispatchMs, k1Launches: launches('k1'), k1Seen });
+
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
     await stepShot(page, 'agents');
     keep({ agents: await list(), pageErrors });
@@ -191,9 +222,16 @@ test('a provider change and a start that replaces a stale terminal end what its 
     expect(launches('d1')[1].oldAlive, 'the task started the new CLI while the old one, or what its launcher started, still ran').toEqual([]);
     expect(d1GoneMs).not.toBeNull();
     expect(d1Seen?.status).not.toBe('error');
+    expect(keyAgain.success, JSON.stringify(keyAgain)).toBe(true);
+    expect(k1AliveAtTask.length, 'the task was not handed over while the old tree was ending: the case proves nothing').toBeGreaterThan(0);
+    expect(k1Dispatched.status, JSON.stringify(k1Dispatched)).toBe(200);
+    expect(k1Dispatched.body.mode, 'the task started a CLI of its own beside the start instead of going into the one it started').toBe('message');
+    expect(launches('k1'), 'a second CLI was started beside the start').toHaveLength(2);
+    expect(launches('k1')[1].oldAlive).toEqual([]);
+    expect(k1Seen?.status).not.toBe('error');
     expect(pageErrors).toEqual([]);
   } finally {
-    for (const id of ['p1', 's1', 'd1', 'unknown']) {
+    for (const id of ['p1', 's1', 'd1', 'k1', 'unknown']) {
       for (const pid of launches(id).flatMap(pidsOf)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
     }
     await app.close().catch(() => { /* gone */ });
